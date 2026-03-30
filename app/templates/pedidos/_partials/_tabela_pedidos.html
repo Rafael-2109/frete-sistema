@@ -1,0 +1,730 @@
+{# _tabela_pedidos.html — Tabela de pedidos + paginacao + form cotacao #}
+{# Variaveis de contexto: pedidos, paginacao, cotar_form, contadores_status, filtro_status_ativo, filtro_url, sort_url, sort_by, sort_order #}
+
+    <!-- 📋 FORMULÁRIO PARA SELECIONAR PEDIDOS E COTAR FRETE -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <div class="row align-items-center">
+                <!-- ▸ ESQUERDA: Título + Filtros Especiais -->
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center gap-2">
+                        <h5 class="card-title mb-0 me-3">
+                            <i class="fas fa-tasks"></i> Seleção de Pedidos para Cotação
+                        </h5>
+
+                        <!-- ✅ NOVOS: Botões de filtro Ag. Pagamento e Ag. Item -->
+                        <a href="{{ filtro_url(status='ag_pagamento') }}"
+                            class="btn btn-sm
+                            {% if filtro_status_ativo == 'ag_pagamento' %}
+                                {% if contadores_status.ag_pagamento > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
+                            {% else %}
+                                {% if contadores_status.ag_pagamento > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}"
+                            title="Pedidos aguardando pagamento antecipado">
+                            <i class="fas fa-money-bill-wave"></i> Ag. Pagamento
+                            <span class="badge badge-contador-theme">{{ contadores_status.ag_pagamento }}</span>
+                        </a>
+
+                        <a href="{{ filtro_url(status='ag_item') }}"
+                            class="btn btn-sm
+                            {% if filtro_status_ativo == 'ag_item' %}
+                                {% if contadores_status.ag_item > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
+                            {% else %}
+                                {% if contadores_status.ag_item > 0 %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}"
+                            title="Pedidos aguardando item em estoque">
+                            <i class="fas fa-exclamation-triangle"></i> Ag. Item
+                            <span class="badge badge-contador-theme">{{ contadores_status.ag_item }}</span>
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- ▸ DIREITA: Filtros de Status + Contador -->
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-end align-items-center gap-2">
+                        <!-- Filtros de Status -->
+                        <a href="{{ filtro_url(status='abertos') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'abertos' %}
+                                {% if contadores_status.abertos > 0 %}btn-danger{% else %}btn-info{% endif %}
+                            {% else %}
+                                {% if contadores_status.abertos > 0 %}btn-outline-danger{% else %}btn-outline-info{% endif %}
+                            {% endif %}">
+                            <i class="fas fa-clock"></i> Abertos
+                            <span class="badge badge-contador-theme">{{ contadores_status.abertos }}</span>
+                        </a>
+                        <a href="{{ filtro_url(status='cotados') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'cotados' %}
+                                {% if contadores_status.cotados > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
+                            {% else %}
+                                {% if contadores_status.cotados > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}">
+                            <i class="fas fa-calculator"></i> Cotados
+                            <span class="badge badge-contador-theme">{{ contadores_status.cotados }}</span>
+                        </a>
+                        <a href="{{ filtro_url(status='nf_cd') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'nf_cd' %}
+                                {% if contadores_status.nf_cd > 0 %}btn-danger{% else %}btn-outline-danger{% endif %}
+                            {% else %}
+                                {% if contadores_status.nf_cd > 0 %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}">
+                            <i class="fas fa-undo"></i> NF no CD
+                            <span class="badge badge-contador-theme">{{ contadores_status.nf_cd }}</span>
+                        </a>
+                        <a href="{{ filtro_url(status='pend_embarque') }}"
+                            class="btn btn-sm filtro-status
+                            {% if filtro_status_ativo == 'pend_embarque' %}
+                                {% if contadores_status.pend_embarque > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
+                            {% else %}
+                                {% if contadores_status.pend_embarque > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                            {% endif %}"
+                            title="Pedidos pendentes de embarque (sem data de embarque)">
+                            <i class="fas fa-shipping-fast"></i> Pend. Embarque
+                            <span class="badge badge-contador-theme">{{ contadores_status.pend_embarque }}</span>
+                        </a>
+
+                        <!-- Contador de pedidos selecionados -->
+                        <span id="selected-count" class="badge bg-success me-2" style="display: none;"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('cotacao.iniciar_cotacao') }}" onsubmit="return confirmCotacao()">
+                {{ cotar_form.hidden_tag() }}
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <!-- Botão para cotar frete -->
+                    <button type="submit" class="btn btn-secondary" disabled id="btnCotarFrete">
+                        <i class="fas fa-calculator"></i> Cotar Frete
+                    </button>
+                    
+                    <!-- Botão para cotação manual -->
+                    <button type="button" class="btn btn-warning" disabled id="btnCotacaoManual" onclick="abrirCotacaoManual()">
+                        <i class="fas fa-edit"></i> Cotação Manual
+                    </button>
+                    
+                    <!-- Botão para embarque FOB -->
+                    <button type="button" class="btn btn-info" disabled id="btnEmbarqueFOB" onclick="abrirEmbarqueFOB()">
+                        <i class="fas fa-ship"></i> Embarque FOB
+                    </button>
+                    
+                    <!-- Ações adicionais -->
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="document.querySelector('thead input[type=checkbox]').click()">
+                            <i class="fas fa-check-square"></i> Selecionar Todos
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.querySelectorAll('input[name=pedido_ids]:checked').forEach(cb => cb.checked = false); updateSelectedCount(); updateCotarButton();">
+                            <i class="fas fa-times"></i> Limpar Seleção
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="abrirMapaPedidos()" id="btnVerMapa" disabled>
+                            <i class="fas fa-map-marked-alt"></i> Ver no Mapa
+                        </button>
+                        <a href="{{ url_for('pedidos.atualizar_status') }}" class="btn btn-outline-warning btn-sm" onclick="return confirm('Confirma a atualização de todos os status dos pedidos?')">
+                            <i class="fas fa-sync-alt"></i> Atualizar Status
+                        </a>
+                    </div>
+                </div>
+
+
+        <!-- Paginação e informações na mesma linha -->
+        {% if paginacao %}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <!-- Informação de registros à esquerda -->
+            <div>
+                <span class="text-muted">
+                    Exibindo
+                    <strong>{{ (paginacao.page - 1) * paginacao.per_page + 1 }}</strong> -
+                    <strong>{{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}</strong>
+                    de <strong>{{ paginacao.total }}</strong> registros
+                </span>
+            </div>
+
+            <!-- Paginação no centro -->
+            {% if paginacao.pages > 1 %}
+            <nav aria-label="Navegação de páginas">
+                {% set args_no_page = {} %}
+                {% for key, value in request.args.items() if key != 'page' %}
+                    {% set _ = args_no_page.update({key: value}) %}
+                {% endfor %}
+
+                <ul class="pagination pagination-sm mb-0">
+                    <!-- Primeira -->
+                    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                        <a class="page-link"
+                           href="{{ url_for('pedidos.lista_pedidos', page=1, **args_no_page) }}">«</a>
+                    </li>
+
+                    <!-- Anterior -->
+                    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+                        <a class="page-link"
+                           href="{{ url_for('pedidos.lista_pedidos', page=paginacao.prev_num, **args_no_page) }}">‹</a>
+                    </li>
+
+                    <!-- Páginas ao redor -->
+                    {% for pg in range(paginacao.page - 2, paginacao.page + 3) if pg>0 and pg<=paginacao.pages %}
+                    <li class="page-item {% if pg == paginacao.page %}active{% endif %}">
+                        <a class="page-link"
+                           href="{{ url_for('pedidos.lista_pedidos', page=pg, **args_no_page) }}">
+                            {{ pg }}
+                        </a>
+                    </li>
+                    {% endfor %}
+
+                    <!-- Próxima -->
+                    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                        <a class="page-link"
+                           href="{{ url_for('pedidos.lista_pedidos', page=paginacao.next_num, **args_no_page) }}">›</a>
+                    </li>
+
+                    <!-- Última -->
+                    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+                        <a class="page-link"
+                           href="{{ url_for('pedidos.lista_pedidos', page=paginacao.pages, **args_no_page) }}">»</a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+
+            <!-- Informação de página à direita -->
+            <div>
+                <span class="badge bg-secondary">Página {{ paginacao.page }} de {{ paginacao.pages }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-thead-theme">
+                <tr>
+                    <!-- Checkbox do "selecionar todos" -->
+                    <th class="text-nowrap">
+                        <input type="checkbox" onclick="toggleAll(this)" title="Selecionar todos">
+                    </th>
+                    <!-- ✨ NOVA COLUNA: Status -->
+                    <th class="text-nowrap">
+                        <i class="fas fa-flag"></i> Status
+                    </th>
+                    <!-- ✅ COLUNAS ORDENÁVEIS -->
+                    <th class="sortable text-nowrap" data-sort="num_pedido">
+                        <a href="{{ sort_url('num_pedido') }}" class="text-decoration-none">
+                            Nº Pedido
+                            {% if sort_by == 'num_pedido' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="cnpj_cpf">
+                        <a href="{{ sort_url('cnpj_cpf') }}" class="text-decoration-none">
+                            CNPJ/CPF
+                            {% if sort_by == 'cnpj_cpf' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="raz_social_red">
+                        <a href="{{ sort_url('raz_social_red') }}" class="text-decoration-none">
+                            Razão Social
+                            {% if sort_by == 'raz_social_red' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="nome_cidade">
+                        <a href="{{ sort_url('nome_cidade') }}" class="text-decoration-none">
+                            Cidade
+                            {% if sort_by == 'nome_cidade' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="cod_uf">
+                        <a href="{{ sort_url('cod_uf') }}" class="text-decoration-none">
+                            UF
+                            {% if sort_by == 'cod_uf' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="valor_saldo_total">
+                        <a href="{{ sort_url('valor_saldo_total') }}" class="text-decoration-none">
+                            Valor Total
+                            {% if sort_by == 'valor_saldo_total' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="peso_total">
+                        <a href="{{ sort_url('peso_total') }}" class="text-decoration-none">
+                            Peso (kg)
+                            {% if sort_by == 'peso_total' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="rota">
+                        <a href="{{ sort_url('rota') }}" class="text-decoration-none">
+                            Rota
+                            {% if sort_by == 'rota' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="expedicao">
+                        <a href="{{ sort_url('expedicao') }}" class="text-decoration-none">
+                            <i class="fas fa-truck"></i> Expedição
+                            {% if sort_by == 'expedicao' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="sortable text-nowrap" data-sort="agendamento">
+                        <a href="{{ sort_url('agendamento') }}" class="text-decoration-none">
+                            <i class="fas fa-calendar"></i> Agenda
+                            {% if sort_by == 'agendamento' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="text-nowrap"><i class="fas fa-phone"></i> Agendamento</th>
+                    <th class="sortable text-nowrap" data-sort="nf">
+                        <a href="{{ sort_url('nf') }}" class="text-decoration-none">
+                            NF
+                            {% if sort_by == 'nf' %}
+                                <i class="fas fa-sort-{{ 'up' if sort_order == 'asc' else 'down' }}"></i>
+                            {% else %}
+                                <i class="fas fa-sort text-muted"></i>
+                            {% endif %}
+                        </a>
+                    </th>
+                    <th class="text-nowrap">Ações</th>
+
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in pedidos %}
+              <tr class="
+                {% if p.status_calculado == 'FATURADO' %}table-success
+                {% elif p.status_calculado == 'EMBARCADO' %}table-primary  
+                {% elif p.status_calculado == 'COTADO' %}table-warning
+                {% else %}table-light
+                {% endif %}
+              ">
+                <!-- Checkbox individual -->
+                <td class="text-center">
+                  <input type="checkbox" 
+                    name="separacao_lote_ids" 
+                    value="{{ p.separacao_lote_id }}"
+                    data-num-pedido="{{ p.num_pedido }}"
+                    {% if p.status_calculado not in ['ABERTO', 'COTADO', 'NF no CD', 'FATURADO', 'CARVIA'] %}disabled title="Pedido já processado"{% endif %}>
+                </td>
+                
+                <!-- ✨ COLUNA: Status + Embarque -->
+                <td class="text-center">
+                  <span class="{{ p.status_badge_class }}">
+                    {% if p.status_calculado == 'NF no CD' %}
+                      <i class="fas fa-undo"></i> NF no CD
+                    {% elif p.status_calculado == 'FATURADO' %}
+                      Faturado
+                    {% elif p.status_calculado == 'EMBARCADO' %}
+                      <i class="fas fa-truck"></i> Embarcado
+                    {% elif p.status_calculado == 'COTADO' %}
+                      Cotado
+                    {% elif p.status_calculado == 'CARVIA' %}
+                      Aberto
+                    {% else %}
+                      Aberto
+                    {% endif %}
+                  </span>
+                  {# CarVia: badge discreto + indicador de tipo (cotacao vs pedido) #}
+                  {% if p.eh_carvia %}
+                    <br><span class="badge bg-info" style="font-size: 0.65rem;">CarVia</span>
+                    {% if p.separacao_lote_id.startswith('CARVIA-PED-') %}
+                      <small class="text-muted ms-1">Pedido</small>
+                    {% else %}
+                      <small class="text-warning ms-1"><i class="fas fa-clock"></i> Cotacao</small>
+                    {% endif %}
+                  {% endif %}
+                  {% if p.ultimo_embarque %}
+                    <br><a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}"
+                           class="btn btn-xs btn-outline-primary"
+                           title="Ver embarque #{{ p.ultimo_embarque.numero }}"
+                           style="font-size: 0.7rem; padding: 1px 4px;">
+                      <i class="fas fa-truck"></i> {{ p.ultimo_embarque.numero }}
+                    </a>
+                  {% endif %}
+                  {% if p.separacao_impressa %}
+                    <br><i class="fas fa-print icon-print-theme" title="Separação impressa"></i>
+                  {% endif %}
+                </td>
+                
+                <td>
+                  {% if p.pedido_cliente %}
+                    <small class="text-muted" title="Pedido do Cliente">PC: {{ p.pedido_cliente }}</small><br>
+                  {% endif %}
+                  <strong>{{ p.num_pedido }}</strong>
+                  {% if p.data_pedido %}
+                    <br><small class="text-muted"><i class="fas fa-calendar-plus"></i> {{ p.data_pedido|formatar_data("%d/%m/%Y") }}</small>
+                  {% else %}
+                    <br><small class="text-muted">Sem data</small>
+                  {% endif %}
+                </td>
+                
+                <td>
+                  <small>{{ p.cnpj_cpf|cnpj_br }}</small>
+                  <br>
+                  {% if p.tem_falta_item and (p.eh_pagamento_antecipado and p.tem_falta_pagamento) %}
+                    {# Ambos: vermelho #}
+                    <button type="button" class="btn btn-sm btn-danger mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-exclamation-triangle"></i> Ag. Item e Pgto.
+                    </button>
+                  {% elif p.tem_falta_item %}
+                    {# Apenas item: vermelho #}
+                    <button type="button" class="btn btn-sm btn-danger mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-exclamation-triangle"></i> Ag. Item
+                    </button>
+                  {% elif p.eh_pagamento_antecipado and p.tem_falta_pagamento %}
+                    {# Apenas pagamento pendente: vermelho #}
+                    <button type="button" class="btn btn-sm btn-danger mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-money-bill-wave"></i> Ag. Pagamento
+                    </button>
+                  {% elif p.eh_pagamento_antecipado and not p.tem_falta_pagamento %}
+                    {# Pagamento antecipado OK: verde #}
+                    <button type="button" class="btn btn-sm btn-success mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-check-circle"></i> Pagamento OK
+                    </button>
+                  {% else %}
+                    {# Normal: azul #}
+                    <button type="button" class="btn btn-sm btn-outline-info mt-1"
+                            onclick="abrirModalInfoSeparacao('{{ p.separacao_lote_id }}'); return false;"
+                            style="font-size: 0.7rem; padding: 2px 6px;">
+                      <i class="fas fa-info-circle"></i> Info Separação
+                    </button>
+                  {% endif %}
+                  {% if p.tags_pedido %}
+                  <div class="mt-1">
+                    {% set tags = p.tags_pedido|from_json %}
+                    {% for tag in tags %}
+                    <span class="badge badge-tag" data-color="{{ tag.color }}">
+                      <i class="fas fa-tag me-1"></i>{{ tag.name }}
+                    </span>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  <strong>{{ p.raz_social_red or '' }}</strong>
+                  {% if p.equipe_vendas %}
+                    <br><small class="text-muted">
+                      <i class="fas fa-users"></i> {{ p.equipe_vendas }}
+                    </small>
+                  {% endif %}
+                  {% if p.obs_separacao %}
+                    <br><span class="badge bg-warning text-dark" title="{{ p.obs_separacao }}" style="font-size: 0.7rem;">
+                      <i class="fas fa-sticky-note"></i> {{ p.obs_separacao[:50] }}{% if p.obs_separacao|length > 50 %}...{% endif %}
+                    </span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {{ p.nome_cidade or '' }}
+                  {% if p.roteirizacao %}
+                    <br><small class="text-info">{{ p.roteirizacao }}</small>
+                  {% endif %}
+                  {% if p.observ_ped_1 %}
+                    <br><small class="text-muted" title="{{ p.observ_ped_1 }}">
+                      <i class="fas fa-comment"></i> {{ p.observ_ped_1[:60] }}{% if p.observ_ped_1|length > 60 %}...{% endif %}
+                    </small>
+                  {% endif %}
+                </td>
+                
+                <td class="text-center">
+                  {% if p.cod_uf %}
+                    <span class="badge bg-secondary">{{ p.cod_uf }}</span>
+                  {% endif %}
+                </td>
+                
+                <td class="text-end">
+                  {% if p.valor_saldo_total %}
+                    <strong>{{ p.valor_saldo_total|valor_br }}</strong>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                
+                <td class="text-end">
+                  {% if p.peso_total %}
+                    {{ p.peso_total|numero_br }} kg
+                    {% if p.pallet_total %}
+                      <br><small class="text-muted">{{ p.pallet_total|numero_br }} pal</small>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                
+                <td class="text-center">
+                  {% if p.rota %}
+                    <span class="badge bg-secondary">{{ p.rota }}</span>
+                  {% endif %}
+                  {% if p.sub_rota %}
+                    <br><small>{{ p.sub_rota }}</small>
+                  {% endif %}
+                  <!-- Botão para ver endereço -->
+                  <br>
+                  <button type="button" 
+                          class="btn btn-sm btn-outline-info mt-1" 
+                          onclick="abrirModalEnderecoPedido('{{ p.num_pedido }}')"
+                          title="Ver endereço de entrega">
+                      <i class="fas fa-map-marker-alt"></i> Endereço
+                  </button>
+                </td>
+                
+                <td class="text-center">
+                  {% if p.expedicao %}
+                    <strong>{{ p.expedicao | formatar_data_brasil }}</strong>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                
+                <!-- ✨ NOVA COLUNA: Agenda -->
+                <td class="text-center">
+                  {% if p.agendamento %}
+                    <strong>{{ p.agendamento | formatar_data_brasil }}</strong>
+                    <br>
+                    {% if p.agendamento_confirmado %}
+                      <button type="button" class="btn btn-sm btn-success"
+                              onclick="reverterConfirmacaoAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}'); return false;"
+                              title="Clique para reverter confirmação">
+                        <i class="fas fa-check-circle"></i> Confirmado
+                      </button>
+                    {% else %}
+                      <button type="button" class="btn btn-sm btn-danger"
+                              onclick="confirmarAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}'); return false;"
+                              title="Clique para confirmar">
+                        <i class="fas fa-hourglass-half"></i> Aguardando
+                      </button>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted">-</span>
+                    <br><button type="button" class="btn btn-sm btn-outline-secondary"
+                            onclick="abrirEdicaoPedido('{{ p.separacao_lote_id }}'); return false;"
+                            title="Editar datas e agendamento">
+                      <i class="fas fa-calendar-plus"></i> Agendar
+                    </button>
+                  {% endif %}
+                  {% if p.protocolo %}
+                    <br><small class="text-muted"><i class="fas fa-barcode"></i> {{ p.protocolo | formatar_protocolo }}</small>
+                  {% else %}
+                    <br><small class="text-muted">Sem protocolo</small>
+                  {% endif %}
+                </td>
+                
+                <!-- ✨ NOVA COLUNA: Forma de Agendamento -->
+                <td class="text-center">
+                  {% if p.contato_agendamento and p.contato_agendamento.forma %}
+                    <button type="button"
+                            class="btn btn-sm btn-primary"
+                            data-cnpj="{{ p.cnpj_cpf }}"
+                            data-forma="{{ p.contato_agendamento.forma }}"
+                            data-contato="{{ p.contato_agendamento.contato }}"
+                            data-observacao="{{ p.contato_agendamento.observacao or '' }}"
+                            data-nao-aceita-pallet="{{ 'true' if p.contato_agendamento.nao_aceita_nf_pallet else 'false' }}"
+                            data-horario-de="{{ p.contato_agendamento.horario_recebimento_de.strftime('%H:%M') if p.contato_agendamento.horario_recebimento_de else '' }}"
+                            data-horario-ate="{{ p.contato_agendamento.horario_recebimento_ate.strftime('%H:%M') if p.contato_agendamento.horario_recebimento_ate else '' }}"
+                            data-obs-recebimento="{{ p.contato_agendamento.observacoes_recebimento or '' }}"
+                            data-cadastrado="true"
+                            onclick="mostrarContatoAgendamento(this)"
+                            title="Clique para ver/editar">
+                      {{ p.contato_agendamento.forma }}
+                    </button>
+                    {% if p.contato_agendamento.horario_recebimento_de or p.contato_agendamento.horario_recebimento_ate %}
+                      <br><small class="text-muted">
+                        <i class="fas fa-clock"></i>
+                        {{ p.contato_agendamento.horario_recebimento_de.strftime('%H:%M') if p.contato_agendamento.horario_recebimento_de else '' }}
+                        {%- if p.contato_agendamento.horario_recebimento_de and p.contato_agendamento.horario_recebimento_ate %} - {% endif -%}
+                        {{ p.contato_agendamento.horario_recebimento_ate.strftime('%H:%M') if p.contato_agendamento.horario_recebimento_ate else '' }}
+                      </small>
+                    {% endif %}
+                    {% if p.contato_agendamento.observacoes_recebimento %}
+                      <br><small class="text-info"><i class="fas fa-info-circle"></i> C/ Obs Recebimento</small>
+                    {% endif %}
+                  {% else %}
+                    <button type="button"
+                            class="btn btn-sm btn-outline-danger"
+                            data-cnpj="{{ p.cnpj_cpf }}"
+                            data-cadastrado="false"
+                            onclick="mostrarContatoAgendamento(this)"
+                            title="Clique para cadastrar">
+                      Não cadastrado
+                    </button>
+                  {% endif %}
+                </td>
+                
+                <td class="text-center">
+                  {% if p.nf %}
+                    <span class="badge bg-success">{{ p.nf }}</span>
+                  {% else %}
+                    <span class="text-muted">-</span>
+                  {% endif %}
+                  {% if p.data_embarque %}
+                    <br><small class="text-primary">Emb: {{ p.data_embarque | formatar_data_hora_brasil }}</small>
+                  {% endif %}
+                </td>
+                
+                <!-- ✅ NOVA COLUNA: Ações -->
+                <td class="text-center">
+                    <!-- Botões para pedidos com status ABERTO -->
+                    <div class="btn-group-vertical btn-group-sm" role="group">
+                      <button type="button" 
+                              class="btn btn-outline-primary btn-sm" 
+                              data-lote-id="{{ p.separacao_lote_id }}"
+                              onclick="abrirEdicaoPedido(this.dataset.loteId)"
+                              title="Editar pedido">
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      {% if p.status_calculado == 'ABERTO' %}
+                      <button type="button" 
+                              class="btn btn-outline-danger btn-sm" 
+                              title="Excluir pedido"
+                              data-lote-id="{{ p.separacao_lote_id }}"
+                              data-pedido-numero="{{ p.num_pedido }}"
+                              onclick="confirmarExclusao(this.dataset.loteId, this.dataset.pedidoNumero)">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                    {% else %}
+                    <!-- Pedidos processados: verificar se podem ser desvinculados -->
+                    <div class="btn-group-vertical btn-group-sm" role="group">
+                      <!-- Botão Ver -->
+                      <a href="{{ url_for('pedidos.detalhes_pedido', lote_id=p.separacao_lote_id) }}" 
+                         class="btn btn-outline-info btn-sm" 
+                         title="Visualizar pedido">
+                        <i class="fas fa-eye"></i>
+                      </a>
+                      {% endif %}
+                      <!-- 🛠️ Botão Desvinculação (apenas para admins) -->
+                      {% if current_user.perfil == 'administrador' and p.status_calculado in ['EMBARCADO', 'COTADO', 'ABERTO'] %}
+                      <button type="button" 
+                              class="btn btn-outline-warning btn-sm" 
+                              title="Desvincular de embarque cancelado (remove vínculos órfãos)"
+                              data-lote-id="{{ p.separacao_lote_id }}"
+                              data-pedido-numero="{{ p.num_pedido }}"
+                              onclick="confirmarDesvinculacao(this.dataset.loteId, this.dataset.pedidoNumero)">
+                        <i class="fas fa-unlink"></i>
+                      </button>
+                      {% else %}
+                      <span class="text-muted" title="Pedido já processado - não pode ser editado">
+                        <i class="fas fa-lock"></i>
+                      </span>
+                      {% endif %}
+                    </div>
+                </td>
+
+              </tr>
+            {% endfor %}
+            
+            {% if not pedidos %}
+              <tr>
+                <td colspan="15" class="text-center py-4">
+                  <div class="text-muted">
+                    <i class="fas fa-search fa-2x mb-2"></i>
+                    <br>Nenhum pedido encontrado com os filtros aplicados.
+                    <br><small>Tente ajustar os critérios de busca.</small>
+                  </div>
+                </td>
+              </tr>
+            {% endif %}
+            </tbody>
+        </table>
+        </div>
+            </form>
+        </div>
+    </div>
+
+<!-- Paginação -->
+{% if paginacao and paginacao.pages > 1 %}
+<nav aria-label="Navegação de páginas">
+  {% set args_no_page = {} %}
+  {% for key, value in request.args.items() if key != 'page' %}
+    {% set _ = args_no_page.update({key: value}) %}
+  {% endfor %}
+
+  <ul class="pagination justify-content-center mt-3">
+    <!-- Primeira -->
+    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+      <a class="page-link"
+         href="{{ url_for('pedidos.lista_pedidos', page=1, **args_no_page) }}">«</a>
+    </li>
+
+    <!-- Anterior -->
+    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+      <a class="page-link"
+         href="{{ url_for('pedidos.lista_pedidos', page=paginacao.prev_num, **args_no_page) }}">‹</a>
+    </li>
+
+    <!-- Páginas ao redor -->
+    {% for pg in range(paginacao.page - 2, paginacao.page + 3) if pg>0 and pg<=paginacao.pages %}
+    <li class="page-item {% if pg == paginacao.page %}active{% endif %}">
+      <a class="page-link"
+         href="{{ url_for('pedidos.lista_pedidos', page=pg, **args_no_page) }}">
+        {{ pg }}
+      </a>
+    </li>
+    {% endfor %}
+
+    <!-- Próxima -->
+    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+      <a class="page-link"
+         href="{{ url_for('pedidos.lista_pedidos', page=paginacao.next_num, **args_no_page) }}">›</a>
+    </li>
+
+    <!-- Última -->
+    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+      <a class="page-link"
+         href="{{ url_for('pedidos.lista_pedidos', page=paginacao.pages, **args_no_page) }}">»</a>
+    </li>
+  </ul>
+</nav>
+
+<div class="text-center">
+  Registros
+  {{ (paginacao.page - 1) * paginacao.per_page + 1 }}
+  –
+  {{ (paginacao.page - 1) * paginacao.per_page + paginacao.items|length }}
+  de
+  {{ paginacao.total }}
+</div>
+{% endif %}

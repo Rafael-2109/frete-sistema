@@ -1,0 +1,218 @@
+{# _filtros.html — Card de filtros de pesquisa + botoes rapidos #}
+{# Variaveis de contexto: filtro_form, contadores_status, contadores_data, filtro_status_ativo, filtro_data_ativo, filtro_sub_status, filtro_url, url_for #}
+
+    <!-- 🔍 FORMULÁRIO DE FILTROS APRIMORADO -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-filter"></i> Filtros de Pesquisa
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                {{ filtro_form.csrf_token }}
+                
+                <!-- Primeira linha de filtros -->
+                <div class="row mb-3">
+                    <div class="col-md-2">
+                        <label for="numero_pedido" class="form-label">
+                            {{ filtro_form.numero_pedido.label }}
+                        </label>
+                        {{ filtro_form.numero_pedido(class="form-control", id="numero_pedido", placeholder="Ex: PED001") }}
+                    </div>
+            
+                    <div class="col-md-2">
+                        <label for="cnpj_cpf" class="form-label">
+                            {{ filtro_form.cnpj_cpf.label }}
+                        </label>
+                        {{ filtro_form.cnpj_cpf(class="form-control", id="cnpj_cpf", placeholder="Ex: 12.345.678") }}
+                    </div>
+
+                    <!-- ✨ NOVO: Campo de busca por cliente -->
+                    <div class="col-md-3">
+                        <label for="cliente" class="form-label">
+                            <i class="fas fa-building"></i> {{ filtro_form.cliente.label }}
+                        </label>
+                        {{ filtro_form.cliente(class="form-control", id="cliente", placeholder="Ex: Nome da Empresa") }}
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="uf" class="form-label">
+                            {{ filtro_form.uf.label }}
+                        </label>
+                        {{ filtro_form.uf(class="form-select", id="uf") }}
+                    </div>
+
+                    <!-- ✨ NOVO: Filtro por status -->
+                    <div class="col-md-2">
+                        <label for="status" class="form-label">
+                            <i class="fas fa-flag"></i> {{ filtro_form.status.label }}
+                        </label>
+                        {{ filtro_form.status(class="form-select", id="status") }}
+                    </div>
+
+
+                </div>
+
+                <!-- Segunda linha de filtros -->
+                <div class="row mb-3">
+                    <div class="col-md-2">
+                        <label for="rota" class="form-label">
+                            {{ filtro_form.rota.label }}
+                        </label>
+                        {{ filtro_form.rota(class="form-select", id="rota") }}
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="sub_rota" class="form-label">
+                            {{ filtro_form.sub_rota.label }}
+                        </label>
+                        {{ filtro_form.sub_rota(class="form-select", id="sub_rota") }}
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="expedicao_inicio" class="form-label">
+                            {{ filtro_form.expedicao_inicio.label }}
+                        </label>
+                        {{ filtro_form.expedicao_inicio(class="form-control", id="expedicao_inicio", type="date") }}
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="expedicao_fim" class="form-label">
+                            {{ filtro_form.expedicao_fim.label }}
+                        </label>
+                        {{ filtro_form.expedicao_fim(class="form-control", id="expedicao_fim", type="date") }}
+                    </div>
+                </div>
+
+                {# -------- LINHA ÚNICA: Aplicar/Limpar e Datas (mais compacto) -------- #}
+            <div class="filtros-container acoes-filtros">
+            <div class="row align-items-center gx-2 gy-2">
+
+                {# ▸ ESQUERDA – Aplicar / Limpar #}
+                <div class="col-auto">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-search"></i> Aplicar Filtros
+                </button>
+                <a href="{{ url_for('pedidos.lista_pedidos') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times"></i> Limpar Filtros
+                </a>
+                <a href="{{ filtro_url(status='agend_pendente') }}"
+                    class="btn filtro-status ms-2
+                    {% if filtro_status_ativo == 'agend_pendente' %}
+                        {% if contadores_status.agend_pendente > 0 %}btn-warning{% else %}btn-outline-warning{% endif %}
+                    {% else %}
+                        {% if contadores_status.agend_pendente > 0 %}btn-outline-warning{% else %}btn-outline-secondary{% endif %}
+                    {% endif %}">
+                    <i class="fas fa-calendar-times"></i> Agend. Pendente
+                    <span class="badge badge-contador-theme">{{ contadores_status.agend_pendente }}</span>
+                </a>
+                </div>
+
+                            {# ▸ CENTRO – Datas + Aberto mais compactos #}
+                            <div class="col">
+                            <div class="d-flex flex-wrap justify-content-center gap-1">
+                                <!-- BOTÃO ATRASADOS (movido para o início) -->
+                                <div class="d-flex flex-column align-items-center filtro-pair">
+                                    <!-- ATRASADOS -->
+                                    <a href="{{ filtro_url(status='atrasados') }}"
+                                    class="btn btn-sm filtro-data
+                                        {% if filtro_status_ativo == 'atrasados' %}
+                                        btn-danger
+                                        {% elif contadores_status.atrasados > 0 %}
+                                        btn-outline-danger
+                                        {% else %}btn-outline-secondary{% endif %}">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Atrasados
+                                    <span class="badge badge-contador-theme">{{ contadores_status.atrasados }}</span>
+                                    </a>
+                                    <!-- ABERTO -->
+                                    <a href="{{ filtro_url(status='atrasados_abertos') }}"
+                                    class="btn btn-sm filtro-aberto mt-1
+                                        {% if filtro_status_ativo == 'atrasados_abertos' %}
+                                        btn-warning
+                                        {% elif contadores_status.atrasados_abertos > 0 %}
+                                        btn-danger
+                                        {% else %}btn-outline-warning{% endif %}">
+                                    <i class="fas fa-clock"></i> Aberto
+                                    <span class="badge badge-contador-theme">{{ contadores_status.atrasados_abertos }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- ✅ NOVO: BOTÃO SEM DATA -->
+                                <div class="d-flex flex-column align-items-center filtro-pair">
+                                    <!-- SEM DATA -->
+                                    <a href="{{ filtro_url(status='sem_data') }}"
+                                    class="btn btn-sm filtro-data
+                                        {% if filtro_status_ativo == 'sem_data' %}
+                                        btn-danger
+                                        {% elif contadores_status.sem_data > 0 %}
+                                        btn-outline-danger
+                                        {% else %}btn-outline-light{% endif %}">
+                                    <i class="fas fa-calendar-times"></i>
+                                    Sem data
+                                    <span class="badge badge-contador-theme">{{ contadores_status.sem_data }}</span>
+                                    </a>
+                                    <!-- ABERTO -->
+                                    <a href="{{ filtro_url(status='sem_data', sub_status='abertos') }}"
+                                    class="btn btn-sm filtro-aberto mt-1
+                                        {% if filtro_status_ativo == 'sem_data' and filtro_sub_status == 'abertos' %}
+                                        btn-warning
+                                        {% else %}btn-outline-warning{% endif %}">
+                                    <i class="fas fa-clock"></i> Aberto
+                                    <span class="badge badge-contador-theme">{{ contadores_status.sem_data }}</span>
+                                    </a>
+                                </div>
+                                
+                                <!-- BOTÕES DE DATA -->
+                                {% for key, dados in contadores_data.items() %}
+                                <div class="d-flex flex-column align-items-center filtro-pair">
+                                    <!-- DATA -->
+                                    <a href="{{ filtro_url(data=dados.data.strftime('%Y-%m-%d'), status=None) }}"
+                                    class="btn btn-sm filtro-data
+                                        {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d') %}
+                                        btn-primary
+                                        {% elif dados.total > 0 %}
+                                        btn-info
+                                        {% else %}btn-outline-primary{% endif %}">
+                                    <i class="far fa-calendar-check"></i>
+                                    {{ dados.data|formatar_data_segura }}
+                                    <span class="badge badge-contador-theme">{{ dados.total }}</span>
+                                    </a>
+                                    <!-- PEND EMB -->
+                                    <a href="{{ filtro_url(data=dados.data.strftime('%Y-%m-%d'), status='pend_embarque') }}"
+                                    class="btn btn-sm filtro-status mt-1
+                                        {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d')
+                                            and filtro_status_ativo == 'pend_embarque' %}
+                                        btn-warning
+                                        {% elif dados.pend_embarque > 0 %}
+                                        btn-outline-warning
+                                        {% else %}btn-outline-secondary{% endif %}">
+                                    <i class="fas fa-shipping-fast"></i> Pend EMB
+                                    <span class="badge badge-contador-theme">{{ dados.pend_embarque }}</span>
+                                    </a>
+                                    <!-- ABERTO -->
+                                    <a href="{{ filtro_url(data=dados.data.strftime('%Y-%m-%d'), status='abertos') }}"
+                                    class="btn btn-sm filtro-aberto mt-1
+                                        {% if filtro_data_ativo == dados.data.strftime('%Y-%m-%d')
+                                            and filtro_status_ativo == 'abertos' %}
+                                        btn-warning
+                                        {% elif dados.abertos > 0 %}
+                                        btn-danger
+                                        {% else %}btn-outline-warning{% endif %}">
+                                    <i class="fas fa-clock"></i> Aberto
+                                    <span class="badge badge-contador-theme">{{ dados.abertos }}</span>
+                                    </a>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                
+                </div>
+            </form>
+        </div>
+    </div>
