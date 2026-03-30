@@ -150,17 +150,17 @@
       "unique": false
     },
     {
-      "name": "idx_nf_pendente_resolvido",
+      "name": "ix_nf_pendente_tagplus_resolvido",
       "columns": [
-        "resolvido",
-        "importado"
+        "resolvido"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_resolvido",
+      "name": "idx_nf_pendente_resolvido",
       "columns": [
-        "resolvido"
+        "resolvido",
+        "importado"
       ],
       "unique": false
     }

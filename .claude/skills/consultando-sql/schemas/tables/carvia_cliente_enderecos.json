@@ -10,13 +10,12 @@
     {
       "name": "cliente_id",
       "type": "integer",
-      "description": "FK → carvia_clientes.id",
-      "nullable": false
+      "description": "FK → carvia_clientes.id. NULL = origem global (compartilhada entre clientes)"
     },
     {
       "name": "cnpj",
       "type": "varchar(20)",
-      "nullable": false
+      "description": "NULL = destino provisorio (sem CNPJ definido)"
     },
     {
       "name": "razao_social",
@@ -90,6 +89,12 @@
       "default": false
     },
     {
+      "name": "provisorio",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
@@ -107,14 +112,14 @@
       "references": "carvia_clientes.id"
     }
   ],
-  "unique_constraints": [
-    [
-      "cliente_id",
-      "cnpj",
-      "tipo"
-    ]
-  ],
   "indices": [
+    {
+      "name": "ix_carvia_cliente_enderecos_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_carvia_endereco_tipo",
       "columns": [
@@ -126,13 +131,6 @@
       "name": "ix_carvia_cliente_enderecos_cliente_id",
       "columns": [
         "cliente_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_cliente_enderecos_cnpj",
-      "columns": [
-        "cnpj"
       ],
       "unique": false
     }
