@@ -151,6 +151,10 @@
       "description": "ICMS próprio da tabela"
     },
     {
+      "name": "condicao_pagamento",
+      "type": "varchar(50)"
+    },
+    {
       "name": "valor_cotado",
       "type": "float",
       "description": "Calculado automaticamente pela tabela",

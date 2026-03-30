@@ -175,9 +175,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_numero_nf",
+      "name": "ix_pallet_nf_remessa_cnpj_destinatario",
       "columns": [
-        "numero_nf"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -190,17 +190,17 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nf_remessa_data_status",
       "columns": [
         "data_emissao",
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_remessa_numero_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     },

@@ -90,6 +90,13 @@
       "unique": false
     },
     {
+      "name": "ix_validacao_fiscal_dfe_chave_nfe",
+      "columns": [
+        "chave_nfe"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_validacao_fiscal_dfe_status",
       "columns": [
         "status"
@@ -100,13 +107,6 @@
       "name": "ix_validacao_fiscal_dfe_cnpj_fornecedor",
       "columns": [
         "cnpj_fornecedor"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_validacao_fiscal_dfe_chave_nfe",
-      "columns": [
-        "chave_nfe"
       ],
       "unique": false
     },

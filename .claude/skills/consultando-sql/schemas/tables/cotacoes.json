@@ -133,6 +133,10 @@
       "name": "icms_proprio",
       "type": "float",
       "description": "ICMS próprio da tabela"
+    },
+    {
+      "name": "condicao_pagamento",
+      "type": "varchar(50)"
     }
   ],
   "foreign_keys": [

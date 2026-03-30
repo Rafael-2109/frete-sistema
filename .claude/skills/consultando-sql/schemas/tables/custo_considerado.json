@@ -132,13 +132,6 @@
   ],
   "indices": [
     {
-      "name": "ix_custo_considerado_cod_produto",
-      "columns": [
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_custo_considerado_custo_atual",
       "columns": [
         "custo_atual"
@@ -150,6 +143,13 @@
       "columns": [
         "cod_produto",
         "custo_atual"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_custo_considerado_cod_produto",
+      "columns": [
+        "cod_produto"
       ],
       "unique": false
     },
