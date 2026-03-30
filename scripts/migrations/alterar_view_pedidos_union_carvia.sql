@@ -91,17 +91,39 @@ SELECT
     dest.fisico_cidade AS cidade_normalizada,
     dest.fisico_uf AS uf_normalizada,
     NULL::text AS codigo_ibge,
-    COALESCE(cot.valor_mercadoria::double precision, 0) AS valor_saldo_total,
+    -- Saldo = valor total da cotacao MENOS valor dos itens ja cobertos por NF
+    GREATEST(
+        COALESCE(cot.valor_mercadoria::double precision, 0) - COALESCE((
+            SELECT SUM(pi.valor_total)
+            FROM carvia_pedidos p
+            JOIN carvia_pedido_itens pi ON pi.pedido_id = p.id
+            WHERE p.cotacao_id = cot.id
+              AND p.status != 'CANCELADO'
+              AND pi.numero_nf IS NOT NULL AND pi.numero_nf != ''
+        )::double precision, 0),
+    0) AS valor_saldo_total,
     0::double precision AS pallet_total,
-    -- Peso: usar peso cubado das motos (se MOTO), senao peso_cubado ou peso manual
-    COALESCE(
-        CASE WHEN cot.tipo_material = 'MOTO' THEN (
-            SELECT COALESCE(SUM(m.peso_cubado_total), 0)
-            FROM carvia_cotacao_motos m WHERE m.cotacao_id = cot.id
-        )
-        ELSE COALESCE(cot.peso_cubado, cot.peso)
-        END::double precision, 0
-    ) AS peso_total,
+    -- Peso saldo: proporcional ao valor saldo (evita misturar cubado com bruto)
+    -- peso_saldo = peso_cubado_total × (valor_saldo / valor_total)
+    GREATEST(
+        COALESCE(
+            CASE WHEN cot.tipo_material = 'MOTO' THEN (
+                SELECT COALESCE(SUM(m.peso_cubado_total), 0)
+                FROM carvia_cotacao_motos m WHERE m.cotacao_id = cot.id
+            )
+            ELSE COALESCE(cot.peso_cubado, cot.peso)
+            END::double precision, 0
+        ) * GREATEST(
+            1.0 - COALESCE((
+                SELECT SUM(pi.valor_total)
+                FROM carvia_pedidos p
+                JOIN carvia_pedido_itens pi ON pi.pedido_id = p.id
+                WHERE p.cotacao_id = cot.id
+                  AND p.status != 'CANCELADO'
+                  AND pi.numero_nf IS NOT NULL AND pi.numero_nf != ''
+            )::double precision, 0) / NULLIF(cot.valor_mercadoria::double precision, 0),
+        0),
+    0) AS peso_total,
     cr.rota::text AS rota,
     csr.sub_rota::text AS sub_rota,
     cot.observacoes AS observ_ped_1,
@@ -138,22 +160,17 @@ LEFT JOIN cadastro_sub_rota csr ON csr.cod_uf = dest.fisico_uf
     AND UPPER(dest.fisico_cidade) LIKE '%' || UPPER(csr.nome_cidade) || '%'
     AND csr.ativa = TRUE
 WHERE cot.status = 'APROVADO'
-  -- Desaparece quando TODOS pedidos nao-cancelados tem itens com NF
-  AND NOT (
-    -- Tem pelo menos 1 pedido ativo
-    EXISTS (
-      SELECT 1 FROM carvia_pedidos p
-      WHERE p.cotacao_id = cot.id AND p.status != 'CANCELADO'
-    )
-    -- E NAO tem nenhum pedido ativo cujos itens ainda nao tem NF
-    AND NOT EXISTS (
-      SELECT 1 FROM carvia_pedidos p
-      JOIN carvia_pedido_itens pi ON pi.pedido_id = p.id
-      WHERE p.cotacao_id = cot.id
-        AND p.status != 'CANCELADO'
-        AND (pi.numero_nf IS NULL OR pi.numero_nf = '')
-    )
-  )
+  -- Aparece enquanto o saldo (valor total - itens com NF) for positivo
+  AND (
+    COALESCE(cot.valor_mercadoria::double precision, 0) - COALESCE((
+        SELECT SUM(pi.valor_total)
+        FROM carvia_pedidos p
+        JOIN carvia_pedido_itens pi ON pi.pedido_id = p.id
+        WHERE p.cotacao_id = cot.id
+          AND p.status != 'CANCELADO'
+          AND pi.numero_nf IS NOT NULL AND pi.numero_nf != ''
+    )::double precision, 0)
+  ) > 0.01
 
 UNION ALL
 
@@ -175,9 +192,15 @@ SELECT
     dest.fisico_cidade AS cidade_normalizada,
     dest.fisico_uf AS uf_normalizada,
     NULL::text AS codigo_ibge,
-    COALESCE(cot.valor_mercadoria::double precision, 0) AS valor_saldo_total,
+    -- Valor: soma dos itens deste pedido (nao da cotacao inteira)
+    COALESCE((
+        SELECT SUM(pi.valor_total)
+        FROM carvia_pedido_itens pi
+        WHERE pi.pedido_id = ped.id
+    )::double precision, 0) AS valor_saldo_total,
     0::double precision AS pallet_total,
-    -- Peso: usar peso cubado das motos (se MOTO), senao peso_cubado ou peso manual
+    -- Peso: cubado proporcional ao valor do pedido (mesma unidade que Part 2A)
+    -- peso_pedido = peso_cubado_total × (valor_pedido / valor_cotacao)
     COALESCE(
         CASE WHEN cot.tipo_material = 'MOTO' THEN (
             SELECT COALESCE(SUM(m.peso_cubado_total), 0)
@@ -185,7 +208,11 @@ SELECT
         )
         ELSE COALESCE(cot.peso_cubado, cot.peso)
         END::double precision, 0
-    ) AS peso_total,
+    ) * COALESCE((
+        SELECT SUM(pi.valor_total)
+        FROM carvia_pedido_itens pi
+        WHERE pi.pedido_id = ped.id
+    )::double precision, 0) / NULLIF(cot.valor_mercadoria::double precision, 0) AS peso_total,
     cr.rota::text AS rota,
     csr.sub_rota::text AS sub_rota,
     cot.observacoes AS observ_ped_1,

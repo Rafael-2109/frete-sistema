@@ -307,7 +307,8 @@ class EmbarqueItem(db.Model):
     agendamento_confirmado = db.Column(db.Boolean, default=False)  # ✅ NOVO: Status de confirmação do agendamento
     nota_fiscal = db.Column(db.String(20))
     volumes = db.Column(db.Integer, nullable=True)
-    peso = db.Column(db.Float)  # Peso do item
+    peso = db.Column(db.Float)  # Peso bruto (fisico) do item
+    peso_cubado = db.Column(db.Float, nullable=True)  # Peso cubado (CarVia motos); NULL = usar peso
     valor = db.Column(db.Float)  # Valor do item
 
     # === GRUPO 1: PALLETS TEÓRICOS ===

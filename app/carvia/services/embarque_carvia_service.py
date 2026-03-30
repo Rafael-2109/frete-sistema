@@ -142,6 +142,26 @@ class EmbarqueCarViaService:
             # ===== CAMINHO PADRAO: provisorio=True =====
             # Criar novo EmbarqueItem real + deduzir/deletar provisorio
 
+            # Peso cubado da NF: somar cubado real de cada veiculo pelo modelo
+            from app.carvia.models import CarviaCotacaoMoto as _CCM
+            _cubado_por_modelo = {}
+            for _m in _CCM.query.filter_by(cotacao_id=carvia_cotacao_id).all():
+                if _m.modelo_moto and _m.quantidade and _m.quantidade > 0:
+                    _cubado_por_modelo[_m.modelo_moto.nome.upper()] = (
+                        float(_m.peso_cubado_total or 0) / int(_m.quantidade)
+                    )
+            _nf_cubado = 0
+            if nf_obj:
+                for _v in nf_obj.veiculos.all():
+                    _mod = (_v.modelo or '').upper()
+                    if _mod in _cubado_por_modelo:
+                        _nf_cubado += _cubado_por_modelo[_mod]
+                    else:
+                        for _nome, _cub in _cubado_por_modelo.items():
+                            if _nome in _mod or _mod in _nome:
+                                _nf_cubado += _cub
+                                break
+
             novo_item = EmbarqueItem(
                 embarque_id=embarque_id,
                 separacao_lote_id=lote_id_nf,
@@ -150,6 +170,7 @@ class EmbarqueCarViaService:
                 pedido=pedido.numero_pedido,
                 nota_fiscal=numero_nf,
                 peso=nf_peso,
+                peso_cubado=round(_nf_cubado, 2) if _nf_cubado > 0 else item_alvo.peso_cubado,
                 valor=nf_valor,
                 pallets=0,
                 uf_destino=item_alvo.uf_destino or (dest.fisico_uf if dest else ''),
@@ -184,6 +205,7 @@ class EmbarqueCarViaService:
             # Deduzir do provisorio
             item_alvo.volumes = max(0, (item_alvo.volumes or 0) - nf_volumes)
             item_alvo.peso = max(0, (item_alvo.peso or 0) - nf_peso)
+            item_alvo.peso_cubado = max(0, (item_alvo.peso_cubado or 0) - _nf_cubado) if item_alvo.peso_cubado else None
             item_alvo.valor = max(0, (item_alvo.valor or 0) - nf_valor)
 
             if item_alvo.volumes <= 0:

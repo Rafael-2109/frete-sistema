@@ -168,7 +168,6 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        import json as json_lib
         from app.carvia.services.cliente_service import CarviaClienteService
         from app.carvia.models import CarviaClienteEndereco
 

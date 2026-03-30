@@ -423,9 +423,10 @@ def register_frete_routes(bp):
             # 2. CarviaFrete → Fatura
             frete.fatura_transportadora_id = fatura.id
 
-            # 3. Auto-preencher valor_cte com valor do subcontrato
-            if sub.valor_final and not frete.valor_cte:
-                frete.valor_cte = float(sub.valor_final)
+            # 3. valor_cte fica vazio — usuario preenche na tela de edicao
+            # valor_considerado inicia com valor_cotado (editavel)
+            if not frete.valor_considerado and frete.valor_cotado:
+                frete.valor_considerado = frete.valor_cotado
 
             db.session.flush()
 

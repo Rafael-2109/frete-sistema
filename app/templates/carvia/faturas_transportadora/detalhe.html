@@ -337,9 +337,11 @@
                                 <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}" title="Ver CTe Subcontrato">
                                     <strong>{{ sub.cte_numero or '#' ~ sub.id }}</strong>
                                 </a>
+                                {% if sub.operacao_id %}
                                 <small class="text-muted">
                                     (<a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}">Op #{{ sub.operacao_id }}</a>)
                                 </small>
+                                {% endif %}
                             </td>
                             <td>{{ sub.operacao.nome_cliente if sub.operacao else '-' }}</td>
                             <td>{{ sub.operacao.cidade_destino + '/' + sub.operacao.uf_destino if sub.operacao else '-' }}</td>

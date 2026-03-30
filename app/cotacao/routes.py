@@ -1544,14 +1544,18 @@ def fechar_frete():
                     except (ValueError, TypeError):
                         pass
 
-                    # Calcular volumes: total de motos da cotacao
+                    # Calcular volumes e peso cubado das motos da cotacao
                     carvia_volumes = None
+                    carvia_peso_cubado = None
                     if carvia_cot_id:
                         try:
                             from app.carvia.models import CarviaCotacaoMoto
-                            carvia_volumes = db.session.query(
-                                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.quantidade), 0)
-                            ).filter_by(cotacao_id=carvia_cot_id).scalar() or None
+                            agg = db.session.query(
+                                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.quantidade), 0),
+                                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.peso_cubado_total), 0),
+                            ).filter_by(cotacao_id=carvia_cot_id).first()
+                            carvia_volumes = int(agg[0]) or None
+                            carvia_peso_cubado = float(agg[1]) or None
                         except Exception:
                             pass
 
@@ -1563,6 +1567,7 @@ def fechar_frete():
                         pedido=pedido.num_pedido,
                         nota_fiscal=pedido.nf or None,
                         peso=pedido.peso_total or 0,
+                        peso_cubado=carvia_peso_cubado,
                         valor=pedido.valor_saldo_total or 0,
                         pallets=0,
                         uf_destino=uf_cv,

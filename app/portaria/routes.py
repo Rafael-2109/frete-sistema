@@ -288,13 +288,13 @@ def registrar_movimento():
                             print(f"[DEBUG] Data embarque atualizada para {registro.data_saida}")
                             flash(f'Data de embarque do Embarque #{embarque.numero} atualizada para {registro.data_saida.strftime("%d/%m/%Y")}!', 'info')
                             
-                            # ✅ PROPAGAR data_embarque para tabela Separacao
+                            # ✅ PROPAGAR data_embarque para tabela Separacao (apenas Nacom, CarVia nao tem Separacao)
                             for item in embarque.itens:
-                                if item.separacao_lote_id:
+                                if item.separacao_lote_id and not str(item.separacao_lote_id).startswith('CARVIA-'):
                                     num_atualizados = Separacao.query.filter_by(
                                         separacao_lote_id=item.separacao_lote_id
                                     ).update({'data_embarque': registro.data_saida}, synchronize_session='fetch')
-                                    
+
                                     if num_atualizados > 0:
                                         print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) atualizado(s) com data_embarque")
                                     else:
@@ -748,23 +748,35 @@ def adicionar_embarque():
             embarque.data_embarque = registro.data_saida
             print(f"[DEBUG] Data embarque atualizada para {registro.data_saida} (vinculação após saída)")
             
-            # ✅ PROPAGAR data_embarque para tabela Separacao
+            # ✅ PROPAGAR data_embarque para tabela Separacao (apenas Nacom, CarVia nao tem Separacao)
             for item in embarque.itens:
-                if item.separacao_lote_id:
+                if item.separacao_lote_id and not str(item.separacao_lote_id).startswith('CARVIA-'):
                     num_atualizados = Separacao.query.filter_by(
                         separacao_lote_id=item.separacao_lote_id
                     ).update({'data_embarque': registro.data_saida}, synchronize_session='fetch')
-                    
+
                     if num_atualizados > 0:
                         print(f"[DEBUG] Separacao lote {item.separacao_lote_id}: {num_atualizados} registro(s) atualizado(s) com data_embarque")
                     else:
                         print(f"[AVISO] Separacao lote {item.separacao_lote_id}: NENHUM registro encontrado para atualizar!")
                         flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
             
+            # Hook CarVia: gerar fretes (vinculacao apos saida)
+            try:
+                from app.carvia.services.carvia_frete_service import CarviaFreteService
+                fretes = CarviaFreteService.lancar_frete_carvia(
+                    embarque_id=embarque_id,
+                    usuario=current_user.email,
+                )
+                if fretes:
+                    flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
+            except Exception as e:
+                print(f"[AVISO] Hook CarVia FreteService falhou (vinculacao): {e}")
+
             # 🔧 CORREÇÃO: Sincroniza com sistema de entregas para cada item do embarque
             if embarque.itens:
                 print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
-                
+
                 for item in embarque.itens:
                     if item.nota_fiscal:
                         try:
@@ -772,10 +784,9 @@ def adicionar_embarque():
                             print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
                         except Exception as e:
                             print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
-                            # Não interrompe o processo por erro de sincronização
-                
+
                 flash(f'Sistema de entregas sincronizado para {len(embarque.itens)} nota(s) fiscal(is)!', 'success')
-            
+
             db.session.commit()
             flash(f'Data de embarque atualizada para {registro.data_saida.strftime("%d/%m/%Y")}!', 'info')
         
