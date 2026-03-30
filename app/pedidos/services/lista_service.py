@@ -684,6 +684,34 @@ class ListaPedidosService:
                 if item.separacao_impressa:
                     info_separacao_por_lote[lid]['separacao_impressa'] = True
 
+        # --- CarVia: enriquecer obs_separacao de carvia_cotacoes ---
+        carvia_lotes = [lid for lid in lotes_ids if str(lid).startswith('CARVIA-')]
+        if carvia_lotes:
+            from app.carvia.models import CarviaCotacao, CarviaPedido
+
+            # Batch: buscar observações das cotações CarVia
+            for lid in carvia_lotes:
+                try:
+                    if str(lid).startswith('CARVIA-PED-'):
+                        ped_id = int(str(lid).replace('CARVIA-PED-', ''))
+                        pedido_cv = db.session.get(CarviaPedido, ped_id)
+                        obs = pedido_cv.cotacao.observacoes if pedido_cv and pedido_cv.cotacao else None
+                    else:
+                        cot_id = int(str(lid).replace('CARVIA-', ''))
+                        cot = db.session.get(CarviaCotacao, cot_id)
+                        obs = cot.observacoes if cot else None
+
+                    info_separacao_por_lote[lid] = {
+                        'tem_falta_item': False,
+                        'tem_falta_pagamento': False,
+                        'num_pedido': None,
+                        'obs_separacao': obs,
+                        'separacao_impressa': False,
+                        'eh_antecipado': False
+                    }
+                except Exception:
+                    pass
+
         # --- Pagamento antecipado via CarteiraPrincipal ---
         num_pedidos = list(set([
             info['num_pedido']

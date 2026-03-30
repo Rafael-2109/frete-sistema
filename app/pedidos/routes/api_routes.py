@@ -52,11 +52,15 @@ def register_api_routes(bp):
     @login_required
     def info_separacao(lote_id): # type: ignore
         """
-        API para buscar informações detalhadas de uma separação para exibir no modal
-        Retorna todos os itens da separação com suas quantidades, valores, e status
+        API para buscar informações detalhadas de uma separação para exibir no modal.
+        Suporta Nacom (Separacao) e CarVia (CarviaCotacao/CarviaPedido).
         """
         try:
-            # Buscar todos os itens da separação
+            # ===== CarVia: polimórfico =====
+            if str(lote_id).startswith('CARVIA-'):
+                return _info_separacao_carvia(lote_id)
+
+            # ===== Nacom: fluxo original =====
             itens = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
 
             if not itens:
@@ -103,7 +107,8 @@ def register_api_routes(bp):
                 'cond_pgto': cond_pgto,
                 'pedido_separado': pedido_separado,
                 'falta_pagamento': itens[0].falta_pagamento,
-                'obs_separacao': itens[0].obs_separacao or '',  # ✅ NOVO: Observação geral do lote
+                'obs_separacao': itens[0].obs_separacao or '',
+                'eh_carvia': False,
                 'totais': {
                     'qtd': qtd_total,
                     'valor': valor_total,
@@ -119,6 +124,123 @@ def register_api_routes(bp):
                 'success': False,
                 'message': f'Erro ao buscar informações: {str(e)}'
             }), 500
+
+
+    def _info_separacao_carvia(lote_id):
+        """Retorna info de separação para pedidos CarVia (cotação ou pedido individual)."""
+        from app.carvia.models import CarviaCotacao, CarviaPedido, CarviaPedidoItem
+
+        if str(lote_id).startswith('CARVIA-PED-'):
+            # Pedido individual CarVia
+            ped_id = int(str(lote_id).replace('CARVIA-PED-', ''))
+            pedido = db.session.get(CarviaPedido, ped_id)
+            if not pedido:
+                return jsonify({'success': False, 'message': f'Pedido CarVia {lote_id} não encontrado.'}), 404
+
+            cot = pedido.cotacao
+            cliente = cot.cliente if cot else None
+            dest = cot.endereco_destino if cot else None
+
+            # Itens do pedido
+            itens_ped = CarviaPedidoItem.query.filter_by(pedido_id=ped_id).all()
+            itens_list = []
+            for item in itens_ped:
+                itens_list.append({
+                    'id': item.id,
+                    'cod_produto': '',
+                    'nome_produto': item.descricao or '',
+                    'qtd_saldo': float(item.quantidade or 0),
+                    'valor_saldo': float(item.valor_total or 0),
+                    'peso': 0,
+                    'pallet': 0,
+                    'falta_item': False,
+                    'obs_separacao': None,
+                    'numero_nf': item.numero_nf or '',
+                    'cor': item.cor or ''
+                })
+
+            valor_total = sum(float(i.valor_total or 0) for i in itens_ped)
+            qtd_total = sum(float(i.quantidade or 0) for i in itens_ped)
+
+            return jsonify({
+                'success': True,
+                'lote_id': lote_id,
+                'num_pedido': pedido.numero_pedido,
+                'cnpj_cpf': dest.cnpj if dest else '',
+                'raz_social_red': dest.razao_social if dest else (cliente.razao_social if cliente else ''),
+                'cond_pgto': None,
+                'pedido_separado': False,
+                'falta_pagamento': False,
+                'obs_separacao': cot.observacoes or '' if cot else '',
+                'eh_carvia': True,
+                'totais': {
+                    'qtd': qtd_total,
+                    'valor': valor_total,
+                    'peso': float(cot.peso or 0) if cot else 0,
+                    'pallet': 0
+                },
+                'itens': itens_list
+            })
+
+        else:
+            # Cotação CarVia (saldo)
+            cot_id = int(str(lote_id).replace('CARVIA-', ''))
+            cot = db.session.get(CarviaCotacao, cot_id)
+            if not cot:
+                return jsonify({'success': False, 'message': f'Cotação CarVia {lote_id} não encontrada.'}), 404
+
+            cliente = cot.cliente
+            dest = cot.endereco_destino
+
+            # Itens: motos ou resumo carga geral
+            itens_list = []
+            if cot.tipo_material == 'MOTO':
+                for moto in cot.motos.all():
+                    nome_moto = moto.modelo_moto.nome if moto.modelo_moto else 'Moto'
+                    itens_list.append({
+                        'id': moto.id,
+                        'cod_produto': '',
+                        'nome_produto': nome_moto,
+                        'qtd_saldo': float(moto.quantidade or 0),
+                        'valor_saldo': float(moto.valor_total or 0),
+                        'peso': float(moto.peso_cubado_total or 0),
+                        'pallet': 0,
+                        'falta_item': False,
+                        'obs_separacao': None
+                    })
+            else:
+                # Carga geral: 1 item resumo
+                itens_list.append({
+                    'id': cot.id,
+                    'cod_produto': '',
+                    'nome_produto': f'Carga Geral - {cot.tipo_material}',
+                    'qtd_saldo': 1,
+                    'valor_saldo': float(cot.valor_mercadoria or 0),
+                    'peso': float(cot.peso or 0),
+                    'pallet': 0,
+                    'falta_item': False,
+                    'obs_separacao': None
+                })
+
+            return jsonify({
+                'success': True,
+                'lote_id': lote_id,
+                'num_pedido': cot.numero_cotacao,
+                'cnpj_cpf': dest.cnpj if dest else '',
+                'raz_social_red': dest.razao_social if dest else (cliente.razao_social if cliente else ''),
+                'cond_pgto': None,
+                'pedido_separado': False,
+                'falta_pagamento': False,
+                'obs_separacao': cot.observacoes or '',
+                'eh_carvia': True,
+                'totais': {
+                    'qtd': sum(i['qtd_saldo'] for i in itens_list),
+                    'valor': float(cot.valor_mercadoria or 0),
+                    'peso': float(cot.peso or 0),
+                    'pallet': 0
+                },
+                'itens': itens_list
+            })
 
 
     @bp.route('/api/toggle_falta_item/<int:item_id>', methods=['POST']) # type: ignore
@@ -207,18 +329,43 @@ def register_api_routes(bp):
     @login_required
     def salvar_obs_separacao(lote_id): # type: ignore
         """
-        API para salvar observações da separação
-        Atualiza todos os itens do lote com a mesma observação
+        API para salvar observações da separação.
+        Suporta Nacom (Separacao) e CarVia (CarviaCotacao).
         """
-        # Guard: pedidos CarVia
-        if str(lote_id).startswith('CARVIA-'):
-            return jsonify({'success': False, 'message': 'Pedidos CarVia nao editaveis aqui.'}), 400
-
         try:
             data = request.get_json()
             obs_separacao = data.get('obs_separacao', '').strip()
 
-            # Buscar todos os itens da separação
+            # ===== CarVia: salva em carvia_cotacoes.observacoes =====
+            if str(lote_id).startswith('CARVIA-'):
+                from app.carvia.models import CarviaCotacao
+
+                # Extrair ID da cotação (tanto CARVIA-PED-X quanto CARVIA-X)
+                if str(lote_id).startswith('CARVIA-PED-'):
+                    from app.carvia.models import CarviaPedido
+                    ped_id = int(str(lote_id).replace('CARVIA-PED-', ''))
+                    pedido = db.session.get(CarviaPedido, ped_id)
+                    if not pedido:
+                        return jsonify({'success': False, 'message': f'Pedido CarVia {lote_id} não encontrado.'}), 404
+                    cot = pedido.cotacao
+                else:
+                    cot_id = int(str(lote_id).replace('CARVIA-', ''))
+                    cot = db.session.get(CarviaCotacao, cot_id)
+
+                if not cot:
+                    return jsonify({'success': False, 'message': f'Cotação CarVia não encontrada.'}), 404
+
+                cot.observacoes = obs_separacao if obs_separacao else None
+                db.session.commit()
+
+                return jsonify({
+                    'success': True,
+                    'lote_id': lote_id,
+                    'obs_separacao': obs_separacao,
+                    'itens_atualizados': 1
+                })
+
+            # ===== Nacom: fluxo original =====
             itens = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
 
             if not itens:
@@ -227,7 +374,6 @@ def register_api_routes(bp):
                     'message': f'Separação {lote_id} não encontrada.'
                 }), 404
 
-            # Atualizar observação em todos os itens do lote
             for item in itens:
                 item.obs_separacao = obs_separacao if obs_separacao else None
 
@@ -312,6 +458,61 @@ def register_api_routes(bp):
                 'success': False,
                 'error': str(e)
             }), 500
+
+
+    @bp.route('/api/endereco-carvia/<string:lote_id>', methods=['GET']) # type: ignore
+    @login_required
+    def api_endereco_carvia(lote_id): # type: ignore
+        """API para buscar endereço de destino de pedidos CarVia via carvia_cliente_enderecos."""
+        try:
+            from app.carvia.models import CarviaCotacao, CarviaPedido
+
+            # Resolver cotação
+            if str(lote_id).startswith('CARVIA-PED-'):
+                ped_id = int(str(lote_id).replace('CARVIA-PED-', ''))
+                pedido_cv = db.session.get(CarviaPedido, ped_id)
+                if not pedido_cv:
+                    return jsonify({'success': False, 'error': f'Pedido CarVia {lote_id} não encontrado'}), 404
+                cot = pedido_cv.cotacao
+            else:
+                cot_id = int(str(lote_id).replace('CARVIA-', ''))
+                cot = db.session.get(CarviaCotacao, cot_id)
+
+            if not cot:
+                return jsonify({'success': False, 'error': 'Cotação CarVia não encontrada'}), 404
+
+            dest = cot.endereco_destino
+            cliente = cot.cliente
+
+            if not dest:
+                return jsonify({'success': False, 'error': 'Endereço de destino não encontrado'}), 404
+
+            dados = {
+                # Cliente
+                'raz_social': dest.razao_social or (cliente.razao_social if cliente else ''),
+                'raz_social_red': dest.razao_social or (cliente.razao_social if cliente else ''),
+                'cnpj_cpf': dest.cnpj or '',
+                'municipio': dest.fisico_cidade or '',
+                'estado': dest.fisico_uf or '',
+                'incoterm': '',
+                # Endereço
+                'empresa_endereco_ent': dest.razao_social or '',
+                'cnpj_endereco_ent': dest.cnpj or '',
+                'cep_endereco_ent': dest.fisico_cep or '',
+                'nome_cidade': dest.fisico_cidade or '',
+                'cod_uf': dest.fisico_uf or '',
+                'bairro_endereco_ent': dest.fisico_bairro or '',
+                'rua_endereco_ent': dest.fisico_logradouro or '',
+                'endereco_ent': dest.fisico_numero or '',
+                'telefone_endereco_ent': '',  # CarviaClienteEndereco nao tem telefone
+                # Obs
+                'observ_ped_1': cot.observacoes or ''
+            }
+
+            return jsonify({'success': True, 'dados': dados})
+
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 
     @bp.route('/api/pedido/<string:num_pedido>/endereco-receita', methods=['GET']) # type: ignore

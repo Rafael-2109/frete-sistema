@@ -50,6 +50,9 @@ class Frete(db.Model):
     tabela_adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV
     tabela_icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
     
+    # Condição de pagamento ("A Vista" ou "XX dias")
+    condicao_pagamento = db.Column(db.String(50))
+
     # OS 4 TIPOS DE VALORES DO FRETE
     valor_cotado = db.Column(db.Float, nullable=False)  # Calculado automaticamente pela tabela
     valor_cte = db.Column(db.Float)  # Valor cobrado pela transportadora

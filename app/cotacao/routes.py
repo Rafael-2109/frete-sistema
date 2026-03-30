@@ -39,6 +39,23 @@ except ImportError:
 
 cotacao_bp = Blueprint("cotacao", __name__, url_prefix="/cotacao")
 
+import re as _re
+
+def _validar_condicao_pagamento(valor):
+    """Valida e sanitiza condicao de pagamento. Retorna string valida ou None."""
+    if not valor or not isinstance(valor, str):
+        return None
+    valor = valor.strip()
+    if valor == 'A Vista':
+        return 'A Vista'
+    match = _re.match(r'^(\d{1,2})\s*dias?$', valor)
+    if match:
+        dias = int(match.group(1))
+        if 1 <= dias <= 30:
+            return f'{dias} dias'
+    return None
+
+
 def formatar_protocolo(protocolo):
     """
     Formata protocolo removendo .0 se for número
@@ -1323,11 +1340,12 @@ def fechar_frete():
                 status='Fechada',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
-                peso_total=peso_total
+                peso_total=peso_total,
+                condicao_pagamento=_validar_condicao_pagamento(data.get('condicao_pagamento'))
             )
             db.session.add(cotacao)
             db.session.flush()  # Força geração do ID da cotação
-            
+
             # Atualiza embarque com nova cotação
             embarque_existente.cotacao_id = cotacao.id
             
@@ -1447,7 +1465,8 @@ def fechar_frete():
                 status='Fechada',
                 tipo_carga=tipo,
                 valor_total=valor_mercadorias,
-                peso_total=peso_total
+                peso_total=peso_total,
+                condicao_pagamento=_validar_condicao_pagamento(data.get('condicao_pagamento'))
             )
             db.session.add(cotacao)
             db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação
@@ -1802,7 +1821,8 @@ def fechar_frete_grupo():
             status='Fechada',
             tipo_carga=tipo,
             valor_total=valor_total,
-            peso_total=peso_total
+            peso_total=peso_total,
+            condicao_pagamento=_validar_condicao_pagamento(data.get('condicao_pagamento'))
         )
         db.session.add(cotacao)
         db.session.flush()  # ✅ CORREÇÃO CRÍTICA: Força geração do ID da cotação

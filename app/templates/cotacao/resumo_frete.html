@@ -41,6 +41,9 @@
             <li><strong>Frete Bruto:</strong> R$ {{ "%.2f"|format(frete_calculado.valor_total) }}</li>
             <li><strong>Frete Líquido:</strong> R$ {{ "%.2f"|format(frete_calculado.valor_liquido) }}</li>
             <li><strong>Frete por kg:</strong> R$ {{ "%.2f"|format(frete_calculado.frete_por_kg or 0) }}</li>
+            {% if cotacao.condicao_pagamento %}
+            <li><strong>Cond. Pagamento:</strong> {{ cotacao.condicao_pagamento }}</li>
+            {% endif %}
           </ul>
         </div>
       </div>
@@ -104,6 +107,9 @@
     <div class="card-header">
       <h5 class="mb-0">
         <i class="fas fa-boxes me-2"></i>Carga Fracionada - {{ cotacao.transportadora.razao_social }}
+        {% if cotacao.condicao_pagamento %}
+        <span class="badge bg-secondary ms-2">{{ cotacao.condicao_pagamento }}</span>
+        {% endif %}
       </h5>
     </div>
   </div>

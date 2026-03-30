@@ -39,7 +39,10 @@ class Cotacao(db.Model):
     gris_minimo = db.Column(db.Float, default=0)    # Valor mínimo de GRIS
     adv_minimo = db.Column(db.Float, default=0)     # Valor mínimo de ADV
     icms_proprio = db.Column(db.Float, nullable=True)  # ICMS próprio da tabela
-    
+
+    # Condição de pagamento ("A Vista" ou "XX dias")
+    condicao_pagamento = db.Column(db.String(50))
+
     # Relacionamentos
     usuario = db.relationship('Usuario', backref='cotacoes')
     transportadora = db.relationship('Transportadora', backref='cotacoes')

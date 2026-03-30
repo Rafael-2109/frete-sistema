@@ -54,22 +54,33 @@ function abrirModalInfoSeparacao(loteId) {
                     document.getElementById('botoes_antecipado_container').style.display = 'none';
                 }
 
+                // CarVia: esconder elementos nao aplicaveis
+                var ehCarvia = data.eh_carvia || false;
+                var colFalta = document.getElementById('col_falta_header');
+                if (colFalta) colFalta.style.display = ehCarvia ? 'none' : '';
+                var btnImprimir = document.getElementById('btn_imprimir_separacao');
+                if (btnImprimir) btnImprimir.style.display = ehCarvia ? 'none' : '';
+                var badgeCarvia = document.getElementById('badge_carvia_info');
+                if (badgeCarvia) badgeCarvia.style.display = ehCarvia ? 'inline-block' : 'none';
+
                 var tbody = document.getElementById('tabela_itens_separacao');
                 tbody.innerHTML = '';
 
                 data.itens.forEach(function(item) {
                     var tr = document.createElement('tr');
+                    var faltaCell = ehCarvia ? '' :
+                        '<td class="text-center">' +
+                        '<button class="btn btn-sm ' + (item.falta_item ? 'btn-danger' : 'btn-outline-secondary') + '" ' +
+                        'onclick="toggleFaltaItem(' + item.id + ', this)" style="font-size: 0.7rem;">' +
+                        (item.falta_item ? 'Falta' : 'OK') +
+                        '</button></td>';
                     tr.innerHTML = '<td><small>' + item.cod_produto + '</small></td>' +
                         '<td><small>' + item.nome_produto + '</small></td>' +
                         '<td class="text-end">' + item.qtd_saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
                         '<td class="text-end">' + item.valor_saldo.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) + '</td>' +
                         '<td class="text-end">' + item.peso.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
                         '<td class="text-end">' + item.pallet.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
-                        '<td class="text-center">' +
-                        '<button class="btn btn-sm ' + (item.falta_item ? 'btn-danger' : 'btn-outline-secondary') + '" ' +
-                        'onclick="toggleFaltaItem(' + item.id + ', this)" style="font-size: 0.7rem;">' +
-                        (item.falta_item ? 'Falta' : 'OK') +
-                        '</button></td>';
+                        faltaCell;
                     tbody.appendChild(tr);
                 });
 

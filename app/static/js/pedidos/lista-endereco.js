@@ -3,21 +3,35 @@
  * Extraido de lista_pedidos.html (linhas 2690-2933)
  */
 
-async function abrirModalEnderecoPedido(numPedido) {
+async function abrirModalEnderecoPedido(numPedido, loteId) {
     try {
-        let response = await fetch('/pedidos/api/pedido/' + numPedido + '/endereco-carteira');
-        let data = await response.json();
-        let fonte = 'carteira';
+        let response, data, fonte;
 
-        if (!response.ok || !data.success) {
-            response = await fetch('/pedidos/api/pedido/' + numPedido + '/endereco-receita');
+        // ===== CarVia: endpoint específico =====
+        if (loteId && loteId.startsWith('CARVIA-')) {
+            response = await fetch('/pedidos/api/endereco-carvia/' + loteId);
             data = await response.json();
+            fonte = 'carvia';
 
             if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Erro ao carregar dados do endereco');
+                throw new Error(data.error || 'Erro ao carregar dados do endereco CarVia');
             }
+        } else {
+            // ===== Nacom: fluxo original =====
+            response = await fetch('/pedidos/api/pedido/' + numPedido + '/endereco-carteira');
+            data = await response.json();
+            fonte = 'carteira';
 
-            fonte = data.fonte || 'receita';
+            if (!response.ok || !data.success) {
+                response = await fetch('/pedidos/api/pedido/' + numPedido + '/endereco-receita');
+                data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Erro ao carregar dados do endereco');
+                }
+
+                fonte = data.fonte || 'receita';
+            }
         }
 
         if (!document.getElementById('modalEnderecoPedido')) {
@@ -112,7 +126,7 @@ function criarModalEnderecoPedido(fonte) {
     document.body.appendChild(modal);
 }
 
-function preencherDadosEnderecoPedido(dados) {
+function preencherDadosEnderecoPedido(dados, fonte) {
     document.getElementById('modal_razao_social').textContent = dados.raz_social || '-';
     document.getElementById('modal_cnpj_cliente').textContent = dados.cnpj_cpf || '-';
     document.getElementById('modal_cliente_municipio').textContent =

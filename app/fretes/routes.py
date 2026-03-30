@@ -3536,6 +3536,11 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
 
             tabela_dados_fob = TabelaFreteManager.preparar_cotacao_fob()
 
+            # Busca condicao de pagamento da cotação (se existir)
+            condicao_pagamento_fob = None
+            if embarque.cotacao_id and embarque.cotacao:
+                condicao_pagamento_fob = embarque.cotacao.condicao_pagamento
+
             novo_frete = Frete(
                 embarque_id=embarque_id,
                 cnpj_cliente=cnpj_cliente,
@@ -3551,6 +3556,7 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
                 numeros_nfs=numeros_nfs,
                 valor_cotado=0,
                 valor_considerado=0,
+                condicao_pagamento=condicao_pagamento_fob,
                 fatura_frete_id=None,
                 criado_por=usuario,
                 lancado_em=agora_utc_naive(),
@@ -3615,6 +3621,11 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
             # Calcula frete usando valor e peso total do CNPJ
             valor_cotado = calcular_valor_frete_pela_tabela(tabela_dados, peso_total_cnpj, valor_total_cnpj)
 
+        # Busca condicao de pagamento da cotação (se existir)
+        condicao_pagamento = None
+        if embarque.cotacao_id and embarque.cotacao:
+            condicao_pagamento = embarque.cotacao.condicao_pagamento
+
         # Cria o frete
         novo_frete = Frete(
             embarque_id=embarque_id,
@@ -3632,6 +3643,8 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
             # Valores
             valor_cotado=valor_cotado,
             valor_considerado=valor_cotado,
+            # Condição de pagamento (propagada da cotação)
+            condicao_pagamento=condicao_pagamento,
             # Fatura
             fatura_frete_id=None,
             # Controle

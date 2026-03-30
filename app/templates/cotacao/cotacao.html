@@ -100,6 +100,34 @@
   </div>
 
   {% if todos_mesmo_uf %}
+  {# 1.5) Condição de Pagamento #}
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header">
+      <i class="fas fa-money-bill-wave"></i> Condição de Pagamento
+    </div>
+    <div class="card-body">
+      <div class="row align-items-end">
+        <div class="col-md-3">
+          <label for="selectCondicaoPagamento" class="form-label">Tipo</label>
+          <select class="form-select" id="selectCondicaoPagamento">
+            <option value="">Selecione...</option>
+            <option value="A Vista">A Vista</option>
+            <option value="A Prazo">A Prazo</option>
+          </select>
+        </div>
+        <div class="col-md-3" id="divPrazoDias" style="display: none;">
+          <label for="inputPrazoDias" class="form-label">Prazo (dias)</label>
+          <input type="number" class="form-control" id="inputPrazoDias"
+                 min="1" max="30" placeholder="Ex: 30">
+          <div class="form-text">Limite: 30 dias</div>
+        </div>
+        <div class="col-md-4">
+          <span id="labelCondicaoResumo" class="badge bg-secondary d-none"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   {# 2) Seções: Carga Direta / Carga Fracionada #}
   <div class="accordion" id="accordionFretes">
     <!-- Seção Carga Direta -->
@@ -877,6 +905,7 @@
       tabela_selecionada: tabelaSelecionada,  // ✅ NOVO: Envia tabela completa
       indice_original: indiceOriginal,  // Mantém para compatibilidade/debug
       embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else None) | tojson }},
+      condicao_pagamento: obterCondicaoPagamento(),
       pedidos: {{ pedidos_selecionados| tojson | safe
   }}.map(function (pedido) {
     return {
@@ -1002,7 +1031,8 @@
       transportadora_id: transportadora_id,
       cnpjs: cnpjs,
       tabelas_por_cnpj: tabelasPorCnpj,  // ✅ NOVO: Envia tabelas completas de todos os CNPJs
-      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else None) | tojson }}
+      embarque_id: {{ (alterando_embarque_info.embarque_id if alterando_embarque_info else None) | tojson }},
+      condicao_pagamento: obterCondicaoPagamento()
     };
 
     // ✅ TIMEOUT: Define timeout de 30 segundos para aviso
@@ -1170,6 +1200,47 @@
       document.body.appendChild(form);
       form.submit();
     }
+  }
+
+  // ===== Condição de Pagamento =====
+  $('#selectCondicaoPagamento').change(function() {
+    const val = $(this).val();
+    if (val === 'A Prazo') {
+      $('#divPrazoDias').show();
+      $('#inputPrazoDias').focus();
+    } else {
+      $('#divPrazoDias').hide();
+      $('#inputPrazoDias').val('');
+    }
+    atualizarResumoCondicao();
+  });
+
+  $('#inputPrazoDias').on('input', function() {
+    let dias = parseInt($(this).val());
+    if (dias > 30) { $(this).val(30); dias = 30; }
+    if (dias < 1) { $(this).val(''); }
+    atualizarResumoCondicao();
+  });
+
+  function atualizarResumoCondicao() {
+    const tipo = $('#selectCondicaoPagamento').val();
+    const $label = $('#labelCondicaoResumo');
+    const texto = obterCondicaoPagamento();
+    if (texto) {
+      $label.text(texto).removeClass('d-none');
+    } else {
+      $label.addClass('d-none');
+    }
+  }
+
+  function obterCondicaoPagamento() {
+    const tipo = $('#selectCondicaoPagamento').val();
+    if (tipo === 'A Vista') return 'A Vista';
+    if (tipo === 'A Prazo') {
+      const dias = parseInt($('#inputPrazoDias').val());
+      if (dias && dias >= 1 && dias <= 30) return dias + ' dias';
+    }
+    return '';
   }
 </script>
 {% endblock %}

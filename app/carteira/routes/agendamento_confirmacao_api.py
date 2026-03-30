@@ -18,8 +18,13 @@ logger = logging.getLogger(__name__)
 @carteira_bp.route('/api/separacao/<string:lote_id>/confirmar-agendamento', methods=['POST'])
 @login_required
 def confirmar_agendamento_separacao(lote_id):
-    """Confirmar agendamento de todas as separações de um lote (independente do status)"""
+    """Confirmar agendamento. Suporta Nacom (Separacao) e CarVia (CarviaCotacao)."""
     try:
+        # ===== CarVia =====
+        if str(lote_id).startswith('CARVIA-'):
+            return _toggle_agendamento_carvia(lote_id, confirmar=True)
+
+        # ===== Nacom: fluxo original =====
         separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
 
         if not separacoes:
@@ -80,8 +85,13 @@ def confirmar_agendamento_separacao(lote_id):
 @carteira_bp.route('/api/separacao/<string:lote_id>/reverter-agendamento', methods=['POST'])
 @login_required
 def reverter_agendamento_separacao(lote_id):
-    """Reverter confirmação de agendamento de todas as separações de um lote (independente do status)"""
+    """Reverter confirmação de agendamento. Suporta Nacom e CarVia."""
     try:
+        # ===== CarVia =====
+        if str(lote_id).startswith('CARVIA-'):
+            return _toggle_agendamento_carvia(lote_id, confirmar=False)
+
+        # ===== Nacom: fluxo original =====
         separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
 
         if not separacoes:
@@ -129,3 +139,41 @@ def reverter_agendamento_separacao(lote_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+def _toggle_agendamento_carvia(lote_id, confirmar=True):
+    """Toggle agendamento_confirmado para cotações CarVia."""
+    from app.carvia.models import CarviaCotacao, CarviaPedido
+
+    # Resolver cotação a partir do lote_id
+    if str(lote_id).startswith('CARVIA-PED-'):
+        ped_id = int(str(lote_id).replace('CARVIA-PED-', ''))
+        pedido = db.session.get(CarviaPedido, ped_id)
+        if not pedido:
+            return jsonify({'success': False, 'error': f'Pedido CarVia {lote_id} não encontrado'}), 404
+        cot = pedido.cotacao
+    else:
+        cot_id = int(str(lote_id).replace('CARVIA-', ''))
+        cot = db.session.get(CarviaCotacao, cot_id)
+
+    if not cot:
+        return jsonify({'success': False, 'error': f'Cotação CarVia não encontrada'}), 404
+
+    # Verificar se tem data_agenda
+    if confirmar and not cot.data_agenda:
+        return jsonify({
+            'success': False,
+            'error': 'Cotação CarVia não possui data de agendamento'
+        }), 400
+
+    cot.agendamento_confirmado = confirmar
+    db.session.commit()
+
+    acao = 'confirmado' if confirmar else 'revertido'
+    logger.info(f"Agendamento CarVia {acao} para {lote_id} (cotação {cot.numero_cotacao}) por {current_user.nome}")
+
+    return jsonify({
+        'success': True,
+        'message': f'Agendamento {acao} para cotação CarVia {cot.numero_cotacao}',
+        'tabelas_sincronizadas': []
+    })

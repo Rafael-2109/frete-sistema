@@ -443,9 +443,9 @@
                   {% endif %}
                   <!-- Botão para ver endereço -->
                   <br>
-                  <button type="button" 
-                          class="btn btn-sm btn-outline-info mt-1" 
-                          onclick="abrirModalEnderecoPedido('{{ p.num_pedido }}')"
+                  <button type="button"
+                          class="btn btn-sm btn-outline-info mt-1"
+                          onclick="abrirModalEnderecoPedido('{{ p.num_pedido }}', '{{ p.separacao_lote_id }}')"
                           title="Ver endereço de entrega">
                       <i class="fas fa-map-marker-alt"></i> Endereço
                   </button>

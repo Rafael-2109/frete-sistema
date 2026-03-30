@@ -1435,6 +1435,9 @@ class CarviaCotacao(db.Model):
     aprovado_por = db.Column(db.String(100), nullable=True)
     aprovado_em = db.Column(db.DateTime, nullable=True)
 
+    # Agendamento
+    agendamento_confirmado = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+
     # Observacoes
     observacoes = db.Column(db.Text, nullable=True)
 

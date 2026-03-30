@@ -369,6 +369,13 @@
                     </h5>
                 </div>
                 <div class="card-body">
+                    {% if frete.condicao_pagamento %}
+                    <div class="mb-3">
+                        <label class="fw-bold text-secondary">Cond. Pagamento</label>
+                        <div><span class="badge bg-secondary fs-6">{{ frete.condicao_pagamento }}</span></div>
+                    </div>
+                    {% endif %}
+
                     <div class="mb-3">
                         <label class="fw-bold text-primary">Valor Cotado</label>
                         <div class="h4 text-primary">{{ (frete.valor_cotado)|moeda_carteira }}</div>

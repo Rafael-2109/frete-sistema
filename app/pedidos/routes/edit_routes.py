@@ -18,13 +18,11 @@ def register_edit_routes(bp):
         """
         Edita campos específicos de um pedido (agenda, protocolo, expedição)
         e sincroniza as alterações com a separação relacionada.
-        Permite alterações apenas em pedidos com status "ABERTO".
-        Suporta requisições AJAX para pop-up.
+        Suporta Nacom (Separacao) e CarVia (CarviaCotacao).
         """
-        # Guard: pedidos CarVia nao sao editaveis por esta rota
+        # ===== CarVia: rota polimórfica =====
         if str(lote_id).startswith('CARVIA-'):
-            flash('Pedidos CarVia devem ser editados no modulo CarVia.', 'warning')
-            return redirect(url_for('pedidos.lista_pedidos'))
+            return _editar_pedido_carvia(lote_id)
 
         pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
 
@@ -175,9 +173,9 @@ def register_edit_routes(bp):
 
         # ✅ RESPOSTA PARA AJAX (apenas o conteúdo do formulário)
         if request.args.get('ajax'):
-            return render_template('pedidos/editar_pedido_ajax.html', form=form, pedido=pedido, separacao=separacao_exemplo, contato_agendamento=contato_agendamento)
+            return render_template('pedidos/editar_pedido_ajax.html', form=form, pedido=pedido, separacao=separacao_exemplo, contato_agendamento=contato_agendamento, eh_carvia=False)
 
-        return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido, separacao=separacao_exemplo, contato_agendamento=contato_agendamento)
+        return render_template('pedidos/editar_pedido.html', form=form, pedido=pedido, separacao=separacao_exemplo, contato_agendamento=contato_agendamento, eh_carvia=False)
 
 
     @bp.route('/reset_status/<string:lote_id>', methods=['POST']) # type: ignore
@@ -489,5 +487,101 @@ def register_edit_routes(bp):
             flash(f"Erro ao excluir pedido: {str(e)}", "error")
     
         return redirect(url_for('pedidos.lista_pedidos'))
+
+    def _editar_pedido_carvia(lote_id):
+        """Editar datas (expedição/agenda) de cotação CarVia."""
+        from app.carvia.models import CarviaCotacao, CarviaPedido
+        from datetime import date
+
+        # Resolver cotação
+        if str(lote_id).startswith('CARVIA-PED-'):
+            ped_id = int(str(lote_id).replace('CARVIA-PED-', ''))
+            pedido_cv = db.session.get(CarviaPedido, ped_id)
+            if not pedido_cv:
+                if request.args.get('ajax'):
+                    return jsonify({'success': False, 'message': 'Pedido CarVia não encontrado'}), 404
+                flash('Pedido CarVia não encontrado', 'error')
+                return redirect(url_for('pedidos.lista_pedidos'))
+            cot = pedido_cv.cotacao
+        else:
+            cot_id = int(str(lote_id).replace('CARVIA-', ''))
+            cot = db.session.get(CarviaCotacao, cot_id)
+
+        if not cot:
+            if request.args.get('ajax'):
+                return jsonify({'success': False, 'message': 'Cotação CarVia não encontrada'}), 404
+            flash('Cotação CarVia não encontrada', 'error')
+            return redirect(url_for('pedidos.lista_pedidos'))
+
+        # Buscar pedido da VIEW para exibição
+        pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
+
+        if request.method == 'POST':
+            try:
+                if request.is_json:
+                    data = request.get_json()
+                else:
+                    data = request.form
+
+                # Atualizar datas na cotação CarVia
+                expedicao_str = data.get('expedicao', '')
+                agendamento_str = data.get('agendamento', '')
+                agendamento_confirmado = data.get('agendamento_confirmado')
+
+                if expedicao_str:
+                    cot.data_expedicao = date.fromisoformat(expedicao_str)
+                else:
+                    cot.data_expedicao = None
+
+                if agendamento_str:
+                    cot.data_agenda = date.fromisoformat(agendamento_str)
+                else:
+                    cot.data_agenda = None
+
+                if agendamento_confirmado is not None:
+                    cot.agendamento_confirmado = agendamento_confirmado in (True, 'True', 'true', 'on', '1', 'y')
+
+                db.session.commit()
+
+                if request.args.get('ajax') or request.is_json:
+                    return jsonify({
+                        'success': True,
+                        'message': f'Cotação CarVia {cot.numero_cotacao} atualizada com sucesso!'
+                    })
+
+                flash(f'Cotação CarVia {cot.numero_cotacao} atualizada com sucesso!', 'success')
+                return redirect(url_for('pedidos.lista_pedidos'))
+
+            except Exception as e:
+                db.session.rollback()
+                if request.args.get('ajax') or request.is_json:
+                    return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+                flash(f'Erro ao atualizar: {str(e)}', 'error')
+
+        # GET: preencher form com dados atuais
+        form = EditarPedidoForm()
+        form.expedicao.data = cot.data_expedicao
+        form.agendamento.data = cot.data_agenda
+        form.protocolo.data = None
+        form.agendamento_confirmado.data = cot.agendamento_confirmado
+
+        if request.args.get('ajax'):
+            return render_template(
+                'pedidos/editar_pedido_ajax.html',
+                form=form,
+                pedido=pedido,
+                separacao=None,
+                contato_agendamento=None,
+                eh_carvia=True
+            )
+
+        return render_template(
+            'pedidos/editar_pedido.html',
+            form=form,
+            pedido=pedido,
+            separacao=None,
+            contato_agendamento=None,
+            eh_carvia=True
+        )
 
     # Função gerar_lote_id movida para app.utils.lote_utils para padronização
