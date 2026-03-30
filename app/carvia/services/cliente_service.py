@@ -170,7 +170,12 @@ class CarviaClienteService:
 
     @staticmethod
     def atualizar_endereco(endereco_id: int, dados: dict) -> Tuple[bool, Optional[str]]:
-        """Atualiza endereco fisico (editavel). Retorna (sucesso, erro)."""
+        """Atualiza endereco fisico (editavel). Retorna (sucesso, erro).
+
+        Para destinos provisorios, tambem aceita:
+        - cnpj: preencher CNPJ pendente (converte provisorio para definitivo)
+        - dados_receita_*: preencher campos da Receita ao definir CNPJ
+        """
         from app.carvia.models import CarviaClienteEndereco
 
         endereco = db.session.get(CarviaClienteEndereco, endereco_id)
@@ -192,6 +197,20 @@ class CarviaClienteService:
         if 'principal' in dados:
             endereco.principal = dados['principal']
 
+        # Atualizar CNPJ (para completar destino provisorio)
+        if 'cnpj' in dados and dados['cnpj']:
+            cnpj_limpo = CarviaClienteService._limpar_cnpj(dados['cnpj'])
+            if cnpj_limpo and len(cnpj_limpo) in (11, 14):
+                endereco.cnpj = cnpj_limpo
+                if endereco.provisorio:
+                    endereco.provisorio = False
+
+        # Campos Receita (preenchidos ao definir CNPJ via Receita Federal)
+        for campo in ('uf', 'cidade', 'logradouro', 'numero', 'bairro', 'cep', 'complemento'):
+            chave = f'receita_{campo}'
+            if chave in dados:
+                setattr(endereco, chave, dados[chave])
+
         db.session.flush()
         return True, None
 
@@ -210,11 +229,130 @@ class CarviaClienteService:
 
     @staticmethod
     def buscar_enderecos_por_cnpj(cnpj: str) -> List:
-        """Busca todos os enderecos cadastrados para um CNPJ (cross-cliente)."""
+        """Busca todos os enderecos cadastrados para um CNPJ (cross-cliente).
+
+        Inclui origens globais (cliente_id IS NULL) e destinos de clientes.
+        """
         from app.carvia.models import CarviaClienteEndereco
 
         cnpj_limpo = CarviaClienteService._limpar_cnpj(cnpj)
         return CarviaClienteEndereco.query.filter_by(cnpj=cnpj_limpo).all()
+
+    # ==================== ORIGENS GLOBAIS ====================
+
+    @staticmethod
+    def listar_origens_globais() -> List:
+        """Retorna todas as origens globais (cliente_id IS NULL, tipo=ORIGEM)."""
+        from app.carvia.models import CarviaClienteEndereco
+
+        return CarviaClienteEndereco.query.filter(
+            CarviaClienteEndereco.tipo == 'ORIGEM',
+            CarviaClienteEndereco.cliente_id.is_(None),
+        ).order_by(CarviaClienteEndereco.razao_social).all()
+
+    @staticmethod
+    def adicionar_origem_global(
+        cnpj: str,
+        criado_por: str,
+        razao_social: Optional[str] = None,
+        dados_receita: Optional[Dict] = None,
+        dados_fisico: Optional[Dict] = None,
+    ) -> Tuple[Optional[object], Optional[str]]:
+        """Cria origem global (compartilhada entre todos os clientes).
+
+        Retorna (endereco, erro).
+        """
+        from app.carvia.models import CarviaClienteEndereco
+        from app.utils.timezone import agora_utc_naive
+
+        cnpj_limpo = CarviaClienteService._limpar_cnpj(cnpj)
+        if not cnpj_limpo or len(cnpj_limpo) not in (11, 14):
+            return None, 'Documento invalido (CNPJ=14 digitos, CPF=11 digitos).'
+
+        # Verificar se ja existe origem global com esse CNPJ
+        existente = CarviaClienteEndereco.query.filter(
+            CarviaClienteEndereco.cnpj == cnpj_limpo,
+            CarviaClienteEndereco.tipo == 'ORIGEM',
+            CarviaClienteEndereco.cliente_id.is_(None),
+        ).first()
+        if existente:
+            return existente, None  # Retorna existente sem erro
+
+        receita = dados_receita or {}
+        fisico = dados_fisico if dados_fisico else dict(receita)
+
+        endereco = CarviaClienteEndereco(
+            cliente_id=None,  # Origem global
+            cnpj=cnpj_limpo,
+            razao_social=razao_social,
+            tipo='ORIGEM',
+            principal=False,
+            criado_por=criado_por,
+            criado_em=agora_utc_naive(),
+            receita_uf=receita.get('uf'),
+            receita_cidade=receita.get('cidade'),
+            receita_logradouro=receita.get('logradouro'),
+            receita_numero=receita.get('numero'),
+            receita_bairro=receita.get('bairro'),
+            receita_cep=receita.get('cep'),
+            receita_complemento=receita.get('complemento'),
+            fisico_uf=fisico.get('uf'),
+            fisico_cidade=fisico.get('cidade'),
+            fisico_logradouro=fisico.get('logradouro'),
+            fisico_numero=fisico.get('numero'),
+            fisico_bairro=fisico.get('bairro'),
+            fisico_cep=fisico.get('cep'),
+            fisico_complemento=fisico.get('complemento'),
+        )
+        db.session.add(endereco)
+        db.session.flush()
+        return endereco, None
+
+    # ==================== DESTINO PROVISORIO ====================
+
+    @staticmethod
+    def adicionar_destino_provisorio(
+        cliente_id: int,
+        criado_por: str,
+        razao_social: Optional[str] = None,
+        dados_fisico: Optional[Dict] = None,
+    ) -> Tuple[Optional[object], Optional[str]]:
+        """Cria destino provisorio sem CNPJ para cotacao de frete.
+
+        CNPJ sera preenchido depois, antes da aprovacao.
+        Endereco fisico (UF + cidade) e obrigatorio.
+        """
+        from app.carvia.models import CarviaCliente, CarviaClienteEndereco
+        from app.utils.timezone import agora_utc_naive
+
+        cliente = db.session.get(CarviaCliente, cliente_id)
+        if not cliente:
+            return None, 'Cliente nao encontrado.'
+
+        fisico = dados_fisico or {}
+        if not fisico.get('uf') or not fisico.get('cidade'):
+            return None, 'UF e cidade do destino sao obrigatorios mesmo para provisorio.'
+
+        endereco = CarviaClienteEndereco(
+            cliente_id=cliente_id,
+            cnpj=None,
+            razao_social=razao_social,
+            tipo='DESTINO',
+            principal=False,
+            provisorio=True,
+            criado_por=criado_por,
+            criado_em=agora_utc_naive(),
+            fisico_uf=fisico.get('uf'),
+            fisico_cidade=fisico.get('cidade'),
+            fisico_logradouro=fisico.get('logradouro'),
+            fisico_numero=fisico.get('numero'),
+            fisico_bairro=fisico.get('bairro'),
+            fisico_cep=fisico.get('cep'),
+            fisico_complemento=fisico.get('complemento'),
+        )
+        db.session.add(endereco)
+        db.session.flush()
+        return endereco, None
 
     # ==================== INTEGRACAO RECEITA ====================
 

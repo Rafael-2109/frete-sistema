@@ -1443,6 +1443,7 @@ def imprimir_embarque_completo(embarque_id):
             'peso_bruto_nf': dados.get('peso_bruto_nf', 0),
             'peso_cubado_nf': dados.get('peso_cubado_nf', 0),
             'filial': dados['filial'],
+            'observacoes': dados.get('observacoes'),
         })
     
     # 🚚 Gerar QR Code para rastreamento

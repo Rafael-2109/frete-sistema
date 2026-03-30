@@ -282,6 +282,145 @@ def register_pedido_routes(bp):
             logger.error("Erro ao anexar NF ao pedido %s: %s", pedido_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
+    # ==================== FILIAL EDITAVEL ====================
+
+    @bp.route('/api/pedidos-carvia/<int:pedido_id>/filial', methods=['PATCH'])
+    @login_required
+    def api_editar_filial_pedido(pedido_id):
+        """Edita filial (SP/RJ) de um pedido CarVia."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaPedido
+
+        pedido = db.session.get(CarviaPedido, pedido_id)
+        if not pedido:
+            return jsonify({'erro': 'Pedido nao encontrado.'}), 404
+        if pedido.status_calculado == 'EMBARCADO':
+            return jsonify({'erro': 'Pedido EMBARCADO nao pode ter filial alterada.'}), 400
+
+        data = request.get_json()
+        nova_filial = (data.get('filial') or '').upper()
+        if nova_filial not in ('SP', 'RJ'):
+            return jsonify({'erro': 'Filial deve ser SP ou RJ.'}), 400
+
+        pedido.filial = nova_filial
+        pedido.tipo_separacao = 'ESTOQUE' if nova_filial == 'SP' else 'CROSSDOCK'
+        db.session.commit()
+        return jsonify({'sucesso': True, 'filial': nova_filial, 'tipo_separacao': pedido.tipo_separacao})
+
+    # ==================== DESANEXAR NF ====================
+
+    @bp.route('/api/pedidos-carvia/<int:pedido_id>/desanexar-nf', methods=['POST'])
+    @login_required
+    def api_desanexar_nf_pedido(pedido_id):
+        """Desanexa NF do pedido (limpa numero_nf, reverte status para ABERTO).
+
+        Remove EmbarqueItem CARVIA-NF-* vinculado e devolve saldo ao provisorio.
+        O pedido NAO e excluido — apenas volta ao estado ABERTO.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaPedido, CarviaNf
+        from app.embarques.models import EmbarqueItem
+
+        pedido = db.session.get(CarviaPedido, pedido_id)
+        if not pedido:
+            return jsonify({'erro': 'Pedido nao encontrado.'}), 404
+
+        if pedido.status_calculado == 'EMBARCADO':
+            return jsonify({'erro': 'Pedido EMBARCADO nao pode ter NF desanexada.'}), 400
+
+        try:
+            cotacao_id = pedido.cotacao_id
+
+            # 1. Coletar NFs dos itens do pedido
+            nfs_do_pedido = [i.numero_nf for i in pedido.itens.all() if i.numero_nf]
+            if not nfs_do_pedido:
+                return jsonify({'erro': 'Pedido nao possui NF vinculada.'}), 400
+
+            nf_ids = []
+            for nf_num in set(nfs_do_pedido):
+                nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
+                if nf_obj:
+                    nf_ids.append(nf_obj.id)
+
+            # 2. Remover EmbarqueItems CARVIA-NF-* e somar saldo
+            peso_devolver = 0
+            valor_devolver = 0
+            vol_devolver = 0
+            embarque_id_ref = None
+
+            for nf_id in nf_ids:
+                lote_nf = f'CARVIA-NF-{nf_id}'
+                ei = EmbarqueItem.query.filter_by(
+                    separacao_lote_id=lote_nf, status='ativo',
+                ).first()
+                if ei:
+                    peso_devolver += float(ei.peso or 0)
+                    valor_devolver += float(ei.valor or 0)
+                    vol_devolver += int(ei.volumes or 0)
+                    embarque_id_ref = ei.embarque_id
+                    db.session.delete(ei)
+
+            # 3. Devolver saldo ao provisorio
+            if embarque_id_ref and cotacao_id:
+                provisorio = EmbarqueItem.query.filter_by(
+                    carvia_cotacao_id=cotacao_id,
+                    provisorio=True,
+                    status='ativo',
+                ).first()
+
+                if provisorio:
+                    provisorio.volumes = (provisorio.volumes or 0) + vol_devolver
+                    provisorio.peso = (provisorio.peso or 0) + peso_devolver
+                    provisorio.valor = (provisorio.valor or 0) + valor_devolver
+                elif peso_devolver > 0 or vol_devolver > 0:
+                    from app.carvia.models import CarviaCotacao
+                    cotacao = db.session.get(CarviaCotacao, cotacao_id)
+                    dest = cotacao.endereco_destino if cotacao else None
+                    novo_prov = EmbarqueItem(
+                        embarque_id=embarque_id_ref,
+                        separacao_lote_id=f'CARVIA-COT-{cotacao_id}',
+                        cnpj_cliente=dest.cnpj if dest else '',
+                        cliente=cotacao.cliente.nome_comercial if cotacao and cotacao.cliente else '',
+                        pedido=cotacao.numero_cotacao if cotacao else '',
+                        peso=peso_devolver,
+                        valor=valor_devolver,
+                        pallets=0,
+                        uf_destino=dest.fisico_uf if dest else '',
+                        cidade_destino=dest.fisico_cidade if dest else '',
+                        volumes=vol_devolver,
+                        provisorio=True,
+                        carvia_cotacao_id=cotacao_id,
+                    )
+                    db.session.add(novo_prov)
+
+            # 4. Limpar numero_nf dos itens
+            for item in pedido.itens.all():
+                item.numero_nf = None
+
+            # 5. Reverter status para ABERTO
+            pedido.status = 'ABERTO'
+
+            db.session.commit()
+            logger.info(
+                "NF desanexada do pedido %s (cotacao %s). NFs: %s",
+                pedido.numero_pedido, cotacao_id, nfs_do_pedido,
+            )
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'NF desanexada. Pedido {pedido.numero_pedido} voltou para ABERTO.',
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao desanexar NF do pedido %s: %s", pedido_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    # ==================== EXCLUIR PEDIDO ====================
+
     @bp.route('/api/pedidos-carvia/<int:pedido_id>', methods=['DELETE'])
     @login_required
     def api_excluir_pedido(pedido_id):

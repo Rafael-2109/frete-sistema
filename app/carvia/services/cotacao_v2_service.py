@@ -48,12 +48,17 @@ class CotacaoV2Service:
             return None, 'Cliente nao encontrado.'
 
         origem = db.session.get(CarviaClienteEndereco, endereco_origem_id)
-        if not origem or origem.cliente_id != cliente_id:
+        if not origem or origem.tipo != 'ORIGEM':
             return None, 'Endereco de origem invalido.'
+        # Origem global (cliente_id=None) e valida para qualquer cliente
+        if origem.cliente_id is not None and origem.cliente_id != cliente_id:
+            return None, 'Endereco de origem nao pertence a este cliente.'
 
         destino = db.session.get(CarviaClienteEndereco, endereco_destino_id)
-        if not destino or destino.cliente_id != cliente_id:
+        if not destino or destino.tipo != 'DESTINO':
             return None, 'Endereco de destino invalido.'
+        if destino.cliente_id != cliente_id:
+            return None, 'Endereco de destino nao pertence a este cliente.'
 
         tipo_material = tipo_material.upper()
         if tipo_material not in ('CARGA_GERAL', 'MOTO'):
@@ -416,6 +421,13 @@ class CotacaoV2Service:
         if cotacao.data_expedicao is None:
             return False, 'Data de expedicao obrigatoria antes de gravar.'
 
+        # Bloquear se destino provisorio sem CNPJ
+        destino = cotacao.endereco_destino
+        if destino and destino.provisorio and not destino.cnpj:
+            return False, (
+                'Destino provisorio sem CNPJ. Preencha o CNPJ do destino antes de gravar.'
+            )
+
         cotacao.status = 'ENVIADO'
         db.session.flush()
         return True, None
@@ -510,15 +522,26 @@ class CotacaoV2Service:
         if cotacao.status != 'APROVADO':
             return False, f'Cotacao em status {cotacao.status}, esperado APROVADO.'
 
-        # Verificar se ha pedidos em estados irreversiveis
-        pedidos_bloqueantes = CarviaPedido.query.filter(
+        # Verificar se ha pedidos embarcados (irreversivel)
+        pedidos_embarcados = CarviaPedido.query.filter(
             CarviaPedido.cotacao_id == cotacao_id,
-            CarviaPedido.status.in_(['EMBARCADO', 'FATURADO']),
+            CarviaPedido.status == 'EMBARCADO',
         ).count()
-        if pedidos_bloqueantes > 0:
+        if pedidos_embarcados > 0:
             return False, (
-                f'Cotacao possui {pedidos_bloqueantes} pedido(s) EMBARCADO/FATURADO. '
+                f'Cotacao possui {pedidos_embarcados} pedido(s) EMBARCADO. '
                 'Nao e possivel reabrir.'
+            )
+
+        # Verificar se ha pedidos com NF vinculada (FATURADO)
+        pedidos_faturados = CarviaPedido.query.filter(
+            CarviaPedido.cotacao_id == cotacao_id,
+            CarviaPedido.status == 'FATURADO',
+        ).count()
+        if pedidos_faturados > 0:
+            return False, (
+                f'Cotacao possui {pedidos_faturados} pedido(s) com NF vinculada. '
+                'Use "Desanexar NF" nos pedidos antes de reabrir.'
             )
 
         cotacao.status = 'RASCUNHO'

@@ -1548,7 +1548,9 @@ def register_cotacao_v2_routes(bp):
     def api_anexar_nf_cotacao(cotacao_id): # type: ignore
         """Anexa NF na cotacao via upload de arquivo (PDF DANFE ou XML NF-e).
 
-        Form multipart: filial=SP|RJ, arquivo=<file>
+        Form multipart: origem_id=<int>, arquivo=<file>
+        (backward compat: filial=SP|RJ tambem aceito)
+
         Parseia o arquivo, cria CarviaNf + itens, cria/reutiliza pedido,
         vincula e expande provisorio no embarque.
         """
@@ -1556,8 +1558,8 @@ def register_cotacao_v2_routes(bp):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
         from app.carvia.models import (
-            CarviaCotacao, CarviaNf, CarviaNfItem, CarviaNfVeiculo,
-            CarviaPedido, CarviaPedidoItem,
+            CarviaCotacao, CarviaClienteEndereco, CarviaNf, CarviaNfItem,
+            CarviaNfVeiculo, CarviaPedido, CarviaPedidoItem,
         )
         from app.utils.timezone import agora_utc_naive
 
@@ -1567,9 +1569,18 @@ def register_cotacao_v2_routes(bp):
         if cotacao.status != 'APROVADO':
             return jsonify({'erro': f'Cotacao em status {cotacao.status}, esperado APROVADO.'}), 400
 
-        filial = (request.form.get('filial') or '').upper()
-        if filial not in ('SP', 'RJ'):
-            return jsonify({'erro': 'Filial deve ser SP ou RJ.'}), 400
+        # Determinar filial: novo fluxo (origem_id) ou legado (filial direta)
+        origem_id = request.form.get('origem_id', type=int)
+        if origem_id:
+            origem = db.session.get(CarviaClienteEndereco, origem_id)
+            if not origem or origem.tipo != 'ORIGEM':
+                return jsonify({'erro': 'Origem invalida.'}), 400
+            filial = 'RJ' if origem.fisico_uf == 'RJ' else 'SP'
+        else:
+            # Backward compat: filial direta
+            filial = (request.form.get('filial') or '').upper()
+            if filial not in ('SP', 'RJ'):
+                return jsonify({'erro': 'Filial ou origem_id obrigatorio.'}), 400
 
         arquivo = request.files.get('arquivo')
         if not arquivo or not arquivo.filename:
@@ -1782,31 +1793,138 @@ def register_cotacao_v2_routes(bp):
     @bp.route('/api/cotacoes/enderecos-cliente/<int:cliente_id>') # type: ignore
     @login_required
     def api_enderecos_cliente_cotacao(cliente_id): # type: ignore
-        """Lista enderecos de um cliente (para dropdown na criacao de cotacao)"""
+        """Lista enderecos para dropdown na cotacao.
+
+        Retorna:
+        - Origens GLOBAIS (cliente_id IS NULL, tipo=ORIGEM) — compartilhadas
+        - Destinos do CLIENTE (cliente_id=cliente_id, tipo=DESTINO)
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
         from app.carvia.models import CarviaClienteEndereco
+        from sqlalchemy import or_
 
-        enderecos = CarviaClienteEndereco.query.filter_by(
-            cliente_id=cliente_id
+        enderecos = CarviaClienteEndereco.query.filter(
+            or_(
+                # Origens globais (compartilhadas)
+                db.and_(
+                    CarviaClienteEndereco.tipo == 'ORIGEM',
+                    CarviaClienteEndereco.cliente_id.is_(None),
+                ),
+                # Destinos do cliente
+                db.and_(
+                    CarviaClienteEndereco.tipo == 'DESTINO',
+                    CarviaClienteEndereco.cliente_id == cliente_id,
+                ),
+            )
         ).order_by(
             CarviaClienteEndereco.tipo,
             CarviaClienteEndereco.principal.desc()
         ).all()
 
+        def _serializar(e):
+            doc = e.cnpj or 'PROVISORIO'
+            prov = ' [PROVISORIO]' if e.provisorio else ''
+            return {
+                'id': e.id,
+                'cnpj': e.cnpj,
+                'razao_social': e.razao_social,
+                'tipo': e.tipo,
+                'principal': e.principal,
+                'provisorio': e.provisorio,
+                'fisico_uf': e.fisico_uf,
+                'fisico_cidade': e.fisico_cidade,
+                'fisico_logradouro': e.fisico_logradouro,
+                'fisico_numero': e.fisico_numero,
+                'fisico_bairro': e.fisico_bairro,
+                'fisico_cep': e.fisico_cep,
+                'fisico_complemento': e.fisico_complemento,
+                'label': f'{doc} - {e.razao_social or "Sem razao"} ({e.fisico_cidade}/{e.fisico_uf}) [{e.tipo}]{prov}',
+            }
+
         return jsonify({
-            'enderecos': [
+            'enderecos': [_serializar(e) for e in enderecos]
+        })
+
+    # ==================== API: ORIGENS GLOBAIS ====================
+
+    @bp.route('/api/cotacoes/origens-globais') # type: ignore
+    @login_required
+    def api_listar_origens_globais(): # type: ignore
+        """Lista origens globais para selecao no modal Importar NF."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.cliente_service import CarviaClienteService
+
+        origens = CarviaClienteService.listar_origens_globais()
+        return jsonify({
+            'origens': [
                 {
-                    'id': e.id,
-                    'cnpj': e.cnpj,
-                    'razao_social': e.razao_social,
-                    'tipo': e.tipo,
-                    'principal': e.principal,
-                    'cidade': e.fisico_cidade,
-                    'uf': e.fisico_uf,
-                    'label': f'{e.cnpj} - {e.razao_social or "Sem razao"} ({e.fisico_cidade}/{e.fisico_uf}) [{e.tipo}]',
+                    'id': o.id,
+                    'cnpj': o.cnpj,
+                    'razao_social': o.razao_social,
+                    'cidade': o.fisico_cidade,
+                    'uf': o.fisico_uf,
+                    'label': f'{o.cnpj} - {o.razao_social or "Sem razao"} ({o.fisico_cidade}/{o.fisico_uf})',
                 }
-                for e in enderecos
+                for o in origens
             ]
+        })
+
+    # ==================== API: EDITAR ENDERECO INLINE ====================
+
+    @bp.route('/api/cotacoes/enderecos/<int:endereco_id>', methods=['PATCH']) # type: ignore
+    @login_required
+    def api_editar_endereco_cotacao(endereco_id): # type: ignore
+        """Edita campos fisico_* de um endereco — acessivel da tela de cotacao."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.cliente_service import CarviaClienteService
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados obrigatorios.'}), 400
+
+        ok, erro = CarviaClienteService.atualizar_endereco(endereco_id, data)
+        if not ok:
+            return jsonify({'erro': erro}), 400
+        db.session.commit()
+        return jsonify({'sucesso': True})
+
+    # ==================== API: DESTINO PROVISORIO ====================
+
+    @bp.route('/api/cotacoes/destino-provisorio', methods=['POST']) # type: ignore
+    @login_required
+    def api_criar_destino_provisorio(): # type: ignore
+        """Cria destino provisorio sem CNPJ para cotacao de frete."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.cliente_service import CarviaClienteService
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados obrigatorios.'}), 400
+
+        cliente_id = data.get('cliente_id')
+        if not cliente_id:
+            return jsonify({'erro': 'cliente_id obrigatorio.'}), 400
+
+        endereco, erro = CarviaClienteService.adicionar_destino_provisorio(
+            cliente_id=cliente_id,
+            criado_por=current_user.email,
+            razao_social=data.get('razao_social'),
+            dados_fisico=data.get('fisico'),
+        )
+        if erro:
+            return jsonify({'erro': erro}), 400
+
+        db.session.commit()
+        return jsonify({
+            'sucesso': True,
+            'endereco_id': endereco.id,
+            'label': f'PROVISORIO - {endereco.razao_social or "Sem razao"} ({endereco.fisico_cidade}/{endereco.fisico_uf}) [DESTINO] [PROVISORIO]',
         })

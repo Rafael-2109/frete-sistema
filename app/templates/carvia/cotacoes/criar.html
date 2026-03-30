@@ -80,7 +80,14 @@
                     {# Passo 3: Endereco Destino (destinatario) #}
                     <div id="wizStep3" class="d-none">
                         <h6 class="mb-3">3. Endereco Destino (Destinatario da NF)</h6>
-                        <div class="row mb-2">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="wizDestProvisorio" onchange="toggleDestinoProvisorio()">
+                            <label class="form-check-label small" for="wizDestProvisorio">Destino provisorio (sem CNPJ)</label>
+                        </div>
+                        <div id="wizDestProvisorioAlert" class="alert alert-warning py-1 small mb-2 d-none">
+                            <i class="fas fa-exclamation-triangle"></i> CNPJ sera obrigatorio para aprovar a cotacao.
+                        </div>
+                        <div id="wizDestCnpjBlock" class="row mb-2">
                             <div class="col-md-4"><label class="form-label small">CNPJ/CPF</label><input type="text" class="form-control form-control-sm" id="wizDestCnpj" readonly></div>
                             <div class="col-md-8"><label class="form-label small">Razao Social/Nome</label><input type="text" class="form-control form-control-sm" id="wizDestRazao" readonly></div>
                         </div>
@@ -155,6 +162,24 @@
                         <select name="endereco_destino_id" class="form-select" id="selDestino" required>
                             <option value="">Selecione o cliente primeiro</option>
                         </select>
+                    </div>
+                </div>
+
+                {# Endereco de entrega editavel (Ajuste 8) #}
+                <div id="enderecoEntregaInline" class="mb-3 d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted fw-bold">Endereco de Entrega (editavel)</small>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-5"><input type="text" class="form-control form-control-sm" id="endLogradouro" placeholder="Logradouro"></div>
+                        <div class="col-md-1"><input type="text" class="form-control form-control-sm" id="endNumero" placeholder="Num"></div>
+                        <div class="col-md-3"><input type="text" class="form-control form-control-sm" id="endBairro" placeholder="Bairro"></div>
+                        <div class="col-md-3"><input type="text" class="form-control form-control-sm" id="endComplemento" placeholder="Complemento"></div>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="endCidade" placeholder="Cidade"></div>
+                        <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="endUf" placeholder="UF" maxlength="2"></div>
+                        <div class="col-md-3"><input type="text" class="form-control form-control-sm" id="endCep" placeholder="CEP"></div>
                     </div>
                 </div>
 
@@ -407,7 +432,12 @@ function iniciarSetupNF() {
             const re = d.receita_emitente;
             const rd = d.receita_destinatario;
 
-            document.getElementById('wizNomeCliente').value = nf.nome_emitente || '';
+            // Ajuste 1: se cliente existe, usar nome cadastrado (nao sobrescrever com NF)
+            if (d.cliente.existe && d.cliente.nome) {
+                document.getElementById('wizNomeCliente').value = d.cliente.nome;
+            } else {
+                document.getElementById('wizNomeCliente').value = nf.nome_emitente || '';
+            }
             document.getElementById('wizOrigCnpj').value = nf.cnpj_emitente || '';
             document.getElementById('wizOrigRazao').value = nf.nome_emitente || '';
             document.getElementById('wizDestCnpj').value = nf.cnpj_destinatario || '';
@@ -486,6 +516,20 @@ function wizMostrarPasso(passo) {
 function wizVoltar() {
     const idx = _wizSteps.indexOf(_wizStep);
     if (idx > 0) wizMostrarPasso(_wizSteps[idx - 1]);
+}
+
+/* Toggle destino provisorio (sem CNPJ) */
+function toggleDestinoProvisorio() {
+    const provisorio = document.getElementById('wizDestProvisorio').checked;
+    const cnpjBlock = document.getElementById('wizDestCnpjBlock');
+    const alertBlock = document.getElementById('wizDestProvisorioAlert');
+    if (provisorio) {
+        cnpjBlock.classList.add('d-none');
+        alertBlock.classList.remove('d-none');
+    } else {
+        cnpjBlock.classList.remove('d-none');
+        alertBlock.classList.add('d-none');
+    }
 }
 
 function wizAvancar() {
@@ -718,7 +762,12 @@ document.getElementById('formCotacao').addEventListener('submit', function(e) {
             // Pre-preencher wizard com dados da NF do banco
             const nf = d.nf;
 
-            document.getElementById('wizNomeCliente').value = nf.nome_emitente || '';
+            // Ajuste 1: se cliente existe, usar nome cadastrado (nao sobrescrever com NF)
+            if (d.cliente.existe && d.cliente.nome) {
+                document.getElementById('wizNomeCliente').value = d.cliente.nome;
+            } else {
+                document.getElementById('wizNomeCliente').value = nf.nome_emitente || '';
+            }
             document.getElementById('wizOrigCnpj').value = nf.cnpj_emitente || '';
             document.getElementById('wizOrigRazao').value = nf.nome_emitente || '';
             document.getElementById('wizDestCnpj').value = nf.cnpj_destinatario || '';

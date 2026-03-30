@@ -39,6 +39,7 @@
                             <th>Tipo</th>
                             <th class="text-center">Embarque</th>
                             <th class="text-center">Status</th>
+                            <th class="text-center">Obs.</th>
                             <th class="text-center">Data</th>
                             <th class="text-center">Acoes</th>
                         </tr>
@@ -77,6 +78,13 @@
                                 {% set st_map = {'ABERTO': 'carvia-badge-pendente', 'FATURADO': 'carvia-badge-faturado', 'EMBARCADO': 'carvia-badge-embarcado', 'CANCELADO': 'carvia-badge-cancelado'} %}
                                 <span class="badge {{ st_map.get(st, 'bg-secondary') }}">{{ st }}</span>
                             </td>
+                            <td class="text-center">
+                                {% if ped.observacoes %}
+                                <span data-bs-toggle="tooltip" data-bs-placement="top" title="{{ ped.observacoes }}">
+                                    <i class="fas fa-comment text-info"></i>
+                                </span>
+                                {% else %}-{% endif %}
+                            </td>
                             <td class="text-center small text-muted">
                                 {{ ped.criado_em.strftime('%d/%m/%Y') if ped.criado_em else '-' }}
                             </td>
@@ -98,4 +106,13 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipList.forEach(function(el) { new bootstrap.Tooltip(el); });
+});
+</script>
 {% endblock %}

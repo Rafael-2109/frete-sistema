@@ -541,6 +541,13 @@ class EmbarqueCarViaService:
         # Filial do pedido (SP/RJ)
         filial = pedido.filial if pedido else None
 
+        # Observacoes: do pedido (se real) ou da cotacao (se provisorio)
+        observacoes = None
+        if pedido and pedido.observacoes:
+            observacoes = pedido.observacoes
+        elif cotacao and cotacao.observacoes:
+            observacoes = cotacao.observacoes
+
         return {
             'cotacao': cotacao,
             'pedido': pedido,
@@ -551,4 +558,5 @@ class EmbarqueCarViaService:
             'peso_cubado_nf': peso_cubado_nf,
             'filial': filial,
             'eh_pedido': eh_pedido,
+            'observacoes': observacoes,
         }

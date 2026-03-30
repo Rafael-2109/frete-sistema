@@ -20,14 +20,6 @@
             {% endif %}
         </h2>
         <div class="d-flex gap-2">
-            {% if cotacao.status == 'APROVADO' %}
-            <button type="button" class="btn btn-success btn-sm" onclick="abrirModalNFCotacao('SP')">
-                <i class="fas fa-file-invoice"></i> NF SP
-            </button>
-            <button type="button" class="btn btn-danger btn-sm" onclick="abrirModalNFCotacao('RJ')">
-                <i class="fas fa-file-invoice"></i> NF RJ
-            </button>
-            {% endif %}
             <button type="button" class="btn btn-primary btn-sm" onclick="salvarTudo()">
                 <i class="fas fa-save"></i> Salvar
             </button>
@@ -102,6 +94,29 @@
                             </select>
                         </div>
                     </div>
+                    {# Endereco de entrega editavel inline (Ajuste 8) #}
+                    {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
+                    <div id="enderecoEntregaInline" class="mb-3 d-none">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted fw-bold">Endereco de Entrega (editavel)</small>
+                            <button type="button" class="btn btn-outline-primary btn-sm" style="font-size: 11px;" onclick="salvarEnderecoInline()">
+                                <i class="fas fa-save"></i> Salvar Endereco
+                            </button>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-5"><input type="text" class="form-control form-control-sm" id="endLogradouro" placeholder="Logradouro"></div>
+                            <div class="col-md-1"><input type="text" class="form-control form-control-sm" id="endNumero" placeholder="Num"></div>
+                            <div class="col-md-3"><input type="text" class="form-control form-control-sm" id="endBairro" placeholder="Bairro"></div>
+                            <div class="col-md-3"><input type="text" class="form-control form-control-sm" id="endComplemento" placeholder="Complemento"></div>
+                        </div>
+                        <div class="row g-2 mt-1">
+                            <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="endCidade" placeholder="Cidade"></div>
+                            <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="endUf" placeholder="UF" maxlength="2"></div>
+                            <div class="col-md-3"><input type="text" class="form-control form-control-sm" id="endCep" placeholder="CEP"></div>
+                        </div>
+                        <div id="enderecoFeedback" class="mt-1" style="display:none"></div>
+                    </div>
+                    {% endif %}
 
                     {# Carga Geral #}
                     <div id="secaoCargaGeral" class="{{ 'd-none' if cotacao.tipo_material == 'MOTO' }}">
@@ -201,9 +216,14 @@
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <strong>Pedidos ({{ pedidos|length }})</strong>
-                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoPedido">
-                        <i class="fas fa-plus"></i> Novo Pedido
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-success btn-sm" onclick="abrirModalImportarNF()">
+                            <i class="fas fa-file-import"></i> Importar NF
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoPedido">
+                            <i class="fas fa-plus"></i> Novo Pedido
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     {% if pedidos %}
@@ -216,7 +236,10 @@
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <div>
                                 <a href="{{ url_for('carvia.detalhe_pedido_carvia', pedido_id=ped.id) }}" class="fw-bold">{{ ped.numero_pedido }}</a>
-                                <span class="badge {{ '#1a73e8' if ped.filial == 'SP' else '#d93025' }}" style="background-color: {{ '#1a73e8' if ped.filial == 'SP' else '#d93025' }}; color: white;">{{ ped.filial }}</span>
+                                <span class="badge" style="background-color: {{ '#1a73e8' if ped.filial == 'SP' else '#d93025' }}; color: white;">{{ ped.filial }}</span>
+                                {% if st not in ('EMBARCADO',) %}
+                                <button class="btn btn-outline-secondary" style="padding: 0 4px; font-size: 10px; line-height: 1.2;" onclick="editarFilial({{ ped.id }}, '{{ ped.filial }}')" title="Trocar SP/RJ"><i class="fas fa-exchange-alt"></i></button>
+                                {% endif %}
                                 <span class="badge {{ st_map.get(st, 'bg-secondary') }}">{{ st }}</span>
                                 {% if nfs_unicas %}
                                 <small class="text-muted ms-1">NF: {{ nfs_unicas | join(', ') }}</small>
@@ -224,6 +247,9 @@
                             </div>
                             <div class="d-flex gap-1">
                                 <a href="{{ url_for('carvia.detalhe_pedido_carvia', pedido_id=ped.id) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-eye"></i></a>
+                                {% if st == 'FATURADO' %}
+                                <button class="btn btn-outline-warning btn-sm" onclick="desanexarNFPedido({{ ped.id }}, '{{ ped.numero_pedido }}')" title="Desanexar NF"><i class="fas fa-unlink"></i></button>
+                                {% endif %}
                                 {% if st not in ('EMBARCADO',) %}
                                 <button class="btn btn-outline-danger btn-sm" onclick="excluirPedido({{ ped.id }}, '{{ ped.numero_pedido }}')" title="Excluir pedido"><i class="fas fa-trash"></i></button>
                                 {% endif %}
@@ -317,17 +343,37 @@
                         <i class="fas fa-calculator"></i> Calcular Preco
                     </button>
                     {% if cotacao.valor_tabela %}
-                    <div class="input-group input-group-sm mb-2">
-                        <input type="number" class="form-control" id="inpDesconto"
-                               placeholder="% desconto" step="0.01" min="0" max="100"
-                               value="{{ cotacao.percentual_desconto or 0 }}">
-                        <button class="btn btn-outline-primary" onclick="aplicarDesconto()">Aplicar</button>
+                    <div class="mb-2">
+                        <div class="row g-2 mb-1">
+                            <div class="col-6">
+                                <label class="form-label small mb-0">Desconto (%)</label>
+                                <input type="number" class="form-control form-control-sm" id="inpDescontoPct"
+                                       step="0.01" min="0" max="100"
+                                       value="{{ cotacao.percentual_desconto or 0 }}"
+                                       oninput="syncDescontoPct()">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-0">Valor Final (R$)</label>
+                                <input type="number" class="form-control form-control-sm" id="inpDescontoValor"
+                                       step="0.01" min="0"
+                                       value="{{ cotacao.valor_descontado or cotacao.valor_tabela or '' }}"
+                                       oninput="syncDescontoValor()">
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-muted">Limite: {{ limite_desconto }}%</small>
+                            <button class="btn btn-outline-primary btn-sm" onclick="aplicarDesconto()">Aplicar Desconto</button>
+                        </div>
+                        <div class="alert alert-info py-1 small mb-1">
+                            <i class="fas fa-info-circle"></i> Descontos acima de {{ limite_desconto }}% requerem aprovacao do administrador.
+                        </div>
                     </div>
                     {% endif %}
                     {% if cotacao.status == 'PENDENTE_ADMIN' %}
                     <div class="alert alert-warning py-1 small mb-2">
+                        <i class="fas fa-exclamation-triangle"></i>
                         Desconto de {{ cotacao.percentual_desconto|numero_br(2) }}% excede limite de {{ limite_desconto }}%.
-                        Ajuste para dentro do limite ou aguarde aprovacao admin.
+                        Requer aprovacao do administrador antes de prosseguir.
                     </div>
                     {% if current_user.perfil == 'administrador' %}
                     <button class="btn btn-success btn-sm w-100 mb-1" onclick="adminAprovar()">Aprovar Desconto</button>
@@ -395,28 +441,40 @@
         </div>
     </div>
 </div>
-<div class="modal fade" id="modalNFCotacao" tabindex="-1">
+<div class="modal fade" id="modalImportarNF" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Adicionar NF — Filial <span id="nfCotacaoFilialLabel" class="fw-bold"></span></h5>
+                <h5 class="modal-title">Importar NF <span class="badge bg-secondary ms-2" id="nfStepLabel">Etapa 1/2</span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info py-2 small mb-3">
-                    Envie o PDF (DANFE) ou XML (NF-e). O sistema extraira numero, produtos, valores e peso automaticamente.
-                    Se nao existir pedido para esta filial, ele sera criado.
+                {# Etapa 1: Upload arquivo #}
+                <div id="nfStep1">
+                    <p class="text-muted small">Envie o PDF (DANFE) ou XML (NF-e). O sistema extraira numero, produtos, valores e peso automaticamente.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Arquivo da NF <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="inpArquivoNF" accept=".pdf,.xml">
+                        <div class="form-text">PDF (DANFE) ou XML (NF-e)</div>
+                    </div>
+                    <div id="nfStep1Feedback" style="display:none"></div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Arquivo da NF <span class="text-danger">*</span></label>
-                    <input type="file" class="form-control" id="inpArquivoNF" accept=".pdf,.xml">
-                    <div class="form-text">PDF (DANFE) ou XML (NF-e)</div>
+                {# Etapa 2: Selecionar origem #}
+                <div id="nfStep2" class="d-none">
+                    <p class="text-muted small">Selecione a origem desta NF.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Origem <span class="text-danger">*</span></label>
+                        <select class="form-select" id="selOrigemNF">
+                            <option value="">Carregando origens...</option>
+                        </select>
+                    </div>
+                    <div id="nfStep2Feedback" style="display:none"></div>
                 </div>
-                <div id="nfCotacaoFeedback" style="display:none"></div>
             </div>
             <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" id="btnNFVoltar" onclick="nfStepVoltar()" style="display:none">Voltar</button>
                 <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button class="btn btn-primary btn-sm" id="btnNFCotacao" onclick="confirmarNFCotacao()">Importar NF</button>
+                <button class="btn btn-primary btn-sm" id="btnNFAvancar" onclick="nfStepAvancar()">Proximo</button>
             </div>
         </div>
     </div>
@@ -442,6 +500,7 @@ function apiCall(url, method, body) {
 const _origemAtual = {{ cotacao.endereco_origem_id or 'null' }};
 const _destinoAtual = {{ cotacao.endereco_destino_id or 'null' }};
 
+let _enderecosCacheados = [];
 function carregarEnderecos() {
     const clienteId = document.getElementById('selCliente').value;
     if (!clienteId) return;
@@ -449,27 +508,38 @@ function carregarEnderecos() {
     fetch(`/carvia/api/cotacoes/enderecos-cliente/${clienteId}`)
     .then(r => r.json())
     .then(data => {
-        const origens = data.enderecos.filter(e => e.tipo === 'ORIGEM');
-        const destinos = data.enderecos.filter(e => e.tipo === 'DESTINO');
-        const todos = data.enderecos;
-        const listaO = origens.length > 0 ? origens : todos;
-        const listaD = destinos.length > 0 ? destinos : todos;
+        _enderecosCacheados = data.enderecos || [];
+        const origens = _enderecosCacheados.filter(e => e.tipo === 'ORIGEM');
+        const destinos = _enderecosCacheados.filter(e => e.tipo === 'DESTINO');
 
         const selO = document.getElementById('selOrigem');
         const selD = document.getElementById('selDestino');
         selO.innerHTML = '<option value="">Selecione...</option>';
         selD.innerHTML = '<option value="">Selecione...</option>';
 
-        listaO.forEach(e => {
+        origens.forEach(e => {
             const sel = e.id === _origemAtual ? 'selected' : '';
             selO.innerHTML += `<option value="${e.id}" ${sel}>${e.label}</option>`;
         });
-        listaD.forEach(e => {
+        destinos.forEach(e => {
             const sel = e.id === _destinoAtual ? 'selected' : '';
             selD.innerHTML += `<option value="${e.id}" ${sel}>${e.label}</option>`;
         });
+
+        // Preencher endereco de entrega inline (Ajuste 8)
+        const destId = parseInt(selD.value);
+        if (destId) {
+            const destEnd = _enderecosCacheados.find(e => e.id === destId);
+            if (destEnd && typeof preencherEnderecoInline === 'function') preencherEnderecoInline(destEnd);
+        }
     });
 }
+// Atualizar endereco inline ao trocar destino
+document.getElementById('selDestino').addEventListener('change', function() {
+    const destId = parseInt(this.value);
+    const destEnd = _enderecosCacheados.find(e => e.id === destId);
+    if (typeof preencherEnderecoInline === 'function') preencherEnderecoInline(destEnd || null);
+});
 
 /* ===== Show/hide por tipo material ===== */
 document.getElementById('selTipoMaterial').addEventListener('change', function() {
@@ -635,7 +705,7 @@ function calcularPreco() {
 }
 
 function aplicarDesconto() {
-    const pct = parseFloat(document.getElementById('inpDesconto').value || 0);
+    const pct = parseFloat(document.getElementById('inpDescontoPct').value || 0);
     apiCall(`/carvia/api/cotacoes/${cotacaoId}/desconto`, 'POST', {percentual_desconto: pct}).then(d => {
         if (d.sucesso) location.reload(); else alert(d.erro);
     });
@@ -683,44 +753,151 @@ function atalhoAnexarNF() {
     });
 }
 
-/* ===== NF direto na Cotacao (upload arquivo) ===== */
-let _nfCotacaoFilial = null;
-function abrirModalNFCotacao(filial) {
-    _nfCotacaoFilial = filial;
-    document.getElementById('nfCotacaoFilialLabel').textContent = filial;
-    document.getElementById('nfCotacaoFilialLabel').style.color = filial === 'SP' ? '#1a73e8' : '#d93025';
+/* ===== Importar NF — Modal 2 Etapas ===== */
+let _nfArquivo = null;
+function abrirModalImportarNF() {
+    _nfArquivo = null;
+    document.getElementById('nfStep1').classList.remove('d-none');
+    document.getElementById('nfStep2').classList.add('d-none');
+    document.getElementById('nfStepLabel').textContent = 'Etapa 1/2';
+    document.getElementById('btnNFVoltar').style.display = 'none';
+    document.getElementById('btnNFAvancar').textContent = 'Proximo';
+    document.getElementById('btnNFAvancar').disabled = false;
     document.getElementById('inpArquivoNF').value = '';
-    document.getElementById('nfCotacaoFeedback').style.display = 'none';
-    new bootstrap.Modal(document.getElementById('modalNFCotacao')).show();
+    const fb1 = document.getElementById('nfStep1Feedback');
+    if (fb1) fb1.style.display = 'none';
+    const fb2 = document.getElementById('nfStep2Feedback');
+    if (fb2) fb2.style.display = 'none';
+    new bootstrap.Modal(document.getElementById('modalImportarNF')).show();
 }
-function confirmarNFCotacao() {
-    const fileInput = document.getElementById('inpArquivoNF');
-    if (!fileInput.files || !fileInput.files[0]) { alert('Selecione o arquivo da NF.'); return; }
-
+function nfStepAvancar() {
+    const step1Visivel = !document.getElementById('nfStep1').classList.contains('d-none');
+    if (step1Visivel) {
+        const fileInput = document.getElementById('inpArquivoNF');
+        if (!fileInput.files || !fileInput.files[0]) { alert('Selecione o arquivo da NF.'); return; }
+        _nfArquivo = fileInput.files[0];
+        // Carregar origens globais
+        fetch('/carvia/api/cotacoes/origens-globais')
+        .then(r => r.json()).then(data => {
+            const sel = document.getElementById('selOrigemNF');
+            sel.innerHTML = '<option value="">Selecione a origem...</option>';
+            (data.origens || []).forEach(o => {
+                sel.innerHTML += '<option value="' + o.id + '">' + o.label + '</option>';
+            });
+        });
+        document.getElementById('nfStep1').classList.add('d-none');
+        document.getElementById('nfStep2').classList.remove('d-none');
+        document.getElementById('nfStepLabel').textContent = 'Etapa 2/2';
+        document.getElementById('btnNFVoltar').style.display = '';
+        document.getElementById('btnNFAvancar').textContent = 'Importar';
+    } else {
+        const origemId = document.getElementById('selOrigemNF').value;
+        if (!origemId) { alert('Selecione a origem.'); return; }
+        confirmarImportarNF(origemId);
+    }
+}
+function nfStepVoltar() {
+    document.getElementById('nfStep1').classList.remove('d-none');
+    document.getElementById('nfStep2').classList.add('d-none');
+    document.getElementById('nfStepLabel').textContent = 'Etapa 1/2';
+    document.getElementById('btnNFVoltar').style.display = 'none';
+    document.getElementById('btnNFAvancar').textContent = 'Proximo';
+}
+function confirmarImportarNF(origemId) {
     const formData = new FormData();
-    formData.append('filial', _nfCotacaoFilial);
-    formData.append('arquivo', fileInput.files[0]);
-
-    document.getElementById('btnNFCotacao').disabled = true;
-    fetch(`/carvia/api/cotacoes/${cotacaoId}/nf`, {
-        method: 'POST',
-        body: formData
-    })
+    formData.append('arquivo', _nfArquivo);
+    formData.append('origem_id', origemId);
+    document.getElementById('btnNFAvancar').disabled = true;
+    fetch(`/carvia/api/cotacoes/${cotacaoId}/nf`, { method: 'POST', body: formData })
     .then(r => r.json())
     .then(d => {
-        document.getElementById('btnNFCotacao').disabled = false;
+        document.getElementById('btnNFAvancar').disabled = false;
         if (d.sucesso) {
-            bootstrap.Modal.getInstance(document.getElementById('modalNFCotacao')).hide();
+            bootstrap.Modal.getInstance(document.getElementById('modalImportarNF')).hide();
             location.reload();
         } else {
-            const fb = document.getElementById('nfCotacaoFeedback');
+            const fb = document.getElementById('nfStep2Feedback');
             fb.innerHTML = '<div class="alert alert-danger py-1 small">' + (d.erro || 'Erro') + '</div>';
             fb.style.display = 'block';
         }
     })
     .catch(err => {
-        document.getElementById('btnNFCotacao').disabled = false;
+        document.getElementById('btnNFAvancar').disabled = false;
         alert('Erro de rede: ' + err.message);
+    });
+}
+
+/* ===== Filial Editavel ===== */
+function editarFilial(pedidoId, filialAtual) {
+    const nova = filialAtual === 'SP' ? 'RJ' : 'SP';
+    if (!confirm('Trocar filial de ' + filialAtual + ' para ' + nova + '?')) return;
+    apiCall('/carvia/api/pedidos-carvia/' + pedidoId + '/filial', 'PATCH', {filial: nova})
+    .then(d => { if (d.sucesso) location.reload(); else alert(d.erro || 'Erro ao trocar filial.'); });
+}
+
+/* ===== Desanexar NF ===== */
+function desanexarNFPedido(pedidoId, numPedido) {
+    if (!confirm('Desanexar NF do pedido ' + numPedido + '? O pedido voltara para ABERTO.')) return;
+    apiCall('/carvia/api/pedidos-carvia/' + pedidoId + '/desanexar-nf')
+    .then(d => { if (d.sucesso) location.reload(); else alert(d.erro || 'Erro ao desanexar.'); });
+}
+
+/* ===== Desconto Sincronizado ===== */
+const _valorTabela = {{ cotacao.valor_tabela or 0 }};
+function syncDescontoPct() {
+    const pct = parseFloat(document.getElementById('inpDescontoPct').value) || 0;
+    const valor = _valorTabela * (1 - pct / 100);
+    document.getElementById('inpDescontoValor').value = valor.toFixed(2);
+}
+function syncDescontoValor() {
+    const valor = parseFloat(document.getElementById('inpDescontoValor').value) || 0;
+    if (_valorTabela > 0) {
+        const pct = (1 - valor / _valorTabela) * 100;
+        document.getElementById('inpDescontoPct').value = pct.toFixed(2);
+    }
+}
+
+/* ===== Endereco Entrega Inline ===== */
+let _enderecoDestinoId = null;
+function preencherEnderecoInline(endereco) {
+    if (!endereco) {
+        const bloco = document.getElementById('enderecoEntregaInline');
+        if (bloco) bloco.classList.add('d-none');
+        return;
+    }
+    _enderecoDestinoId = endereco.id;
+    document.getElementById('endLogradouro').value = endereco.fisico_logradouro || '';
+    document.getElementById('endNumero').value = endereco.fisico_numero || '';
+    document.getElementById('endBairro').value = endereco.fisico_bairro || '';
+    document.getElementById('endComplemento').value = endereco.fisico_complemento || '';
+    document.getElementById('endCidade').value = endereco.fisico_cidade || '';
+    document.getElementById('endUf').value = endereco.fisico_uf || '';
+    document.getElementById('endCep').value = endereco.fisico_cep || '';
+    const bloco = document.getElementById('enderecoEntregaInline');
+    if (bloco) bloco.classList.remove('d-none');
+}
+function salvarEnderecoInline() {
+    if (!_enderecoDestinoId) return;
+    const data = {
+        fisico_logradouro: document.getElementById('endLogradouro').value,
+        fisico_numero: document.getElementById('endNumero').value,
+        fisico_bairro: document.getElementById('endBairro').value,
+        fisico_complemento: document.getElementById('endComplemento').value,
+        fisico_cidade: document.getElementById('endCidade').value,
+        fisico_uf: document.getElementById('endUf').value,
+        fisico_cep: document.getElementById('endCep').value,
+    };
+    apiCall('/carvia/api/cotacoes/enderecos/' + _enderecoDestinoId, 'PATCH', data)
+    .then(d => {
+        const fb = document.getElementById('enderecoFeedback');
+        if (d.sucesso) {
+            fb.innerHTML = '<small class="text-success"><i class="fas fa-check"></i> Endereco salvo.</small>';
+            fb.style.display = 'block';
+            setTimeout(() => fb.style.display = 'none', 3000);
+        } else {
+            fb.innerHTML = '<small class="text-danger">' + (d.erro || 'Erro') + '</small>';
+            fb.style.display = 'block';
+        }
     });
 }
 

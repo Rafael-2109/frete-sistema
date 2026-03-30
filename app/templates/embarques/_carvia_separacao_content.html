@@ -92,6 +92,14 @@
     </div>
 </div>
 
+{# Observacoes do pedido ou cotacao (Ajuste 7) #}
+{% set obs = pedido.observacoes if (eh_pedido and pedido and pedido.observacoes) else cotacao.observacoes %}
+{% if obs %}
+<div style="margin: 10px 0; padding: 8px; border: 2px solid #f0ad4e; background: #fcf8e3; font-size: 13px;">
+    <strong>OBSERVACOES:</strong> {{ obs }}
+</div>
+{% endif %}
+
 <!-- Tabela de itens: 1 linha por veiculo/chassi (pedido) ou motos (cotacao) -->
 {% if eh_pedido and itens_pedido %}
 <h3 style="margin: 10px 0 5px; font-size: 14px;">ITENS DO PEDIDO</h3>
