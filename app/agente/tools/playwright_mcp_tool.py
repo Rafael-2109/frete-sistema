@@ -41,7 +41,7 @@ import os
 import threading
 import time
 import uuid
-from typing import Any, Dict, List
+from typing import Annotated, Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +322,7 @@ try:
             "Exemplos: 'acesse https://example.com', 'abra o SSW'."
         ),
         {
-            "url": str,
+            "url": Annotated[str, "URL completa a navegar (protocolo https:// adicionado automaticamente se ausente)"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -477,8 +477,8 @@ try:
             "{\"selector\": \"#tabela\"} (elemento especifico)."
         ),
         {
-            "full_page": bool,
-            "selector": str,
+            "full_page": Annotated[bool, "Se true captura pagina inteira; se false (default) apenas o viewport visivel"],
+            "selector": Annotated[str, "CSS selector para capturar elemento especifico (opcional, omitir para pagina toda)"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=True,
@@ -675,9 +675,9 @@ try:
             "Exemplos: text='Entrar', text='Manual', selector='#btn-login'."
         ),
         {
-            "text": str,
-            "selector": str,
-            "role": str,
+            "text": Annotated[str, "Texto visivel do elemento a clicar (prioridade 1 — metodo mais confiavel)"],
+            "selector": Annotated[str, "CSS selector do elemento (prioridade 3 — usar quando text nao funcionar)"],
+            "role": Annotated[str, "ARIA role do elemento (button, link, etc.); combinado com text como accessible name (prioridade 2)"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -767,9 +767,9 @@ try:
             "Exemplos: label='Usuário' text='admin', selector='#email' text='user@test.com'."
         ),
         {
-            "text": str,
-            "label": str,
-            "selector": str,
+            "text": Annotated[str, "Texto a digitar no campo (obrigatorio)"],
+            "label": Annotated[str, "Texto do label HTML do campo a preencher (prioridade 1 — metodo mais confiavel)"],
+            "selector": Annotated[str, "CSS selector do campo input (prioridade 2 — usar quando label nao funcionar)"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -847,8 +847,8 @@ try:
             "Exemplos: selector='#uf' value='SP', selector='select[name=estado]' value='RJ'."
         ),
         {
-            "selector": str,
-            "value": str,
+            "selector": Annotated[str, "CSS selector do elemento <select> (obrigatorio)"],
+            "value": Annotated[str, "Valor (atributo value) ou texto visivel (label) da opcao a selecionar"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -919,7 +919,7 @@ try:
             "Exemplos: selector='body', selector='.manual-content', selector='#main'."
         ),
         {
-            "selector": str,
+            "selector": Annotated[str, "CSS selector da secao a ler. Default 'body' para pagina inteira. Use seletores especificos para economizar tokens"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=True,
@@ -1024,7 +1024,7 @@ try:
             "script='document.querySelectorAll(\"input\").length'."
         ),
         {
-            "script": str,
+            "script": Annotated[str, "Codigo JavaScript a executar na pagina ou frame ativo. Retorna resultado serializado como string"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -1097,8 +1097,8 @@ try:
             "Exemplos: name='mainFrame', name='menuFrame', name='main' (voltar)."
         ),
         {
-            "name": str,
-            "list_frames": bool,
+            "name": Annotated[str, "Nome do frame a ativar. Use 'main', 'page' ou 'top' para voltar ao frame principal"],
+            "list_frames": Annotated[bool, "Se true, lista frames disponiveis sem trocar o ativo (ignorando name)"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -1361,7 +1361,7 @@ try:
             "Exemplos: option_number=4 (emissao CTRCs), option_number=436 (faturamento)."
         ),
         {
-            "option_number": int,
+            "option_number": Annotated[int, "Numero da opcao SSW a navegar (ex: 4=emissao CTRCs, 436=faturamento, 401=cadastro unidades). Consulte documentacao SSW para numeros"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=False,

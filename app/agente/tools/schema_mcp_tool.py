@@ -16,7 +16,7 @@ import os
 import re
 import sys
 import logging
-from typing import Any
+from typing import Annotated, Any
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +196,7 @@ try:
         "Use ANTES de sugerir operações de cadastro ou alteração para "
         "garantir que todos os campos corretos sejam incluídos. "
         "Exemplo: consultar_schema({'tabela': 'cadastro_palletizacao'})",
-        {"tabela": str},
+        {"tabela": Annotated[str, "Nome da tabela do banco (ex: carteira_principal, embarques, faturamento). Case-insensitive"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -264,7 +264,7 @@ try:
         "Evita inventar valores que não existem no banco. "
         "Apenas campos varchar/text são aceitos. "
         "Exemplo: consultar_valores_campo({'tabela': 'cadastro_palletizacao', 'campo': 'categoria_produto'})",
-        {"tabela": str, "campo": str},
+        {"tabela": Annotated[str, "Nome da tabela contendo o campo"], "campo": Annotated[str, "Nome do campo varchar/text/boolean cujos valores distintos serao listados (max 100 valores)"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,

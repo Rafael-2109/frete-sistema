@@ -41,11 +41,82 @@ Referências:
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Generic, TypeVar
+from typing import Annotated, Any, Awaitable, Callable, Generic, TypeVar, get_args, get_origin
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+# =====================================================================
+# TYPE → JSON SCHEMA CONVERTER (SDK 0.1.52+ typing.Annotated support)
+# =====================================================================
+
+def _python_type_to_json_schema(py_type: Any) -> dict[str, Any]:
+    """
+    Converte tipo Python para JSON Schema com suporte a typing.Annotated.
+
+    Processa recursivamente tipos aninhados:
+    - Annotated[str, "descricao"] → {"type": "string", "description": "descricao"}
+    - NotRequired[Annotated[int, "desc"]] → unwrap NotRequired, preserva description
+    - list[int] → {"type": "array", "items": {"type": "integer"}}
+    - Tipos primitivos → JSON Schema type correspondente
+
+    A primeira string encontrada nos metadados de Annotated se torna a description.
+    Metadados nao-string (validators, Field, etc.) sao ignorados.
+
+    Ref: claude-agent-sdk PR #762 (_python_type_to_json_schema)
+
+    Args:
+        py_type: Tipo Python (str, int, Annotated[str, "desc"], list[int], etc.)
+
+    Returns:
+        Dict JSON Schema (ex: {"type": "string", "description": "..."})
+    """
+    origin = get_origin(py_type)
+
+    # Unwrap NotRequired/Required/ReadOnly (typing_extensions)
+    if origin is not None and getattr(origin, "_name", None) in (
+        "NotRequired", "Required", "ReadOnly",
+    ):
+        return _python_type_to_json_schema(get_args(py_type)[0])
+
+    # Annotated[base_type, metadata1, metadata2, ...]
+    if origin is Annotated:
+        args = get_args(py_type)
+        schema = _python_type_to_json_schema(args[0])  # Recurse no tipo base
+        for meta in args[1:]:
+            if isinstance(meta, str):
+                schema["description"] = meta
+                break  # Primeira string vira description
+        return schema
+
+    # list[T] → {"type": "array", "items": schema(T)}
+    if origin is list:
+        item_args = get_args(py_type)
+        if item_args:
+            return {
+                "type": "array",
+                "items": _python_type_to_json_schema(item_args[0]),
+            }
+        return {"type": "array"}
+
+    # Tipos primitivos
+    if py_type is str:
+        return {"type": "string"}
+    if py_type is int:
+        return {"type": "integer"}
+    if py_type is float:
+        return {"type": "number"}
+    if py_type is bool:
+        return {"type": "boolean"}
+
+    # Fallback: dict com JSON Schema completo ja pronto
+    if isinstance(py_type, dict) and "type" in py_type:
+        return py_type
+
+    # Default: string (compatibilidade com tipos desconhecidos)
+    return {"type": "string"}
 
 
 # =====================================================================
@@ -187,16 +258,7 @@ def create_enhanced_mcp_server(
                     else:
                         properties = {}
                         for param_name, param_type in tool_def.input_schema.items():
-                            if param_type is str:
-                                properties[param_name] = {"type": "string"}
-                            elif param_type is int:
-                                properties[param_name] = {"type": "integer"}
-                            elif param_type is float:
-                                properties[param_name] = {"type": "number"}
-                            elif param_type is bool:
-                                properties[param_name] = {"type": "boolean"}
-                            else:
-                                properties[param_name] = {"type": "string"}
+                            properties[param_name] = _python_type_to_json_schema(param_type)
                         schema = {
                             "type": "object",
                             "properties": properties,

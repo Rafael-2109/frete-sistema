@@ -94,14 +94,6 @@
 
 ---
 
-## Planejamento (fora de references — nao operacional)
-
-Roadmaps e planejamento futuro foram movidos para `.planning/roadmaps/`:
-- `FEATURES_AGENTE.md` — Features futuras do Agente Logistico
-- `IMPLEMENTACAO_ODOO.md` — Status de implementacao Odoo
-
----
-
 ## Mapeamento Skill -> References
 
 | Skill | References Utilizadas |

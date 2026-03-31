@@ -306,6 +306,12 @@ def load_agent_definitions(agents_dir: str) -> dict:
             skills_str = frontmatter.get("skills")
             skills_list = _parse_skills(skills_str)
 
+            # SDK 0.1.51+: Campos de controle de subagentes
+            disallowed_tools = _parse_tools(frontmatter.get("disallowed_tools"))
+            max_turns_str = frontmatter.get("max_turns")
+            max_turns = int(max_turns_str) if max_turns_str and max_turns_str.strip().isdigit() else None
+            initial_prompt = frontmatter.get("initial_prompt")
+
             # Prompt: nativo (SDK >= 0.1.49) ou fallback (texto no prompt)
             if _SDK_HAS_NATIVE_FIELDS:
                 # SDK carrega skills nativamente via AgentDefinition.skills
@@ -326,6 +332,14 @@ def load_agent_definitions(agents_dir: str) -> dict:
             if _SDK_HAS_NATIVE_FIELDS and skills_list:
                 agent_kwargs["skills"] = skills_list
 
+            # SDK 0.1.51+: Campos de controle de subagentes
+            if disallowed_tools:
+                agent_kwargs["disallowedTools"] = disallowed_tools
+            if max_turns is not None:
+                agent_kwargs["maxTurns"] = max_turns
+            if initial_prompt:
+                agent_kwargs["initialPrompt"] = initial_prompt
+
             agent_def = AgentDefinition(**agent_kwargs)
 
             agents[name] = agent_def
@@ -336,10 +350,16 @@ def load_agent_definitions(agents_dir: str) -> dict:
                 if _SDK_HAS_NATIVE_FIELDS and skills_list
                 else f"injected:{skills_str}" if skills_str else "none"
             )
+            controls = []
+            if disallowed_tools:
+                controls.append(f"deny={disallowed_tools}")
+            if max_turns:
+                controls.append(f"maxTurns={max_turns}")
             logger.debug(
                 f"[AGENT_LOADER] Carregado: {name} | "
                 f"model={model} | tools={tools} | "
                 f"skills={skills_mode} | "
+                f"controls={controls or 'none'} | "
                 f"prompt_len={len(prompt)} chars"
             )
 

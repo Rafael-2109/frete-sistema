@@ -18,7 +18,7 @@ import logging
 import re
 import threading
 from contextvars import ContextVar
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -1408,7 +1408,7 @@ try:
         "Use path='/memories' para listar diretórios. "
         "Use path='/memories/user.xml' para ver arquivo específico. "
         "Esta ferramenta é sua ÚNICA fonte de contexto cross-session.",
-        {"path": str},
+        {"path": Annotated[str, "Path da memoria a visualizar. Raiz: /memories. Subdiretorios: user.xml, preferences.xml, corrections/, empresa/. Use /memories para listar tudo"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -1505,7 +1505,7 @@ try:
         "/memories/learned/regras.xml (regras de negócio), "
         "/memories/corrections/dominio.xml (correções). "
         "Se o arquivo já existir, o conteúdo será SUBSTITUÍDO.",
-        {"path": str, "content": str},
+        {"path": Annotated[str, "Path completo onde salvar (ex: /memories/user.xml, /memories/corrections/regra_frete.md, /memories/empresa/termos/palmito.md)"], "content": Annotated[str, "Conteudo da memoria em formato texto ou XML. Para user.xml e preferences.xml, usar formato XML existente"]},
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -1785,7 +1785,7 @@ try:
         "Substitui um trecho de texto em um arquivo de memória existente. "
         "O old_str deve ser encontrado exatamente UMA vez no arquivo. "
         "Use para atualizar informações específicas sem reescrever o arquivo inteiro.",
-        {"path": str, "old_str": str, "new_str": str},
+        {"path": Annotated[str, "Path da memoria a atualizar"], "old_str": Annotated[str, "Texto EXATO a substituir (deve aparecer exatamente uma vez no conteudo atual)"], "new_str": Annotated[str, "Novo texto para substituir old_str (pode ser string vazia para deletar trecho)"]},
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -1919,7 +1919,7 @@ try:
         "delete_memory",
         "Deleta um arquivo ou diretório de memória. "
         "Não é possível deletar o diretório raiz /memories.",
-        {"path": str},
+        {"path": Annotated[str, "Path da memoria ou diretorio a deletar permanentemente"]},
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=True,
@@ -2138,7 +2138,7 @@ try:
         "injeção por baixa efetividade (injetadas 20+ vezes sem nunca serem usadas na resposta). "
         "Use quando precisar consultar histórico de informações antigas que não aparecem mais "
         "no contexto automático. Busca por texto no conteúdo e path.",
-        {"query": str},
+        {"query": Annotated[str, "Texto para buscar no conteudo e path das memorias frias (arquivadas). Busca case-insensitive por substring"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -2238,7 +2238,7 @@ try:
         "Use para ver quando e por quem a memória foi alterada, "
         "e o conteúdo de versões anteriores (preview de 200 chars). "
         "Útil para auditoria ou antes de restaurar uma versão antiga.",
-        {"path": str, "limit": int},
+        {"path": Annotated[str, "Path da memoria cujo historico de versoes sera consultado"], "limit": Annotated[int, "Maximo de versoes a retornar (1-20, default 5)"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -2342,7 +2342,7 @@ try:
         "Restaura uma versão anterior de uma memória. "
         "O conteúdo atual é salvo como nova versão antes da restauração (backup automático). "
         "Use view_memory_history primeiro para ver versões disponíveis.",
-        {"path": str, "version": int},
+        {"path": Annotated[str, "Path da memoria a restaurar para versao anterior"], "version": Annotated[int, "Numero da versao a restaurar (use view_memory_history para ver versoes disponiveis)"]},
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -2480,7 +2480,7 @@ try:
         "Use quando o usuário confirmar que uma pendência listada já foi tratada, "
         "ou quando você mesmo completar a tarefa descrita. "
         "A pendência simplesmente desaparece do contexto de sessões futuras.",
-        {"description": str},
+        {"description": Annotated[str, "Texto EXATO da pendencia a marcar como resolvida (deve corresponder a uma pendencia existente no briefing)"]},
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -2574,7 +2574,7 @@ try:
         "'API do HIBP retorna 429 se bater mais de 1 req/1.5s', "
         "'campo fiscal X só recalcula via Playwright, não XML-RPC'. "
         "Diferente de corrections (erros do agente) — são conhecimentos sobre armadilhas do sistema.",
-        {"area": str, "description": str},
+        {"area": Annotated[str, "Area do sistema: odoo, ssw, banco, deploy, api, frete, carteira, financeiro"], "description": Annotated[str, "Descricao da armadilha/gotcha operacional encontrada no sistema (max 20 pitfalls ativos)"]},
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,

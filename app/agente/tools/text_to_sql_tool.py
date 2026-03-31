@@ -22,7 +22,7 @@ import json
 import logging
 import threading
 from contextvars import ContextVar
-from typing import Any
+from typing import Annotated, Any
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +390,16 @@ try:
         "FIDELIDADE: apresente valores EXATOS do resultado — não arredonde, não invente dados, "
         "não adicione métricas não solicitadas. Se resultado vazio, informe claramente. "
         "Se campo 'aviso' presente, mencione que houve correção automática.",
-        {"pergunta": str},
+        {
+            "pergunta": Annotated[
+                str,
+                "Pergunta em linguagem natural sobre dados do sistema de frete. "
+                "Use termos do dominio: clientes, pedidos, embarques, NFs, faturamento, "
+                "transportadoras, separacoes, devolucoes. "
+                "Exemplos: 'Top 10 clientes por valor de frete em marco', "
+                "'Pedidos pendentes por estado', 'Valor medio de frete por transportadora'"
+            ],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,

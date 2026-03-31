@@ -1837,6 +1837,9 @@ Nunca invente informações."""
             # SDK 0.1.46+: stop_reason indica motivo do encerramento
             stop_reason = getattr(message, 'stop_reason', '') or ''
 
+            # SDK 0.1.51+: errors detalhados (API errors, tool crashes, validation fails)
+            result_errors = getattr(message, 'errors', []) or []
+
             if message.result:
                 state.full_text = message.result
 
@@ -1857,6 +1860,7 @@ Nunca invente informações."""
                 f"usage={message.usage} | turns={message.num_turns} | "
                 f"duration={message.duration_ms}ms | "
                 f"tokens_captured=({state.input_tokens},{state.output_tokens})"
+                f"{f' | errors={result_errors}' if result_errors else ''}"
             )
 
             # Detectar interrupt
@@ -1911,6 +1915,7 @@ Nunca invente informações."""
                         'interrupted': is_interrupted,
                         'stop_reason': stop_reason,
                         'structured_output': structured_output,
+                        'errors': result_errors if result_errors else None,
                     },
                     metadata={'message_id': state.last_message_id or ''}
                 ))
@@ -1993,6 +1998,7 @@ Nunca invente informações."""
         plan_mode: bool = False,
         user_id: int = None,
         output_format: Optional[Dict[str, Any]] = None,
+        our_session_id: Optional[str] = None,
     ) -> 'ClaudeAgentOptions':
         """
         Constrói ClaudeAgentOptions para ClaudeSDKClient.
@@ -2009,6 +2015,7 @@ Nunca invente informações."""
             plan_mode: Ativar modo somente-leitura
             user_id: ID do usuário (para Memory Tool)
             output_format: JSON Schema para structured output (SDK nativo)
+            our_session_id: Nosso UUID de sessão — SDK 0.1.52+ usa como nome do JSONL
 
         Returns:
             ClaudeAgentOptions configurado
@@ -2087,6 +2094,12 @@ Nunca invente informações."""
                 "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "240000",  # 240s (4 min) em ms
             },
         }
+
+        # SDK 0.1.52+: session_id nativo — pre-declara o UUID do JSONL
+        # Permite naming deterministico: JSONL sera ~/.claude/projects/.../{our_session_id}.jsonl
+        # Elimina necessidade de capturar sdk_session_id do SystemMessage.
+        if our_session_id:
+            options_dict["session_id"] = our_session_id
 
         # =================================================================
         # System Prompt: preset claude_code vs preset operacional
@@ -2535,6 +2548,12 @@ Nunca invente informações."""
                     agent_id = hook_input.get('agent_id', '')
                     agent_type = hook_input.get('agent_type', '')
 
+                    # SDK 0.1.52+: Registrar mapa agent_id → agent_type
+                    # para politicas de seguranca em can_use_tool()
+                    if agent_id and agent_type:
+                        from ..config.permissions import register_subagent
+                        register_subagent(agent_id, agent_type)
+
                     logger.info(
                         f"[HOOK:SubagentStart] "
                         f"agent_type={agent_type} | "
@@ -2568,6 +2587,11 @@ Nunca invente informações."""
                     agent_id = hook_input.get('agent_id', '')
                     agent_type = hook_input.get('agent_type', '')
                     transcript_path = hook_input.get('agent_transcript_path', '')
+
+                    # SDK 0.1.52+: Limpar mapa agent_id → agent_type
+                    if agent_id:
+                        from ..config.permissions import unregister_subagent
+                        unregister_subagent(agent_id)
 
                     # Extrair custo do transcript (ultima linha ResultMessage)
                     cost_usd = None
@@ -3031,20 +3055,24 @@ Nunca invente informações."""
             plan_mode=plan_mode,
             can_use_tool=can_use_tool,
             output_format=output_format,
+            our_session_id=our_session_id,
         )
 
         # ─── RESUME: só na primeira conexão ───
         # Se o client já existe no pool (reutilização), o CLI subprocess
         # já tem o contexto da conversa. Resume só é necessário quando
         # criamos um novo client (primeiro turno ou após idle cleanup).
+        # SDK 0.1.52+: Se our_session_id foi passado como session_id,
+        # o resume pode usar our_session_id diretamente como fallback.
         pool_key = our_session_id or ''
         existing = get_pooled_client(pool_key)
-        if not existing and sdk_session_id:
-            options = self._with_resume(options, sdk_session_id)
-            logger.info(f"[AGENT_SDK_PERSISTENT] Resuming session: {sdk_session_id[:12]}...")
+        resume_id = sdk_session_id or our_session_id
+        if not existing and resume_id:
+            options = self._with_resume(options, resume_id)
+            logger.info(f"[AGENT_SDK_PERSISTENT] Resuming session: {resume_id[:12]}...")
 
         # ─── Emitir init sintético ───
-        state.result_session_id = sdk_session_id
+        state.result_session_id = resume_id or sdk_session_id
         yield StreamEvent(
             type='init',
             content={'session_id': sdk_session_id or 'pending'},

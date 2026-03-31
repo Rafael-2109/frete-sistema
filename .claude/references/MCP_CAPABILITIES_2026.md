@@ -8,7 +8,7 @@
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.1.50 | CLI 2.1.81. AgentDefinition.skills/memory/mcpServers (0.1.49), RateLimitEvent + HookMatcher.timeout (0.1.50) |
+| `claude-agent-sdk` | 0.1.53 | CLI 2.1.88. Annotated params (0.1.52), agent_id permissions (0.1.52), disallowedTools/maxTurns (0.1.51), session_id nativo (0.1.52), SIGKILL nativo (0.1.51), is_error MCP (0.1.51) |
 | `mcp` | 1.26.0 | MCP Python SDK (spec 2025-11-25). **Pin recomendado: `>=1.25,<2`** |
 
 ---
@@ -67,14 +67,22 @@ Criado em 2026-02-17 para preencher gap entre SDK wrapper e MCP spec.
 
 **Total**: 35 tools registradas, todas com `openWorldHint` configurado.
 
-### SDK 0.1.49/0.1.50 — Features por AgentDefinition
+### SDK 0.1.49–0.1.53 — Features por AgentDefinition
 
 | Campo | Status | Nota |
 |---|---|---|
 | `AgentDefinition.skills` | **ADOTADO** | `agent_loader.py` passa skills nativas. Fallback texto para SDK < 0.1.49 |
+| `AgentDefinition.disallowedTools` | **PRONTO** (0.1.51) | `agent_loader.py` parseia `disallowed_tools` do frontmatter. Nao aplicado por default — `tools` whitelist ja restringe |
+| `AgentDefinition.maxTurns` | **PRONTO** (0.1.51) | `agent_loader.py` parseia `max_turns` do frontmatter. Disponivel quando necessario |
+| `AgentDefinition.initialPrompt` | **PRONTO** (0.1.51) | `agent_loader.py` parseia `initial_prompt` do frontmatter |
 | `AgentDefinition.mcpServers` | N/A | Apenas para servers stdio/sse/http EXTERNOS. In-process herdados via tool inheritance |
 | `AgentDefinition.memory` | N/A | Conflita com sistema custom `mcp__memory__*` (PostgreSQL). Reservado |
-| MCP Runtime Control | Disponivel | `get_mcp_status()`, `toggle_mcp_server()`, `reconnect_mcp_server()` — requer ClaudeSDKClient |
+| `typing.Annotated` params | **ADOTADO** (0.1.52) | `_mcp_enhanced.py:_python_type_to_json_schema()` + 34 tools com descriptions |
+| `ToolPermissionContext.agent_id` | **ADOTADO** (0.1.52) | Mapa agent_id→agent_type em `permissions.py`. Audit trail + politicas opt-in |
+| `ClaudeAgentOptions.session_id` | **ADOTADO** (0.1.52) | Naming deterministico do JSONL via `_build_options()` |
+| `ResultMessage.errors` | **ADOTADO** (0.1.51) | Logado e propagado no StreamEvent `done` |
+| MCP Runtime Control | Disponivel | `get_mcp_status()`, `toggle_mcp_server()` — requer ClaudeSDKClient |
+| `get_context_usage()` | Disponivel (0.1.52) | NAO implementado — requer wiring 3-layer |
 
 ---
 

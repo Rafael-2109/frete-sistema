@@ -62,7 +62,7 @@ zxcvbn>=4.4.28              # Password strength estimation (seguranca module)
 # AI & CLAUDE INTEGRATION
 # ==========================================
 anthropic==0.84.0           # API direta Anthropic (Structured Outputs, top-level cache_control, MCP converters)
-claude-agent-sdk==0.1.50    # Claude Agent SDK oficial (0.1.50: session APIs, RateLimitEvent, HookMatcher.timeout)
+claude-agent-sdk==0.1.53    # Claude Agent SDK oficial (0.1.53: Annotated params, agent_id permissions, disallowedTools, session_id, SIGKILL nativo)
 mcp>=1.26.0                 # Model Context Protocol (latest stable)
 pydantic==2.12.5           # Data validation
 anyio==4.12.1              # Async support

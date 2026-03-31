@@ -21,7 +21,7 @@ Referencia API Render:
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 import requests
 from app.utils.timezone import agora_utc_naive
@@ -368,12 +368,12 @@ try:
             "Exemplos: 'logs de erro das ultimas 2 horas', 'busca timeout nos logs do worker'."
         ),
         {
-            "texto": str,
-            "servico": str,
-            "tipo": str,
-            "nivel": str,
-            "horas": int,
-            "limite": int,
+            "texto": Annotated[str, "Filtro de texto para buscar nos logs (opcional, omitir para todos)"],
+            "servico": Annotated[str, "Servico alvo: 'web' (app principal), 'worker' (filas RQ), 'postgres', 'redis'. Default 'web'"],
+            "tipo": Annotated[str, "Tipo de log: 'app' (aplicacao), 'request' (HTTP), 'build' (deploy). Default 'app'"],
+            "nivel": Annotated[str, "Nivel minimo: 'error', 'warning', 'info'. Omitir para todos os niveis"],
+            "horas": Annotated[int, "Periodo em horas para busca retroativa (1-24, default 1)"],
+            "limite": Annotated[int, "Numero maximo de logs a retornar (1-100, default 50)"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=True,
@@ -494,9 +494,9 @@ try:
             "'por que a NF nao processou?', 'erros no worker'."
         ),
         {
-            "servico": str,
-            "minutos": int,
-            "texto": str,
+            "servico": Annotated[str, "Servico alvo: 'web' ou 'worker'. Default 'web'"],
+            "minutos": Annotated[int, "Janela de tempo em minutos (5-120, default 30)"],
+            "texto": Annotated[str, "Filtro adicional de texto para os logs de erro (opcional)"],
         },
         annotations=ToolAnnotations(
             readOnlyHint=True,

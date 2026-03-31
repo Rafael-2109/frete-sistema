@@ -17,7 +17,7 @@ Uso pelo agente:
 
 import logging
 import threading
-from typing import Any, Dict, Optional, Tuple
+from typing import Annotated, Any, Dict, Optional, Tuple
 from contextvars import ContextVar
 
 logger = logging.getLogger(__name__)
@@ -241,7 +241,7 @@ try:
             "Em debug mode: use target_user_id para buscar sessões de outro usuário, "
             "e channel='teams' ou 'web' para filtrar por canal."
         ),
-        {"query": str},
+        {"query": Annotated[str, "Texto a buscar em sessoes anteriores (minimo 2 caracteres). Busca em titulos e conteudo de mensagens"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -387,7 +387,7 @@ try:
             "Em debug mode: use target_user_id para listar sessões de outro usuário, "
             "e channel='teams' ou 'web' para filtrar por canal."
         ),
-        {"limit": int},
+        {"limit": Annotated[int, "Numero maximo de sessoes recentes a retornar (default 10)"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -498,7 +498,7 @@ try:
             "Encontra conversas por similaridade de significado, não apenas texto exato. "
             "Em debug mode: use target_user_id para buscar sessões de outro usuário."
         ),
-        {"query": str, "limit": int},
+        {"query": Annotated[str, "Texto ou tema para busca semantica por similaridade em sessoes anteriores (minimo 2 caracteres)"], "limit": Annotated[int, "Numero maximo de resultados a retornar (default 10)"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
@@ -644,7 +644,7 @@ try:
             "Retorna user_id, nome, total de sessões, breakdown web/teams e última atividade. "
             "Use para descobrir target_user_id antes de buscar sessões de outro usuário."
         ),
-        {"limit": int},
+        {"limit": Annotated[int, "Numero maximo de usuarios a retornar (default 20, max 50). Requer debug mode"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,

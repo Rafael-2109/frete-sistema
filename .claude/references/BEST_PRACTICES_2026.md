@@ -9,7 +9,7 @@
 | Componente | Versao | Notas |
 |-----------|--------|-------|
 | `anthropic` SDK | **0.84.0** | Atualizado de 0.79.0. count_tokens, batches, cache_control disponiveis |
-| `claude-agent-sdk` | **0.1.50** | CLI 2.1.81. Skills/memory/mcpServers nativos em AgentDefinition (0.1.49). RateLimitEvent, HookMatcher.timeout, effort nativo (0.1.50) |
+| `claude-agent-sdk` | **0.1.53** | CLI 2.1.88. Annotated params, agent_id permissions, disallowedTools/maxTurns, session_id nativo, SIGKILL nativo, is_error MCP (0.1.51-0.1.53) |
 | `mcp` | 1.26.0+ | 7 servers, 35 tools |
 | pgvector | **0.8.1** (confirmado prod) | iterative_scan SUPORTADO, halfvec disponivel |
 
@@ -137,7 +137,8 @@
 - [ ] **Session History SDK**: `list_sessions()`, `get_session_messages()` (v0.1.46+)
 
 ### Fase 4 — Otimizacoes (4h estimadas)
-- [ ] **Runtime MCP Management**: `toggle_mcp_server()` em runtime (lazy-loading tools). Disponivel SDK 0.1.50, requer ClaudeSDKClient
+- [ ] **Runtime MCP Management**: `toggle_mcp_server()` em runtime (lazy-loading tools). Disponivel SDK 0.1.50+, requer ClaudeSDKClient
+- [ ] **Context Usage Monitoring**: `get_context_usage()` (SDK 0.1.52+). Requer wiring 3-layer (client→routes→chat.js)
 - [ ] **halfvec pgvector**: 50% storage de embeddings (migration destrutiva, testar recall)
 - [ ] **HTTP Hooks**: POST JSON para Teams quando agente completa tarefa
 - [x] **PreCompact Hook**: Salvar contexto antes de compaction (implementado `_pre_compact_hook`)

@@ -171,6 +171,50 @@ def cleanup_teams_task_context(session_id: str) -> None:
             )
 
 
+# =============================================================================
+# SUBAGENT TYPE MAP: agent_id (UUID instancia) → agent_type (nome legivel)
+# =============================================================================
+# Populado pelo SubagentStart hook (client.py), limpo pelo SubagentStop hook.
+# Permite que can_use_tool() aplique politicas de seguranca POR tipo de subagente.
+# SDK 0.1.52+: ToolPermissionContext.agent_id disponivel em can_use_tool().
+#
+# agent_id e UUID de INSTANCIA (unico por spawn), NAO o nome do tipo.
+# agent_type e o nome legivel (ex: "analista-carteira", "gestor-ssw").
+# Main agent tem agent_id=None (nao aparece neste mapa).
+# =============================================================================
+_agent_type_map: Dict[str, str] = {}  # agent_id → agent_type
+
+# Politicas de seguranca por tipo de subagente (opt-in).
+# Cada entrada define tools NEGADAS para aquele tipo.
+# Tools nao listadas sao permitidas (default allow).
+# Patterns com fnmatch: "mcp__browser__*" nega todas as browser tools.
+# Main agent ('main') herda politica existente (Write/Edit restrito a /tmp).
+# NOTA: Por padrao vazio — subagentes ja sao restritos pelo campo `tools`
+# do AgentDefinition (whitelist). Adicionar entradas aqui para enforcement
+# DINAMICO alem da whitelist estatica (ex: rate limiting, content-based).
+_SUBAGENT_DENY_POLICIES: Dict[str, list[str]] = {}
+
+
+def register_subagent(agent_id: str, agent_type: str) -> None:
+    """Registra mapeamento agent_id → agent_type (chamado pelo SubagentStart hook)."""
+    with _context_lock:
+        _agent_type_map[agent_id] = agent_type
+
+
+def unregister_subagent(agent_id: str) -> None:
+    """Remove mapeamento agent_id (chamado pelo SubagentStop hook)."""
+    with _context_lock:
+        _agent_type_map.pop(agent_id, None)
+
+
+def get_agent_type(agent_id: str | None) -> str:
+    """Resolve agent_id para agent_type. Retorna 'main' se None ou nao encontrado."""
+    if not agent_id:
+        return 'main'
+    with _context_lock:
+        return _agent_type_map.get(agent_id, 'unknown')
+
+
 # Diretório temporário padrão do sistema
 TEMP_DIR = tempfile.gettempdir()  # /tmp no Linux
 
@@ -209,6 +253,43 @@ async def can_use_tool(
         PermissionResultAllow ou PermissionResultDeny
     """
     try:
+        # ================================================================
+        # SDK 0.1.52+: Extrair agent_id e tool_use_id do context
+        # ================================================================
+        agent_id = getattr(context, 'agent_id', None) if context else None
+        tool_use_id = getattr(context, 'tool_use_id', None) if context else None
+        agent_type = get_agent_type(agent_id)
+
+        # ================================================================
+        # REGRA: Politicas de seguranca POR subagente
+        # ================================================================
+        if agent_type not in ('main', 'unknown'):
+            from fnmatch import fnmatch as _fnmatch
+            deny_list = _SUBAGENT_DENY_POLICIES.get(agent_type, [])
+            for pattern in deny_list:
+                if _fnmatch(tool_name, pattern):
+                    logger.warning(
+                        f"[PERMISSION] DENIED by subagent policy: "
+                        f"tool={tool_name} | agent_type={agent_type} | "
+                        f"agent_id={agent_id[:12] if agent_id else 'N/A'} | "
+                        f"tool_use_id={tool_use_id or 'N/A'}"
+                    )
+                    return PermissionResultDeny(
+                        message=(
+                            f"Tool '{tool_name}' nao permitida para subagente '{agent_type}'. "
+                            f"Use apenas as tools autorizadas para este tipo de agente."
+                        )
+                    )
+
+        # Log de auditoria com agent context (SDK 0.1.52+)
+        if agent_type != 'main':
+            logger.info(
+                f"[PERMISSION] Subagent call: tool={tool_name} | "
+                f"agent_type={agent_type} | "
+                f"agent_id={agent_id[:12] if agent_id else 'N/A'} | "
+                f"tool_use_id={tool_use_id or 'N/A'}"
+            )
+
         # ================================================================
         # REGRA: Write APENAS para /tmp
         # ================================================================

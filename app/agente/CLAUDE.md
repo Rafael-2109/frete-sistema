@@ -371,28 +371,43 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 ---
 
-## SDK 0.1.50 (atualizado 2026-03-22)
+## SDK 0.1.53 (atualizado 2026-03-31)
 
-**Versao**: `claude-agent-sdk==0.1.50`
+**Versao**: `claude-agent-sdk==0.1.53`
 
-### Features adotadas:
-- **`ResultMessage.stop_reason`**: Populado automaticamente no StreamEvent `done` e logado. Valores: `"end_turn"`, `"max_turns"`, `"budget_exceeded"`, etc.
-- **Task messages** (`TaskStartedMessage`, `TaskProgressMessage`, `TaskNotificationMessage`): Emitidos como SSE events `task_started`/`task_progress` para observabilidade de subagentes. Import direto (sem fallback).
-- **`agent_id`/`agent_type` em hooks**: `PostToolUseHookInput` (opcionais). Logados no `[AUDIT] PostToolUse`. **NAO disponivel** em `StopHookInput`.
-- **`effort` field nativo**: `ClaudeAgentOptions.effort` (Literal["low"|"medium"|"high"|"max"]) — substituiu `max_thinking_tokens` (deprecated)
-- **`RateLimitEvent`** (0.1.50): Detecta rate limits com status (`allowed_warning`, `rejected`), utilizacao e tempo de reset. Pipeline 3-layer: client.py → routes.py → chat.js (toast).
-- **`HookMatcher.timeout`** (0.1.50): Timeout granular por hook. `UserPromptSubmit` usa 120s (memorias + semantic search). Demais usam default SDK.
-- **`AgentDefinition.skills`** (0.1.49): Skills nativas no subagente. `agent_loader.py` detecta suporte via `_SDK_HAS_NATIVE_FIELDS` e passa skills como campo nativo em vez de injetar texto no prompt. Fallback automatico para SDK < 0.1.49.
-- **`AgentDefinition.mcpServers`** (0.1.49, NAO usado): MCP servers por agente. Apenas para servers stdio/sse/http EXTERNOS. Os 6 MCP servers in-process sao herdados via tool inheritance — `mcpServers` nao funciona para eles.
-- **`AgentDefinition.memory`** (0.1.49, NAO usado): Escopo de memoria CLI do subagente. Conflita com sistema custom `mcp__memory__*` (PostgreSQL). Reservado para avaliacao futura.
-- **Session Management APIs** (0.1.50, NAO usadas): `list_sessions()`, `get_session_info()`, `get_session_messages()`, `rename_session()`, `tag_session()` — operam em JSONL do CLI.
-- **MCP Runtime Control** (0.1.50, NAO usadas): `get_mcp_status()`, `reconnect_mcp_server()`, `toggle_mcp_server()` — requerem ClaudeSDKClient.
+### Features adotadas (0.1.51–0.1.53):
+- **`typing.Annotated` em MCP tools** (0.1.52): Descriptions por parametro no JSON Schema. `_mcp_enhanced.py:_python_type_to_json_schema()` processa `Annotated[str, "desc"]` → `{"type": "string", "description": "desc"}`. Aplicado em 34 tools (7 MCP servers). Modelo recebe instrucoes por parametro em vez de adivinhar pelo nome.
+- **`ToolPermissionContext.tool_use_id/agent_id`** (0.1.52): `can_use_tool()` agora recebe `agent_id` (UUID instancia do subagente) e `tool_use_id` (ID unico da tool call). `permissions.py` registra mapa `agent_id→agent_type` via `SubagentStart` hook. Infraestrutura de politicas por subagente pronta (`_SUBAGENT_DENY_POLICIES`, vazio por default — `tools` whitelist ja restringe). Audit trail com agent_type em cada permissao.
+- **`AgentDefinition.disallowedTools/maxTurns/initialPrompt`** (0.1.51): `agent_loader.py` parseia `disallowed_tools`, `max_turns`, `initial_prompt` do frontmatter. Disponivel para uso nos `.claude/agents/*.md` quando necessario — nao aplicado por padrao.
+- **`ClaudeAgentOptions.session_id`** (0.1.52): Pre-declara UUID do JSONL. `_build_options()` passa `our_session_id` como `session_id` → naming deterministico. Resume usa `our_session_id` como fallback se `sdk_session_id` ausente. **NOTA**: Issue #560 (aberta) — `ClaudeSDKClient` nao usa `session_id` para isolamento; nosso pool resolve via instancias separadas.
+- **`ResultMessage.errors`** (0.1.51): Campo `errors` logado no ResultMessage handler e propagado no StreamEvent `done`.
+- **`fork_session()`/`delete_session()`** (0.1.51, NAO usadas): APIs de sessao. Disponiveis para uso futuro.
+- **`task_budget`** (0.1.51, NAO usado): Limite de tokens por task/subagent.
+- **`SystemPromptFile`** (0.1.51, NAO usado): System prompt via arquivo. Nosso prompt e ~3KB string — sem necessidade.
+- **`get_context_usage()`** (0.1.52, NAO implementado): Monitoramento de context window. Requer wiring 3-layer (client→routes→chat.js).
 
-### Memory leak fixes do CLI 2.1.69+:
-- Fix: old message arrays acumulando (~35MB/1000 turns)
-- Fix: bridge polling loop, hook events, teammates leaks
-- Fix: API 400 errors em forked agents
-- Baseline memory ~16MB
+### Features adotadas (anteriores, mantidas):
+- **`ResultMessage.stop_reason`**: Populado automaticamente no StreamEvent `done` e logado.
+- **Task messages** (`TaskStartedMessage`, `TaskProgressMessage`, `TaskNotificationMessage`): SSE events para observabilidade de subagentes.
+- **`agent_id`/`agent_type` em hooks**: `PostToolUseHookInput` logados no `[AUDIT] PostToolUse`.
+- **`effort` field nativo**: `ClaudeAgentOptions.effort` — substituiu `max_thinking_tokens`.
+- **`RateLimitEvent`** (0.1.50): Pipeline 3-layer: client.py → routes.py → chat.js (toast).
+- **`HookMatcher.timeout`** (0.1.50): `UserPromptSubmit` usa 120s.
+- **`AgentDefinition.skills`** (0.1.49): Skills nativas via `_SDK_HAS_NATIVE_FIELDS`.
+
+### Bug fixes criticos (0.1.51–0.1.53):
+- **`is_error` MCP propagado** (0.1.51): Modelo sabe quando MCP tool falhou (antes interpretava erro como sucesso)
+- **`SIGKILL` fallback nativo** (0.1.51): SDK agora mata subprocess zombie. `_force_kill_subprocess()` em `client_pool.py` pode ser simplificado
+- **`control_cancel_request`** (0.1.52): Hooks in-flight cancelados corretamente (antes ficavam zombie)
+- **Cross-task `RuntimeError` fix** (0.1.51): `disconnect()` nao falha mais ao ser chamado de task diferente
+- **`--setting-sources` fix** (0.1.53): Lista vazia nao corrompe flags do CLI
+- **Deadlock `query()`+hooks fix** (0.1.53): Afeta apenas path v2 (codigo morto)
+
+### NAO usadas (mantidas para referencia):
+- **Session Management APIs** (0.1.50): `list_sessions()`, `get_session_info()`, etc.
+- **MCP Runtime Control** (0.1.50): `get_mcp_status()`, `toggle_mcp_server()`, etc.
+- **`AgentDefinition.mcpServers`** (0.1.49): Apenas para servers EXTERNOS.
+- **`AgentDefinition.memory`** (0.1.49): Conflita com sistema custom PostgreSQL.
 
 ---
 

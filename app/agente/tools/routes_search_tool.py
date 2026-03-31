@@ -11,7 +11,7 @@ Uso pelo agente:
 
 import logging
 import os
-from typing import Any, Dict
+from typing import Annotated, Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ try:
             "Retorna URL clicavel, menu, template e metadados. "
             "~300 rotas indexadas cobrindo todos os modulos do sistema."
         ),
-        {"query": str, "tipo": str, "limit": int},
+        {"query": Annotated[str, "Texto de busca para encontrar rotas, telas ou APIs do sistema (minimo 2 caracteres)"], "tipo": Annotated[str, "Filtrar por tipo: 'rota_template' (telas HTML), 'rota_api' (endpoints JSON). Omitir para ambos"], "limit": Annotated[int, "Numero maximo de resultados (1-20, default 5)"]},
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
