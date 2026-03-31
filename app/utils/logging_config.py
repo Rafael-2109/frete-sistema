@@ -1,4 +1,5 @@
 import logging
+import re
 import sys
 from datetime import datetime
 import traceback
@@ -6,6 +7,79 @@ from functools import wraps
 import time
 import psutil
 import os
+
+
+# ---------------------------------------------------------------------------
+# SensitiveFilter — redacta credenciais em log records
+# ---------------------------------------------------------------------------
+
+class SensitiveFilter(logging.Filter):
+    """Redacta credenciais e segredos em mensagens de log.
+
+    Patterns redactados:
+    - URLs com credenciais: ``redis://:password@host`` -> ``redis://***@host``
+    - Pares chave=valor: ``password=abc``, ``api_key=xyz``, ``secret=...``, ``token=...``
+    - Strings JSON-like: ``"api_key": "valor"``
+
+    A classe e DEFENSIVA: qualquer excecao interna e engolida para jamais
+    quebrar o pipeline de logging.
+    """
+
+    # URL com credenciais  (ex: redis://:senha@host, postgres://user:pass@host)
+    _URL_CRED_RE = re.compile(
+        r'(?P<scheme>[a-zA-Z][a-zA-Z0-9+\-.]*)://'   # scheme://
+        r'(?P<userinfo>[^@]+)@',                       # userinfo@
+    )
+
+    # Pares chave=valor (query string ou log text)
+    _KV_RE = re.compile(
+        r'(?i)'
+        r'(?P<key>password|passwd|api_key|apikey|secret|token|authorization|credential)'
+        r'\s*[=:]\s*'
+        r'(?P<quote>["\']?)(?P<value>[^\s,;"\'}]+)(?P=quote)',
+    )
+
+    def _redact(self, text: str) -> str:
+        """Aplica redacao a uma string."""
+        # 1) URLs com credenciais  ->  scheme://***@host
+        text = self._URL_CRED_RE.sub(
+            lambda m: f"{m.group('scheme')}://***@",
+            text,
+        )
+        # 2) Pares chave=valor  ->  key=***
+        text = self._KV_RE.sub(
+            lambda m: f"{m.group('key')}=***",
+            text,
+        )
+        return text
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Modifica record.msg e record.args para remover credenciais.
+
+        Retorna sempre ``True`` para que o record continue no pipeline.
+        """
+        try:
+            # Redactar msg (pode ser str ou outro tipo — so processa str)
+            if isinstance(record.msg, str):
+                record.msg = self._redact(record.msg)
+
+            # Redactar args (tupla ou dict usados em %-formatting)
+            if isinstance(record.args, tuple):
+                record.args = tuple(
+                    self._redact(a) if isinstance(a, str) else a
+                    for a in record.args
+                )
+            elif isinstance(record.args, dict):
+                record.args = {
+                    k: self._redact(v) if isinstance(v, str) else v
+                    for k, v in record.args.items()
+                }
+        except Exception:
+            # DEFENSIVO: nunca quebrar logging
+            pass
+
+        return True
+
 
 # Configuração de logging
 def setup_logging():

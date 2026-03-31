@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 def setup_redis_connection():
     """Configura conexão com Redis"""
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-    logger.info(f"Conectando ao Redis: {redis_url}")
+    logger.info(f"Conectando ao Redis: {redis_url[:30]}...")
     return Redis.from_url(redis_url)
 
 def worker_startup():
