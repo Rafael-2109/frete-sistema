@@ -135,17 +135,17 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_tf_tipo_carga",
-      "columns": [
-        "tipo_carga"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_tf_uf",
       "columns": [
         "uf_origem",
         "uf_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_tf_tipo_carga",
+      "columns": [
+        "tipo_carga"
       ],
       "unique": false
     }

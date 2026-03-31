@@ -1,0 +1,92 @@
+{
+  "name": "agent_improvement_dialogue",
+  "description": "Dialogo versionado de melhoria continua entre Agent SDK e Claude Code.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "suggestion_key",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "version",
+      "type": "integer",
+      "nullable": false,
+      "default": 1
+    },
+    {
+      "name": "author",
+      "type": "varchar(20)",
+      "description": "'agent_sdk' | 'claude_code'",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "proposed"
+    },
+    {
+      "name": "category",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "severity",
+      "type": "varchar(10)",
+      "nullable": false,
+      "default": "info"
+    },
+    {
+      "name": "title",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "evidence_json",
+      "type": "json"
+    },
+    {
+      "name": "affected_files",
+      "type": "array"
+    },
+    {
+      "name": "implementation_notes",
+      "type": "text"
+    },
+    {
+      "name": "auto_implemented",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "source_session_ids",
+      "type": "array"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "suggestion_key",
+      "version"
+    ]
+  ]
+}

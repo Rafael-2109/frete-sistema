@@ -132,13 +132,6 @@
   ],
   "indices": [
     {
-      "name": "ix_custo_considerado_custo_atual",
-      "columns": [
-        "custo_atual"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_custo_considerado_atual",
       "columns": [
         "cod_produto",
@@ -147,16 +140,23 @@
       "unique": false
     },
     {
-      "name": "ix_custo_considerado_cod_produto",
+      "name": "idx_custo_considerado_tipo",
       "columns": [
-        "cod_produto"
+        "tipo_produto"
       ],
       "unique": false
     },
     {
-      "name": "idx_custo_considerado_tipo",
+      "name": "ix_custo_considerado_custo_atual",
       "columns": [
-        "tipo_produto"
+        "custo_atual"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_custo_considerado_cod_produto",
+      "columns": [
+        "cod_produto"
       ],
       "unique": false
     }
