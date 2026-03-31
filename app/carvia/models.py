@@ -1397,6 +1397,15 @@ class CarviaCotacao(db.Model):
         nullable=False
     )
 
+    # Endereco de entrega (override por cotacao — independente do destino cadastrado)
+    entrega_uf = db.Column(db.String(2), nullable=True)
+    entrega_cidade = db.Column(db.String(100), nullable=True)
+    entrega_logradouro = db.Column(db.String(255), nullable=True)
+    entrega_numero = db.Column(db.String(20), nullable=True)
+    entrega_bairro = db.Column(db.String(100), nullable=True)
+    entrega_cep = db.Column(db.String(10), nullable=True)
+    entrega_complemento = db.Column(db.String(255), nullable=True)
+
     # Tipo de material e carga
     tipo_material = db.Column(db.String(20), nullable=False)  # CARGA_GERAL | MOTO
     tipo_carga = db.Column(db.String(20), nullable=True)  # DIRETA | FRACIONADA
