@@ -1,6 +1,7 @@
 # 🔥 PRIMEIRA COISA: REGISTRAR TIPOS POSTGRESQL
 import sys
 import os
+import logging
 
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -379,6 +380,14 @@ def create_app(config_name=None):
     login_manager.refresh_view = "auth.login"
     login_manager.needs_refresh_message = "Sua sessão expirou. Faça login novamente."
     login_manager.needs_refresh_message_category = "info"
+
+    # 🔒 SensitiveFilter — redacta credenciais em TODOS os logs (root logger)
+    try:
+        from app.utils.logging_config import SensitiveFilter
+        _sensitive_filter = SensitiveFilter()
+        logging.getLogger().addFilter(_sensitive_filter)
+    except Exception as e:
+        print(f"⚠️ Erro ao instalar SensitiveFilter: {e}")
 
     # 📊 Sistema de monitoramento e logging
     try:
