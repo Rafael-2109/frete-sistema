@@ -88,10 +88,69 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Endereco Destino <span class="text-danger">*</span></label>
-                            <select class="form-select" id="selDestino">
-                                <option value="">Carregando...</option>
-                            </select>
+                            <label class="form-label">
+                                Endereco Destino <span class="text-danger">*</span>
+                                {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-2 small" id="btnToggleDestinoManual" onclick="toggleModoDestinoManual()">
+                                    Inserir manualmente
+                                </button>
+                                {% endif %}
+                            </label>
+
+                            {# Modo dropdown (padrao) #}
+                            <div id="blocoDestinoDropdown">
+                                <select class="form-select" id="selDestino">
+                                    <option value="">Carregando...</option>
+                                </select>
+                            </div>
+
+                            {# Modo manual (oculto por padrao) #}
+                            {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
+                            <div id="blocoDestinoManual" class="d-none">
+                                <div class="row g-2 mt-0">
+                                    <div class="col-md-4">
+                                        <input type="text" class="form-control form-control-sm" id="manDestUf" placeholder="UF *" maxlength="2" style="text-transform:uppercase">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <input type="text" class="form-control form-control-sm" id="manDestCidade" placeholder="Cidade *">
+                                    </div>
+                                </div>
+                                <div class="row g-2 mt-1">
+                                    <div class="col-md-3">
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control form-control-sm" id="manDestCep" placeholder="CEP"
+                                                   data-cep-lookup
+                                                   data-cep-logradouro="#manDestLogradouro"
+                                                   data-cep-bairro="#manDestBairro"
+                                                   data-cep-cidade="#manDestCidade"
+                                                   data-cep-uf="#manDestUf">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" data-cep-trigger="#manDestCep" title="Buscar CEP">
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <input type="text" class="form-control form-control-sm" id="manDestLogradouro" placeholder="Logradouro">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="text" class="form-control form-control-sm" id="manDestNumero" placeholder="Numero">
+                                    </div>
+                                </div>
+                                <div class="row g-2 mt-1">
+                                    <div class="col-md-4">
+                                        <input type="text" class="form-control form-control-sm" id="manDestBairro" placeholder="Bairro">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <input type="text" class="form-control form-control-sm" id="manDestRazao" placeholder="Nome / Razao Social (opcional)">
+                                    </div>
+                                </div>
+                                <div class="alert alert-warning py-1 mt-2 small mb-0">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Destino provisorio — CNPJ sera obrigatorio antes de gravar a cotacao.
+                                </div>
+                                <div id="manDestFeedback" class="mt-1" style="display:none"></div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                     {# Endereco de entrega editavel inline (Ajuste 8) #}
@@ -112,7 +171,19 @@
                         <div class="row g-2 mt-1">
                             <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="endCidade" placeholder="Cidade"></div>
                             <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="endUf" placeholder="UF" maxlength="2"></div>
-                            <div class="col-md-3"><input type="text" class="form-control form-control-sm" id="endCep" placeholder="CEP"></div>
+                            <div class="col-md-3">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control form-control-sm" id="endCep" placeholder="CEP"
+                                           data-cep-lookup
+                                           data-cep-logradouro="#endLogradouro"
+                                           data-cep-bairro="#endBairro"
+                                           data-cep-cidade="#endCidade"
+                                           data-cep-uf="#endUf">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-cep-trigger="#endCep" title="Buscar CEP">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div id="enderecoFeedback" class="mt-1" style="display:none"></div>
                     </div>
@@ -483,9 +554,21 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/viacep.js') }}"></script>
 <script>
 const cotacaoId = {{ cotacao.id }};
 const modelosMoto = {{ modelos_moto_json|safe }};
+
+// Endereco de entrega da cotacao (override, pode ser null)
+const _entregaCotacao = {
+    uf: {{ cotacao.entrega_uf|tojson }},
+    cidade: {{ cotacao.entrega_cidade|tojson }},
+    logradouro: {{ cotacao.entrega_logradouro|tojson }},
+    numero: {{ cotacao.entrega_numero|tojson }},
+    bairro: {{ cotacao.entrega_bairro|tojson }},
+    cep: {{ cotacao.entrega_cep|tojson }},
+    complemento: {{ cotacao.entrega_complemento|tojson }},
+};
 
 /* ===== API helper ===== */
 function apiCall(url, method, body) {
@@ -643,14 +726,103 @@ function initMotos() {
     recalcularTotaisMotos();
 }
 
+/* ===== Toggle Destino Manual ===== */
+let _modoDestinoManual = false;
+
+function toggleModoDestinoManual() {
+    _modoDestinoManual = !_modoDestinoManual;
+    const dropdown = document.getElementById('blocoDestinoDropdown');
+    const manual = document.getElementById('blocoDestinoManual');
+    const btn = document.getElementById('btnToggleDestinoManual');
+    const endInline = document.getElementById('enderecoEntregaInline');
+
+    if (_modoDestinoManual) {
+        if (dropdown) dropdown.classList.add('d-none');
+        if (manual) manual.classList.remove('d-none');
+        if (endInline) endInline.classList.add('d-none');
+        if (btn) btn.textContent = '\u2190 Selecionar da lista';
+    } else {
+        if (dropdown) dropdown.classList.remove('d-none');
+        if (manual) manual.classList.add('d-none');
+        if (btn) btn.textContent = 'Inserir manualmente';
+        // Limpar campos manuais
+        ['manDestUf','manDestCidade','manDestCep','manDestLogradouro','manDestNumero','manDestBairro','manDestRazao'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const fb = document.getElementById('manDestFeedback');
+        if (fb) fb.style.display = 'none';
+        // Re-mostrar endereco inline se ha destino selecionado no dropdown
+        const destId = parseInt(document.getElementById('selDestino').value);
+        if (destId && endInline) {
+            const destEnd = _enderecosCacheados.find(e => e.id === destId);
+            if (destEnd) preencherEnderecoInline(destEnd);
+        }
+    }
+}
+
 /* ===== SALVAR TUDO (dados + motos) ===== */
-function salvarTudo() {
+async function salvarTudo() {
+    let destinoId = parseInt(document.getElementById('selDestino').value) || null;
+
+    // Se modo manual: criar destino provisorio via API primeiro
+    if (_modoDestinoManual) {
+        const cidade = (document.getElementById('manDestCidade')?.value || '').trim();
+        const uf = (document.getElementById('manDestUf')?.value || '').trim().toUpperCase();
+        const clienteId = parseInt(document.getElementById('selCliente').value) || 0;
+
+        if (!cidade || !uf) {
+            alert('Cidade e UF do destino sao obrigatorios.');
+            return;
+        }
+        if (!clienteId) {
+            alert('Selecione o cliente.');
+            return;
+        }
+
+        const fb = document.getElementById('manDestFeedback');
+        if (fb) {
+            fb.innerHTML = '<small class="text-muted"><i class="fas fa-spinner fa-spin"></i> Criando destino provisorio...</small>';
+            fb.style.display = 'block';
+        }
+
+        try {
+            const resp = await fetch('/carvia/api/cotacoes/destino-provisorio', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    cliente_id: clienteId,
+                    razao_social: document.getElementById('manDestRazao')?.value.trim() || null,
+                    fisico: {
+                        uf: uf,
+                        cidade: cidade,
+                        cep: document.getElementById('manDestCep')?.value.trim() || null,
+                        logradouro: document.getElementById('manDestLogradouro')?.value.trim() || null,
+                        numero: document.getElementById('manDestNumero')?.value.trim() || null,
+                        bairro: document.getElementById('manDestBairro')?.value.trim() || null,
+                    }
+                })
+            });
+            const data = await resp.json();
+            if (!data.sucesso) {
+                if (fb) fb.innerHTML = '<small class="text-danger"><i class="fas fa-times"></i> ' + (data.erro || 'Erro') + '</small>';
+                alert(data.erro || 'Erro ao criar destino provisorio.');
+                return;
+            }
+            destinoId = data.endereco_id;
+            if (fb) fb.innerHTML = '<small class="text-success"><i class="fas fa-check"></i> Destino provisorio criado.</small>';
+        } catch (err) {
+            alert('Erro de rede: ' + err.message);
+            return;
+        }
+    }
+
     const tipoMat = document.getElementById('selTipoMaterial').value;
 
     const payload = {
         cliente_id: parseInt(document.getElementById('selCliente').value) || null,
         endereco_origem_id: parseInt(document.getElementById('selOrigem').value) || null,
-        endereco_destino_id: parseInt(document.getElementById('selDestino').value) || null,
+        endereco_destino_id: destinoId,
         tipo_material: tipoMat,
         tipo_carga: document.getElementById('selTipoCarga').value,
         peso: parseFloat(document.getElementById('inpPeso').value) || null,
@@ -663,6 +835,18 @@ function salvarTudo() {
         data_agenda: document.getElementById('inpDataAg').value || null,
         observacoes: document.getElementById('inpObs').value || null,
     };
+
+    // Incluir endereco de entrega (override cotacao) se inline visivel
+    const _endInline = document.getElementById('enderecoEntregaInline');
+    if (_endInline && !_endInline.classList.contains('d-none')) {
+        payload.entrega_uf = (document.getElementById('endUf').value || '').trim().toUpperCase();
+        payload.entrega_cidade = (document.getElementById('endCidade').value || '').trim();
+        payload.entrega_logradouro = (document.getElementById('endLogradouro').value || '').trim();
+        payload.entrega_numero = (document.getElementById('endNumero').value || '').trim();
+        payload.entrega_bairro = (document.getElementById('endBairro').value || '').trim();
+        payload.entrega_cep = (document.getElementById('endCep').value || '').trim();
+        payload.entrega_complemento = (document.getElementById('endComplemento').value || '').trim();
+    }
 
     // Coletar motos da tabela
     if (tipoMat === 'MOTO') {
@@ -698,7 +882,25 @@ function salvarData(campo, valor) {
 }
 
 /* ===== Pricing ===== */
-function calcularPreco() {
+async function calcularPreco() {
+    // Auto-salvar endereco de entrega na COTACAO antes de calcular
+    const endInline = document.getElementById('enderecoEntregaInline');
+    if (endInline && !endInline.classList.contains('d-none')) {
+        const entrega = {
+            entrega_uf: (document.getElementById('endUf').value || '').trim().toUpperCase(),
+            entrega_cidade: (document.getElementById('endCidade').value || '').trim(),
+            entrega_logradouro: (document.getElementById('endLogradouro').value || '').trim(),
+            entrega_numero: (document.getElementById('endNumero').value || '').trim(),
+            entrega_bairro: (document.getElementById('endBairro').value || '').trim(),
+            entrega_cep: (document.getElementById('endCep').value || '').trim(),
+            entrega_complemento: (document.getElementById('endComplemento').value || '').trim(),
+        };
+        const resp = await apiCall(`/carvia/api/cotacoes/${cotacaoId}`, 'PUT', entrega);
+        if (!resp.sucesso) {
+            alert(resp.erro || 'Erro ao salvar endereco de entrega.');
+            return;
+        }
+    }
     apiCall(`/carvia/api/cotacoes/${cotacaoId}/calcular-preco`).then(d => {
         if (d.sucesso) location.reload(); else alert(d.erro);
     });
@@ -866,18 +1068,23 @@ function preencherEnderecoInline(endereco) {
         return;
     }
     _enderecoDestinoId = endereco.id;
-    document.getElementById('endLogradouro').value = endereco.fisico_logradouro || '';
-    document.getElementById('endNumero').value = endereco.fisico_numero || '';
-    document.getElementById('endBairro').value = endereco.fisico_bairro || '';
-    document.getElementById('endComplemento').value = endereco.fisico_complemento || '';
-    document.getElementById('endCidade').value = endereco.fisico_cidade || '';
-    document.getElementById('endUf').value = endereco.fisico_uf || '';
-    document.getElementById('endCep').value = endereco.fisico_cep || '';
+
+    // Prioridade: entrega da cotacao (override) > destino cadastrado
+    const e = _entregaCotacao;
+    const temOverride = e.uf || e.cidade;
+    document.getElementById('endLogradouro').value = (temOverride ? e.logradouro : endereco.fisico_logradouro) || '';
+    document.getElementById('endNumero').value = (temOverride ? e.numero : endereco.fisico_numero) || '';
+    document.getElementById('endBairro').value = (temOverride ? e.bairro : endereco.fisico_bairro) || '';
+    document.getElementById('endComplemento').value = (temOverride ? e.complemento : endereco.fisico_complemento) || '';
+    document.getElementById('endCidade').value = (temOverride ? e.cidade : endereco.fisico_cidade) || '';
+    document.getElementById('endUf').value = (temOverride ? e.uf : endereco.fisico_uf) || '';
+    document.getElementById('endCep').value = (temOverride ? e.cep : endereco.fisico_cep) || '';
+
     const bloco = document.getElementById('enderecoEntregaInline');
     if (bloco) bloco.classList.remove('d-none');
 }
-function salvarEnderecoInline() {
-    if (!_enderecoDestinoId) return;
+function salvarEnderecoInline(silencioso) {
+    if (!_enderecoDestinoId) return Promise.resolve(true);
     const data = {
         fisico_logradouro: document.getElementById('endLogradouro').value,
         fisico_numero: document.getElementById('endNumero').value,
@@ -887,16 +1094,20 @@ function salvarEnderecoInline() {
         fisico_uf: document.getElementById('endUf').value,
         fisico_cep: document.getElementById('endCep').value,
     };
-    apiCall('/carvia/api/cotacoes/enderecos/' + _enderecoDestinoId, 'PATCH', data)
+    return apiCall('/carvia/api/cotacoes/enderecos/' + _enderecoDestinoId, 'PATCH', data)
     .then(d => {
         const fb = document.getElementById('enderecoFeedback');
         if (d.sucesso) {
-            fb.innerHTML = '<small class="text-success"><i class="fas fa-check"></i> Endereco salvo.</small>';
-            fb.style.display = 'block';
-            setTimeout(() => fb.style.display = 'none', 3000);
+            if (!silencioso) {
+                fb.innerHTML = '<small class="text-success"><i class="fas fa-check"></i> Endereco salvo.</small>';
+                fb.style.display = 'block';
+                setTimeout(() => fb.style.display = 'none', 3000);
+            }
+            return true;
         } else {
             fb.innerHTML = '<small class="text-danger">' + (d.erro || 'Erro') + '</small>';
             fb.style.display = 'block';
+            return false;
         }
     });
 }

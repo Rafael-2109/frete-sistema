@@ -787,10 +787,47 @@ def register_cotacao_v2_routes(bp):
             data_exp = request.form.get('data_expedicao')
             data_ag = request.form.get('data_agenda')
 
+            # Resolver endereco_destino_id (com fallback para destino manual)
+            endereco_destino_id = int(request.form.get('endereco_destino_id', 0))
+            if endereco_destino_id == 0:
+                # Fallback server-side: criar provisorio a partir de campos manuais
+                man_cidade = (request.form.get('man_dest_cidade') or '').strip()
+                man_uf = (request.form.get('man_dest_uf') or '').strip().upper()
+                if man_cidade and man_uf:
+                    cliente_id_form = int(request.form.get('cliente_id', 0))
+                    endereco_prov, erro_prov = CarviaClienteService.adicionar_destino_provisorio(
+                        cliente_id=cliente_id_form,
+                        criado_por=current_user.email,
+                        razao_social=(request.form.get('man_dest_razao') or '').strip() or None,
+                        dados_fisico={
+                            'cidade': man_cidade,
+                            'uf': man_uf,
+                            'cep': (request.form.get('man_dest_cep') or '').strip() or None,
+                            'logradouro': (request.form.get('man_dest_logradouro') or '').strip() or None,
+                            'numero': (request.form.get('man_dest_numero') or '').strip() or None,
+                            'bairro': (request.form.get('man_dest_bairro') or '').strip() or None,
+                        }
+                    )
+                    if erro_prov:
+                        flash(erro_prov, 'danger')
+                        return render_template(
+                            'carvia/cotacoes/criar.html',
+                            nf_id_param=nf_id_param,
+                            **_ctx_criar(),
+                        )
+                    endereco_destino_id = endereco_prov.id
+                else:
+                    flash('Selecione um destino ou preencha Cidade e UF manualmente.', 'danger')
+                    return render_template(
+                        'carvia/cotacoes/criar.html',
+                        nf_id_param=nf_id_param,
+                        **_ctx_criar(),
+                    )
+
             cotacao, erro = CotacaoV2Service.criar_cotacao(
                 cliente_id=int(request.form.get('cliente_id', 0)),
                 endereco_origem_id=int(request.form.get('endereco_origem_id', 0)),
-                endereco_destino_id=int(request.form.get('endereco_destino_id', 0)),
+                endereco_destino_id=endereco_destino_id,
                 tipo_material=request.form.get('tipo_material', 'CARGA_GERAL'),
                 criado_por=current_user.email,
                 peso=request.form.get('peso', type=float),
@@ -1184,6 +1221,13 @@ def register_cotacao_v2_routes(bp):
             if 'observacoes' in data:
                 cotacao.observacoes = data['observacoes'] or None
 
+            # Endereco de entrega (override por cotacao)
+            for campo in ('entrega_uf', 'entrega_cidade', 'entrega_logradouro',
+                          'entrega_numero', 'entrega_bairro', 'entrega_cep',
+                          'entrega_complemento'):
+                if campo in data:
+                    setattr(cotacao, campo, data[campo] or None)
+
             db.session.commit()
             return jsonify({'sucesso': True, 'mensagem': 'Cotacao atualizada.'})
 
@@ -1247,6 +1291,13 @@ def register_cotacao_v2_routes(bp):
                 )
             if 'observacoes' in data:
                 cotacao.observacoes = data['observacoes'] or None
+
+            # Endereco de entrega (override por cotacao)
+            for campo in ('entrega_uf', 'entrega_cidade', 'entrega_logradouro',
+                          'entrega_numero', 'entrega_bairro', 'entrega_cep',
+                          'entrega_complemento'):
+                if campo in data:
+                    setattr(cotacao, campo, data[campo] or None)
 
             # --- Sync motos (se tipo=MOTO) ---
             if cotacao.tipo_material == 'MOTO' and 'motos' in data:

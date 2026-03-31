@@ -245,7 +245,8 @@ def register_cliente_routes(bp):
         try:
             sucesso, erro = CarviaClienteService.remover_endereco(endereco_id)
             if not sucesso:
-                return jsonify({'erro': erro}), 404
+                status = 404 if 'nao encontrado' in (erro or '') else 400
+                return jsonify({'erro': erro}), status
 
             db.session.commit()
             return jsonify({'sucesso': True, 'mensagem': 'Endereco removido.'})

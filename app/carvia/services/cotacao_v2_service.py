@@ -192,6 +192,13 @@ class CotacaoV2Service:
         if not destino:
             return None, 'Endereco de destino nao definido.'
 
+        # Endereco efetivo: entrega da cotacao (override) > destino cadastrado
+        uf_entrega = cotacao.entrega_uf or destino.fisico_uf
+        cidade_entrega = cotacao.entrega_cidade or destino.fisico_cidade
+
+        if not uf_entrega:
+            return None, 'UF de destino nao definida.'
+
         # Determinar peso e valor para calculo
         if cotacao.tipo_material == 'MOTO':
             peso = cotacao.peso_total_motos
@@ -207,6 +214,8 @@ class CotacaoV2Service:
         resultado_carvia = CotacaoV2Service._cotar_dentro_tabela(
             cotacao=cotacao,
             destino=destino,
+            uf_entrega=uf_entrega,
+            cidade_entrega=cidade_entrega,
             peso=peso,
             valor=valor,
         )
@@ -234,7 +243,8 @@ class CotacaoV2Service:
 
         # Fora da tabela — cotar via tabelas Nacom
         opcoes = CotacaoV2Service._cotar_fora_tabela(
-            destino=destino,
+            uf_entrega=uf_entrega,
+            cidade_entrega=cidade_entrega,
             peso=peso,
             valor=valor,
         )
@@ -248,17 +258,27 @@ class CotacaoV2Service:
         }, None
 
     @staticmethod
-    def _cotar_dentro_tabela(cotacao, destino, peso: float, valor: float) -> Optional[Dict]:
-        """Tenta cotar usando tabela CarVia (preco de venda)."""
+    def _cotar_dentro_tabela(cotacao, destino, peso: float, valor: float,
+                             uf_entrega: Optional[str] = None,
+                             cidade_entrega: Optional[str] = None) -> Optional[Dict]:
+        """Tenta cotar usando tabela CarVia (preco de venda).
+
+        uf_entrega/cidade_entrega: endereco efetivo (cotacao override > destino).
+        CNPJ vem sempre do destino cadastrado.
+        """
+        # Compat: se nao recebeu override, usar destino
+        _uf = uf_entrega or (destino.fisico_uf if destino else None)
+        _cidade = cidade_entrega or (destino.fisico_cidade if destino else None)
+
         try:
             from app.carvia.services.carvia_tabela_service import CarviaTabelaService
             svc = CarviaTabelaService()
 
             origem = cotacao.endereco_origem
-            if not origem or not origem.fisico_uf or not destino.fisico_uf:
+            if not origem or not origem.fisico_uf or not _uf:
                 return None
 
-            cnpj_cliente = destino.cnpj
+            cnpj_cliente = destino.cnpj if destino else None
 
             # Preparar categorias_moto se aplicavel
             categorias_moto = None
@@ -279,8 +299,8 @@ class CotacaoV2Service:
 
             opcoes = svc.cotar_carvia(
                 uf_origem=origem.fisico_uf,
-                uf_destino=destino.fisico_uf,
-                cidade_destino=destino.fisico_cidade,
+                uf_destino=_uf,
+                cidade_destino=_cidade,
                 peso=peso,
                 valor_mercadoria=valor,
                 cnpj_cliente=cnpj_cliente,
@@ -302,19 +322,29 @@ class CotacaoV2Service:
         return None
 
     @staticmethod
-    def _cotar_fora_tabela(destino, peso: float, valor: float) -> List[Dict]:
-        """Cota via tabelas Nacom (fora da tabela CarVia). Retorna lista de opcoes."""
+    def _cotar_fora_tabela(peso: float, valor: float,
+                          uf_entrega: Optional[str] = None,
+                          cidade_entrega: Optional[str] = None,
+                          destino=None) -> List[Dict]:
+        """Cota via tabelas Nacom (fora da tabela CarVia). Retorna lista de opcoes.
+
+        uf_entrega/cidade_entrega: endereco efetivo (cotacao override > destino).
+        """
+        # Compat: se nao recebeu override, usar destino
+        _uf = uf_entrega or (destino.fisico_uf if destino else None)
+        _cidade = cidade_entrega or (destino.fisico_cidade if destino else None)
+
         try:
             from app.carvia.services.cotacao_service import CotacaoService
             svc = CotacaoService()
 
-            if not destino.fisico_cidade or not destino.fisico_uf:
+            if not _cidade or not _uf:
                 return []
 
             # cotar_todas_opcoes retorna List[Dict]
             opcoes = svc.cotar_todas_opcoes(
-                cidade_destino=destino.fisico_cidade,
-                uf_destino=destino.fisico_uf,
+                cidade_destino=_cidade,
+                uf_destino=_uf,
                 peso=peso,
                 valor_mercadoria=valor,
             )

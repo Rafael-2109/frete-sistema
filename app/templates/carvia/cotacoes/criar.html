@@ -21,14 +21,15 @@
             </div>
         </div>
     </div>
-    {% else %}
-    {# Upload de NF para pre-preencher #}
-    <div class="card mb-3">
+    {% endif %}
+
+    {# Upload de NF (Iniciar / Adicionar) — unico ponto de entrada #}
+    <div class="card mb-3" id="cardUploadNF" {% if nf_id_param %}style="display:none"{% endif %}>
         <div class="card-body">
             <div class="d-flex align-items-center gap-3">
                 <div>
-                    <label class="form-label fw-bold mb-1">Iniciar pela NF</label>
-                    <div class="form-text mt-0">Envie um PDF (DANFE) ou XML (NF-e) para pre-preencher a cotacao.</div>
+                    <label class="form-label fw-bold mb-1" id="lblUploadNF">Iniciar pela NF</label>
+                    <div class="form-text mt-0" id="txtUploadNF">Envie um PDF (DANFE) ou XML (NF-e) para pre-preencher a cotacao.</div>
                 </div>
                 <input type="file" class="form-control form-control-sm" id="inpNFPrePreencher" accept=".pdf,.xml" style="max-width: 300px;">
                 <button type="button" class="btn btn-outline-primary btn-sm" onclick="iniciarSetupNF()" id="btnPrePreencher">
@@ -38,7 +39,6 @@
             <div id="prePreencherFeedback" class="mt-2" style="display:none"></div>
         </div>
     </div>
-    {% endif %}
 
     {# Modal Wizard: Criar Cliente + Enderecos #}
     <div class="modal fade" id="modalWizardNF" tabindex="-1" data-bs-backdrop="static">
@@ -138,14 +138,8 @@
 
     {# Card: NFs importadas (multi-NF) #}
     <div id="cardNfsImportadas" class="card mb-3 d-none">
-        <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <div class="card-header py-2">
             <span class="fw-bold small"><i class="fas fa-file-alt me-1"></i> NFs na Cotacao</span>
-            <div class="d-flex align-items-center gap-2">
-                <input type="file" class="form-control form-control-sm" id="inpNfAdicional" accept=".pdf,.xml" style="max-width: 250px;">
-                <button type="button" class="btn btn-outline-primary btn-sm" onclick="adicionarOutraNf()" id="btnAdicionarNf">
-                    <i class="fas fa-plus"></i> Adicionar NF
-                </button>
-            </div>
         </div>
         <div class="card-body p-0">
             <table class="table table-sm table-hover mb-0 small">
@@ -163,7 +157,6 @@
                 </tfoot>
             </table>
         </div>
-        <div id="nfAdicionalFeedback" class="px-3 pb-2" style="display:none"></div>
     </div>
 
     <div class="card">
@@ -206,10 +199,73 @@
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Endereco Destino <span class="text-danger">*</span></label>
-                        <select name="endereco_destino_id" class="form-select" id="selDestino" required>
-                            <option value="">Selecione o cliente primeiro</option>
-                        </select>
+                        <label class="form-label">
+                            Endereco Destino <span class="text-danger">*</span>
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-2 small" id="btnToggleDestinoManual" onclick="toggleModoDestinoManual()">
+                                Inserir manualmente
+                            </button>
+                        </label>
+
+                        {# Modo dropdown (padrao) #}
+                        <div id="blocoDestinoDropdown">
+                            <select name="endereco_destino_id" class="form-select" id="selDestino" required>
+                                <option value="">Selecione o cliente primeiro</option>
+                            </select>
+                        </div>
+
+                        {# Modo manual (oculto por padrao) #}
+                        <div id="blocoDestinoManual" class="d-none">
+                            <div class="row g-2 mt-0">
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control form-control-sm" id="manDestUf" placeholder="UF *" maxlength="2" style="text-transform:uppercase">
+                                </div>
+                                <div class="col-md-8">
+                                    <input type="text" class="form-control form-control-sm" id="manDestCidade" placeholder="Cidade *">
+                                </div>
+                            </div>
+                            <div class="row g-2 mt-1">
+                                <div class="col-md-3">
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control form-control-sm" id="manDestCep" placeholder="CEP"
+                                               data-cep-lookup
+                                               data-cep-logradouro="#manDestLogradouro"
+                                               data-cep-bairro="#manDestBairro"
+                                               data-cep-cidade="#manDestCidade"
+                                               data-cep-uf="#manDestUf">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-cep-trigger="#manDestCep" title="Buscar CEP">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control form-control-sm" id="manDestLogradouro" placeholder="Logradouro">
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="text" class="form-control form-control-sm" id="manDestNumero" placeholder="Numero">
+                                </div>
+                            </div>
+                            <div class="row g-2 mt-1">
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control form-control-sm" id="manDestBairro" placeholder="Bairro">
+                                </div>
+                                <div class="col-md-8">
+                                    <input type="text" class="form-control form-control-sm" id="manDestRazao" placeholder="Nome / Razao Social (opcional)">
+                                </div>
+                            </div>
+                            <div class="alert alert-warning py-1 mt-2 small mb-0">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Destino provisorio — CNPJ sera obrigatorio antes de gravar a cotacao.
+                            </div>
+                            <div id="manDestFeedback" class="mt-1" style="display:none"></div>
+                        </div>
+                        {# Hidden inputs para fallback server-side #}
+                        <input type="hidden" name="man_dest_uf" id="hidManDestUf" value="">
+                        <input type="hidden" name="man_dest_cidade" id="hidManDestCidade" value="">
+                        <input type="hidden" name="man_dest_cep" id="hidManDestCep" value="">
+                        <input type="hidden" name="man_dest_logradouro" id="hidManDestLogradouro" value="">
+                        <input type="hidden" name="man_dest_numero" id="hidManDestNumero" value="">
+                        <input type="hidden" name="man_dest_bairro" id="hidManDestBairro" value="">
+                        <input type="hidden" name="man_dest_razao" id="hidManDestRazao" value="">
                     </div>
                 </div>
 
@@ -453,12 +509,13 @@ function iniciarSetupNF() {
     const fileInput = document.getElementById('inpNFPrePreencher');
     if (!fileInput.files || !fileInput.files[0]) { alert('Selecione o arquivo da NF.'); return; }
 
+    const isAddMode = _nfsCollection.length > 0;
     const formData = new FormData();
     formData.append('arquivo', fileInput.files[0]);
 
     document.getElementById('btnPrePreencher').disabled = true;
     const fb = document.getElementById('prePreencherFeedback');
-    fb.innerHTML = '<span class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Parseando e verificando...</span>';
+    fb.innerHTML = '<span class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Parseando ' + (isAddMode ? 'NF...' : 'e verificando...') + '</span>';
     fb.style.display = 'block';
 
     fetch('/carvia/api/cotacoes/setup-nf', { method: 'POST', body: formData })
@@ -466,6 +523,22 @@ function iniciarSetupNF() {
     .then(d => {
         document.getElementById('btnPrePreencher').disabled = false;
         if (!d.sucesso) { fb.innerHTML = '<div class="alert alert-danger py-1 small">' + (d.erro || 'Erro') + '</div>'; return; }
+
+        // Modo adicionar: pular wizard, apenas adicionar ao collection
+        if (isAddMode) {
+            const jaExiste = _nfsCollection.some(n =>
+                n.nf.numero_nf === d.nf.numero_nf && n.nf.cnpj_emitente === d.nf.cnpj_emitente
+            );
+            if (jaExiste) {
+                fb.innerHTML = '<div class="alert alert-warning py-1 small">NF ' + d.nf.numero_nf + ' ja esta na lista.</div>';
+                return;
+            }
+            adicionarNfAoCollection(d);
+            fb.innerHTML = '<div class="alert alert-success py-1 small">NF ' + (d.nf.numero_nf || '') + ' adicionada!</div>';
+            setTimeout(() => { fb.style.display = 'none'; }, 2000);
+            fileInput.value = '';
+            return;
+        }
 
         _setupData = d;
 
@@ -724,48 +797,6 @@ function atualizarTotaisNfs() {
     document.getElementById('nfDadosJson').value = JSON.stringify(_nfsCollection);
 }
 
-function adicionarOutraNf() {
-    const fileInput = document.getElementById('inpNfAdicional');
-    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
-        alert('Selecione o arquivo da NF.');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('arquivo', fileInput.files[0]);
-
-    document.getElementById('btnAdicionarNf').disabled = true;
-    const fb = document.getElementById('nfAdicionalFeedback');
-    fb.innerHTML = '<span class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Parseando NF...</span>';
-    fb.style.display = 'block';
-
-    fetch('/carvia/api/cotacoes/setup-nf', { method: 'POST', body: formData })
-    .then(r => r.json())
-    .then(d => {
-        document.getElementById('btnAdicionarNf').disabled = false;
-        if (!d.sucesso) {
-            fb.innerHTML = '<div class="alert alert-danger py-1 small mb-0">' + (d.erro || 'Erro') + '</div>';
-            return;
-        }
-        // Verificar NF duplicada na collection
-        const jaExiste = _nfsCollection.some(n =>
-            n.nf.numero_nf === d.nf.numero_nf && n.nf.cnpj_emitente === d.nf.cnpj_emitente
-        );
-        if (jaExiste) {
-            fb.innerHTML = '<div class="alert alert-warning py-1 small mb-0">NF ' + d.nf.numero_nf + ' ja esta na lista.</div>';
-            return;
-        }
-        adicionarNfAoCollection(d);
-        fb.innerHTML = '<div class="alert alert-success py-1 small mb-0">NF ' + (d.nf.numero_nf || '') + ' adicionada!</div>';
-        setTimeout(() => { fb.style.display = 'none'; }, 2000);
-        fileInput.value = '';
-    })
-    .catch(err => {
-        document.getElementById('btnAdicionarNf').disabled = false;
-        fb.innerHTML = '<div class="alert alert-danger py-1 small mb-0">Erro: ' + err.message + '</div>';
-    });
-}
-
 function aplicarDadosNF(d) {
     const nf = d.nf;
     const fb = document.getElementById('prePreencherFeedback') || document.getElementById('nfExistenteFeedback');
@@ -825,32 +856,151 @@ function aplicarDadosNF(d) {
     if (fb) {
         fb.innerHTML = '<div class="alert alert-success py-1 small mb-0">' +
             '<i class="fas fa-check-circle me-1"></i>' +
-            _nfsCollection.length + ' NF(s) importada(s). Veja a lista acima.' +
+            _nfsCollection.length + ' NF(s) importada(s). Veja a lista abaixo.' +
             '</div>';
         fb.style.display = 'block';
     }
+
+    // Transformar card de upload para modo "Adicionar NF"
+    const cardUpload = document.getElementById('cardUploadNF');
+    if (cardUpload) {
+        cardUpload.style.display = '';
+        document.getElementById('lblUploadNF').textContent = 'Adicionar NF';
+        document.getElementById('txtUploadNF').textContent = 'Envie outro PDF (DANFE) ou XML (NF-e) para adicionar a cotacao.';
+        document.getElementById('btnPrePreencher').innerHTML = '<i class="fas fa-plus"></i> Adicionar';
+        document.getElementById('inpNFPrePreencher').value = '';
+    }
 }
 
-/* ===== Form submit: serializar motos em JSON ===== */
-document.getElementById('formCotacao').addEventListener('submit', function(e) {
-    if (document.getElementById('selTipoMaterial').value !== 'MOTO') return;
+/* ===== Toggle Destino Manual ===== */
+let _modoDestinoManual = false;
 
-    const motos = [];
-    document.querySelectorAll('#tbodyMotos tr').forEach(tr => {
-        const modeloId = parseInt(tr.querySelector('[id^="motoModelo"]')?.value);
-        const qtd = parseInt(tr.querySelector('[id^="motoQtd"]')?.value);
-        const valorUnit = parseFloat(tr.querySelector('[id^="motoValorUnit"]')?.value) || null;
-        if (modeloId && qtd > 0) {
-            motos.push({ modelo_moto_id: modeloId, quantidade: qtd, valor_unitario: valorUnit });
-        }
-    });
+function toggleModoDestinoManual() {
+    _modoDestinoManual = !_modoDestinoManual;
+    const dropdown = document.getElementById('blocoDestinoDropdown');
+    const manual = document.getElementById('blocoDestinoManual');
+    const btn = document.getElementById('btnToggleDestinoManual');
+    const selDestino = document.getElementById('selDestino');
+    const endInline = document.getElementById('enderecoEntregaInline');
 
-    if (motos.length === 0) {
-        e.preventDefault();
-        alert('Adicione pelo menos uma moto com modelo selecionado.');
-        return;
+    if (_modoDestinoManual) {
+        dropdown.classList.add('d-none');
+        manual.classList.remove('d-none');
+        selDestino.removeAttribute('required');
+        selDestino.removeAttribute('name');
+        if (endInline) endInline.classList.add('d-none');
+        btn.textContent = '\u2190 Selecionar da lista';
+    } else {
+        dropdown.classList.remove('d-none');
+        manual.classList.add('d-none');
+        selDestino.setAttribute('required', '');
+        selDestino.setAttribute('name', 'endereco_destino_id');
+        btn.textContent = 'Inserir manualmente';
+        // Limpar campos manuais e hidden inputs
+        ['manDestUf','manDestCidade','manDestCep','manDestLogradouro','manDestNumero','manDestBairro','manDestRazao'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        ['hidManDestUf','hidManDestCidade','hidManDestCep','hidManDestLogradouro','hidManDestNumero','hidManDestBairro','hidManDestRazao'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        document.getElementById('manDestFeedback').style.display = 'none';
     }
-    document.getElementById('motosJson').value = JSON.stringify(motos);
+}
+
+/* ===== Form submit: destino manual + serializar motos ===== */
+document.getElementById('formCotacao').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    // Se modo manual: criar destino provisorio via API
+    if (_modoDestinoManual) {
+        const cidade = (document.getElementById('manDestCidade').value || '').trim();
+        const uf = (document.getElementById('manDestUf').value || '').trim().toUpperCase();
+        const clienteId = parseInt(document.getElementById('selCliente').value) || 0;
+
+        if (!cidade || !uf) {
+            alert('Cidade e UF do destino sao obrigatorios.');
+            return;
+        }
+        if (!clienteId) {
+            alert('Selecione o cliente primeiro.');
+            return;
+        }
+
+        const fb = document.getElementById('manDestFeedback');
+        fb.innerHTML = '<small class="text-muted"><i class="fas fa-spinner fa-spin"></i> Criando destino provisorio...</small>';
+        fb.style.display = 'block';
+
+        // Copiar para hidden inputs (fallback server-side)
+        document.getElementById('hidManDestUf').value = uf;
+        document.getElementById('hidManDestCidade').value = cidade;
+        document.getElementById('hidManDestCep').value = (document.getElementById('manDestCep').value || '').trim();
+        document.getElementById('hidManDestLogradouro').value = (document.getElementById('manDestLogradouro').value || '').trim();
+        document.getElementById('hidManDestNumero').value = (document.getElementById('manDestNumero').value || '').trim();
+        document.getElementById('hidManDestBairro').value = (document.getElementById('manDestBairro').value || '').trim();
+        document.getElementById('hidManDestRazao').value = (document.getElementById('manDestRazao').value || '').trim();
+
+        try {
+            const resp = await fetch('/carvia/api/cotacoes/destino-provisorio', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    cliente_id: clienteId,
+                    razao_social: document.getElementById('manDestRazao').value.trim() || null,
+                    fisico: {
+                        uf: uf,
+                        cidade: cidade,
+                        cep: document.getElementById('manDestCep').value.trim() || null,
+                        logradouro: document.getElementById('manDestLogradouro').value.trim() || null,
+                        numero: document.getElementById('manDestNumero').value.trim() || null,
+                        bairro: document.getElementById('manDestBairro').value.trim() || null,
+                    }
+                })
+            });
+            const data = await resp.json();
+            if (!data.sucesso) {
+                fb.innerHTML = '<small class="text-danger"><i class="fas fa-times"></i> ' + (data.erro || 'Erro ao criar destino.') + '</small>';
+                return;
+            }
+            // Injetar ID do destino criado no form
+            let hidDest = document.getElementById('hidDestinoProvId');
+            if (!hidDest) {
+                hidDest = document.createElement('input');
+                hidDest.type = 'hidden';
+                hidDest.name = 'endereco_destino_id';
+                hidDest.id = 'hidDestinoProvId';
+                this.appendChild(hidDest);
+            }
+            hidDest.value = data.endereco_id;
+            fb.innerHTML = '<small class="text-success"><i class="fas fa-check"></i> Destino provisorio criado.</small>';
+        } catch (err) {
+            fb.innerHTML = '<small class="text-danger"><i class="fas fa-times"></i> Erro de rede: ' + err.message + '</small>';
+            return;
+        }
+    }
+
+    // Serializar motos (se tipo MOTO)
+    if (document.getElementById('selTipoMaterial').value === 'MOTO') {
+        const motos = [];
+        document.querySelectorAll('#tbodyMotos tr').forEach(tr => {
+            const modeloId = parseInt(tr.querySelector('[id^="motoModelo"]')?.value);
+            const qtd = parseInt(tr.querySelector('[id^="motoQtd"]')?.value);
+            const valorUnit = parseFloat(tr.querySelector('[id^="motoValorUnit"]')?.value) || null;
+            if (modeloId && qtd > 0) {
+                motos.push({ modelo_moto_id: modeloId, quantidade: qtd, valor_unitario: valorUnit });
+            }
+        });
+
+        if (motos.length === 0) {
+            alert('Adicione pelo menos uma moto com modelo selecionado.');
+            return;
+        }
+        document.getElementById('motosJson').value = JSON.stringify(motos);
+    }
+
+    // Submeter form
+    this.submit();
 });
 
 /* ===== Auto-setup quando vem de NF existente ===== */
