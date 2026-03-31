@@ -64,11 +64,22 @@
                             <div class="col-md-4"><label class="form-label small">CNPJ/CPF</label><input type="text" class="form-control form-control-sm" id="wizOrigCnpj" readonly></div>
                             <div class="col-md-8"><label class="form-label small">Razao Social</label><input type="text" class="form-control form-control-sm" id="wizOrigRazao" readonly></div>
                         </div>
-                        <p class="text-muted small mb-1">Endereco Fisico (editavel):</p>
+                        <p class="text-muted small mb-1">Endereco Fisico (editavel) — digite o CEP para buscar automaticamente:</p>
                         <div class="row mb-2">
-                            <div class="col-md-8"><input type="text" class="form-control form-control-sm" id="wizOrigLogradouro" placeholder="Logradouro"></div>
+                            <div class="col-md-3">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control form-control-sm" id="wizOrigCep" placeholder="CEP"
+                                           data-cep-lookup
+                                           data-cep-logradouro="#wizOrigLogradouro"
+                                           data-cep-bairro="#wizOrigBairro"
+                                           data-cep-cidade="#wizOrigCidade"
+                                           data-cep-uf="#wizOrigUf"
+                                           data-cep-complemento="#wizOrigComplemento">
+                                    <button class="btn btn-outline-secondary" type="button" data-cep-trigger="#wizOrigCep" title="Buscar CEP"><i class="fas fa-search"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-7"><input type="text" class="form-control form-control-sm" id="wizOrigLogradouro" placeholder="Logradouro"></div>
                             <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="wizOrigNumero" placeholder="Num"></div>
-                            <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="wizOrigCep" placeholder="CEP"></div>
                         </div>
                         <div class="row mb-2">
                             <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="wizOrigBairro" placeholder="Bairro"></div>
@@ -91,11 +102,22 @@
                             <div class="col-md-4"><label class="form-label small">CNPJ/CPF</label><input type="text" class="form-control form-control-sm" id="wizDestCnpj" readonly></div>
                             <div class="col-md-8"><label class="form-label small">Razao Social/Nome</label><input type="text" class="form-control form-control-sm" id="wizDestRazao" readonly></div>
                         </div>
-                        <p class="text-muted small mb-1">Endereco Fisico (editavel):</p>
+                        <p class="text-muted small mb-1">Endereco Fisico (editavel) — digite o CEP para buscar automaticamente:</p>
                         <div class="row mb-2">
-                            <div class="col-md-8"><input type="text" class="form-control form-control-sm" id="wizDestLogradouro" placeholder="Logradouro"></div>
+                            <div class="col-md-3">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control form-control-sm" id="wizDestCep" placeholder="CEP"
+                                           data-cep-lookup
+                                           data-cep-logradouro="#wizDestLogradouro"
+                                           data-cep-bairro="#wizDestBairro"
+                                           data-cep-cidade="#wizDestCidade"
+                                           data-cep-uf="#wizDestUf"
+                                           data-cep-complemento="#wizDestComplemento">
+                                    <button class="btn btn-outline-secondary" type="button" data-cep-trigger="#wizDestCep" title="Buscar CEP"><i class="fas fa-search"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-md-7"><input type="text" class="form-control form-control-sm" id="wizDestLogradouro" placeholder="Logradouro"></div>
                             <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="wizDestNumero" placeholder="Num"></div>
-                            <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="wizDestCep" placeholder="CEP"></div>
                         </div>
                         <div class="row mb-2">
                             <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="wizDestBairro" placeholder="Bairro"></div>
@@ -114,14 +136,40 @@
         </div>
     </div>
 
+    {# Card: NFs importadas (multi-NF) #}
+    <div id="cardNfsImportadas" class="card mb-3 d-none">
+        <div class="card-header d-flex justify-content-between align-items-center py-2">
+            <span class="fw-bold small"><i class="fas fa-file-alt me-1"></i> NFs na Cotacao</span>
+            <div class="d-flex align-items-center gap-2">
+                <input type="file" class="form-control form-control-sm" id="inpNfAdicional" accept=".pdf,.xml" style="max-width: 250px;">
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="adicionarOutraNf()" id="btnAdicionarNf">
+                    <i class="fas fa-plus"></i> Adicionar NF
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0 small">
+                <thead class="table-light">
+                    <tr><th>NF</th><th>Emitente</th><th class="text-center">Itens</th><th class="text-end">Peso (kg)</th><th class="text-end">Valor (R$)</th><th style="width:40px"></th></tr>
+                </thead>
+                <tbody id="tbodyNfsImportadas"></tbody>
+                <tfoot>
+                    <tr class="table-light fw-bold">
+                        <td colspan="3">Total</td>
+                        <td class="text-end" id="totalPesoNfs">-</td>
+                        <td class="text-end" id="totalValorNfs">-</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <div id="nfAdicionalFeedback" class="px-3 pb-2" style="display:none"></div>
+    </div>
+
     <div class="card">
         <div class="card-body">
             <form method="POST" id="formCotacao" enctype="multipart/form-data">
-                <input type="hidden" name="nf_arquivo_nome" id="nfArquivoNome" value="">
                 <input type="hidden" name="nf_dados_json" id="nfDadosJson" value="">
-                {% if nf_id_param %}
-                <input type="hidden" name="nf_id_existente" id="nfIdExistente" value="{{ nf_id_param }}">
-                {% endif %}
                 {# Cliente #}
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -280,6 +328,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/viacep.js') }}"></script>
 <script>
 /* ===== Enderecos por cliente ===== */
 function carregarEnderecos() {
@@ -607,15 +656,124 @@ function wizConcluir() {
     });
 }
 
+/* ===== Multi-NF Collection ===== */
+let _nfsCollection = [];
+
+function adicionarNfAoCollection(d) {
+    if (d.nf_id) d.nf_db_id = d.nf_id;
+    _nfsCollection.push(d);
+    renderNfsList();
+    atualizarTotaisNfs();
+}
+
+function removerNfDoCollection(idx) {
+    _nfsCollection.splice(idx, 1);
+    renderNfsList();
+    atualizarTotaisNfs();
+}
+
+function renderNfsList() {
+    const tbody = document.getElementById('tbodyNfsImportadas');
+    const card = document.getElementById('cardNfsImportadas');
+    if (!tbody || !card) return;
+
+    if (_nfsCollection.length === 0) {
+        card.classList.add('d-none');
+        return;
+    }
+
+    card.classList.remove('d-none');
+    tbody.innerHTML = '';
+    _nfsCollection.forEach((d, idx) => {
+        const nf = d.nf;
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><strong>' + (nf.numero_nf || '-') + '</strong>' +
+            (d.nf_db_id ? ' <span class="badge bg-info bg-opacity-75">BD</span>' : '') + '</td>' +
+            '<td class="text-truncate" style="max-width:200px">' + (nf.nome_emitente || '-') + '</td>' +
+            '<td class="text-center">' + (d.itens || []).length + '</td>' +
+            '<td class="text-end">' + (nf.peso_bruto || 0).toLocaleString('pt-BR', {maximumFractionDigits: 3}) + '</td>' +
+            '<td class="text-end">R$ ' + (nf.valor_total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
+            '<td><button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" onclick="removerNfDoCollection(' + idx + ')" title="Remover"><i class="fas fa-times"></i></button></td>';
+        tbody.appendChild(tr);
+    });
+}
+
+function atualizarTotaisNfs() {
+    let totalPeso = 0, totalValor = 0, totalVolumes = 0;
+    _nfsCollection.forEach(d => {
+        totalPeso += d.nf.peso_bruto || 0;
+        totalValor += d.nf.valor_total || 0;
+        totalVolumes += d.nf.quantidade_volumes || 0;
+    });
+
+    const elPeso = document.getElementById('totalPesoNfs');
+    const elValor = document.getElementById('totalValorNfs');
+    if (elPeso) elPeso.textContent = totalPeso.toLocaleString('pt-BR', {maximumFractionDigits: 3});
+    if (elValor) elValor.textContent = 'R$ ' + totalValor.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+
+    // Atualizar campos do form com totais
+    const pesoCampo = document.querySelector('[name="peso"]');
+    const valorCampo = document.querySelector('[name="valor_mercadoria"]');
+    const volumesCampo = document.querySelector('[name="volumes"]');
+    if (pesoCampo) pesoCampo.value = totalPeso || '';
+    if (valorCampo) valorCampo.value = totalValor || '';
+    if (volumesCampo) volumesCampo.value = totalVolumes || '';
+
+    // Serializar todas as NFs no hidden input
+    document.getElementById('nfDadosJson').value = JSON.stringify(_nfsCollection);
+}
+
+function adicionarOutraNf() {
+    const fileInput = document.getElementById('inpNfAdicional');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        alert('Selecione o arquivo da NF.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('arquivo', fileInput.files[0]);
+
+    document.getElementById('btnAdicionarNf').disabled = true;
+    const fb = document.getElementById('nfAdicionalFeedback');
+    fb.innerHTML = '<span class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Parseando NF...</span>';
+    fb.style.display = 'block';
+
+    fetch('/carvia/api/cotacoes/setup-nf', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(d => {
+        document.getElementById('btnAdicionarNf').disabled = false;
+        if (!d.sucesso) {
+            fb.innerHTML = '<div class="alert alert-danger py-1 small mb-0">' + (d.erro || 'Erro') + '</div>';
+            return;
+        }
+        // Verificar NF duplicada na collection
+        const jaExiste = _nfsCollection.some(n =>
+            n.nf.numero_nf === d.nf.numero_nf && n.nf.cnpj_emitente === d.nf.cnpj_emitente
+        );
+        if (jaExiste) {
+            fb.innerHTML = '<div class="alert alert-warning py-1 small mb-0">NF ' + d.nf.numero_nf + ' ja esta na lista.</div>';
+            return;
+        }
+        adicionarNfAoCollection(d);
+        fb.innerHTML = '<div class="alert alert-success py-1 small mb-0">NF ' + (d.nf.numero_nf || '') + ' adicionada!</div>';
+        setTimeout(() => { fb.style.display = 'none'; }, 2000);
+        fileInput.value = '';
+    })
+    .catch(err => {
+        document.getElementById('btnAdicionarNf').disabled = false;
+        fb.innerHTML = '<div class="alert alert-danger py-1 small mb-0">Erro: ' + err.message + '</div>';
+    });
+}
+
 function aplicarDadosNF(d) {
     const nf = d.nf;
-    const itens = d.itens;
-    const fb = document.getElementById('prePreencherFeedback');
+    const fb = document.getElementById('prePreencherFeedback') || document.getElementById('nfExistenteFeedback');
+    const isFirstNf = _nfsCollection.length === 0;
 
-    // Selecionar cliente
-    if (d.cliente.id) {
+    // Selecionar cliente (apenas primeira NF)
+    if (isFirstNf && d.cliente.id) {
         const selCliente = document.getElementById('selCliente');
-        // Adicionar opcao se nao existe
         if (!selCliente.querySelector('option[value="' + d.cliente.id + '"]')) {
             const opt = document.createElement('option');
             opt.value = d.cliente.id;
@@ -624,33 +782,28 @@ function aplicarDadosNF(d) {
         }
         selCliente.value = d.cliente.id;
         carregarEnderecos();
-        // Aguardar enderecos carregarem e selecionar
         setTimeout(() => {
             if (d.enderecos.origem_id) document.getElementById('selOrigem').value = d.enderecos.origem_id;
             if (d.enderecos.destino_id) document.getElementById('selDestino').value = d.enderecos.destino_id;
         }, 800);
     }
 
-    // Tipo material
-    if (d.tipo_material) {
+    // Tipo material (apenas primeira NF)
+    if (isFirstNf && d.tipo_material) {
         document.getElementById('selTipoMaterial').value = d.tipo_material;
         document.getElementById('selTipoMaterial').dispatchEvent(new Event('change'));
     }
 
-    // Preencher campos de carga geral
-    if (nf.peso_bruto) document.querySelector('[name="peso"]').value = nf.peso_bruto;
-    if (nf.valor_total) document.querySelector('[name="valor_mercadoria"]').value = nf.valor_total;
-    if (nf.quantidade_volumes) document.querySelector('[name="volumes"]').value = nf.quantidade_volumes;
+    // Adicionar ao collection (atualiza totais e hidden input automaticamente)
+    adicionarNfAoCollection(d);
 
-    // Auto-preencher linhas de moto se reconhecidas
-    // Aguardar o change handler criar a secao de motos no DOM
-    if (d.tipo_material === 'MOTO' && d.motos_reconhecidas && d.motos_reconhecidas.length > 0) {
+    // Auto-preencher motos se reconhecidas (apenas primeira NF)
+    if (isFirstNf && d.tipo_material === 'MOTO' && d.motos_reconhecidas && d.motos_reconhecidas.length > 0) {
         const _preencherMotos = () => {
             const tbody = document.getElementById('tbodyMotos');
             if (!tbody) { setTimeout(_preencherMotos, 200); return; }
             tbody.innerHTML = '';
             motoRowIdx = 0;
-
             d.motos_reconhecidas.forEach((moto) => {
                 adicionarLinhaMotos();
                 const idx = motoRowIdx - 1;
@@ -668,28 +821,14 @@ function aplicarDadosNF(d) {
         setTimeout(_preencherMotos, 300);
     }
 
-    // Guardar NF para gravar ao salvar — apenas se NAO e NF existente
-    if (!document.getElementById('nfIdExistente')) {
-        document.getElementById('nfArquivoNome').value = nf.arquivo_nome || '';
-        document.getElementById('nfDadosJson').value = JSON.stringify(d);
+    // Feedback resumido no card de upload
+    if (fb) {
+        fb.innerHTML = '<div class="alert alert-success py-1 small mb-0">' +
+            '<i class="fas fa-check-circle me-1"></i>' +
+            _nfsCollection.length + ' NF(s) importada(s). Veja a lista acima.' +
+            '</div>';
+        fb.style.display = 'block';
     }
-
-    // Feedback
-    let html = '<div class="alert alert-success py-2 small">' +
-        '<strong>NF ' + (nf.numero_nf || '?') + '</strong> — ' +
-        itens.length + ' item(ns), R$ ' + (nf.valor_total || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2}) +
-        ', ' + (nf.peso_bruto || 0) + ' kg. Tipo: <strong>' + d.tipo_material + '</strong>' +
-        '</div>';
-    if (itens.length > 0) {
-        html += '<table class="table table-sm small mb-0"><thead><tr><th>Produto</th><th>Qtd</th><th class="text-end">Valor</th></tr></thead><tbody>';
-        itens.forEach(it => {
-            html += '<tr><td>' + (it.descricao || '-') + '</td><td>' + (it.quantidade || '-') + '</td>' +
-                '<td class="text-end">' + (it.valor_total ? 'R$ ' + it.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-') + '</td></tr>';
-        });
-        html += '</tbody></table>';
-    }
-    fb.innerHTML = html;
-    fb.style.display = 'block';
 }
 
 /* ===== Form submit: serializar motos em JSON ===== */
@@ -774,11 +913,47 @@ document.getElementById('formCotacao').addEventListener('submit', function(e) {
             document.getElementById('wizDestCnpj').value = nf.cnpj_destinatario || '';
             document.getElementById('wizDestRazao').value = nf.nome_destinatario || '';
 
-            // Sem receita WS — usar cidade/UF direto da NF
-            document.getElementById('wizOrigCidade').value = nf.cidade_emitente || '';
-            document.getElementById('wizOrigUf').value = nf.uf_emitente || '';
-            document.getElementById('wizDestCidade').value = nf.cidade_destinatario || '';
-            document.getElementById('wizDestUf').value = nf.uf_destinatario || '';
+            // Pre-preencher enderecos da Receita ou fallback NF
+            const re = d.receita_emitente;
+            const rd = d.receita_destinatario;
+            const fbNfEx = document.getElementById('nfExistenteFeedback');
+
+            if (re) {
+                document.getElementById('wizOrigLogradouro').value = re.logradouro || '';
+                document.getElementById('wizOrigNumero').value = re.numero || '';
+                document.getElementById('wizOrigBairro').value = re.bairro || '';
+                document.getElementById('wizOrigCidade').value = re.cidade || '';
+                document.getElementById('wizOrigUf').value = re.uf || '';
+                document.getElementById('wizOrigCep').value = re.cep || '';
+                document.getElementById('wizOrigComplemento').value = re.complemento || '';
+            } else {
+                document.getElementById('wizOrigCidade').value = nf.cidade_emitente || '';
+                document.getElementById('wizOrigUf').value = nf.uf_emitente || '';
+            }
+            if (rd) {
+                document.getElementById('wizDestLogradouro').value = rd.logradouro || '';
+                document.getElementById('wizDestNumero').value = rd.numero || '';
+                document.getElementById('wizDestBairro').value = rd.bairro || '';
+                document.getElementById('wizDestCidade').value = rd.cidade || '';
+                document.getElementById('wizDestUf').value = rd.uf || '';
+                document.getElementById('wizDestCep').value = rd.cep || '';
+                document.getElementById('wizDestComplemento').value = rd.complemento || '';
+            } else {
+                document.getElementById('wizDestCidade').value = nf.cidade_destinatario || '';
+                document.getElementById('wizDestUf').value = nf.uf_destinatario || '';
+                if (d.receita_destinatario_erro && fbNfEx) {
+                    fbNfEx.innerHTML += '<div class="alert alert-warning py-1 small mb-2 mt-2">' +
+                        '<i class="fas fa-exclamation-triangle me-1"></i>' +
+                        '<strong>Destinatario:</strong> ' + d.receita_destinatario_erro +
+                        '. Preencha o endereco manualmente.</div>';
+                }
+            }
+            if (!re && d.receita_emitente_erro && fbNfEx) {
+                fbNfEx.innerHTML += '<div class="alert alert-warning py-1 small mb-2 mt-2">' +
+                    '<i class="fas fa-exclamation-triangle me-1"></i>' +
+                    '<strong>Emitente:</strong> ' + d.receita_emitente_erro +
+                    '. Preencha o endereco manualmente.</div>';
+            }
 
             _wizStep = 0;
             wizMostrarPasso(_wizSteps[0]);

@@ -70,6 +70,10 @@
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'clientes' else 'btn-outline-secondary' }}">
         Clientes
     </a>
+    <a href="{{ url_for('carvia.origens_globais') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'origens_globais' else 'btn-outline-secondary' }}">
+        Origens
+    </a>
     <a href="{{ url_for('carvia.listar_cotacoes_v2') }}"
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'cotacoes_v2' else 'btn-outline-secondary' }}">
         Cotacao Comercial

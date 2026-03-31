@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-warehouse"></i> Origens Globais</h2>
+            <p class="text-muted small mb-0">Enderecos de origem compartilhados entre todos os clientes.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaOrigem">
+            <i class="fas fa-plus"></i> Nova Origem
+        </button>
+    </div>
+
+    {% set carvia_active = 'origens_globais' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="card">
+        <div class="card-body p-0">
+            {% if origens %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0 carvia-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>CNPJ/CPF</th>
+                            <th>Razao Social</th>
+                            <th>Cidade/UF</th>
+                            <th>Endereco</th>
+                            <th>CEP</th>
+                            <th style="width:100px">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for o in origens %}
+                        <tr>
+                            <td class="small">{{ o.cnpj or '-' }}</td>
+                            <td>{{ o.razao_social or '-' }}</td>
+                            <td>{{ o.fisico_cidade or '-' }}/{{ o.fisico_uf or '-' }}</td>
+                            <td class="small text-truncate" style="max-width:250px">
+                                {{ o.fisico_logradouro or '' }}{% if o.fisico_numero %}, {{ o.fisico_numero }}{% endif %}
+                                {% if o.fisico_bairro %} - {{ o.fisico_bairro }}{% endif %}
+                            </td>
+                            <td class="small">{{ o.fisico_cep or '-' }}</td>
+                            <td>
+                                <button class="btn btn-outline-secondary btn-sm py-0 px-1"
+                                        onclick="editarOrigem({{ o.id }}, {
+                                            cnpj: '{{ o.cnpj or '' }}',
+                                            razao_social: '{{ o.razao_social|replace("'", "\\'") if o.razao_social else '' }}',
+                                            fisico_logradouro: '{{ o.fisico_logradouro|replace("'", "\\'") if o.fisico_logradouro else '' }}',
+                                            fisico_numero: '{{ o.fisico_numero or '' }}',
+                                            fisico_bairro: '{{ o.fisico_bairro|replace("'", "\\'") if o.fisico_bairro else '' }}',
+                                            fisico_cidade: '{{ o.fisico_cidade|replace("'", "\\'") if o.fisico_cidade else '' }}',
+                                            fisico_uf: '{{ o.fisico_uf or '' }}',
+                                            fisico_cep: '{{ o.fisico_cep or '' }}',
+                                            fisico_complemento: '{{ o.fisico_complemento or '' }}'
+                                        })" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm py-0 px-1"
+                                        onclick="removerOrigem({{ o.id }}, '{{ o.razao_social or o.cnpj }}')" title="Remover">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-warehouse fa-3x mb-3 opacity-25"></i>
+                <p>Nenhuma origem cadastrada.</p>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovaOrigem">
+                    <i class="fas fa-plus"></i> Cadastrar Primeira Origem
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% if origens %}
+        <div class="card-footer text-muted small">{{ origens|length }} origem(ns)</div>
+        {% endif %}
+    </div>
+</div>
+
+{# Modal: Nova Origem Global #}
+<div class="modal fade" id="modalNovaOrigem" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nova Origem Global</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label small">CNPJ/CPF</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="novoOrigCnpj" placeholder="00.000.000/0000-00">
+                            <button class="btn btn-outline-secondary" type="button" onclick="buscarCnpjOrigem()">Buscar</button>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label small">Razao Social</label>
+                        <input type="text" class="form-control" id="novoOrigRazao" readonly>
+                    </div>
+                </div>
+                <div id="novoOrigFeedback" style="display:none"></div>
+                <div id="secaoEndereco" class="d-none">
+                    <hr>
+                    <p class="text-muted small mb-2">Endereco Fisico — digite o CEP para buscar automaticamente:</p>
+                    <div class="row mb-2">
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" id="novoOrigCep" placeholder="CEP"
+                                       data-cep-lookup
+                                       data-cep-logradouro="#novoOrigLogradouro"
+                                       data-cep-bairro="#novoOrigBairro"
+                                       data-cep-cidade="#novoOrigCidade"
+                                       data-cep-uf="#novoOrigUf"
+                                       data-cep-complemento="#novoOrigComplemento">
+                                <button class="btn btn-outline-secondary" type="button" data-cep-trigger="#novoOrigCep"><i class="fas fa-search"></i></button>
+                            </div>
+                        </div>
+                        <div class="col-md-7"><input type="text" class="form-control form-control-sm" id="novoOrigLogradouro" placeholder="Logradouro"></div>
+                        <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="novoOrigNumero" placeholder="Num"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="novoOrigBairro" placeholder="Bairro"></div>
+                        <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="novoOrigCidade" placeholder="Cidade"></div>
+                        <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="novoOrigUf" placeholder="UF" maxlength="2"></div>
+                        <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="novoOrigComplemento" placeholder="Compl."></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" id="btnSalvarOrigem" onclick="salvarOrigem()" disabled>Salvar Origem</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal: Editar Origem #}
+<div class="modal fade" id="modalEditarOrigem" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Endereco de Origem</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editOrigId">
+                <div class="row mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label small">CNPJ/CPF</label>
+                        <input type="text" class="form-control" id="editOrigCnpj" readonly>
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label small">Razao Social</label>
+                        <input type="text" class="form-control" id="editOrigRazao" readonly>
+                    </div>
+                </div>
+                <hr>
+                <p class="text-muted small mb-2">Endereco Fisico:</p>
+                <div class="row mb-2">
+                    <div class="col-md-3">
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="editOrigCep" placeholder="CEP"
+                                   data-cep-lookup
+                                   data-cep-logradouro="#editOrigLogradouro"
+                                   data-cep-bairro="#editOrigBairro"
+                                   data-cep-cidade="#editOrigCidade"
+                                   data-cep-uf="#editOrigUf"
+                                   data-cep-complemento="#editOrigComplemento">
+                            <button class="btn btn-outline-secondary" type="button" data-cep-trigger="#editOrigCep"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                    <div class="col-md-7"><input type="text" class="form-control form-control-sm" id="editOrigLogradouro" placeholder="Logradouro"></div>
+                    <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="editOrigNumero" placeholder="Num"></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="editOrigBairro" placeholder="Bairro"></div>
+                    <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="editOrigCidade" placeholder="Cidade"></div>
+                    <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="editOrigUf" placeholder="UF" maxlength="2"></div>
+                    <div class="col-md-2"><input type="text" class="form-control form-control-sm" id="editOrigComplemento" placeholder="Compl."></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary btn-sm" onclick="atualizarOrigem()">Salvar Alteracoes</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/viacep.js') }}"></script>
+<script>
+/* Buscar CNPJ na Receita Federal */
+function buscarCnpjOrigem() {
+    const cnpj = document.getElementById('novoOrigCnpj').value.replace(/\D/g, '');
+    if (cnpj.length !== 14 && cnpj.length !== 11) {
+        alert('CNPJ deve ter 14 digitos ou CPF 11 digitos.');
+        return;
+    }
+
+    const fb = document.getElementById('novoOrigFeedback');
+    fb.innerHTML = '<span class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Consultando...</span>';
+    fb.style.display = 'block';
+
+    if (cnpj.length === 14) {
+        fetch('{{ url_for("carvia.api_buscar_cnpj") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({cnpj: cnpj})
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.erro) {
+                fb.innerHTML = '<div class="alert alert-danger py-1 small">' + d.erro + '</div>';
+                return;
+            }
+            const dados = d.dados;
+            document.getElementById('novoOrigRazao').value = dados.razao_social || '';
+            document.getElementById('novoOrigLogradouro').value = dados.logradouro || '';
+            document.getElementById('novoOrigNumero').value = dados.numero || '';
+            document.getElementById('novoOrigBairro').value = dados.bairro || '';
+            document.getElementById('novoOrigCidade').value = dados.cidade || '';
+            document.getElementById('novoOrigUf').value = dados.uf || '';
+            document.getElementById('novoOrigCep').value = dados.cep || '';
+            document.getElementById('novoOrigComplemento').value = dados.complemento || '';
+
+            document.getElementById('secaoEndereco').classList.remove('d-none');
+            document.getElementById('btnSalvarOrigem').disabled = false;
+
+            if (d.aviso) {
+                fb.innerHTML = '<div class="alert alert-warning py-1 small">' + d.aviso + '</div>';
+            } else {
+                fb.innerHTML = '<div class="alert alert-success py-1 small">CNPJ encontrado!</div>';
+            }
+        })
+        .catch(err => { fb.innerHTML = '<div class="alert alert-danger py-1 small">Erro: ' + err.message + '</div>'; });
+    } else {
+        // CPF — preencher manualmente
+        document.getElementById('novoOrigRazao').readOnly = false;
+        document.getElementById('novoOrigRazao').value = '';
+        document.getElementById('novoOrigRazao').focus();
+        document.getElementById('secaoEndereco').classList.remove('d-none');
+        document.getElementById('btnSalvarOrigem').disabled = false;
+        fb.innerHTML = '<div class="alert alert-info py-1 small">CPF detectado. Preencha o nome e endereco manualmente.</div>';
+    }
+}
+
+/* Salvar nova origem global */
+function salvarOrigem() {
+    const cnpj = document.getElementById('novoOrigCnpj').value.replace(/\D/g, '');
+    const payload = {
+        cnpj: cnpj,
+        razao_social: document.getElementById('novoOrigRazao').value,
+        receita_logradouro: document.getElementById('novoOrigLogradouro').value,
+        receita_numero: document.getElementById('novoOrigNumero').value,
+        receita_bairro: document.getElementById('novoOrigBairro').value,
+        receita_cidade: document.getElementById('novoOrigCidade').value,
+        receita_uf: document.getElementById('novoOrigUf').value,
+        receita_cep: document.getElementById('novoOrigCep').value,
+        receita_complemento: document.getElementById('novoOrigComplemento').value,
+        fisico_logradouro: document.getElementById('novoOrigLogradouro').value,
+        fisico_numero: document.getElementById('novoOrigNumero').value,
+        fisico_bairro: document.getElementById('novoOrigBairro').value,
+        fisico_cidade: document.getElementById('novoOrigCidade').value,
+        fisico_uf: document.getElementById('novoOrigUf').value,
+        fisico_cep: document.getElementById('novoOrigCep').value,
+        fisico_complemento: document.getElementById('novoOrigComplemento').value,
+    };
+
+    document.getElementById('btnSalvarOrigem').disabled = true;
+    fetch('{{ url_for("carvia.api_criar_origem_global") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.erro) {
+            alert(d.erro);
+            document.getElementById('btnSalvarOrigem').disabled = false;
+            return;
+        }
+        location.reload();
+    })
+    .catch(err => {
+        alert('Erro: ' + err.message);
+        document.getElementById('btnSalvarOrigem').disabled = false;
+    });
+}
+
+/* Editar origem existente */
+function editarOrigem(id, data) {
+    document.getElementById('editOrigId').value = id;
+    document.getElementById('editOrigCnpj').value = data.cnpj || '';
+    document.getElementById('editOrigRazao').value = data.razao_social || '';
+    document.getElementById('editOrigLogradouro').value = data.fisico_logradouro || '';
+    document.getElementById('editOrigNumero').value = data.fisico_numero || '';
+    document.getElementById('editOrigBairro').value = data.fisico_bairro || '';
+    document.getElementById('editOrigCidade').value = data.fisico_cidade || '';
+    document.getElementById('editOrigUf').value = data.fisico_uf || '';
+    document.getElementById('editOrigCep').value = data.fisico_cep || '';
+    document.getElementById('editOrigComplemento').value = data.fisico_complemento || '';
+    new bootstrap.Modal(document.getElementById('modalEditarOrigem')).show();
+}
+
+function atualizarOrigem() {
+    const id = document.getElementById('editOrigId').value;
+    const payload = {
+        fisico_logradouro: document.getElementById('editOrigLogradouro').value,
+        fisico_numero: document.getElementById('editOrigNumero').value,
+        fisico_bairro: document.getElementById('editOrigBairro').value,
+        fisico_cidade: document.getElementById('editOrigCidade').value,
+        fisico_uf: document.getElementById('editOrigUf').value,
+        fisico_cep: document.getElementById('editOrigCep').value,
+        fisico_complemento: document.getElementById('editOrigComplemento').value,
+    };
+
+    fetch('/carvia/api/enderecos/' + id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.erro) { alert(d.erro); return; }
+        location.reload();
+    })
+    .catch(err => alert('Erro: ' + err.message));
+}
+
+/* Remover origem */
+function removerOrigem(id, nome) {
+    if (!confirm('Remover origem "' + nome + '"? Cotacoes usando esta origem ficarao sem endereco.')) return;
+    fetch('/carvia/api/enderecos/' + id, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(d => {
+        if (d.erro) { alert(d.erro); return; }
+        location.reload();
+    })
+    .catch(err => alert('Erro: ' + err.message));
+}
+</script>
+{% endblock %}

@@ -172,16 +172,26 @@ def register_cliente_routes(bp):
             dados_fisico[campo] = data.get(f'fisico_{campo}', '')
 
         try:
-            endereco, erro = CarviaClienteService.adicionar_endereco(
-                cliente_id=cliente_id,
-                cnpj=cnpj,
-                tipo=tipo,
-                criado_por=current_user.email,
-                razao_social=data.get('razao_social'),
-                dados_receita=dados_receita,
-                dados_fisico=dados_fisico,
-                principal=data.get('principal', False),
-            )
+            # Origens sao sempre globais (cliente_id=NULL)
+            if tipo == 'ORIGEM':
+                endereco, erro = CarviaClienteService.adicionar_origem_global(
+                    cnpj=cnpj,
+                    razao_social=data.get('razao_social'),
+                    criado_por=current_user.email,
+                    dados_receita=dados_receita,
+                    dados_fisico=dados_fisico,
+                )
+            else:
+                endereco, erro = CarviaClienteService.adicionar_endereco(
+                    cliente_id=cliente_id,
+                    cnpj=cnpj,
+                    tipo=tipo,
+                    criado_por=current_user.email,
+                    razao_social=data.get('razao_social'),
+                    dados_receita=dados_receita,
+                    dados_fisico=dados_fisico,
+                    principal=data.get('principal', False),
+                )
             if erro:
                 return jsonify({'erro': erro}), 400
 
@@ -243,6 +253,70 @@ def register_cliente_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error("Erro ao remover endereco #%s: %s", endereco_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    # ==================== ORIGENS GLOBAIS ====================
+
+    @bp.route('/clientes/origens') # type: ignore
+    @login_required
+    def origens_globais(): # type: ignore
+        """Lista e gerencia origens globais (compartilhadas entre todos os clientes)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.services.cliente_service import CarviaClienteService
+        origens = CarviaClienteService.listar_origens_globais()
+
+        return render_template(
+            'carvia/clientes/origens_globais.html',
+            origens=origens,
+        )
+
+    @bp.route('/api/origens-globais', methods=['POST']) # type: ignore
+    @login_required
+    def api_criar_origem_global(): # type: ignore
+        """Cria origem global (JSON API)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.cliente_service import CarviaClienteService
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        cnpj = (data.get('cnpj') or '').strip()
+        if not cnpj:
+            return jsonify({'erro': 'CNPJ/CPF e obrigatorio.'}), 400
+
+        dados_receita = {}
+        dados_fisico = {}
+        for campo in ('uf', 'cidade', 'logradouro', 'numero', 'bairro', 'cep', 'complemento'):
+            dados_receita[campo] = data.get(f'receita_{campo}', '')
+            dados_fisico[campo] = data.get(f'fisico_{campo}', '')
+
+        try:
+            endereco, erro = CarviaClienteService.adicionar_origem_global(
+                cnpj=cnpj,
+                razao_social=data.get('razao_social'),
+                criado_por=current_user.email,
+                dados_receita=dados_receita,
+                dados_fisico=dados_fisico,
+            )
+            if erro:
+                return jsonify({'erro': erro}), 400
+
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'id': endereco.id,
+                'mensagem': 'Origem global criada.',
+            }), 201
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao criar origem global: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
     # ==================== API: BUSCAR CNPJ NA RECEITA ====================

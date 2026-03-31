@@ -102,11 +102,16 @@ class Pedido(db.Model):
                 return 'EMBARCADO'
             return 'CARVIA'
 
-        # Nacom (logica existente, inalterada)
+        # Nacom: flags concretas têm prioridade (NF existe de fato)
         if getattr(self, 'nf_cd', False):
             return 'NF no CD'
         elif self.nf and self.nf.strip():
             return 'FATURADO'
+        # Status real persistido (ex: COTADO via embarque) tem prioridade sobre derivação
+        status_real = getattr(self, 'status', '') or ''
+        if status_real not in ('', 'ABERTO'):
+            return status_real
+        # Fallback derivado
         elif self.cotacao_id:
             return 'COTADO'
         else:

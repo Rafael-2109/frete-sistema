@@ -209,37 +209,27 @@ def register_cotacao_v2_routes(bp):
             enderecos_existentes = CarviaClienteService.buscar_enderecos_por_cnpj(
                 cnpj_emit_limpo
             ) if cnpj_emit_limpo else []
-            if enderecos_existentes:
-                cliente_id = enderecos_existentes[0].cliente_id
-                cliente_nome = enderecos_existentes[0].cliente.nome_comercial
+            for end in enderecos_existentes:
+                if end.cliente_id and end.cliente:
+                    cliente_id = end.cliente_id
+                    cliente_nome = end.cliente.nome_comercial
+                    break
 
             # Tambem checar pelo CNPJ destino
             if not cliente_id and cnpj_dest_limpo:
                 enderecos_dest = CarviaClienteService.buscar_enderecos_por_cnpj(
                     cnpj_dest_limpo
                 )
-                if enderecos_dest:
-                    cliente_id = enderecos_dest[0].cliente_id
-                    cliente_nome = enderecos_dest[0].cliente.nome_comercial
+                for end in enderecos_dest:
+                    if end.cliente_id and end.cliente:
+                        cliente_id = end.cliente_id
+                        cliente_nome = end.cliente.nome_comercial
+                        break
 
             # 3. Verificar enderecos ORIGEM e DESTINO
             endereco_origem_id = None
             endereco_destino_id = None
             if cliente_id:
-                # Buscar origem: primeiro global (cliente_id=NULL), depois do cliente
-                if cnpj_emit_limpo:
-                    orig = CarviaClienteEndereco.query.filter(
-                        CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
-                        CarviaClienteEndereco.tipo == 'ORIGEM',
-                        db.or_(
-                            CarviaClienteEndereco.cliente_id.is_(None),
-                            CarviaClienteEndereco.cliente_id == cliente_id,
-                        ),
-                    ).first()
-                    if orig:
-                        endereco_origem_id = orig.id
-
-                # Buscar destino (destinatario — sempre do cliente)
                 if cnpj_dest_limpo:
                     dest = CarviaClienteEndereco.query.filter_by(
                         cliente_id=cliente_id, cnpj=cnpj_dest_limpo, tipo='DESTINO'
@@ -247,8 +237,8 @@ def register_cotacao_v2_routes(bp):
                     if dest:
                         endereco_destino_id = dest.id
 
-            # Buscar origem global mesmo se cliente nao foi encontrado
-            if not endereco_origem_id and cnpj_emit_limpo:
+            # Buscar origem global (origens sao sempre compartilhadas, cliente_id=NULL)
+            if cnpj_emit_limpo:
                 orig_global = CarviaClienteEndereco.query.filter(
                     CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
                     CarviaClienteEndereco.tipo == 'ORIGEM',
@@ -453,36 +443,44 @@ def register_cotacao_v2_routes(bp):
             enderecos_existentes = CarviaClienteService.buscar_enderecos_por_cnpj(
                 cnpj_emit_limpo
             )
-            if enderecos_existentes:
-                cliente_id = enderecos_existentes[0].cliente_id
-                cliente_nome = enderecos_existentes[0].cliente.nome_comercial
+            for end in enderecos_existentes:
+                if end.cliente_id and end.cliente:
+                    cliente_id = end.cliente_id
+                    cliente_nome = end.cliente.nome_comercial
+                    break
 
             # Tambem checar pelo CNPJ destino
             if not cliente_id and cnpj_dest_limpo:
                 enderecos_dest = CarviaClienteService.buscar_enderecos_por_cnpj(
                     cnpj_dest_limpo
                 )
-                if enderecos_dest:
-                    cliente_id = enderecos_dest[0].cliente_id
-                    cliente_nome = enderecos_dest[0].cliente.nome_comercial
+                for end in enderecos_dest:
+                    if end.cliente_id and end.cliente:
+                        cliente_id = end.cliente_id
+                        cliente_nome = end.cliente.nome_comercial
+                        break
 
             # 3. Verificar enderecos ORIGEM e DESTINO
             endereco_origem_id = None
             endereco_destino_id = None
-            if cliente_id:
-                if cnpj_emit_limpo:
-                    orig = CarviaClienteEndereco.query.filter_by(
-                        cliente_id=cliente_id, cnpj=cnpj_emit_limpo, tipo='ORIGEM'
-                    ).first()
-                    if orig:
-                        endereco_origem_id = orig.id
 
-                if cnpj_dest_limpo:
-                    dest = CarviaClienteEndereco.query.filter_by(
-                        cliente_id=cliente_id, cnpj=cnpj_dest_limpo, tipo='DESTINO'
-                    ).first()
-                    if dest:
-                        endereco_destino_id = dest.id
+            # Buscar origem global (origens sao sempre compartilhadas, cliente_id=NULL)
+            if cnpj_emit_limpo:
+                orig_global = CarviaClienteEndereco.query.filter(
+                    CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
+                    CarviaClienteEndereco.tipo == 'ORIGEM',
+                    CarviaClienteEndereco.cliente_id.is_(None),
+                ).first()
+                if orig_global:
+                    endereco_origem_id = orig_global.id
+
+            # Buscar destino do cliente
+            if cliente_id and cnpj_dest_limpo:
+                dest = CarviaClienteEndereco.query.filter_by(
+                    cliente_id=cliente_id, cnpj=cnpj_dest_limpo, tipo='DESTINO'
+                ).first()
+                if dest:
+                    endereco_destino_id = dest.id
 
             # 4. Detectar tipo material (MOTO se NCM comeca com 8711)
             itens_db = nf.itens.all()
@@ -516,7 +514,40 @@ def register_cotacao_v2_routes(bp):
                 except Exception as e:
                     logger.warning("Erro no reconhecimento de motos (NF existente): %s", e)
 
-            # 6. Serializar veiculos
+            # 6. Consultar Receita para CNPJs (se sao CNPJ, nao CPF)
+            receita_emitente = None
+            receita_emitente_erro = None
+            receita_dest = None
+            receita_dest_erro = None
+            if len(cnpj_emit_limpo) == 14:
+                try:
+                    receita_emitente, erro = CarviaClienteService.buscar_cnpj_receita(
+                        cnpj_emit_limpo
+                    )
+                    if erro:
+                        receita_emitente_erro = erro
+                        logger.warning("ReceitaWS emitente %s: %s", cnpj_emit_limpo, erro)
+                except Exception as e:
+                    receita_emitente_erro = f'Erro ao consultar Receita: {e}'
+                    logger.warning("ReceitaWS emitente %s exception: %s", cnpj_emit_limpo, e)
+            elif cnpj_emit_limpo:
+                receita_emitente_erro = 'CPF detectado (Receita so consulta CNPJ)'
+
+            if len(cnpj_dest_limpo) == 14:
+                try:
+                    receita_dest, erro = CarviaClienteService.buscar_cnpj_receita(
+                        cnpj_dest_limpo
+                    )
+                    if erro:
+                        receita_dest_erro = erro
+                        logger.warning("ReceitaWS dest %s: %s", cnpj_dest_limpo, erro)
+                except Exception as e:
+                    receita_dest_erro = f'Erro ao consultar Receita: {e}'
+                    logger.warning("ReceitaWS dest %s exception: %s", cnpj_dest_limpo, e)
+            elif cnpj_dest_limpo:
+                receita_dest_erro = 'CPF detectado (Receita so consulta CNPJ)'
+
+            # 7. Serializar veiculos
             veiculos_db = nf.veiculos.all()
 
             return jsonify({
@@ -536,8 +567,8 @@ def register_cotacao_v2_routes(bp):
                     'nome_destinatario': nf.nome_destinatario,
                     'uf_destinatario': nf.uf_destinatario,
                     'cidade_destinatario': nf.cidade_destinatario,
-                    'valor_total': float(nf.valor_total) if nf.valor_total else None,
-                    'peso_bruto': float(nf.peso_bruto) if nf.peso_bruto else None,
+                    'valor_total': float(nf.valor_total) if nf.valor_total is not None else None,
+                    'peso_bruto': float(nf.peso_bruto) if nf.peso_bruto is not None else None,
                     'quantidade_volumes': nf.quantidade_volumes,
                     'tipo_fonte': nf.tipo_fonte,
                     'arquivo_nome': nf.arquivo_nome_original,
@@ -576,10 +607,10 @@ def register_cotacao_v2_routes(bp):
                     'destino_id': endereco_destino_id,
                     'destino_existe': endereco_destino_id is not None,
                 },
-                'receita_emitente': None,
-                'receita_emitente_erro': None,
-                'receita_destinatario': None,
-                'receita_destinatario_erro': None,
+                'receita_emitente': receita_emitente,
+                'receita_emitente_erro': receita_emitente_erro,
+                'receita_destinatario': receita_dest,
+                'receita_destinatario_erro': receita_dest_erro,
                 'motos_reconhecidas': motos_reconhecidas,
             })
 
@@ -813,25 +844,132 @@ def register_cotacao_v2_routes(bp):
             except Exception as e_price:
                 logger.warning("Auto-cotacao falhou para %s: %s", cotacao.id, e_price)
 
-            # Criar pedido vinculado a NF (existente do banco ou nova via JSON)
-            nf_id_existente = request.form.get('nf_id_existente', type=int)
+            # Criar 1 pedido por NF — suporta array de NFs (multi-NF)
             nf_dados_raw = request.form.get('nf_dados_json', '').strip()
+            nfs_list = []
 
-            if nf_id_existente:
-                # ---- PATH A: NF ja existe no banco (veio da tela de NF) ----
+            if nf_dados_raw:
                 try:
-                    from app.carvia.models import (
-                        CarviaNf, CarviaPedido, CarviaPedidoItem,
-                    )
-                    from app.utils.timezone import agora_utc_naive as _agora
+                    import json as json_lib
+                    parsed = json_lib.loads(nf_dados_raw)
+                    # Suportar array (multi-NF) ou objeto unico (legado)
+                    if isinstance(parsed, list):
+                        nfs_list = parsed
+                    elif isinstance(parsed, dict):
+                        nfs_list = [parsed]
+                except Exception:
+                    nfs_list = []
 
-                    nf_obj = db.session.get(CarviaNf, nf_id_existente)
-                    if nf_obj and nf_obj.status != 'CANCELADA':
+            if nfs_list:
+                from app.carvia.models import (
+                    CarviaNf, CarviaNfItem, CarviaNfVeiculo,
+                    CarviaPedido, CarviaPedidoItem,
+                )
+                from app.utils.timezone import agora_utc_naive as _agora
+
+                origem = cotacao.endereco_origem
+                filial = 'RJ' if origem and origem.fisico_uf == 'RJ' else 'SP'
+                tipo_sep = 'ESTOQUE' if filial == 'SP' else 'CROSSDOCK'
+
+                for nf_entry in nfs_list:
+                    try:
+                        nf_db_id = nf_entry.get('nf_db_id') or nf_entry.get('nf_id')
+                        nf_info = nf_entry.get('nf', {})
+                        nf_itens = nf_entry.get('itens', [])
+                        nf_veiculos = nf_entry.get('veiculos', [])
+
+                        # Resolver ou criar CarviaNf
+                        nf_obj = None
+                        if nf_db_id:
+                            # PATH A: NF ja existe no banco
+                            nf_obj = db.session.get(CarviaNf, int(nf_db_id))
+                            if nf_obj and nf_obj.status == 'CANCELADA':
+                                logger.warning("NF %s cancelada, pulando", nf_db_id)
+                                continue
+                            if not nf_obj:
+                                logger.warning("NF %s nao encontrada, pulando", nf_db_id)
+                                continue
+                            # Usar itens reais do banco se disponiveis
+                            itens_db = nf_obj.itens.all()
+                            veiculos_db = nf_obj.veiculos.all()
+                        else:
+                            # PATH B: NF nova via JSON (upload)
+                            data_emissao = nf_info.get('data_emissao')
+                            if data_emissao and isinstance(data_emissao, str) and data_emissao != '':
+                                try:
+                                    data_emissao = datetime.strptime(data_emissao[:10], '%Y-%m-%d').date()
+                                except (ValueError, TypeError):
+                                    data_emissao = None
+                            else:
+                                data_emissao = None
+
+                            chave = nf_info.get('chave_acesso')
+                            if chave:
+                                nf_obj = CarviaNf.query.filter_by(chave_acesso_nf=chave).first()
+
+                            if not nf_obj:
+                                nf_obj = CarviaNf(
+                                    numero_nf=nf_info.get('numero_nf') or '0',
+                                    serie_nf=nf_info.get('serie_nf'),
+                                    chave_acesso_nf=chave,
+                                    data_emissao=data_emissao,
+                                    cnpj_emitente=nf_info.get('cnpj_emitente') or 'DESCONHECIDO',
+                                    nome_emitente=nf_info.get('nome_emitente'),
+                                    uf_emitente=nf_info.get('uf_emitente'),
+                                    cidade_emitente=nf_info.get('cidade_emitente'),
+                                    cnpj_destinatario=nf_info.get('cnpj_destinatario'),
+                                    nome_destinatario=nf_info.get('nome_destinatario'),
+                                    uf_destinatario=nf_info.get('uf_destinatario'),
+                                    cidade_destinatario=nf_info.get('cidade_destinatario'),
+                                    valor_total=nf_info.get('valor_total'),
+                                    peso_bruto=nf_info.get('peso_bruto'),
+                                    quantidade_volumes=nf_info.get('quantidade_volumes'),
+                                    tipo_fonte=nf_info.get('tipo_fonte', 'MANUAL'),
+                                    arquivo_nome_original=nf_info.get('arquivo_nome'),
+                                    criado_por=current_user.email,
+                                    criado_em=_agora(),
+                                )
+                                db.session.add(nf_obj)
+                                db.session.flush()
+
+                                for it in nf_itens:
+                                    db.session.add(CarviaNfItem(
+                                        nf_id=nf_obj.id,
+                                        codigo_produto=it.get('codigo'),
+                                        descricao=it.get('descricao'),
+                                        ncm=it.get('ncm'),
+                                        unidade=it.get('unidade'),
+                                        quantidade=it.get('quantidade'),
+                                        valor_unitario=it.get('valor_unitario'),
+                                        valor_total_item=it.get('valor_total'),
+                                    ))
+
+                            # Criar veiculos — dedup por chassi
+                            for v_idx, v in enumerate(nf_veiculos):
+                                chassi = (v.get('chassi') or '').strip()
+                                if chassi:
+                                    existente = CarviaNfVeiculo.query.filter_by(chassi=chassi).first()
+                                    if not existente:
+                                        item_ref = nf_itens[min(v_idx, len(nf_itens) - 1)] if nf_itens else {}
+                                        db.session.add(CarviaNfVeiculo(
+                                            nf_id=nf_obj.id,
+                                            chassi=chassi,
+                                            modelo=v.get('modelo') or item_ref.get('descricao'),
+                                            cor=v.get('cor'),
+                                            valor=(
+                                                v.get('valor')
+                                                or item_ref.get('valor_unitario')
+                                                or item_ref.get('valor_total')
+                                            ),
+                                            ano=v.get('ano_modelo'),
+                                            numero_motor=v.get('numero_motor'),
+                                        ))
+
+                            itens_db = None
+                            veiculos_db = None
+
+                        # Criar pedido para esta NF
                         numero_nf = nf_obj.numero_nf or '0'
-
-                        origem = cotacao.endereco_origem
-                        filial = 'RJ' if origem and origem.fisico_uf == 'RJ' else 'SP'
-                        tipo_sep = 'ESTOQUE' if filial == 'SP' else 'CROSSDOCK'
 
                         pedido = CarviaPedido(
                             numero_pedido=CarviaPedido.gerar_numero_pedido(cotacao.id),
@@ -845,21 +983,32 @@ def register_cotacao_v2_routes(bp):
                         db.session.add(pedido)
                         db.session.flush()
 
-                        # Criar itens do pedido a partir dos itens reais da NF
-                        itens_nf = nf_obj.itens.all()
-                        veiculos_nf = nf_obj.veiculos.all()
-
-                        if itens_nf:
-                            for idx, it in enumerate(itens_nf):
-                                veiculo = veiculos_nf[idx] if idx < len(veiculos_nf) else None
+                        # Criar itens — preferir dados do banco (PATH A), senao JSON (PATH B)
+                        if itens_db:
+                            vlist = veiculos_db or []
+                            for idx, it in enumerate(itens_db):
+                                veiculo = vlist[idx] if idx < len(vlist) else None
                                 cor = veiculo.cor if veiculo else None
                                 db.session.add(CarviaPedidoItem(
                                     pedido_id=pedido.id,
                                     descricao=it.descricao or 'Produto',
                                     cor=cor,
                                     quantidade=int(it.quantidade or 1),
-                                    valor_unitario=float(it.valor_unitario) if it.valor_unitario else None,
-                                    valor_total=float(it.valor_total_item) if it.valor_total_item else None,
+                                    valor_unitario=float(it.valor_unitario) if it.valor_unitario is not None else None,
+                                    valor_total=float(it.valor_total_item) if it.valor_total_item is not None else None,
+                                    numero_nf=numero_nf,
+                                ))
+                        elif nf_itens:
+                            for idx, it in enumerate(nf_itens):
+                                veiculo = nf_veiculos[idx] if idx < len(nf_veiculos) else None
+                                cor = veiculo.get('cor') if veiculo else None
+                                db.session.add(CarviaPedidoItem(
+                                    pedido_id=pedido.id,
+                                    descricao=it.get('descricao') or 'Produto',
+                                    cor=cor,
+                                    quantidade=int(it.get('quantidade') or 1),
+                                    valor_unitario=it.get('valor_unitario'),
+                                    valor_total=it.get('valor_total'),
                                     numero_nf=numero_nf,
                                 ))
                         else:
@@ -868,169 +1017,23 @@ def register_cotacao_v2_routes(bp):
                                 pedido_id=pedido.id,
                                 descricao=nf_obj.nome_emitente or 'Produto',
                                 quantidade=1,
-                                valor_total=float(nf_obj.valor_total) if nf_obj.valor_total else None,
+                                valor_total=float(nf_obj.valor_total) if nf_obj.valor_total is not None else None,
                                 numero_nf=numero_nf,
                             ))
 
                         pedido.status = 'FATURADO'
-
                         logger.info(
-                            "Pedido %s criado (NF existente %s) na cotacao %s",
+                            "Pedido %s criado (NF %s) na cotacao %s",
                             pedido.numero_pedido, numero_nf, cotacao.numero_cotacao,
                         )
-                    else:
-                        logger.warning(
-                            "NF %s nao encontrada ou cancelada ao criar cotacao",
-                            nf_id_existente,
-                        )
-                except Exception as e_nf:
-                    logger.warning("Erro ao criar pedido via NF existente: %s", e_nf)
 
-            elif nf_dados_raw:
-                # ---- PATH B: NF nova via JSON (veio do upload de arquivo) ----
-                try:
-                    import json as json_lib
-                    nf_parsed = json_lib.loads(nf_dados_raw)
-                    nf_info = nf_parsed.get('nf', {})
-                    nf_itens = nf_parsed.get('itens', [])
-                    nf_veiculos = nf_parsed.get('veiculos', [])
-
-                    from app.carvia.models import (
-                        CarviaNf, CarviaNfItem, CarviaNfVeiculo,
-                        CarviaPedido, CarviaPedidoItem,
-                    )
-                    from app.utils.timezone import agora_utc_naive as _agora
-
-                    data_emissao = nf_info.get('data_emissao')
-                    if data_emissao and isinstance(data_emissao, str) and data_emissao != '':
-                        try:
-                            data_emissao = datetime.strptime(data_emissao[:10], '%Y-%m-%d').date()
-                        except (ValueError, TypeError):
-                            data_emissao = None
-                    else:
-                        data_emissao = None
-
-                    # Dedup: reutilizar NF existente se mesma chave
-                    chave = nf_info.get('chave_acesso')
-                    nf_obj = None
-                    numero_nf = nf_info.get('numero_nf') or '0'
-
-                    if chave:
-                        nf_obj = CarviaNf.query.filter_by(chave_acesso_nf=chave).first()
-
-                    if not nf_obj:
-                        nf_obj = CarviaNf(
-                            numero_nf=numero_nf,
-                            serie_nf=nf_info.get('serie_nf'),
-                            chave_acesso_nf=chave,
-                            data_emissao=data_emissao,
-                            cnpj_emitente=nf_info.get('cnpj_emitente') or 'DESCONHECIDO',
-                            nome_emitente=nf_info.get('nome_emitente'),
-                            uf_emitente=nf_info.get('uf_emitente'),
-                            cidade_emitente=nf_info.get('cidade_emitente'),
-                            cnpj_destinatario=nf_info.get('cnpj_destinatario'),
-                            nome_destinatario=nf_info.get('nome_destinatario'),
-                            uf_destinatario=nf_info.get('uf_destinatario'),
-                            cidade_destinatario=nf_info.get('cidade_destinatario'),
-                            valor_total=nf_info.get('valor_total'),
-                            peso_bruto=nf_info.get('peso_bruto'),
-                            quantidade_volumes=nf_info.get('quantidade_volumes'),
-                            tipo_fonte=nf_info.get('tipo_fonte', 'MANUAL'),
-                            arquivo_nome_original=nf_info.get('arquivo_nome'),
-                            criado_por=current_user.email,
-                            criado_em=_agora(),
-                        )
-                        db.session.add(nf_obj)
-                        db.session.flush()
-
-                        for it in nf_itens:
-                            db.session.add(CarviaNfItem(
-                                nf_id=nf_obj.id,
-                                codigo_produto=it.get('codigo'),
-                                descricao=it.get('descricao'),
-                                ncm=it.get('ncm'),
-                                unidade=it.get('unidade'),
-                                quantidade=it.get('quantidade'),
-                                valor_unitario=it.get('valor_unitario'),
-                                valor_total_item=it.get('valor_total'),
-                            ))
-                    else:
-                        numero_nf = nf_obj.numero_nf or numero_nf
-
-                    # Criar veiculos (chassis) — dedup por chassi
-                    for v_idx, v in enumerate(nf_veiculos):
-                        chassi = (v.get('chassi') or '').strip()
-                        if chassi:
-                            existente = CarviaNfVeiculo.query.filter_by(chassi=chassi).first()
-                            if not existente:
-                                # B2 fix: more vehicles than NF items → fall back to last item (same NF line, multiple chassis)
-                                item_ref = nf_itens[min(v_idx, len(nf_itens) - 1)] if nf_itens else {}
-                                db.session.add(CarviaNfVeiculo(
-                                    nf_id=nf_obj.id,
-                                    chassi=chassi,
-                                    modelo=v.get('modelo') or item_ref.get('descricao'),
-                                    cor=v.get('cor'),
-                                    valor=(
-                                        v.get('valor')
-                                        or item_ref.get('valor_unitario')
-                                        or item_ref.get('valor_total')
-                                    ),
-                                    ano=v.get('ano_modelo'),
-                                    numero_motor=v.get('numero_motor'),
-                                ))
-
-                    # Criar pedido vinculado a cotacao
-                    origem = cotacao.endereco_origem
-                    filial = 'RJ' if origem and origem.fisico_uf == 'RJ' else 'SP'
-                    tipo_sep = 'ESTOQUE' if filial == 'SP' else 'CROSSDOCK'
-
-                    pedido = CarviaPedido(
-                        numero_pedido=CarviaPedido.gerar_numero_pedido(cotacao.id),
-                        cotacao_id=cotacao.id,
-                        filial=filial,
-                        tipo_separacao=tipo_sep,
-                        criado_por=current_user.email,
-                        criado_em=_agora(),
-                        atualizado_em=_agora(),
-                    )
-                    db.session.add(pedido)
-                    db.session.flush()
-
-                    # Criar itens do pedido com dados reais da NF
-                    if nf_itens:
-                        for idx, it in enumerate(nf_itens):
-                            veiculo = nf_veiculos[idx] if idx < len(nf_veiculos) else None
-                            cor = veiculo.get('cor') if veiculo else None
-                            db.session.add(CarviaPedidoItem(
-                                pedido_id=pedido.id,
-                                descricao=it.get('descricao') or 'Produto',
-                                cor=cor,
-                                quantidade=int(it.get('quantidade') or 1),
-                                valor_unitario=it.get('valor_unitario'),
-                                valor_total=it.get('valor_total'),
-                                numero_nf=numero_nf,
-                            ))
-                    else:
-                        # Fallback: NF sem itens detalhados
-                        db.session.add(CarviaPedidoItem(
-                            pedido_id=pedido.id,
-                            descricao=nf_info.get('nome_emitente') or 'Produto',
-                            quantidade=1,
-                            valor_total=nf_info.get('valor_total'),
-                            numero_nf=numero_nf,
-                        ))
-
-                    pedido.status = 'FATURADO'
-
-                    logger.info(
-                        "NF %s + pedido %s criados na cotacao %s",
-                        numero_nf, pedido.numero_pedido, cotacao.numero_cotacao,
-                    )
-                except Exception as e_nf:
-                    logger.warning("Erro ao criar NF/pedido na cotacao: %s", e_nf)
+                    except Exception as e_nf:
+                        logger.warning("Erro ao criar pedido para NF na cotacao %s: %s", cotacao.id, e_nf)
 
             db.session.commit()
-            flash(f'Cotacao {cotacao.numero_cotacao} criada.', 'success')
+            n_pedidos = len(nfs_list)
+            msg_pedidos = f' com {n_pedidos} pedido(s)' if n_pedidos else ''
+            flash(f'Cotacao {cotacao.numero_cotacao} criada{msg_pedidos}.', 'success')
             return redirect(url_for('carvia.detalhe_cotacao_v2', cotacao_id=cotacao.id))
 
         except Exception as e:

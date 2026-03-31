@@ -125,6 +125,10 @@ class CarviaClienteService:
         if tipo not in ('ORIGEM', 'DESTINO'):
             return None, 'Tipo deve ser ORIGEM ou DESTINO.'
 
+        # Origens sao SEMPRE globais (cliente_id=NULL) — usar adicionar_origem_global()
+        if tipo == 'ORIGEM':
+            return None, 'Origens sao globais. Use adicionar_origem_global() em vez de adicionar_endereco().'
+
         # Verificar duplicata
         existente = CarviaClienteEndereco.query.filter_by(
             cliente_id=cliente_id,

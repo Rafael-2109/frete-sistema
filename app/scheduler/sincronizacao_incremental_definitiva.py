@@ -22,7 +22,7 @@ import signal
 import sys
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from apscheduler.schedulers.blocking import BlockingScheduler
 from time import sleep
 from app.utils.timezone import agora_utc_naive
@@ -83,6 +83,12 @@ _ultimo_kg_cleanup = None  # Timestamp do ultimo cleanup bem-sucedido
 AUDITORIA_FINANCEIRA_ENABLED = os.environ.get("AUDITORIA_FINANCEIRA_ENABLED", "true").lower() == "true"
 AUDITORIA_FINANCEIRA_HOUR = int(os.environ.get("AUDITORIA_FINANCEIRA_HOUR", "6"))  # 6h (após KG cleanup 5h)
 _ultima_auditoria_financeira = None  # Timestamp da ultima auditoria bem-sucedida
+
+# Improvement Dialogue batch — sugestoes de melhoria Agent SDK -> Claude Code (25º módulo)
+# Roda 2x/dia: 07:00 (catch-up noturno) e 10:00 (pronto antes do D8 cron as 11:00)
+IMPROVEMENT_DIALOGUE_ENABLED = os.environ.get("AGENT_IMPROVEMENT_DIALOGUE", "false").lower() == "true"
+IMPROVEMENT_DIALOGUE_HOURS = [7, 10]  # Horarios de execucao
+_ultimo_improvement_dialogue = None  # Timestamp da ultima execucao bem-sucedida
 
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
@@ -168,7 +174,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultimo_improvement_dialogue
 
     _t_inicio = time.time()
     logger.info("=" * 60)
@@ -1681,6 +1687,56 @@ def executar_sincronizacao():
                 pass
         logger.info(f"   [TIMER] Step 24 (MV Comercial): {time.time() - _t_step:.1f}s")
 
+        # ── 2️⃣5️⃣ IMPROVEMENT DIALOGUE BATCH (2x/dia, 25º módulo) ──
+        _t_step = time.time()
+        sucesso_improvement = False
+        improvement_executou = False
+
+        if IMPROVEMENT_DIALOGUE_ENABLED:
+            hora_imp = agora_utc_naive().hour
+            hoje_imp = agora_utc_naive().date()
+
+            deve_rodar_imp = (
+                hora_imp in IMPROVEMENT_DIALOGUE_HOURS
+                and (_ultimo_improvement_dialogue is None
+                     or _ultimo_improvement_dialogue < agora_utc_naive() - timedelta(hours=4))
+            )
+
+            if deve_rodar_imp:
+                improvement_executou = True
+
+                try:
+                    db.session.remove()
+                    db.engine.dispose()
+                    logger.info("♻️ Reconexão antes de Improvement Dialogue")
+                except Exception:
+                    pass
+
+                try:
+                    logger.info("🔄 Improvement Dialogue batch (Agent SDK -> Claude Code)...")
+                    from app.agente.services.improvement_suggester import executar_batch_improvement
+
+                    resultado_imp = executar_batch_improvement(db)
+
+                    sucesso_improvement = True
+                    _ultimo_improvement_dialogue = agora_utc_naive()
+                    logger.info(
+                        f"✅ Improvement Dialogue: "
+                        f"{resultado_imp.get('suggestions_created', 0)} sugestoes, "
+                        f"{resultado_imp.get('evaluations_done', 0)} avaliacoes, "
+                        f"{resultado_imp.get('sessions_analyzed', 0)} sessoes"
+                    )
+
+                except Exception as e:
+                    logger.error(f"❌ Erro no Improvement Dialogue: {e}")
+                    _ultimo_improvement_dialogue = agora_utc_naive()
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
+        logger.info(f"   [TIMER] Step 25 (Improvement Dialogue): {time.time() - _t_step:.1f}s")
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1705,6 +1761,9 @@ def executar_sincronizacao():
 
         if auditoria_fin_executou:
             modulos_sync.append(sucesso_auditoria_fin)
+
+        if improvement_executou:
+            modulos_sync.append(sucesso_improvement)
 
         total_modulos = len(modulos_sync)
         total_sucesso = sum(modulos_sync)
@@ -1797,6 +1856,8 @@ def executar_sincronizacao():
                 registrar_step('KG Cleanup', 22, sucesso_kg_cleanup)
             if auditoria_fin_executou:
                 registrar_step('Auditoria Financeira', 23, sucesso_auditoria_fin)
+            if improvement_executou:
+                registrar_step('Improvement Dialogue', 25, sucesso_improvement)
 
             # Resumo geral
             registrar_step('CICLO_COMPLETO', 0, total_sucesso == total_modulos,
