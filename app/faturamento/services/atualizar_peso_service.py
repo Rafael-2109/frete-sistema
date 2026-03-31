@@ -84,7 +84,9 @@ class AtualizadorPesoService:
         """
         logger.info(f"  📦 Atualizando FaturamentoProduto...")
 
-        itens = FaturamentoProduto.query.filter_by(numero_nf=numero_nf).all()
+        itens = db.session.query(FaturamentoProduto).filter_by(
+            numero_nf=numero_nf
+        ).with_for_update().all()
 
         if not itens:
             logger.warning(f"  ⚠️ Nenhum item encontrado em FaturamentoProduto para NF {numero_nf}")
@@ -156,7 +158,9 @@ class AtualizadorPesoService:
         """
         logger.info(f"  📊 Atualizando RelatorioFaturamentoImportado...")
 
-        relatorio = RelatorioFaturamentoImportado.query.filter_by(numero_nf=numero_nf).first()
+        relatorio = db.session.query(RelatorioFaturamentoImportado).filter_by(
+            numero_nf=numero_nf
+        ).with_for_update().first()
 
         if not relatorio:
             logger.warning(f"  ⚠️ RelatorioFaturamentoImportado não encontrado para NF {numero_nf}")
@@ -198,7 +202,9 @@ class AtualizadorPesoService:
         """
         logger.info(f"  🚚 Atualizando EmbarqueItem...")
 
-        embarque_items = EmbarqueItem.query.filter_by(nota_fiscal=numero_nf).all()
+        embarque_items = db.session.query(EmbarqueItem).filter_by(
+            nota_fiscal=numero_nf
+        ).with_for_update().all()
 
         if not embarque_items:
             logger.warning(f"  ⚠️ Nenhum EmbarqueItem encontrado para NF {numero_nf}")
@@ -292,7 +298,13 @@ class AtualizadorPesoService:
         embarques_atualizados = set()
 
         for embarque_item in embarque_items:
-            embarque = embarque_item.embarque
+            if not embarque_item.embarque_id:
+                continue
+
+            # Lock row-level no Embarque antes de read-modify-write
+            embarque = db.session.query(Embarque).filter_by(
+                id=embarque_item.embarque_id
+            ).with_for_update().first()
 
             if not embarque:
                 continue
@@ -357,8 +369,10 @@ class AtualizadorPesoService:
         if not embarque_ids:
             return {'atualizados': 0, 'motivo': 'sem_embarque_id'}
 
-        # Buscar fretes vinculados
-        fretes = Frete.query.filter(Frete.embarque_id.in_(embarque_ids)).all()
+        # Buscar fretes vinculados com lock para evitar lost update
+        fretes = db.session.query(Frete).filter(
+            Frete.embarque_id.in_(embarque_ids)
+        ).with_for_update().all()
 
         if not fretes:
             logger.warning(f"  ⚠️ Nenhum Frete encontrado para embarques: {embarque_ids}")
