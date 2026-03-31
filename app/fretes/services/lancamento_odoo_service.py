@@ -21,6 +21,7 @@ import logging
 import time
 import traceback
 from datetime import date
+from decimal import Decimal
 from typing import Dict, List, Optional, Tuple, Any
 from flask import current_app
 
@@ -1403,21 +1404,24 @@ class LancamentoOdooService:
                         if linha_atual:
                             price_unit_atual = linha_atual[0].get('price_unit', 0)
 
-                            # Comparar com tolerância de R$ 0.01
-                            diferenca = abs(price_unit_atual - valor_correto_dfe)
-                            if diferenca > 0.01:
+                            # Comparar com Decimal para precisão monetária
+                            price_unit_d = Decimal(str(price_unit_atual))
+                            valor_correto_d = Decimal(str(valor_correto_dfe))
+                            diferenca = abs(price_unit_d - valor_correto_d)
+                            if diferenca > Decimal('0.01'):
                                 current_app.logger.warning(
                                     f"⚠️ VALOR INCORRETO DETECTADO! "
                                     f"PO linha: R$ {price_unit_atual:.2f} | "
                                     f"DFE correto: R$ {valor_correto_dfe:.2f} | "
-                                    f"Diferença: R$ {diferenca:.2f}"
+                                    f"Diferença: R$ {float(diferenca):.2f}"
                                 )
 
                                 # Corrigir o valor da linha com o valor do DFE
+                                # Odoo XML-RPC requer float na interface
                                 self.odoo.write(
                                     'purchase.order.line',
                                     line_ids_po[:1],
-                                    {'price_unit': valor_correto_dfe}
+                                    {'price_unit': float(valor_correto_d)}
                                 )
                                 current_app.logger.info(
                                     f"✅ VALOR CORRIGIDO: R$ {price_unit_atual:.2f} → R$ {valor_correto_dfe:.2f}"

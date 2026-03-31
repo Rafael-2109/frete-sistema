@@ -1,10 +1,14 @@
 """
 Módulo unificado de cálculo de frete.
 Centraliza todas as funções de cálculo para eliminar divergências entre cotação, resumo e lançamento.
+
+Usa Decimal para precisão monetária (evita erros de arredondamento float).
+Callers podem passar float — conversão é feita internamente via Decimal(str(x)).
 """
 
 import logging
 import math
+from decimal import Decimal, ROUND_HALF_UP
 from app.utils.localizacao import LocalizacaoService
 
 logger = logging.getLogger(__name__)
@@ -14,8 +18,30 @@ class CalculadoraFrete:
     """
     Calculadora centralizada de frete.
     Implementa toda a lógica de cálculo de forma unificada.
+    Usa Decimal internamente para precisão monetária.
     """
-    
+
+    # Constantes de arredondamento
+    _DUAS_CASAS = Decimal('0.01')
+    _QUATRO_CASAS = Decimal('0.0001')
+    _ZERO = Decimal('0')
+    _CEM = Decimal('100')
+    _UM = Decimal('1')
+
+    @staticmethod
+    def _to_decimal(valor) -> Decimal:
+        """Converte valor para Decimal de forma segura via str (evita imprecisão de float)."""
+        if valor is None:
+            return Decimal('0')
+        if isinstance(valor, Decimal):
+            return valor
+        return Decimal(str(valor))
+
+    @staticmethod
+    def _quantize_monetario(valor: Decimal) -> Decimal:
+        """Arredonda para 2 casas decimais (padrão brasileiro ROUND_HALF_UP)."""
+        return valor.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
     @staticmethod
     def calcular_frete_unificado(
         peso,
@@ -47,10 +73,10 @@ class CalculadoraFrete:
             
         Returns:
             dict: {
-                'valor_bruto': float,
-                'valor_com_icms': float,
-                'valor_liquido': float,
-                'icms_aplicado': float,
+                'valor_bruto': Decimal,
+                'valor_com_icms': Decimal,
+                'valor_liquido': Decimal,
+                'icms_aplicado': Decimal,
                 'detalhes': dict
             }
         """
@@ -58,8 +84,16 @@ class CalculadoraFrete:
         if not peso or not valor_mercadoria or not tabela_dados:
             logger.warning("Parâmetros insuficientes para cálculo de frete")
             return CalculadoraFrete._resultado_vazio()
-        
+
         try:
+            _D = CalculadoraFrete._to_decimal
+            _Q = CalculadoraFrete._quantize_monetario
+            ZERO = CalculadoraFrete._ZERO
+
+            # Converter inputs para Decimal
+            peso_d = _D(peso)
+            valor_mercadoria_d = _D(valor_mercadoria)
+
             # Config default se não informada
             if not transportadora_config:
                 transportadora_config = {
@@ -72,49 +106,49 @@ class CalculadoraFrete:
                     'aplica_tas_pos_minimo': False,
                     'pedagio_por_fracao': True
                 }
-            
+
             # 1. Obter ICMS (prioriza ICMS próprio da tabela)
             # Corrigir caso cidade seja um dict
             if isinstance(cidade, dict):
                 cidade_obj = type('obj', (object,), cidade)() if cidade else None
             else:
                 cidade_obj = cidade
-            icms_cidade = CalculadoraFrete._obter_icms_final(tabela_dados, cidade_obj, codigo_ibge)
-            
+            icms_cidade = _D(CalculadoraFrete._obter_icms_final(tabela_dados, cidade_obj, codigo_ibge))
+
             # 2. Determinar peso para cálculo
-            peso_para_calculo = CalculadoraFrete._determinar_peso_calculo(peso, tabela_dados)
-            
+            peso_para_calculo = CalculadoraFrete._determinar_peso_calculo(peso_d, tabela_dados)
+
             # 3. Calcular frete base (sempre entra antes do mínimo)
-            frete_base = CalculadoraFrete._calcular_frete_base(peso_para_calculo, valor_mercadoria, tabela_dados)
-            
+            frete_base = CalculadoraFrete._calcular_frete_base(peso_para_calculo, valor_mercadoria_d, tabela_dados)
+
             # 4. Separar componentes entre ANTES e DEPOIS do frete mínimo
-            componentes_antes = 0
-            componentes_depois = 0
-            
+            componentes_antes = ZERO
+            componentes_depois = ZERO
+
             # GRIS (com valor mínimo)
-            gris = CalculadoraFrete._calcular_gris_com_minimo(valor_mercadoria, tabela_dados)
+            gris = CalculadoraFrete._calcular_gris_com_minimo(valor_mercadoria_d, tabela_dados)
             if transportadora_config.get('aplica_gris_pos_minimo'):
                 componentes_depois += gris
             else:
                 componentes_antes += gris
-            
+
             # ADV (com valor mínimo)
-            adv = CalculadoraFrete._calcular_adv_com_minimo(valor_mercadoria, tabela_dados)
+            adv = CalculadoraFrete._calcular_adv_com_minimo(valor_mercadoria_d, tabela_dados)
             if transportadora_config.get('aplica_adv_pos_minimo'):
                 componentes_depois += adv
             else:
                 componentes_antes += adv
-            
+
             # RCA
-            rca = CalculadoraFrete._calcular_rca(valor_mercadoria, tabela_dados)
+            rca = CalculadoraFrete._calcular_rca(valor_mercadoria_d, tabela_dados)
             if transportadora_config.get('aplica_rca_pos_minimo'):
                 componentes_depois += rca
             else:
                 componentes_antes += rca
-            
+
             # Pedágio (com opção de fração ou direto)
             pedagio = CalculadoraFrete._calcular_pedagio_v2(
-                peso_para_calculo, 
+                peso_para_calculo,
                 tabela_dados,
                 transportadora_config.get('pedagio_por_fracao', True)
             )
@@ -122,76 +156,76 @@ class CalculadoraFrete:
                 componentes_depois += pedagio
             else:
                 componentes_antes += pedagio
-            
+
             # Valores fixos (TAS, Despacho, CTE)
-            valor_tas = tabela_dados.get('valor_tas', 0) or 0
-            valor_despacho = tabela_dados.get('valor_despacho', 0) or 0
-            valor_cte = tabela_dados.get('valor_cte', 0) or 0
-            
+            valor_tas = _D(tabela_dados.get('valor_tas', 0) or 0)
+            valor_despacho = _D(tabela_dados.get('valor_despacho', 0) or 0)
+            valor_cte = _D(tabela_dados.get('valor_cte', 0) or 0)
+
             if transportadora_config.get('aplica_tas_pos_minimo'):
                 componentes_depois += valor_tas
             else:
                 componentes_antes += valor_tas
-            
+
             if transportadora_config.get('aplica_despacho_pos_minimo'):
                 componentes_depois += valor_despacho
             else:
                 componentes_antes += valor_despacho
-            
+
             if transportadora_config.get('aplica_cte_pos_minimo'):
                 componentes_depois += valor_cte
             else:
                 componentes_antes += valor_cte
-            
+
             # 5. Calcular frete líquido ANTES do mínimo
             frete_liquido_antes = frete_base + componentes_antes
-            
+
             # 6. Aplicar frete mínimo VALOR
             frete_apos_minimo = CalculadoraFrete._aplicar_frete_minimo_valor(frete_liquido_antes, tabela_dados)
-            
+
             # 7. Adicionar componentes APÓS o mínimo
             frete_final_liquido = frete_apos_minimo + componentes_depois
-            
+
             # 8. Aplicar ICMS apenas no final (se não estiver incluso)
             frete_com_icms = CalculadoraFrete._aplicar_icms_final(
                 frete_final_liquido, tabela_dados, icms_cidade
             )
-            
+
             # 9. Calcular valor líquido (desconta ICMS se transportadora não for optante)
             valor_liquido = CalculadoraFrete._calcular_valor_liquido(
                 frete_com_icms, icms_cidade, transportadora_optante
             )
-            
-            # 10. Montar resultado
+
+            # 10. Montar resultado com Decimal quantizado
             resultado = {
-                'valor_bruto': round(frete_final_liquido, 2),   # Valor SEM ICMS
-                'valor_com_icms': round(frete_com_icms, 2),     # Valor COM ICMS
-                'valor_liquido': round(valor_liquido, 2),       # Valor para transportadora
+                'valor_bruto': _Q(frete_final_liquido),       # Valor SEM ICMS
+                'valor_com_icms': _Q(frete_com_icms),         # Valor COM ICMS
+                'valor_liquido': _Q(valor_liquido),           # Valor para transportadora
                 'icms_aplicado': icms_cidade,
                 'detalhes': {
-                    'peso_real': peso,
+                    'peso_real': peso_d,
                     'peso_para_calculo': peso_para_calculo,
-                    'frete_base': round(frete_base, 2),
-                    'gris': round(gris, 2),
-                    'adv': round(adv, 2),
-                    'rca': round(rca, 2),
-                    'pedagio': round(pedagio, 2),
-                    'valor_tas': round(valor_tas, 2),
-                    'valor_despacho': round(valor_despacho, 2),
-                    'valor_cte': round(valor_cte, 2),
-                    'componentes_antes_minimo': round(componentes_antes, 2),
-                    'componentes_apos_minimo': round(componentes_depois, 2),
-                    'frete_liquido_antes_minimo': round(frete_liquido_antes, 2),
+                    'frete_base': _Q(frete_base),
+                    'gris': _Q(gris),
+                    'adv': _Q(adv),
+                    'rca': _Q(rca),
+                    'pedagio': _Q(pedagio),
+                    'valor_tas': _Q(valor_tas),
+                    'valor_despacho': _Q(valor_despacho),
+                    'valor_cte': _Q(valor_cte),
+                    'componentes_antes_minimo': _Q(componentes_antes),
+                    'componentes_apos_minimo': _Q(componentes_depois),
+                    'frete_liquido_antes_minimo': _Q(frete_liquido_antes),
                     'frete_minimo_aplicado': frete_apos_minimo > frete_liquido_antes,
                     'icms_incluso_tabela': tabela_dados.get('icms_incluso', False),
                     'icms_proprio_usado': tabela_dados.get('icms_proprio') is not None,
                     'transportadora_optante': transportadora_optante
                 }
             }
-            
+
             logger.debug(f"Frete calculado: R$ {frete_com_icms:.2f} (bruto: R$ {frete_final_liquido:.2f}, líquido: R$ {valor_liquido:.2f})")
             return resultado
-            
+
         except Exception as e:
             logger.error(f"Erro no cálculo de frete: {str(e)}")
             return CalculadoraFrete._resultado_vazio()
@@ -241,22 +275,26 @@ class CalculadoraFrete:
         CORREÇÃO: Determina o peso a ser usado no cálculo.
         frete_minimo_peso é um PESO MÍNIMO, não um valor.
         """
-        frete_minimo_peso = tabela_dados.get('frete_minimo_peso', 0) or 0
-        return max(peso_real, frete_minimo_peso)
+        _D = CalculadoraFrete._to_decimal
+        frete_minimo_peso = _D(tabela_dados.get('frete_minimo_peso', 0) or 0)
+        return max(_D(peso_real), frete_minimo_peso)
     
     @staticmethod
     def _calcular_frete_base(peso_para_calculo, valor_mercadoria, tabela_dados):
         """
         CORREÇÃO: Calcula frete base SOMANDO peso + valor.
         """
+        _D = CalculadoraFrete._to_decimal
+        CEM = CalculadoraFrete._CEM
+
         # Frete baseado no peso (usando peso para cálculo que já considera mínimo)
-        valor_kg = tabela_dados.get('valor_kg', 0) or 0
-        frete_peso = peso_para_calculo * valor_kg
-        
+        valor_kg = _D(tabela_dados.get('valor_kg', 0) or 0)
+        frete_peso = _D(peso_para_calculo) * valor_kg
+
         # Frete baseado no valor da mercadoria (percentual_valor)
-        percentual_valor = tabela_dados.get('percentual_valor', 0) or 0
-        frete_valor = valor_mercadoria * (percentual_valor / 100)
-        
+        percentual_valor = _D(tabela_dados.get('percentual_valor', 0) or 0)
+        frete_valor = _D(valor_mercadoria) * (percentual_valor / CEM)
+
         # CORREÇÃO: SOMA peso + valor (não pega o maior)
         return frete_peso + frete_valor
     
@@ -266,23 +304,26 @@ class CalculadoraFrete:
         Calcula adicionais baseados no valor da mercadoria: GRIS, ADV, RCA.
         [MANTIDO PARA COMPATIBILIDADE - usar métodos específicos para nova lógica]
         """
-        total_adicionais = 0
-        
+        _D = CalculadoraFrete._to_decimal
+        CEM = CalculadoraFrete._CEM
+        total_adicionais = CalculadoraFrete._ZERO
+        valor_mercadoria_d = _D(valor_mercadoria)
+
         # GRIS (% sobre valor da mercadoria)
-        percentual_gris = tabela_dados.get('percentual_gris', 0) or 0
+        percentual_gris = _D(tabela_dados.get('percentual_gris', 0) or 0)
         if percentual_gris:
-            total_adicionais += valor_mercadoria * (percentual_gris / 100)
-        
-        # ADV (% sobre valor da mercadoria) 
-        percentual_adv = tabela_dados.get('percentual_adv', 0) or 0
+            total_adicionais += valor_mercadoria_d * (percentual_gris / CEM)
+
+        # ADV (% sobre valor da mercadoria)
+        percentual_adv = _D(tabela_dados.get('percentual_adv', 0) or 0)
         if percentual_adv:
-            total_adicionais += valor_mercadoria * (percentual_adv / 100)
-        
+            total_adicionais += valor_mercadoria_d * (percentual_adv / CEM)
+
         # RCA (% sobre valor da mercadoria)
-        percentual_rca = tabela_dados.get('percentual_rca', 0) or 0
+        percentual_rca = _D(tabela_dados.get('percentual_rca', 0) or 0)
         if percentual_rca:
-            total_adicionais += valor_mercadoria * (percentual_rca / 100)
-        
+            total_adicionais += valor_mercadoria_d * (percentual_rca / CEM)
+
         return total_adicionais
     
     @staticmethod
@@ -290,40 +331,46 @@ class CalculadoraFrete:
         """
         Calcula GRIS aplicando valor mínimo se configurado.
         """
-        percentual_gris = tabela_dados.get('percentual_gris', 0) or 0
-        gris_minimo = tabela_dados.get('gris_minimo', 0) or 0
-        
+        _D = CalculadoraFrete._to_decimal
+        CEM = CalculadoraFrete._CEM
+        percentual_gris = _D(tabela_dados.get('percentual_gris', 0) or 0)
+        gris_minimo = _D(tabela_dados.get('gris_minimo', 0) or 0)
+
         if percentual_gris:
-            gris_calculado = valor_mercadoria * (percentual_gris / 100)
+            gris_calculado = _D(valor_mercadoria) * (percentual_gris / CEM)
             # Usa o maior entre calculado e mínimo
             return max(gris_calculado, gris_minimo)
-        
-        return 0
+
+        return CalculadoraFrete._ZERO
     
     @staticmethod
     def _calcular_adv_com_minimo(valor_mercadoria, tabela_dados):
         """
         Calcula ADV aplicando valor mínimo se configurado.
         """
-        percentual_adv = tabela_dados.get('percentual_adv', 0) or 0
-        adv_minimo = tabela_dados.get('adv_minimo', 0) or 0
-        
+        _D = CalculadoraFrete._to_decimal
+        CEM = CalculadoraFrete._CEM
+        percentual_adv = _D(tabela_dados.get('percentual_adv', 0) or 0)
+        adv_minimo = _D(tabela_dados.get('adv_minimo', 0) or 0)
+
         if percentual_adv:
-            adv_calculado = valor_mercadoria * (percentual_adv / 100)
+            adv_calculado = _D(valor_mercadoria) * (percentual_adv / CEM)
             # Usa o maior entre calculado e mínimo
             return max(adv_calculado, adv_minimo)
-        
-        return 0
+
+        return CalculadoraFrete._ZERO
     
     @staticmethod
     def _calcular_rca(valor_mercadoria, tabela_dados):
         """
         Calcula RCA (sem valor mínimo).
         """
-        percentual_rca = tabela_dados.get('percentual_rca', 0) or 0
+        _D = CalculadoraFrete._to_decimal
+        CEM = CalculadoraFrete._CEM
+        percentual_rca = _D(tabela_dados.get('percentual_rca', 0) or 0)
         if percentual_rca:
-            return valor_mercadoria * (percentual_rca / 100)
-        return 0
+            return _D(valor_mercadoria) * (percentual_rca / CEM)
+        return CalculadoraFrete._ZERO
     
     @staticmethod
     def _calcular_pedagio(peso_para_calculo, tabela_dados):
@@ -331,46 +378,53 @@ class CalculadoraFrete:
         Calcula pedágio baseado no peso para cálculo.
         [MANTIDO PARA COMPATIBILIDADE - usar _calcular_pedagio_v2 para nova lógica]
         """
-        pedagio_por_100kg = tabela_dados.get('pedagio_por_100kg', 0) or 0
-        if pedagio_por_100kg and peso_para_calculo > 0:
+        _D = CalculadoraFrete._to_decimal
+        CEM = CalculadoraFrete._CEM
+        pedagio_por_100kg = _D(tabela_dados.get('pedagio_por_100kg', 0) or 0)
+        peso_d = _D(peso_para_calculo)
+        if pedagio_por_100kg and peso_d > 0:
             # Calcula quantas vezes 100kg, arredondando para cima
-            multiplos_100kg = float(math.ceil(peso_para_calculo / 100))
+            multiplos_100kg = _D(math.ceil(float(peso_d / CEM)))
             return multiplos_100kg * pedagio_por_100kg
-        
-        return 0
-    
+
+        return CalculadoraFrete._ZERO
+
     @staticmethod
     def _calcular_pedagio_v2(peso_para_calculo, tabela_dados, por_fracao=True):
         """
         Calcula pedágio com opção de fração ou direto.
-        
+
         Args:
             por_fracao (bool): Se True, arredonda para cima. Se False, usa valor exato.
         """
-        pedagio_por_100kg = tabela_dados.get('pedagio_por_100kg', 0) or 0
-        if pedagio_por_100kg and peso_para_calculo > 0:
+        _D = CalculadoraFrete._to_decimal
+        CEM = CalculadoraFrete._CEM
+        pedagio_por_100kg = _D(tabela_dados.get('pedagio_por_100kg', 0) or 0)
+        peso_d = _D(peso_para_calculo)
+        if pedagio_por_100kg and peso_d > 0:
             if por_fracao:
                 # Arredonda para cima (comportamento original)
-                multiplos_100kg = float(math.ceil(peso_para_calculo / 100))
+                multiplos_100kg = _D(math.ceil(float(peso_d / CEM)))
             else:
                 # Usa valor exato (sem arredondamento)
-                multiplos_100kg = peso_para_calculo / 100
-            
+                multiplos_100kg = peso_d / CEM
+
             return multiplos_100kg * pedagio_por_100kg
-        
-        return 0
+
+        return CalculadoraFrete._ZERO
     
     @staticmethod
     def _calcular_valores_fixos(tabela_dados):
         """
         Calcula valores fixos: Despacho, CTE, TAS.
         """
-        total_fixos = 0
-        
-        total_fixos += tabela_dados.get('valor_despacho', 0) or 0
-        total_fixos += tabela_dados.get('valor_cte', 0) or 0
-        total_fixos += tabela_dados.get('valor_tas', 0) or 0
-        
+        _D = CalculadoraFrete._to_decimal
+        total_fixos = CalculadoraFrete._ZERO
+
+        total_fixos += _D(tabela_dados.get('valor_despacho', 0) or 0)
+        total_fixos += _D(tabela_dados.get('valor_cte', 0) or 0)
+        total_fixos += _D(tabela_dados.get('valor_tas', 0) or 0)
+
         return total_fixos
     
     @staticmethod
@@ -378,54 +432,68 @@ class CalculadoraFrete:
         """
         CORREÇÃO: Aplica frete mínimo VALOR no frete líquido (sem ICMS).
         """
-        frete_minimo_valor = tabela_dados.get('frete_minimo_valor', 0) or 0
-        return max(frete_liquido, frete_minimo_valor)
+        _D = CalculadoraFrete._to_decimal
+        frete_minimo_valor = _D(tabela_dados.get('frete_minimo_valor', 0) or 0)
+        return max(_D(frete_liquido), frete_minimo_valor)
     
     @staticmethod
     def _aplicar_icms_final(frete_final_liquido, tabela_dados, icms_cidade):
         """
         CORREÇÃO: Aplica ICMS apenas no valor final se não estiver incluso na tabela.
         """
+        _D = CalculadoraFrete._to_decimal
+        UM = CalculadoraFrete._UM
+        CEM = CalculadoraFrete._CEM
+        ZERO = CalculadoraFrete._ZERO
         icms_incluso = tabela_dados.get('icms_incluso', False)
-        
-        if not icms_incluso and icms_cidade > 0:
+        frete_d = _D(frete_final_liquido)
+        icms_d = _D(icms_cidade)
+
+        if not icms_incluso and icms_d > ZERO:
             # ICMS não está incluso na tabela, precisa embutir
             # Fórmula: valor_com_icms = valor_sem_icms / (1 - icms)
-            if icms_cidade < 1:  # Se for decimal (0.07)
-                divisor = 1 - icms_cidade
+            if icms_d < UM:  # Se for decimal (0.07)
+                divisor = UM - icms_d
             else:  # Se for percentual (7)
-                divisor = 1 - (icms_cidade / 100)
-            
-            if divisor > 0:
-                return frete_final_liquido / divisor
-        
-        return frete_final_liquido
+                divisor = UM - (icms_d / CEM)
+
+            if divisor > ZERO:
+                return frete_d / divisor
+
+        return frete_d
     
     @staticmethod
     def _calcular_valor_liquido(valor_com_icms, icms_cidade, transportadora_optante):
         """
         Calcula valor líquido (desconta ICMS se transportadora não for optante).
         """
+        _D = CalculadoraFrete._to_decimal
+        UM = CalculadoraFrete._UM
+        ZERO = CalculadoraFrete._ZERO
+        valor_d = _D(valor_com_icms)
+        icms_d = _D(icms_cidade)
+
         if transportadora_optante:
             # Transportadora optante não paga ICMS
-            return valor_com_icms
-        
-        if icms_cidade > 0:
+            return valor_d
+
+        if icms_d > ZERO:
             # Desconta ICMS do valor
-            return valor_com_icms * (1 - icms_cidade)
-        
-        return valor_com_icms
+            return valor_d * (UM - icms_d)
+
+        return valor_d
     
     @staticmethod
     def _resultado_vazio():
         """
         Retorna resultado vazio em caso de erro.
         """
+        ZERO = Decimal('0')
         return {
-            'valor_bruto': 0,
-            'valor_com_icms': 0,
-            'valor_liquido': 0,
-            'icms_aplicado': 0,
+            'valor_bruto': ZERO,
+            'valor_com_icms': ZERO,
+            'valor_liquido': ZERO,
+            'icms_aplicado': ZERO,
             'detalhes': {}
         }
     
@@ -448,10 +516,13 @@ class CalculadoraFrete:
         2. Rateia proporcionalmente pelo peso do CNPJ
         """
         
+        _D = CalculadoraFrete._to_decimal
+        _Q = CalculadoraFrete._quantize_monetario
+
         if peso_total_embarque <= 0:
             logger.warning("Peso total do embarque inválido para carga direta")
             return CalculadoraFrete._resultado_vazio()
-        
+
         # Calcula frete total do embarque
         resultado_total = CalculadoraFrete.calcular_frete_unificado(
             peso=peso_total_embarque,
@@ -462,26 +533,28 @@ class CalculadoraFrete:
             transportadora_optante=transportadora_optante,
             transportadora_config=transportadora_config
         )
-        
+
         # Calcula proporção do CNPJ
-        proporcao_peso = peso_cnpj / peso_total_embarque
-        
+        peso_total_d = _D(peso_total_embarque)
+        peso_cnpj_d = _D(peso_cnpj)
+        proporcao_peso = peso_cnpj_d / peso_total_d
+
         # Rateia valores
         resultado = {
-            'valor_bruto': round(resultado_total['valor_bruto'] * proporcao_peso, 2),       # SEM ICMS
-            'valor_com_icms': round(resultado_total['valor_com_icms'] * proporcao_peso, 2), # COM ICMS
-            'valor_liquido': round(resultado_total['valor_liquido'] * proporcao_peso, 2),   # PARA TRANSPORTADORA
+            'valor_bruto': _Q(_D(resultado_total['valor_bruto']) * proporcao_peso),       # SEM ICMS
+            'valor_com_icms': _Q(_D(resultado_total['valor_com_icms']) * proporcao_peso), # COM ICMS
+            'valor_liquido': _Q(_D(resultado_total['valor_liquido']) * proporcao_peso),   # PARA TRANSPORTADORA
             'icms_aplicado': resultado_total['icms_aplicado'],
             'detalhes': {
                 **resultado_total['detalhes'],
                 'tipo_carga': 'DIRETA',
-                'peso_total_embarque': peso_total_embarque,
-                'peso_cnpj': peso_cnpj,
-                'proporcao_peso': round(proporcao_peso, 4),
+                'peso_total_embarque': peso_total_d,
+                'peso_cnpj': peso_cnpj_d,
+                'proporcao_peso': proporcao_peso.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP),
                 'valor_total_embarque': resultado_total['valor_com_icms']
             }
         }
-        
+
         logger.debug(f"Frete carga direta calculado - CNPJ: R$ {resultado['valor_com_icms']:.2f} ({proporcao_peso:.2%} do total)")
         return resultado
     
@@ -565,6 +638,7 @@ class CalculadoraFrete:
 def calcular_valor_frete_pela_tabela(tabela_dados, peso, valor):
     """
     Função de compatibilidade para o código existente.
+    Retorna float para manter compatibilidade com callers antigos.
     Use CalculadoraFrete.calcular_frete_unificado() para novos desenvolvimentos.
     """
     resultado = CalculadoraFrete.calcular_frete_unificado(
@@ -572,5 +646,6 @@ def calcular_valor_frete_pela_tabela(tabela_dados, peso, valor):
         valor_mercadoria=valor,
         tabela_dados=tabela_dados
     )
-    
-    return resultado['valor_com_icms'] 
+
+    # Converte Decimal para float para compatibilidade com callers antigos
+    return float(resultado['valor_com_icms'])

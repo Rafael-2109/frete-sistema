@@ -1,9 +1,12 @@
 """
 Servico de Custeio
 Calcula custos de produtos comprados, intermediarios e acabados
+
+Usa Decimal para precisão monetária em todos os cálculos de custo.
 """
 from typing import Dict, List, Any, Optional
 from datetime import datetime, date
+from decimal import Decimal, ROUND_HALF_UP
 import logging
 from app.utils.timezone import agora_utc_naive
 
@@ -24,7 +27,27 @@ class ServicoCusteio:
     1. COMPRADOS   -> Custo = (Valor - ICMS - PIS - COFINS) / Qtd
     2. INTERMEDIARIOS -> Custo BOM usando custos de COMPRADOS
     3. ACABADOS    -> Custo BOM usando COMPRADOS + INTERMEDIARIOS
+
+    Usa Decimal internamente para precisão monetária.
     """
+
+    # Constantes Decimal
+    _ZERO = Decimal('0')
+    _SEIS_CASAS = Decimal('0.000001')
+
+    @staticmethod
+    def _to_decimal(valor) -> Decimal:
+        """Converte valor para Decimal de forma segura via str."""
+        if valor is None:
+            return Decimal('0')
+        if isinstance(valor, Decimal):
+            return valor
+        return Decimal(str(valor))
+
+    @staticmethod
+    def _quantize_custo(valor: Decimal) -> Decimal:
+        """Arredonda para 6 casas decimais (padrão custeio)."""
+        return valor.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
 
     # ================================================
     # CALCULOS PARA PRODUTOS COMPRADOS
@@ -87,29 +110,33 @@ class ServicoCusteio:
                     'estoque_inicial': {'qtd': 0, 'custo': 0}
                 }
 
+            _D = ServicoCusteio._to_decimal
+            _QC = ServicoCusteio._quantize_custo
+            ZERO = ServicoCusteio._ZERO
+
             # Somar valores - usar qtd_recebida se disponivel, senao qtd_produto_pedido
-            qtd_total = 0
-            valor_bruto = 0
-            valor_icms = 0
-            valor_pis = 0
-            valor_cofins = 0
+            qtd_total = ZERO
+            valor_bruto = ZERO
+            valor_icms = ZERO
+            valor_pis = ZERO
+            valor_cofins = ZERO
 
             for c in compras:
                 # Preferir qtd_recebida (quantidade realmente recebida)
-                qtd = float(c.qtd_recebida or c.qtd_produto_pedido or 0)
-                preco = float(c.preco_produto_pedido or 0)
+                qtd = _D(c.qtd_recebida or c.qtd_produto_pedido or 0)
+                preco = _D(c.preco_produto_pedido or 0)
 
                 qtd_total += qtd
                 valor_bruto += preco * qtd
-                valor_icms += float(c.icms_produto_pedido or 0)
-                valor_pis += float(c.pis_produto_pedido or 0)
-                valor_cofins += float(c.cofins_produto_pedido or 0)
+                valor_icms += _D(c.icms_produto_pedido or 0)
+                valor_pis += _D(c.pis_produto_pedido or 0)
+                valor_cofins += _D(c.cofins_produto_pedido or 0)
 
             # Valor liquido (descontando impostos)
             valor_liquido = valor_bruto - valor_icms - valor_pis - valor_cofins
 
             # Custo liquido medio
-            custo_liquido_medio = valor_liquido / qtd_total if qtd_total > 0 else 0
+            custo_liquido_medio = valor_liquido / qtd_total if qtd_total > ZERO else ZERO
 
             # Ultimo custo (ultima compra do periodo)
             # Usa os impostos da PROPRIA ultima compra, nao a media do periodo
@@ -119,33 +146,33 @@ class ServicoCusteio:
                 reverse=True
             )
 
-            ultimo_custo = 0
+            ultimo_custo = ZERO
             if compras_ordenadas:
                 ultima_compra = compras_ordenadas[0]
-                qtd_ultima = float(ultima_compra.qtd_recebida or ultima_compra.qtd_produto_pedido or 0)
-                preco_unitario = float(ultima_compra.preco_produto_pedido or 0)
+                qtd_ultima = _D(ultima_compra.qtd_recebida or ultima_compra.qtd_produto_pedido or 0)
+                preco_unitario = _D(ultima_compra.preco_produto_pedido or 0)
 
                 # Calcular valor liquido da ultima compra usando SEUS PROPRIOS impostos
                 valor_bruto_ultima = preco_unitario * qtd_ultima
-                icms_ultima = float(ultima_compra.icms_produto_pedido or 0)
-                pis_ultima = float(ultima_compra.pis_produto_pedido or 0)
-                cofins_ultima = float(ultima_compra.cofins_produto_pedido or 0)
+                icms_ultima = _D(ultima_compra.icms_produto_pedido or 0)
+                pis_ultima = _D(ultima_compra.pis_produto_pedido or 0)
+                cofins_ultima = _D(ultima_compra.cofins_produto_pedido or 0)
                 valor_liquido_ultima = valor_bruto_ultima - icms_ultima - pis_ultima - cofins_ultima
 
-                ultimo_custo = valor_liquido_ultima / qtd_ultima if qtd_ultima > 0 else 0
+                ultimo_custo = valor_liquido_ultima / qtd_ultima if qtd_ultima > ZERO else ZERO
 
             # Buscar estoque inicial do mes
             estoque_inicial = ServicoCusteio._buscar_estoque_inicial(cod_produto, mes, ano)
 
             # Custo medio do estoque
-            qtd_total_estoque = estoque_inicial['qtd'] + qtd_total
-            custo_total_estoque = estoque_inicial['custo'] + valor_liquido
-            custo_medio_estoque = custo_total_estoque / qtd_total_estoque if qtd_total_estoque > 0 else 0
+            qtd_total_estoque = _D(estoque_inicial['qtd']) + qtd_total
+            custo_total_estoque = _D(estoque_inicial['custo']) + valor_liquido
+            custo_medio_estoque = custo_total_estoque / qtd_total_estoque if qtd_total_estoque > ZERO else ZERO
 
             return {
-                'custo_liquido_medio': round(custo_liquido_medio, 6),
-                'custo_medio_estoque': round(custo_medio_estoque, 6),
-                'ultimo_custo': round(ultimo_custo, 6),
+                'custo_liquido_medio': _QC(custo_liquido_medio),
+                'custo_medio_estoque': _QC(custo_medio_estoque),
+                'ultimo_custo': _QC(ultimo_custo),
                 'qtd_comprada': qtd_total,
                 'valor_bruto': valor_bruto,
                 'valor_icms': valor_icms,
@@ -206,25 +233,29 @@ class ServicoCusteio:
                     'erro': bom.get('erro', 'Produto sem estrutura BOM')
                 }
 
+            _D = ServicoCusteio._to_decimal
+            _QC = ServicoCusteio._quantize_custo
+            ZERO = ServicoCusteio._ZERO
+
             # Funcao recursiva para calcular custo
             def calcular_custo_recursivo(componentes: List[Dict], nivel: int = 0) -> tuple:
                 """Retorna (custo_total, lista_componentes_usados)"""
-                custo = 0
+                custo = ZERO
                 componentes_usados = []
 
                 for comp in componentes:
                     cod_comp = comp['cod_produto']
-                    qtd = comp['qtd_necessaria']
+                    qtd = _D(comp['qtd_necessaria'])
                     tipo = comp.get('tipo', 'DESCONHECIDO')
 
-                    custo_unit = 0
+                    custo_unit = ZERO
 
                     if tipo == 'COMPONENTE' or comp.get('produto_comprado'):
                         # Produto comprado - usar custo ja calculado
-                        custo_unit = custos_componentes.get(cod_comp, 0)
+                        custo_unit = _D(custos_componentes.get(cod_comp, 0))
                     elif tipo == 'INTERMEDIARIO':
                         # Produto intermediario - usar custo BOM calculado
-                        custo_unit = custos_intermediarios.get(cod_comp, 0)
+                        custo_unit = _D(custos_intermediarios.get(cod_comp, 0))
                     elif comp.get('tem_estrutura') and comp.get('componentes'):
                         # Recursao para sub-componentes
                         custo_unit, _ = calcular_custo_recursivo(comp['componentes'], nivel + 1)
@@ -247,7 +278,7 @@ class ServicoCusteio:
             custo_total, componentes_detalhados = calcular_custo_recursivo(bom['componentes'])
 
             return {
-                'custo_bom': round(custo_total, 6),
+                'custo_bom': _QC(custo_total),
                 'componentes': componentes_detalhados,
                 'estrutura': bom,
                 'erro': None
@@ -570,13 +601,14 @@ class ServicoCusteio:
             status='FECHADO'
         ).first()
 
+        _D = ServicoCusteio._to_decimal
         if custo_anterior:
             return {
-                'qtd': float(custo_anterior.qtd_estoque_final or 0),
-                'custo': float(custo_anterior.custo_estoque_final or 0)
+                'qtd': _D(custo_anterior.qtd_estoque_final or 0),
+                'custo': _D(custo_anterior.custo_estoque_final or 0)
             }
 
-        return {'qtd': 0, 'custo': 0}
+        return {'qtd': Decimal('0'), 'custo': Decimal('0')}
 
     @staticmethod
     def _salvar_custo_mensal(
@@ -621,14 +653,15 @@ class ServicoCusteio:
             registro.qtd_estoque_inicial = estoque.get('qtd', 0)
             registro.custo_estoque_inicial = estoque.get('custo', 0)
 
-            # Calcular estoque final
+            # Calcular estoque final com Decimal
+            _D = ServicoCusteio._to_decimal
             registro.qtd_estoque_final = (
-                float(registro.qtd_estoque_inicial or 0) +
-                float(registro.qtd_comprada or 0)
+                _D(registro.qtd_estoque_inicial or 0) +
+                _D(registro.qtd_comprada or 0)
             )
             registro.custo_estoque_final = (
-                float(registro.custo_estoque_inicial or 0) +
-                float(registro.valor_compras_liquido or 0)
+                _D(registro.custo_estoque_inicial or 0) +
+                _D(registro.valor_compras_liquido or 0)
             )
         else:
             registro.custo_bom = custos.get('custo_bom')
@@ -795,7 +828,7 @@ class ServicoCusteio:
             db.session.commit()
             return {
                 'sucesso': True,
-                'custo_considerado': float(custo_atual.custo_considerado or 0),
+                'custo_considerado': ServicoCusteio._to_decimal(custo_atual.custo_considerado or 0),
                 'tipo_selecionado': tipo_custo,
                 'versao': custo_atual.versao
             }
@@ -812,7 +845,7 @@ class ServicoCusteio:
 
         return {
             'sucesso': True,
-            'custo_considerado': float(nova_versao.custo_considerado or 0),
+            'custo_considerado': ServicoCusteio._to_decimal(nova_versao.custo_considerado or 0),
             'tipo_selecionado': tipo_custo,
             'versao': nova_versao.versao,
             'versao_anterior': custo_atual.versao
@@ -965,11 +998,12 @@ class ServicoCusteio:
 
         db.session.commit()
 
+        _D = ServicoCusteio._to_decimal
         return {
             'sucesso': True,
             'cod_produto': cod_produto,
-            'custo_considerado': float(nova_versao.custo_considerado or 0),
-            'custo_producao': float(nova_versao.custo_producao or 0),
+            'custo_considerado': _D(nova_versao.custo_considerado or 0),
+            'custo_producao': _D(nova_versao.custo_producao or 0),
             'versao': nova_versao.versao
         }
 
@@ -1019,6 +1053,8 @@ class ServicoCusteio:
         }
 
         try:
+            _D = ServicoCusteio._to_decimal
+
             # ============================================
             # FASE 1: Carregar custos dos COMPRADOS
             # ============================================
@@ -1026,7 +1062,7 @@ class ServicoCusteio:
             for c in CustoConsiderado.query.filter_by(custo_atual=True).all():
                 produto = CadastroPalletizacao.query.filter_by(cod_produto=c.cod_produto).first()
                 if produto and produto.produto_comprado and c.custo_considerado:
-                    custos_comprados[c.cod_produto] = float(c.custo_considerado)
+                    custos_comprados[c.cod_produto] = _D(c.custo_considerado)
 
             logger.info(f"Propagacao: {len(custos_comprados)} comprados com custo definido")
 
@@ -1050,13 +1086,15 @@ class ServicoCusteio:
                     bom_cache[bom.cod_produto_produzido] = []
                 bom_cache[bom.cod_produto_produzido].append({
                     'cod_componente': bom.cod_produto_componente,
-                    'qtd': float(bom.qtd_utilizada) if bom.qtd_utilizada else 0
+                    'qtd': _D(bom.qtd_utilizada) if bom.qtd_utilizada else Decimal('0')
                 })
 
             # ============================================
             # FASE 3: Funcao de calculo recursivo
             # ============================================
             custos_calculados = dict(custos_comprados)  # Começa com comprados
+
+            ZERO = ServicoCusteio._ZERO
 
             def calcular_custo_bom_recursivo(cod_produto, visitados=None):
                 """
@@ -1080,7 +1118,7 @@ class ServicoCusteio:
                 visitados.add(cod_produto)
                 componentes = bom_cache.get(cod_produto, [])
 
-                custo_total = 0
+                custo_total = ZERO
                 # Soma parcial: soma o que tem, ignora o que não tem
                 for comp in componentes:
                     custo_comp = calcular_custo_bom_recursivo(comp['cod_componente'], visitados.copy())
@@ -1088,7 +1126,7 @@ class ServicoCusteio:
                         custo_total += custo_comp * comp['qtd']
 
                 # Retorna o total se > 0, mesmo que alguns componentes não tenham custo
-                if custo_total > 0:
+                if custo_total > ZERO:
                     custos_calculados[cod_produto] = custo_total
                     return custo_total
 
@@ -1173,9 +1211,10 @@ class ServicoCusteio:
             custo_atual=True
         ).first()
 
+        _D = ServicoCusteio._to_decimal
         if custo_atual:
             # Só atualiza se o valor mudou
-            if custo_atual.custo_considerado and abs(float(custo_atual.custo_considerado) - custo_considerado) < 0.000001:
+            if custo_atual.custo_considerado and abs(_D(custo_atual.custo_considerado) - _D(custo_considerado)) < Decimal('0.000001'):
                 return  # Sem alteração
 
             # Criar nova versão
