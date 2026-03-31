@@ -39,7 +39,24 @@ Antes de modificar qualquer codigo:
 
 1. **Compreensao**: O que foi pedido? Quais modulos/tabelas/arquivos? O que sei (com fonte)? O que falta?
 2. **Analise de impacto**: Arquivos lidos, estruturas verificadas, fluxo de dados mapeado (Request → Route → Service → Model → DB → Template), dependencias e pontos de falha identificados.
-3. **Plano de implementacao**: Mudancas planejadas (arquivo, linha, o que muda e por que), artefatos adicionais, validacoes, cenarios de teste.
+3. **Plano de implementacao (GATE — apresentar ao usuario ANTES de codar)**:
+   - Lista NUMERADA de TODOS os arquivos a criar/modificar, com: caminho, o que muda, e por que
+   - Checklist obrigatorio (verificar cada item):
+     - [ ] Route registrada no blueprint correto
+     - [ ] Link no menu (`base.html`) ou em tela relacionada
+     - [ ] Template includes/extends corretos
+     - [ ] Imports completos (especialmente apos file splits)
+     - [ ] Migrations: DDL + Python (regra CLAUDE.md)
+     - [ ] Validacoes frontend E backend
+   - NAO iniciar implementacao ate confirmar escopo com usuario
+
+## Self-Audit Pos-Implementacao (OBRIGATORIO para tarefas media/grande)
+
+Apos implementar, ANTES de apresentar resultado:
+1. Comparar checklist planejado vs arquivos realmente modificados
+2. Verificar: imports presentes? Routes registradas? Links no menu? Templates wired?
+3. Rodar mentalmente o fluxo completo: Request → Route → Service → Model → DB → Template → Response
+4. Se encontrar gap: corrigir ANTES de reportar ao usuario
 
 ## Quando Parar e Perguntar
 

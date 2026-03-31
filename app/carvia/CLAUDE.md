@@ -120,6 +120,14 @@ def api_calcular_cotacao():
 Apos alterar `peso_bruto` ou `peso_cubado`, OBRIGATORIO chamar `operacao.calcular_peso_utilizado()`.
 Cotacao usa `peso_utilizado` — valor stale = cotacao errada.
 
+**Cubado e bruto sao conceitos DISTINTOS** — NAO confundir:
+- `peso_bruto`: peso real na balanca
+- `peso_cubado`: peso volumetrico (dimensoes × fator cubagem)
+- `peso_utilizado`: o MAIOR entre os dois (regra transportadoras)
+
+**Distribuicao de peso entre itens e PROPORCIONAL**, NAO exata por unidade.
+Ex: 3 motos de 100kg cada num CTe de 350kg (embalagem) → cada moto = 350/3 = 116.67kg, NAO 100kg.
+
 ### R4: Fluxo de Status e Irreversivel (exceto cancelamento)
 ```
 CTe CarVia:         RASCUNHO → COTADO → CONFIRMADO → FATURADO    [CANCELADO exceto FATURADO]

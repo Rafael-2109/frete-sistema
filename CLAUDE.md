@@ -7,11 +7,18 @@
 
 ---
 
+## CONTEXTO DE NEGOCIO
+
+A Nacom Goya vende **exclusivamente veiculos ELETRICOS** (motos, bikes). NUNCA referenciar modelos a combustao (Honda CG, XRE, etc.) em SQL, seeds, dados de teste ou qualquer codigo gerado.
+
+---
+
 ## DADOS:
 
 ### OBRIGATÓRIO
 1. **FONTE PARA CONSULTA**: Utilize exclusivamente o MCP do Render, orientações em: `.claude/references/INFRAESTRUTURA.md`
 2. **NÃO UTILIZAR**: Dados locais = Dados teste.
+3. **CROSS-VERIFICACAO ODOO**: Se o usuario pedir para verificar no Odoo, seguir roteamento em `.claude/references/odoo/ROUTING_ODOO.md`. Se encontrar inconsistencias em dados locais/Render originados do Odoo, TAMBEM verificar direto no Odoo.
 
 
 ## REGRAS UNIVERSAIS
