@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~7.1K | **Arquivos**: 12 | **Atualizado**: 30/03/2026
+**LOC**: ~7.5K | **Arquivos**: 13 | **Atualizado**: 31/03/2026
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -17,6 +17,7 @@ app/agente/services/
   ├── friction_analyzer.py       #   463 LOC — Deteccao de friccao heuristica (P2-4)
   ├── session_summarizer.py      #   445 LOC — Resumos M1 estruturados via Sonnet (P0-2)
   ├── intersession_briefing.py   #   505 LOC — Briefing entre sessoes, zero LLM (P0)
+  ├── improvement_suggester.py   #   400 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
   ├── tool_skill_mapper.py       #   316 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
   ├── recommendations_engine.py  #   221 LOC — Recomendacoes rule-based para dashboard
   ├── suggestion_generator.py    #   216 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
@@ -103,6 +104,15 @@ Clustering por prefixo usa sort + varredura linear. NAO alterar para comparacao 
 ### insights_service: composicao inline
 Chama `friction_analyzer` + `recommendations_engine` internamente. Alteracao em qualquer um afeta dashboard admin.
 
+### improvement_suggester: dialogo versionado D8 (batch)
+Loop Agent SDK <-> Claude Code. Sonnet analisa batch de sessoes recentes (8h) e gera 0-5 sugestoes cross-sessao.
+Tambem avalia respostas pendentes do Claude Code contra sessoes recentes.
+Max 3 versoes por suggestion_key (spiral prevention). Flag: `USE_IMPROVEMENT_DIALOGUE` (= `AGENT_IMPROVEMENT_DIALOGUE` env).
+Tabela: `agent_improvement_dialogue`. Custo: ~$0.005/batch.
+Trigger: APScheduler modulo 25 (07:00 e 10:00), NAO pos-sessao — captura sessoes abandonadas.
+POST endpoint: `/api/improvement-dialogue`. GET: `/api/improvement-dialogue/pending`.
+— FONTE: `improvement_suggester.py:1-25`, `sincronizacao_incremental_definitiva.py` (step 25)
+
 ---
 
 ## Interdependencias
@@ -111,6 +121,7 @@ Chama `friction_analyzer` + `recommendations_engine` internamente. Alteracao em 
 | Caller | Services usados |
 |--------|----------------|
 | `routes.py` | sentiment, suggestions, summarizer, patterns (5 funcoes), friction, insights, KG (strip_xml) |
+| `sincronizacao_incremental_definitiva.py` | improvement_suggester (batch, modulo 25) |
 | `client.py` | intersession_briefing, KG (query_graph_memories) |
 | `memory_mcp_tool.py` | consolidator (2 funcoes), KG (extract, remove, strip_xml) |
 
@@ -121,6 +132,7 @@ Chama `friction_analyzer` + `recommendations_engine` internamente. Alteracao em 
 | pattern_analyzer | session_summarizer output (JSONB `AgentSession.summary`) |
 | knowledge_graph_service | `app.embeddings` (product_search, entity_search) |
 | memory_consolidator | `AgentMemory` model + tier frio |
+| improvement_suggester | `AgentImprovementDialogue` model |
 
 ### Padrao de logging
-Cada service usa prefixo unico: `[SENTIMENT]`, `[SUGGESTIONS]`, `[SUMMARIZER]`, `[PATTERNS]`, `[KG]`, `[FRICTION]`, `[INSIGHTS]`, `[CONSOLIDATOR]`, `[BRIEFING]`.
+Cada service usa prefixo unico: `[SENTIMENT]`, `[SUGGESTIONS]`, `[SUMMARIZER]`, `[PATTERNS]`, `[KG]`, `[FRICTION]`, `[INSIGHTS]`, `[CONSOLIDATOR]`, `[BRIEFING]`, `[IMPROVEMENT]`.

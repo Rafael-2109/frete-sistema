@@ -1032,3 +1032,234 @@ class AgentIntelligenceReport(db.Model):
         )
         db.session.add(report)
         return report
+
+
+class AgentImprovementDialogue(db.Model):
+    """
+    Dialogo versionado de melhoria continua entre Agent SDK e Claude Code.
+
+    Agent SDK escreve sugestoes (v1), Claude Code avalia/implementa (v2),
+    Agent SDK verifica se atende (v3). Max 3 versoes por suggestion_key.
+
+    Status lifecycle:
+        proposed -> responded -> verified -> closed
+        proposed -> rejected (por Claude Code)
+        responded -> needs_revision (por Agent SDK, gera v3)
+
+    Categorias:
+        skill_suggestion: skills que ajudariam mas nao existem
+        instruction_request: instrucoes/clarificacoes que o agente precisa
+        prompt_feedback: feedback sobre system_prompt e memorias
+        gotcha_report: armadilhas e informacoes uteis
+        memory_feedback: memorias que estao incorretas ou faltando
+    """
+    __tablename__ = 'agent_improvement_dialogue'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identidade do dialogo
+    suggestion_key = db.Column(db.String(100), nullable=False)
+    version = db.Column(db.Integer, nullable=False, default=1)
+
+    # Autoria e status
+    author = db.Column(db.String(20), nullable=False)  # 'agent_sdk' | 'claude_code'
+    status = db.Column(db.String(20), nullable=False, default='proposed')
+
+    # Conteudo
+    category = db.Column(db.String(30), nullable=False)
+    severity = db.Column(db.String(10), nullable=False, default='info')
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    evidence_json = db.Column(db.JSON, default=dict)
+
+    # Campos de resposta (preenchidos por Claude Code)
+    affected_files = db.Column(db.ARRAY(db.Text), nullable=True)
+    implementation_notes = db.Column(db.Text, nullable=True)
+    auto_implemented = db.Column(db.Boolean, default=False)
+
+    # Rastreabilidade
+    source_session_ids = db.Column(db.ARRAY(db.Text), nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive())
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: agora_utc_naive(),
+        onupdate=lambda: agora_utc_naive(),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint('suggestion_key', 'version', name='uq_aid_key_version'),
+    )
+
+    def __repr__(self):
+        return (
+            f'<AgentImprovementDialogue {self.suggestion_key} '
+            f'v{self.version} {self.status} by={self.author}>'
+        )
+
+    # =========================================================================
+    # CLASSMETHODS
+    # =========================================================================
+
+    @classmethod
+    def generate_key(cls) -> str:
+        """Gera suggestion_key unica: IMP-YYYY-MM-DD-NNN."""
+        from app.utils.timezone import agora_utc_naive
+        today = agora_utc_naive().strftime('%Y-%m-%d')
+        # Conta sugestoes do dia para gerar sequencial
+        count = cls.query.filter(
+            cls.suggestion_key.like(f'IMP-{today}-%'),
+            cls.version == 1,
+        ).count()
+        return f'IMP-{today}-{count + 1:03d}'
+
+    @classmethod
+    def create_suggestion(
+        cls,
+        category: str,
+        severity: str,
+        title: str,
+        description: str,
+        evidence: Optional[Dict] = None,
+        session_ids: Optional[List[str]] = None,
+    ) -> 'AgentImprovementDialogue':
+        """
+        Cria nova sugestao do Agent SDK (v1).
+
+        Returns:
+            Instancia criada
+        """
+        suggestion = cls(
+            suggestion_key=cls.generate_key(),
+            version=1,
+            author='agent_sdk',
+            status='proposed',
+            category=category,
+            severity=severity,
+            title=title,
+            description=description,
+            evidence_json=evidence or {},
+            source_session_ids=session_ids or [],
+        )
+        db.session.add(suggestion)
+        return suggestion
+
+    @classmethod
+    def get_pending_suggestions(cls, limit: int = 10) -> List['AgentImprovementDialogue']:
+        """
+        Retorna sugestoes pendentes para Claude Code avaliar.
+
+        Usado pelo D8 cron via query no Render Postgres.
+        """
+        return cls.query.filter_by(
+            status='proposed',
+            author='agent_sdk',
+            version=1,
+        ).order_by(
+            db.case(
+                (cls.severity == 'critical', 0),
+                (cls.severity == 'warning', 1),
+                else_=2,
+            ),
+            cls.created_at.asc(),
+        ).limit(limit).all()
+
+    @classmethod
+    def get_unverified_responses(cls, days: int = 14) -> List['AgentImprovementDialogue']:
+        """
+        Retorna respostas de Claude Code que o Agent SDK ainda nao verificou.
+
+        Usado pelo intersession_briefing para injetar no contexto do agente.
+        """
+        cutoff = agora_utc_naive() - __import__('datetime').timedelta(days=days)
+        return cls.query.filter(
+            cls.author == 'claude_code',
+            cls.status == 'responded',
+            cls.created_at >= cutoff,
+        ).order_by(cls.created_at.desc()).limit(5).all()
+
+    @classmethod
+    def get_open_by_category(cls) -> List['AgentImprovementDialogue']:
+        """
+        Retorna sugestoes abertas agrupadas por categoria.
+
+        Usado para dedup antes de criar nova sugestao.
+        """
+        return cls.query.filter(
+            cls.status.in_(['proposed', 'responded']),
+            cls.version == 1,
+        ).all()
+
+    @classmethod
+    def upsert_response(
+        cls,
+        suggestion_key: str,
+        version: int,
+        author: str,
+        status: str,
+        description: str,
+        implementation_notes: Optional[str] = None,
+        affected_files: Optional[List[str]] = None,
+        auto_implemented: bool = False,
+    ) -> 'AgentImprovementDialogue':
+        """
+        Insere ou atualiza resposta (v2 de Claude Code ou v3 de Agent SDK).
+
+        Tambem atualiza o status da versao anterior (v1 ou v2).
+        """
+        from sqlalchemy.orm.attributes import flag_modified
+
+        existing = cls.query.filter_by(
+            suggestion_key=suggestion_key,
+            version=version,
+        ).first()
+
+        if existing:
+            existing.author = author
+            existing.status = status
+            existing.description = description
+            existing.implementation_notes = implementation_notes
+            existing.affected_files = affected_files
+            existing.auto_implemented = auto_implemented
+            existing.updated_at = agora_utc_naive()
+            if existing.evidence_json:
+                flag_modified(existing, 'evidence_json')
+            return existing
+
+        # Buscar v1 para copiar category/severity/title
+        v1 = cls.query.filter_by(
+            suggestion_key=suggestion_key,
+            version=1,
+        ).first()
+
+        if not v1:
+            raise ValueError(f"suggestion_key {suggestion_key} nao encontrada")
+
+        # Atualizar status da versao anterior
+        prev_version = version - 1
+        prev = cls.query.filter_by(
+            suggestion_key=suggestion_key,
+            version=prev_version,
+        ).first()
+        if prev:
+            prev.status = status
+            prev.updated_at = agora_utc_naive()
+
+        response = cls(
+            suggestion_key=suggestion_key,
+            version=version,
+            author=author,
+            status=status,
+            category=v1.category,
+            severity=v1.severity,
+            title=v1.title,
+            description=description,
+            evidence_json={},
+            affected_files=affected_files,
+            implementation_notes=implementation_notes,
+            auto_implemented=auto_implemented,
+            source_session_ids=v1.source_session_ids,
+        )
+        db.session.add(response)
+        return response

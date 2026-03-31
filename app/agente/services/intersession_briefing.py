@@ -79,6 +79,13 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
         if intelligence_alert:
             parts.append(intelligence_alert)
 
+        # 8. Respostas do Claude Code ao dialogo de melhoria (D8)
+        use_improvement = os.getenv('AGENT_IMPROVEMENT_DIALOGUE', 'false').lower() == 'true'
+        if use_improvement:
+            improvement_responses = _check_improvement_responses()
+            if improvement_responses:
+                parts.append(improvement_responses)
+
         if not parts:
             return None
 
@@ -502,4 +509,58 @@ def _check_intelligence_report() -> Optional[str]:
 
     except Exception as e:
         logger.debug(f"[BRIEFING] Intelligence report check falhou (ignorado): {e}")
+        return None
+
+
+def _check_improvement_responses() -> Optional[str]:
+    """
+    Verifica respostas do Claude Code ao dialogo de melhoria (D8).
+
+    Busca respostas nao verificadas (status='responded', ultimos 14 dias)
+    e formata como XML para injecao no briefing do agente.
+
+    Zero custo LLM — query SQL direta.
+
+    Returns:
+        XML tag com respostas ou None se nao houver pendentes.
+    """
+    try:
+        from ..models import AgentImprovementDialogue
+
+        responses = AgentImprovementDialogue.get_unverified_responses()
+        if not responses:
+            return None
+
+        def _xml_esc(text: str) -> str:
+            """Escapa texto para XML."""
+            return (
+                text.replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+                .replace('"', '&quot;')
+            )
+
+        parts = []
+        for r in responses[:5]:  # max 5 para nao poluir contexto
+            safe_title = _xml_esc(str(r.title))
+            notes = r.implementation_notes or r.description
+            safe_notes = _xml_esc(str(notes)[:200])
+            implemented = 'auto' if r.auto_implemented else 'manual'
+
+            parts.append(
+                f'<response key="{r.suggestion_key}" '
+                f'category="{r.category}" impl="{implemented}">'
+                f'{safe_title} — {safe_notes}</response>'
+            )
+
+        return (
+            f'<improvement_responses count="{len(responses)}" '
+            f'note="Respostas do Claude Code ao dialogo de melhoria. '
+            f'Avalie se as mudancas resolveram os problemas reportados.">'
+            + ''.join(parts)
+            + '</improvement_responses>'
+        )
+
+    except Exception as e:
+        logger.debug(f"[BRIEFING] Improvement responses check falhou (ignorado): {e}")
         return None

@@ -1,17 +1,18 @@
 # Plano de Atualizacao Automatizada
 
 **Criado**: 27/03/2026
-**Atualizado**: 28/03/2026 (v3 — Agent Intelligence Report)
-**Frequencia**: Semanal (segunda-feira, 10:00 BRT)
-**Executor**: OpenClaw Cron → Claude Code (Opus)
+**Atualizado**: 31/03/2026 (v4 — D8 + crontab local)
+**Frequencia**: D1-D7 semanal (seg 10:00) + D8 diario (11:03)
+**Executor**: Crontab local (WSL2) → Claude Code CLI (Opus)
 
 ---
 
 ## Visao Geral
 
-Tarefa agendada que executa **7 dominios** de manutencao em **3 estagios paralelos**, gerando relatorios rastreaveis para cada execucao e um relatorio consolidado.
+Tarefas agendadas que executam **8 dominios** de manutencao, gerando relatorios rastreaveis.
 
-**Scheduler unico**: OpenClaw (local). RemoteTrigger desabilitado em 28/03/2026.
+**Scheduler**: Crontab local (`sudo crontab -u rafaelnascimento -l`).
+RemoteTrigger cloud desabilitado — nao tem acesso a MCP servers locais (Render, Sentry, Playwright).
 
 ---
 
@@ -26,6 +27,7 @@ Tarefa agendada que executa **7 dominios** de manutencao em **3 estagios paralel
 | 5 | **Tests** | [`tests/`](tests/) | [`dominios/dominio-5-tests.md`](dominios/dominio-5-tests.md) | Executa suite pytest e reporta resultados com correlacao D4 |
 | 6 | **Memory Eval** | [`memory-eval/`](memory-eval/) | [`dominios/dominio-6-memory-eval.md`](dominios/dominio-6-memory-eval.md) | Avalia saude do sistema de memorias em producao (Render Postgres) |
 | 7 | **Agent Intelligence Report** | [`agent-reports/`](agent-reports/) | [`dominios/dominio-7-agent-report.md`](dominios/dominio-7-agent-report.md) | Analisa sessoes, tools, friccao e gera recomendacoes prescritivas (Bridge Agent SDK <-> Claude Code) |
+| 8 | **Improvement Dialogue** | [`improvement-dialogue/`](improvement-dialogue/) | [`dominios/dominio-8-improvement-dialogue.md`](dominios/dominio-8-improvement-dialogue.md) | Dialogo versionado Agent SDK <-> Claude Code: avalia sugestoes, implementa via feature-dev (cron diario separado) |
 
 ---
 
@@ -140,17 +142,38 @@ Cada dominio segue o ciclo: **Avaliar → Atualizar → Relatorio → Status JSO
 
 ---
 
-## Configuracao OpenClaw
+## Configuracao Crontab
+
+Gerenciado via `sudo crontab -u rafaelnascimento -l`. Logs em `/tmp/claude-cron-*.log`.
+
+### D1-D7: Manutencao Semanal
 
 | Campo | Valor |
 |-------|-------|
-| ID | `04c21701-6c01-44ac-b7ac-592f15f541f7` |
-| Nome | `Manutencao Semanal - Orquestrador Paralelo` |
-| Schedule | `0 10 * * 1` (segundas 10:00) |
-| Model | `anthropic/claude-opus-4-6` |
-| Timeout | 2400s (40 min) |
-| Session | isolated |
-| Budget | sem limite |
+| Cron | `0 10 * * 1` (segundas 10:00 BRT) |
+| Comando | `claude -p "$(cat .claude/atualizacoes/prompt_manutencao.md)" --model opus --permission-mode bypassPermissions` |
+| Log | `/tmp/claude-cron-semanal-YYYY-MM-DD.log` |
+
+### D8: Improvement Dialogue (diario)
+
+| Campo | Valor |
+|-------|-------|
+| Cron | `3 11 * * *` (diario 11:03 BRT) |
+| Comando | `claude -p "$(cat .claude/atualizacoes/dominios/dominio-8-improvement-dialogue.md)" --model opus --permission-mode bypassPermissions` |
+| Log | `/tmp/claude-cron-d8-YYYY-MM-DD.log` |
+| Workflow | `feature-dev` para implementacoes |
+| Branch | `improvement/D8-{DATA}` |
+
+### RemoteTriggers (DESABILITADOS)
+
+Migrados para crontab local em 31/03/2026. Sem acesso a MCP servers locais.
+
+| ID | Nome | Status |
+|----|------|--------|
+| `trig_016x6pEVKZPrnKCpmpmDKDum` | Manutencao Semanal (v1, apenas D1-D2) | Desabilitado |
+| `trig_01MCebVrnEgw7JWivdyjUria` | D8 Improvement Dialogue | Desabilitado |
+
+Gerenciar: https://claude.ai/code/scheduled
 
 ---
 
@@ -161,3 +184,4 @@ Cada dominio segue o ciclo: **Avaliar → Atualizar → Relatorio → Status JSO
 | 27/03/2026 | v1 | Criacao — 3 dominios sequenciais + RemoteTrigger |
 | 28/03/2026 | v2 | Orquestrador Paralelo — 6 dominios, 3 estagios, RemoteTrigger desabilitado |
 | 28/03/2026 | v3 | Agent Intelligence Report — D7 adicionado (bridge Agent SDK <-> Claude Code), Estagio 2 de 2→3 agentes |
+| 31/03/2026 | v4 | Improvement Dialogue — D8 adicionado + migracao de OpenClaw/RemoteTrigger para crontab local (WSL2) |

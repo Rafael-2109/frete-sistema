@@ -323,3 +323,17 @@ USE_CUSTOM_SYSTEM_PROMPT = os.getenv("AGENT_CUSTOM_SYSTEM_PROMPT", "true").lower
 # Controlado por toggle na UI, validado server-side (perfil=administrador)
 # Default true: feature disponivel, mas requer ativacao explicita pelo admin
 USE_DEBUG_MODE = os.getenv("AGENT_DEBUG_MODE", "true").lower() == "true"
+
+# ====================================================================
+# Improvement Dialogue (Loop Agent SDK <-> Claude Code)
+# ====================================================================
+
+# Habilita dialogo versionado de melhoria continua.
+# Agent SDK gera sugestoes pos-sessao via Sonnet (~$0.005/sessao).
+# Claude Code (D8 cron diario) avalia, implementa e responde.
+# Agent SDK verifica respostas via intersession briefing.
+# Default false: ativacao gradual apos testes.
+USE_IMPROVEMENT_DIALOGUE = os.getenv("AGENT_IMPROVEMENT_DIALOGUE", "false").lower() == "true"
+
+# Minimo de mensagens na sessao para gerar sugestoes de melhoria
+IMPROVEMENT_DIALOGUE_MIN_MESSAGES = int(os.getenv("AGENT_IMPROVEMENT_MIN_MESSAGES", "3"))
