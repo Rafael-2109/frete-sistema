@@ -43,7 +43,7 @@ from app.recebimento.models import (
 )
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.utils.dfe_utils import TIPOS_DFE_COMPRA
-from app.utils.cnpj_utils import normalizar_cnpj, obter_nome_empresa
+from app.utils.cnpj_utils import normalizar_cnpj, obter_nome_empresa, validar_cnpj
 
 logger = logging.getLogger(__name__)
 
@@ -405,10 +405,20 @@ class ValidacaoFiscalService:
         )
 
     def _extrair_cnpj(self, dfe: Dict) -> str:
-        """Extrai CNPJ do fornecedor do DFE"""
+        """Extrai e valida CNPJ do fornecedor do DFE.
+
+        Alem de normalizar, verifica digitos verificadores.
+        Se invalido, loga warning mas retorna o CNPJ normalizado
+        (dados do Odoo podem conter CNPJs legados).
+        """
         cnpj = dfe.get('nfe_infnfe_emit_cnpj', '')
-        # Limpar formatacao usando funcao centralizada
-        return normalizar_cnpj(cnpj)
+        cnpj_normalizado = normalizar_cnpj(cnpj)
+        if cnpj_normalizado and not validar_cnpj(cnpj_normalizado):
+            logger.warning(
+                f"CNPJ do fornecedor com digito verificador invalido: {cnpj_normalizado} "
+                f"(DFE {dfe.get('id', '?')})"
+            )
+        return cnpj_normalizado
 
     # =========================================================================
     # BUSCA HISTORICA NO ODOO

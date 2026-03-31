@@ -47,6 +47,60 @@ def cnpjs_iguais(cnpj1, cnpj2):
     """
     return normalizar_cnpj(cnpj1) == normalizar_cnpj(cnpj2)
 
+def validar_cnpj(cnpj: str) -> bool:
+    """
+    Valida CNPJ brasileiro verificando digitos verificadores (modulo 11).
+    Funcao centralizada — usar esta em vez de reimplementar o algoritmo.
+
+    Aceita CNPJ com ou sem formatacao (pontos, barras, hifens).
+    Rejeita CNPJs com todos os digitos iguais (ex: 11.111.111/1111-11).
+
+    Args:
+        cnpj: String com CNPJ formatado ou nao
+
+    Returns:
+        True se CNPJ e valido (14 digitos + digitos verificadores corretos),
+        False caso contrario
+
+    Exemplos:
+        validar_cnpj('04.108.518/0001-02') -> True
+        validar_cnpj('04108518000102') -> True
+        validar_cnpj('11111111111111') -> False
+        validar_cnpj('12345') -> False
+        validar_cnpj('') -> False
+    """
+    if not cnpj:
+        return False
+
+    # Remover caracteres nao numericos
+    digitos = re.sub(r'\D', '', str(cnpj))
+
+    # Verificar se tem 14 digitos
+    if len(digitos) != 14:
+        return False
+
+    # Rejeitar CNPJs com todos os digitos iguais
+    if len(set(digitos)) == 1:
+        return False
+
+    # Calcular primeiro digito verificador
+    pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    soma = sum(int(digitos[i]) * pesos1[i] for i in range(12))
+    resto = soma % 11
+    dv1 = 0 if resto < 2 else 11 - resto
+
+    if int(digitos[12]) != dv1:
+        return False
+
+    # Calcular segundo digito verificador
+    pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    soma = sum(int(digitos[i]) * pesos2[i] for i in range(13))
+    resto = soma % 11
+    dv2 = 0 if resto < 2 else 11 - resto
+
+    return int(digitos[13]) == dv2
+
+
 def formatar_cnpj(cnpj):
     """
     Formata um CNPJ adicionando pontuação padrão.

@@ -265,41 +265,13 @@ def format_currency(value: float, currency: str = 'BRL') -> str:
 
 def validate_cnpj(cnpj: str) -> bool:
     """
-    Valida CNPJ brasileiro
-    
-    Args:
-        cnpj (str): CNPJ a ser validado
-        
-    Returns:
-        bool: True se válido
+    Valida CNPJ brasileiro.
+
+    DEPRECATED: Usar app.utils.cnpj_utils.validar_cnpj() diretamente.
+    Este wrapper existe apenas para manter compatibilidade.
     """
-    # Remover caracteres não numéricos
-    cnpj = ''.join(filter(str.isdigit, cnpj))
-    
-    # Verificar se tem 14 dígitos
-    if len(cnpj) != 14:
-        return False
-    
-    # Verificar se todos os dígitos são iguais
-    if cnpj == cnpj[0] * 14:
-        return False
-    
-    # Calcular primeiro dígito verificador
-    weights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-    sum_products = sum(int(cnpj[i]) * weights[i] for i in range(12))
-    remainder = sum_products % 11
-    first_digit = 0 if remainder < 2 else 11 - remainder
-    
-    if int(cnpj[12]) != first_digit:
-        return False
-    
-    # Calcular segundo dígito verificador
-    weights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-    sum_products = sum(int(cnpj[i]) * weights[i] for i in range(13))
-    remainder = sum_products % 11
-    second_digit = 0 if remainder < 2 else 11 - remainder
-    
-    return int(cnpj[13]) == second_digit
+    from app.utils.cnpj_utils import validar_cnpj
+    return validar_cnpj(cnpj)
 
 def clean_phone_number(phone: str) -> str:
     """

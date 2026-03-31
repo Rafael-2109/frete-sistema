@@ -13,6 +13,7 @@ from wtforms.validators import DataRequired, Optional, Length, NumberRange, Vali
 
 
 # GAP-26: Validador de digitos verificadores de CNPJ
+# Usa funcao centralizada de app.utils.cnpj_utils
 def validar_cnpj(_form, field):
     """Valida digitos verificadores de CNPJ (14 digitos)"""
     if not field.data:
@@ -21,22 +22,8 @@ def validar_cnpj(_form, field):
     digitos = re.sub(r'\D', '', field.data)
     if len(digitos) != 14:
         return  # Length validator ja cuida do tamanho
-    # Rejeitar CNPJs com todos os digitos iguais
-    if len(set(digitos)) == 1:
-        raise ValidationError('CNPJ invalido.')
-    # Calculo do primeiro digito verificador
-    pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-    soma = sum(int(digitos[i]) * pesos1[i] for i in range(12))
-    resto = soma % 11
-    dv1 = 0 if resto < 2 else 11 - resto
-    if int(digitos[12]) != dv1:
-        raise ValidationError('CNPJ invalido (digito verificador).')
-    # Calculo do segundo digito verificador
-    pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-    soma = sum(int(digitos[i]) * pesos2[i] for i in range(13))
-    resto = soma % 11
-    dv2 = 0 if resto < 2 else 11 - resto
-    if int(digitos[13]) != dv2:
+    from app.utils.cnpj_utils import validar_cnpj as _validar_cnpj_central
+    if not _validar_cnpj_central(digitos):
         raise ValidationError('CNPJ invalido (digito verificador).')
 
 
