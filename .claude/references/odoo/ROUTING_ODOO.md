@@ -30,7 +30,8 @@ Resumo rapido:
 | Match NF x PO (Fase 2) | `validacao-nf-po` |
 | Split/Consolidar PO (Fase 3) | `conciliando-odoo-po` |
 | Lotes/Quality Check (Fase 4) | `recebimento-fisico-odoo` |
-| Pagamentos, reconciliacoes | `executando-odoo-financeiro` |
+| Pagamentos, reconciliacoes (clientes/fornecedores) | `executando-odoo-financeiro` |
+| Transferencias internas entre contas NACOM GOYA | `conciliando-transferencias-internas` |
 | Razao geral, balancete | `razao-geral-odoo` |
 | Explorar modelo desconhecido | `descobrindo-odoo-estrutura` (ULTIMO RECURSO) |
 

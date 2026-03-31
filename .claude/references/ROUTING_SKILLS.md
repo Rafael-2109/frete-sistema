@@ -57,8 +57,9 @@ Se a resposta esta no reference -> NAO usar skill.
    |-- Pipeline completo       -> ver odoo/PIPELINE_RECEBIMENTO.md
 
 2. FINANCEIRO?
-   |-- Criar pagamento / reconciliar extrato -> executando-odoo-financeiro
-   |-- Exportar razao geral                  -> razao-geral-odoo
+   |-- Criar pagamento / reconciliar extrato com cliente/fornecedor -> executando-odoo-financeiro
+   |-- Transferencia interna entre bancos NACOM GOYA               -> conciliando-transferencias-internas
+   |-- Exportar razao geral                                        -> razao-geral-odoo
 
 3. DESENVOLVIMENTO de nova integracao?
    |-- Criar service/route/migration -> integracao-odoo
@@ -80,6 +81,7 @@ Se a resposta esta no reference -> NAO usar skill.
 | rastreando vs validacao-nf-po | Fluxo completo -> rastreando. Apenas Fase 2 match -> validacao |
 | conciliando vs validacao-nf-po | Fase 3 (split/consolidar) -> conciliando. Fase 2 (match) -> validacao |
 | integracao vs descobrindo | CRIAR novo service -> integracao. EXPLORAR modelo -> descobrindo |
+| executando-odoo-financeiro vs conciliando-transferencias-internas | Extrato de cliente/fornecedor (CNPJ terceiro) -> executando-odoo-financeiro. Extrato NACOM GOYA/61.724.241 (propria empresa) com par espelhado em outro journal -> conciliando-transferencias-internas. Sinal: "is_internal_transfer", "NACOM GOYA no extrato", "transferencia entre bancos proprios" -> conciliando-transferencias-internas |
 | Nao sei qual skill Odoo usar | -> Subagente `especialista-odoo` (orquestra todas) |
 | Teams tasks vs diagnostico agente | **TeamsTask** (status task, stale cleanup) → `consultando-sql` direto. **Sessoes/memorias Teams** (filtro `--channel teams`, flags) → `gerindo-agente`. **Teams SSO** (config, webhook) → dev manual |
 | cotando-frete vs acessando-ssw | **Nacom** (industria, contrata frete) -> cotando-frete. **CarVia** (transportadora, vende frete) -> acessando-ssw. Sinal: "no SSW", "opcao NNN", "CarVia" -> SSW. Sem qualificador -> Nacom. Sinais adicionais CarVia: "parametros de frete" (opcao 062), "resultado CTRC" (opcao 101), "formacao de preco" (opcao 062/004) |
@@ -109,7 +111,8 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
 ### Skills Odoo (Claude Code)
 `rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
-`integracao-odoo`, `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`
+`integracao-odoo`, `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`,
+`conciliando-transferencias-internas`
 
 ### Skills Dev (Claude Code)
 `frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`

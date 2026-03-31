@@ -155,6 +155,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | # | Skill | Scripts | Size | Status | Data |
 |---|-------|---------|------|--------|------|
 | 27 | `operando-portal-atacadao` | 3 | ~120KB | DONE | 2026-03-08 |
+| 28 | `conciliando-transferencias-internas` | 0 | ~20KB | DONE | 2026-03-30 |
 
 ### SKIP — Meta-skills
 

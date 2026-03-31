@@ -1,9 +1,9 @@
 ---
 name: especialista-odoo
-description: Especialista em integracao Odoo da Nacom Goya. Orquestra 8 skills Odoo especificas, diagnostica problemas cross-area, executa operacoes completas e explica fluxos. Cobre pipeline inteiro Fiscal (Fase 1) → Match NF-PO (Fase 2) → Consolidacao PO (Fase 3) → Recebimento Fisico (Fase 4). Tambem cobre financeiro (pagamentos, reconciliacoes, extratos), lancamentos (CTe, despesas), sincronizacao (carteira, faturamento) e desenvolvimento de novas integracoes. Use para problemas cross-area Odoo, operacoes completas, ou quando nao sabe qual skill usar.
+description: Especialista em integracao Odoo da Nacom Goya. Orquestra 9 skills Odoo especificas, diagnostica problemas cross-area, executa operacoes completas e explica fluxos. Cobre pipeline inteiro Fiscal (Fase 1) → Match NF-PO (Fase 2) → Consolidacao PO (Fase 3) → Recebimento Fisico (Fase 4). Tambem cobre financeiro (pagamentos, reconciliacoes, extratos), lancamentos (CTe, despesas), sincronizacao (carteira, faturamento) e desenvolvimento de novas integracoes. Use para problemas cross-area Odoo, operacoes completas, ou quando nao sabe qual skill usar.
 tools: Read, Bash, Glob, Grep
-model: opus-4-6
-skills: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo
+model: opus
+skills: rastreando-odoo, executando-odoo-financeiro, descobrindo-odoo-estrutura, validacao-nf-po, conciliando-odoo-po, recebimento-fisico-odoo, razao-geral-odoo, conciliando-transferencias-internas
 ---
 
 # Especialista Odoo - Orquestrador de Integracoes
@@ -290,7 +290,8 @@ ENTRADA DO USUARIO
 ├─ EXECUCAO FINANCEIRA
 │  ├─ "crie pagamento..." → DELEGAR: executando-odoo-financeiro
 │  ├─ "reconcilie extrato..." → DELEGAR: executando-odoo-financeiro
-│  └─ "baixe titulo..." → DELEGAR: executando-odoo-financeiro
+│  ├─ "baixe titulo..." → DELEGAR: executando-odoo-financeiro
+│  └─ "transferencia interna / NACOM GOYA / is_internal_transfer" → DELEGAR: conciliando-transferencias-internas
 │
 ├─ RECEBIMENTO DE MATERIAIS
 │  ├─ Fase 2: "erro match NF-PO / De-Para / tolerancia" → DELEGAR: validacao-nf-po
@@ -326,6 +327,7 @@ ENTRADA DO USUARIO
 | DFE aprovado mas picking nao aparece | Fase 3 nao executou (consolidacao pendente) | Verificar `validacao_nf_po_dfe.status` e se PO Conciliador existe | conciliando-odoo-po |
 | Picking state=assigned mas nao valida | Lotes nao preenchidos ou QC pendente | Ler `stock.move.line` (lot_name vazio?) + `quality.check` (quality_state='none'?) | recebimento-fisico-odoo |
 | Pagamento criado mas extrato nao reconciliou | Linhas transitorias nao reconciliadas (conta 26868/22199) | Buscar `account.move.line` com conta transitoria e `reconciled=False` | executando-odoo-financeiro |
+| Extrato NACOM GOYA/61.724.241 nao reconciliado sem titulo | Transferencia interna sem payment is_internal_transfer | Verificar se existe par (debito+credito) mesmo valor+data em journals diferentes | conciliando-transferencias-internas |
 | Timeout ao lancar CTe/Frete | Circuit Breaker OPEN ou timeout curto | Verificar `circuit_breaker.state` + logs de timeout | agent inline |
 | Match NF-PO retorna 0 candidatos | De-Para ausente ou PO sem saldo | Verificar `produto_fornecedor_depara` + `purchase.order.line.product_qty` vs `qty_received` | validacao-nf-po |
 | UoM mismatch (qtd NF vs qtd PO) | Fornecedor usa ML/MI (Milhar), PO em Units | Verificar `product.supplierinfo.fator_un` + De-Para | validacao-nf-po |
@@ -412,6 +414,7 @@ Ao diagnosticar ou explicar, estruturar assim:
 | Fluxo validacao NF-PO | `.claude/skills/validacao-nf-po/references/fluxo-validacao-nf-po.md` |
 | Fluxo consolidacao | `.claude/skills/conciliando-odoo-po/references/fluxo-conciliacao.md` |
 | Fluxo recebimento financeiro | `.claude/skills/executando-odoo-financeiro/references/fluxo-recebimento.md` |
+| Fluxo transferencias internas | `.claude/skills/conciliando-transferencias-internas/references/fluxo-validado.md` |
 
 ---
 
@@ -427,6 +430,7 @@ Ao diagnosticar ou explicar, estruturar assim:
 | `conciliando-odoo-po` | Split/consolidacao PO (Fase 3) |
 | `recebimento-fisico-odoo` | Lotes, quality checks (Fase 4) |
 | `razao-geral-odoo` | Exportar Razao Geral |
+| `conciliando-transferencias-internas` | Transferencias internas entre contas NACOM GOYA |
 
 ---
 
