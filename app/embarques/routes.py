@@ -23,6 +23,35 @@ logger = logging.getLogger(__name__)
 
 embarques_bp = Blueprint('embarques', __name__,url_prefix='/embarques')
 
+
+def _buscar_pedidos_impressos(embarque):
+    """Busca dados de impressão dos pedidos em batch (evita N+1 queries).
+
+    Substitui o pattern:
+        for item in embarque.itens:
+            pedido = Pedido.query.filter_by(separacao_lote_id=...).first()
+
+    por uma unica query com IN.
+    """
+    lote_ids = [item.separacao_lote_id for item in embarque.itens if item.separacao_lote_id]
+    if not lote_ids:
+        return {}
+
+    pedidos = Pedido.query.filter(Pedido.separacao_lote_id.in_(lote_ids)).all()
+    pedidos_por_lote = {p.separacao_lote_id: p for p in pedidos}
+
+    pedidos_impressos = {}
+    for item in embarque.itens:
+        lote_id = item.separacao_lote_id
+        if lote_id and lote_id in pedidos_por_lote:
+            pedido = pedidos_por_lote[lote_id]
+            pedidos_impressos[lote_id] = {
+                'impresso': pedido.separacao_impressa,
+                'impresso_em': pedido.separacao_impressa_em,
+                'impresso_por': pedido.separacao_impressa_por
+            }
+    return pedidos_impressos
+
 # Importa a função centralizada
 
 def apagar_fretes_sem_cte_embarque(embarque_id):
@@ -150,21 +179,11 @@ def visualizar_embarque(id):
             # Código para adicionar item
             dados_portaria = obter_dados_portaria_embarque(embarque.id)
             
-            # Buscar dados de impressão
-            pedidos_impressos = {}
-            for item in embarque.itens:
-                if item.separacao_lote_id:
-                    pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                    if pedido:
-                        pedidos_impressos[item.separacao_lote_id] = {
-                            'impresso': pedido.separacao_impressa,
-                            'impresso_em': pedido.separacao_impressa_em,
-                            'impresso_por': pedido.separacao_impressa_por
-                        }
-            
-            return render_template('embarques/visualizar_embarque.html', 
-                                 form=form, 
-                                 embarque=embarque, 
+            pedidos_impressos = _buscar_pedidos_impressos(embarque)
+
+            return render_template('embarques/visualizar_embarque.html',
+                                 form=form,
+                                 embarque=embarque,
                                  dados_portaria=dados_portaria,
                                  pedidos_impressos=pedidos_impressos)
 
@@ -457,30 +476,12 @@ def visualizar_embarque(id):
                     logger.warning(f"  Campo '{field_name}': {errors}")
                 flash("Erros na validação do formulário.", "danger")
             dados_portaria = obter_dados_portaria_embarque(embarque.id)
-            pedidos_impressos = {}
-            for item in embarque.itens:
-                if item.separacao_lote_id:
-                    pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                    if pedido:
-                        pedidos_impressos[item.separacao_lote_id] = {
-                            'impresso': pedido.separacao_impressa,
-                            'impresso_em': pedido.separacao_impressa_em,
-                            'impresso_por': pedido.separacao_impressa_por
-                        }
+            pedidos_impressos = _buscar_pedidos_impressos(embarque)
             return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria, pedidos_impressos=pedidos_impressos)
 
         # Se chegou aqui e nao match action => exibe a página
         dados_portaria = obter_dados_portaria_embarque(embarque.id)
-        pedidos_impressos = {}
-        for item in embarque.itens:
-            if item.separacao_lote_id:
-                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                if pedido:
-                    pedidos_impressos[item.separacao_lote_id] = {
-                        'impresso': pedido.separacao_impressa,
-                        'impresso_em': pedido.separacao_impressa_em,
-                        'impresso_por': pedido.separacao_impressa_por
-                    }
+        pedidos_impressos = _buscar_pedidos_impressos(embarque)
         return render_template('embarques/visualizar_embarque.html', form=form, embarque=embarque, dados_portaria=dados_portaria, pedidos_impressos=pedidos_impressos)
 
     else:
@@ -561,21 +562,11 @@ def visualizar_embarque(id):
         # Buscar dados da portaria para este embarque
         dados_portaria = obter_dados_portaria_embarque(embarque.id)
         
-        # Buscar dados de impressão dos pedidos
-        pedidos_impressos = {}
-        for item in embarque.itens:
-            if item.separacao_lote_id:
-                pedido = Pedido.query.filter_by(separacao_lote_id=item.separacao_lote_id).first()
-                if pedido:
-                    pedidos_impressos[item.separacao_lote_id] = {
-                        'impresso': pedido.separacao_impressa,
-                        'impresso_em': pedido.separacao_impressa_em,
-                        'impresso_por': pedido.separacao_impressa_por
-                    }
-        
-        return render_template('embarques/visualizar_embarque.html', 
-                             form=form, 
-                             embarque=embarque, 
+        pedidos_impressos = _buscar_pedidos_impressos(embarque)
+
+        return render_template('embarques/visualizar_embarque.html',
+                             form=form,
+                             embarque=embarque,
                              dados_portaria=dados_portaria,
                              pedidos_impressos=pedidos_impressos)
   

@@ -641,10 +641,12 @@ def _obter_resposta_agente(
         return resposta_texto, new_sdk_session_id, ns_input_tokens, ns_output_tokens, ns_tools_used, ns_cost_usd
 
     except asyncio.TimeoutError:
+        future.cancel()  # Evita "Task was destroyed but it is pending"
         logger.error("[TEAMS-BOT] Timeout ao aguardar resposta do agente")
         return "Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais especifica.", None, 0, 0, [], 0.0
 
     except Exception as e:
+        future.cancel()  # Evita "Task was destroyed but it is pending"
         logger.error(f"[TEAMS-BOT] Erro ao obter resposta do agente: {e}", exc_info=True)
         return "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.", None, 0, 0, [], 0.0
 
@@ -1151,6 +1153,7 @@ def _obter_resposta_agente_streaming(
         return resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd
 
     except asyncio.TimeoutError:
+        future.cancel()  # Evita "Task was destroyed but it is pending"
         logger.error("[TEAMS-STREAM] Timeout ao aguardar resposta do agente")
         _cleanup_orphan_claude_processes()
         return (
@@ -1159,6 +1162,7 @@ def _obter_resposta_agente_streaming(
         ), None, 0, 0, [], 0.0
 
     except Exception as e:
+        future.cancel()  # Evita "Task was destroyed but it is pending"
         logger.error(
             f"[TEAMS-STREAM] Erro ao obter resposta do agente: {e}",
             exc_info=True,
