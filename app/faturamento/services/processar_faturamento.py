@@ -16,6 +16,7 @@ from app.estoque.models import MovimentacaoEstoque
 from app.separacao.models import Separacao
 from app.embarques.models import Embarque, EmbarqueItem
 from app.carteira.models import FaturamentoParcialJustificativa
+from app.exceptions import FaturamentoError
 
 logger = logging.getLogger(__name__)
 
@@ -97,19 +98,28 @@ class ProcessadorFaturamento:
                         resultado["movimentacoes_criadas"] += mov_criadas
                         resultado["embarque_items_atualizados"] += emb_atualizados
 
-                except Exception as e:
-                    logger.error(f"❌ Erro NF {nf.numero_nf}: {str(e)}")
+                except FaturamentoError as e:
+                    logger.error(
+                        f"Erro de faturamento NF {nf.numero_nf}: {e}",
+                        extra={'numero_nf': nf.numero_nf, 'code': e.code, 'pedido': getattr(nf, 'origem', None)}
+                    )
                     resultado["erros"].append(f"NF {nf.numero_nf}: {str(e)}")
                     nfs_falhadas.append(nf.numero_nf)
-                    db.session.rollback()  # Rollback específico do erro
+                    db.session.rollback()
+                    continue
+                except Exception as e:
+                    logger.exception(f"Erro inesperado ao processar NF {nf.numero_nf}")
+                    resultado["erros"].append(f"NF {nf.numero_nf}: {str(e)}")
+                    nfs_falhadas.append(nf.numero_nf)
+                    db.session.rollback()
                     continue
 
             # Commit único no final (mais simples e seguro)
             try:
                 db.session.commit()
-                logger.debug(f"✅ Commit final de {resultado['processadas']} NFs processadas")
+                logger.debug(f"Commit final de {resultado['processadas']} NFs processadas")
             except Exception as e:
-                logger.error(f"❌ Erro no commit final: {e}")
+                logger.exception(f"Erro no commit final do processamento de faturamento ({resultado['processadas']} NFs)")
                 db.session.rollback()
                 # Todas as NFs do batch falharam no commit
                 nfs_do_batch = [nf.numero_nf for nf in nfs_pendentes]
@@ -129,9 +139,13 @@ class ProcessadorFaturamento:
             if resultado.get("embarque_items_atualizados", 0) > 0:
                 logger.info(f"📦 EmbarqueItems atualizados: {resultado['embarque_items_atualizados']}")
 
+        except FaturamentoError as e:
+            db.session.rollback()
+            logger.error(f"Erro geral de faturamento no processamento: {e}", extra={'code': e.code})
+            resultado["erro_geral"] = str(e)
         except Exception as e:
             db.session.rollback()
-            logger.error(f"❌ Erro geral no processamento: {str(e)}")
+            logger.exception("Erro inesperado geral no processamento de faturamento")
             resultado["erro_geral"] = str(e)
             # Erro geral: todas as NFs pendentes precisam de retry
             if nfs_especificas:
@@ -706,10 +720,15 @@ class ProcessadorFaturamento:
                 db.session.add(mov)
                 movimentacoes_criadas += 1
                 logger.debug(f"  ✓ Movimentação criada: {produto.cod_produto} - Qtd: {mov.qtd_movimentacao}")
+            except FaturamentoError as e:
+                logger.error(
+                    f"Erro de faturamento ao criar movimentacao para produto {produto.cod_produto}: {e}",
+                    extra={'cod_produto': produto.cod_produto, 'numero_nf': nf.numero_nf, 'code': e.code}
+                )
             except Exception as e:
-                logger.error(f"  ✗ Erro ao criar movimentação para produto {produto.cod_produto}: {e}")
+                logger.exception(f"Erro inesperado ao criar movimentacao para produto {produto.cod_produto} da NF {nf.numero_nf}")
 
-        logger.info(f"✅ {movimentacoes_criadas} movimentações 'Sem Separação' preparadas para NF {nf.numero_nf}")
+        logger.info(f"{movimentacoes_criadas} movimentacoes 'Sem Separacao' preparadas para NF {nf.numero_nf}")
         return movimentacoes_criadas
 
     def _criar_movimentacao_com_lote(
@@ -791,10 +810,15 @@ class ProcessadorFaturamento:
                 movimentacoes_criadas += 1
                 logger.debug(f"  ✓ Movimentação criada: {produto.cod_produto} - Qtd: {mov.qtd_movimentacao}")
 
+            except FaturamentoError as e:
+                logger.error(
+                    f"Erro de faturamento ao criar movimentacao com lote para produto {produto.cod_produto}: {e}",
+                    extra={'cod_produto': produto.cod_produto, 'numero_nf': nf.numero_nf, 'lote_id': lote_id, 'code': e.code}
+                )
             except Exception as e:
-                logger.error(f"  ✗ Erro ao criar movimentação para produto {produto.cod_produto}: {e}")
+                logger.exception(f"Erro inesperado ao criar movimentacao com lote para produto {produto.cod_produto} da NF {nf.numero_nf}")
 
-        logger.info(f"✅ {movimentacoes_criadas} movimentações com lote preparadas para NF {nf.numero_nf}")
+        logger.info(f"{movimentacoes_criadas} movimentacoes com lote preparadas para NF {nf.numero_nf}")
         return movimentacoes_criadas
 
     def _criar_justificativa_divergencia(self, nf: RelatorioFaturamentoImportado, lote_id: str, usuario: str):
@@ -872,8 +896,14 @@ class ProcessadorFaturamento:
             logger.info(f"✅ NF {numero_nf} vinculada ao EmbarqueItem do lote {lote_id} (ID: {item.id})")
             return True
 
+        except FaturamentoError as e:
+            logger.error(
+                f"Erro de faturamento ao atualizar EmbarqueItem do lote {lote_id} com NF {numero_nf}: {e}",
+                extra={'lote_id': lote_id, 'numero_nf': numero_nf, 'code': e.code}
+            )
+            return False
         except Exception as e:
-            logger.error(f"❌ Erro ao atualizar EmbarqueItem do lote {lote_id} com NF {numero_nf}: {e}")
+            logger.exception(f"Erro inesperado ao atualizar EmbarqueItem do lote {lote_id} com NF {numero_nf}")
             return False
 
     def _atualizar_status_separacoes_faturadas(self) -> int:
@@ -939,7 +969,7 @@ class ProcessadorFaturamento:
                 logger.info(f"✅ Total: {contador} separações atualizadas para FATURADO")
 
         except Exception as e:
-            logger.error(f"❌ Erro ao atualizar status das separações: {e}")
+            logger.exception("Erro inesperado ao atualizar status das separacoes para FATURADO")
             db.session.rollback()
 
         return contador
@@ -985,7 +1015,7 @@ class ProcessadorFaturamento:
             return False
 
         except Exception as e:
-            logger.error(f"❌ Erro ao sincronizar NF pallet para EmbarqueItem {embarque_item.id}: {e}")
+            logger.exception(f"Erro inesperado ao sincronizar NF pallet para EmbarqueItem {embarque_item.id}")
             return False
 
     def _enqueue_retry_nfs_falhadas(self, nfs_falhadas: list, erros: list) -> None:

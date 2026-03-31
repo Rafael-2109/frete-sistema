@@ -1,4 +1,5 @@
 import os
+import logging
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app import db
@@ -10,6 +11,9 @@ from app.monitoramento.models import EntregaMonitorada
 from datetime import datetime
 from sqlalchemy import func
 from app.utils.timezone import agora_utc_naive
+from app.exceptions import FaturamentoError, SyncError, ValidationError, ReconciliacaoError
+
+logger = logging.getLogger(__name__)
 
 faturamento_bp = Blueprint('faturamento', __name__,url_prefix='/faturamento')
 
@@ -47,8 +51,10 @@ def revalidar_embarques_pendentes(nfs_importadas):
             print(f"📦 Embarque {embarque_id}: {resultado}")
             if not sucesso and "NF_DIVERGENTE" in resultado:
                 itens_corrigidos += 1
+        except FaturamentoError as e:
+            logger.error(f"Erro de faturamento ao re-validar embarque {embarque_id}: {e}", extra={'embarque_id': embarque_id, 'code': e.code})
         except Exception as e:
-            print(f"❌ Erro ao re-validar embarque {embarque_id}: {e}")
+            logger.exception(f"Erro inesperado ao re-validar embarque {embarque_id}")
     
     if embarques_revalidados:
         db.session.commit()
@@ -90,24 +96,28 @@ def sincronizar_orphas():
             try:
                 sincronizar_entrega_por_nf(numero_nf)
                 sucesso += 1
-            except Exception as e:
-                print(f"Erro ao sincronizar NF {numero_nf}: {e}")
+            except SyncError as e:
+                logger.error(f"Erro de sincronizacao NF {numero_nf}: {e}", extra={'numero_nf': numero_nf, 'code': e.code})
                 erros += 1
-        
+            except Exception as e:
+                logger.exception(f"Erro inesperado ao sincronizar NF {numero_nf}")
+                erros += 1
+
         db.session.commit()
-        
+
         # Mensagem de resultado
         if sucesso > 0:
-            flash(f'✅ Sincronização concluída! {sucesso} NFs sincronizadas com sucesso!', 'success')
-        
+            flash(f'Sincronizacao concluida! {sucesso} NFs sincronizadas com sucesso!', 'success')
+
         if erros > 0:
-            flash(f'⚠️ {erros} NFs tiveram erro na sincronização (verifique os logs)', 'warning')
-        
+            flash(f'{erros} NFs tiveram erro na sincronizacao (verifique os logs)', 'warning')
+
         # Redireciona para monitoramento para ver resultado
         return redirect(url_for('monitoramento.listar_entregas'))
-        
+
     except Exception as e:
-        flash(f'❌ Erro durante sincronização: {str(e)}', 'danger')
+        logger.exception("Erro inesperado durante sincronizacao de orfas")
+        flash('Erro durante sincronizacao. Verifique os logs.', 'danger')
         return redirect(url_for('faturamento.listar_relatorios'))
 
 @faturamento_bp.route('/listar', methods=['GET'])
@@ -221,9 +231,9 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
     try:
         print(f"[DEBUG] 🔍 Buscando NFs de embarques que precisam ser sincronizadas...")
         
-        # ✅ CORREÇÃO: Tratamento robusto de transação para evitar InFailedSqlTransaction
+        # Tratamento robusto de transacao para evitar InFailedSqlTransaction
         try:
-            # Busca TODAS as NFs que estão em embarques ativos
+            # Busca TODAS as NFs que estao em embarques ativos
             nfs_em_embarques = db.session.query(EmbarqueItem.nota_fiscal).filter(
                 EmbarqueItem.nota_fiscal.isnot(None),
                 EmbarqueItem.nota_fiscal != '',
@@ -231,28 +241,26 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
             ).join(Embarque).filter(
                 Embarque.status == 'ativo'
             ).distinct().all()
-            
+
             nfs_em_embarques_set = {nf[0] for nf in nfs_em_embarques}
-            print(f"[DEBUG] 📦 Total de NFs únicas em embarques ativos: {len(nfs_em_embarques_set)}")
-            
+            logger.debug(f"Total de NFs unicas em embarques ativos: {len(nfs_em_embarques_set)}")
+
         except Exception as e:
-            print(f"[DEBUG] ❌ Erro ao buscar NFs em embarques: {e}")
-            # Força rollback se houver erro na consulta
+            logger.exception("Erro ao buscar NFs em embarques para sincronizacao")
             try:
                 db.session.rollback()
             except Exception:
                 pass
             return 0
-        
+
         try:
-            # Busca NFs que JÁ estão no monitoramento
+            # Busca NFs que JA estao no monitoramento
             nfs_no_monitoramento = db.session.query(EntregaMonitorada.numero_nf).distinct().all()
             nfs_no_monitoramento_set = {nf[0] for nf in nfs_no_monitoramento}
-            print(f"[DEBUG] 📊 Total de NFs no monitoramento: {len(nfs_no_monitoramento_set)}")
-            
+            logger.debug(f"Total de NFs no monitoramento: {len(nfs_no_monitoramento_set)}")
+
         except Exception as e:
-            print(f"[DEBUG] ❌ Erro ao buscar NFs no monitoramento: {e}")
-            # Força rollback se houver erro na consulta
+            logger.exception("Erro ao buscar NFs no monitoramento")
             try:
                 db.session.rollback()
             except Exception:
@@ -275,37 +283,40 @@ def sincronizar_nfs_pendentes_embarques(nfs_importadas):
                 if fat:
                     nfs_faturadas_pendentes.append(nf)
             except Exception as e:
-                print(f"[DEBUG] ❌ Erro ao buscar faturamento para NF {nf}: {e}")
-                # Força rollback se houver erro
+                logger.exception(f"Erro ao buscar faturamento para NF {nf}")
                 try:
                     db.session.rollback()
                 except Exception:
                     pass
                 continue
-        
-        print(f"[DEBUG] 🎯 NFs em embarques COM faturamento que precisam sincronizar: {len(nfs_faturadas_pendentes)}")
-        
-        # Sincroniza as NFs pendentes que têm faturamento
+
+        logger.debug(f"NFs em embarques COM faturamento que precisam sincronizar: {len(nfs_faturadas_pendentes)}")
+
+        # Sincroniza as NFs pendentes que tem faturamento
         contador_sincronizadas = 0
         for nf in nfs_faturadas_pendentes:
             try:
-                print(f"[DEBUG] 🔄 Sincronizando NF de embarque: {nf}")
+                logger.debug(f"Sincronizando NF de embarque: {nf}")
                 sincronizar_entrega_por_nf(nf)
                 contador_sincronizadas += 1
-            except Exception as e:
-                print(f"[DEBUG] ❌ Erro ao sincronizar NF {nf}: {e}")
-                # Força rollback se houver erro
+            except SyncError as e:
+                logger.error(f"Erro de sincronizacao NF {nf}: {e}", extra={'numero_nf': nf, 'code': e.code})
                 try:
                     db.session.rollback()
                 except Exception:
                     pass
-        
-        print(f"[DEBUG] ✅ Total de NFs de embarques sincronizadas: {contador_sincronizadas}")
+            except Exception as e:
+                logger.exception(f"Erro inesperado ao sincronizar NF {nf}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.debug(f"Total de NFs de embarques sincronizadas: {contador_sincronizadas}")
         return contador_sincronizadas
-        
+
     except Exception as e:
-        print(f"[DEBUG] ❌ Erro geral na sincronização de NFs pendentes: {e}")
-        # Força rollback da sessão principal se houver erro
+        logger.exception("Erro geral na sincronizacao de NFs pendentes de embarques")
         try:
             db.session.rollback()
         except Exception:
@@ -355,12 +366,16 @@ def inativar_nfs():
                 else:
                     erros.append(f"NF {numero_nf} não encontrada no faturamento")
                     
-            except Exception as e:
+            except FaturamentoError as e:
+                logger.error(f"Erro de faturamento ao inativar NF {numero_nf}: {e}", extra={'numero_nf': numero_nf, 'code': e.code})
                 erros.append(f"NF {numero_nf}: {str(e)}")
-        
-        # Salva alterações
+            except Exception as e:
+                logger.exception(f"Erro inesperado ao inativar NF {numero_nf}")
+                erros.append(f"NF {numero_nf}: {str(e)}")
+
+        # Salva alteracoes
         db.session.commit()
-        
+
         # Prepara mensagem de resultado
         mensagens = []
         if nfs_inativadas > 0:
@@ -369,13 +384,13 @@ def inativar_nfs():
             mensagens.append(f"{nfs_removidas_monitoramento} removida(s) do monitoramento")
         if erros:
             mensagens.append(f"{len(erros)} erro(s)")
-        
+
         sucesso = nfs_inativadas > 0
-        mensagem = "Processamento concluído: " + ", ".join(mensagens)
-        
+        mensagem = "Processamento concluido: " + ", ".join(mensagens)
+
         if erros and len(erros) <= 3:  # Mostra erros se poucos
             mensagem += f"\nErros: {'; '.join(erros)}"
-        
+
         return jsonify({
             'success': sucesso,
             'message': mensagem,
@@ -385,11 +400,19 @@ def inativar_nfs():
                 'erros': len(erros)
             }
         })
-        
-    except Exception as e:
+
+    except FaturamentoError as e:
+        logger.error(f"Erro de faturamento ao inativar NFs: {e}", extra={'code': e.code})
         return jsonify({
             'success': False,
-            'message': f'Erro interno: {str(e)}'
+            'message': str(e),
+            'code': e.code
+        }), 400
+    except Exception as e:
+        logger.exception("Erro inesperado ao inativar NFs")
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno ao inativar NFs'
         }), 500
     
 # =====================================
@@ -535,20 +558,21 @@ def listar_faturamento_produtos():
             opcoes_vendedores = []
             from datetime import date
             mes_atual = date.today().replace(day=1)  # Initialize mes_atual for empty case
-    except Exception:
+    except Exception as e:
+        logger.exception("Erro ao carregar listagem de faturamento por produto")
         faturamentos = None
         total_registros_sistema = 0
         total_registros_filtrados = 0
         total_valor_faturado = 0
         total_quantidade = 0
-        total_peso = 0  # Add missing total_peso
+        total_peso = 0
         produtos_unicos = 0
         opcoes_estados = []
         opcoes_incoterms = []
         opcoes_vendedores = []
         from datetime import date
-        mes_atual = date.today().replace(day=1)  # Initialize mes_atual for error case
-    
+        mes_atual = date.today().replace(day=1)
+
     return render_template('faturamento/listar_produtos.html',
                         produtos=faturamentos,
                         pagination=faturamentos,
@@ -593,9 +617,10 @@ def api_estatisticas_produtos():
         }
         
         return jsonify({'success': True, 'data': stats})
-        
+
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.exception("Erro ao buscar estatisticas de produtos do faturamento")
+        return jsonify({'success': False, 'error': 'Erro interno ao buscar estatisticas'}), 500
 
 @faturamento_bp.route('/produtos/exportar-dados')
 @login_required 
@@ -699,7 +724,8 @@ def exportar_dados_faturamento():
         return response
         
     except Exception as e:
-        flash(f'Erro ao exportar dados: {str(e)}', 'error')
+        logger.exception("Erro ao exportar dados de faturamento")
+        flash('Erro ao exportar dados. Verifique os logs.', 'error')
         return redirect(url_for('faturamento.listar_faturamento_produtos'))
 
 # =====================================
@@ -748,7 +774,7 @@ def dashboard_faturamento():
                 qtd_itens_faturados_mes = float(resultado) if resultado else 0
                 print(f"[DEBUG] Qtd itens faturados: {qtd_itens_faturados_mes}")
         except Exception as e:
-            print(f"[DEBUG] Erro ao calcular itens faturados: {e}")
+            logger.exception("Erro ao calcular itens faturados no dashboard")
             qtd_itens_faturados_mes = 0
         
         # Última sincronização do Odoo
@@ -787,7 +813,8 @@ def dashboard_faturamento():
                              logs_atividade=logs_atividade)
         
     except Exception as e:
-        flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
+        logger.exception("Erro ao carregar dashboard de faturamento")
+        flash('Erro ao carregar dashboard. Verifique os logs.', 'error')
         return redirect(url_for('faturamento.listar_relatorios'))
 
 @faturamento_bp.route('/cancelar-nf-devolvida', methods=['POST'])
@@ -882,11 +909,20 @@ def cancelar_nf_devolvida():
             'recarregar': True  # Solicitar recarga da página para atualizar a lista
         })
 
-    except Exception as e:
+    except FaturamentoError as e:
         db.session.rollback()
+        logger.error(f"Erro de faturamento ao cancelar NF devolvida: {e}", extra={'code': e.code, 'details': e.details})
         return jsonify({
             'success': False,
-            'message': f'Erro ao cancelar NF: {str(e)}'
+            'message': str(e),
+            'code': e.code
+        }), 400
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Erro inesperado ao cancelar NF devolvida")
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno ao cancelar NF'
         }), 500
 
 @faturamento_bp.route('/dashboard-reconciliacao')
@@ -904,8 +940,13 @@ def dashboard_reconciliacao():
         return render_template('faturamento/dashboard_reconciliacao.html',
                              inconsistencias=inconsistencias)
         
+    except ReconciliacaoError as e:
+        logger.error(f"Erro de reconciliacao no dashboard: {e}", extra={'code': e.code})
+        flash('Erro ao carregar dados de reconciliacao. Verifique os logs.', 'error')
+        return redirect(url_for('faturamento.dashboard_faturamento'))
     except Exception as e:
-        flash(f'Erro ao carregar dashboard de reconciliação: {str(e)}', 'error')
+        logger.exception("Erro inesperado ao carregar dashboard de reconciliacao")
+        flash('Erro ao carregar dashboard de reconciliacao. Verifique os logs.', 'error')
         return redirect(url_for('faturamento.dashboard_faturamento'))
 
 @faturamento_bp.route('/conciliacao-manual')
@@ -1014,8 +1055,13 @@ def tela_conciliacao_manual():
                              inconsistencias=inconsistencias,
                              total_registros=total_registros)
         
+    except ReconciliacaoError as e:
+        logger.error(f"Erro de reconciliacao: {e}", extra={'code': e.code})
+        flash('Erro ao carregar tela de conciliacao. Verifique os logs.', 'error')
+        return redirect(url_for('faturamento.dashboard_reconciliacao'))
     except Exception as e:
-        flash(f'Erro ao carregar tela de conciliação: {str(e)}', 'error')
+        logger.exception("Erro inesperado ao carregar tela de conciliacao manual")
+        flash('Erro ao carregar tela de conciliacao. Verifique os logs.', 'error')
         return redirect(url_for('faturamento.dashboard_reconciliacao'))
 
 def _filtrar_item(item, numero, cliente, produto):
@@ -1121,8 +1167,13 @@ def justificativas_parciais():
                              total_registros=total_registros,
                              resumo=resumo)
         
+    except FaturamentoError as e:
+        logger.error(f"Erro de faturamento ao carregar justificativas: {e}", extra={'code': e.code})
+        flash('Erro ao carregar justificativas. Verifique os logs.', 'error')
+        return redirect(url_for('faturamento.dashboard_faturamento'))
     except Exception as e:
-        flash(f'Erro ao carregar justificativas: {str(e)}', 'error')
+        logger.exception("Erro inesperado ao carregar justificativas parciais")
+        flash('Erro ao carregar justificativas. Verifique os logs.', 'error')
         return redirect(url_for('faturamento.dashboard_faturamento'))
 
 @faturamento_bp.route('/status-processamento')
@@ -1134,19 +1185,21 @@ def status_processamento():
         return render_template('faturamento/status_processamento.html')
         
     except Exception as e:
-        flash(f'Erro ao carregar status: {str(e)}', 'error')
+        logger.exception("Erro ao carregar status de processamento")
+        flash('Erro ao carregar status. Verifique os logs.', 'error')
         return redirect(url_for('faturamento.dashboard_faturamento'))
 
 @faturamento_bp.route('/relatorio-auditoria')
 @login_required
 def relatorio_auditoria():
-    """Relatório de auditoria"""
+    """Relatorio de auditoria"""
     try:
-        # TODO: Implementar relatório de auditoria
+        # TODO: Implementar relatorio de auditoria
         return render_template('faturamento/relatorio_auditoria.html')
-        
+
     except Exception as e:
-        flash(f'Erro ao carregar relatório: {str(e)}', 'error')
+        logger.exception("Erro ao carregar relatorio de auditoria")
+        flash('Erro ao carregar relatorio. Verifique os logs.', 'error')
         return redirect(url_for('faturamento.dashboard_faturamento'))
 
 # =====================================
@@ -1193,11 +1246,20 @@ def api_excluir_nf(numero_nf):
             'produtos_deletados': qtd_produtos
         })
         
-    except Exception as e:
+    except FaturamentoError as e:
         db.session.rollback()
+        logger.error(f"Erro de faturamento ao excluir NF {numero_nf}: {e}", extra={'numero_nf': numero_nf, 'code': e.code})
         return jsonify({
             'success': False,
-            'error': f'Erro ao excluir NF: {str(e)}'
+            'error': str(e),
+            'code': e.code
+        }), 400
+    except Exception as e:
+        db.session.rollback()
+        logger.exception(f"Erro inesperado ao excluir NF {numero_nf}")
+        return jsonify({
+            'success': False,
+            'error': 'Erro interno ao excluir NF'
         }), 500
 
 @faturamento_bp.route('/api/sincronizar-odoo', methods=['POST'])
@@ -1222,11 +1284,19 @@ def api_sincronizar_odoo():
                 'message': resultado.get('erro', 'Erro na sincronização')
             })
         
-    except Exception as e:
+    except SyncError as e:
+        logger.error(f"Erro de sincronizacao com Odoo: {e}", extra={'code': e.code})
         return jsonify({
             'success': False,
-            'message': f'Erro na sincronização: {str(e)}'
-        })
+            'message': str(e),
+            'code': e.code
+        }), 502
+    except Exception as e:
+        logger.exception("Erro inesperado na sincronizacao com Odoo")
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno na sincronizacao'
+        }), 500
 
 @faturamento_bp.route('/api/processar-pendencias', methods=['POST'])
 @login_required
@@ -1244,11 +1314,19 @@ def api_processar_pendencias():
             'message': f"Processamento concluído! {resultado.get('processadas', 0)} NFs processadas."
         })
         
-    except Exception as e:
+    except FaturamentoError as e:
+        logger.error(f"Erro de faturamento ao processar pendencias: {e}", extra={'code': e.code})
         return jsonify({
             'success': False,
-            'message': f'Erro no processamento: {str(e)}'
-        })
+            'message': str(e),
+            'code': e.code
+        }), 400
+    except Exception as e:
+        logger.exception("Erro inesperado ao processar pendencias de faturamento")
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno no processamento'
+        }), 500
 
 @faturamento_bp.route('/api/reconciliacao-automatica', methods=['POST'])
 @login_required
@@ -1267,11 +1345,19 @@ def api_reconciliacao_automatica():
             'message': f"Reconciliação automática concluída!"
         })
         
-    except Exception as e:
+    except ReconciliacaoError as e:
+        logger.error(f"Erro de reconciliacao automatica: {e}", extra={'code': e.code})
         return jsonify({
             'success': False,
-            'message': f'Erro na reconciliação: {str(e)}'
-        })
+            'message': str(e),
+            'code': e.code
+        }), 400
+    except Exception as e:
+        logger.exception("Erro inesperado na reconciliacao automatica")
+        return jsonify({
+            'success': False,
+            'message': 'Erro interno na reconciliacao'
+        }), 500
 
 @faturamento_bp.route('/api/status-cards')
 @login_required
@@ -1318,9 +1404,7 @@ def api_status_cards():
             ).count()
 
         except Exception as e_pendentes:
-            # Fallback para 0 se der erro na query complexa
-            import logging
-            logging.getLogger(__name__).warning(f"Erro ao calcular NFs pendentes: {e_pendentes}")
+            logger.warning(f"Erro ao calcular NFs pendentes no status cards: {e_pendentes}")
             nfs_pendentes = 0
         
         valor_faturado_mes = 0
@@ -1331,9 +1415,9 @@ def api_status_cards():
                 ).filter(
                     FaturamentoProduto.data_fatura >= mes_atual
                 ).scalar() or 0
-        except Exception:
-            pass
-        
+        except Exception as e_valor:
+            logger.warning(f"Erro ao calcular valor faturado no status cards: {e_valor}")
+
         return jsonify({
             'success': True,
             'nfs_processadas_mes': nfs_processadas_mes,
@@ -1343,10 +1427,11 @@ def api_status_cards():
         })
         
     except Exception as e:
+        logger.exception("Erro inesperado ao carregar status cards")
         return jsonify({
             'success': False,
-            'message': str(e)
-        })
+            'message': 'Erro interno ao carregar status'
+        }), 500
 
 @faturamento_bp.route('/api/exportar-inconsistencias')
 @login_required
@@ -1360,10 +1445,11 @@ def api_exportar_inconsistencias():
         })
 
     except Exception as e:
+        logger.exception("Erro inesperado ao exportar inconsistencias")
         return jsonify({
             'success': False,
-            'message': str(e)
-        })
+            'message': 'Erro interno ao exportar inconsistencias'
+        }), 500
 
 
 @faturamento_bp.route('/atualizar-peso/<numero_nf>', methods=['POST'])
@@ -1391,11 +1477,18 @@ def atualizar_peso_nf(numero_nf):
 
         return jsonify(resultado)
 
-    except Exception as e:
-        import logging
-        logging.error(f"Erro ao atualizar peso da NF {numero_nf}: {e}")
+    except FaturamentoError as e:
+        logger.error(f"Erro de faturamento ao atualizar peso da NF {numero_nf}: {e}", extra={'numero_nf': numero_nf, 'code': e.code})
         return jsonify({
             'success': False,
             'numero_nf': numero_nf,
-            'erro': str(e)
+            'erro': str(e),
+            'code': e.code
+        }), 400
+    except Exception as e:
+        logger.exception(f"Erro inesperado ao atualizar peso da NF {numero_nf}")
+        return jsonify({
+            'success': False,
+            'numero_nf': numero_nf,
+            'erro': 'Erro interno ao atualizar peso'
         }), 500

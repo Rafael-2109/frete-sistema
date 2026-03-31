@@ -17,6 +17,7 @@ from app.faturamento.models import FaturamentoProduto, RelatorioFaturamentoImpor
 from app.producao.models import CadastroPalletizacao
 from app.embarques.models import EmbarqueItem, Embarque
 from app.fretes.models import Frete
+from app.exceptions import FaturamentoError
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,20 @@ class AtualizadorPesoService:
                 'frete': resultado_frete
             }
 
+        except FaturamentoError as e:
+            logger.error(
+                f"Erro de faturamento ao atualizar peso da NF {numero_nf}: {e}",
+                extra={'numero_nf': numero_nf, 'code': e.code}
+            )
+            db.session.rollback()
+            return {
+                'success': False,
+                'numero_nf': numero_nf,
+                'erro': str(e),
+                'code': e.code
+            }
         except Exception as e:
-            logger.error(f"❌ Erro ao atualizar peso da NF {numero_nf}: {e}")
+            logger.exception(f"Erro inesperado ao atualizar peso da NF {numero_nf}")
             db.session.rollback()
             return {
                 'success': False,
@@ -133,8 +146,19 @@ class AtualizadorPesoService:
 
                 atualizados += 1
 
+            except FaturamentoError as e:
+                logger.error(
+                    f"Erro de faturamento ao atualizar peso do item {item.cod_produto}: {e}",
+                    extra={'cod_produto': item.cod_produto, 'numero_nf': numero_nf, 'code': e.code}
+                )
+                detalhes.append({
+                    'cod_produto': item.cod_produto,
+                    'status': 'erro',
+                    'erro': str(e)
+                })
+                erros += 1
             except Exception as e:
-                logger.error(f"  ❌ Erro ao atualizar item {item.cod_produto}: {e}")
+                logger.exception(f"Erro inesperado ao atualizar peso do item {item.cod_produto} da NF {numero_nf}")
                 detalhes.append({
                     'cod_produto': item.cod_produto,
                     'status': 'erro',
@@ -254,7 +278,7 @@ class AtualizadorPesoService:
                     })
 
             except Exception as e:
-                logger.error(f"    ❌ Erro ao calcular produto {produto.cod_produto}: {e}")
+                logger.exception(f"Erro inesperado ao calcular peso/pallet do produto {produto.cod_produto} da NF {numero_nf}")
 
         # Atualizar TODOS os EmbarqueItems com esta NF
         atualizados = 0
@@ -265,7 +289,7 @@ class AtualizadorPesoService:
                 atualizados += 1
 
             except Exception as e:
-                logger.error(f"  ❌ Erro ao atualizar EmbarqueItem {embarque_item.id}: {e}")
+                logger.exception(f"Erro inesperado ao atualizar EmbarqueItem {embarque_item.id} para NF {numero_nf}")
 
         db.session.flush()
 
@@ -469,15 +493,18 @@ class AtualizadorPesoService:
 
                     recalculados += 1
 
+                except FaturamentoError as calc_error:
+                    logger.error(
+                        f"Erro de faturamento ao recalcular frete {frete.id}: {calc_error}",
+                        extra={'frete_id': frete.id, 'numero_nf': numero_nf, 'code': calc_error.code}
+                    )
                 except Exception as calc_error:
-                    logger.error(f"    ❌ Erro ao recalcular frete {frete.id}: {calc_error}")
-                    # Continua mesmo se falhar o recálculo, pelo menos atualiza o peso
-                    pass
+                    logger.exception(f"Erro inesperado ao recalcular frete {frete.id} para NF {numero_nf}")
 
                 atualizados += 1
 
             except Exception as e:
-                logger.error(f"  ❌ Erro ao atualizar frete {frete.id}: {e}")
+                logger.exception(f"Erro inesperado ao atualizar frete {frete.id} para NF {numero_nf}")
 
         db.session.flush()
         logger.info(f"  ✅ Frete: {atualizados} fretes atualizados, {recalculados} recalculados")
