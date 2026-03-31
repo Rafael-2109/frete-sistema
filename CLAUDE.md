@@ -7,12 +7,6 @@
 
 ---
 
-## CONTEXTO DE NEGOCIO
-
-A Nacom Goya vende **exclusivamente veiculos ELETRICOS** (motos, bikes). NUNCA referenciar modelos a combustao (Honda CG, XRE, etc.) em SQL, seeds, dados de teste ou qualquer codigo gerado.
-
----
-
 ## DADOS:
 
 ### OBRIGATÓRIO
