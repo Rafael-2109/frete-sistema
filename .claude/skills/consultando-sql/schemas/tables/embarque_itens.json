@@ -227,9 +227,10 @@
   ],
   "indices": [
     {
-      "name": "idx_ei_nota_fiscal",
+      "name": "idx_ei_embarque_status",
       "columns": [
-        "nota_fiscal"
+        "embarque_id",
+        "status"
       ],
       "unique": false
     },
@@ -241,16 +242,16 @@
       "unique": false
     },
     {
-      "name": "idx_ei_cnpj_cliente",
+      "name": "idx_ei_nota_fiscal",
       "columns": [
-        "cnpj_cliente"
+        "nota_fiscal"
       ],
       "unique": false
     },
     {
-      "name": "ix_embarque_itens_carvia_cotacao_id",
+      "name": "idx_ei_cnpj_cliente",
       "columns": [
-        "carvia_cotacao_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -262,10 +263,9 @@
       "unique": false
     },
     {
-      "name": "idx_ei_embarque_status",
+      "name": "ix_embarque_itens_carvia_cotacao_id",
       "columns": [
-        "embarque_id",
-        "status"
+        "carvia_cotacao_id"
       ],
       "unique": false
     }

@@ -304,16 +304,16 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_ativo",
+      "name": "ix_conhecimento_transporte_odoo_status_codigo",
       "columns": [
-        "ativo"
+        "odoo_status_codigo"
       ],
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_odoo_status_codigo",
+      "name": "ix_conhecimento_transporte_ativo",
       "columns": [
-        "odoo_status_codigo"
+        "ativo"
       ],
       "unique": false
     },
