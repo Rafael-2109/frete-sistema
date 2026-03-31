@@ -31,6 +31,34 @@
       "nullable": false
     },
     {
+      "name": "entrega_uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "entrega_cidade",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "entrega_logradouro",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "entrega_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "entrega_bairro",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "entrega_cep",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "entrega_complemento",
+      "type": "varchar(255)"
+    },
+    {
       "name": "tipo_material",
       "type": "varchar(20)",
       "nullable": false

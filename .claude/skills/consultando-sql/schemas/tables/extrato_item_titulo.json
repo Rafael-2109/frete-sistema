@@ -135,13 +135,6 @@
   ],
   "indices": [
     {
-      "name": "ix_extrato_item_titulo_extrato_item_id",
-      "columns": [
-        "extrato_item_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_extrato_titulo_item",
       "columns": [
         "extrato_item_id"
@@ -173,6 +166,13 @@
       "name": "idx_extrato_titulo_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_titulo_extrato_item_id",
+      "columns": [
+        "extrato_item_id"
       ],
       "unique": false
     },

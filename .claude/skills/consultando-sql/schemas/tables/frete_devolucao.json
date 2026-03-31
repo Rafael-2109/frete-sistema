@@ -162,16 +162,16 @@
       "unique": false
     },
     {
-      "name": "idx_frete_dev_transportadora",
+      "name": "ix_frete_devolucao_ativo",
       "columns": [
-        "transportadora_id"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_frete_devolucao_ativo",
+      "name": "idx_frete_dev_transportadora",
       "columns": [
-        "ativo"
+        "transportadora_id"
       ],
       "unique": false
     },

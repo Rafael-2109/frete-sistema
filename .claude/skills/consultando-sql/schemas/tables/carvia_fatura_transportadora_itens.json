@@ -101,16 +101,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_transportadora_itens_nf_id",
+      "name": "ix_carvia_fatura_transportadora_itens_subcontrato_id",
       "columns": [
-        "nf_id"
+        "subcontrato_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_transportadora_itens_subcontrato_id",
+      "name": "ix_carvia_fatura_transportadora_itens_nf_id",
       "columns": [
-        "subcontrato_id"
+        "nf_id"
       ],
       "unique": false
     },
