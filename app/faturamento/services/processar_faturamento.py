@@ -59,6 +59,9 @@ class ProcessadorFaturamento:
             "embarque_items_atualizados": 0,
         }
 
+        # Coletar NFs que falharam para retry
+        nfs_falhadas = []
+
         try:
             # 1. Buscar NFs para processar
             if nfs_especificas:
@@ -97,6 +100,7 @@ class ProcessadorFaturamento:
                 except Exception as e:
                     logger.error(f"❌ Erro NF {nf.numero_nf}: {str(e)}")
                     resultado["erros"].append(f"NF {nf.numero_nf}: {str(e)}")
+                    nfs_falhadas.append(nf.numero_nf)
                     db.session.rollback()  # Rollback específico do erro
                     continue
 
@@ -107,6 +111,9 @@ class ProcessadorFaturamento:
             except Exception as e:
                 logger.error(f"❌ Erro no commit final: {e}")
                 db.session.rollback()
+                # Todas as NFs do batch falharam no commit
+                nfs_do_batch = [nf.numero_nf for nf in nfs_pendentes]
+                nfs_falhadas = list(set(nfs_falhadas + nfs_do_batch))
 
             # NOVO: Atualizar status das separações para FATURADO
             logger.info("🔄 Atualizando status das separações para FATURADO...")
@@ -126,6 +133,13 @@ class ProcessadorFaturamento:
             db.session.rollback()
             logger.error(f"❌ Erro geral no processamento: {str(e)}")
             resultado["erro_geral"] = str(e)
+            # Erro geral: todas as NFs pendentes precisam de retry
+            if nfs_especificas:
+                nfs_falhadas = list(set(nfs_falhadas + nfs_especificas))
+
+        # Enfileirar retry para NFs que falharam
+        if nfs_falhadas:
+            self._enqueue_retry_nfs_falhadas(nfs_falhadas, resultado.get("erros", []))
 
         return resultado
 
@@ -973,3 +987,45 @@ class ProcessadorFaturamento:
         except Exception as e:
             logger.error(f"❌ Erro ao sincronizar NF pallet para EmbarqueItem {embarque_item.id}: {e}")
             return False
+
+    def _enqueue_retry_nfs_falhadas(self, nfs_falhadas: list, erros: list) -> None:
+        """
+        Enfileira retry job para NFs que falharam no processamento.
+
+        Usa fire-and-forget: se o enqueue falhar, loga mas nao bloqueia.
+
+        Args:
+            nfs_falhadas: Lista de numeros de NF que falharam
+            erros: Lista de mensagens de erro do processamento
+        """
+        try:
+            from app.faturamento.jobs.retry_nf_sync_job import enqueue_nf_retry
+
+            # Deduplica
+            nfs_unicas = list(set(nfs_falhadas))
+            erro_resumo = erros[-1] if erros else 'Erro desconhecido no processamento'
+
+            logger.warning(
+                f"🔄 Enfileirando retry para {len(nfs_unicas)} NFs falhadas: "
+                f"{nfs_unicas[:5]}{'...' if len(nfs_unicas) > 5 else ''}"
+            )
+
+            job_id = enqueue_nf_retry(
+                nf_ids=nfs_unicas,
+                erro_original=erro_resumo,
+            )
+
+            if job_id:
+                logger.info(f"✅ Retry job enfileirado: {job_id} para {len(nfs_unicas)} NFs")
+            else:
+                logger.error(
+                    f"❌ Falha ao enfileirar retry para NFs: {nfs_unicas}. "
+                    f"Verificar manualmente."
+                )
+
+        except Exception as e:
+            logger.error(
+                f"❌ Erro ao enfileirar retry job (nao bloqueante): {e}. "
+                f"NFs que precisam de processamento manual: {nfs_falhadas}",
+                exc_info=True,
+            )
