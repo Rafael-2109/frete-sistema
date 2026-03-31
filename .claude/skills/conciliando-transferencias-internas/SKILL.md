@@ -126,7 +126,7 @@ SEMPRE FAZER:
 - SEMPRE usar get_odoo_connection() de app.odoo.utils.connection
 - SEMPRE filtrar: is_reconciled=False, to_check=False
 - SEMPRE usar tolerancia ZERO dias (mesma data exata) no matching
-- SEMPRE excluir payment_ref contendo "FAV" ou "Movimentação" (pagamentos a terceiros)
+- SEMPRE excluir payment_ref contendo "fav" ou "movimenta" (case-insensitive via .lower())
 - SEMPRE verificar is_reconciled apos cada operacao
 - SEMPRE reportar resultado por par antes de prosseguir ao proximo
 ```

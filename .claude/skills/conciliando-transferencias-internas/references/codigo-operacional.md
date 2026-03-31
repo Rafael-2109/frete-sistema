@@ -266,11 +266,10 @@ def levantar_pares_transferencia_interna(data_inicio=None, data_fim=None, valor=
         {'fields': ['id', 'date', 'amount', 'payment_ref', 'journal_id'],
          'order': 'date asc'})
 
-    # Filtrar exclusoes (FAV, Movimentacao)
+    # Filtrar exclusoes (FAV, Movimentacao) — case-insensitive via .lower()
     lines = [l for l in lines
-             if 'FAV' not in (l['payment_ref'] or '').upper()
-             and 'MOVIMENTAÇÃO' not in (l['payment_ref'] or '')
-             and 'MOVIMENTACAO' not in (l['payment_ref'] or '').upper()]
+             if 'fav' not in (l['payment_ref'] or '').lower()
+             and 'movimenta' not in (l['payment_ref'] or '').lower()]
 
     # Separar debitos e creditos
     debitos = [l for l in lines if l['amount'] < 0]
