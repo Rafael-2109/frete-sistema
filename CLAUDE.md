@@ -100,7 +100,7 @@ Gotchas rapidos:
 | Infraestrutura Render | `.claude/references/INFRAESTRUTURA.md` |
 | Confiabilidade de subagentes | `.claude/references/SUBAGENT_RELIABILITY.md` |
 | Protocolo de memoria (agente) | `.claude/references/MEMORY_PROTOCOL.md` |
-| Regras de output (agente, I1-I6) | `.claude/references/REGRAS_OUTPUT.md` |
+| Regras de output complementares (I1, I5, I6) | `.claude/references/REGRAS_OUTPUT.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 ---
@@ -134,7 +134,7 @@ Gotchas rapidos:
 | `analista-carteira` | Analise P1-P7, comunicacao PCP/Comercial |
 | `especialista-odoo` | Problema cross-area Odoo |
 | `raio-x-pedido` | Visao 360 do pedido |
-| `desenvolvedor-integracao-odoo` | Criar/modificar integracoes Odoo |
+| `desenvolvedor-integracao-odoo` | Criar/modificar integracoes Odoo (dev-only, nao exposto ao agente web) |
 | `gestor-carvia` | Operacoes CarVia cross-dimensional (ops + entregas + frete) |
 | `gestor-ssw` | Operacoes SSW multi-step (POP-A10, cadastros) |
 

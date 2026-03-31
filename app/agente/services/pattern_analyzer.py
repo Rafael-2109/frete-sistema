@@ -418,8 +418,22 @@ def analyze_and_save(
             if not patterns:
                 return False
 
-            # Salvar em /memories/learned/patterns.xml
-            _save_patterns_to_memory(user_id, patterns)
+            # Guard: nao salvar patterns.xml se TODOS os arrays estiverem vazios
+            # (XML estruturalmente vazio gasta tokens sem valor — critica validada)
+            has_content = (
+                patterns.get('error_patterns')
+                or patterns.get('anti_patterns')
+                or patterns.get('entity_defaults')
+            )
+            if not has_content:
+                logger.info(
+                    f"[PATTERNS] Usuário {user_id}: Sonnet não identificou patterns "
+                    f"(arrays vazios, skip save). Confiança={patterns.get('confianca', 'N/A')}"
+                )
+                # Continuar para user_profile piggyback (pode ter perfil valido)
+            else:
+                # Salvar em /memories/learned/patterns.xml
+                _save_patterns_to_memory(user_id, patterns)
 
             # Piggyback: salvar user_profile como user.xml (Tier 1)
             # Evita Sonnet call duplicado quando patterns E profile trigam juntos
@@ -913,8 +927,8 @@ Retorne JSON VALIDO com esta estrutura (array vazio se nao encontrar nada):
       "nivel": 3,
       "dominio": "texto livre (ex: recebimento, financeiro, comercial, logistica, carvia, producao, integracao)",
       "criterios_atendidos": [1, 3],
-      "descricao": "Descricao clara do conhecimento",
-      "prescricao": "Quando [situacao], o agente deve [acao] porque [razao]"
+      "descricao": "Descricao GENERICA do conhecimento (SEM valores absolutos, NFs, datas ou CNPJs especificos — generalize o padrao)",
+      "prescricao": "Quando [situacao generica], o agente deve [acao] porque [razao]"
     }
   ]
 }
@@ -948,8 +962,9 @@ FILTRO ANTI-RUIDO (aplicar ANTES de incluir qualquer item):
    Exemplos de termos que NUNCA devem ser extraidos: "cross-docking", "D+2", "lote",
    "pedido de venda", "data de expedicao", "separacao", "carteira", "janela de descarga".
    Estes sao conceitos de logistica generica, nao conhecimento tacito.
-2. Fatos pontuais: "NF 12345 era da empresa 3" ou "endereco do pedido VCD267 era Guarulhos"
-   sao especificos de UM caso. NAO extraia — morrem no primeiro uso.
+2. Fatos pontuais e valores absolutos: "NF 12345 era da empresa 3", "R$34.057,80 vs R$34.020,00",
+   "endereco do pedido VCD267 era Guarulhos" sao especificos de UM caso. NAO extraia — morrem no
+   primeiro uso. Se o caso revela um PADRAO, extraia o padrao SEM os numeros/NFs/datas especificos.
 3. Perfis de usuario minimos: "Rafael eh administrador" ou "Edson eh analista comercial"
    sao informacoes de Nivel 1 (lookup na tabela usuarios). NAO extraia.
 4. Termos do sistema: nomes de tabelas, campos, modelos ORM. Estao no codigo. NAO extraia.

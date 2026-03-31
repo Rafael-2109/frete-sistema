@@ -178,6 +178,103 @@ def maybe_cleanup_low_value() -> int:
         return 0
 
 
+def maybe_gc_cold_memories(user_id: int) -> int:
+    """
+    Garbage collection: remove memorias cold sem atividade por 90+ dias.
+
+    Implementa a regra do MEMORY_PROTOCOL.md:
+    "cold sem acesso por 90+ dias PODEM ser removidas."
+
+    Protecoes:
+    - Apenas memorias com is_cold=True (ja classificadas como ineficazes)
+    - Apenas memorias com updated_at < now() - max_age_days
+    - Memorias permanent sao imunes (defense-in-depth, embora nao devam chegar a cold)
+    - Embeddings e KG links removidos junto (cascade manual)
+
+    Best-effort: falhas logadas, nunca propagadas.
+    Chamado junto com maybe_consolidate e maybe_move_to_cold.
+    Flag independente: USE_COLD_GC (pausar cold move nao impede GC).
+
+    Args:
+        user_id: ID do usuario (0 = empresa)
+
+    Returns:
+        Numero de memorias removidas
+    """
+    try:
+        from ..config.feature_flags import USE_COLD_GC, COLD_GC_MAX_AGE_DAYS
+        if not USE_COLD_GC:
+            return 0
+
+        from ..models import AgentMemory
+        from app import db
+        from app.utils.timezone import agora_utc_naive
+        from datetime import timedelta
+
+        cutoff = agora_utc_naive() - timedelta(days=COLD_GC_MAX_AGE_DAYS)
+
+        candidates = AgentMemory.query.filter(
+            AgentMemory.user_id == user_id,
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.is_cold == True,  # noqa: E712
+            AgentMemory.category != 'permanent',  # defense-in-depth
+            AgentMemory.updated_at < cutoff,
+        ).all()
+
+        if not candidates:
+            return 0
+
+        removed = 0
+        for mem in candidates:
+            logger.info(
+                f"[MEMORY_GC] Removendo cold memory: {mem.path} "
+                f"(user_id={user_id}, updated_at={mem.updated_at}, "
+                f"usage={mem.usage_count}, effective={mem.effective_count})"
+            )
+            # Remover embeddings associados
+            try:
+                from sqlalchemy import text as sql_text
+                db.session.execute(sql_text("""
+                    DELETE FROM agent_memory_embeddings
+                    WHERE memory_id = :mem_id
+                """), {"mem_id": mem.id})
+            except Exception:
+                pass  # Tabela pode nao existir
+
+            # Remover KG links
+            try:
+                from sqlalchemy import text as sql_text
+                db.session.execute(sql_text("""
+                    DELETE FROM agent_memory_entity_links
+                    WHERE memory_id = :mem_id
+                """), {"mem_id": mem.id})
+            except Exception:
+                pass  # Tabela pode nao existir
+
+            db.session.delete(mem)
+            removed += 1
+
+        if removed > 0:
+            try:
+                db.session.commit()
+                logger.info(
+                    f"[MEMORY_GC] {removed} memorias cold removidas "
+                    f"(user_id={user_id}, cutoff={COLD_GC_MAX_AGE_DAYS}d)"
+                )
+            except Exception as commit_err:
+                db.session.rollback()
+                logger.warning(
+                    f"[MEMORY_GC] Erro ao committar GC (rollback): {commit_err}"
+                )
+                return 0
+
+        return removed
+
+    except Exception as e:
+        logger.warning(f"[MEMORY_GC] Garbage collection falhou (ignorado): {e}")
+        return 0
+
+
 def maybe_consolidate(user_id: int) -> Optional[Dict[str, Any]]:
     """
     Verifica se memórias do usuário excedem thresholds e consolida se necessário.

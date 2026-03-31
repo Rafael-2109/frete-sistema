@@ -652,6 +652,31 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             except Exception as t15_err:
                 logger.debug(f"[MEMORY_INJECT] Tier 1.5 falhou (ignorado): {t15_err}")
 
+            # ── Tier 1.6: Heuristicas empresa nivel 5 (SEMPRE injetadas, como user.xml) ──
+            # Armadilhas nivel 5 sao heuristicas emergentes de alto valor (~3-5 por empresa).
+            # Deveriam estar SEMPRE no contexto para prevencao proativa de erros.
+            tier16_memories = []
+            try:
+                tier16_query = AgentMemory.query.filter(
+                    AgentMemory.user_id == 0,  # empresa
+                    AgentMemory.is_directory == False,  # noqa: E712
+                    AgentMemory.is_cold == False,  # noqa: E712
+                    AgentMemory.path.like('/memories/empresa/heuristicas/%'),
+                ).all()
+                # Filtrar: apenas memorias com nivel >= 5 no conteudo
+                for mem in tier16_query:
+                    content_lower = (mem.content or '').lower()
+                    # Checar nivel 5+ (heuristicas emergentes)
+                    if any(f'nivel={n}' in content_lower for n in range(5, 10)) and mem.id not in protected_ids:
+                        tier16_memories.append(mem)
+                        protected_ids.add(mem.id)
+                if tier16_memories:
+                    logger.info(
+                        f"[MEMORY_INJECT] Tier 1.6: {len(tier16_memories)} heuristicas nivel 5 injetadas"
+                    )
+            except Exception as t16_err:
+                logger.debug(f"[MEMORY_INJECT] Tier 1.6 falhou (ignorado): {t16_err}")
+
             # ── Tier 2: Busca semântica com composite scoring (QW-1 + v2 category decay) ──
             additional_memories = []
             _pass1_scores = {}  # mem.id → composite score original (com similarity)
@@ -866,8 +891,19 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 tier15_texts.append((mem, mem_text))
                 tier15_chars += len(mem_text)
 
+            # Tier 1.6: heuristicas empresa nivel 5 (sempre incluídas)
+            tier16_texts = []
+            tier16_chars = 0
+            for mem in tier16_memories:
+                content = (mem.content or "").strip()
+                if not content:
+                    continue
+                mem_text = f'<memory path="{mem.path}" tier="heuristica">\n{content}\n</memory>\n'
+                tier16_texts.append((mem, mem_text))
+                tier16_chars += len(mem_text)
+
             # Budget restante para Tier 2 + 2b (None = sem limite para Opus)
-            budget_remaining = (budget - overhead - tier1_chars - tier15_chars) if budget is not None else None
+            budget_remaining = (budget - overhead - tier1_chars - tier15_chars - tier16_chars) if budget is not None else None
 
             # Tier 2/2b: calcular tamanho de cada candidato e ordenar por composite
             tier2_candidates = []
@@ -923,6 +959,10 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 selected_parts.append(mem_text)
                 injected_mems.append(mem)
 
+            for mem, mem_text in tier16_texts:
+                selected_parts.append(mem_text)
+                injected_mems.append(mem)
+
             for mem, mem_text in selected_tier2:
                 selected_parts.append(mem_text)
                 injected_mems.append(mem)
@@ -960,6 +1000,14 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             penalized_count = sum(1 for m in injected_mems if (m.correction_count or 0) > 0)  # S2
             budget_pct = round(total_chars / budget * 100) if budget and budget > 0 else 0
             skipped_budget = len(tier2_candidates) - len(selected_tier2)
+
+            # ── Observabilidade: paths de memorias injetadas por tier ──
+            tier1_paths = [m.path for m in protected_memories if m.content]
+            tier15_paths = [m.path for m, _ in tier15_texts]
+            tier16_paths = [m.path for m, _ in tier16_texts]
+            tier2_paths = [m.path for m, _ in selected_tier2]
+            all_injected_paths = tier1_paths + tier15_paths + tier16_paths + tier2_paths
+
             logger.info(
                 f"[MEMORY_INJECT] "
                 f"user_id={user_id} | "
@@ -985,6 +1033,15 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 f"min_similarity_threshold={MEMORY_INJECTION_MIN_SIMILARITY} | "
                 f"prompt_preview={prompt[:50] if prompt else 'None'}"
             )
+            # Log complementar com paths individuais para auditoria/debug
+            if all_injected_paths:
+                logger.info(
+                    f"[MEMORY_INJECT_PATHS] user_id={user_id} | "
+                    f"tier1={tier1_paths} | "
+                    f"tier1.5={tier15_paths} | "
+                    f"tier1.6={tier16_paths} | "
+                    f"tier2={tier2_paths}"
+                )
 
             return result, injected_ids
 

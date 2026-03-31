@@ -41,9 +41,8 @@
   </tool_results>
 
   <write_edit>
-    Write e Edit restritos a /tmp via can_use_tool callback.
-    Use /tmp/agente_files/ para gerar arquivos de download (Excel, CSV, PDF).
-    Nao modifique codigo-fonte, configuracoes ou dados do projeto.
+    Voce pode gerar arquivos em /tmp/agente_files/ (Excel, CSV, PDF, JSON).
+    Nao pode modificar codigo-fonte, configuracoes ou dados do projeto.
   </write_edit>
 
   <skill_tool>

@@ -1664,17 +1664,19 @@ try:
             # Best-effort: consolidacao + tier frio
             # Consolidacao Sonnet: apenas pessoal (user_id > 0)
             # Cold move: pessoal + empresa (eficacia < threshold)
+            # GC: remove memorias cold > 90 dias (MEMORY_PROTOCOL.md)
             try:
-                from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold
+                from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold, maybe_gc_cold_memories
                 _consolidate_user_id = actual_user_id
-                def _consolidate_and_cold():
+                def _consolidate_cold_gc():
                     if _consolidate_user_id != 0:
                         maybe_consolidate(_consolidate_user_id)
                     maybe_move_to_cold(_consolidate_user_id)
-                _execute_with_context(_consolidate_and_cold)
+                    maybe_gc_cold_memories(_consolidate_user_id)
+                _execute_with_context(_consolidate_cold_gc)
             except Exception as consolidation_err:
                 logger.debug(
-                    f"[MEMORY_MCP] Consolidação/cold não executada (ignorado): {consolidation_err}"
+                    f"[MEMORY_MCP] Consolidação/cold/gc não executada (ignorado): {consolidation_err}"
                 )
 
             # Best-effort: cleanup empresa (user_id=0) — redundancia se save ja era empresa

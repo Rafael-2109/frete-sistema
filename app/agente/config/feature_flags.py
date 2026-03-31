@@ -187,6 +187,13 @@ COLD_MOVE_MAX_EFFICACY = float(os.getenv("AGENT_COLD_MOVE_MAX_EFFICACY", "0.10")
 # Desativar se empresa mover memorias demais: AGENT_COLD_MOVE_EMPRESA=false
 USE_COLD_MOVE_EMPRESA = os.getenv("AGENT_COLD_MOVE_EMPRESA", "true").lower() == "true"
 
+# Garbage collection de memorias cold > 90 dias (MEMORY_PROTOCOL.md)
+# Remove permanentemente memorias ja classificadas como cold sem atividade por 90+ dias
+# Independente de USE_COLD_MOVE — pausar classificacao nao impede limpeza de memorias ja frias
+# Rollback: AGENT_COLD_GC=false
+USE_COLD_GC = os.getenv("AGENT_COLD_GC", "true").lower() == "true"
+COLD_GC_MAX_AGE_DAYS = int(os.getenv("AGENT_COLD_GC_MAX_AGE_DAYS", "90"))
+
 # Merge inteligente de memorias empresa via Sonnet (substitui append cego)
 # Quando true: _try_enrich_existing() usa Sonnet para fundir old+new em versao unica
 # Quando false: fallback para append legado (old + "<!-- Enriquecido em -->" + new)

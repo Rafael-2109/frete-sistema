@@ -937,6 +937,22 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
         # ── CAPDo v3.0: Metricas de qualidade de conhecimento ──
         capdo_metrics = _compute_capdo_quality_metrics(base_filter, total_memories, days)
 
+        # ── Cold tier metrics: memorias frias e candidatas a garbage collection ──
+        cold_total = AgentMemory.query.filter(
+            *base_filter,
+            AgentMemory.is_cold == True,  # noqa: E712
+        ).count()
+        cold_gc_candidates = 0
+        try:
+            gc_cutoff = now - timedelta(days=90)
+            cold_gc_candidates = AgentMemory.query.filter(
+                *base_filter,
+                AgentMemory.is_cold == True,  # noqa: E712
+                AgentMemory.updated_at < gc_cutoff,
+            ).count()
+        except Exception:
+            pass
+
         return {
             'total_memories': total_memories,
             'utilization_rate': utilization_rate,
@@ -956,6 +972,10 @@ def get_memory_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[st
             'categories': categories,
             'knowledge_graph': graph_stats,
             'capdo_quality': capdo_metrics,
+            'cold_tier': {
+                'total': cold_total,
+                'gc_candidates_90d': cold_gc_candidates,
+            },
             'period_days': days,
         }
 

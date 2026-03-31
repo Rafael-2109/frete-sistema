@@ -303,6 +303,8 @@
     IDs completos (picking_type, journal, product): .claude/references/odoo/IDS_FIXOS.md
   </critical_ids>
 
+  <!-- Redundancia intencional com CLAUDE.md raiz (secao "Gotchas rapidos") — safety net.
+       Dois contextos independentes (agente web vs Claude Code dev) que nunca coexistem. -->
   <critical_fields name="carteira_separacao">
     CarteiraPrincipal: `qtd_saldo_produto_pedido` (NAO `qtd_saldo` — campo errado retorna 0).
     Separacao: `qtd_saldo` (NAO `qtd_saldo_produto_pedido`).

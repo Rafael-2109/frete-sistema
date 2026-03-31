@@ -1,9 +1,11 @@
-# Regras de Qualidade de Output do Agente
+# Regras Complementares de Output (I1, I5, I6)
 
-**Ultima Atualizacao**: 26/03/2026
+**Ultima Atualizacao**: 31/03/2026
 
-Regras complementares de formatacao e linguagem para o agente web.
-Regras criticas de seguranca operacional (I2-I4) permanecem inline no `system_prompt.md`.
+Regras de formatacao e linguagem para o agente web.
+Este arquivo contem apenas I1, I5, I6 — regras de FORMATACAO carregadas on-demand.
+I2 (Detalhar Faltas), I3 (Peso/Pallet) e I4 (Saldo Separacao) permanecem **inline no `system_prompt.md`**
+por serem safety-critical (ausencia causa decisao operacional errada).
 
 ---
 
