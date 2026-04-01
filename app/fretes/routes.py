@@ -444,7 +444,8 @@ def listar_fretes():
     if form.transportadora_id.data:
         try:
             transportadora_id = int(form.transportadora_id.data)
-            query = query.filter(Frete.transportadora_id == transportadora_id)
+            from app.transportadoras.filter_utils import expandir_filtro_fk
+            query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id))
         except (ValueError, TypeError):
             pass
 
@@ -1872,7 +1873,8 @@ def listar_faturas():
     if form.transportadora_id.data:
         try:
             transportadora_id = int(form.transportadora_id.data)
-            query = query.filter(FaturaFrete.transportadora_id == transportadora_id)
+            from app.transportadoras.filter_utils import expandir_filtro_fk
+            query = query.filter(expandir_filtro_fk(FaturaFrete.transportadora_id, transportadora_id))
         except (ValueError, TypeError):
             pass
 

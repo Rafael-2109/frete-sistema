@@ -289,7 +289,8 @@ def _buscar_fretes_por_nfs(numeros_nfs: List[str], transportadora_id: Optional[i
 
     # Filtro por transportadora
     if transportadora_id:
-        query = query.filter(Frete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id))
 
     fretes_result = query.all()
 

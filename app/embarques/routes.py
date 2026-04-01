@@ -669,7 +669,8 @@ def listar_embarques():
     if transportadora_id and transportadora_id != '':
         try:
             transportadora_id = int(transportadora_id)
-            query = query.filter(Embarque.transportadora_id == transportadora_id)
+            from app.transportadoras.filter_utils import expandir_filtro_fk
+            query = query.filter(expandir_filtro_fk(Embarque.transportadora_id, transportadora_id))
             form_filtros.transportadora_id.data = transportadora_id
             filtros_aplicados = True
         except ValueError:

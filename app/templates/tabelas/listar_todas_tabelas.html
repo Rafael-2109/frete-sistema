@@ -9,7 +9,7 @@
       <label class="form-label">Transportadora</label>
       <input type="text" name="transportadora_nome" class="form-control"
              placeholder="Buscar transportadora..."
-             value="{{ transportadora_selecionada_nome|default('') }}"
+             value="{{ transportadora_selecionada_nome or request.args.get('transportadora_nome', '') }}"
              autocomplete="off"
              data-transportadora-autocomplete
              data-transportadora-id="#transportadoraSelect">

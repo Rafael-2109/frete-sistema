@@ -71,11 +71,14 @@
         var debounceTimer = null;
         var selectedIndex = -1;
         var resultados = [];
+        var _selecting = false;
+        var _searchId = 0;
 
         // Busca ao digitar
         input.addEventListener('input', function () {
-            var q = this.value.trim();
             clearTimeout(debounceTimer);
+            if (_selecting) return;
+            var q = this.value.trim();
             selectedIndex = -1;
 
             if (q.length < minChars) {
@@ -119,10 +122,12 @@
 
         // Limpar hidden fields ao editar texto manualmente
         input.addEventListener('input', function () {
+            if (_selecting) return;
             clearHiddenFields();
         });
 
         function buscar(query) {
+            var mySearchId = ++_searchId;
             var params = 'busca=' + encodeURIComponent(query);
             if (ufAttr) {
                 var ufEl = document.querySelector(ufAttr);
@@ -139,6 +144,7 @@
             })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
+                    if (mySearchId !== _searchId) return; // resposta obsoleta
                     if (data.sucesso && data.transportadoras) {
                         resultados = data.transportadoras;
                         renderDropdown();
@@ -148,6 +154,7 @@
                     }
                 })
                 .catch(function () {
+                    if (mySearchId !== _searchId) return;
                     resultados = [];
                     hideDropdown();
                 });
@@ -221,6 +228,9 @@
         }
 
         function selecionar(t) {
+            _selecting = true;
+            _searchId++;
+
             input.value = t.nome;
 
             if (idSelector) {
@@ -235,6 +245,8 @@
 
             triggerChange(input);
             hideDropdown();
+
+            _selecting = false;
 
             // Callback customizado (recebe objeto completo da transportadora)
             if (onSelectFn && typeof window[onSelectFn] === 'function') {

@@ -325,7 +325,8 @@ def historico_tabelas():
 
     # Aplica filtros
     if transportadora_id:
-        query = query.filter(HistoricoTabelaFrete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(HistoricoTabelaFrete.transportadora_id, transportadora_id))
 
     if uf_destino:
         query = query.filter(HistoricoTabelaFrete.uf_destino == uf_destino)
@@ -443,7 +444,8 @@ def listar_todas_tabelas():
     modalidade = request.args.get('modalidade', '')
 
     if transportadora_id:
-        query = query.filter(TabelaFrete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(TabelaFrete.transportadora_id, transportadora_id))
 
     if uf_destino:
         query = query.filter(TabelaFrete.uf_destino == uf_destino)
@@ -601,7 +603,14 @@ def listar_todas_tabelas():
     per_page = 20
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
-    # 4) RENDER
+    # 4) Resolver nome da transportadora selecionada (para preservar no input apos reload)
+    transportadora_selecionada_nome = ''
+    if transportadora_id:
+        transp_obj = Transportadora.query.get(transportadora_id)
+        if transp_obj:
+            transportadora_selecionada_nome = transp_obj.razao_social
+
+    # 5) RENDER
     return render_template(
         'tabelas/listar_todas_tabelas.html',
         paginacao=paginacao,
@@ -610,7 +619,8 @@ def listar_todas_tabelas():
         uf_list=uf_list,
         modalidades=modalidades,
         sort=sort,
-        direction=direction
+        direction=direction,
+        transportadora_selecionada_nome=transportadora_selecionada_nome,
     )
 
 
@@ -925,7 +935,8 @@ def exportar_tabelas():
         apenas_orfas = request.args.get('apenas_orfas', '')
         
         if transportadora_id:
-            query = query.filter(TabelaFrete.transportadora_id == transportadora_id)
+            from app.transportadoras.filter_utils import expandir_filtro_fk
+            query = query.filter(expandir_filtro_fk(TabelaFrete.transportadora_id, transportadora_id))
         
         if uf_destino:
             query = query.filter(TabelaFrete.uf_destino == uf_destino)

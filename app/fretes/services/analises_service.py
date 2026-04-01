@@ -111,7 +111,8 @@ def analise_por_uf(data_inicio=None, data_fim=None, transportadora_id=None, stat
         data_fim_inclusivo = data_fim + timedelta(days=1)
         query = query.filter(Frete.criado_em < data_fim_inclusivo)
     if transportadora_id:
-        query = query.filter(Frete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id))
     if status:
         query = query.filter(Frete.status == status)
 
@@ -175,7 +176,8 @@ def analise_por_cidade(data_inicio=None, data_fim=None, transportadora_id=None, 
         data_fim_inclusivo = data_fim + timedelta(days=1)
         query = query.filter(Frete.criado_em < data_fim_inclusivo)
     if transportadora_id:
-        query = query.filter(Frete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id))
     if uf:
         query = query.filter(Frete.uf_destino == uf)
     if status:
@@ -251,7 +253,8 @@ def analise_por_subrota(data_inicio=None, data_fim=None, transportadora_id=None,
         data_fim_inclusivo = data_fim + timedelta(days=1)
         query = query.filter(Frete.criado_em < data_fim_inclusivo)
     if transportadora_id:
-        query = query.filter(Frete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id))
     if uf:
         query = query.filter(Frete.uf_destino == uf)
     if status:
@@ -390,7 +393,8 @@ def analise_por_cliente(data_inicio=None, data_fim=None, transportadora_id=None,
         data_fim_inclusivo = data_fim + timedelta(days=1)
         query = query.filter(Frete.criado_em < data_fim_inclusivo)
     if transportadora_id:
-        query = query.filter(Frete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id))
     if uf:
         query = query.filter(Frete.uf_destino == uf)
     if status:
@@ -459,7 +463,8 @@ def analise_por_mes(data_inicio=None, data_fim=None, transportadora_id=None, uf=
         data_fim_inclusivo = data_fim + timedelta(days=1)
         query = query.filter(Frete.criado_em < data_fim_inclusivo)
     if transportadora_id:
-        query = query.filter(Frete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id))
     if uf:
         query = query.filter(Frete.uf_destino == uf)
     if status:
@@ -534,7 +539,8 @@ def analise_por_modalidade(data_inicio=None, data_fim=None, transportadora_id=No
         data_fim_inclusivo = data_fim + timedelta(days=1)
         query = query.filter(Frete.criado_em < data_fim_inclusivo)
     if transportadora_id:
-        query = query.filter(Frete.transportadora_id == transportadora_id)
+        from app.transportadoras.filter_utils import expandir_filtro_fk
+        query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id))
     if uf:
         query = query.filter(Frete.uf_destino == uf)
     if status:
