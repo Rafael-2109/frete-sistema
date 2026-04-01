@@ -3125,11 +3125,31 @@ Nunca invente informações."""
 
         try:
             # ─── Obter ou criar client do pool ───
-            pooled = await get_or_create_client(
-                session_id=pool_key,
-                options=options,
-                user_id=user_id or 0,
-            )
+            # Fix 3: Se connect() com resume falha (JSONL inexistente após
+            # reciclagem de worker), retry sem resume para quebrar ciclo vicioso.
+            # Sem isso: resume falha → sem transcript → próximo resume falha → loop.
+            try:
+                pooled = await get_or_create_client(
+                    session_id=pool_key,
+                    options=options,
+                    user_id=user_id or 0,
+                )
+            except ProcessError as pe:
+                exit_code = getattr(pe, 'exit_code', None)
+                if resume_id and exit_code == 1:
+                    logger.warning(
+                        f"[AGENT_SDK_PERSISTENT] Resume falhou (exit={exit_code}), "
+                        f"retentando sem resume | session={pool_key[:8]}..."
+                    )
+                    from dataclasses import replace as _dc_replace
+                    options = _dc_replace(options, resume=None, fork_session=False)
+                    pooled = await get_or_create_client(
+                        session_id=pool_key,
+                        options=options,
+                        user_id=user_id or 0,
+                    )
+                else:
+                    raise  # Re-raise se não é falha de resume
 
             # ─── Ajustar model/permission se client já existia ───
             current_model = model or self.settings.model
