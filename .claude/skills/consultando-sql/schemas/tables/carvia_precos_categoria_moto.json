@@ -60,16 +60,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_precos_categoria_moto_tabela_frete_id",
+      "name": "ix_carvia_precos_categoria_moto_categoria_moto_id",
       "columns": [
-        "tabela_frete_id"
+        "categoria_moto_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_precos_categoria_moto_categoria_moto_id",
+      "name": "ix_carvia_precos_categoria_moto_tabela_frete_id",
       "columns": [
-        "categoria_moto_id"
+        "tabela_frete_id"
       ],
       "unique": false
     }

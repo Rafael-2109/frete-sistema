@@ -126,6 +126,21 @@
       "type": "json"
     },
     {
+      "name": "cotacao_manual",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "valor_manual",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "veiculo_id",
+      "type": "integer",
+      "description": "FK → veiculos.id"
+    },
+    {
       "name": "data_cotacao",
       "type": "timestamp",
       "nullable": false
@@ -210,9 +225,20 @@
     {
       "column": "tabela_carvia_id",
       "references": "carvia_tabelas_frete.id"
+    },
+    {
+      "column": "veiculo_id",
+      "references": "veiculos.id"
     }
   ],
   "indices": [
+    {
+      "name": "ix_carvia_cotacoes_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_carvia_cotacoes_cliente_id",
       "columns": [
@@ -221,9 +247,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cotacoes_status",
+      "name": "ix_carvia_cotacoes_veiculo_id",
       "columns": [
-        "status"
+        "veiculo_id"
       ],
       "unique": false
     },
