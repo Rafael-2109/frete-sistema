@@ -25,8 +25,8 @@ def buscar_alertas_pendentes():
     """
     try:
         alertas = AlertaSeparacaoCotada.buscar_alertas_pendentes()
-        total_alertas = AlertaSeparacaoCotada.contar_alertas_pendentes()
-        
+        total_alertas = AlertaSeparacaoCotada.contar_alertas_from_resultado(alertas)
+
         return jsonify({
             'success': True,
             'total_alertas': total_alertas,
@@ -106,8 +106,8 @@ def get_card_alertas_html():
 
     try:
         alertas = AlertaSeparacaoCotada.buscar_alertas_pendentes()
-        total_alertas = AlertaSeparacaoCotada.contar_alertas_pendentes()
-        
+        total_alertas = AlertaSeparacaoCotada.contar_alertas_from_resultado(alertas)
+
         if total_alertas == 0:
             return '', 204  # No content
         

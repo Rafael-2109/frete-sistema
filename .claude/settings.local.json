@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "auto",
     "allow": [
       "Bash(python3:*)",
       "Bash(source:*)",
@@ -188,9 +187,12 @@
       "Bash(/tmp/passo4_conciliar_extrato.py:*)",
       "Bash(/tmp/passo4b_investigar_conciliacao.py:*)",
       "Bash(/tmp/passo5_verificar.py:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(set -a)",
+      "Bash(set +a)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "auto"
   },
   "outputStyle": "precision-engineer",
   "prefersReducedMotion": false

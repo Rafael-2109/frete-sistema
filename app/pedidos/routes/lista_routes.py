@@ -1,7 +1,6 @@
 """Routes de listagem de pedidos (Fase 1 — GET-only, sem WTForms)."""
 from flask import render_template, request
 from flask_login import login_required
-from sqlalchemy import distinct
 
 from app import db
 from app.pedidos.models import Pedido
@@ -21,11 +20,8 @@ def register_lista_routes(bp):
         from app.pedidos.services.counter_service import PedidosCounterService
         from app.pedidos.services.lista_service import ListaPedidosService as Svc
 
-        # --- Choices data (sem WTForms) ---
-        rotas = db.session.query(distinct(Pedido.rota)).filter(Pedido.rota.isnot(None)).order_by(Pedido.rota).all()
-        sub_rotas = db.session.query(distinct(Pedido.sub_rota)).filter(Pedido.sub_rota.isnot(None)).order_by(Pedido.sub_rota).all()
-        rotas_choices = [r[0] for r in rotas if r[0]]
-        sub_rotas_choices = [sr[0] for sr in sub_rotas if sr[0]]
+        # --- Choices data (cache Redis 5min) ---
+        rotas_choices, sub_rotas_choices = PedidosCounterService.obter_rotas_choices()
 
         # CotarFreteForm ainda necessario para CSRF do form de cotacao
         cotar_form = CotarFreteForm()
@@ -38,14 +34,6 @@ def register_lista_routes(bp):
         hoje = agora_utc_naive().date()
         dados_contadores = PedidosCounterService.obter_contadores()
 
-        # --- Contatos de agendamento (reusados no enriquecimento) ---
-        contatos_agendamento_todos = ContatoAgendamento.query.filter(
-            ContatoAgendamento.forma.isnot(None),
-            ContatoAgendamento.forma != '',
-            ContatoAgendamento.forma != 'SEM AGENDAMENTO'
-        ).all()
-        contatos_por_cnpj_global = {c.cnpj: c for c in contatos_agendamento_todos if c.cnpj}
-
         # --- Contadores facetados (atualizam com filtros ativos) ---
         _filter_keys = [
             'status', 'cond_atrasados', 'cond_sem_data', 'cond_pend_embarque',
@@ -56,8 +44,8 @@ def register_lista_routes(bp):
         has_filters = any(request.args.get(k) for k in _filter_keys)
 
         if has_filters:
-            # Contadores calculados no contexto dos filtros ativos (faceted)
-            contadores_calc = Svc.calcular_contadores_filtrados(
+            # Contadores facetados (cache Redis 30s por fingerprint de filtros)
+            contadores_calc = PedidosCounterService.obter_contadores_filtrados(
                 request.args, hoje,
                 cnpjs_agendamento=dados_contadores['cnpjs_agendamento'],
                 lotes_item=dados_contadores['lotes_falta_item'],
@@ -92,8 +80,20 @@ def register_lista_routes(bp):
         paginacao = query.paginate(page=page, per_page=50, error_out=False)
         pedidos = paginacao.items
 
+        # --- Contatos de agendamento (apenas CNPJs da pagina atual) ---
+        cnpjs_pagina = list({p.cnpj_cpf for p in pedidos if p.cnpj_cpf})
+        contatos_por_cnpj = {}
+        if cnpjs_pagina:
+            contatos = ContatoAgendamento.query.filter(
+                ContatoAgendamento.cnpj.in_(cnpjs_pagina),
+                ContatoAgendamento.forma.isnot(None),
+                ContatoAgendamento.forma != '',
+                ContatoAgendamento.forma != 'SEM AGENDAMENTO'
+            ).all()
+            contatos_por_cnpj = {c.cnpj: c for c in contatos if c.cnpj}
+
         # --- Enriquecimento (embarques, contatos, flags) ---
-        Svc.enriquecer_pedidos(pedidos, contatos_por_cnpj_global)
+        Svc.enriquecer_pedidos(pedidos, contatos_por_cnpj)
 
         # --- URL helper para sort (usado pelo template) ---
         def sort_url(campo):

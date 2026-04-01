@@ -271,6 +271,8 @@ class ListaPedidosService:
             contadores_data[f'd{i}'] = {
                 'data': datas[i].isoformat(),
                 'total': dr[i] or 0,
+                'pend_embarque': 0,
+                'abertos': 0,
             }
 
         return {
@@ -615,30 +617,66 @@ class ListaPedidosService:
                 if item.separacao_lote_id not in embarques_por_lote:
                     embarques_por_lote[item.separacao_lote_id] = embarque
 
-        # --- CarVia: fallback para lotes sem EmbarqueItem ---
-        for pedido in pedidos:
-            if getattr(pedido, 'eh_carvia', False) and pedido.separacao_lote_id not in embarques_por_lote:
-                lote = pedido.separacao_lote_id or ''
-                cot_id = None
+        # --- CarVia: fallback batch para lotes sem EmbarqueItem ---
+        carvia_sem_embarque = [
+            p for p in pedidos
+            if getattr(p, 'eh_carvia', False)
+            and p.separacao_lote_id not in embarques_por_lote
+        ]
+        if carvia_sem_embarque:
+            from app.carvia.models import CarviaPedido as _CP
+
+            # Coletar cotacao_ids via batch
+            ped_ids = []
+            cot_ids_diretos = []
+            lote_to_cot_id = {}
+            for p in carvia_sem_embarque:
+                lote = p.separacao_lote_id or ''
                 try:
                     if lote.startswith('CARVIA-PED-'):
-                        ped_id = int(lote.replace('CARVIA-PED-', ''))
-                        from app.carvia.models import CarviaPedido as _CP
-                        _p = db.session.get(_CP, ped_id)
-                        cot_id = _p.cotacao_id if _p else None
+                        ped_ids.append(int(lote.replace('CARVIA-PED-', '')))
                     elif lote.startswith('CARVIA-'):
-                        cot_id = int(lote.replace('CARVIA-', ''))
+                        cid = int(lote.replace('CARVIA-', ''))
+                        cot_ids_diretos.append(cid)
+                        lote_to_cot_id[lote] = cid
                 except (ValueError, TypeError):
                     pass
-                if cot_id:
-                    em_item = EmbarqueItem.query.filter(
-                        EmbarqueItem.carvia_cotacao_id == cot_id,
-                        EmbarqueItem.status == 'ativo',
-                    ).first()
-                    if em_item:
-                        emb = db.session.get(Embarque, em_item.embarque_id)
-                        if emb and emb.status == 'ativo':
-                            embarques_por_lote[pedido.separacao_lote_id] = emb
+
+            # Batch load CarviaPedido para obter cotacao_id
+            if ped_ids:
+                carvia_peds = _CP.query.filter(_CP.id.in_(ped_ids)).all()
+                for cp in carvia_peds:
+                    if cp.cotacao_id:
+                        lote_key = f'CARVIA-PED-{cp.id}'
+                        lote_to_cot_id[lote_key] = cp.cotacao_id
+
+            # Batch load EmbarqueItems por carvia_cotacao_id
+            all_cot_ids = list(set(lote_to_cot_id.values()))
+            if all_cot_ids:
+                cv_em_items = EmbarqueItem.query.filter(
+                    EmbarqueItem.carvia_cotacao_id.in_(all_cot_ids),
+                    EmbarqueItem.status == 'ativo',
+                ).all()
+                cv_embarque_ids = {ei.embarque_id for ei in cv_em_items if ei.embarque_id}
+                cv_embarques = {}
+                if cv_embarque_ids:
+                    for emb in Embarque.query.filter(
+                        Embarque.id.in_(list(cv_embarque_ids)),
+                        Embarque.status == 'ativo'
+                    ).all():
+                        cv_embarques[emb.id] = emb
+
+                # Map cotacao_id -> embarque
+                cot_to_embarque = {}
+                for ei in cv_em_items:
+                    if ei.carvia_cotacao_id and ei.embarque_id in cv_embarques:
+                        cot_to_embarque[ei.carvia_cotacao_id] = cv_embarques[ei.embarque_id]
+
+                # Atribuir
+                for lote_key, cot_id in lote_to_cot_id.items():
+                    emb = cot_to_embarque.get(cot_id)
+                    if emb:
+                        embarques_por_lote[lote_key] = emb
 
         # --- Contatos de agendamento ---
         cnpjs_pedidos = [p.cnpj_cpf for p in pedidos if p.cnpj_cpf]
@@ -684,33 +722,53 @@ class ListaPedidosService:
                 if item.separacao_impressa:
                     info_separacao_por_lote[lid]['separacao_impressa'] = True
 
-        # --- CarVia: enriquecer obs_separacao de carvia_cotacoes ---
+        # --- CarVia: enriquecer obs_separacao via batch ---
         carvia_lotes = [lid for lid in lotes_ids if str(lid).startswith('CARVIA-')]
         if carvia_lotes:
             from app.carvia.models import CarviaCotacao, CarviaPedido
+            from sqlalchemy.orm import joinedload
 
-            # Batch: buscar observações das cotações CarVia
+            # Separar lotes por tipo
+            cv_ped_ids = []
+            cv_cot_ids = []
             for lid in carvia_lotes:
                 try:
                     if str(lid).startswith('CARVIA-PED-'):
-                        ped_id = int(str(lid).replace('CARVIA-PED-', ''))
-                        pedido_cv = db.session.get(CarviaPedido, ped_id)
-                        obs = pedido_cv.cotacao.observacoes if pedido_cv and pedido_cv.cotacao else None
+                        cv_ped_ids.append(int(str(lid).replace('CARVIA-PED-', '')))
                     else:
-                        cot_id = int(str(lid).replace('CARVIA-', ''))
-                        cot = db.session.get(CarviaCotacao, cot_id)
-                        obs = cot.observacoes if cot else None
-
-                    info_separacao_por_lote[lid] = {
-                        'tem_falta_item': False,
-                        'tem_falta_pagamento': False,
-                        'num_pedido': None,
-                        'obs_separacao': obs,
-                        'separacao_impressa': False,
-                        'eh_antecipado': False
-                    }
-                except Exception:
+                        cv_cot_ids.append(int(str(lid).replace('CARVIA-', '')))
+                except (ValueError, TypeError):
                     pass
+
+            # Batch load com joinedload para cotacao
+            obs_por_lote = {}
+            if cv_ped_ids:
+                peds = CarviaPedido.query.filter(
+                    CarviaPedido.id.in_(cv_ped_ids)
+                ).options(joinedload(CarviaPedido.cotacao)).all()
+                for p in peds:
+                    obs_por_lote[f'CARVIA-PED-{p.id}'] = (
+                        p.cotacao.observacoes if p.cotacao else None
+                    )
+
+            if cv_cot_ids:
+                cots = CarviaCotacao.query.filter(
+                    CarviaCotacao.id.in_(cv_cot_ids)
+                ).all()
+                for c in cots:
+                    obs_por_lote[f'CARVIA-{c.id}'] = c.observacoes
+
+            for lid in carvia_lotes:
+                info_separacao_por_lote.setdefault(lid, {
+                    'tem_falta_item': False,
+                    'tem_falta_pagamento': False,
+                    'num_pedido': None,
+                    'obs_separacao': obs_por_lote.get(lid),
+                    'separacao_impressa': False,
+                    'eh_antecipado': False
+                })
+                # Sempre atualizar obs_separacao do CarVia (fonte primaria)
+                info_separacao_por_lote[lid]['obs_separacao'] = obs_por_lote.get(lid)
 
         # --- Pagamento antecipado via CarteiraPrincipal ---
         num_pedidos = list(set([

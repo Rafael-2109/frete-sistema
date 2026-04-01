@@ -105,73 +105,107 @@ class AlertaSeparacaoCotada(db.Model):
     @classmethod
     def buscar_alertas_pendentes(cls):
         """
-        Retorna todos os alertas não reimpresos agrupados por embarque
+        Retorna todos os alertas nao reimpresos agrupados por embarque.
+        Usa batch-loading (3 queries) em vez de queries por alerta.
         """
         from app.embarques.models import Embarque, EmbarqueItem
-        from app.pedidos.models import Pedido
-        
-        # Buscar alertas não reimpresos
+
+        # Q1: Carregar todos alertas pendentes
         alertas = cls.query.filter_by(reimpresso=False).all()
-        
         if not alertas:
             return {}
-        
-        # Agrupar por embarque
-        alertas_por_embarque = {}
-        
-        for alerta in alertas:
-            # Buscar o embarque através do separacao_lote_id
-            pedido = Pedido.query.filter_by(
-                separacao_lote_id=alerta.separacao_lote_id
-            ).first()
-            
-            if pedido:
-                # Buscar o embarque - IMPORTANTE: só embarques ATIVOS!
-                embarque_item = EmbarqueItem.query.filter_by(
-                    separacao_lote_id=alerta.separacao_lote_id,
-                    status='ativo'  # Ignorar embarques cancelados
-                ).first()
-                
-                if not embarque_item:
-                    # Se não achou pelo lote, tentar pelo pedido (caso lote tenha sido substituído)
-                    embarque_item = EmbarqueItem.query.filter_by(
-                        pedido=alerta.num_pedido,
-                        status='ativo'
-                    ).first()
-                
-                if embarque_item:
-                    embarque = db.session.get(Embarque,embarque_item.embarque_id) if embarque_item.embarque_id else None
 
-                    if embarque:
-                        embarque_num = embarque.numero or f"ID-{embarque.id}"
-                        
-                        if embarque_num not in alertas_por_embarque:
-                            alertas_por_embarque[embarque_num] = {
-                                'embarque_id': embarque.id,
-                                'embarque_numero': embarque_num,
-                                'data_embarque': embarque.data_embarque,
-                                'transportadora': embarque.transportadora.razao_social if embarque.transportadora and hasattr(embarque.transportadora, 'razao_social') else 'N/A',
-                                'pedidos': {}
-                            }
-                        
-                        if alerta.num_pedido not in alertas_por_embarque[embarque_num]['pedidos']:
-                            alertas_por_embarque[embarque_num]['pedidos'][alerta.num_pedido] = {
-                                'separacao_lote_id': alerta.separacao_lote_id,
-                                'cliente': alerta.cliente,
-                                'itens': []
-                            }
-                        
-                        alertas_por_embarque[embarque_num]['pedidos'][alerta.num_pedido]['itens'].append({
-                            'alerta_id': alerta.id,
-                            'cod_produto': alerta.cod_produto,
-                            'nome_produto': alerta.nome_produto,
-                            'tipo_alteracao': alerta.tipo_alteracao,
-                            'qtd_anterior': alerta.qtd_anterior,
-                            'qtd_nova': alerta.qtd_nova,
-                            'qtd_diferenca': alerta.qtd_diferenca,
-                            'data_alerta': alerta.data_alerta
-                        })
-        
+        # Coletar lote_ids unicos
+        lote_ids = list({a.separacao_lote_id for a in alertas if a.separacao_lote_id})
+
+        # Q2: Batch load EmbarqueItems ativos por lote_id e por num_pedido (fallback)
+        embarque_items_por_lote = {}
+        embarque_items_por_pedido = {}
+        if lote_ids:
+            items = EmbarqueItem.query.filter(
+                EmbarqueItem.separacao_lote_id.in_(lote_ids),
+                EmbarqueItem.status == 'ativo'
+            ).all()
+            for item in items:
+                if item.separacao_lote_id not in embarque_items_por_lote:
+                    embarque_items_por_lote[item.separacao_lote_id] = item
+
+        # Fallback: lotes nao encontrados, tentar por num_pedido
+        lotes_encontrados = set(embarque_items_por_lote.keys())
+        lotes_faltando_set = {lid for lid in lote_ids if lid not in lotes_encontrados}
+        if lotes_faltando_set:
+            # Apenas num_pedidos dos alertas cujo lote nao foi encontrado
+            num_pedidos_fallback = list({
+                a.num_pedido for a in alertas
+                if a.separacao_lote_id in lotes_faltando_set and a.num_pedido
+            })
+            if num_pedidos_fallback:
+                items_fallback = EmbarqueItem.query.filter(
+                    EmbarqueItem.pedido.in_(num_pedidos_fallback),
+                    EmbarqueItem.status == 'ativo'
+                ).all()
+                for item in items_fallback:
+                    if item.pedido and item.pedido not in embarque_items_por_pedido:
+                        embarque_items_por_pedido[item.pedido] = item
+
+        # Q3: Batch load Embarques
+        embarque_ids = set()
+        for item in embarque_items_por_lote.values():
+            if item.embarque_id:
+                embarque_ids.add(item.embarque_id)
+        for item in embarque_items_por_pedido.values():
+            if item.embarque_id:
+                embarque_ids.add(item.embarque_id)
+
+        embarques_por_id = {}
+        if embarque_ids:
+            embarques = Embarque.query.filter(Embarque.id.in_(list(embarque_ids))).all()
+            embarques_por_id = {e.id: e for e in embarques}
+
+        # Agrupar por embarque usando lookups in-memory
+        alertas_por_embarque = {}
+
+        for alerta in alertas:
+            # Encontrar EmbarqueItem: primeiro por lote, fallback por pedido
+            em_item = embarque_items_por_lote.get(alerta.separacao_lote_id)
+            if not em_item:
+                em_item = embarque_items_por_pedido.get(alerta.num_pedido)
+            if not em_item or not em_item.embarque_id:
+                continue
+
+            embarque = embarques_por_id.get(em_item.embarque_id)
+            if not embarque:
+                continue
+
+            embarque_num = embarque.numero or f"ID-{embarque.id}"
+
+            if embarque_num not in alertas_por_embarque:
+                alertas_por_embarque[embarque_num] = {
+                    'embarque_id': embarque.id,
+                    'embarque_numero': embarque_num,
+                    'data_embarque': embarque.data_embarque,
+                    'transportadora': embarque.transportadora.razao_social if embarque.transportadora and hasattr(embarque.transportadora, 'razao_social') else 'N/A',
+                    'pedidos': {}
+                }
+
+            if alerta.num_pedido not in alertas_por_embarque[embarque_num]['pedidos']:
+                alertas_por_embarque[embarque_num]['pedidos'][alerta.num_pedido] = {
+                    'separacao_lote_id': alerta.separacao_lote_id,
+                    'cliente': alerta.cliente,
+                    'itens': []
+                }
+
+            alertas_por_embarque[embarque_num]['pedidos'][alerta.num_pedido]['itens'].append({
+                'alerta_id': alerta.id,
+                'cod_produto': alerta.cod_produto,
+                'nome_produto': alerta.nome_produto,
+                'tipo_alteracao': alerta.tipo_alteracao,
+                'qtd_anterior': alerta.qtd_anterior,
+                'qtd_nova': alerta.qtd_nova,
+                'qtd_diferenca': alerta.qtd_diferenca,
+                'data_alerta': alerta.data_alerta
+            })
+
         return alertas_por_embarque
     
     @classmethod
@@ -196,21 +230,16 @@ class AlertaSeparacaoCotada(db.Model):
         return len(alertas)
     
     @classmethod
-    def contar_alertas_pendentes(cls):
+    def contar_alertas_from_resultado(cls, alertas_agrupados):
         """
-        Retorna a quantidade de alertas pendentes de reimpressão
-        que têm pedido e embarque ativo (que serão exibidos)
+        Conta total de alertas a partir do resultado de buscar_alertas_pendentes().
+        Evita chamar buscar_alertas_pendentes() novamente.
         """
-        # Usar o mesmo método que busca os alertas para garantir consistência
-        alertas_agrupados = cls.buscar_alertas_pendentes()
-        
-        # Contar total de alertas em todos os embarques
-        total = 0
-        for embarque_info in alertas_agrupados.values():
-            for pedido_info in embarque_info['pedidos'].values():
-                total += len(pedido_info['itens'])
-        
-        return total
+        return sum(
+            len(pedido_info['itens'])
+            for embarque_info in alertas_agrupados.values()
+            for pedido_info in embarque_info['pedidos'].values()
+        )
     
     def __repr__(self):
         return f'<AlertaSeparacaoCotada {self.num_pedido}/{self.cod_produto} - {self.tipo_alteracao}>'

@@ -6,9 +6,11 @@ Uso:
     from app.pedidos.services.counter_service import PedidosCounterService
     dados = PedidosCounterService.obter_contadores()
 """
+import hashlib
+import json
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 
 from sqlalchemy import func, distinct, case
 
@@ -27,6 +29,12 @@ CNPJS_EXCLUIR_AGENDAMENTO = ['93209765', '75315333', '00063960', '01157555', '06
 
 CACHE_KEY = "pedidos:contadores:v3"
 CACHE_TTL = 45  # segundos
+
+FACETED_CACHE_PREFIX = "pedidos:contadores:filtros:"
+FACETED_CACHE_TTL = 30  # segundos
+
+ROTAS_CACHE_KEY = "pedidos:rotas_choices:v1"
+ROTAS_CACHE_TTL = 300  # 5 minutos
 
 
 class PedidosCounterService:
@@ -232,7 +240,7 @@ class PedidosCounterService:
     def _obter_dados_agendamento():
         """
         Carrega contatos de agendamento e retorna:
-        - contatos_por_cnpj: dict {cnpj: contato_obj} para enrichment
+        - contatos_por_cnpj: dict {cnpj: contato_id} (IDs, nao objetos ORM)
         - cnpjs_agendamento: lista de CNPJs validos para filtro
         """
         contatos = ContatoAgendamento.query.filter(
@@ -298,8 +306,89 @@ class PedidosCounterService:
             logger.error(f"Erro ao buscar lotes_falta_pgto: {e}")
             return []
 
+    # ---------------------------------------------------------------
+    # CONTADORES FACETADOS (cache por fingerprint de filtros)
+    # ---------------------------------------------------------------
+    @staticmethod
+    def _build_filter_fingerprint(args) -> str:
+        """Gera hash MD5 dos parametros de filtro (exclui page/sort)."""
+        filter_keys = sorted([
+            'status', 'cond_atrasados', 'cond_sem_data', 'cond_pend_embarque',
+            'cond_agend_pendente', 'cond_ag_pagamento', 'cond_ag_item',
+            'expedicao_de', 'expedicao_ate', 'uf', 'rota', 'sub_rota',
+            'numero_pedido', 'cnpj_cpf', 'cliente', 'data',
+        ])
+        params = {k: args.get(k, '') for k in filter_keys if args.get(k)}
+        raw = json.dumps(params, sort_keys=True)
+        return hashlib.md5(raw.encode()).hexdigest()
+
+    @staticmethod
+    def obter_contadores_filtrados(args, hoje,
+                                    cnpjs_agendamento=None,
+                                    lotes_item=None,
+                                    lotes_pgto=None) -> Dict[str, Any]:
+        """
+        Contadores facetados com cache Redis (TTL=30s).
+        Chave = fingerprint dos filtros ativos.
+        """
+        fingerprint = PedidosCounterService._build_filter_fingerprint(args)
+        cache_key = f"{FACETED_CACHE_PREFIX}{fingerprint}"
+
+        cached = redis_cache.get(cache_key)
+        if cached is not None:
+            logger.debug("Contadores facetados: CACHE HIT (%s)", fingerprint[:8])
+            return cached
+
+        logger.debug("Contadores facetados: CACHE MISS (%s) - calculando", fingerprint[:8])
+        from app.pedidos.services.lista_service import ListaPedidosService as Svc
+        resultado = Svc.calcular_contadores_filtrados(
+            args, hoje,
+            cnpjs_agendamento=cnpjs_agendamento,
+            lotes_item=lotes_item,
+            lotes_pgto=lotes_pgto,
+        )
+
+        redis_cache.set(cache_key, resultado, FACETED_CACHE_TTL)
+        return resultado
+
+    # ---------------------------------------------------------------
+    # CHOICES DE ROTA/SUB-ROTA (cache 5 min)
+    # ---------------------------------------------------------------
+    @staticmethod
+    def obter_rotas_choices() -> Tuple[List[str], List[str]]:
+        """
+        Retorna (rotas_choices, sub_rotas_choices) com cache Redis (TTL=5min).
+        """
+        cached = redis_cache.get(ROTAS_CACHE_KEY)
+        if cached is not None:
+            logger.debug("Rotas choices: CACHE HIT")
+            return cached['rotas'], cached['sub_rotas']
+
+        logger.debug("Rotas choices: CACHE MISS - calculando")
+        rotas = db.session.query(distinct(Pedido.rota)).filter(
+            Pedido.rota.isnot(None)
+        ).order_by(Pedido.rota).all()
+        sub_rotas = db.session.query(distinct(Pedido.sub_rota)).filter(
+            Pedido.sub_rota.isnot(None)
+        ).order_by(Pedido.sub_rota).all()
+
+        rotas_choices = [r[0] for r in rotas if r[0]]
+        sub_rotas_choices = [sr[0] for sr in sub_rotas if sr[0]]
+
+        redis_cache.set(ROTAS_CACHE_KEY, {
+            'rotas': rotas_choices,
+            'sub_rotas': sub_rotas_choices,
+        }, ROTAS_CACHE_TTL)
+
+        return rotas_choices, sub_rotas_choices
+
+    # ---------------------------------------------------------------
+    # INVALIDACAO
+    # ---------------------------------------------------------------
     @staticmethod
     def invalidar_cache():
-        """Invalida o cache de contadores. Chamar apos mudancas de status/NF/expedicao."""
+        """Invalida todos os caches de contadores e choices."""
         redis_cache.delete(CACHE_KEY)
-        logger.info("🗑️ Cache de contadores pedidos invalidado")
+        redis_cache.flush_pattern(f"{FACETED_CACHE_PREFIX}*")
+        redis_cache.delete(ROTAS_CACHE_KEY)
+        logger.info("Cache de contadores pedidos invalidado (global + facetados + rotas)")

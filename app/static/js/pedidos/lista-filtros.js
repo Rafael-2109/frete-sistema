@@ -10,9 +10,6 @@
     'use strict';
 
     var BASE_URL = '';
-    var DEBOUNCE_MS = 300;
-    var MIN_CHARS_AUTOCOMPLETE = 2;
-
     // Labels para chips
     var PARAM_LABELS = {
         'status': {
@@ -231,157 +228,6 @@
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // AUTOCOMPLETE — Cliente (pattern: transportadora-autocomplete.js)
-    // ═══════════════════════════════════════════════════════════════
-
-    function initClienteAutocomplete() {
-        var input = document.querySelector('[data-pedidos-autocomplete]');
-        if (!input) return;
-
-        var apiUrl = '/pedidos/api/clientes/buscar';
-        var debounceTimer = null;
-        var selectedIndex = -1;
-        var resultados = [];
-
-        // Wrapper + dropdown
-        var wrapper = document.createElement('div');
-        wrapper.className = 'pedidos-ac-wrapper';
-        input.parentNode.insertBefore(wrapper, input);
-        wrapper.appendChild(input);
-
-        var dropdown = document.createElement('div');
-        dropdown.className = 'pedidos-ac-dropdown';
-        wrapper.appendChild(dropdown);
-
-        // Busca ao digitar
-        input.addEventListener('input', function () {
-            var q = this.value.trim();
-            clearTimeout(debounceTimer);
-            selectedIndex = -1;
-
-            if (q.length < MIN_CHARS_AUTOCOMPLETE) {
-                hideDropdown();
-                return;
-            }
-
-            debounceTimer = setTimeout(function () {
-                buscar(q);
-            }, DEBOUNCE_MS);
-        });
-
-        // Teclado
-        input.addEventListener('keydown', function (e) {
-            if (dropdown.style.display === 'none' || dropdown.style.display === '') {
-                if (e.key === 'Enter') {
-                    // Se dropdown fechado, navegar com filtro texto
-                    return; // Deixa o handler data-navigate-on-enter cuidar
-                }
-                return;
-            }
-
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                selectedIndex = Math.min(selectedIndex + 1, resultados.length - 1);
-                highlightItem();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                selectedIndex = Math.max(selectedIndex - 1, 0);
-                highlightItem();
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                e.stopPropagation(); // Evitar que o handler Enter de texto tambem dispare
-                if (selectedIndex >= 0 && resultados[selectedIndex]) {
-                    selecionar(resultados[selectedIndex]);
-                } else {
-                    hideDropdown();
-                    // Navegar com texto digitado
-                    navegarComFiltros({ cliente: input.value.trim() || null });
-                }
-            } else if (e.key === 'Escape') {
-                hideDropdown();
-            }
-        });
-
-        // Fechar ao clicar fora
-        document.addEventListener('click', function (e) {
-            if (!wrapper.contains(e.target)) {
-                hideDropdown();
-            }
-        });
-
-        function buscar(query) {
-            fetch(apiUrl + '?busca=' + encodeURIComponent(query), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.sucesso && data.clientes) {
-                        resultados = data.clientes;
-                        renderDropdown();
-                    } else {
-                        resultados = [];
-                        hideDropdown();
-                    }
-                })
-                .catch(function () {
-                    resultados = [];
-                    hideDropdown();
-                });
-        }
-
-        function renderDropdown() {
-            if (resultados.length === 0) {
-                dropdown.innerHTML = '<div class="pedidos-ac-empty">Nenhum cliente encontrado</div>';
-                dropdown.style.display = 'block';
-                return;
-            }
-
-            var html = '';
-            for (var i = 0; i < resultados.length; i++) {
-                var c = resultados[i];
-                html += '<div class="pedidos-ac-item" data-index="' + i + '">' +
-                    '<div class="pedidos-ac-item__nome">' + escapeHtml(c.nome) + '</div>' +
-                    '<div class="pedidos-ac-item__cnpj">' + escapeHtml(c.cnpj) + '</div>' +
-                    '</div>';
-            }
-            dropdown.innerHTML = html;
-            dropdown.style.display = 'block';
-
-            dropdown.querySelectorAll('.pedidos-ac-item').forEach(function (item) {
-                item.addEventListener('click', function () {
-                    var idx = parseInt(this.getAttribute('data-index'), 10);
-                    if (resultados[idx]) selecionar(resultados[idx]);
-                });
-                item.addEventListener('mouseenter', function () {
-                    selectedIndex = parseInt(this.getAttribute('data-index'), 10);
-                    highlightItem();
-                });
-            });
-        }
-
-        function highlightItem() {
-            dropdown.querySelectorAll('.pedidos-ac-item').forEach(function (item, i) {
-                if (i === selectedIndex) {
-                    item.classList.add('highlighted');
-                } else {
-                    item.classList.remove('highlighted');
-                }
-            });
-        }
-
-        function selecionar(c) {
-            hideDropdown();
-            navegarComFiltros({ cliente: c.nome });
-        }
-
-        function hideDropdown() {
-            dropdown.style.display = 'none';
-            selectedIndex = -1;
-            resultados = [];
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
     // SPACER — alinhar status row abaixo das datas
     // ═══════════════════════════════════════════════════════════════
 
@@ -476,9 +322,6 @@
 
         // Chips
         renderChips();
-
-        // Autocomplete cliente
-        initClienteAutocomplete();
 
         // Spacer: alinhar status row abaixo das datas
         alignDateSpacer();

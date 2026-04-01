@@ -269,57 +269,6 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     AUTOCOMPLETE DROPDOWN — cliente
-     Pattern: transportadora-autocomplete.js
-     ═══════════════════════════════════════════════════════════════════════════ */
-  .pedidos-ac-wrapper {
-    position: relative;
-  }
-
-  .pedidos-ac-dropdown {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 1050;
-    max-height: 240px;
-    overflow-y: auto;
-    background: var(--bg-light);
-    border: 1px solid var(--border);
-    border-top: none;
-    border-radius: 0 0 var(--radius-md) var(--radius-md);
-    box-shadow: 0 4px 8px hsla(0 0% 0% / 0.1);
-  }
-
-  .pedidos-ac-item {
-    padding: 0.5rem 0.75rem;
-    cursor: pointer;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.15s;
-  }
-
-  .pedidos-ac-item:hover,
-  .pedidos-ac-item.highlighted {
-    background: var(--hover-bg);
-  }
-
-  .pedidos-ac-item__nome {
-    font-weight: 500;
-  }
-
-  .pedidos-ac-item__cnpj {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  .pedidos-ac-empty {
-    padding: 0.5rem 0.75rem;
-    color: var(--text-muted);
-    font-size: 0.875rem;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════════
      FILTER SECTION SEPARATORS
      ═══════════════════════════════════════════════════════════════════════════ */
   .pedidos-filtros-separator {
