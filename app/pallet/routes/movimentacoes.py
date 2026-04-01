@@ -113,42 +113,68 @@ def listar():
         )
 
     # ===== FILTRO: Transportadora =====
-    if transportadora:
-        transp_limpo = transportadora.replace('.', '').replace('-', '').replace('/', '')
-        # Busca em três locais:
-        # 1. cnpj_destinatario quando tipo='TRANSPORTADORA'
-        # 2. cnpj_transportadora (quando pallets vão para cliente via transportadora)
-        # 3. Embarque.transportadora_id (via relacionamento)
-        subquery_embarques_transp = db.session.query(Embarque.id).join(
-            Embarque.transportadora
-        ).filter(
-            db.or_(
-                Embarque.transportadora.has(cnpj=transp_limpo),
-                Embarque.transportadora.has(db.func.lower(db.func.concat(
-                    Embarque.transportadora.property.mapper.class_.razao_social
-                )).like(f'%{transportadora.lower()}%'))
-            )
-        ).subquery()
+    transportadora_id = request.args.get('transportadora_id', type=int)
+    if transportadora or transportadora_id:
+        from app.transportadoras.filter_utils import expandir_filtro_texto, expandir_filtro_fk
 
-        query = query.filter(
-            db.or_(
-                # Destinatário é transportadora
-                db.and_(
-                    PalletNFRemessa.tipo_destinatario == 'TRANSPORTADORA',
-                    db.or_(
-                        PalletNFRemessa.cnpj_destinatario.ilike(f'%{transp_limpo}%'),
-                        PalletNFRemessa.nome_destinatario.ilike(f'%{transportadora}%')
-                    )
-                ),
-                # Transportadora que levou (campo secundário)
-                db.or_(
-                    PalletNFRemessa.cnpj_transportadora.ilike(f'%{transp_limpo}%'),
-                    PalletNFRemessa.nome_transportadora.ilike(f'%{transportadora}%')
-                ),
-                # Via embarque
-                PalletNFRemessa.embarque_id.in_(subquery_embarques_transp)
+        # Expansao de grupo: quando transportadora_id selecionado, expande para todo o grupo
+        if transportadora_id:
+            filtro_texto = expandir_filtro_texto(
+                [PalletNFRemessa.nome_destinatario, PalletNFRemessa.nome_transportadora],
+                transportadora_id=transportadora_id,
+                texto_busca=transportadora
             )
-        )
+            filtro_cnpj = expandir_filtro_texto(
+                [PalletNFRemessa.cnpj_destinatario, PalletNFRemessa.cnpj_transportadora],
+                transportadora_id=transportadora_id
+            )
+            filtro_embarque_fk = expandir_filtro_fk(Embarque.transportadora_id, transportadora_id)
+
+            subquery_embarques_transp = db.session.query(Embarque.id).filter(
+                filtro_embarque_fk
+            ).subquery()
+
+            condicoes = []
+            if filtro_texto is not None:
+                condicoes.append(db.and_(
+                    PalletNFRemessa.tipo_destinatario == 'TRANSPORTADORA',
+                    filtro_texto
+                ))
+            if filtro_cnpj is not None:
+                condicoes.append(filtro_cnpj)
+            condicoes.append(PalletNFRemessa.embarque_id.in_(subquery_embarques_transp))
+
+            query = query.filter(db.or_(*condicoes))
+        else:
+            # Fallback: busca texto livre (comportamento original)
+            transp_limpo = transportadora.replace('.', '').replace('-', '').replace('/', '')
+            subquery_embarques_transp = db.session.query(Embarque.id).join(
+                Embarque.transportadora
+            ).filter(
+                db.or_(
+                    Embarque.transportadora.has(cnpj=transp_limpo),
+                    Embarque.transportadora.has(db.func.lower(db.func.concat(
+                        Embarque.transportadora.property.mapper.class_.razao_social
+                    )).like(f'%{transportadora.lower()}%'))
+                )
+            ).subquery()
+
+            query = query.filter(
+                db.or_(
+                    db.and_(
+                        PalletNFRemessa.tipo_destinatario == 'TRANSPORTADORA',
+                        db.or_(
+                            PalletNFRemessa.cnpj_destinatario.ilike(f'%{transp_limpo}%'),
+                            PalletNFRemessa.nome_destinatario.ilike(f'%{transportadora}%')
+                        )
+                    ),
+                    db.or_(
+                        PalletNFRemessa.cnpj_transportadora.ilike(f'%{transp_limpo}%'),
+                        PalletNFRemessa.nome_transportadora.ilike(f'%{transportadora}%')
+                    ),
+                    PalletNFRemessa.embarque_id.in_(subquery_embarques_transp)
+                )
+            )
 
     # ===== FILTRO: Data =====
     if data_de:

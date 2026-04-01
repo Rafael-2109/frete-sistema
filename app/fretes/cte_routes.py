@@ -107,14 +107,17 @@ def listar_ctes():
         )
         logger.info(f"🔍 Filtrando CTes (incluindo complementares) por NF: {filtro_numero_nf}")
 
-    # Filtro por transportadora - case insensitive
-    if filtro_transportadora:
-        query = query.filter(
-            or_(
-                ConhecimentoTransporte.cnpj_emitente.ilike(f'%{filtro_transportadora}%'),
-                ConhecimentoTransporte.nome_emitente.ilike(f'%{filtro_transportadora}%')
-            )
+    # Filtro por transportadora - com expansao de grupo
+    transportadora_id_param = request.args.get('transportadora_id', type=int)
+    if transportadora_id_param or filtro_transportadora:
+        from app.transportadoras.filter_utils import expandir_filtro_texto
+        filtro = expandir_filtro_texto(
+            [ConhecimentoTransporte.cnpj_emitente, ConhecimentoTransporte.nome_emitente],
+            transportadora_id=transportadora_id_param,
+            texto_busca=filtro_transportadora
         )
+        if filtro is not None:
+            query = query.filter(filtro)
 
     if filtro_data_inicio:
         try:

@@ -76,7 +76,11 @@ def register_frete_routes(bp):
             query = query.filter(CarviaFrete.numeros_nfs.ilike(f'%{filtro_nf}%'))
         if filtro_status:
             query = query.filter(CarviaFrete.status == filtro_status)
-        if filtro_transportadora:
+        transportadora_id_param = request.args.get('transportadora_id', type=int)
+        if transportadora_id_param:
+            from app.transportadoras.filter_utils import expandir_filtro_fk
+            query = query.filter(expandir_filtro_fk(CarviaFrete.transportadora_id, transportadora_id_param))
+        elif filtro_transportadora:
             from app.transportadoras.models import Transportadora
             query = query.join(Transportadora).filter(
                 Transportadora.razao_social.ilike(f'%{filtro_transportadora}%')

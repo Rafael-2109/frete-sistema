@@ -17,8 +17,6 @@
 
     <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="transportadora_id" id="transportadora_id_input" value="">
-
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados da Fatura</h5>
@@ -27,14 +25,14 @@
                 <div class="row g-3">
                     <div class="col-md-5">
                         <label class="form-label">Transportadora <span class="text-danger">*</span></label>
-                        <div class="carvia-autocomplete-wrapper">
-                            <input type="text" id="busca-transportadora" class="form-control"
-                                   placeholder="Digite para buscar transportadora..." autocomplete="off" required>
-                            <div id="autocomplete-results" class="carvia-autocomplete-results"></div>
-                        </div>
-                        <div id="transp-selecionada-info" class="form-text d-none">
-                            <i class="fas fa-check-circle text-success"></i>
-                            <span id="transp-selecionada-nome" class="text-navy fw-semibold"></span>
+                        <input type="text" name="transportadora_nome" class="form-control"
+                               placeholder="Buscar transportadora..."
+                               autocomplete="off" required
+                               data-transportadora-autocomplete
+                               data-transportadora-api="/carvia/api/opcoes-transportadora"
+                               data-transportadora-id="#transportadora_id_input"
+                               data-transportadora-criar-modal="#modalCriarTransportadora">
+                        <input type="hidden" id="transportadora_id_input" name="transportadora_id" value="">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -82,217 +80,21 @@
     </form>
 </div>
 
-{# Modal Criar Transportadora #}
-<div class="modal fade" id="modalCriarTransportadora" tabindex="-1" aria-labelledby="modalCriarTranspLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalCriarTranspLabel">
-                    <i class="fas fa-plus-circle text-success"></i> Criar Nova Transportadora
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body">
-                <div id="modal-transp-alert" class="d-none"></div>
-                <div class="mb-3">
-                    <label for="transp-cnpj" class="form-label">CNPJ <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="transp-cnpj" placeholder="00.000.000/0000-00" required>
-                </div>
-                <div class="mb-3">
-                    <label for="transp-razao" class="form-label">Razao Social <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="transp-razao" placeholder="Nome da transportadora" required>
-                </div>
-                <div class="row g-3 mb-3">
-                    <div class="col-8">
-                        <label for="transp-cidade" class="form-label">Cidade <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="transp-cidade" placeholder="Cidade" required>
-                    </div>
-                    <div class="col-4">
-                        <label for="transp-uf" class="form-label">UF <span class="text-danger">*</span></label>
-                        <select class="form-select" id="transp-uf" required>
-                            <option value="">UF</option>
-                            {% for uf in ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] %}
-                            <option value="{{ uf }}">{{ uf }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="transp-freteiro">
-                    <label class="form-check-label" for="transp-freteiro">Freteiro (autonomo)</label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" id="btn-salvar-transp">
-                    <i class="fas fa-save"></i> Cadastrar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+{% include 'shared/_modal_criar_transportadora.html' %}
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 <script>
-// ====== Estado ======
-let debounceTimer = null;
-let transportadoraSelecionada = false;
-
-const inputBusca = document.getElementById('busca-transportadora');
-const autocompleteResults = document.getElementById('autocomplete-results');
-const hiddenInput = document.getElementById('transportadora_id_input');
-
-// ====== Autocomplete ======
-inputBusca.addEventListener('input', function() {
-    clearTimeout(debounceTimer);
-    transportadoraSelecionada = false;
-    hiddenInput.value = '';
-    document.getElementById('transp-selecionada-info').classList.add('d-none');
-
-    const val = this.value.trim();
-    if (val.length < 2) {
-        autocompleteResults.classList.remove('show');
-        return;
-    }
-    debounceTimer = setTimeout(() => fetchAutocomplete(val), 300);
-});
-
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('.carvia-autocomplete-wrapper')) {
-        autocompleteResults.classList.remove('show');
-    }
-});
-
-function fetchAutocomplete(busca) {
-    const url = `/carvia/api/opcoes-transportadora?busca=${encodeURIComponent(busca)}`;
-    fetch(url)
-        .then(r => r.json())
-        .then(data => {
-            if (!data.sucesso) {
-                autocompleteResults.classList.remove('show');
-                return;
-            }
-            renderAutocomplete(data.transportadoras || []);
-        })
-        .catch(() => autocompleteResults.classList.remove('show'));
-}
-
-function renderAutocomplete(transportadoras) {
-    let html = '';
-    transportadoras.forEach(t => {
-        html += `<a href="#" class="list-group-item list-group-item-action py-2 autocomplete-item"
-                    data-id="${t.id}" data-nome="${t.nome}" data-cnpj="${t.cnpj || ''}">
-                    <div class="d-flex align-items-center">
-                        <strong class="text-navy">${t.nome}</strong>
-                        ${t.freteiro ? '<span class="badge bg-warning text-dark ms-1">Freteiro</span>' : ''}
-                    </div>
-                    <small class="text-muted">${t.cnpj || '-'}</small>
-                 </a>`;
-    });
-
-    html += `<a href="#" class="list-group-item list-group-item-action carvia-autocomplete-criar py-2"
-                id="autocomplete-criar-nova">
-                <i class="fas fa-plus-circle"></i> Criar Nova Transportadora
-             </a>`;
-
-    autocompleteResults.innerHTML = html;
-    autocompleteResults.classList.add('show');
-
-    autocompleteResults.querySelectorAll('.autocomplete-item').forEach(item => {
-        item.addEventListener('click', function(e) {
-            e.preventDefault();
-            selecionarTransportadora(this.dataset.id, this.dataset.nome, this.dataset.cnpj);
-        });
-    });
-
-    const criarNovaBtn = document.getElementById('autocomplete-criar-nova');
-    if (criarNovaBtn) {
-        criarNovaBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            autocompleteResults.classList.remove('show');
-            new bootstrap.Modal(document.getElementById('modalCriarTransportadora')).show();
-        });
-    }
-}
-
-function selecionarTransportadora(id, nome, cnpj) {
-    hiddenInput.value = id;
-    inputBusca.value = nome;
-    transportadoraSelecionada = true;
-    autocompleteResults.classList.remove('show');
-
-    const info = document.getElementById('transp-selecionada-info');
-    document.getElementById('transp-selecionada-nome').textContent =
-        nome + (cnpj ? ` (${cnpj})` : '');
-    info.classList.remove('d-none');
-}
-
 // ====== Validacao de submit ======
 document.querySelector('form').addEventListener('submit', function(e) {
+    var hiddenInput = document.getElementById('transportadora_id_input');
     if (!hiddenInput.value) {
         e.preventDefault();
         alert('Selecione uma transportadora da lista de autocomplete.');
-        inputBusca.focus();
+        var acInput = document.querySelector('[data-transportadora-autocomplete]');
+        if (acInput) acInput.focus();
     }
 });
-
-// ====== Modal Criar Transportadora ======
-document.getElementById('btn-salvar-transp').addEventListener('click', function() {
-    const cnpj = document.getElementById('transp-cnpj').value.trim();
-    const razao = document.getElementById('transp-razao').value.trim();
-    const cidade = document.getElementById('transp-cidade').value.trim();
-    const uf = document.getElementById('transp-uf').value;
-    const freteiro = document.getElementById('transp-freteiro').checked;
-    const alertEl = document.getElementById('modal-transp-alert');
-
-    if (!cnpj || !razao || !cidade || !uf) {
-        alertEl.className = 'alert alert-warning mb-3';
-        alertEl.textContent = 'Preencha todos os campos obrigatorios.';
-        alertEl.classList.remove('d-none');
-        return;
-    }
-
-    this.disabled = true;
-    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cadastrando...';
-
-    fetch('/carvia/api/cadastrar-transportadora', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token() }}',
-        },
-        body: JSON.stringify({ cnpj, razao_social: razao, cidade, uf, freteiro }),
-    })
-    .then(r => r.json())
-    .then(data => {
-        this.disabled = false;
-        this.innerHTML = '<i class="fas fa-save"></i> Cadastrar';
-
-        if (data.sucesso || data.transportadora) {
-            const t = data.transportadora;
-            bootstrap.Modal.getInstance(document.getElementById('modalCriarTransportadora')).hide();
-            selecionarTransportadora(t.id, t.razao_social || razao, t.cnpj || cnpj);
-            // Limpar modal
-            document.getElementById('transp-cnpj').value = '';
-            document.getElementById('transp-razao').value = '';
-            document.getElementById('transp-cidade').value = '';
-            document.getElementById('transp-uf').value = '';
-            document.getElementById('transp-freteiro').checked = false;
-            alertEl.classList.add('d-none');
-        } else {
-            alertEl.className = 'alert alert-danger mb-3';
-            alertEl.textContent = data.erro || 'Erro ao cadastrar transportadora.';
-            alertEl.classList.remove('d-none');
-        }
-    })
-    .catch(err => {
-        this.disabled = false;
-        this.innerHTML = '<i class="fas fa-save"></i> Cadastrar';
-        alertEl.className = 'alert alert-danger mb-3';
-        alertEl.textContent = 'Erro de conexao: ' + err.message;
-        alertEl.classList.remove('d-none');
-    });
-}.bind(document.getElementById('btn-salvar-transp')));
 </script>
 {% endblock %}

@@ -28,6 +28,7 @@ def register_subcontrato_routes(bp):
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
         transp_filtro = request.args.get('transportadora', '')
+        transp_id_param = request.args.get('transportadora_id', type=int)
         fatura_filtro = request.args.get('fatura', '')
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
@@ -46,14 +47,17 @@ def register_subcontrato_routes(bp):
             query = query.filter(CarviaSubcontrato.fatura_transportadora_id.is_(None))
 
         # Join Transportadora se transp_filtro ou busca precisam
-        if transp_filtro or busca:
+        if transp_filtro or transp_id_param or busca:
             from app.transportadoras.models import Transportadora
             query = query.outerjoin(
                 Transportadora,
                 CarviaSubcontrato.transportadora_id == Transportadora.id,
             )
 
-        if transp_filtro:
+        if transp_id_param:
+            from app.transportadoras.filter_utils import expandir_filtro_fk
+            query = query.filter(expandir_filtro_fk(CarviaSubcontrato.transportadora_id, transp_id_param))
+        elif transp_filtro:
             transp_like = f'%{transp_filtro}%'
             query = query.filter(Transportadora.razao_social.ilike(transp_like))
 

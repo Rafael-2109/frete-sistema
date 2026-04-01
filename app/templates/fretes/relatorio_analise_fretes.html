@@ -50,12 +50,14 @@
                                 <label for="transportadora_id" class="form-label">
                                     <i class="fas fa-truck"></i> Transportadora (opcional)
                                 </label>
-                                <select class="form-select" id="transportadora_id" name="transportadora_id">
-                                    <option value="">Todas as transportadoras</option>
-                                    {% for t in transportadoras %}
-                                    <option value="{{ t.id }}">{{ t.razao_social }} ({{ t.cnpj }})</option>
-                                    {% endfor %}
-                                </select>
+                                <input type="text" name="transportadora_nome" class="form-control"
+                                       placeholder="Buscar transportadora..."
+                                       value="{{ transportadora_selecionada_nome|default('') }}"
+                                       autocomplete="off"
+                                       data-transportadora-autocomplete
+                                       data-transportadora-id="#transportadora_id">
+                                <input type="hidden" id="transportadora_id" name="transportadora_id"
+                                       value="{{ request.args.get('transportadora_id', '') }}">
                             </div>
                         </div>
 
@@ -113,6 +115,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('formRelatorio');

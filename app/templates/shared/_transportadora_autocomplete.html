@@ -1,0 +1,53 @@
+{#
+  Partial: Autocomplete de Transportadora
+  ========================================
+
+  Substitui <select> de transportadora por input com autocomplete.
+  Requer: transportadora-autocomplete.js incluido no template pai.
+
+  Variaveis disponiveis (passar via contexto ou usar defaults):
+    ac_name            : name do hidden field (default: "transportadora_id")
+    ac_input_name      : name do input texto (default: "transportadora_nome")
+    ac_id              : id unico do hidden field (default: "transportadora_id")
+    ac_value           : valor pre-selecionado do ID (default: request.args)
+    ac_display         : nome da transportadora pre-selecionada para exibicao
+    ac_placeholder     : placeholder do input (default: "Buscar transportadora...")
+    ac_api             : URL da API (default: usa default do JS)
+    ac_extra_params    : params extras (ex: "freteiro=1")
+    ac_criar_modal     : selector do modal Criar Nova (ex: "#modalCriarTransportadora")
+    ac_on_select       : nome funcao callback global ao selecionar
+    ac_label           : label do campo (default: "Transportadora")
+    ac_required        : se o campo e obrigatorio (default: false)
+    ac_size            : "sm" para form-control-sm (default: normal)
+
+  Exemplo de uso:
+    {% set ac_value = request.args.get('transportadora_id', '') %}
+    {% set ac_display = transportadora_selecionada_nome %}
+    {% include 'shared/_transportadora_autocomplete.html' %}
+#}
+
+{% set _ac_name = ac_name|default('transportadora_id') %}
+{% set _ac_input_name = ac_input_name|default('transportadora_nome') %}
+{% set _ac_id = ac_id|default('transportadora_id') %}
+{% set _ac_value = ac_value|default(request.args.get('transportadora_id', '')) %}
+{% set _ac_display = ac_display|default('') %}
+{% set _ac_placeholder = ac_placeholder|default('Buscar transportadora...') %}
+{% set _ac_size = 'form-control-sm' if ac_size|default('') == 'sm' else '' %}
+
+<input type="text"
+       name="{{ _ac_input_name }}"
+       class="form-control {{ _ac_size }}"
+       placeholder="{{ _ac_placeholder }}"
+       value="{{ _ac_display }}"
+       autocomplete="off"
+       data-transportadora-autocomplete
+       data-transportadora-id="#{{ _ac_id }}"
+       {% if ac_api is defined and ac_api %}data-transportadora-api="{{ ac_api }}"{% endif %}
+       {% if ac_extra_params is defined and ac_extra_params %}data-transportadora-extra-params="{{ ac_extra_params }}"{% endif %}
+       {% if ac_criar_modal is defined and ac_criar_modal %}data-transportadora-criar-modal="{{ ac_criar_modal }}"{% endif %}
+       {% if ac_on_select is defined and ac_on_select %}data-transportadora-on-select="{{ ac_on_select }}"{% endif %}
+       {% if ac_required|default(false) %}required{% endif %}>
+<input type="hidden"
+       id="{{ _ac_id }}"
+       name="{{ _ac_name }}"
+       value="{{ _ac_value }}">

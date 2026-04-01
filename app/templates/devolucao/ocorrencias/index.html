@@ -161,25 +161,25 @@
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Transp. Entrega</label>
-                        <select name="transportadora" class="form-select form-select-sm">
-                            <option value="">Todas</option>
-                            {% for transp in lista_transportadoras %}
-                            <option value="{{ transp }}" {% if filtros.transportadora == transp %}selected{% endif %}>
-                                {{ transp[:30] }}{% if transp|length > 30 %}...{% endif %}
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <input type="text" name="transportadora" class="form-select form-select-sm"
+                               placeholder="Buscar transportadora..."
+                               value="{{ filtros.transportadora|default('') }}"
+                               autocomplete="off"
+                               data-transportadora-autocomplete
+                               data-transportadora-id="#filtro_transportadora_id">
+                        <input type="hidden" id="filtro_transportadora_id" name="transportadora_id"
+                               value="{{ request.args.get('transportadora_id', '') }}">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Transp. Retorno</label>
-                        <select name="transportadora_retorno" class="form-select form-select-sm">
-                            <option value="">Todas</option>
-                            {% for transp in lista_transportadoras_retorno %}
-                            <option value="{{ transp }}" {% if filtros.transportadora_retorno == transp %}selected{% endif %}>
-                                {{ transp[:25] }}{% if transp|length > 25 %}...{% endif %}
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <input type="text" name="transportadora_retorno" class="form-select form-select-sm"
+                               placeholder="Buscar transportadora..."
+                               value="{{ filtros.transportadora_retorno|default('') }}"
+                               autocomplete="off"
+                               data-transportadora-autocomplete
+                               data-transportadora-id="#filtro_transportadora_retorno_id">
+                        <input type="hidden" id="filtro_transportadora_retorno_id" name="transportadora_retorno_id"
+                               value="{{ request.args.get('transportadora_retorno_id', '') }}">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">Prev. Retorno</label>
@@ -896,4 +896,5 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Modal de Cadastros de Ocorrencias -->
 {% include 'devolucao/ocorrencias/_modal_cadastros.html' %}
 <script src="{{ url_for('static', filename='js/devolucao/cadastros-modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}

@@ -136,7 +136,10 @@
                         <label for="transportadora" class="form-label">Transportadora</label>
                         <input type="text" name="transportadora" id="transportadora" class="form-control"
                                value="{{ filtro_transportadora }}" placeholder="Nome ou CNPJ"
-                               data-transportadora-autocomplete>
+                               data-transportadora-autocomplete
+                               data-transportadora-id="#filtro_transportadora_id">
+                        <input type="hidden" id="filtro_transportadora_id" name="transportadora_id"
+                               value="{{ request.args.get('transportadora_id', '') }}">
                     </div>
 
                     <div class="col-md-2">

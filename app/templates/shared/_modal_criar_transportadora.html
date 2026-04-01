@@ -1,0 +1,181 @@
+{#
+  Partial: Modal Criar Nova Transportadora
+  =========================================
+
+  Modal reutilizavel para cadastro rapido de transportadora.
+  Usa POST /carvia/api/cadastrar-transportadora (JSON).
+
+  Variaveis opcionais:
+    modal_id : id do modal (default: "modalCriarTransportadora")
+    modal_on_created : funcao JS global chamada apos cadastro (recebe obj transportadora)
+
+  Apos cadastro:
+  - Fecha modal
+  - Se modal_on_created definido, chama a funcao com o objeto da transportadora
+  - Se existir input com data-transportadora-autocomplete + data-transportadora-id,
+    preenche automaticamente
+#}
+
+{% set _modal_id = modal_id|default('modalCriarTransportadora') %}
+
+<div class="modal fade" id="{{ _modal_id }}" tabindex="-1" aria-labelledby="{{ _modal_id }}Label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="{{ _modal_id }}Label">
+                    <i class="fas fa-plus-circle text-success"></i> Criar Nova Transportadora
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="{{ _modal_id }}-alert" class="d-none"></div>
+                <div class="mb-3">
+                    <label for="{{ _modal_id }}-cnpj" class="form-label">CNPJ <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="{{ _modal_id }}-cnpj" placeholder="00.000.000/0000-00" required>
+                </div>
+                <div class="mb-3">
+                    <label for="{{ _modal_id }}-razao" class="form-label">Razao Social <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="{{ _modal_id }}-razao" placeholder="Nome da transportadora" required>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-8">
+                        <label for="{{ _modal_id }}-cidade" class="form-label">Cidade <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="{{ _modal_id }}-cidade" placeholder="Cidade" required>
+                    </div>
+                    <div class="col-4">
+                        <label for="{{ _modal_id }}-uf" class="form-label">UF <span class="text-danger">*</span></label>
+                        <select class="form-select" id="{{ _modal_id }}-uf" required>
+                            <option value="">UF</option>
+                            {% for uf in ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'] %}
+                            <option value="{{ uf }}">{{ uf }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="{{ _modal_id }}-freteiro">
+                    <label class="form-check-label" for="{{ _modal_id }}-freteiro">Freteiro (autonomo)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="{{ _modal_id }}-btn-salvar">
+                    <i class="fas fa-save"></i> Cadastrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var modalId = '{{ _modal_id }}';
+    var btnSalvar = document.getElementById(modalId + '-btn-salvar');
+    if (!btnSalvar) return;
+
+    btnSalvar.addEventListener('click', function() {
+        var cnpj = document.getElementById(modalId + '-cnpj').value.trim();
+        var razao = document.getElementById(modalId + '-razao').value.trim();
+        var cidade = document.getElementById(modalId + '-cidade').value.trim();
+        var uf = document.getElementById(modalId + '-uf').value;
+        var freteiro = document.getElementById(modalId + '-freteiro').checked;
+        var alertEl = document.getElementById(modalId + '-alert');
+
+        if (!cnpj || !razao || !cidade || !uf) {
+            alertEl.className = 'alert alert-warning mb-3';
+            alertEl.textContent = 'Preencha todos os campos obrigatorios.';
+            alertEl.classList.remove('d-none');
+            return;
+        }
+
+        btnSalvar.disabled = true;
+        btnSalvar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cadastrando...';
+
+        // Obter CSRF token
+        var csrfToken = '';
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMeta) {
+            csrfToken = csrfMeta.getAttribute('content');
+        } else {
+            var csrfInput = document.querySelector('input[name="csrf_token"]');
+            if (csrfInput) csrfToken = csrfInput.value;
+        }
+
+        fetch('/carvia/api/cadastrar-transportadora', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({
+                cnpj: cnpj,
+                razao_social: razao,
+                cidade: cidade,
+                uf: uf,
+                freteiro: freteiro,
+            }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = '<i class="fas fa-save"></i> Cadastrar';
+
+            if (data.sucesso || data.transportadora) {
+                var t = data.transportadora;
+
+                // Fechar modal
+                var modalEl = document.getElementById(modalId);
+                var modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+
+                // Limpar campos
+                document.getElementById(modalId + '-cnpj').value = '';
+                document.getElementById(modalId + '-razao').value = '';
+                document.getElementById(modalId + '-cidade').value = '';
+                document.getElementById(modalId + '-uf').value = '';
+                document.getElementById(modalId + '-freteiro').checked = false;
+                alertEl.classList.add('d-none');
+
+                // Callback customizado
+                {% if modal_on_created is defined and modal_on_created %}
+                if (typeof window['{{ modal_on_created }}'] === 'function') {
+                    window['{{ modal_on_created }}'](t);
+                }
+                {% endif %}
+
+                // Auto-preencher autocomplete mais proximo (se existir)
+                var acInputs = document.querySelectorAll('[data-transportadora-autocomplete]');
+                if (acInputs.length > 0) {
+                    var acInput = acInputs[0];
+                    acInput.value = t.razao_social || t.nome || '';
+                    var idSel = acInput.getAttribute('data-transportadora-id');
+                    if (idSel) {
+                        var idEl = document.querySelector(idSel);
+                        if (idEl) {
+                            idEl.value = t.id;
+                            idEl.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                    var cnpjSel = acInput.getAttribute('data-transportadora-cnpj');
+                    if (cnpjSel) {
+                        var cnpjEl = document.querySelector(cnpjSel);
+                        if (cnpjEl) cnpjEl.value = t.cnpj || '';
+                    }
+                    acInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            } else {
+                alertEl.className = 'alert alert-danger mb-3';
+                alertEl.textContent = data.erro || 'Erro ao cadastrar transportadora.';
+                alertEl.classList.remove('d-none');
+            }
+        })
+        .catch(function(err) {
+            btnSalvar.disabled = false;
+            btnSalvar.innerHTML = '<i class="fas fa-save"></i> Cadastrar';
+            alertEl.className = 'alert alert-danger mb-3';
+            alertEl.textContent = 'Erro de rede: ' + err.message;
+            alertEl.classList.remove('d-none');
+        });
+    });
+})();
+</script>

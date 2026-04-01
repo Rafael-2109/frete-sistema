@@ -144,7 +144,8 @@ def listar_contas_receber():
             pass
 
     # Filtros que usam dados de EntregaMonitorada (via join)
-    if vendedor or transportadora or canhoto:
+    transportadora_id = request.args.get('transportadora_id', type=int)
+    if vendedor or transportadora or transportadora_id or canhoto:
         query = query.outerjoin(
             EntregaMonitorada,
             ContasAReceber.entrega_monitorada_id == EntregaMonitorada.id
@@ -153,8 +154,15 @@ def listar_contas_receber():
         if vendedor:
             query = query.filter(EntregaMonitorada.vendedor.ilike(f'%{vendedor}%'))
 
-        if transportadora:
-            query = query.filter(EntregaMonitorada.transportadora.ilike(f'%{transportadora}%'))
+        if transportadora or transportadora_id:
+            from app.transportadoras.filter_utils import expandir_filtro_texto
+            filtro = expandir_filtro_texto(
+                [EntregaMonitorada.transportadora],
+                transportadora_id=transportadora_id,
+                texto_busca=transportadora
+            )
+            if filtro is not None:
+                query = query.filter(filtro)
 
         if canhoto:
             if canhoto == 'com':

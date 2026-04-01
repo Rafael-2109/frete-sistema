@@ -125,7 +125,10 @@
                                 <label class="form-label small">Transportadora</label>
                                 <input type="text" name="transportadora" class="form-control form-control-sm"
                                        placeholder="Transportadora" value="{{ request.args.get('transportadora', '') }}"
-                                       data-transportadora-autocomplete>
+                                       data-transportadora-autocomplete
+                                       data-transportadora-id="#filtro_transportadora_id">
+                                <input type="hidden" id="filtro_transportadora_id" name="transportadora_id"
+                                       value="{{ request.args.get('transportadora_id', '') }}">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label small">Canhoto</label>

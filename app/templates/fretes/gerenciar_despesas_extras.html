@@ -98,7 +98,10 @@
                                            class="form-control"
                                            value="{{ filtro_transportadora if filtro_transportadora else '' }}"
                                            placeholder="Nome ou CNPJ"
-                                           data-transportadora-autocomplete>
+                                           data-transportadora-autocomplete
+                                           data-transportadora-id="#filtro_transportadora_id_hidden">
+                                    <input type="hidden" id="filtro_transportadora_id_hidden" name="transportadora_id"
+                                           value="{{ request.args.get('transportadora_id', '') }}">
                                 </div>
                             </div>
                             <div class="col-md-2">

@@ -80,7 +80,10 @@
                         <input type="text" name="transportadora" class="form-control form-control-sm"
                                placeholder="Nome..." value="{{ filtro_transportadora }}"
                                data-transportadora-autocomplete
-                               data-transportadora-api="/carvia/api/opcoes-transportadora">
+                               data-transportadora-api="/carvia/api/opcoes-transportadora"
+                               data-transportadora-id="#filtro_transportadora_id">
+                        <input type="hidden" id="filtro_transportadora_id" name="transportadora_id"
+                               value="{{ request.args.get('transportadora_id', '') }}">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small">Criado De</label>

@@ -36,18 +36,14 @@
                         {{ form.hidden_tag() }}
 
                         <!-- Transportadora (autocomplete) -->
-                        <input type="hidden" name="transportadora_id" id="transportadora_id_input" value="">
                         <div class="form-group mb-3">
                             <label class="form-label">Transportadora</label>
-                            <div class="carvia-autocomplete-wrapper">
-                                <input type="text" id="busca-transportadora" class="form-control"
-                                       placeholder="Digite para buscar transportadora..." autocomplete="off" required>
-                                <div id="autocomplete-results" class="carvia-autocomplete-results"></div>
-                            </div>
-                            <div id="transp-selecionada-info" class="form-text d-none">
-                                <i class="fas fa-check-circle text-success"></i>
-                                <span id="transp-selecionada-nome" class="text-navy fw-semibold"></span>
-                            </div>
+                            <input type="text" name="transportadora_nome" class="form-control"
+                                   placeholder="Buscar transportadora..."
+                                   autocomplete="off" required
+                                   data-transportadora-autocomplete
+                                   data-transportadora-id="#transportadora_id_input">
+                            <input type="hidden" id="transportadora_id_input" name="transportadora_id" value="">
                         </div>
 
                         <!-- Número e Data -->
@@ -231,92 +227,16 @@
         });
     });
 
-    // ====== Autocomplete Transportadora ======
-    let debounceTimer = null;
-    let transportadoraSelecionada = false;
-
-    const inputBusca = document.getElementById('busca-transportadora');
-    const autocompleteResults = document.getElementById('autocomplete-results');
-    const hiddenInput = document.getElementById('transportadora_id_input');
-
-    inputBusca.addEventListener('input', function() {
-        clearTimeout(debounceTimer);
-        transportadoraSelecionada = false;
-        hiddenInput.value = '';
-        document.getElementById('transp-selecionada-info').classList.add('d-none');
-
-        const val = this.value.trim();
-        if (val.length < 2) {
-            autocompleteResults.classList.remove('show');
-            return;
-        }
-        debounceTimer = setTimeout(() => fetchAutocomplete(val), 300);
-    });
-
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.carvia-autocomplete-wrapper')) {
-            autocompleteResults.classList.remove('show');
-        }
-    });
-
-    function fetchAutocomplete(busca) {
-        const url = `/fretes/api/transportadoras/buscar?busca=${encodeURIComponent(busca)}`;
-        fetch(url)
-            .then(r => r.json())
-            .then(data => {
-                if (!data.sucesso) {
-                    autocompleteResults.classList.remove('show');
-                    return;
-                }
-                renderAutocomplete(data.transportadoras || []);
-            })
-            .catch(() => autocompleteResults.classList.remove('show'));
-    }
-
-    function renderAutocomplete(transportadoras) {
-        let html = '';
-        transportadoras.forEach(t => {
-            html += `<a href="#" class="list-group-item list-group-item-action py-2 autocomplete-item"
-                        data-id="${t.id}" data-nome="${t.nome}" data-cnpj="${t.cnpj || ''}">
-                        <strong class="text-navy">${t.nome}</strong>
-                        <br><small class="text-muted">${t.cnpj || '-'}</small>
-                     </a>`;
-        });
-
-        if (!transportadoras.length) {
-            html = `<div class="list-group-item text-muted py-2">Nenhuma transportadora encontrada</div>`;
-        }
-
-        autocompleteResults.innerHTML = html;
-        autocompleteResults.classList.add('show');
-
-        autocompleteResults.querySelectorAll('.autocomplete-item').forEach(item => {
-            item.addEventListener('click', function(e) {
-                e.preventDefault();
-                selecionarTransportadora(this.dataset.id, this.dataset.nome, this.dataset.cnpj);
-            });
-        });
-    }
-
-    function selecionarTransportadora(id, nome, cnpj) {
-        hiddenInput.value = id;
-        inputBusca.value = nome;
-        transportadoraSelecionada = true;
-        autocompleteResults.classList.remove('show');
-
-        const info = document.getElementById('transp-selecionada-info');
-        document.getElementById('transp-selecionada-nome').textContent =
-            nome + (cnpj ? ` (${cnpj})` : '');
-        info.classList.remove('d-none');
-    }
-
     // ====== Validacao de submit ======
     document.querySelector('form').addEventListener('submit', function(e) {
+        var hiddenInput = document.getElementById('transportadora_id_input');
         if (!hiddenInput.value) {
             e.preventDefault();
             alert('Selecione uma transportadora da lista de autocomplete.');
-            inputBusca.focus();
+            var inputBusca = document.querySelector('[data-transportadora-autocomplete]');
+            if (inputBusca) inputBusca.focus();
         }
     });
 </script>
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}

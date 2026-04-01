@@ -860,8 +860,17 @@ def listar_entregas():
     if numero_nf := request.args.get('numero_nf'):
         query = query.filter(EntregaMonitorada.numero_nf.ilike(f"%{numero_nf}%"))
 
-    if transportadora := request.args.get('transportadora'):
-        query = query.filter(EntregaMonitorada.transportadora.ilike(f"%{transportadora}%"))
+    transportadora = request.args.get('transportadora', '')
+    transportadora_id = request.args.get('transportadora_id', type=int)
+    if transportadora or transportadora_id:
+        from app.transportadoras.filter_utils import expandir_filtro_texto
+        filtro = expandir_filtro_texto(
+            [EntregaMonitorada.transportadora],
+            transportadora_id=transportadora_id,
+            texto_busca=transportadora
+        )
+        if filtro is not None:
+            query = query.filter(filtro)
 
     if cliente := request.args.get('cliente'):
         query = query.filter(EntregaMonitorada.cliente.ilike(f"%{cliente}%"))

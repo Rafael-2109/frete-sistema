@@ -4052,6 +4052,9 @@ def gerenciar_despesas_extras():
     tipos_despesa_query = db.session.query(DespesaExtra.tipo_despesa).distinct().order_by(DespesaExtra.tipo_despesa).all()
     tipos_despesa = [t[0] for t in tipos_despesa_query if t[0]]
 
+    # Filtro por transportadora com expansao de grupo
+    transportadora_id_param = request.args.get("transportadora_id", type=int)
+
     # Função para aplicar filtros comuns
     def aplicar_filtros(query):
         if filtro_nf:
@@ -4060,7 +4063,10 @@ def gerenciar_despesas_extras():
             query = query.filter(DespesaExtra.numero_documento.ilike(f"%{filtro_documento}%"))
         if filtro_tipo_despesa:
             query = query.filter(DespesaExtra.tipo_despesa == filtro_tipo_despesa)
-        if filtro_transportadora:
+        if transportadora_id_param:
+            from app.transportadoras.filter_utils import expandir_filtro_fk
+            query = query.filter(expandir_filtro_fk(Frete.transportadora_id, transportadora_id_param))
+        elif filtro_transportadora:
             query = query.filter(
                 or_(
                     Transportadora.razao_social.ilike(f"%{filtro_transportadora}%"),

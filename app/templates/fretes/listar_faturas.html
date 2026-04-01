@@ -32,7 +32,14 @@
                         </div>
                         <div class="col-md-3">
                             {{ form.transportadora_id.label(class="form-label") }}
-                            {{ form.transportadora_id(class="form-control") }}
+                            <input type="text" name="transportadora_nome" class="form-control"
+                                   placeholder="Buscar transportadora..."
+                                   value="{{ transportadora_selecionada_nome|default('') }}"
+                                   autocomplete="off"
+                                   data-transportadora-autocomplete
+                                   data-transportadora-id="#transportadora_id">
+                            <input type="hidden" id="transportadora_id" name="transportadora_id"
+                                   value="{{ request.args.get('transportadora_id', '') }}">
                         </div>
                         <div class="col-md-3">
                             {{ form.numero_nf.label(class="form-label") }}
@@ -347,4 +354,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('data_criacao_ate').value = ultimoDia.toISOString().split('T')[0];
 });
 </script>
+
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}

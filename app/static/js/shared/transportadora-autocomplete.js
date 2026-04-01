@@ -25,7 +25,10 @@
  *   data-transportadora-cnpj         : selector do campo hidden para CNPJ
  *   data-transportadora-uf           : UF destino para filtro de tabelas
  *   data-transportadora-min-chars    : min chars para buscar (default: 2)
- *   data-transportadora-api          : URL da API (default: /carvia/api/opcoes-transportadora)
+ *   data-transportadora-api          : URL da API (default: /fretes/api/transportadoras/buscar)
+ *   data-transportadora-extra-params : params adicionais na busca (ex: "freteiro=1")
+ *   data-transportadora-on-select    : nome de funcao global chamada ao selecionar (recebe obj)
+ *   data-transportadora-criar-modal  : selector do modal "Criar Nova Transportadora"
  *
  * O componente se auto-inicializa via DOMContentLoaded.
  */
@@ -47,6 +50,9 @@
         var idSelector = input.getAttribute('data-transportadora-id');
         var cnpjSelector = input.getAttribute('data-transportadora-cnpj');
         var ufAttr = input.getAttribute('data-transportadora-uf');
+        var extraParams = input.getAttribute('data-transportadora-extra-params') || '';
+        var onSelectFn = input.getAttribute('data-transportadora-on-select');
+        var criarModalSelector = input.getAttribute('data-transportadora-criar-modal');
 
         // Criar wrapper e dropdown
         var wrapper = document.createElement('div');
@@ -124,6 +130,9 @@
                     params += '&uf_destino=' + encodeURIComponent(ufEl.value);
                 }
             }
+            if (extraParams) {
+                params += '&' + extraParams;
+            }
 
             fetch(apiUrl + '?' + params, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -166,6 +175,13 @@
                     '</div>';
             }
 
+            // Item "Criar Nova Transportadora" (se modal configurado)
+            if (criarModalSelector) {
+                html += '<div class="transportadora-ac-criar" style="padding:.5rem .75rem;cursor:pointer;' +
+                    'border-top:2px solid var(--border-color,#dee2e6);color:var(--primary,#0d6efd);font-weight:500;">' +
+                    '<i class="fas fa-plus-circle"></i> Criar Nova Transportadora</div>';
+            }
+
             dropdown.innerHTML = html;
             dropdown.style.display = 'block';
 
@@ -182,6 +198,19 @@
                     highlightItem();
                 });
             });
+
+            // Handler "Criar Nova"
+            var criarBtn = dropdown.querySelector('.transportadora-ac-criar');
+            if (criarBtn && criarModalSelector) {
+                criarBtn.addEventListener('click', function () {
+                    hideDropdown();
+                    var modalEl = document.querySelector(criarModalSelector);
+                    if (modalEl && typeof bootstrap !== 'undefined') {
+                        var modal = new bootstrap.Modal(modalEl);
+                        modal.show();
+                    }
+                });
+            }
         }
 
         function highlightItem() {
@@ -206,6 +235,11 @@
 
             triggerChange(input);
             hideDropdown();
+
+            // Callback customizado (recebe objeto completo da transportadora)
+            if (onSelectFn && typeof window[onSelectFn] === 'function') {
+                window[onSelectFn](t);
+            }
         }
 
         function clearHiddenFields() {

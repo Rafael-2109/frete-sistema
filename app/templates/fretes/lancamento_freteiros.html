@@ -22,7 +22,15 @@
                     <div class="row align-items-end">
                         <div class="col-md-8">
                             {{ filtro_form.transportadora_id.label(class="form-label") }}
-                            {{ filtro_form.transportadora_id(class="form-select") }}
+                            <input type="text" name="transportadora_nome" class="form-control"
+                                   placeholder="Buscar transportadora..."
+                                   value="{{ transportadora_selecionada_nome|default('') }}"
+                                   autocomplete="off"
+                                   data-transportadora-autocomplete
+                                   data-transportadora-id="#transportadora_id"
+                                   data-transportadora-extra-params="freteiro=1">
+                            <input type="hidden" id="transportadora_id" name="transportadora_id"
+                                   value="{{ request.args.get('transportadora_id', '') }}">
                             <small class="form-text text-muted">
                                 <i class="fas fa-info-circle"></i> 
                                 Mostra apenas fretes de embarques que já saíram (com data de embarque preenchida)
@@ -832,4 +840,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %} 

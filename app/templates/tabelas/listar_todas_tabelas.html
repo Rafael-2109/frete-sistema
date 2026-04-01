@@ -7,15 +7,14 @@
   <form method="GET" class="row g-3 mb-4">
     <div class="col-md-3">
       <label class="form-label">Transportadora</label>
-      <select name="transportadora" id="transportadoraSelect" class="form-select">
-        <option value="">Todas as Transportadoras</option>
-        {% for transp in transportadoras %}
-          <option value="{{ transp.id }}"
-            {% if request.args.get('transportadora', '')|int == transp.id %}selected{% endif %}>
-            {{ transp.razao_social }}
-          </option>
-        {% endfor %}
-      </select>
+      <input type="text" name="transportadora_nome" class="form-control"
+             placeholder="Buscar transportadora..."
+             value="{{ transportadora_selecionada_nome|default('') }}"
+             autocomplete="off"
+             data-transportadora-autocomplete
+             data-transportadora-id="#transportadoraSelect">
+      <input type="hidden" id="transportadoraSelect" name="transportadora"
+             value="{{ request.args.get('transportadora', '') }}">
     </div>
 
     <div class="col-md-2">
@@ -356,4 +355,5 @@ function confirmarExclusao(id) {
   }
 }
 </script>
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}

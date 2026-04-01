@@ -82,7 +82,17 @@
      =============================== -->
   <form method="GET" class="card p-3 shadow-sm mb-4">
     <div class="row g-2">
-      <div class="col-md-2">{{ form.razao_social.label }}{{ form.razao_social(class="form-control") }}</div>
+      <div class="col-md-2">
+        {{ form.razao_social.label }}
+        <input type="text" name="razao_social" class="form-control"
+               placeholder="Buscar transportadora..."
+               value="{{ request.args.get('razao_social', '') }}"
+               autocomplete="off"
+               data-transportadora-autocomplete
+               data-transportadora-id="#filtro_transportadora_id">
+        <input type="hidden" id="filtro_transportadora_id" name="transportadora_id"
+               value="{{ request.args.get('transportadora_id', '') }}">
+      </div>
       <div class="col-md-2">{{ form.cnpj.label }}{{ form.cnpj(class="form-control") }}</div>
       <div class="col-md-1">{{ form.uf.label }}{{ form.uf(class="form-control") }}</div>
       <div class="col-md-2">{{ form.cidade.label }}{{ form.cidade(class="form-control") }}</div>
@@ -411,4 +421,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}

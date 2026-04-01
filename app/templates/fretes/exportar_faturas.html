@@ -33,7 +33,14 @@
                 <div class="row">
                     <div class="col-md-4">
                         {{ form.transportadora_id.label(class="form-label") }}
-                        {{ form.transportadora_id(class="form-control") }}
+                        <input type="text" name="transportadora_nome" class="form-control"
+                               placeholder="Buscar transportadora..."
+                               value="{{ transportadora_selecionada_nome|default('') }}"
+                               autocomplete="off"
+                               data-transportadora-autocomplete
+                               data-transportadora-id="#transportadora_id">
+                        <input type="hidden" id="transportadora_id" name="transportadora_id"
+                               value="{{ request.args.get('transportadora_id', '') }}">
                     </div>
                     <div class="col-md-4">
                         {{ form.status_conferencia.label(class="form-label") }}
@@ -150,4 +157,6 @@ document.getElementById('formExportar').addEventListener('submit', function(e) {
     }, 10000);
 });
 </script>
+
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}
