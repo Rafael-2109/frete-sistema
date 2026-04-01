@@ -127,16 +127,16 @@
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_status",
+      "name": "ix_divergencia_nf_po_validacao_id",
       "columns": [
-        "status"
+        "validacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_odoo_dfe_id",
+      "name": "ix_divergencia_nf_po_status",
       "columns": [
-        "odoo_dfe_id"
+        "status"
       ],
       "unique": false
     },
@@ -148,9 +148,9 @@
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_validacao_id",
+      "name": "ix_divergencia_nf_po_odoo_dfe_id",
       "columns": [
-        "validacao_id"
+        "odoo_dfe_id"
       ],
       "unique": false
     }

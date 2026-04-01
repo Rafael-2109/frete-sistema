@@ -143,17 +143,17 @@
       "unique": false
     },
     {
-      "name": "idx_nf_pendente_resolvido",
+      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
       "columns": [
-        "resolvido",
-        "importado"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
+      "name": "idx_nf_pendente_resolvido",
       "columns": [
-        "cnpj_cliente"
+        "resolvido",
+        "importado"
       ],
       "unique": false
     },
