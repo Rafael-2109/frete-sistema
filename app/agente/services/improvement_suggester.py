@@ -62,8 +62,9 @@ CONTEXTO DO SISTEMA:
 - O agente usa: MCP tools (SQL, memoria, schema, browser), skills, subagentes
 
 CATEGORIAS DE SUGESTAO:
-A) skill_suggestion: skill que ajudaria mas nao existe
-B) instruction_request: instrucao que o agente precisa mas nao tem
+A) skill_suggestion: skill que ajudaria mas NAO EXISTE no inventario (verificar <inventario_skills> no user message)
+   - Se a skill/subagente JA EXISTE mas o agente nao usou, categorizar como instruction_request (nao skill_suggestion)
+B) instruction_request: instrucao que o agente precisa mas nao tem (inclui casos onde skill existe mas agente nao usou)
 C) prompt_feedback: feedback sobre o system_prompt ou memorias
 D) gotcha_report: armadilha ou informacao util descoberta nas sessoes
 E) memory_feedback: memoria incorreta ou faltando
@@ -103,6 +104,39 @@ GERE um JSON array com avaliacoes:
 
 verified: problema resolvido. needs_revision: problema persiste. inconclusive: cenario nao ocorreu.
 RESPONDA APENAS o JSON array."""
+
+
+def _get_skills_inventory() -> str:
+    """
+    Le inventario de skills e subagentes do filesystem.
+
+    Retorna bloco formatado para injecao no prompt Sonnet.
+    Caminhos relativos ao root do projeto.
+    """
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+    skills = []
+    skills_dir = os.path.join(project_root, '.claude', 'skills')
+    if os.path.isdir(skills_dir):
+        for name in sorted(os.listdir(skills_dir)):
+            full = os.path.join(skills_dir, name)
+            if os.path.isdir(full):
+                skills.append(name)
+
+    agents = []
+    agents_dir = os.path.join(project_root, '.claude', 'agents')
+    if os.path.isdir(agents_dir):
+        for name in sorted(os.listdir(agents_dir)):
+            if name.endswith('.md'):
+                agents.append(name.replace('.md', ''))
+
+    lines = []
+    if skills:
+        lines.append(f"Skills ({len(skills)}): {', '.join(skills)}")
+    if agents:
+        lines.append(f"Subagentes ({len(agents)}): {', '.join(agents)}")
+
+    return '\n'.join(lines) if lines else ''
 
 
 def _get_anthropic_client() -> anthropic.Anthropic:
@@ -305,6 +339,18 @@ def _generate_batch_suggestions(
             + "\n</sugestoes_abertas>"
         )
 
+    # Inventario de skills/subagentes para evitar skill_suggestion duplicada
+    inventory = _get_skills_inventory()
+    inventory_block = ""
+    if inventory:
+        inventory_block = (
+            "\n\n<inventario_skills>\n"
+            "Skills e subagentes JA EXISTENTES no sistema — NAO sugerir criar skill que ja existe.\n"
+            "Se o agente nao usou uma skill existente, categorize como instruction_request.\n"
+            f"{inventory}\n"
+            "</inventario_skills>"
+        )
+
     try:
         client = _get_anthropic_client()
 
@@ -313,6 +359,7 @@ def _generate_batch_suggestions(
             f"{batch_text}\n"
             f"</batch_sessoes>"
             f"{open_summary}"
+            f"{inventory_block}"
         )
 
         response = client.messages.create(

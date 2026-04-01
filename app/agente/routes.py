@@ -57,7 +57,7 @@ from flask import (
 from flask_login import login_required, current_user
 
 from . import agente_bp
-from app import db
+from app import csrf, db
 from app.utils.timezone import agora_utc_naive
 # Configuração de uploads
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'agente_files')
@@ -3560,6 +3560,7 @@ def get_latest_intelligence_report():
 # =========================================================================
 
 @agente_bp.route('/api/improvement-dialogue', methods=['POST'])
+@csrf.exempt
 def save_improvement_dialogue():
     """
     Persiste resposta do Claude Code ao dialogo de melhoria (D8 cron diario).
