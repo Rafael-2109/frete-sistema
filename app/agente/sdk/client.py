@@ -2103,8 +2103,19 @@ Nunca invente informações."""
         # SDK 0.1.52+: session_id nativo — pre-declara o UUID do JSONL
         # Permite naming deterministico: JSONL sera ~/.claude/projects/.../{our_session_id}.jsonl
         # Elimina necessidade de capturar sdk_session_id do SystemMessage.
+        # IMPORTANTE: CLI exige UUID valido. Sessions Teams usam formato "teams_{id}"
+        # que NAO e UUID → CLI rejeita com "Invalid session ID" (exit code 1).
+        # Apenas passar session_id quando for UUID valido.
         if our_session_id:
-            options_dict["session_id"] = our_session_id
+            try:
+                import uuid as _uuid
+                _uuid.UUID(our_session_id)
+                options_dict["session_id"] = our_session_id
+            except (ValueError, AttributeError):
+                logger.debug(
+                    f"[AGENT_CLIENT] session_id '{our_session_id[:20]}...' "
+                    "não é UUID válido — CLI gerará próprio ID"
+                )
 
         # =================================================================
         # System Prompt: preset claude_code vs preset operacional
