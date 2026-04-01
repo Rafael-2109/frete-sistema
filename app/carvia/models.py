@@ -1434,6 +1434,13 @@ class CarviaCotacao(db.Model):
     dentro_tabela = db.Column(db.Boolean, nullable=True)
     detalhes_calculo = db.Column(db.JSON, nullable=True)
 
+    # Cotacao manual (sem lookup de tabela — requer aprovacao admin)
+    cotacao_manual = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    valor_manual = db.Column(db.Numeric(15, 2), nullable=True)
+
+    # Veiculo selecionado (DIRETA only — FK veiculos.id)
+    veiculo_id = db.Column(db.Integer, db.ForeignKey('veiculos.id'), nullable=True, index=True)
+
     # Datas
     data_cotacao = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     data_expedicao = db.Column(db.Date, nullable=True)
@@ -1476,6 +1483,7 @@ class CarviaCotacao(db.Model):
         lazy='joined'
     )
     tabela_carvia = db.relationship('CarviaTabelaFrete', lazy='joined')
+    veiculo = db.relationship('Veiculo', lazy='joined')
     motos = db.relationship(
         'CarviaCotacaoMoto',
         backref='cotacao',
