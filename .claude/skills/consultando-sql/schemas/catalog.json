@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 164,
+  "total_tabelas": 166,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -112,6 +112,15 @@
         "entrega_id",
         "data_agendada",
         "hora_agendada"
+      ]
+    },
+    {
+      "name": "agent_improvement_dialogue",
+      "description": "Dialogo versionado de melhoria continua entre Agent SDK e Claude Code.",
+      "key_fields": [
+        "suggestion_key",
+        "version",
+        "author"
       ]
     },
     {
@@ -355,6 +364,15 @@
         "tipo_despesa",
         "descricao",
         "valor"
+      ]
+    },
+    {
+      "name": "carvia_emissao_cte",
+      "description": "Tabela carvia_emissao_cte",
+      "key_fields": [
+        "nf_id",
+        "operacao_id",
+        "status"
       ]
     },
     {

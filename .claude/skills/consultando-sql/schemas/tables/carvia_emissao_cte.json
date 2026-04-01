@@ -1,0 +1,113 @@
+{
+  "name": "carvia_emissao_cte",
+  "description": "Tabela carvia_emissao_cte",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_id",
+      "type": "integer",
+      "description": "FK → carvia_nfs.id",
+      "nullable": false
+    },
+    {
+      "name": "operacao_id",
+      "type": "integer",
+      "description": "FK → carvia_operacoes.id"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "etapa",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "job_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "ctrc_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "placa",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "ARMAZEM"
+    },
+    {
+      "name": "cnpj_tomador",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "frete_valor",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "data_vencimento",
+      "type": "date"
+    },
+    {
+      "name": "medidas_json",
+      "type": "json"
+    },
+    {
+      "name": "erro_ssw",
+      "type": "text"
+    },
+    {
+      "name": "resultado_json",
+      "type": "json"
+    },
+    {
+      "name": "fatura_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "fatura_pdf_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "xml_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "dacte_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_id",
+      "references": "carvia_nfs.id"
+    },
+    {
+      "column": "operacao_id",
+      "references": "carvia_operacoes.id"
+    }
+  ]
+}

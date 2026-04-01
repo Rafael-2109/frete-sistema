@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 241,
+  "total_relationships": 244,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -141,6 +141,12 @@
       "to_column": "id"
     },
     {
+      "from_table": "carvia_cotacoes",
+      "from_column": "veiculo_id",
+      "to_table": "veiculos",
+      "to_column": "id"
+    },
+    {
       "from_table": "carvia_cte_complementares",
       "from_column": "operacao_id",
       "to_table": "carvia_operacoes",
@@ -180,6 +186,18 @@
       "from_table": "carvia_custos_entrega",
       "from_column": "frete_id",
       "to_table": "carvia_fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_emissao_cte",
+      "from_column": "nf_id",
+      "to_table": "carvia_nfs",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_emissao_cte",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
       "to_column": "id"
     },
     {

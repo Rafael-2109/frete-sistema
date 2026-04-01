@@ -268,16 +268,16 @@
       "unique": false
     },
     {
-      "name": "idx_conta_receber_nf",
+      "name": "ix_contas_a_receber_vencimento",
       "columns": [
-        "titulo_nf"
+        "vencimento"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_vencimento",
+      "name": "idx_conta_receber_nf",
       "columns": [
-        "vencimento"
+        "titulo_nf"
       ],
       "unique": false
     },
