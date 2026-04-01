@@ -21,7 +21,7 @@ def validar_cnpj(_form, field):
     # Extrair apenas digitos
     digitos = re.sub(r'\D', '', field.data)
     if len(digitos) != 14:
-        return  # Length validator ja cuida do tamanho
+        raise ValidationError('CNPJ deve conter exatamente 14 digitos.')
     from app.utils.cnpj_utils import validar_cnpj as _validar_cnpj_central
     if not _validar_cnpj_central(digitos):
         raise ValidationError('CNPJ invalido (digito verificador).')

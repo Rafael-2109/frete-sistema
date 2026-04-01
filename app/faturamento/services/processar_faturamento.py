@@ -118,19 +118,19 @@ class ProcessadorFaturamento:
             try:
                 db.session.commit()
                 logger.debug(f"Commit final de {resultado['processadas']} NFs processadas")
+
+                # Atualizar status das separações para FATURADO — SOMENTE após commit bem-sucedido
+                logger.info("Atualizando status das separacoes para FATURADO...")
+                separacoes_atualizadas = self._atualizar_status_separacoes_faturadas()
+                if separacoes_atualizadas > 0:
+                    logger.info(f"{separacoes_atualizadas} separacoes atualizadas para status FATURADO")
+                    resultado["separacoes_atualizadas_status"] = separacoes_atualizadas
             except Exception as e:
                 logger.exception(f"Erro no commit final do processamento de faturamento ({resultado['processadas']} NFs)")
                 db.session.rollback()
                 # Todas as NFs do batch falharam no commit
                 nfs_do_batch = [nf.numero_nf for nf in nfs_pendentes]
                 nfs_falhadas = list(set(nfs_falhadas + nfs_do_batch))
-
-            # NOVO: Atualizar status das separações para FATURADO
-            logger.info("🔄 Atualizando status das separações para FATURADO...")
-            separacoes_atualizadas = self._atualizar_status_separacoes_faturadas()
-            if separacoes_atualizadas > 0:
-                logger.info(f"✅ {separacoes_atualizadas} separações atualizadas para status FATURADO")
-                resultado["separacoes_atualizadas_status"] = separacoes_atualizadas
 
             # Estatísticas finais
             logger.info(f"✅ Processamento completo: {resultado['processadas']} NFs processadas")

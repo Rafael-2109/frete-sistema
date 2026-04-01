@@ -149,6 +149,8 @@ def _handle_persistent_failures(
         attempt: Tentativa atual
         max_attempts: Maximo de tentativas
     """
+    max_attempts = max(1, max_attempts)  # Guard: nunca menos que 1 tentativa
+
     if attempt >= max_attempts:
         # Max attempts excedido - escalar para intervencao manual
         logger.critical(
@@ -169,24 +171,27 @@ def _handle_persistent_failures(
     )
 
     try:
-        from app.portal.workers import enqueue_job
-        from rq import Retry
+        from datetime import timedelta
+        from app.portal.workers import get_queue
 
-        enqueue_job(
+        queue = get_queue(QUEUE_NAME)
+        job = queue.enqueue_in(
+            timedelta(seconds=delay_seconds),
             retry_nf_sync,
             nf_ids,
             next_attempt,
             max_attempts,
             erros[-1] if erros else None,
-            queue_name=QUEUE_NAME,
-            timeout=JOB_TIMEOUT,
+            job_timeout=JOB_TIMEOUT,
+            result_ttl=86400,
+            failure_ttl=86400,
         )
 
-        next_retry_time = agora_utc_naive().strftime('%H:%M:%S')
+        scheduled_time = agora_utc_naive().strftime('%H:%M:%S')
         logger.info(
-            f"[RETRY NF SYNC] Job reenfileirado. "
-            f"Tentativa {next_attempt} agendada. "
-            f"Enfileirado em: {next_retry_time}"
+            f"[RETRY NF SYNC] Job {job.id} agendado com delay de {delay_seconds}s. "
+            f"Tentativa {next_attempt} em ~{delay_seconds // 60}min. "
+            f"Enfileirado em: {scheduled_time}"
         )
 
     except Exception as e:

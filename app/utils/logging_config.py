@@ -31,12 +31,17 @@ class SensitiveFilter(logging.Filter):
         r'(?P<userinfo>[^@]+)@',                       # userinfo@
     )
 
-    # Pares chave=valor (query string ou log text)
+    # Pares chave=valor (query string ou log text, inclui JSON "key": "value")
     _KV_RE = re.compile(
         r'(?i)'
         r'(?P<key>password|passwd|api_key|apikey|secret|token|authorization|credential)'
         r'\s*[=:]\s*'
-        r'(?P<quote>["\']?)(?P<value>[^\s,;"\'}]+)(?P=quote)',
+        r'(?P<quote>["\']?)(?P<value>.+?)(?=(?P=quote)[\s,;}\])]|(?P=quote)$|[\s,;}\])]+|$)',
+    )
+
+    # Authorization Bearer/Basic/Token pattern
+    _AUTH_RE = re.compile(
+        r'(?i)(?P<scheme>Bearer|Basic|Token)\s+(?P<credential>\S+)'
     )
 
     def _redact(self, text: str) -> str:
@@ -46,7 +51,12 @@ class SensitiveFilter(logging.Filter):
             lambda m: f"{m.group('scheme')}://***@",
             text,
         )
-        # 2) Pares chave=valor  ->  key=***
+        # 2) Authorization headers  ->  Bearer ***
+        text = self._AUTH_RE.sub(
+            lambda m: f"{m.group('scheme')} ***",
+            text,
+        )
+        # 3) Pares chave=valor  ->  key=***
         text = self._KV_RE.sub(
             lambda m: f"{m.group('key')}=***",
             text,

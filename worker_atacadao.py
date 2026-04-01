@@ -15,6 +15,7 @@ Uso:
 
 import os
 import sys
+import re
 import logging
 import time
 from redis import Redis
@@ -36,7 +37,8 @@ logger = logging.getLogger(__name__)
 def setup_redis_connection():
     """Configura conexão com Redis"""
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-    logger.info(f"Conectando ao Redis: {redis_url[:30]}...")
+    safe_url = re.sub(r'://([^@]+)@', '://***@', redis_url)
+    logger.info(f"Conectando ao Redis: {safe_url}")
     return Redis.from_url(redis_url)
 
 def worker_startup():

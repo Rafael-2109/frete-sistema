@@ -478,8 +478,9 @@ class CalculadoraFrete:
             return valor_d
 
         if icms_d > ZERO:
-            # Desconta ICMS do valor
-            return valor_d * (UM - icms_d)
+            # Desconta ICMS do valor (normalizar % vs fração)
+            fator = icms_d if icms_d < UM else icms_d / CalculadoraFrete._CEM
+            return valor_d * (UM - fator)
 
         return valor_d
     
