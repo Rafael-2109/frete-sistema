@@ -3101,17 +3101,18 @@ Nunca invente informações."""
         # Se o client já existe no pool (reutilização), o CLI subprocess
         # já tem o contexto da conversa. Resume só é necessário quando
         # criamos um novo client (primeiro turno ou após idle cleanup).
-        # SDK 0.1.52+: Se our_session_id foi passado como session_id,
-        # o resume pode usar our_session_id diretamente como fallback.
+        # IMPORTANTE: Só resume se sdk_session_id vier do DB (sessão real).
+        # Fallback para our_session_id causava --resume com JSONL inexistente
+        # em sessões novas → CLI exit code 1 (ProcessError).
         pool_key = our_session_id or ''
         existing = get_pooled_client(pool_key)
-        resume_id = sdk_session_id or our_session_id
+        resume_id = sdk_session_id
         if not existing and resume_id:
             options = self._with_resume(options, resume_id)
             logger.info(f"[AGENT_SDK_PERSISTENT] Resuming session: {resume_id[:12]}...")
 
         # ─── Emitir init sintético ───
-        state.result_session_id = resume_id or sdk_session_id
+        state.result_session_id = sdk_session_id or our_session_id
         yield StreamEvent(
             type='init',
             content={'session_id': sdk_session_id or 'pending'},
