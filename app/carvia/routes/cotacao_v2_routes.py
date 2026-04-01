@@ -1070,7 +1070,6 @@ def register_cotacao_v2_routes(bp):
                                 numero_nf=numero_nf,
                             ))
 
-                        pedido.status = 'FATURADO'
                         logger.info(
                             "Pedido %s criado (NF %s) na cotacao %s",
                             pedido.numero_pedido, numero_nf, cotacao.numero_cotacao,
@@ -2035,10 +2034,6 @@ def register_cotacao_v2_routes(bp):
                     numero_nf=numero_nf,
                 )
                 db.session.add(pedido_item)
-
-            # 6. Atualizar status do pedido
-            if pedido.status == 'ABERTO':
-                pedido.status = 'FATURADO'
 
             db.session.flush()
 

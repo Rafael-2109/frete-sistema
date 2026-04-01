@@ -75,7 +75,7 @@
                             </td>
                             <td class="text-center">
                                 {% set st = ped.status_calculado %}
-                                {% set st_map = {'ABERTO': 'carvia-badge-pendente', 'FATURADO': 'carvia-badge-faturado', 'EMBARCADO': 'carvia-badge-embarcado', 'CANCELADO': 'carvia-badge-cancelado'} %}
+                                {% set st_map = {'ABERTO': 'carvia-badge-pendente', 'COTADO': 'carvia-badge-cotado', 'EMBARCADO': 'carvia-badge-embarcado', 'CANCELADO': 'carvia-badge-cancelado'} %}
                                 <span class="badge {{ st_map.get(st, 'bg-secondary') }}">{{ st }}</span>
                             </td>
                             <td class="text-center">

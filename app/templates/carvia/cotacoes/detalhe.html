@@ -341,7 +341,7 @@
                     {% if pedidos %}
                     {% for ped in pedidos %}
                     {% set st = ped.status_calculado %}
-                    {% set st_map = {'ABERTO': 'carvia-badge-pendente', 'FATURADO': 'carvia-badge-faturado', 'EMBARCADO': 'carvia-badge-embarcado', 'CANCELADO': 'carvia-badge-cancelado'} %}
+                    {% set st_map = {'ABERTO': 'carvia-badge-pendente', 'COTADO': 'carvia-badge-cotado', 'EMBARCADO': 'carvia-badge-embarcado', 'CANCELADO': 'carvia-badge-cancelado'} %}
                     {% set todos_itens = ped.itens.all() %}
                     {% set nfs_unicas = todos_itens | map(attribute='numero_nf') | select | unique | list %}
                     <div class="border rounded mb-2 p-2">
@@ -359,7 +359,7 @@
                             </div>
                             <div class="d-flex gap-1">
                                 <a href="{{ url_for('carvia.detalhe_pedido_carvia', pedido_id=ped.id) }}" class="btn btn-outline-primary btn-sm"><i class="fas fa-eye"></i></a>
-                                {% if st == 'FATURADO' %}
+                                {% if nfs_unicas and st != 'EMBARCADO' %}
                                 <button class="btn btn-outline-warning btn-sm" onclick="desanexarNFPedido({{ ped.id }}, '{{ ped.numero_pedido }}')" title="Desanexar NF"><i class="fas fa-unlink"></i></button>
                                 {% endif %}
                                 {% if st not in ('EMBARCADO',) %}

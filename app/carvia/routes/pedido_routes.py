@@ -222,10 +222,6 @@ def register_pedido_routes(bp):
             for item in itens:
                 item.numero_nf = numero_nf
 
-            # Atualizar status do pedido
-            if pedido.status == 'ABERTO':
-                pedido.status = 'FATURADO'
-
             db.session.flush()
 
             # 2. Expandir provisorio no embarque (se cotacao esta em algum)
@@ -270,7 +266,7 @@ def register_pedido_routes(bp):
                 'sucesso': True,
                 'mensagem': f'NF {numero_nf} anexada ao pedido {pedido.numero_pedido}.',
                 'itens_atualizados': len(itens),
-                'status_pedido': pedido.status,
+                'status_pedido': pedido.status_calculado,
             }
             if resultado_expansao:
                 resposta['embarque'] = resultado_expansao
@@ -400,9 +396,6 @@ def register_pedido_routes(bp):
             # 4. Limpar numero_nf dos itens
             for item in pedido.itens.all():
                 item.numero_nf = None
-
-            # 5. Reverter status para ABERTO
-            pedido.status = 'ABERTO'
 
             db.session.commit()
             logger.info(

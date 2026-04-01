@@ -560,20 +560,20 @@ class CarviaFreteService:
         if not nfs:
             return
 
-        # Buscar pedidos com esses NFs
+        # Buscar pedidos com esses NFs (excluir ja embarcados e cancelados)
         pedidos_itens = CarviaPedidoItem.query.join(
             CarviaPedido,
             CarviaPedidoItem.pedido_id == CarviaPedido.id
         ).filter(
             CarviaPedidoItem.numero_nf.in_(nfs),
-            CarviaPedido.status == 'FATURADO',
+            CarviaPedido.status.notin_(['EMBARCADO', 'CANCELADO']),
         ).all()
 
         pedidos_atualizados = set()
         for pi in pedidos_itens:
             if pi.pedido_id not in pedidos_atualizados:
                 pedido = db.session.get(CarviaPedido, pi.pedido_id)
-                if pedido and pedido.status == 'FATURADO':
+                if pedido and pedido.status not in ('EMBARCADO', 'CANCELADO'):
                     pedido.status = 'EMBARCADO'
                     pedidos_atualizados.add(pi.pedido_id)
                     logger.info(

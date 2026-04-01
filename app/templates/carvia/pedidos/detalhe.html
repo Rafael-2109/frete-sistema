@@ -9,8 +9,7 @@
                 {# Badge semantico por status #}
                 {% set status_map = {
                     'ABERTO': 'carvia-badge-pendente',
-                    'SEPARADO': 'carvia-badge-separado',
-                    'FATURADO': 'carvia-badge-faturado',
+                    'COTADO': 'carvia-badge-cotado',
                     'EMBARCADO': 'carvia-badge-embarcado',
                     'CANCELADO': 'carvia-badge-cancelado'
                 } %}
@@ -142,7 +141,7 @@
             <div class="modal-body">
                 <p class="text-muted small">
                     O numero da NF sera preenchido em todos os {{ itens|length }} itens deste pedido.
-                    O status sera alterado para FATURADO.
+                    O numero da NF sera vinculado aos itens do pedido.
                 </p>
                 <div class="mb-3">
                     <label class="form-label">Numero da NF <span class="text-danger">*</span></label>

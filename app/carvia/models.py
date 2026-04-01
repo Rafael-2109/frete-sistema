@@ -1619,7 +1619,7 @@ class CarviaPedido(db.Model):
     """Pedido CarVia — vinculado a cotacao, split por filial SP/RJ"""
     __tablename__ = 'carvia_pedidos'
 
-    STATUSES = ['ABERTO', 'FATURADO', 'EMBARCADO', 'CANCELADO']
+    STATUSES = ['ABERTO', 'COTADO', 'EMBARCADO', 'CANCELADO']
 
     id = db.Column(db.Integer, primary_key=True)
     numero_pedido = db.Column(db.String(20), nullable=False, index=True)
@@ -1650,7 +1650,7 @@ class CarviaPedido(db.Model):
 
     __table_args__ = (
         db.CheckConstraint(
-            "status IN ('ABERTO','FATURADO','EMBARCADO','CANCELADO')",
+            "status IN ('ABERTO','COTADO','EMBARCADO','CANCELADO')",
             name='ck_carvia_pedido_status'
         ),
         db.CheckConstraint("filial IN ('SP', 'RJ')", name='ck_carvia_pedido_filial'),
@@ -1689,51 +1689,62 @@ class CarviaPedido(db.Model):
     def status_calculado(self):
         """Status derivado do estado real, sem dependencia de atualizacao manual.
 
-        ABERTO: itens sem NF (ou sem itens) — equivale a ABERTO da Separacao Nacom
-        FATURADO: TODOS itens com NF preenchida
-        EMBARCADO: FATURADO + portaria registrou saida (embarque.data_embarque)
+        ABERTO: pedido nao esta em nenhum embarque
+        COTADO: pedido esta em embarque (provisorio ou real) — ha cotacao de compra
+        EMBARCADO: COTADO + portaria registrou saida (embarque.data_embarque)
         CANCELADO: cancelamento explicito (coluna status)
         """
         if self.status == 'CANCELADO':
             return 'CANCELADO'
 
-        # Buscar itens (lazy='dynamic', precisa .all())
-        itens_lista = self.itens.all()
-        if not itens_lista:
-            return 'ABERTO'
-
-        todos_com_nf = all(i.numero_nf for i in itens_lista)
-        if not todos_com_nf:
-            return 'ABERTO'
-
-        # Todos itens com NF — verificar se esta em embarque embarcado
         from app.embarques.models import EmbarqueItem, Embarque
 
-        # Buscar EmbarqueItems via padrao CARVIA-NF-{nf_id} (novo)
+        em_embarque = False
+
+        # 1. Buscar EmbarqueItems reais via padrao CARVIA-NF-{nf_id}
+        itens_lista = self.itens.all()
         nf_nums = {i.numero_nf for i in itens_lista if i.numero_nf}
         for nf_num in nf_nums:
             nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
             if nf_obj:
-                em_embarque = EmbarqueItem.query.filter_by(
+                ei = EmbarqueItem.query.filter_by(
                     separacao_lote_id=f'CARVIA-NF-{nf_obj.id}',
                     status='ativo',
                 ).first()
-                if em_embarque:
-                    embarque = db.session.get(Embarque, em_embarque.embarque_id)
+                if ei:
+                    embarque = db.session.get(Embarque, ei.embarque_id)
                     if embarque and embarque.data_embarque:
                         return 'EMBARCADO'
+                    em_embarque = True
 
-        # Backward compat: padrao antigo CARVIA-PED-{id}
-        em_legado = EmbarqueItem.query.filter_by(
-            separacao_lote_id=f'CARVIA-PED-{self.id}',
-            status='ativo',
-        ).first()
-        if em_legado:
-            embarque = db.session.get(Embarque, em_legado.embarque_id)
-            if embarque and embarque.data_embarque:
-                return 'EMBARCADO'
+        # 2. Backward compat: padrao antigo CARVIA-PED-{id}
+        if not em_embarque:
+            em_legado = EmbarqueItem.query.filter_by(
+                separacao_lote_id=f'CARVIA-PED-{self.id}',
+                status='ativo',
+            ).first()
+            if em_legado:
+                embarque = db.session.get(Embarque, em_legado.embarque_id)
+                if embarque and embarque.data_embarque:
+                    return 'EMBARCADO'
+                em_embarque = True
 
-        return 'FATURADO'
+        # 3. Provisorio via cotacao (cotacao adicionada ao embarque)
+        if not em_embarque:
+            ei_prov = EmbarqueItem.query.filter_by(
+                carvia_cotacao_id=self.cotacao_id,
+                status='ativo',
+            ).first()
+            if ei_prov:
+                embarque_prov = db.session.get(Embarque, ei_prov.embarque_id)
+                if embarque_prov and embarque_prov.data_embarque:
+                    return 'EMBARCADO'
+                em_embarque = True
+
+        if em_embarque:
+            return 'COTADO'
+
+        return 'ABERTO'
 
     def __repr__(self):
         return f'<CarviaPedido {self.numero_pedido} ({self.status}) filial={self.filial}>'

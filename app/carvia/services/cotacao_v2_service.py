@@ -640,7 +640,7 @@ class CotacaoV2Service:
     def reabrir(cotacao_id: int, reaberto_por: str) -> Tuple[bool, Optional[str]]:
         """Reabre cotacao APROVADA, voltando para RASCUNHO.
 
-        Bloqueia se houver pedidos EMBARCADO ou FATURADO vinculados.
+        Bloqueia se houver pedidos EMBARCADO ou em embarque (COTADO).
         """
         from app.carvia.models import CarviaCotacao, CarviaPedido
         from app.utils.timezone import agora_utc_naive
@@ -662,15 +662,16 @@ class CotacaoV2Service:
                 'Nao e possivel reabrir.'
             )
 
-        # Verificar se ha pedidos com NF vinculada (FATURADO)
-        pedidos_faturados = CarviaPedido.query.filter(
-            CarviaPedido.cotacao_id == cotacao_id,
-            CarviaPedido.status == 'FATURADO',
+        # Verificar se ha pedidos em embarque (cotados)
+        from app.embarques.models import EmbarqueItem
+        em_embarque = EmbarqueItem.query.filter(
+            EmbarqueItem.carvia_cotacao_id == cotacao_id,
+            EmbarqueItem.status == 'ativo',
         ).count()
-        if pedidos_faturados > 0:
+        if em_embarque > 0:
             return False, (
-                f'Cotacao possui {pedidos_faturados} pedido(s) com NF vinculada. '
-                'Use "Desanexar NF" nos pedidos antes de reabrir.'
+                'Cotacao possui pedido(s) em embarque. '
+                'Remova do embarque antes de reabrir.'
             )
 
         cotacao.status = 'RASCUNHO'
