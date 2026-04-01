@@ -475,7 +475,7 @@
                     </button>
                     {% endif %}
 
-                    {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
+                    {% if cotacao.status != 'CANCELADO' %}
                     <hr>
                     <button class="btn btn-outline-danger btn-sm w-100" onclick="cancelarCotacao()">Cancelar Cotacao</button>
                     {% endif %}
@@ -918,7 +918,13 @@ function enviarCotacao() { if (!confirm('Gravar cotacao?')) return; apiCall(`/ca
 function aprovarCliente() { if (!confirm('Cliente aprovou?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/aprovar-cliente`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function recusarCliente() { if (!confirm('Cliente recusou?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/recusar-cliente`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function contraProposta() { const v = prompt('Valor da contra-proposta (R$):'); if (!v) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/contra-proposta`, 'POST', {novo_valor: parseFloat(v)}).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
-function cancelarCotacao() { if (!confirm('Cancelar cotacao?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/cancelar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
+function cancelarCotacao() {
+    const pedidosAtivos = {{ pedidos|rejectattr('status', 'equalto', 'CANCELADO')|list|length }};
+    let msg = 'Cancelar cotacao?';
+    if (pedidosAtivos > 0) msg += '\n\n' + pedidosAtivos + ' pedido(s) vinculado(s) tambem serao cancelados.';
+    if (!confirm(msg)) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/cancelar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); });
+}
 function reabrirCotacao() { if (!confirm('Reabrir cotacao? O status voltara para RASCUNHO.')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/reabrir`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function adminAprovar() { if (!confirm('Aprovar desconto?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/admin-aprovar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function adminRejeitar() { if (!confirm('Rejeitar desconto?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/admin-rejeitar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
@@ -1111,6 +1117,60 @@ function salvarEnderecoInline(silencioso) {
         }
     });
 }
+
+/* ===== Auto-save endereco cotacao com debounce 500ms ===== */
+let _enderecoDebounce = null;
+const _camposPricing = ['endUf', 'endCidade', 'endCep'];
+
+function _zerarPricingUI() {
+    // Zerar exibicao de pricing no card (sem reload)
+    document.querySelectorAll('.card-header').forEach(h => {
+        if (h.textContent.trim() === 'Pricing') {
+            const body = h.nextElementSibling;
+            if (body) {
+                body.querySelectorAll('.fs-5, .fs-4').forEach(el => el.textContent = '-');
+            }
+        }
+    });
+}
+
+function _salvarEnderecoCotacaoDebounce(campoAlterado) {
+    clearTimeout(_enderecoDebounce);
+    _enderecoDebounce = setTimeout(async () => {
+        const entrega = {
+            entrega_uf: (document.getElementById('endUf').value || '').trim().toUpperCase(),
+            entrega_cidade: (document.getElementById('endCidade').value || '').trim(),
+            entrega_logradouro: (document.getElementById('endLogradouro').value || '').trim(),
+            entrega_numero: (document.getElementById('endNumero').value || '').trim(),
+            entrega_bairro: (document.getElementById('endBairro').value || '').trim(),
+            entrega_cep: (document.getElementById('endCep').value || '').trim(),
+            entrega_complemento: (document.getElementById('endComplemento').value || '').trim(),
+        };
+        const resp = await apiCall(`/carvia/api/cotacoes/${cotacaoId}`, 'PUT', entrega);
+        const fb = document.getElementById('enderecoFeedback');
+        if (resp.sucesso) {
+            fb.innerHTML = '<small class="text-success"><i class="fas fa-check"></i> Endereco salvo na cotacao.</small>';
+            fb.style.display = 'block';
+            setTimeout(() => fb.style.display = 'none', 3000);
+        }
+    }, 500);
+
+    // Zerar pricing imediatamente se campo critico mudou
+    if (_camposPricing.includes(campoAlterado)) {
+        _zerarPricingUI();
+    }
+}
+
+// Attach listeners em todos os campos inline
+document.addEventListener('DOMContentLoaded', function() {
+    ['endLogradouro','endNumero','endBairro','endComplemento','endCidade','endUf','endCep'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => _salvarEnderecoCotacaoDebounce(id));
+        // Tambem capturar 'change' para auto-preenchimento do ViaCEP
+        el.addEventListener('change', () => _salvarEnderecoCotacaoDebounce(id));
+    });
+});
 
 /* ===== Init ===== */
 document.addEventListener('DOMContentLoaded', function() {

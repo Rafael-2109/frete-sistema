@@ -595,7 +595,15 @@ class CotacaoService:
                                 continue
 
             # 3. Fallback: busca direta por UF (sem CidadeAtendida)
-            # Usado quando cidade nao foi informada ou nao tem vinculos
+            # Usado APENAS quando cidade nao foi informada.
+            # Se cidade foi informada mas nao tem vinculos, bloquear.
+            if cidade_destino and not vinculos_encontrados:
+                logger.info(
+                    "Cidade '%s/%s' nao tem vinculos em CidadeAtendida — sem opcoes",
+                    cidade_destino, uf_destino,
+                )
+                return []
+
             if not vinculos_encontrados:
                 query = db.session.query(TabelaFrete).join(
                     Transportadora,

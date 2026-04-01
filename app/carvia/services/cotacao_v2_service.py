@@ -241,21 +241,8 @@ class CotacaoV2Service:
                 'detalhes_calculo': cotacao.detalhes_calculo,
             }, None
 
-        # Fora da tabela — cotar via tabelas Nacom
-        opcoes = CotacaoV2Service._cotar_fora_tabela(
-            uf_entrega=uf_entrega,
-            cidade_entrega=cidade_entrega,
-            peso=peso,
-            valor=valor,
-        )
-
-        cotacao.dentro_tabela = False
-        db.session.flush()
-
-        return {
-            'dentro_tabela': False,
-            'opcoes_fora_tabela': opcoes,
-        }, None
+        # Cotacao comercial nao cota fora da tabela CarVia
+        return None, 'Cidade nao atendida pela tabela CarVia.'
 
     @staticmethod
     def _cotar_dentro_tabela(cotacao, destino, peso: float, valor: float,
@@ -583,35 +570,52 @@ class CotacaoV2Service:
 
     @staticmethod
     def cancelar(cotacao_id: int) -> Tuple[bool, Optional[str]]:
-        """Cancela cotacao (de qualquer status exceto APROVADO).
+        """Cancela cotacao de qualquer status (exceto CANCELADO).
 
-        Se cotacao esta em embarque (provisorio), remove o EmbarqueItem.
+        Bloqueia se houver pedidos EMBARCADO (irreversivel).
+        Cancela pedidos vinculados em cascata e remove EmbarqueItems.
         """
-        from app.carvia.models import CarviaCotacao
+        from app.carvia.models import CarviaCotacao, CarviaPedido
 
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
             return False, 'Cotacao nao encontrada.'
-        if cotacao.status == 'APROVADO':
-            return False, 'Cotacao APROVADA nao pode ser cancelada.'
         if cotacao.status == 'CANCELADO':
             return False, 'Cotacao ja esta cancelada.'
 
-        # Limpar provisorio do embarque (nao-bloqueante)
-        embarque_info = None
+        # Bloquear se algum pedido EMBARCADO (irreversivel)
+        pedidos_embarcados = CarviaPedido.query.filter(
+            CarviaPedido.cotacao_id == cotacao_id,
+            CarviaPedido.status == 'EMBARCADO',
+        ).count()
+        if pedidos_embarcados > 0:
+            return False, (
+                f'Cotacao possui {pedidos_embarcados} pedido(s) EMBARCADO. '
+                'Nao e possivel cancelar.'
+            )
+
+        # Limpar embarque: provisorio + reais (nao-bloqueante)
         try:
             from app.carvia.services.embarque_carvia_service import EmbarqueCarViaService
-            embarque_info = EmbarqueCarViaService.remover_provisorio_cotacao(cotacao_id)
+            EmbarqueCarViaService.remover_itens_cotacao(cotacao_id)
         except Exception as e:
-            logger.warning("Erro ao limpar provisorio do embarque: %s", e)
+            logger.warning("Erro ao limpar embarque da cotacao: %s", e)
+
+        # Cascata: cancelar todos pedidos nao-CANCELADO
+        pedidos = CarviaPedido.query.filter(
+            CarviaPedido.cotacao_id == cotacao_id,
+            CarviaPedido.status != 'CANCELADO',
+        ).all()
+        for pedido in pedidos:
+            pedido.status = 'CANCELADO'
 
         cotacao.status = 'CANCELADO'
         db.session.flush()
 
-        if embarque_info:
+        if pedidos:
             logger.info(
-                "Cotacao %s cancelada. Provisorio removido do embarque #%s.",
-                cotacao_id, embarque_info.get('numero')
+                "Cotacao %s cancelada. %d pedido(s) cancelado(s) em cascata.",
+                cotacao_id, len(pedidos),
             )
 
         return True, None

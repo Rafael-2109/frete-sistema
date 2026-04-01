@@ -399,6 +399,45 @@ class EmbarqueCarViaService:
         }
 
     @staticmethod
+    def remover_itens_cotacao(carvia_cotacao_id: int) -> Optional[Dict]:
+        """Remove TODOS os EmbarqueItems de uma cotacao (provisorio + reais).
+
+        Diferente de remover_provisorio_cotacao(), nao depende do provisorio existir.
+        Usado no cancelamento de cotacao — corrige caso em que provisorio ja foi
+        consumido (expandido_completo) mas itens reais CARVIA-NF-* permanecem.
+        """
+        from app.embarques.models import EmbarqueItem, Embarque
+
+        todos_itens = EmbarqueItem.query.filter_by(
+            carvia_cotacao_id=carvia_cotacao_id,
+            status='ativo',
+        ).all()
+
+        if not todos_itens:
+            return None
+
+        embarque_id = todos_itens[0].embarque_id
+        embarque = db.session.get(Embarque, embarque_id)
+
+        for item in todos_itens:
+            db.session.delete(item)
+
+        EmbarqueCarViaService._recalcular_totais(embarque_id)
+
+        if embarque:
+            embarque.marcar_alterado_apos_impressao()
+
+        logger.info(
+            "%d EmbarqueItem(s) removido(s) do embarque %s (cotacao %s cancelada)",
+            len(todos_itens), embarque_id, carvia_cotacao_id,
+        )
+
+        return {
+            'embarque_id': embarque_id,
+            'numero': embarque.numero if embarque else None,
+        }
+
+    @staticmethod
     def _recalcular_totais(embarque_id: int):
         """Recalcula peso_total e valor_total do embarque.
 

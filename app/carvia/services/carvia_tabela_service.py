@@ -102,6 +102,12 @@ class CarviaTabelaService:
                 if vinculos:
                     nomes_tabela = [v.nome_tabela for v in vinculos]
                     lead_times = {v.nome_tabela: v.lead_time for v in vinculos}
+                else:
+                    # Cidade nao esta em CidadeAtendida — bloquear
+                    return []
+            else:
+                # Cidade nao encontrada no cadastro de cidades — bloquear
+                return []
 
         # Query base
         query = CarviaTabelaFrete.query.filter(

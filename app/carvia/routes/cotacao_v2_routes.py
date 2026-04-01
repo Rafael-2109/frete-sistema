@@ -1189,7 +1189,21 @@ def register_cotacao_v2_routes(bp):
             if 'endereco_origem_id' in data and data['endereco_origem_id']:
                 cotacao.endereco_origem_id = int(data['endereco_origem_id'])
             if 'endereco_destino_id' in data and data['endereco_destino_id']:
-                cotacao.endereco_destino_id = int(data['endereco_destino_id'])
+                novo_destino = int(data['endereco_destino_id'])
+                if novo_destino != cotacao.endereco_destino_id:
+                    cotacao.endereco_destino_id = novo_destino
+                    # Limpar override de entrega e pricing (destino mudou)
+                    for c in ('entrega_uf', 'entrega_cidade', 'entrega_logradouro',
+                              'entrega_numero', 'entrega_bairro', 'entrega_cep',
+                              'entrega_complemento'):
+                        setattr(cotacao, c, None)
+                    cotacao.valor_tabela = None
+                    cotacao.valor_descontado = None
+                    cotacao.valor_final_aprovado = None
+                    cotacao.tabela_carvia_id = None
+                    cotacao.dentro_tabela = None
+                    cotacao.detalhes_calculo = None
+                    cotacao.percentual_desconto = None
             if 'tipo_material' in data and data['tipo_material'] in ('CARGA_GERAL', 'MOTO'):
                 cotacao.tipo_material = data['tipo_material']
 
@@ -1222,11 +1236,27 @@ def register_cotacao_v2_routes(bp):
                 cotacao.observacoes = data['observacoes'] or None
 
             # Endereco de entrega (override por cotacao)
+            endereco_mudou = False
             for campo in ('entrega_uf', 'entrega_cidade', 'entrega_logradouro',
                           'entrega_numero', 'entrega_bairro', 'entrega_cep',
                           'entrega_complemento'):
                 if campo in data:
-                    setattr(cotacao, campo, data[campo] or None)
+                    novo = data[campo] or None
+                    if campo in ('entrega_uf', 'entrega_cidade'):
+                        atual = getattr(cotacao, campo, None)
+                        if novo != atual:
+                            endereco_mudou = True
+                    setattr(cotacao, campo, novo)
+
+            # Zerar pricing quando UF ou cidade mudam (obriga recalculo)
+            if endereco_mudou:
+                cotacao.valor_tabela = None
+                cotacao.valor_descontado = None
+                cotacao.valor_final_aprovado = None
+                cotacao.tabela_carvia_id = None
+                cotacao.dentro_tabela = None
+                cotacao.detalhes_calculo = None
+                cotacao.percentual_desconto = None
 
             db.session.commit()
             return jsonify({'sucesso': True, 'mensagem': 'Cotacao atualizada.'})
@@ -1262,7 +1292,20 @@ def register_cotacao_v2_routes(bp):
             if data.get('endereco_origem_id'):
                 cotacao.endereco_origem_id = int(data['endereco_origem_id'])
             if data.get('endereco_destino_id'):
-                cotacao.endereco_destino_id = int(data['endereco_destino_id'])
+                novo_destino = int(data['endereco_destino_id'])
+                if novo_destino != cotacao.endereco_destino_id:
+                    cotacao.endereco_destino_id = novo_destino
+                    for c in ('entrega_uf', 'entrega_cidade', 'entrega_logradouro',
+                              'entrega_numero', 'entrega_bairro', 'entrega_cep',
+                              'entrega_complemento'):
+                        setattr(cotacao, c, None)
+                    cotacao.valor_tabela = None
+                    cotacao.valor_descontado = None
+                    cotacao.valor_final_aprovado = None
+                    cotacao.tabela_carvia_id = None
+                    cotacao.dentro_tabela = None
+                    cotacao.detalhes_calculo = None
+                    cotacao.percentual_desconto = None
             if data.get('tipo_material') in ('CARGA_GERAL', 'MOTO'):
                 cotacao.tipo_material = data['tipo_material']
             if data.get('tipo_carga') in ('DIRETA', 'FRACIONADA'):
@@ -1293,11 +1336,27 @@ def register_cotacao_v2_routes(bp):
                 cotacao.observacoes = data['observacoes'] or None
 
             # Endereco de entrega (override por cotacao)
+            endereco_mudou = False
             for campo in ('entrega_uf', 'entrega_cidade', 'entrega_logradouro',
                           'entrega_numero', 'entrega_bairro', 'entrega_cep',
                           'entrega_complemento'):
                 if campo in data:
-                    setattr(cotacao, campo, data[campo] or None)
+                    novo = data[campo] or None
+                    if campo in ('entrega_uf', 'entrega_cidade'):
+                        atual = getattr(cotacao, campo, None)
+                        if novo != atual:
+                            endereco_mudou = True
+                    setattr(cotacao, campo, novo)
+
+            # Zerar pricing quando UF ou cidade mudam (obriga recalculo)
+            if endereco_mudou:
+                cotacao.valor_tabela = None
+                cotacao.valor_descontado = None
+                cotacao.valor_final_aprovado = None
+                cotacao.tabela_carvia_id = None
+                cotacao.dentro_tabela = None
+                cotacao.detalhes_calculo = None
+                cotacao.percentual_desconto = None
 
             # --- Sync motos (se tipo=MOTO) ---
             if cotacao.tipo_material == 'MOTO' and 'motos' in data:
