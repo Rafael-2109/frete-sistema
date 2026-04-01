@@ -1288,6 +1288,10 @@ def process_teams_task_async(
                 f"para msg ({len(mensagem.split())} palavras)"
             )
 
+            # Prefixos de erro retornados por _obter_resposta_agente_*
+            # NÃO devem ser aceitos como resposta válida pelo retry loop.
+            _ERROR_PREFIXES = ("Desculpe, ocorreu um erro", "Desculpe, a consulta demorou")
+
             for attempt in range(max_retries):
                 try:
                     if TEAMS_PROGRESSIVE_STREAMING:
@@ -1312,13 +1316,28 @@ def process_teams_task_async(
                             session=session,
                             model=selected_model,
                         )
-                    if resposta_texto:
+                    # Fix: mensagens de erro são truthy mas NÃO são respostas válidas.
+                    # Sem esta checagem, "Desculpe, ocorreu um erro..." bypassa o retry.
+                    is_error_response = (
+                        resposta_texto
+                        and resposta_texto.startswith(_ERROR_PREFIXES)
+                    )
+                    if resposta_texto and not is_error_response:
                         break
                     if attempt < max_retries - 1:
                         logger.warning(
-                            f"[TEAMS-ASYNC] Tentativa {attempt + 1}: resposta vazia. Retry..."
+                            f"[TEAMS-ASYNC] Tentativa {attempt + 1}: "
+                            f"{'resposta é erro interno' if is_error_response else 'resposta vazia'}. "
+                            f"Retry..."
                         )
+                        resposta_texto = None  # Limpar para retry
                         time.sleep(2)
+                    elif is_error_response:
+                        # Última tentativa e ainda é erro — manter a mensagem de erro
+                        logger.error(
+                            f"[TEAMS-ASYNC] Todas as {max_retries} tentativas "
+                            f"retornaram erro: {resposta_texto[:100]}"
+                        )
                 except Exception as agent_err:
                     if attempt < max_retries - 1:
                         logger.warning(

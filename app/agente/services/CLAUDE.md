@@ -104,14 +104,17 @@ Clustering por prefixo usa sort + varredura linear. NAO alterar para comparacao 
 ### insights_service: composicao inline
 Chama `friction_analyzer` + `recommendations_engine` internamente. Alteracao em qualquer um afeta dashboard admin.
 
-### improvement_suggester: dialogo versionado D8 (batch)
+### improvement_suggester: dialogo versionado D8 (batch + real-time)
 Loop Agent SDK <-> Claude Code. Sonnet analisa batch de sessoes recentes (8h) e gera 0-5 sugestoes cross-sessao.
 Tambem avalia respostas pendentes do Claude Code contra sessoes recentes.
+6 categorias: skill_suggestion, instruction_request, prompt_feedback, gotcha_report, memory_feedback, **skill_bug** (nova).
 Max 3 versoes por suggestion_key (spiral prevention). Flag: `USE_IMPROVEMENT_DIALOGUE` (= `AGENT_IMPROVEMENT_DIALOGUE` env).
 Tabela: `agent_improvement_dialogue`. Custo: ~$0.005/batch.
-Trigger: APScheduler modulo 25 (07:00 e 10:00), NAO pos-sessao — captura sessoes abandonadas.
+**Dois caminhos de entrada:**
+- Batch: APScheduler modulo 25 (07:00 e 10:00) — captura sessoes abandonadas
+- Real-time: MCP tool `register_improvement` (memory server) — agente registra durante conversa (R9 system_prompt)
 POST endpoint: `/api/improvement-dialogue`. GET: `/api/improvement-dialogue/pending`.
-— FONTE: `improvement_suggester.py:1-25`, `sincronizacao_incremental_definitiva.py` (step 25)
+— FONTE: `improvement_suggester.py:1-25`, `sincronizacao_incremental_definitiva.py` (step 25), `memory_mcp_tool.py`
 
 ---
 

@@ -165,6 +165,57 @@ python .claude/skills/operando-ssw/scripts/cancelar_cte_004.py \
 
 ---
 
+## 4. gerar_fatura_ssw_437.py
+
+**Proposito:** Gera fatura no SSW (opcao 437, filial MTZ). Seleciona CTe no grid e gera fatura com download PDF. Filial DEVE ser MTZ (nao CAR).
+
+```bash
+python .claude/skills/operando-ssw/scripts/gerar_fatura_ssw_437.py \
+  --cnpj-tomador "12345678000199" \
+  --ctrc 94 \
+  --data-vencimento "150426" \
+  [--baixar-pdf] \
+  --dry-run
+```
+
+| Parametro | Obrig | Default | Descricao |
+|-----------|-------|---------|-----------|
+| `--cnpj-tomador` | **Sim** | — | CNPJ do tomador (14 digitos sem formatacao) |
+| `--ctrc` | **Sim** | — | Numero CTRC sem DV (ex: 94) |
+| `--data-vencimento` | Nao | — | Data vencimento no formato DDMMYY |
+| `--baixar-pdf` | Nao | — | Baixar PDF da fatura gerada |
+| `--dry-run` | — | — | Preenche CNPJ e banco sem gerar fatura. **OBRIGATORIO 1a execucao** |
+
+**Retorno JSON:**
+```json
+{
+  "sucesso": true,
+  "fatura_numero": "12345",
+  "fatura_pdf": "/tmp/ssw_operacoes/fatura_437/fatura_12345.pdf",
+  "ctrc_selecionado": "CAR000094-9",
+  "campos_preenchidos": {
+    "cnpj_tomador": "12345678000199",
+    "banco": "auto-preenchido",
+    "data_vencimento": "150426"
+  }
+}
+```
+
+**Campos SSW (tela 437):**
+
+| Campo | Name/ID | Acao |
+|-------|---------|------|
+| CNPJ tomador | `cgc_cliente` | `getcli(value)` no change |
+| Banco | — | `findbco('nro_banco','S','S','')` |
+| Prosseguir | — | `ajaxEnvia('ENV', 0)` |
+| Vencimento | `f2` (id=2) | Formato DDMMYY |
+| Apontar docs | — | `ajaxEnvia('APO', 1)` |
+| Grid CTes | checkbox + ► (`srimglnk`) | Seleciona CTe |
+| Fatura gerada | `nro_fatura` (readonly) | Resultado |
+| Download PDF | — | `ajaxEnvia('', 1, 'ssw2701?act=IMP&...')` |
+
+---
+
 ## Exemplos de Uso
 
 ### Cenario 1: Emitir CT-e fracionado completo

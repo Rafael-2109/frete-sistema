@@ -2218,3 +2218,263 @@ def register_cotacao_v2_routes(bp):
             'endereco_id': endereco.id,
             'label': f'PROVISORIO - {endereco.razao_social or "Sem razao"} ({endereco.fisico_cidade}/{endereco.fisico_uf}) [DESTINO] [PROVISORIO]',
         })
+
+    # ==================================================================
+    # Emissao CTe SSW a partir da Cotacao
+    # ==================================================================
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/preview-emissao-cte', methods=['GET'])
+    @login_required
+    def api_preview_emissao_cte(cotacao_id):
+        """Preview dos dados que serao usados para emissao de CTe.
+
+        Valida premissas (APROVADO, NFs completas) e retorna
+        resumo dos dados para confirmacao do usuario.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import (
+            CarviaCotacao, CarviaPedido, CarviaPedidoItem,
+            CarviaNf, CarviaCotacaoMoto, CarviaEmissaoCte,
+        )
+        import random
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return jsonify({'erro': 'Cotacao nao encontrada'}), 404
+
+        # --- Premissa 1: status APROVADO ---
+        if cotacao.status != 'APROVADO':
+            return jsonify({
+                'erro': f'Cotacao deve estar APROVADA para emitir CTe (status atual: {cotacao.status})',
+                'bloqueio': 'STATUS',
+            }), 400
+
+        # --- Premissa 2: todos os pedidos devem ter NF ---
+        pedidos = CarviaPedido.query.filter(
+            CarviaPedido.cotacao_id == cotacao_id,
+            CarviaPedido.status != 'CANCELADO',
+        ).all()
+
+        if not pedidos:
+            return jsonify({
+                'erro': 'Cotacao nao possui pedidos. Crie pedidos e anexe NFs antes de emitir CTe.',
+                'bloqueio': 'SEM_PEDIDOS',
+            }), 400
+
+        itens_sem_nf = []
+        nf_numeros = set()
+        for ped in pedidos:
+            for item in ped.itens.all():
+                if not item.numero_nf:
+                    itens_sem_nf.append({
+                        'pedido': ped.numero_pedido,
+                        'descricao': item.descricao,
+                        'quantidade': item.quantidade,
+                    })
+                else:
+                    nf_numeros.add(item.numero_nf)
+
+        if itens_sem_nf:
+            return jsonify({
+                'erro': f'{len(itens_sem_nf)} item(ns) sem NF vinculada. Anexe NFs a todos os itens antes de emitir.',
+                'bloqueio': 'NF_INCOMPLETA',
+                'itens_sem_nf': itens_sem_nf,
+            }), 400
+
+        # --- Buscar NFs com chave de acesso ---
+        nfs_para_emitir = []
+        nfs_sem_chave = []
+        for nf_num in sorted(nf_numeros):
+            nf = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
+            if not nf:
+                nfs_sem_chave.append(nf_num)
+                continue
+            if not nf.chave_acesso_nf or len(nf.chave_acesso_nf) != 44:
+                nfs_sem_chave.append(nf_num)
+                continue
+
+            # Verificar se ja existe emissao em andamento
+            em_andamento = CarviaEmissaoCte.query.filter(
+                CarviaEmissaoCte.nf_id == nf.id,
+                CarviaEmissaoCte.status.in_(['PENDENTE', 'EM_PROCESSAMENTO']),
+            ).first()
+
+            nfs_para_emitir.append({
+                'nf_id': nf.id,
+                'numero_nf': nf.numero_nf,
+                'chave_acesso': nf.chave_acesso_nf,
+                'valor_total': float(nf.valor_total) if nf.valor_total else None,
+                'peso_bruto': float(nf.peso_bruto) if nf.peso_bruto else None,
+                'em_andamento': em_andamento.id if em_andamento else None,
+            })
+
+        if nfs_sem_chave:
+            return jsonify({
+                'erro': f'NF(s) sem chave de acesso valida: {", ".join(nfs_sem_chave)}. Importe o XML da NF primeiro.',
+                'bloqueio': 'SEM_CHAVE',
+                'nfs_sem_chave': nfs_sem_chave,
+            }), 400
+
+        # --- Montar dados de medidas (motos) ---
+        medidas = []
+        motos = CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao_id).all()
+        for moto in motos:
+            modelo = moto.modelo_moto
+            medidas.append({
+                'modelo_id': moto.modelo_moto_id,
+                'modelo_nome': modelo.nome if modelo else '?',
+                'comp_cm': float(modelo.comprimento) if modelo else 0,
+                'larg_cm': float(modelo.largura) if modelo else 0,
+                'alt_cm': float(modelo.altura) if modelo else 0,
+                'qtd': moto.quantidade,
+            })
+
+        # --- CNPJ tomador (destinatario) ---
+        dest = cotacao.endereco_destino
+        cnpj_tomador = dest.cnpj if dest else None
+
+        # --- Placa ---
+        placa = 'ARMAZEM' if cotacao.tipo_carga == 'FRACIONADA' else ''
+
+        # --- Gerar captcha (3 numeros aleatorios) ---
+        captcha = str(random.randint(100, 999))
+
+        return jsonify({
+            'sucesso': True,
+            'cotacao': {
+                'id': cotacao.id,
+                'numero': cotacao.numero_cotacao,
+                'cliente': cotacao.cliente.nome_comercial if cotacao.cliente else '?',
+                'destino': f'{dest.fisico_cidade}/{dest.fisico_uf}' if dest else '?',
+                'valor_frete': float(cotacao.valor_final_aprovado) if cotacao.valor_final_aprovado else None,
+                'tipo_carga': cotacao.tipo_carga,
+                'tipo_material': cotacao.tipo_material,
+            },
+            'nfs': nfs_para_emitir,
+            'medidas': medidas,
+            'placa': placa,
+            'cnpj_tomador': cnpj_tomador,
+            'captcha': captcha,
+        })
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/emitir-cte', methods=['POST'])
+    @login_required
+    def api_emitir_cte_cotacao(cotacao_id):
+        """Dispara emissao de CTe SSW para todas NFs da cotacao.
+
+        Body JSON:
+            captcha_resposta: str  — deve bater com captcha gerado
+            captcha_esperado: str  — captcha original (validado server-side)
+            incluir_fatura: bool   — se True, gera fatura 437 alem do CTe
+            data_vencimento: str   — YYYY-MM-DD (obrigatorio se incluir_fatura)
+            placa: str             — default ARMAZEM
+
+        Returns 202:
+            {emissoes: [{nf_id, emissao_id, status}]}
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Body JSON obrigatorio'}), 400
+
+        # --- Validar captcha ---
+        captcha_resp = str(data.get('captcha_resposta', '')).strip()
+        captcha_esperado = str(data.get('captcha_esperado', '')).strip()
+        if not captcha_resp or captcha_resp != captcha_esperado:
+            return jsonify({'erro': 'Codigo de confirmacao incorreto'}), 400
+
+        incluir_fatura = data.get('incluir_fatura', False)
+
+        # --- Parsear data_vencimento ---
+        data_vencimento = None
+        if incluir_fatura:
+            if not data.get('data_vencimento'):
+                return jsonify({'erro': 'data_vencimento obrigatoria para emissao com fatura'}), 400
+            try:
+                from datetime import datetime
+                data_vencimento = datetime.strptime(
+                    data['data_vencimento'], '%Y-%m-%d'
+                ).date()
+            except ValueError:
+                return jsonify({'erro': 'data_vencimento invalida (YYYY-MM-DD)'}), 400
+
+        from app.carvia.models import (
+            CarviaCotacao, CarviaPedido, CarviaNf, CarviaCotacaoMoto,
+        )
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao or cotacao.status != 'APROVADO':
+            return jsonify({'erro': 'Cotacao nao encontrada ou nao APROVADA'}), 400
+
+        # --- Coletar NFs unicas dos pedidos ---
+        pedidos = CarviaPedido.query.filter(
+            CarviaPedido.cotacao_id == cotacao_id,
+            CarviaPedido.status != 'CANCELADO',
+        ).all()
+
+        nf_numeros = set()
+        for ped in pedidos:
+            for item in ped.itens.all():
+                if item.numero_nf:
+                    nf_numeros.add(item.numero_nf)
+
+        if not nf_numeros:
+            return jsonify({'erro': 'Nenhuma NF encontrada nos pedidos'}), 400
+
+        # --- Resolver NF IDs ---
+        nf_ids = []
+        for nf_num in sorted(nf_numeros):
+            nf = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
+            if nf and nf.chave_acesso_nf and len(nf.chave_acesso_nf) == 44:
+                nf_ids.append(nf.id)
+
+        if not nf_ids:
+            return jsonify({'erro': 'Nenhuma NF com chave de acesso valida'}), 400
+
+        # --- Montar medidas ---
+        medidas = []
+        motos = CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao_id).all()
+        for moto in motos:
+            if moto.modelo_moto_id and moto.quantidade:
+                medidas.append({
+                    'modelo_id': moto.modelo_moto_id,
+                    'qtd': moto.quantidade,
+                })
+
+        # --- CNPJ tomador ---
+        dest = cotacao.endereco_destino
+        cnpj_tomador = dest.cnpj if (dest and incluir_fatura) else None
+
+        placa = data.get('placa', 'ARMAZEM')
+        frete_valor = float(cotacao.valor_final_aprovado) if cotacao.valor_final_aprovado else 0
+
+        if frete_valor <= 0:
+            return jsonify({'erro': 'Cotacao sem valor de frete aprovado'}), 400
+
+        # --- Disparar emissao via SswEmissaoService ---
+        try:
+            from app.carvia.services.ssw_emissao_service import SswEmissaoService
+            resultados = SswEmissaoService.preparar_emissao_lote(
+                nf_ids=nf_ids,
+                placa=placa,
+                cnpj_tomador=cnpj_tomador,
+                frete_valor=frete_valor,
+                data_vencimento=data_vencimento,
+                medidas_motos=medidas if medidas else None,
+                usuario=current_user.email,
+            )
+            return jsonify({
+                'sucesso': True,
+                'emissoes': resultados,
+                'cotacao_id': cotacao_id,
+                'incluir_fatura': incluir_fatura,
+            }), 202
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao emitir CTe cotacao {cotacao_id}: {e}")
+            return jsonify({'erro': str(e)}), 500

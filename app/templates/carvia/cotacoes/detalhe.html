@@ -566,6 +566,14 @@
 
                     {% if cotacao.status == 'APROVADO' %}
                     <hr>
+                    <p class="fw-bold mb-2 small">Emissao CTe SSW</p>
+                    <button class="btn btn-warning btn-sm w-100 mb-1" onclick="iniciarEmissaoCte(false)">
+                        <i class="fas fa-bolt"></i> Emitir CTe
+                    </button>
+                    <button class="btn btn-success btn-sm w-100 mb-1" onclick="iniciarEmissaoCte(true)">
+                        <i class="fas fa-bolt"></i> Emitir CTe + Fatura
+                    </button>
+                    <hr>
                     <button class="btn btn-outline-warning btn-sm w-100" onclick="reabrirCotacao()">
                         <i class="fas fa-undo"></i> Reabrir Cotacao
                     </button>
@@ -1351,10 +1359,209 @@ function togglePercentuais() {
     else if (!v) { remEl.value = ''; destEl.value = ''; }
 }
 
+/* ===== Emissao CTe SSW ===== */
+var _emissaoCaptcha = '';
+var _emissaoComFatura = false;
+
+function iniciarEmissaoCte(comFatura) {
+    _emissaoComFatura = comFatura;
+    const statusDiv = document.getElementById('emissaoCteStatus');
+    const erroDiv = document.getElementById('emissaoCteErro');
+    const resumoDiv = document.getElementById('emissaoCteResumo');
+    const captchaDiv = document.getElementById('emissaoCteCaptcha');
+    const captchaInput = document.getElementById('inpCaptchaCte');
+    const successDiv = document.getElementById('emissaoCteSuccess');
+    const btnConfirmar = document.getElementById('btnConfirmarEmissao');
+    const vencBlock = document.getElementById('emissaoVencimentoBlock');
+
+    // Reset
+    erroDiv.classList.add('d-none');
+    successDiv.classList.add('d-none');
+    resumoDiv.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Validando premissas...</div>';
+    captchaDiv.classList.add('d-none');
+    captchaInput.value = '';
+    btnConfirmar.disabled = true;
+    vencBlock.style.display = comFatura ? '' : 'none';
+
+    // Titulo
+    document.getElementById('emissaoCteModalTitle').textContent =
+        comFatura ? 'Emitir CTe + Fatura SSW' : 'Emitir CTe SSW';
+
+    new bootstrap.Modal(document.getElementById('modalEmitirCteCotacao')).show();
+
+    // Buscar preview
+    fetch(`/carvia/api/cotacoes/{{ cotacao.id }}/preview-emissao-cte`)
+        .then(r => r.json().then(d => ({status: r.status, data: d})))
+        .then(({status, data}) => {
+            if (status !== 200 || !data.sucesso) {
+                erroDiv.classList.remove('d-none');
+                erroDiv.textContent = data.erro || 'Erro na validacao';
+                if (data.itens_sem_nf) {
+                    erroDiv.innerHTML += '<br><small>Itens: ' +
+                        data.itens_sem_nf.map(i => `${i.pedido}: ${i.descricao} (${i.quantidade}x)`).join(', ') +
+                        '</small>';
+                }
+                resumoDiv.innerHTML = '';
+                return;
+            }
+
+            _emissaoCaptcha = data.captcha;
+
+            // Montar resumo
+            let html = '<table class="table table-sm small mb-2">';
+            html += `<tr><td class="text-muted">Cotacao</td><td><strong>${data.cotacao.numero}</strong></td></tr>`;
+            html += `<tr><td class="text-muted">Cliente</td><td>${data.cotacao.cliente}</td></tr>`;
+            html += `<tr><td class="text-muted">Destino</td><td>${data.cotacao.destino}</td></tr>`;
+            html += `<tr><td class="text-muted">Valor Frete</td><td><strong>R$ ${(data.cotacao.valor_frete||0).toFixed(2).replace('.', ',')}</strong></td></tr>`;
+            html += `<tr><td class="text-muted">Placa</td><td>${data.placa || 'ARMAZEM'}</td></tr>`;
+            if (data.cnpj_tomador) html += `<tr><td class="text-muted">CNPJ Tomador</td><td>${data.cnpj_tomador}</td></tr>`;
+            html += '</table>';
+
+            // NFs
+            html += `<p class="fw-bold small mb-1">NFs para emissao (${data.nfs.length})</p><ul class="small mb-2">`;
+            data.nfs.forEach(nf => {
+                let badge = '';
+                if (nf.em_andamento) badge = ' <span class="badge bg-warning">Em andamento</span>';
+                html += `<li>NF ${nf.numero_nf} — Chave: <code>${nf.chave_acesso.substring(0,12)}...${nf.chave_acesso.substring(36)}</code>${badge}</li>`;
+            });
+            html += '</ul>';
+
+            // Medidas moto
+            if (data.medidas && data.medidas.length > 0) {
+                html += '<p class="fw-bold small mb-1">Medidas Moto</p><ul class="small mb-2">';
+                data.medidas.forEach(m => {
+                    html += `<li>${m.modelo_nome}: ${m.comp_cm}x${m.larg_cm}x${m.alt_cm} cm, ${m.qtd}x</li>`;
+                });
+                html += '</ul>';
+            }
+
+            resumoDiv.innerHTML = html;
+
+            // Mostrar captcha
+            captchaDiv.classList.remove('d-none');
+            document.getElementById('captchaNumero').textContent = _emissaoCaptcha;
+        })
+        .catch(err => {
+            erroDiv.classList.remove('d-none');
+            erroDiv.textContent = 'Erro de conexao: ' + err.message;
+            resumoDiv.innerHTML = '';
+        });
+}
+
+// Validar captcha no input
+document.getElementById('inpCaptchaCte')?.addEventListener('input', function() {
+    document.getElementById('btnConfirmarEmissao').disabled =
+        this.value.trim() !== _emissaoCaptcha;
+});
+
+function confirmarEmissaoCte() {
+    const btn = document.getElementById('btnConfirmarEmissao');
+    const erroDiv = document.getElementById('emissaoCteErro');
+    const successDiv = document.getElementById('emissaoCteSuccess');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Emitindo...';
+
+    const payload = {
+        captcha_resposta: document.getElementById('inpCaptchaCte').value.trim(),
+        captcha_esperado: _emissaoCaptcha,
+        incluir_fatura: _emissaoComFatura,
+        placa: 'ARMAZEM',
+    };
+
+    if (_emissaoComFatura) {
+        payload.data_vencimento = document.getElementById('inpVencimentoCte')?.value || '';
+    }
+
+    fetch(`/carvia/api/cotacoes/{{ cotacao.id }}/emitir-cte`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+    })
+    .then(r => r.json().then(d => ({status: r.status, data: d})))
+    .then(({status, data}) => {
+        if (status === 202 && data.sucesso) {
+            successDiv.classList.remove('d-none');
+            const qtd = data.emissoes.filter(e => e.status !== 'ERRO').length;
+            const erros = data.emissoes.filter(e => e.status === 'ERRO');
+            let msg = `${qtd} emissao(oes) enfileirada(s) com sucesso!`;
+            if (erros.length > 0) {
+                msg += `<br><small class="text-danger">${erros.length} erro(s): ${erros.map(e => e.erro).join('; ')}</small>`;
+            }
+            msg += '<br><small>Acompanhe o progresso na tela de detalhe de cada NF.</small>';
+            successDiv.innerHTML = msg;
+            btn.innerHTML = '<i class="fas fa-check"></i> Emissao disparada';
+        } else {
+            erroDiv.classList.remove('d-none');
+            erroDiv.textContent = data.erro || 'Erro ao emitir';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-bolt"></i> Confirmar Emissao';
+        }
+    })
+    .catch(err => {
+        erroDiv.classList.remove('d-none');
+        erroDiv.textContent = 'Erro: ' + err.message;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-bolt"></i> Confirmar Emissao';
+    });
+}
+
 /* ===== Init ===== */
 document.addEventListener('DOMContentLoaded', function() {
     carregarEnderecos();
     initMotos();
 });
 </script>
+
+{# ── Modal Emitir CTe da Cotacao ── #}
+{% if cotacao.status == 'APROVADO' %}
+<div class="modal fade" id="modalEmitirCteCotacao" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="emissaoCteModalTitle"><i class="fas fa-bolt"></i> Emitir CTe SSW</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger d-none" id="emissaoCteErro"></div>
+                <div class="alert alert-success d-none" id="emissaoCteSuccess"></div>
+
+                <div id="emissaoCteResumo"></div>
+
+                <div id="emissaoVencimentoBlock" style="display:none;" class="mb-3">
+                    <label class="form-label">Data Vencimento Fatura <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="inpVencimentoCte">
+                </div>
+
+                <div id="emissaoCteCaptcha" class="d-none">
+                    <div class="card border-warning">
+                        <div class="card-body text-center">
+                            <p class="mb-2 small">Para confirmar, digite o codigo abaixo:</p>
+                            <h2 class="text-warning fw-bold mb-3" id="captchaNumero" style="letter-spacing: 0.5em; font-family: monospace;"></h2>
+                            <input type="text" class="form-control text-center fw-bold mx-auto"
+                                   id="inpCaptchaCte" maxlength="3" inputmode="numeric"
+                                   style="max-width: 120px; font-size: 1.5rem; letter-spacing: 0.3em;"
+                                   placeholder="___" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="emissaoCteStatus" class="mt-3 d-none">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="spinner-border spinner-border-sm text-warning"></div>
+                        <span id="emissaoCteMensagem">Processando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarEmissao"
+                        disabled onclick="confirmarEmissaoCte()">
+                    <i class="fas fa-bolt"></i> Confirmar Emissao
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

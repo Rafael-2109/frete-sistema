@@ -23,6 +23,24 @@ Mapeamento dos 3 campos preenchidos pelo script no formulario SSW opcao 004:
 | `--placa` | `f13` | `13` | Placa coleta. Blur (`Tab`) dispara validacao SSW. ARMAZEM = fracionado |
 | `--chave-nfe` | `chaveAcesso` | `-1` | 44 digitos. `onChange` chama `isSSW(value, 1)` — lookup servidor, aguardar 10s |
 | `--frete-peso` | `id_frt_inf_frete_peso` | — | Dentro do painel colapsavel "parc". Abrir com `showhide('parc')`, fechar com `fechafrtparc('C')` |
+| `--medidas` | `id_dim_{n}_altu/larg/comp/vezes` | — | Dimensoes de moto. Painel "Volume (m3)": abrir com `showhide('volume')`, confirmar com `acabadim('C')`. Valores em metros. `_vezes` dispara `linhadim()` no blur |
+
+### Campos de volume (dimensoes moto) — emitir_cte_004.py
+
+Painel colapsavel "Volume (m3)" com linhas indexadas (n=1,2,3...):
+
+| Campo SSW (name) | Campo SSW (id) | Tipo | Notas |
+|-------------------|----------------|------|-------|
+| `id_dim_{n}_altu` | `id_dim_{n}_altu` | currencyedit, 3 casas | Altura em metros |
+| `id_dim_{n}_larg` | `id_dim_{n}_larg` | currencyedit, 3 casas | Largura em metros |
+| `id_dim_{n}_comp` | `id_dim_{n}_comp` | currencyedit, 3 casas | Comprimento em metros |
+| `id_dim_{n}_vezes` | `id_dim_{n}_vezes` | numerico, maxlength 4 | Quantidade. `onblur=linhadim()` calcula cubagem |
+
+Botoes:
+- Abrir painel: `<a id="lnk_dim" onclick="showhide('volume')">Volume (m3):</a>`
+- Confirmar: `<a id="id_dim_env" onclick="acabadim('C')">►</a>`
+
+Conversao: `carvia_modelos_moto` armazena em CM → dividir por 100 para SSW (metros).
 
 ### Campos de consulta — consultar_ctrc_101.py
 

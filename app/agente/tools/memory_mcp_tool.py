@@ -1392,6 +1392,18 @@ MEMORY_LOG_PITFALL_OUTPUT_SCHEMA: dict = {
     "required": ["area", "description", "total_pitfalls", "is_update"],
 }
 
+MEMORY_REGISTER_IMPROVEMENT_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "suggestion_key": {"type": "string"},
+        "category": {"type": "string"},
+        "severity": {"type": "string"},
+        "title": {"type": "string"},
+        "status": {"type": "string"},
+    },
+    "required": ["suggestion_key", "category", "severity", "title", "status"],
+}
+
 # =====================================================================
 # CUSTOM TOOLS — Enhanced MCP v2.0.0
 # =====================================================================
@@ -2700,10 +2712,139 @@ try:
             logger.error(f"[MEMORY_MCP] {error_msg}")
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
+    @enhanced_tool(
+        "register_improvement",
+        "Registra sugestao de melhoria para o Claude Code (dev). "
+        "Use quando descobrir: bug em skill existente (skill_bug), "
+        "skill que falta (skill_suggestion), instrucao necessaria "
+        "(instruction_request), ou gotcha do sistema (gotcha_report). "
+        "Diferente de log_system_pitfall (armadilhas operacionais do ambiente) "
+        "— isto vai para o dialogo de melhoria Agent SDK <-> Claude Code.",
+        {
+            "category": Annotated[str, "Categoria: skill_bug, skill_suggestion, instruction_request, prompt_feedback, gotcha_report, memory_feedback"],
+            "severity": Annotated[str, "Severidade: critical (erro/frustacao recorrente), warning (melhoria significativa), info (nice-to-have)"],
+            "title": Annotated[str, "Titulo conciso da sugestao (max 100 chars)"],
+            "description": Annotated[str, "Descricao PRESCRITIVA: o que deve mudar e por que. Para skill_bug: nome da skill, o que fez errado, o que deveria fazer"],
+            "evidence": Annotated[str, "Evidencia da sessao: o que aconteceu, IDs envolvidos, valores, o que falhou"],
+        },
+        annotations=ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+        output_schema=MEMORY_REGISTER_IMPROVEMENT_OUTPUT_SCHEMA,
+    )
+    async def register_improvement(args: dict[str, Any]) -> dict[str, Any]:
+        """
+        Registra sugestao de melhoria no dialogo Agent SDK <-> Claude Code.
+
+        Escreve diretamente na tabela agent_improvement_dialogue (v1, proposed).
+        O D8 cron (Claude Code local) avalia e implementa/rejeita.
+
+        Args:
+            args: {
+                "category": str — skill_bug|skill_suggestion|instruction_request|
+                                   prompt_feedback|gotcha_report|memory_feedback,
+                "severity": str — critical|warning|info,
+                "title": str — titulo conciso (max 100 chars),
+                "description": str — descricao prescritiva,
+                "evidence": str — evidencia da sessao
+            }
+
+        Returns:
+            MCP tool response com suggestion_key gerado
+        """
+        category = args.get("category", "").strip()
+        severity = args.get("severity", "info").strip()
+        title = args.get("title", "").strip()
+        description = args.get("description", "").strip()
+        evidence = args.get("evidence", "").strip()
+
+        # Validacoes
+        valid_categories = {
+            'skill_bug', 'skill_suggestion', 'instruction_request',
+            'prompt_feedback', 'gotcha_report', 'memory_feedback',
+        }
+        valid_severities = {'critical', 'warning', 'info'}
+
+        if category not in valid_categories:
+            return {
+                "content": [{"type": "text", "text": f"Erro: category deve ser um de: {', '.join(sorted(valid_categories))}"}],
+                "is_error": True,
+            }
+        if severity not in valid_severities:
+            severity = 'info'
+        if not title:
+            return {
+                "content": [{"type": "text", "text": "Erro: title e obrigatorio"}],
+                "is_error": True,
+            }
+        if not description:
+            return {
+                "content": [{"type": "text", "text": "Erro: description e obrigatoria"}],
+                "is_error": True,
+            }
+        if len(title) > 200:
+            title = title[:197] + '...'
+
+        try:
+            from ..models import AgentImprovementDialogue
+            from app import db
+            from app.agente.config.permissions import get_current_session_id
+
+            def _register():
+                session_id = get_current_session_id()
+                evidence_json = {
+                    'session_signal': evidence,
+                    'occurrences': 1,
+                    'session_ids': [session_id] if session_id else [],
+                    'source': 'real_time',
+                }
+
+                suggestion = AgentImprovementDialogue.create_suggestion(
+                    category=category,
+                    severity=severity,
+                    title=title,
+                    description=description,
+                    evidence=evidence_json,
+                    session_ids=[session_id] if session_id else [],
+                )
+                db.session.commit()
+                return suggestion.suggestion_key
+
+            key = _execute_with_context(_register)
+            logger.info(
+                f"[MEMORY_MCP] register_improvement: {key} "
+                f"category={category} severity={severity} title='{title[:60]}'"
+            )
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": (
+                        f"Sugestao registrada: {key} ({category}/{severity}).\n"
+                        f"Titulo: {title}\n"
+                        f"O Claude Code (dev) avaliara na proxima execucao D8."
+                    ),
+                }],
+                "structuredContent": {
+                    "suggestion_key": key,
+                    "category": category,
+                    "severity": severity,
+                    "title": title,
+                    "status": "proposed",
+                },
+            }
+
+        except Exception as e:
+            error_msg = f"Erro ao registrar improvement: {str(e)}"
+            logger.error(f"[MEMORY_MCP] {error_msg}")
+            return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
+
     # Criar MCP server in-process
     memory_server = create_enhanced_mcp_server(
         name="memory-tools",
-        version="2.0.0",
+        version="2.1.0",
         tools=[
             view_memories,
             save_memory,
@@ -2716,10 +2857,11 @@ try:
             restore_memory_version,
             resolve_pendencia,
             log_system_pitfall,
+            register_improvement,
         ],
     )
 
-    logger.info("[MEMORY_MCP] Enhanced MCP 'memory' v2.0.0 registrado (11 tools, structuredContent)")
+    logger.info("[MEMORY_MCP] Enhanced MCP 'memory' v2.1.0 registrado (12 tools, structuredContent)")
 
 except ImportError as e:
     # claude_agent_sdk não disponível (ex: rodando fora do agente)

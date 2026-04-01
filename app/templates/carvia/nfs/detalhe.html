@@ -41,6 +41,12 @@
                     data-bs-target="#modalCriarCte" title="Criar CTe CarVia a partir desta NF">
                 <i class="fas fa-plus"></i> Criar CTe CarVia
             </button>
+            {% if nf.chave_acesso_nf and nf.chave_acesso_nf|length == 44 %}
+            <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal"
+                    data-bs-target="#modalEmitirCteSsw" title="Emitir CTe automaticamente no SSW">
+                <i class="fas fa-bolt"></i> Emitir CTe SSW
+            </button>
+            {% endif %}
             <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalCancelarNf" title="Cancelar NF">
                 <i class="fas fa-ban"></i> Cancelar NF
             </button>
@@ -533,5 +539,238 @@ if (cteValorModalInput && btnCriarCte) {
         btnCriarCte.disabled = this.value.trim().length === 0;
     });
 }
+
+// ── Emissao CTe SSW ──
+(function() {
+    const form = document.getElementById('formEmitirCteSsw');
+    if (!form) return;
+
+    const btnSubmit = document.getElementById('btnEmitirCteSsw');
+    const statusDiv = document.getElementById('emissaoSswStatus');
+    const statusMsg = document.getElementById('emissaoSswMsg');
+    const statusEtapa = document.getElementById('emissaoSswEtapa');
+    const statusErro = document.getElementById('emissaoSswErro');
+    const statusSucesso = document.getElementById('emissaoSswSucesso');
+    let pollingInterval = null;
+
+    // Limpar polling ao fechar modal
+    const modalEl = document.getElementById('modalEmitirCteSsw');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', function() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+        });
+    }
+
+    const ETAPAS_LABEL = {
+        'LOGIN': 'Conectando ao SSW...',
+        'PREENCHIMENTO': 'Preenchendo formulario CTe...',
+        'SEFAZ': 'Enviando ao SEFAZ...',
+        'CONSULTA_101': 'Consultando resultado...',
+        'IMPORTACAO_CTE': 'Importando XML do CTe...',
+        'FATURA_437': 'Gerando fatura SSW...',
+        'IMPORTACAO_FAT': 'Importando fatura...',
+    };
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enfileirando...';
+        statusDiv.classList.remove('d-none');
+        statusErro.classList.add('d-none');
+        statusSucesso.classList.add('d-none');
+        statusMsg.textContent = 'Enfileirando emissao...';
+        statusEtapa.textContent = '';
+
+        const payload = {
+            placa: form.placa.value || 'ARMAZEM',
+            cnpj_tomador: form.cnpj_tomador.value || null,
+            frete_valor: parseFloat(form.frete_valor.value) || 0,
+            data_vencimento: form.data_vencimento.value || null,
+        };
+
+        // Coletar medidas de moto (se preenchidas)
+        const medidas = [];
+        document.querySelectorAll('.medida-moto-row').forEach(row => {
+            const modeloId = row.querySelector('[name="modelo_id"]')?.value;
+            const qtd = row.querySelector('[name="moto_qtd"]')?.value;
+            if (modeloId && qtd && parseInt(qtd) > 0) {
+                medidas.push({modelo_id: parseInt(modeloId), qtd: parseInt(qtd)});
+            }
+        });
+        if (medidas.length > 0) payload.medidas = medidas;
+
+        fetch(`/carvia/api/nfs/{{ nf.id }}/emitir-cte-ssw`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json().then(data => ({status: r.status, data})))
+        .then(({status, data}) => {
+            if (status === 202 && data.emissao_id) {
+                statusMsg.textContent = 'Emissao na fila. Aguardando processamento...';
+                iniciarPolling(data.emissao_id);
+            } else {
+                statusErro.classList.remove('d-none');
+                statusErro.textContent = data.erro || 'Erro ao enfileirar';
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Emitir CTe SSW';
+            }
+        })
+        .catch(err => {
+            statusErro.classList.remove('d-none');
+            statusErro.textContent = 'Erro de conexao: ' + err.message;
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Emitir CTe SSW';
+        });
+    });
+
+    function iniciarPolling(emissaoId) {
+        pollingInterval = setInterval(() => {
+            fetch(`/carvia/api/emissao-cte/${emissaoId}/status`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.etapa) {
+                        statusEtapa.textContent = ETAPAS_LABEL[data.etapa] || data.etapa;
+                    }
+
+                    if (data.status === 'SUCESSO') {
+                        clearInterval(pollingInterval);
+                        statusMsg.textContent = '';
+                        statusSucesso.classList.remove('d-none');
+                        let msg = `CTe ${data.ctrc || ''} emitido com sucesso!`;
+                        if (data.fatura_numero) msg += ` Fatura: ${data.fatura_numero}`;
+                        statusSucesso.innerHTML = msg;
+                        if (data.operacao_id) {
+                            statusSucesso.innerHTML += ` <a href="/carvia/operacoes/${data.operacao_id}" class="btn btn-sm btn-outline-success ms-2">Ver Operacao</a>`;
+                        }
+                        btnSubmit.disabled = false;
+                        btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Emitir CTe SSW';
+                    } else if (data.status === 'ERRO') {
+                        clearInterval(pollingInterval);
+                        statusMsg.textContent = '';
+                        statusErro.classList.remove('d-none');
+                        statusErro.textContent = `Erro: ${data.erro || 'Falha desconhecida'}`;
+                        btnSubmit.disabled = false;
+                        btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Tentar Novamente';
+                    }
+                })
+                .catch(() => {});
+        }, 5000);
+    }
+})();
 </script>
+
+{# ── Modal Emitir CTe SSW ── #}
+{% if nf.chave_acesso_nf and nf.chave_acesso_nf|length == 44 %}
+<div class="modal fade" id="modalEmitirCteSsw" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-bolt"></i> Emitir CTe SSW</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEmitirCteSsw">
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Emissao automatica de CTe no SSW para NF {{ nf.numero_nf }}.
+                    Chave: <code>{{ nf.chave_acesso_nf[:20] }}...{{ nf.chave_acesso_nf[-8:] }}</code>
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label">Placa Coleta</label>
+                    <input type="text" name="placa" class="form-control" value="ARMAZEM"
+                           placeholder="ARMAZEM ou placa real">
+                    <div class="form-text">ARMAZEM = subcontratada. Placa real = carga fechada/agregado.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Valor Frete (R$) <span class="text-danger">*</span></label>
+                    <input type="number" name="frete_valor" class="form-control" step="0.01" min="0" required
+                           placeholder="600.00">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">CNPJ Tomador (para fatura)</label>
+                    <input type="text" name="cnpj_tomador" class="form-control" maxlength="14"
+                           placeholder="14 digitos sem formatacao"
+                           value="{{ nf.cnpj_emitente|replace('.', '')|replace('/', '')|replace('-', '') if nf.cnpj_emitente else '' }}">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Vencimento da Fatura</label>
+                    <input type="date" name="data_vencimento" class="form-control">
+                </div>
+
+                <hr>
+                <p class="fw-bold mb-2">Medidas de Motos (opcional)</p>
+                <div id="medidasMotoContainer">
+                    <div class="row medida-moto-row mb-2">
+                        <div class="col-8">
+                            <select name="modelo_id" class="form-select form-select-sm">
+                                <option value="">Selecione modelo...</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <input type="number" name="moto_qtd" class="form-control form-control-sm"
+                                   placeholder="Qtd" min="1">
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAddMedida">
+                    <i class="fas fa-plus"></i> Adicionar modelo
+                </button>
+
+                <div id="emissaoSswStatus" class="mt-3 d-none">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <div class="spinner-border spinner-border-sm text-warning"></div>
+                        <span id="emissaoSswMsg">Processando...</span>
+                    </div>
+                    <small class="text-muted" id="emissaoSswEtapa"></small>
+                    <div class="alert alert-danger mt-2 d-none" id="emissaoSswErro"></div>
+                    <div class="alert alert-success mt-2 d-none" id="emissaoSswSucesso"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-warning" id="btnEmitirCteSsw">
+                    <i class="fas fa-bolt"></i> Emitir CTe SSW
+                </button>
+            </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Carregar modelos de moto para o select
+fetch('/carvia/api/modelos-moto')
+    .then(r => r.json())
+    .then(data => {
+        if (data.modelos) {
+            document.querySelectorAll('select[name="modelo_id"]').forEach(sel => {
+                data.modelos.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = `${m.nome} (${m.comprimento}x${m.largura}x${m.altura} cm)`;
+                    sel.appendChild(opt);
+                });
+            });
+        }
+    })
+    .catch(() => {});
+
+// Adicionar linha de modelo
+document.getElementById('btnAddMedida')?.addEventListener('click', function() {
+    const container = document.getElementById('medidasMotoContainer');
+    const firstRow = container.querySelector('.medida-moto-row');
+    const newRow = firstRow.cloneNode(true);
+    newRow.querySelector('select').value = '';
+    newRow.querySelector('input').value = '';
+    container.appendChild(newRow);
+});
+</script>
+{% endif %}
 {% endblock %}

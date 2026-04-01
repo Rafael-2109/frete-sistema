@@ -7,6 +7,7 @@ Analisa sessoes recentes em batch e gera sugestoes versionadas em 5 categorias:
 - prompt_feedback: feedback sobre system_prompt e memorias
 - gotcha_report: armadilhas e informacoes uteis
 - memory_feedback: memorias incorretas ou faltando
+- skill_bug: skill existente com bug (resultado errado, logica incorreta)
 
 Tambem avalia respostas do Claude Code (verificacao contra sessoes recentes).
 
@@ -68,6 +69,10 @@ B) instruction_request: instrucao que o agente precisa mas nao tem (inclui casos
 C) prompt_feedback: feedback sobre o system_prompt ou memorias
 D) gotcha_report: armadilha ou informacao util descoberta nas sessoes
 E) memory_feedback: memoria incorreta ou faltando
+F) skill_bug: skill existente que NAO FUNCIONA corretamente
+   (retornou resultado errado, vazio inesperado, ou usou logica incorreta).
+   Inclua: nome da skill, o que fez errado, o que deveria fazer.
+   Diferente de skill_suggestion (skill nova) — aqui a skill EXISTE mas tem bug.
 
 GERE um JSON array com 0-5 sugestoes. Cada sugestao:
 {
@@ -121,7 +126,22 @@ def _get_skills_inventory() -> str:
         for name in sorted(os.listdir(skills_dir)):
             full = os.path.join(skills_dir, name)
             if os.path.isdir(full):
-                skills.append(name)
+                # Ler primeira linha do SKILL.md para descricao (ate 150 chars)
+                desc = ''
+                skill_md = os.path.join(full, 'SKILL.md')
+                if os.path.isfile(skill_md):
+                    try:
+                        with open(skill_md, 'r', encoding='utf-8') as f:
+                            for line in f:
+                                line = line.strip()
+                                # Pular frontmatter e linhas vazias
+                                if line.startswith('---') or line.startswith('#') or not line:
+                                    continue
+                                desc = line[:150]
+                                break
+                    except OSError:
+                        pass
+                skills.append(f"  - {name}: {desc}" if desc else f"  - {name}")
 
     agents = []
     agents_dir = os.path.join(project_root, '.claude', 'agents')
@@ -132,7 +152,8 @@ def _get_skills_inventory() -> str:
 
     lines = []
     if skills:
-        lines.append(f"Skills ({len(skills)}): {', '.join(skills)}")
+        lines.append(f"Skills ({len(skills)}):")
+        lines.extend(skills)
     if agents:
         lines.append(f"Subagentes ({len(agents)}): {', '.join(agents)}")
 
@@ -237,7 +258,7 @@ def _validate_suggestions(suggestions: list) -> List[Dict[str, Any]]:
     """Valida estrutura das sugestoes."""
     valid_categories = {
         'skill_suggestion', 'instruction_request', 'prompt_feedback',
-        'gotcha_report', 'memory_feedback',
+        'gotcha_report', 'memory_feedback', 'skill_bug',
     }
     valid_severities = {'critical', 'warning', 'info'}
 

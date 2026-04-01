@@ -534,6 +534,63 @@ async def emitir_cte(args):
 
             await capturar_screenshot_local(popup, "05_frete_preenchido")
 
+            # ── 5d. Preencher dimensoes de moto (se fornecidas) ──
+            # Painel "Volume (m3)" — abrir com showhide('volume')
+            # Campos por linha: id_dim_{n}_altu, id_dim_{n}_larg,
+            #   id_dim_{n}_comp, id_dim_{n}_vezes
+            # Confirmar com acabadim('C')
+            medidas_list = getattr(args, 'medidas', None)
+            if medidas_list:
+                if isinstance(medidas_list, str):
+                    medidas_list = json.loads(medidas_list)
+
+                try:
+                    # Abrir painel Volume
+                    await popup.evaluate("showhide('volume')")
+                    await asyncio.sleep(1)
+
+                    for i, med in enumerate(medidas_list, start=1):
+                        # Formatar valores para BR (virgula decimal, 3 casas)
+                        alt_br = f"{float(med['alt_m']):.3f}".replace('.', ',')
+                        larg_br = f"{float(med['larg_m']):.3f}".replace('.', ',')
+                        comp_br = f"{float(med['comp_m']):.3f}".replace('.', ',')
+                        qtd_str = str(int(med['qtd']))
+
+                        # Preencher campos de dimensao
+                        campo_alt = popup.locator(f'input[name="id_dim_{i}_altu"]')
+                        campo_larg = popup.locator(f'input[name="id_dim_{i}_larg"]')
+                        campo_comp = popup.locator(f'input[name="id_dim_{i}_comp"]')
+                        campo_vezes = popup.locator(f'input[name="id_dim_{i}_vezes"]')
+
+                        await campo_alt.click(force=True)
+                        await campo_alt.fill(alt_br, force=True)
+                        await asyncio.sleep(0.3)
+
+                        await campo_larg.click(force=True)
+                        await campo_larg.fill(larg_br, force=True)
+                        await asyncio.sleep(0.3)
+
+                        await campo_comp.click(force=True)
+                        await campo_comp.fill(comp_br, force=True)
+                        await asyncio.sleep(0.3)
+
+                        await campo_vezes.click(force=True)
+                        await campo_vezes.fill(qtd_str, force=True)
+                        # Tab dispara onblur=linhadim() que calcula cubagem
+                        await campo_vezes.press("Tab")
+                        await asyncio.sleep(1)
+
+                    # Confirmar dimensoes (botao ► = acabadim('C'))
+                    await popup.evaluate("acabadim('C')")
+                    await asyncio.sleep(2)
+
+                    campos_ok["medidas"] = medidas_list
+                    campos_ok["medidas_linhas"] = len(medidas_list)
+                except Exception as e:
+                    campos_ok["medidas_erro"] = str(e)
+
+                await capturar_screenshot_local(popup, "05b_medidas_preenchidas")
+
             # ── Dry-run: parar aqui ──
             if args.dry_run:
                 campos_estado = await capturar_campos(popup)
@@ -807,6 +864,12 @@ def main():
         help="Filial para emissao (default: CAR)"
     )
 
+    # Dimensoes moto (novo)
+    parser.add_argument(
+        "--medidas", default=None,
+        help='JSON com dimensoes moto: [{"comp_m":2.0,"larg_m":0.8,"alt_m":1.2,"qtd":3}]'
+    )
+
     # Etapas opcionais
     parser.add_argument(
         "--enviar-sefaz", action="store_true",
@@ -819,6 +882,10 @@ def main():
     parser.add_argument(
         "--baixar-dacte", action="store_true",
         help="Baixar DACTE PDF e XML (requer --consultar-101)"
+    )
+    parser.add_argument(
+        "--baixar-xml", action="store_true",
+        help="Baixar XML do CT-e (requer --consultar-101)"
     )
 
     # Config

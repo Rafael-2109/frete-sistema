@@ -255,7 +255,7 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 Guia completo de regras, gotchas e interdependencias: **`services/CLAUDE.md`**
 Todos controlados por feature flags em `config/feature_flags.py`.
 
-### MCP Tools de memoria (memory_mcp_tool.py v2.0.0 Enhanced, 11 operacoes)
+### MCP Tools de memoria (memory_mcp_tool.py v2.1.0 Enhanced, 12 operacoes)
 | Tool | O que faz |
 |------|-----------|
 | `view_memories` | Le memoria por path |
@@ -269,6 +269,7 @@ Todos controlados por feature flags em `config/feature_flags.py`.
 | `restore_memory_version` | Restaura versao anterior (backup automatico do atual) |
 | `resolve_pendencia` | Marca pendencia como resolvida (desaparece do briefing) |
 | `log_system_pitfall` | Registra armadilha/gotcha do sistema (max 20, category=structural) |
+| `register_improvement` | Registra sugestao de melhoria real-time para Claude Code (skill_bug, skill_suggestion, etc.) |
 
 **Admin (debug mode)**: TODAS as 11 tools aceitam `target_user_id=N` para acesso cross-user.
 Validacao: `_resolve_user_id(args)` — requer `get_debug_mode() == True`. Todo acesso logado.

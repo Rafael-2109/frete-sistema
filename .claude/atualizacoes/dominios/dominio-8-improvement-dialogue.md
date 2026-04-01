@@ -73,7 +73,8 @@ Usar Read, Grep, Glob para validar a sugestao:
 
 | Categoria | O que verificar |
 |-----------|----------------|
-| `skill_suggestion` | Verificar se skill ja existe em `.claude/skills/`. Verificar se topico e frequente o suficiente |
+| `skill_suggestion` | Verificar se skill ja existe em `.claude/skills/`. Se JA EXISTE: reclassificar como `skill_bug` e investigar se a skill tem bug que explica a friccao da sessao. Se NAO existe: verificar se topico e frequente o suficiente |
+| `skill_bug` | Ler o codigo da skill (SKILL.md + references/). Confirmar se o bug descrito e real. Se real: implementar fix ou propor plano |
 | `instruction_request` | Verificar se instrucao ja existe em system_prompt.md, CLAUDE.md ou references |
 | `prompt_feedback` | Ler o trecho do system_prompt mencionado. Avaliar se feedback e valido |
 | `gotcha_report` | Verificar se gotcha ja esta documentado. Confirmar no codigo se e real |

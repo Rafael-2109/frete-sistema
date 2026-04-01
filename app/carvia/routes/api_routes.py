@@ -1039,3 +1039,187 @@ def register_api_routes(bp):
             db.session.rollback()
             logger.error(f"Erro ao registrar cotacao sub {sub_id}: {e}")
             return jsonify({'erro': str(e)}), 500
+
+    # ==================================================================
+    # Modelos de moto (JSON para selects)
+    # ==================================================================
+
+    @bp.route('/api/modelos-moto', methods=['GET'])
+    @login_required
+    def api_listar_modelos_moto():
+        """Lista modelos de moto ativos para selects (JSON)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaModeloMoto
+        modelos = CarviaModeloMoto.query.filter_by(ativo=True).order_by(
+            CarviaModeloMoto.nome.asc()
+        ).all()
+
+        return jsonify({
+            'modelos': [{
+                'id': m.id,
+                'nome': m.nome,
+                'comprimento': float(m.comprimento),
+                'largura': float(m.largura),
+                'altura': float(m.altura),
+                'peso_medio': float(m.peso_medio) if m.peso_medio else None,
+            } for m in modelos]
+        })
+
+    # ==================================================================
+    # Emissao automatica CTe SSW
+    # ==================================================================
+
+    @bp.route('/api/nfs/<int:nf_id>/emitir-cte-ssw', methods=['POST'])
+    @login_required
+    def api_emitir_cte_ssw(nf_id):
+        """Dispara emissao assincrona de CTe no SSW para uma NF.
+
+        Body JSON:
+            placa: str (default "ARMAZEM")
+            cnpj_tomador: str (14 digitos, para fatura 437)
+            frete_valor: float (R$ frete peso)
+            data_vencimento: str (YYYY-MM-DD)
+            medidas: list[{modelo_id: int, qtd: int}]
+
+        Returns 202:
+            {emissao_id, job_id, status, status_url}
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Body JSON obrigatorio'}), 400
+
+        placa = data.get('placa', 'ARMAZEM')
+        cnpj_tomador = data.get('cnpj_tomador')
+        frete_valor = data.get('frete_valor')
+        medidas = data.get('medidas')
+
+        if frete_valor is None:
+            return jsonify({'erro': 'frete_valor obrigatorio'}), 400
+
+        # Parsear data_vencimento
+        data_vencimento = None
+        if data.get('data_vencimento'):
+            try:
+                from datetime import datetime
+                data_vencimento = datetime.strptime(
+                    data['data_vencimento'], '%Y-%m-%d'
+                ).date()
+            except ValueError:
+                return jsonify({
+                    'erro': 'data_vencimento invalida (formato esperado: YYYY-MM-DD)'
+                }), 400
+
+        try:
+            from app.carvia.services.ssw_emissao_service import SswEmissaoService
+            resultado = SswEmissaoService.preparar_emissao(
+                nf_id=nf_id,
+                placa=placa,
+                cnpj_tomador=cnpj_tomador,
+                frete_valor=frete_valor,
+                data_vencimento=data_vencimento,
+                medidas_motos=medidas,
+                usuario=current_user.email,
+            )
+            resultado['status_url'] = (
+                f'/carvia/api/emissao-cte/{resultado["emissao_id"]}/status'
+            )
+            return jsonify(resultado), 202
+
+        except ValueError as e:
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao enfileirar emissao CTe NF {nf_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/emissao-cte/<int:emissao_id>/status', methods=['GET'])
+    @login_required
+    def api_status_emissao_cte(emissao_id):
+        """Polling: retorna status da emissao SSW."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaEmissaoCte
+        emissao = db.session.get(CarviaEmissaoCte, emissao_id)
+        if not emissao:
+            return jsonify({'erro': 'Emissao nao encontrada'}), 404
+
+        return jsonify({
+            'emissao_id': emissao.id,
+            'nf_id': emissao.nf_id,
+            'status': emissao.status,
+            'etapa': emissao.etapa,
+            'ctrc': emissao.ctrc_numero,
+            'erro': emissao.erro_ssw,
+            'operacao_id': emissao.operacao_id,
+            'fatura_numero': emissao.fatura_numero,
+            'criado_em': emissao.criado_em.isoformat() if emissao.criado_em else None,
+            'atualizado_em': emissao.atualizado_em.isoformat() if emissao.atualizado_em else None,
+        })
+
+    @bp.route('/api/emitir-cte-ssw/lote', methods=['POST'])
+    @login_required
+    def api_emitir_cte_ssw_lote():
+        """Dispara emissao de CTe SSW para multiplas NFs.
+
+        Body JSON:
+            nf_ids: list[int]
+            placa: str (default "ARMAZEM")
+            cnpj_tomador: str
+            frete_valor: float
+            data_vencimento: str (YYYY-MM-DD)
+            medidas: list[{modelo_id, qtd}]
+
+        Returns 202:
+            {emissoes: [{nf_id, emissao_id, status}]}
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data or not data.get('nf_ids'):
+            return jsonify({'erro': 'nf_ids obrigatorio'}), 400
+
+        nf_ids = data['nf_ids']
+        if not isinstance(nf_ids, list) or len(nf_ids) == 0:
+            return jsonify({'erro': 'nf_ids deve ser lista nao-vazia'}), 400
+        if len(nf_ids) > 20:
+            return jsonify({'erro': 'Maximo 20 NFs por lote'}), 400
+        if data.get('frete_valor') is None:
+            return jsonify({'erro': 'frete_valor obrigatorio'}), 400
+
+        # Parsear data_vencimento
+        data_vencimento = None
+        if data.get('data_vencimento'):
+            try:
+                from datetime import datetime
+                data_vencimento = datetime.strptime(
+                    data['data_vencimento'], '%Y-%m-%d'
+                ).date()
+            except ValueError:
+                return jsonify({
+                    'erro': 'data_vencimento invalida (formato YYYY-MM-DD)'
+                }), 400
+
+        try:
+            from app.carvia.services.ssw_emissao_service import SswEmissaoService
+            resultados = SswEmissaoService.preparar_emissao_lote(
+                nf_ids=nf_ids,
+                placa=data.get('placa', 'ARMAZEM'),
+                cnpj_tomador=data.get('cnpj_tomador'),
+                frete_valor=data.get('frete_valor'),
+                data_vencimento=data_vencimento,
+                medidas_motos=data.get('medidas'),
+                usuario=current_user.email,
+            )
+            return jsonify({'emissoes': resultados}), 202
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao enfileirar lote CTe: {e}")
+            return jsonify({'erro': str(e)}), 500

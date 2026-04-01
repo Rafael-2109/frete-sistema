@@ -12,7 +12,9 @@ description: >-
   "POP-A10", "nova rota completa", "vincular unidade a transportadora",
   "emitir CT-e", "emitir CTE", "gerar CT-e fracionado", "enviar SEFAZ",
   "consultar CTRC", "consultar CT-e", "status do CT-e", "baixar DACTE",
-  "baixar XML CT-e", "cancelar CT-e".
+  "baixar XML CT-e", "cancelar CT-e", "gerar fatura SSW", "faturar CTRC",
+  "fatura 437", "opcao 437", "emitir CT-e com medidas moto",
+  "emitir CT-e com dimensoes", "cubagem moto".
   Requer --dry-run obrigatorio na primeira execucao e confirmacao do
   usuario antes da execucao real (exceto consultar_ctrc_101.py que e read-only).
   NAO USAR QUANDO:
@@ -48,6 +50,8 @@ Separada de `acessando-ssw` (apenas consulta/documentacao).
 - **485 multiplas filiais**: Se CNPJ tem N filiais no SSW, PES retorna lista (nao form). Script da timeout. Informar ao usuario.
 - **Resultados do script**: Apresentar EXATAMENTE o que o JSON de saida retorna. NAO inferir campos que nao existem no output.
 - **CT-e filial DEVE ser CAR**: Emissao (004) e consulta (101) DEVEM usar filial CAR. NAO usar MTZ. Script troca automaticamente, mas agente deve confirmar.
+- **Fatura 437 filial DEVE ser MTZ**: Faturamento (437) DEVE usar filial MTZ. NAO usar CAR. Script troca automaticamente.
+- **Medidas moto em METROS**: `--medidas` aceita dimensoes em metros. Se os dados vierem de `carvia_modelos_moto` (CM), dividir por 100 ANTES de passar ao script. O SswEmissaoService faz isso automaticamente.
 - **CT-e chave NF-e = 44 digitos exatos**: Se usuario fornecer chave com menos ou mais digitos, REJEITAR. NAO completar com zeros. NAO remover digitos.
 - **Consulta 101 e READ-ONLY**: `consultar_ctrc_101.py` NAO altera dados. NAO pedir confirmacao nem --dry-run. Executar diretamente.
 
@@ -64,6 +68,9 @@ Separada de `acessando-ssw` (apenas consulta/documentacao).
 | "Chave nao localizada" na 004 | Chave NF-e errada ou NF nao importada | Verificar 44 digitos, confirmar com usuario |
 | Timeout na consulta 101 | CTRC nao existe ou filial errada | Confirmar numero CTRC e filial CAR |
 | SEFAZ rejeicao na 007 | Dados inconsistentes no CT-e | Cancelar pre-CTRC e reemitir com dados corretos |
+| "Cliente nao encontrado" na 437 | CNPJ tomador nao cadastrado no SSW | Verificar CNPJ com usuario (14 digitos sem formatacao) |
+| Grid vazio na 437 (APO) | CTe nao disponivel para faturamento | Verificar se CTe foi autorizado no SEFAZ antes de faturar |
+| Fatura nao gerada (nro_fatura vazio) | Erro ao apontar documento na 437 | Verificar CTe selecionado no grid, tentar novamente |
 
 ---
 
@@ -101,9 +108,23 @@ Cotar frete no SSW (002)?
   → Exibir parametros_assumidos antes de confirmar
 Emitir CT-e fracionado (004)?
   → Perguntar: chave NF-e (44 digitos), frete peso (R$), placa (ARMAZEM=fracionado)
-  → emitir_cte_004.py --chave-nfe "..." --frete-peso 600 --placa ARMAZEM --dry-run
-  → OPERACAO FISCAL — apos confirmar: --enviar-sefaz --consultar-101 [--baixar-dacte]
+  → Com motos? Perguntar: medidas por modelo [{comp_m, larg_m, alt_m, qtd}]
+    → Dimensoes de carvia_modelos_moto em CM — dividir por 100 para metros
+  → emitir_cte_004.py --chave-nfe "..." --frete-peso 600 --placa ARMAZEM [--medidas '[...]'] --dry-run
+  → OPERACAO FISCAL — apos confirmar: --enviar-sefaz --consultar-101 [--baixar-dacte] [--baixar-xml]
   → Detalhes: [SCRIPTS.md](SCRIPTS.md) | POP-C01 (fracionado) / POP-C02 (carga direta)
+Gerar fatura SSW (437)?
+  → Perguntar: CNPJ tomador (14 digitos), numero CTRC, data vencimento (DDMMYY)
+  → gerar_fatura_ssw_437.py --cnpj-tomador "..." --ctrc 94 --data-vencimento "150426" --dry-run
+  → IMPORTANTE: filial DEVE ser MTZ (nao CAR). Script troca automaticamente.
+  → Apos confirmar: --baixar-pdf
+  → Detalhes: [SCRIPTS.md](SCRIPTS.md)
+Emitir CT-e + fatura completo (via API)?
+  → Endpoint: POST /carvia/api/nfs/<nf_id>/emitir-cte-ssw (assincrono via RQ)
+  → Body: {placa, cnpj_tomador, frete_valor, data_vencimento, medidas}
+  → Polling: GET /carvia/api/emissao-cte/<id>/status (a cada 5s)
+  → Executa: 004 (emitir) → 007 (SEFAZ) → 101 (consultar+XML) → 437 (fatura) → importar
+  → Lote: POST /carvia/api/emitir-cte-ssw/lote (max 20 NFs)
 Consultar CTRC / CT-e (101)?
   → consultar_ctrc_101.py --ctrc 94 [--baixar-xml] [--baixar-dacte]
   → OU: consultar_ctrc_101.py --nf 35714 [--baixar-xml] [--baixar-dacte]
@@ -159,6 +180,7 @@ Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
 | 14 | `cancelar_cte_004.py` | 004 | Cancelar CT-e autorizado (SEFAZ, irreversivel, POP-C06) |
 | 15 | `emitir_cte_004.py` | 004 | Emitir CT-e completo (004 → 007 → 101) |
 | 16 | `consultar_ctrc_101.py` | 101 | Consultar CTRC/CT-e + baixar DACTE/XML (read-only) |
+| 17 | `gerar_fatura_ssw_437.py` | 437 | Gerar fatura SSW (filial MTZ) + download PDF |
 
 ---
 
@@ -170,8 +192,8 @@ Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
 | Criar comissao, gerar/importar CSV 408 | [COMISSOES.md](references/COMISSOES.md) |
 | Cotar frete na 002 (params, workflow, gotchas) | [COTACAO.md](references/COTACAO.md) |
 | Funcoes ssw_common, defaults, batch, mapeamento | [SSW_COMMON.md](references/SSW_COMMON.md) |
-| Emitir, consultar ou cancelar CT-e (params, retornos) | [SCRIPTS.md](SCRIPTS.md) |
-| CT-e gotchas, FIELD_MAP, workflow completo | [CTE.md](references/CTE.md) |
+| Emitir, consultar, cancelar CT-e ou gerar fatura (params, retornos) | [SCRIPTS.md](SCRIPTS.md) |
+| CT-e gotchas, FIELD_MAP, dimensoes moto, workflow completo | [CTE.md](references/CTE.md) |
 | Cadastrar unidade passo-a-passo | `POP-A02-cadastrar-unidade-parceira.md` |
 | Cadastrar cidades passo-a-passo | `POP-A03-cadastrar-cidades.md` |
 | Implantar rota completa | `POP-A10-implantar-nova-rota.md` |

@@ -19,6 +19,7 @@ import json
 import asyncio
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 import aiohttp
@@ -484,6 +485,7 @@ async def _poll_and_respond(
         http_session: aiohttp.ClientSession reutilizavel
     """
     poll_count = 0
+    poll_start_time = time.monotonic()  # Tempo real de início do polling
     interval = POLL_INTERVAL_PROCESSING
     card_sent = False  # Fix 1: Enviar Adaptive Card apenas 1 vez
     consecutive_errors = 0
@@ -577,9 +579,13 @@ async def _poll_and_respond(
 
             elif status == "completed":
                 resposta = result.get("resposta", "Sem resposta do sistema.")
+                processing_time = time.monotonic() - poll_start_time  # tempo real
+                delivered = False
 
-                if progressive_activity_id:
-                    # Atualizar mensagem existente com texto final (sem sufixo)
+                if progressive_activity_id and processing_time < 120:
+                    # Só tenta update_activity se processamento foi rápido (<2 min).
+                    # Teams rejeita updates em mensagens com mais de ~2-3 min de idade,
+                    # causando perda silenciosa da resposta.
                     try:
                         update = Activity(
                             id=progressive_activity_id,
@@ -587,23 +593,48 @@ async def _poll_and_respond(
                             text=resposta,
                         )
                         await turn_context.update_activity(update)
+                        delivered = True
                         logger.info(
                             f"[BOT] Progressive final update: "
                             f"task={task_id[:8]}... "
                             f"({len(resposta)} chars, {poll_count} polls)"
                         )
                     except Exception as update_err:
-                        # Fallback: enviar como nova mensagem se update falhar
                         logger.warning(
-                            f"[BOT] Erro ao atualizar progressive msg final, "
-                            f"enviando como nova: {update_err}"
+                            f"[BOT] update_activity falhou "
+                            f"(processing_time={processing_time:.0f}s): {update_err}"
                         )
-                        await _send_split_response(turn_context, resposta)
-                else:
-                    await _send_split_response(turn_context, resposta)
+                elif progressive_activity_id:
+                    # Processamento longo (>2 min): pular update_activity,
+                    # deletar msg parcial para evitar duplicata
                     logger.info(
-                        f"[BOT] Resposta enviada para task={task_id[:8]}... "
-                        f"({len(resposta)} chars, {poll_count} polls)"
+                        f"[BOT] Processamento longo ({processing_time:.0f}s), "
+                        f"pulando update_activity para task={task_id[:8]}..."
+                    )
+                    try:
+                        await turn_context.delete_activity(progressive_activity_id)
+                    except Exception:
+                        pass  # Best effort — msg parcial pode ficar visível
+
+                if not delivered:
+                    # Enviar como nova mensagem(ns) com try/except robusto
+                    try:
+                        await _send_split_response(turn_context, resposta)
+                        delivered = True
+                        logger.info(
+                            f"[BOT] Resposta enviada (nova msg): task={task_id[:8]}... "
+                            f"({len(resposta)} chars, {poll_count} polls)"
+                        )
+                    except Exception as send_err:
+                        logger.error(
+                            f"[BOT] FALHA ao entregar resposta: "
+                            f"task={task_id[:8]}... error={send_err}"
+                        )
+
+                if not delivered:
+                    logger.error(
+                        f"[BOT] RESPOSTA PERDIDA: task={task_id[:8]}... "
+                        f"({len(resposta)} chars, processing_time={processing_time:.0f}s)"
                     )
                 return
 

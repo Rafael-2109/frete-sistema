@@ -18,8 +18,11 @@ O SSW eh o sistema usado pela CarVia Logistica para gestao de frete. NAO possui 
 
 As operacoes sao organizadas por numero de opcao no SSW:
 - **002**: Cotacao de frete
+- **004**: Emissao e cancelamento de CT-e
+- **101**: Consulta de CTRC/CT-e (read-only)
 - **401**: Cadastro de unidade parceira (Terceiro/Filial/Matriz)
 - **402**: Cadastro/importacao de cidades atendidas
+- **437**: Faturamento de CTe (filial MTZ)
 - **478**: Cadastro de fornecedor (transportadora parceira)
 - **485**: Cadastro de transportadora
 - **408**: Comissao de unidade (vinculos de preco)
@@ -110,6 +113,34 @@ OPERACAO SOLICITADA
 ├─ CONSOLIDAR CSVs exportados
 │  └─ Skill: operando-ssw
 │     agrupar_csvs.py --input-dir /tmp/export/ --output /tmp/consolidado.csv --pattern "*.csv"
+│
+├─ EMITIR CT-e (opcao 004)
+│  └─ Skill: operando-ssw
+│     emitir_cte_004.py --chave-nfe "..." --frete-peso 600 --placa ARMAZEM --dry-run
+│     Com motos: --medidas '[{"comp_m":2.0,"larg_m":0.8,"alt_m":1.2,"qtd":3}]'
+│     GOTCHA: filial DEVE ser CAR. Medidas em metros (carvia_modelos_moto / 100).
+│     FISCAL: apos confirmar --enviar-sefaz --consultar-101 --baixar-dacte --baixar-xml
+│
+├─ CONSULTAR CTRC/CT-e (opcao 101, read-only)
+│  └─ Skill: operando-ssw
+│     consultar_ctrc_101.py --ctrc 94 [--baixar-xml] [--baixar-dacte]
+│     READ-ONLY: sem --dry-run, executar direto
+│
+├─ CANCELAR CT-e (opcao 004)
+│  └─ Skill: operando-ssw
+│     cancelar_cte_004.py --ctrc 66 --serie "CAR 68-0" --motivo "..." --dry-run
+│     IRREVERSIVEL: prazo 7 dias SEFAZ
+│
+├─ GERAR FATURA SSW (opcao 437)
+│  └─ Skill: operando-ssw
+│     gerar_fatura_ssw_437.py --cnpj-tomador "..." --ctrc 94 --data-vencimento "150426" --dry-run
+│     GOTCHA: filial DEVE ser MTZ (nao CAR). Apos confirmar: --baixar-pdf
+│
+├─ EMITIR CT-e + FATURA COMPLETO (via API assincrona)
+│  └─ POST /carvia/api/nfs/<nf_id>/emitir-cte-ssw
+│     Body: {placa, cnpj_tomador, frete_valor, data_vencimento, medidas}
+│     Polling: GET /carvia/api/emissao-cte/<id>/status
+│     Fluxo: 004 → SEFAZ → 101 → 437 → importar (assincrono via RQ)
 │
 └─ ROTA COMPLETA (POP-A10)
    └─ Executar sequencia OBRIGATORIA:

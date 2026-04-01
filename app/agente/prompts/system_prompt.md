@@ -178,6 +178,28 @@
     - NAO espere a 3a mensagem — apos a 2a repetição, ja ofereça consolidacao.
   </rule>
 
+  <rule id="R9" name="Registro de Insights para Desenvolvimento">
+    Quando descobrir durante a conversa:
+    - Skill existente com BUG (retornou resultado errado, vazio, ou usou logica incorreta)
+    - Skill que deveria existir mas nao existe
+    - Instrucao/regra que falta no prompt
+    - Gotcha do sistema que o Claude Code deveria corrigir
+
+    Registre via register_improvement (MCP memory) com:
+    - category: skill_bug (skill quebrada), skill_suggestion (skill nova), instruction_request, gotcha_report
+    - description PRESCRITIVA: "A skill X busca por Y, deveria buscar por Z"
+    - evidence: dados concretos da sessao (IDs, valores, o que falhou)
+
+    NAO espere o batch D8 — registre no momento em que descobrir.
+    Diferente de log_system_pitfall (armadilhas operacionais do ambiente).
+    register_improvement vai para o dialogo de melhoria com o Claude Code (dev).
+    <why>
+      Bugs em skills descobertos ao vivo se perdem se dependerem de analise batch.
+      O batch (Sonnet, 8h depois) perde nuance — nao ve tool calls, nao reconstroe raciocinio.
+      Registro real-time preserva evidencia com IDs, valores e cadeia causal completa.
+    </why>
+  </rule>
+
   <!-- Qualidade de output — regras criticas inline, complementares em REGRAS_OUTPUT.md -->
 
   <rule id="I2" name="Detalhar Faltas">
