@@ -49,9 +49,10 @@ Usar `created_at` marca como timeout task esperando resposta do usuario.
 ### R7: CancelledError e BaseException
 `asyncio.CancelledError` e `BaseException` desde Python 3.9. `except Exception` NAO captura.
 `asyncio.wait_for(timeout=chunk_timeout)` per-chunk cancela via CancelledError → bypassa TODOS os except handlers.
-Deadline renewal: INACTIVITY_TIMEOUT=120s (renovavel) + MAX_ABSOLUTE=600s (teto).
+Timeout por inatividade apenas (INACTIVITY_TIMEOUT=240s, renovavel a cada chunk).
+SEM teto absoluto — operacoes com subagentes Odoo podem levar 15-30 min legitimamente (DC-9).
 Usar `finally` para garantias (Event.set, cleanup).
-— FONTE: `services.py:981,992` (DC-8)
+— FONTE: `services.py:957,1009-1045` (DC-8, DC-9)
 
 ---
 
@@ -130,6 +131,7 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 | `TEAMS_DEFAULT_MODEL` | `claude-opus-4-6` | Modelo LLM |
 | `TEAMS_ASYNC_MODE` | `true` | Async (thread) vs sync |
 | `TEAMS_ASK_USER_TIMEOUT` | `120` | Timeout Adaptive Card (seg) |
+| `INACTIVITY_TIMEOUT` | `240` | Sem chunk por 4 min = timeout (DC-9, sem teto absoluto) |
 | `TEAMS_PROGRESSIVE_STREAMING` | `true` | Flush parcial ao DB |
 | `TEAMS_STREAM_FLUSH_INTERVAL` | `4.0` | Intervalo flush (seg) |
 | `USE_PERSISTENT_SDK_CLIENT` | `false` | v3 pool vs v2 efemero (rollback) |

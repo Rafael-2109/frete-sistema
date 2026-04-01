@@ -953,9 +953,10 @@ def _obter_resposta_agente_streaming(
     # Pool key para path persistente (ClaudeSDKClient por sessão)
     our_session_id = session.session_id if session else None
 
-    # Deadline com renewal: timeout de inatividade renovável + teto absoluto
-    INACTIVITY_TIMEOUT = 240   # 4 min sem atividade = timeout (mantém valor original)
-    MAX_ABSOLUTE = 600         # 10 min teto absoluto (safety net)
+    # Timeout por inatividade: mata quando não há atividade real.
+    # Cada chunk/tool_call recebido renova o deadline.
+    # Sem teto absoluto — operações longas (subagentes Odoo, bulk) são legítimas.
+    INACTIVITY_TIMEOUT = 240   # 4 min sem atividade = timeout
 
     try:
         async def _stream_with_flush():
@@ -969,7 +970,7 @@ def _obter_resposta_agente_streaming(
             cost_usd = 0.0
             last_flush_time = time.monotonic()
             last_activity = time.monotonic()  # Renewal: atualizado a cada chunk
-            stream_start = time.monotonic()   # Absolute: fixo
+            stream_start = time.monotonic()   # Para log de elapsed time
 
             # Helper: flush com app_context para daemon thread.
             # No daemon thread, não há Flask app_context — wrapping necessário.
@@ -992,9 +993,8 @@ def _obter_resposta_agente_streaming(
                         "[TEAMS-STREAM] Flush ignorado: sem app_context disponível"
                     )
 
-            # Deadline com renewal: aguarda cada chunk com timeout de inatividade.
+            # Timeout por inatividade: cada chunk renova o deadline.
             # Se nenhum chunk chegar em INACTIVITY_TIMEOUT, dispara TimeoutError.
-            # Se ultrapassar MAX_ABSOLUTE total, dispara TimeoutError independente.
             stream_iter = client.stream_response(
                 prompt=prompt_completo,
                 user_name=usuario,
@@ -1007,25 +1007,23 @@ def _obter_resposta_agente_streaming(
             ).__aiter__()
 
             while True:
-                # Calcular timeout para este chunk: menor entre
-                # inatividade restante e teto absoluto restante
+                # Timeout por inatividade apenas — sem teto absoluto.
+                # Operações com subagentes (Odoo XML-RPC, bulk) podem
+                # levar 15-30 min legitimamente. Matar por wall-clock
+                # desperdiça trabalho ativo (DC-9).
                 now_mono = time.monotonic()
-                abs_remaining = MAX_ABSOLUTE - (now_mono - stream_start)
-                inact_remaining = INACTIVITY_TIMEOUT - (now_mono - last_activity)
-                chunk_timeout = min(abs_remaining, inact_remaining)
+                chunk_timeout = INACTIVITY_TIMEOUT - (now_mono - last_activity)
 
                 if chunk_timeout <= 0:
-                    reason = (
-                        "absolute" if abs_remaining <= 0
-                        else "inactivity"
-                    )
+                    elapsed = now_mono - stream_start
+                    inact = now_mono - last_activity
                     logger.warning(
-                        f"[TEAMS-STREAM] Deadline expired ({reason}) "
-                        f"- abs_remaining={abs_remaining:.0f}s "
-                        f"inact_remaining={inact_remaining:.0f}s"
+                        f"[TEAMS-STREAM] Inactivity timeout "
+                        f"- elapsed={elapsed:.0f}s "
+                        f"inactivity={inact:.0f}s"
                     )
                     raise asyncio.TimeoutError(
-                        f"Deadline expired ({reason})"
+                        f"Inactivity timeout ({inact:.0f}s)"
                     )
 
                 try:
@@ -1128,8 +1126,11 @@ def _obter_resposta_agente_streaming(
         # v2 (asyncio.run) desligado em 2026-03-27.
         from app.agente.sdk.client_pool import submit_coroutine
         future = submit_coroutine(_stream_with_timeout())
+        # Timeout da thread: safety net contra coroutine que nunca retorna.
+        # Generoso (1h) porque o timeout real é por inatividade (240s) dentro da coroutine.
+        THREAD_SAFETY_TIMEOUT = 3600
         resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd = future.result(
-            timeout=MAX_ABSOLUTE + 10
+            timeout=THREAD_SAFETY_TIMEOUT
         )
 
         # Extrair e sanitizar resposta
