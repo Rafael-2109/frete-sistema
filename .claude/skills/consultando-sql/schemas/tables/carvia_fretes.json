@@ -209,6 +209,26 @@
     {
       "name": "observacoes",
       "type": "text"
+    },
+    {
+      "name": "condicao_pagamento",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "prazo_dias",
+      "type": "integer"
+    },
+    {
+      "name": "responsavel_frete",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "percentual_remetente",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "percentual_destinatario",
+      "type": "numeric(5,2)"
     }
   ],
   "foreign_keys": [
@@ -246,13 +266,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_fretes_cnpj_destino",
-      "columns": [
-        "cnpj_destino"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_fretes_status",
       "columns": [
         "status"
@@ -284,6 +297,13 @@
       "name": "ix_carvia_fretes_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_fretes_cnpj_destino",
+      "columns": [
+        "cnpj_destino"
       ],
       "unique": false
     }

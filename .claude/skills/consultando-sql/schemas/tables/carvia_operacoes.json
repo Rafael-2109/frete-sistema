@@ -123,6 +123,26 @@
       "type": "text"
     },
     {
+      "name": "condicao_pagamento",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "prazo_dias",
+      "type": "integer"
+    },
+    {
+      "name": "responsavel_frete",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "percentual_remetente",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "percentual_destinatario",
+      "type": "numeric(5,2)"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"
@@ -146,13 +166,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_operacoes_cte_numero",
-      "columns": [
-        "cte_numero"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_operacoes_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
@@ -163,6 +176,13 @@
       "name": "ix_carvia_operacoes_fatura_cliente_id",
       "columns": [
         "fatura_cliente_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_operacoes_cte_numero",
+      "columns": [
+        "cte_numero"
       ],
       "unique": false
     }

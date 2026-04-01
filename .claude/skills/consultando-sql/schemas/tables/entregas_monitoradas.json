@@ -154,30 +154,9 @@
   ],
   "indices": [
     {
-      "name": "idx_em_entregue",
-      "columns": [
-        "entregue"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_data_embarque",
-      "columns": [
-        "data_embarque"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_em_transportadora",
       "columns": [
         "transportadora"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_data_agenda",
-      "columns": [
-        "data_agenda"
       ],
       "unique": false
     },
@@ -196,6 +175,34 @@
       "unique": false
     },
     {
+      "name": "idx_em_entregue",
+      "columns": [
+        "entregue"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_embarque",
+      "columns": [
+        "data_embarque"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_agenda",
+      "columns": [
+        "data_agenda"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_em_data_faturamento",
       "columns": [
         "data_faturamento"
@@ -206,13 +213,6 @@
       "name": "ix_entregas_monitoradas_numero_nf",
       "columns": [
         "numero_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
-      "columns": [
-        "cnpj_cliente"
       ],
       "unique": false
     },

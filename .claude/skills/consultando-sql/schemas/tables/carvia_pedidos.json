@@ -64,9 +64,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_pedidos_status",
+      "name": "ix_carvia_pedidos_cotacao_id",
       "columns": [
-        "status"
+        "cotacao_id"
       ],
       "unique": false
     },
@@ -78,9 +78,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_pedidos_cotacao_id",
+      "name": "ix_carvia_pedidos_status",
       "columns": [
-        "cotacao_id"
+        "status"
       ],
       "unique": false
     }

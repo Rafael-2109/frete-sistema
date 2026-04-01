@@ -246,13 +246,6 @@
   ],
   "indices": [
     {
-      "name": "ix_movimentacao_estoque_tipo_movimentacao",
-      "columns": [
-        "tipo_movimentacao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_movimentacao_baixado",
       "columns": [
         "baixado"
@@ -395,16 +388,16 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_cnpj_destinatario",
+      "name": "ix_movimentacao_estoque_cod_produto",
       "columns": [
-        "cnpj_destinatario"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_cod_produto",
+      "name": "ix_movimentacao_estoque_cnpj_destinatario",
       "columns": [
-        "cod_produto"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -482,6 +475,13 @@
       "name": "idx_movimentacao_tipo_destinatario",
       "columns": [
         "tipo_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_tipo_movimentacao",
+      "columns": [
+        "tipo_movimentacao"
       ],
       "unique": false
     }

@@ -95,9 +95,9 @@
       "unique": false
     },
     {
-      "name": "ix_depara_produto_cliente_prefixo_cnpj",
+      "name": "ix_depara_produto_cliente_codigo_cliente",
       "columns": [
-        "prefixo_cnpj"
+        "codigo_cliente"
       ],
       "unique": false
     },
@@ -109,16 +109,16 @@
       "unique": false
     },
     {
-      "name": "ix_depara_produto_cliente_codigo_cliente",
+      "name": "ix_depara_produto_cliente_ativo",
       "columns": [
-        "codigo_cliente"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_depara_produto_cliente_ativo",
+      "name": "ix_depara_produto_cliente_prefixo_cnpj",
       "columns": [
-        "ativo"
+        "prefixo_cnpj"
       ],
       "unique": false
     },

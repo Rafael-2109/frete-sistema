@@ -121,9 +121,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_nfs_numero_nf",
+      "name": "ix_carvia_nfs_status",
       "columns": [
-        "numero_nf"
+        "status"
       ],
       "unique": false
     },
@@ -135,9 +135,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_nfs_status",
+      "name": "ix_carvia_nfs_numero_nf",
       "columns": [
-        "status"
+        "numero_nf"
       ],
       "unique": false
     },

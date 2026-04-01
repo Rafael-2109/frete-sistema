@@ -178,6 +178,26 @@
       "type": "text"
     },
     {
+      "name": "condicao_pagamento",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "prazo_dias",
+      "type": "integer"
+    },
+    {
+      "name": "responsavel_frete",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "percentual_remetente",
+      "type": "numeric(5,2)"
+    },
+    {
+      "name": "percentual_destinatario",
+      "type": "numeric(5,2)"
+    },
+    {
       "name": "alerta_saida_sem_nf",
       "type": "boolean",
       "nullable": false,
