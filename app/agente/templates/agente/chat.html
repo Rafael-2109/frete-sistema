@@ -396,6 +396,25 @@
     </div>
 </div>
 
+<!-- SDK Stderr Debug Panel (Admin only) -->
+{% if current_user.perfil == 'administrador' %}
+<div id="debug-panel" class="debug-panel-container hidden">
+    <div class="debug-panel-header">
+        <span class="debug-panel-title"><i class="fas fa-terminal"></i> CLI Debug</span>
+        <div class="debug-panel-controls">
+            <button class="debug-filter-btn active" data-level="all" onclick="filterDebugLines('all')" title="Todos">All</button>
+            <button class="debug-filter-btn" data-level="debug" onclick="filterDebugLines('debug')" title="Debug">DBG</button>
+            <button class="debug-filter-btn" data-level="warn" onclick="filterDebugLines('warn')" title="Warnings">WRN</button>
+            <button class="debug-filter-btn" data-level="error" onclick="filterDebugLines('error')" title="Errors">ERR</button>
+            <span class="badge bg-dark ms-2" id="debug-line-count">0</span>
+            <button class="btn-close-panel ms-1" onclick="clearDebugPanel()" title="Limpar"><i class="fas fa-trash-alt"></i></button>
+            <button class="btn-close-panel" onclick="toggleDebugPanel()" title="Fechar"><i class="fas fa-times"></i></button>
+        </div>
+    </div>
+    <div class="debug-panel-body" id="debug-body"></div>
+</div>
+{% endif %}
+
 <!-- FEAT-023: Markdown Avançado - Bibliotecas -->
 <script src="https://cdn.jsdelivr.net/npm/marked@13.0.0/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>

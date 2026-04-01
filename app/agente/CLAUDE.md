@@ -307,7 +307,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 **Se uma camada faltar, o evento e silenciosamente descartado.** Nao ha validacao automatica.
 
-### Mapa de eventos (atualizado 2026-03-15)
+### Mapa de eventos (atualizado 2026-04-01)
 
 | Evento | client.py | routes.py | chat.js | Origem |
 |--------|-----------|-----------|---------|--------|
@@ -322,7 +322,8 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 | `task_started` | StreamEvent | _sse_event | case | TaskStartedMessage (subagente) |
 | `task_progress` | StreamEvent | _sse_event | case | TaskProgressMessage (subagente) |
 | `task_notification` | StreamEvent | _sse_event | case | TaskNotificationMessage (subagente) |
-| `done` | StreamEvent | _sse_event | case | ResultMessage (fim) |
+| `stderr` | StreamEvent | _sse_event | case | SDK stderr callback (debug, admin-only) |
+| `done` | StreamEvent | _sse_event | case | ResultMessage (fim, inclui structured_output) |
 | `start` | — | SSE generator | case | Inicio do SSE stream |
 | `heartbeat` | — | SSE generator | case | Keep-alive 10s |
 | `suggestions` | — | pos-stream | case | suggestion_generator |
@@ -385,6 +386,8 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 - **`task_budget`** (0.1.51, NAO usado): Limite de tokens por task/subagent.
 - **`SystemPromptFile`** (0.1.51, NAO usado): System prompt via arquivo. Nosso prompt e ~3KB string — sem necessidade.
 - **`get_context_usage()`** (0.1.52, NAO implementado): Monitoramento de context window. Requer wiring 3-layer (client→routes→chat.js).
+- **`stderr` callback** (0.1.53, implementado 2026-04-01): Captura debug output do CLI subprocess em real-time. Pipeline 3-layer: `_build_options(stderr_queue)` → `StreamEvent('stderr')` → SSE → debug panel (admin-only). Flag: `USE_STDERR_CALLBACK`. Requer `debug_mode=true` no request E flag ativa. `extra_args: {"debug-to-stderr": None}` habilita output no CLI.
+- **`output_format`** (0.1.53, frontend implementado 2026-04-01): Structured output com JSON Schema. Backend ja estava wired (`_build_options` + done event). Frontend agora renderiza `structured_output` como tabela (arrays), badges (fields simples), ou JSON collapsible (fallback). Request param: `output_format: {type: "json_schema", schema: {...}}`.
 
 ### Features adotadas (anteriores, mantidas):
 - **`ResultMessage.stop_reason`**: Populado automaticamente no StreamEvent `done` e logado.

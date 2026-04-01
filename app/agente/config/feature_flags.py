@@ -280,6 +280,16 @@ TEAMS_TOOL_STATUS_FEEDBACK = os.getenv("TEAMS_TOOL_STATUS_FEEDBACK", "true").low
 USE_EXPANDED_HOOKS = os.getenv("AGENT_EXPANDED_HOOKS", "true").lower() == "true"
 
 # ====================================================================
+# Stderr Callback (SDK Debug Output)
+# ====================================================================
+# Quando true: registra stderr callback no ClaudeAgentOptions para capturar
+# debug output do CLI subprocess em real-time. Emite como SSE event 'stderr'
+# para o debug panel no frontend (admin-only, requer debug_mode=true).
+# Quando false: stderr capturado apenas em ProcessError (comportamento original).
+# Desativar se causar overhead perceptível no streaming.
+USE_STDERR_CALLBACK = os.getenv("AGENT_STDERR_CALLBACK", "true").lower() == "true"
+
+# ====================================================================
 # Async Streaming (migração incremental)
 # ====================================================================
 # Quando true: usa implementação async nativa para streaming SSE

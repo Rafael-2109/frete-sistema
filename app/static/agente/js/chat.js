@@ -280,8 +280,208 @@ if (debugModeToggle) {
             debugModeBanner.style.display = this.checked ? 'block' : 'none';
         }
 
+        // Mostrar/ocultar debug panel
+        const debugPanel = document.getElementById('debug-panel');
+        if (debugPanel) {
+            debugPanel.classList.toggle('hidden', !this.checked);
+        }
+
         console.log('[AGENTE] Debug Mode:', debugModeEnabled ? 'ATIVADO' : 'DESATIVADO');
     });
+}
+
+// ============================================
+// DEBUG PANEL — Stderr output (Admin only)
+// ============================================
+const MAX_DEBUG_LINES = 500;
+let debugLineCount = 0;
+
+function appendDebugLine(line) {
+    const debugBody = document.getElementById('debug-body');
+    if (!debugBody) return;
+
+    const panel = document.getElementById('debug-panel');
+    if (panel && panel.classList.contains('hidden') && debugLineCount === 0) {
+        // Auto-show apenas na primeira linha (não reabre se o usuário fechou)
+        panel.classList.remove('hidden');
+    }
+
+    // Classificar a linha para coloração
+    const entry = document.createElement('div');
+    entry.className = 'debug-line';
+    if (line.includes('[DEBUG]')) {
+        entry.classList.add('debug-level-debug');
+    } else if (line.includes('[WARN]') || line.includes('[WARNING]')) {
+        entry.classList.add('debug-level-warn');
+    } else if (line.includes('[ERROR]')) {
+        entry.classList.add('debug-level-error');
+    }
+
+    const time = new Date().toLocaleTimeString('pt-BR', { hour12: false, fractionalSecondDigits: 1 });
+    entry.textContent = `[${time}] ${line}`;
+    debugBody.appendChild(entry);
+
+    // Limitar linhas para evitar memory leak
+    debugLineCount++;
+    if (debugLineCount > MAX_DEBUG_LINES) {
+        const first = debugBody.firstChild;
+        if (first) debugBody.removeChild(first);
+        debugLineCount--;
+    }
+
+    // Auto-scroll para o final
+    debugBody.scrollTop = debugBody.scrollHeight;
+
+    // Atualizar contador
+    const counter = document.getElementById('debug-line-count');
+    if (counter) counter.textContent = debugLineCount.toString();
+}
+
+function clearDebugPanel() {
+    const debugBody = document.getElementById('debug-body');
+    if (debugBody) debugBody.innerHTML = '';
+    debugLineCount = 0;
+    const counter = document.getElementById('debug-line-count');
+    if (counter) counter.textContent = '0';
+}
+
+function toggleDebugPanel() {
+    const panel = document.getElementById('debug-panel');
+    if (panel) panel.classList.toggle('hidden');
+}
+
+function filterDebugLines(level) {
+    const debugBody = document.getElementById('debug-body');
+    if (!debugBody) return;
+    const lines = debugBody.querySelectorAll('.debug-line');
+    lines.forEach(line => {
+        if (level === 'all') {
+            line.style.display = '';
+        } else {
+            line.style.display = line.classList.contains(`debug-level-${level}`) ? '' : 'none';
+        }
+    });
+    // Highlight active filter button
+    document.querySelectorAll('.debug-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.level === level);
+    });
+}
+
+// ============================================
+// SDK Structured Output Renderer
+// ============================================
+function renderStructuredOutput(data, container) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'structured-output';
+
+    // Se for array de objetos: renderizar como tabela
+    if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+        wrapper.appendChild(createTable(data));
+    } else if (typeof data === 'object' && !Array.isArray(data)) {
+        // Objeto: se tem arrays dentro que parecem tabelas, renderizar misto
+        const hasArrayProp = Object.values(data).some(v => Array.isArray(v) && v.length > 0 && typeof v[0] === 'object');
+        if (hasArrayProp) {
+            // Renderizar campos simples como badges + arrays como tabelas
+            const simpleFields = document.createElement('div');
+            simpleFields.className = 'structured-output-fields';
+            for (const [key, val] of Object.entries(data)) {
+                if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object') {
+                    const label = document.createElement('div');
+                    label.className = 'structured-output-section-label';
+                    label.textContent = formatFieldName(key);
+                    wrapper.appendChild(label);
+                    wrapper.appendChild(createTable(val));
+                } else {
+                    const badge = createFieldBadge(key, val);
+                    simpleFields.appendChild(badge);
+                }
+            }
+            if (simpleFields.childNodes.length > 0) {
+                wrapper.insertBefore(simpleFields, wrapper.firstChild);
+            }
+        } else {
+            // Objeto simples: renderizar como JSON collapsible
+            wrapper.appendChild(createJsonViewer(data));
+        }
+    } else {
+        // Fallback: JSON puro
+        wrapper.appendChild(createJsonViewer(data));
+    }
+
+    // Inserir após o conteúdo da mensagem (fallback para container se .message-bubble ausente)
+    const bubble = container.querySelector('.message-bubble');
+    (bubble || container).appendChild(wrapper);
+}
+
+function createTable(rows) {
+    const table = document.createElement('table');
+    table.className = 'structured-output-table markdown-table';
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    const keys = Object.keys(rows[0]);
+    keys.forEach(key => {
+        const th = document.createElement('th');
+        th.textContent = formatFieldName(key);
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    rows.forEach(row => {
+        const tr = document.createElement('tr');
+        keys.forEach(key => {
+            const td = document.createElement('td');
+            const val = row[key];
+            td.textContent = val === null || val === undefined ? '-' : String(val);
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    return table;
+}
+
+function createFieldBadge(key, value) {
+    const el = document.createElement('span');
+    el.className = 'structured-output-badge';
+    const label = document.createElement('span');
+    label.className = 'structured-output-badge-label';
+    label.textContent = formatFieldName(key);
+    const val = document.createElement('span');
+    val.className = 'structured-output-badge-value';
+    if (typeof value === 'boolean') {
+        val.textContent = value ? 'Sim' : 'Nao';
+        val.classList.add(value ? 'badge-true' : 'badge-false');
+    } else {
+        val.textContent = String(value);
+    }
+    el.appendChild(label);
+    el.appendChild(val);
+    return el;
+}
+
+function createJsonViewer(data) {
+    const details = document.createElement('details');
+    details.className = 'structured-output-json';
+    const summary = document.createElement('summary');
+    summary.textContent = 'JSON Output';
+    details.appendChild(summary);
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+    code.className = 'language-json';
+    code.textContent = JSON.stringify(data, null, 2);
+    pre.appendChild(code);
+    details.appendChild(pre);
+    // Tentar highlight se hljs disponível
+    if (typeof hljs !== 'undefined') {
+        try { hljs.highlightElement(code); } catch(e) { /* ignore */ }
+    }
+    return details;
+}
+
+function formatFieldName(key) {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
 // ============================================
@@ -1009,6 +1209,14 @@ function processSSEEvent(eventType, data, state) {
                 break;
             }
 
+            // SDK stderr callback: debug output do CLI subprocess (admin-only)
+            case 'stderr': {
+                if (debugModeEnabled) {
+                    appendDebugLine(data.line || '');
+                }
+                break;
+            }
+
             case 'error':
                 hideTyping();
                 hideThinkingPanel();
@@ -1057,6 +1265,11 @@ function processSSEEvent(eventType, data, state) {
                 // FEAT-030: Finaliza items pendentes (timeline e todos)
                 finalizePendingTimelineItems('success');
                 finalizePendingTodos(true);  // Marca como completed
+
+                // SDK structured output: renderizar JSON se output_format ativo
+                if (data.structured_output && state.msgElement) {
+                    renderStructuredOutput(data.structured_output, state.msgElement);
+                }
 
                 // Adicionar botões de feedback à mensagem streamed
                 if (state.msgElement && state.text && state.text.trim()) {

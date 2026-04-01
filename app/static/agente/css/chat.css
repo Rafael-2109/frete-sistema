@@ -2187,3 +2187,252 @@
     color: #ffc107;
     border-bottom-color: rgba(255, 193, 7, 0.2);
 }
+
+/* ============================================
+   SDK Structured Output
+   ============================================ */
+
+.structured-output {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+.structured-output-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.structured-output-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 0.78rem;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+.structured-output-badge-label {
+    padding: 3px 8px;
+    background: var(--bg-light, #f0f0f0);
+    color: var(--text-muted, #666);
+    font-weight: 500;
+}
+
+.structured-output-badge-value {
+    padding: 3px 8px;
+    font-weight: 600;
+}
+
+.structured-output-badge-value.badge-true {
+    color: var(--success, #28a745);
+}
+
+.structured-output-badge-value.badge-false {
+    color: var(--danger, #dc3545);
+}
+
+.structured-output-section-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 8px 0 4px;
+    color: var(--text-muted, #666);
+}
+
+.structured-output-table {
+    font-size: 0.8rem;
+    width: 100%;
+}
+
+.structured-output-json {
+    margin-top: 6px;
+}
+
+.structured-output-json summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--text-muted, #666);
+    user-select: none;
+}
+
+.structured-output-json pre {
+    margin-top: 6px;
+    max-height: 300px;
+    overflow: auto;
+    font-size: 0.72rem;
+    border-radius: 6px;
+    background: var(--bg-light, #f4f4f4);
+    padding: 8px;
+}
+
+[data-bs-theme="dark"] .structured-output {
+    border-top-color: rgba(255,255,255,0.08);
+}
+
+[data-bs-theme="dark"] .structured-output-badge {
+    border-color: rgba(255,255,255,0.1);
+}
+
+[data-bs-theme="dark"] .structured-output-badge-label {
+    background: rgba(255,255,255,0.06);
+}
+
+[data-bs-theme="dark"] .structured-output-json pre {
+    background: rgba(0,0,0,0.2);
+}
+
+/* ============================================
+   SDK Stderr Debug Panel (Admin only)
+   ============================================ */
+
+.debug-panel-container {
+    position: fixed;
+    left: 12px;
+    bottom: 80px;
+    width: 480px;
+    max-height: 300px;
+    background: var(--bg-card, #1e1e2e);
+    color: var(--text, #cdd6f4);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    z-index: 110;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.72rem;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.debug-panel-container.hidden {
+    transform: translateY(350px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.debug-panel-header {
+    background: var(--bg-darker, #181825);
+    color: var(--text-muted, #a6adc8);
+    padding: 6px 10px;
+    border-radius: 10px 10px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 500;
+    gap: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.debug-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.debug-panel-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.debug-filter-btn {
+    background: transparent;
+    color: var(--text-muted, #a6adc8);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.65rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.debug-filter-btn:hover {
+    background: rgba(255,255,255,0.08);
+}
+
+.debug-filter-btn.active {
+    background: rgba(137, 180, 250, 0.2);
+    color: var(--primary, #89b4fa);
+    border-color: rgba(137, 180, 250, 0.3);
+}
+
+.debug-panel-body {
+    overflow-y: auto;
+    padding: 6px 8px;
+    flex: 1;
+    max-height: 240px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.debug-line {
+    padding: 1px 0;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-muted, #a6adc8);
+}
+
+.debug-line.debug-level-debug {
+    color: var(--text-muted, #a6adc8);
+}
+
+.debug-line.debug-level-warn {
+    color: var(--warning, #f9e2af);
+}
+
+.debug-line.debug-level-error {
+    color: var(--danger, #f38ba8);
+    font-weight: 500;
+}
+
+/* Light mode overrides */
+[data-bs-theme="light"] .debug-panel-container {
+    background: #f8f9fa;
+    color: #333;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+[data-bs-theme="light"] .debug-panel-header {
+    background: #e9ecef;
+    color: #555;
+    border-bottom-color: rgba(0,0,0,0.08);
+}
+
+[data-bs-theme="light"] .debug-line {
+    color: #555;
+}
+
+[data-bs-theme="light"] .debug-line.debug-level-warn {
+    color: #b8860b;
+}
+
+[data-bs-theme="light"] .debug-line.debug-level-error {
+    color: #dc3545;
+}
+
+[data-bs-theme="light"] .debug-filter-btn {
+    color: #555;
+    border-color: rgba(0,0,0,0.1);
+}
+
+[data-bs-theme="light"] .debug-filter-btn.active {
+    background: rgba(13, 110, 253, 0.1);
+    color: #0d6efd;
+    border-color: rgba(13, 110, 253, 0.2);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .debug-panel-container {
+        left: 4px;
+        right: 4px;
+        width: auto;
+        bottom: 70px;
+        max-height: 200px;
+    }
+}

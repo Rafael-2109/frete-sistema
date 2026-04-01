@@ -53,6 +53,15 @@ else
     echo " ✅ Navegadores do Playwright já instalados"
 fi
 
+# 🤖 PRE-AQUECER CLAUDE CLI (evita "Installation process exited with code: 1" no primeiro uso)
+echo " Pre-aquecendo Claude CLI..."
+CLAUDE_CLI=$(python -c "from pathlib import Path; import claude_agent_sdk; print(Path(claude_agent_sdk.__file__).parent / '_bundled' / 'claude')" 2>/dev/null)
+if [ -n "$CLAUDE_CLI" ] && [ -f "$CLAUDE_CLI" ]; then
+    timeout 30 "$CLAUDE_CLI" --version 2>/dev/null && echo " ✅ Claude CLI pronto" || echo " ⚠️ Claude CLI pre-warm falhou (será retentado no primeiro uso)"
+else
+    echo " ⚠️ Claude CLI bundled não encontrado"
+fi
+
 # Configurar encoding UTF-8
 export PYTHONIOENCODING=utf-8
 export LANG=C.UTF-8

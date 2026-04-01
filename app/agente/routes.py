@@ -130,6 +130,13 @@ def api_chat():
         effort_level = data.get('effort_level', 'off')
         plan_mode = data.get('plan_mode', False)
         files = data.get('files', [])
+        output_format = data.get('output_format')  # JSON Schema para structured output
+        if output_format is not None:
+            if not isinstance(output_format, dict) or output_format.get('type') != 'json_schema':
+                return jsonify({'success': False, 'error': 'output_format deve ter type=json_schema'}), 400
+            import json as _json
+            if len(_json.dumps(output_format)) > 4096:
+                return jsonify({'success': False, 'error': 'output_format excede limite de 4KB'}), 400
 
         user_id = current_user.id
         user_name = getattr(current_user, 'nome', 'Usuário')
@@ -212,6 +219,7 @@ def api_chat():
                 plan_mode=plan_mode,
                 image_files=image_files,  # FEAT-032: Imagens para Vision API
                 debug_mode=debug_mode,
+                output_format=output_format,
             )),
             mimetype='text/event-stream',
             headers={
@@ -254,6 +262,7 @@ async def _async_stream_sdk_client(
     image_files: list = None,
     app=None,
     debug_mode: bool = False,
+    output_format: dict = None,
 ):
     """
     Streaming via query() + resume — self-contained, sem pool.
@@ -354,6 +363,8 @@ async def _async_stream_sdk_client(
             sdk_session_id=sdk_session_id_for_resume,
             can_use_tool=can_use_tool,
             our_session_id=our_session_id,
+            debug_mode=debug_mode,
+            output_format=output_format,
         ):
             should_continue = _process_stream_event(event)
             if should_continue:
@@ -391,6 +402,7 @@ def _stream_chat_response(
     plan_mode: bool = False,
     image_files: List[dict] = None,
     debug_mode: bool = False,
+    output_format: dict = None,
 ) -> Generator[str, None, None]:
     """
     Gera resposta em streaming (SSE).
@@ -605,6 +617,12 @@ def _stream_chat_response(
                     # SDK 0.1.50: Rate limit event
                     event_queue.put(_sse_event('rate_limit', event.metadata or {}))
 
+                elif event.type == 'stderr':
+                    # SDK stderr callback: debug output do CLI subprocess (admin-only)
+                    event_queue.put(_sse_event('stderr', {
+                        'line': event.content,
+                    }))
+
                 elif event.type == 'done':
                     message_id = event.metadata.get('message_id', '') or str(agora_utc_naive().timestamp())
                     response_state['input_tokens'] = event.content.get('input_tokens', 0)
@@ -668,6 +686,7 @@ def _stream_chat_response(
                 image_files=image_files,
                 app=app,
                 debug_mode=debug_mode,
+                output_format=output_format,
             )
 
             # =============================================================

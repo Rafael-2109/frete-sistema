@@ -15,6 +15,7 @@ ARQUITETURA (v2 — query() + resume):
 
 import asyncio
 import logging
+import queue
 import time
 from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
@@ -1943,6 +1944,7 @@ Nunca invente informações."""
         can_use_tool: Optional[Callable] = None,
         our_session_id: Optional[str] = None,
         output_format: Optional[Dict[str, Any]] = None,
+        debug_mode: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming.
@@ -1963,6 +1965,7 @@ Nunca invente informações."""
             can_use_tool: Callback de permissão
             our_session_id: Nosso UUID de sessão (usado pelo path persistente como pool key)
             output_format: JSON Schema para structured output (SDK nativo)
+            debug_mode: Se true E flag USE_STDERR_CALLBACK ativo, captura stderr do CLI
 
         Yields:
             StreamEvent com tipo e conteúdo
@@ -1985,6 +1988,7 @@ Nunca invente informações."""
             can_use_tool=can_use_tool,
             our_session_id=our_session_id,
             output_format=output_format,
+            debug_mode=debug_mode,
         ):
             yield event
 
@@ -1999,6 +2003,7 @@ Nunca invente informações."""
         user_id: int = None,
         output_format: Optional[Dict[str, Any]] = None,
         our_session_id: Optional[str] = None,
+        stderr_queue: Optional['queue.SimpleQueue'] = None,
     ) -> 'ClaudeAgentOptions':
         """
         Constrói ClaudeAgentOptions para ClaudeSDKClient.
@@ -2167,6 +2172,18 @@ Nunca invente informações."""
         if output_format:
             options_dict["output_format"] = output_format
             logger.info(f"[AGENT_CLIENT] Structured output ativo: {output_format.get('type', 'unknown')}")
+
+        # Stderr Callback (SDK Debug Output)
+        # Registra callback sincrono que captura linhas de debug do CLI subprocess.
+        # Linhas vao para a stderr_queue (thread-safe SimpleQueue), drenada no
+        # loop de streaming como StreamEvent(type='stderr').
+        # Requer flag USE_STDERR_CALLBACK=true + debug_mode=true no request.
+        if stderr_queue is not None:
+            def _stderr_callback(line: str):
+                stderr_queue.put_nowait(line)
+            options_dict["stderr"] = _stderr_callback
+            options_dict["extra_args"] = {"debug-to-stderr": None}
+            logger.info("[AGENT_CLIENT] Stderr callback ativo com debug-to-stderr")
 
         # =================================================================
         # FEATURE FLAGS: Quick Wins (ativados via env vars)
@@ -3009,6 +3026,7 @@ Nunca invente informações."""
         can_use_tool: Optional[Callable] = None,
         our_session_id: Optional[str] = None,
         output_format: Optional[Dict[str, Any]] = None,
+        debug_mode: bool = False,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando ClaudeSDKClient persistente.
@@ -3046,6 +3064,15 @@ Nunca invente informações."""
         # quando ResultMessage é recebido. Sem _make_streaming_prompt().
         state.streaming_done_event = None
 
+        # ─── Stderr callback queue (debug_mode + USE_STDERR_CALLBACK) ───
+        # SimpleQueue é thread-safe: callback (sync, CLI thread) → put_nowait()
+        # Loop de streaming (async) → get_nowait() entre mensagens SDK
+        stderr_q: Optional[queue.SimpleQueue] = None
+        if debug_mode:
+            from ..config.feature_flags import USE_STDERR_CALLBACK
+            if USE_STDERR_CALLBACK:
+                stderr_q = queue.SimpleQueue()
+
         # ─── Construir options ───
         options = self._build_options(
             user_name=user_name,
@@ -3056,6 +3083,7 @@ Nunca invente informações."""
             can_use_tool=can_use_tool,
             output_format=output_format,
             our_session_id=our_session_id,
+            stderr_queue=stderr_q,
         )
 
         # ─── RESUME: só na primeira conexão ───
@@ -3094,6 +3122,15 @@ Nunca invente informações."""
             # ─── Ajustar model/permission se client já existia ───
             current_model = model or self.settings.model
             if existing and existing.connected:
+                # Client reutilizado — stderr callback não pode ser reaplicado.
+                # O ClaudeSDKClient foi criado com as options originais (sem stderr).
+                # Notificar admin via StreamEvent para que saiba da limitação.
+                if stderr_q is not None:
+                    yield StreamEvent(
+                        type='stderr',
+                        content='[INFO] Stderr debug: client reutilizado do pool. '
+                                'Para capturar stderr completo, inicie nova sessão com debug ativo.'
+                    )
                 # Client reutilizado — aplicar mudanças de configuração
                 try:
                     await pooled.client.set_model(current_model)
@@ -3138,8 +3175,25 @@ Nunca invente informações."""
 
                 # Receber resposta (termina após ResultMessage)
                 async for message in pooled.client.receive_response():
+                    # Drenar stderr lines acumuladas (thread-safe SimpleQueue)
+                    if stderr_q is not None:
+                        while True:
+                            try:
+                                line = stderr_q.get_nowait()
+                                yield StreamEvent(type='stderr', content=line)
+                            except queue.Empty:
+                                break
                     for event in await self._parse_sdk_message(message, state):
                         yield event
+
+            # ─── Drain final de stderr (últimas linhas após receive_response) ───
+            if stderr_q is not None:
+                while True:
+                    try:
+                        line = stderr_q.get_nowait()
+                        yield StreamEvent(type='stderr', content=line)
+                    except queue.Empty:
+                        break
 
             # ─── Fallback done (sem ResultMessage) ───
             if not state.done_emitted:
@@ -3783,15 +3837,21 @@ Nunca invente informações."""
         Retorna cópia do options com resume configurado.
 
         Usa dataclasses.replace() para criar cópia imutável.
+        CLI requer --fork-session quando --session-id é combinado com --resume.
+        Sem fork_session, o CLI rejeita com exit code 1:
+        "Error: --session-id can only be used with --continue or --resume
+        if --fork-session is also specified."
 
         Args:
             options: ClaudeAgentOptions original
             sdk_session_id: Session ID do SDK para resume
 
         Returns:
-            Novo ClaudeAgentOptions com resume=sdk_session_id
+            Novo ClaudeAgentOptions com resume=sdk_session_id (e fork_session se necessário)
         """
         from dataclasses import replace
+        if getattr(options, 'session_id', None):
+            return replace(options, resume=sdk_session_id, fork_session=True)
         return replace(options, resume=sdk_session_id)
 
     async def get_response(
