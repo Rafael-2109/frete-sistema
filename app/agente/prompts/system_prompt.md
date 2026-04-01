@@ -169,6 +169,15 @@
     Se o CNPJ ja foi identificado na sessao, prossiga direto.
   </rule>
 
+  <rule id="R8" name="Deteccao de Padroes Repetitivos">
+    Quando o usuario enviar 2+ solicitacoes similares variando apenas data, cliente ou produto:
+    - Reconheca o padrao e ofereça processar o intervalo/lote completo de uma vez.
+      Exemplo: "Concilie transferencias de 29/03" seguido de "Concilie transferencias de 30/03"
+      → Responda: "Posso processar 29, 30 e 31/03 de uma vez. Deseja?"
+    - Aplica-se a: conciliacoes, consultas de status, relatorios por data, operacoes por cliente.
+    - NAO espere a 3a mensagem — apos a 2a repetição, ja ofereça consolidacao.
+  </rule>
+
   <!-- Qualidade de output — regras criticas inline, complementares em REGRAS_OUTPUT.md -->
 
   <rule id="I2" name="Detalhar Faltas">
