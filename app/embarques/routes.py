@@ -1763,13 +1763,17 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id, itens_nf_removida=None)
                     separacao_lote_id=item.separacao_lote_id
                 ).all()
                 
-                # 🔧 CORREÇÃO: Se não encontrou por lote, buscar por NF (95% dos casos!)
-                if not entregas_vinculadas and item.nota_fiscal:
-                    entregas_vinculadas = EntregaMonitorada.query.filter_by(
-                        numero_nf=item.nota_fiscal
-                    ).all()
-                    if entregas_vinculadas:
-                        print(f"[SYNC] 🔍 Encontrada entrega pela NF {item.nota_fiscal} (fallback)")
+                # 🔧 CORREÇÃO: Se não encontrou por lote, buscar por NF
+                # Usa pedido.nf como fallback porque item.nota_fiscal pode ter sido
+                # zerado no step 1 do cancelamento (linha ~951)
+                if not entregas_vinculadas:
+                    nf_busca = item.nota_fiscal or (pedido.nf if pedido else None)
+                    if nf_busca:
+                        entregas_vinculadas = EntregaMonitorada.query.filter_by(
+                            numero_nf=nf_busca
+                        ).all()
+                        if entregas_vinculadas:
+                            print(f"[SYNC] 🔍 Encontrada entrega pela NF {nf_busca} (fallback)")
                 
                 tem_entrega_no_cd = any(e.nf_cd for e in entregas_vinculadas)
                 
@@ -1788,7 +1792,7 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id, itens_nf_removida=None)
                         # ✅ HÁ ENTREGAS VINCULADAS → NF voltou para CD
                         Separacao.query.filter_by(
                             separacao_lote_id=item.separacao_lote_id
-                        ).update({'nf_cd': True})
+                        ).update({'nf_cd': True, 'status': 'NF no CD'})
                         # MANTÉM numero_nf (não apaga)
                         print(f"[SYNC] 📦 NF {pedido.nf} voltou para o CD (nf_cd=True)")
 
@@ -1815,7 +1819,8 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id, itens_nf_removida=None)
                             ).update({
                                 'nf_cd': True,
                                 'data_embarque': None,
-                                'cotacao_id': None
+                                'cotacao_id': None,
+                                'status': 'NF no CD'
                             })
                             # transportadora ignorado conforme orientação
                             print(f"[SYNC] NF {pedido.nf} preservada, marcada nf_cd=True (cancelamento sem entrega)")
@@ -1827,7 +1832,8 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id, itens_nf_removida=None)
                                 'numero_nf': None,
                                 'data_embarque': None,
                                 'cotacao_id': None,
-                                'nf_cd': False
+                                'nf_cd': False,
+                                'status': 'ABERTO'
                             })
                             # transportadora ignorado conforme orientação
                             print(f"[SYNC] Pedido {pedido.num_pedido} resetado para 'Aberto'")
@@ -1837,9 +1843,17 @@ def sincronizar_nf_embarque_pedido_completa(embarque_id, itens_nf_removida=None)
                     
                     if entregas_vinculadas:
                         # ✅ SINCRONIZAR ESTADO COM ENTREGAS MONITORADAS
+                        update_data = {'nf_cd': tem_entrega_no_cd}
+                        if tem_entrega_no_cd:
+                            update_data['status'] = 'NF no CD'
+                            # Restaurar EntregaMonitorada: NF voltou ao CD
+                            for entrega in entregas_vinculadas:
+                                entrega.nf_cd = True
+                                entrega.data_embarque = None
+                                entrega.transportadora = "-"
                         Separacao.query.filter_by(
                             separacao_lote_id=item.separacao_lote_id
-                        ).update({'nf_cd': tem_entrega_no_cd})
+                        ).update(update_data)
                         print(f"[SYNC] 🔗 Estado sincronizado: nf_cd={tem_entrega_no_cd}")
                         
                     else:
