@@ -273,6 +273,12 @@ def register_api_routes(bp):
             query = query.order_by(Transportadora.razao_social).limit(50)
             transportadoras = query.all()
 
+            # Expandir grupos: por grupo_transportadora_id E por prefixo CNPJ (filiais)
+            from app.transportadoras.filter_utils import expandir_grupo_autocomplete
+            membros_grupo = expandir_grupo_autocomplete(transportadoras)
+            if apenas_freteiros:
+                membros_grupo = [t for t in membros_grupo if t.freteiro]
+
             resultado = [{
                 'id': t.id,
                 'nome': t.razao_social,
@@ -282,6 +288,19 @@ def register_api_routes(bp):
                 'qtd_tabelas': tabelas_info.get(t.id, 0),
                 'grupo': t.grupo.nome if t.grupo_transportadora_id and t.grupo else None,
             } for t in transportadoras]
+
+            # Adicionar membros expandidos (grupo/filiais)
+            for t in membros_grupo:
+                resultado.append({
+                    'id': t.id,
+                    'nome': t.razao_social,
+                    'cnpj': t.cnpj,
+                    'freteiro': t.freteiro,
+                    'tem_tabela': t.id in tabelas_info,
+                    'qtd_tabelas': tabelas_info.get(t.id, 0),
+                    'grupo': t.grupo.nome if t.grupo_transportadora_id and t.grupo else None,
+                    'via_grupo': True,
+                })
 
             return jsonify({'sucesso': True, 'transportadoras': resultado})
 

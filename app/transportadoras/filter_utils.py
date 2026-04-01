@@ -76,6 +76,65 @@ def expandir_ids_grupo(transportadora_id: int) -> list:
     return ids
 
 
+def expandir_grupo_autocomplete(transportadoras):
+    """Expande resultados de autocomplete com membros do mesmo grupo.
+
+    Dado um conjunto de transportadoras (resultado primario da busca),
+    retorna transportadoras adicionais que pertencem ao mesmo grupo —
+    via grupo_transportadora_id OU prefixo CNPJ (primeiros 8 digitos = filiais).
+
+    Args:
+        transportadoras: lista de objetos Transportadora (resultado primario)
+
+    Returns:
+        Lista de objetos Transportadora que sao membros expandidos
+        (NAO inclui as que ja estao no input)
+    """
+    if not transportadoras:
+        return []
+
+    from app.transportadoras.models import Transportadora
+
+    ids_resultado = {t.id for t in transportadoras}
+
+    # 1) grupo_transportadora_id
+    grupo_ids = {t.grupo_transportadora_id for t in transportadoras
+                 if t.grupo_transportadora_id}
+
+    # 2) Prefixo CNPJ: mesma raiz = mesma empresa (filiais)
+    cnpj_prefixos = set()
+    for t in transportadoras:
+        if t.cnpj:
+            cnpj = t.cnpj.strip()
+            barra_pos = cnpj.find('/')
+            if barra_pos >= 0:
+                cnpj_prefixos.add(cnpj[:barra_pos + 1])
+            else:
+                digits = ''.join(c for c in cnpj if c.isdigit())
+                if len(digits) >= 8:
+                    cnpj_prefixos.add(digits[:8])
+
+    # Montar OR de condicoes
+    conditions = []
+    if grupo_ids:
+        conditions.append(Transportadora.grupo_transportadora_id.in_(grupo_ids))
+    for prefixo in cnpj_prefixos:
+        conditions.append(Transportadora.cnpj.ilike(f'{prefixo}%'))
+
+    if not conditions:
+        return []
+
+    try:
+        return Transportadora.query.filter(
+            or_(*conditions),
+            Transportadora.ativo == True,  # noqa: E712
+            ~Transportadora.id.in_(ids_resultado),
+        ).order_by(Transportadora.razao_social).all()
+    except Exception as e:
+        logger.error(f"Erro ao expandir grupo autocomplete: {e}")
+        return []
+
+
 def expandir_filtro_fk(coluna, transportadora_id: int):
     """Retorna filtro SQLAlchemy para FK de transportadora com expansao de grupo.
 

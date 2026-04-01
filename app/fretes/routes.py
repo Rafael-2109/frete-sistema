@@ -1947,18 +1947,9 @@ def api_buscar_transportadoras():
         query = query.order_by(Transportadora.razao_social).limit(50)
         transportadoras = query.all()
 
-        # Expandir grupos: se uma transportadora pertence a um grupo,
-        # incluir as demais do grupo (que nao estejam ja no resultado)
-        ids_resultado = {t.id for t in transportadoras}
-        grupo_ids = {t.grupo_transportadora_id for t in transportadoras if t.grupo_transportadora_id}
-
-        membros_grupo = []
-        if grupo_ids:
-            membros_grupo = Transportadora.query.filter(
-                Transportadora.grupo_transportadora_id.in_(grupo_ids),
-                Transportadora.ativo == True,  # noqa: E712
-                ~Transportadora.id.in_(ids_resultado),
-            ).order_by(Transportadora.razao_social).all()
+        # Expandir grupos: por grupo_transportadora_id E por prefixo CNPJ (filiais)
+        from app.transportadoras.filter_utils import expandir_grupo_autocomplete
+        membros_grupo = expandir_grupo_autocomplete(transportadoras)
 
         # Montar resultado com info de grupo
         resultado = []
