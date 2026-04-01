@@ -84,6 +84,12 @@ class CotacaoV2Service:
             data_expedicao=kwargs.get('data_expedicao'),
             data_agenda=kwargs.get('data_agenda'),
             observacoes=kwargs.get('observacoes'),
+            # Condicao de pagamento e responsavel do frete
+            condicao_pagamento=kwargs.get('condicao_pagamento'),
+            prazo_dias=kwargs.get('prazo_dias'),
+            responsavel_frete=kwargs.get('responsavel_frete'),
+            percentual_remetente=kwargs.get('percentual_remetente'),
+            percentual_destinatario=kwargs.get('percentual_destinatario'),
         )
 
         # Calcular peso cubado se dimensoes fornecidas
@@ -210,6 +216,10 @@ class CotacaoV2Service:
         if peso <= 0:
             return None, 'Peso nao definido. Preencha peso ou adicione motos.'
 
+        # DIRETA requer selecao de veiculo
+        if cotacao.tipo_carga == 'DIRETA' and not cotacao.veiculo_id:
+            return None, 'Selecione um veiculo para carga direta antes de calcular o preco.'
+
         # Tentar "dentro da tabela" — CarViaCidadeAtendida
         resultado_carvia = CotacaoV2Service._cotar_dentro_tabela(
             cotacao=cotacao,
@@ -227,6 +237,11 @@ class CotacaoV2Service:
             cotacao.tabela_carvia_id = resultado_carvia.get('tabela_carvia_id')
             cotacao.detalhes_calculo = resultado_carvia.get('detalhes')
 
+            # Se era manual e recalculou com tabela, limpar flag manual
+            if cotacao.cotacao_manual:
+                cotacao.cotacao_manual = False
+                cotacao.valor_manual = None
+
             # Reaplicar desconto com novo valor_tabela (0% se nunca definido)
             desconto = float(cotacao.percentual_desconto or 0)
             valor_desc = float(cotacao.valor_tabela) * (1 - desconto / 100)
@@ -240,6 +255,16 @@ class CotacaoV2Service:
                 'tabela_carvia_id': cotacao.tabela_carvia_id,
                 'detalhes_calculo': cotacao.detalhes_calculo,
             }, None
+
+        # Erro especifico para DIRETA com veiculo selecionado
+        if cotacao.tipo_carga == 'DIRETA' and cotacao.veiculo_id:
+            veiculo = cotacao.veiculo
+            nome_v = veiculo.nome if veiculo else '?'
+            return None, (
+                f'Veiculo "{nome_v}" nao possui tabela de frete CarVia '
+                f'para esta rota. Selecione outro veiculo ou verifique '
+                f'a configuracao das tabelas.'
+            )
 
         # Cotacao comercial nao cota fora da tabela CarVia
         return None, 'Cidade nao atendida pela tabela CarVia.'
@@ -295,6 +320,16 @@ class CotacaoV2Service:
                 categorias_moto=categorias_moto,
             )
 
+            # DIRETA + veiculo selecionado: filtrar por modalidade do veiculo
+            if cotacao.tipo_carga == 'DIRETA' and cotacao.veiculo_id and opcoes:
+                veiculo = cotacao.veiculo
+                if veiculo:
+                    nome_v = (veiculo.nome or '').strip().upper()
+                    opcoes = [
+                        o for o in opcoes
+                        if (o.get('modalidade') or '').strip().upper() == nome_v
+                    ]
+
             # cotar_carvia retorna List[Dict] ordenado por valor (menor primeiro)
             if opcoes and len(opcoes) > 0:
                 melhor = opcoes[0]
@@ -343,6 +378,71 @@ class CotacaoV2Service:
 
         return []
 
+    # ==================== COTACAO MANUAL ====================
+
+    @staticmethod
+    def definir_valor_manual(
+        cotacao_id: int,
+        valor: float,
+        usuario: str,
+    ) -> Tuple[bool, Optional[str]]:
+        """Define valor manual para cotacao (sem lookup de tabela).
+
+        Cotacao vai para PENDENTE_ADMIN automaticamente.
+        Permite cotar mesmo sem cidade atendida ou tabela cadastrada.
+        """
+        from app.carvia.models import CarviaCotacao
+        from app.utils.timezone import agora_utc_naive
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return False, 'Cotacao nao encontrada.'
+        if cotacao.status not in ('RASCUNHO', 'PENDENTE_ADMIN'):
+            return False, f'Cotacao em status {cotacao.status} nao permite valor manual.'
+
+        if valor <= 0:
+            return False, 'Valor deve ser positivo.'
+
+        cotacao.cotacao_manual = True
+        cotacao.valor_manual = Decimal(str(valor))
+        cotacao.valor_tabela = None
+        cotacao.tabela_carvia_id = None
+        cotacao.dentro_tabela = None
+        cotacao.percentual_desconto = Decimal('0')
+        cotacao.valor_descontado = Decimal(str(valor))
+        cotacao.valor_final_aprovado = Decimal(str(valor))
+        cotacao.detalhes_calculo = {
+            'tipo': 'manual',
+            'valor_manual': valor,
+            'definido_por': usuario,
+            'definido_em': str(agora_utc_naive()),
+        }
+        cotacao.status = 'PENDENTE_ADMIN'
+
+        db.session.flush()
+        return True, None
+
+    # ==================== SUGESTAO DE VEICULO ====================
+
+    @staticmethod
+    def sugerir_veiculo(peso: float) -> Optional[int]:
+        """Sugere o menor veiculo cujo peso_maximo >= peso.
+
+        Retorna veiculo_id ou None se nenhum comporta o peso.
+        """
+        from app.veiculos.models import Veiculo
+
+        if peso <= 0:
+            return None
+
+        veiculo = Veiculo.query.filter(
+            Veiculo.peso_maximo >= peso
+        ).order_by(
+            Veiculo.peso_maximo.asc()
+        ).first()
+
+        return veiculo.id if veiculo else None
+
     # ==================== DESCONTO ====================
 
     @staticmethod
@@ -360,14 +460,17 @@ class CotacaoV2Service:
             return False, 'Cotacao nao encontrada.'
         if cotacao.status not in ('RASCUNHO', 'PENDENTE_ADMIN'):
             return False, f'Cotacao em status {cotacao.status} nao permite desconto.'
+        if cotacao.cotacao_manual:
+            return False, 'Cotacao manual nao permite desconto. Use valor manual diretamente.'
         if cotacao.valor_tabela is None:
             return False, 'Cotacao sem valor de tabela. Calcule o preco primeiro.'
 
         valor_tabela = float(cotacao.valor_tabela)
         desconto = float(percentual_desconto)
 
-        if desconto < 0 or desconto > 100:
-            return False, 'Desconto deve ser entre 0 e 100.'
+        # Permite desconto negativo (markup = venda acima da tabela)
+        if desconto > 100:
+            return False, 'Desconto nao pode exceder 100%.'
 
         valor_desc = valor_tabela * (1 - desconto / 100)
 
@@ -375,12 +478,12 @@ class CotacaoV2Service:
         cotacao.valor_descontado = Decimal(str(round(valor_desc, 2)))
         cotacao.valor_final_aprovado = cotacao.valor_descontado
 
-        # Verificar limite
+        # Verificar limite — markup (desconto < 0) nao requer aprovacao
         limite = CarviaConfigService.limite_desconto_percentual()
         if desconto > limite:
             cotacao.status = 'PENDENTE_ADMIN'
         else:
-            # Desconto dentro do limite — Jessica pode prosseguir
+            # Markup (acima tabela) ou desconto dentro do limite — livre
             if cotacao.status == 'PENDENTE_ADMIN':
                 cotacao.status = 'RASCUNHO'
 
@@ -503,6 +606,15 @@ class CotacaoV2Service:
         if novo_valor <= 0:
             return False, 'Valor da contra-proposta deve ser positivo.'
 
+        # Cotacao manual: atualiza valor_manual, re-envia para admin
+        if cotacao.cotacao_manual:
+            cotacao.valor_manual = Decimal(str(novo_valor))
+            cotacao.valor_descontado = Decimal(str(novo_valor))
+            cotacao.valor_final_aprovado = Decimal(str(novo_valor))
+            cotacao.status = 'PENDENTE_ADMIN'
+            db.session.flush()
+            return True, None
+
         # Recalcular desconto com base no novo valor
         valor_tabela = float(cotacao.valor_tabela or 0)
         if valor_tabela > 0:
@@ -511,10 +623,10 @@ class CotacaoV2Service:
             desconto = 0
 
         cotacao.valor_final_aprovado = Decimal(str(novo_valor))
-        cotacao.percentual_desconto = Decimal(str(round(max(desconto, 0), 2)))
+        cotacao.percentual_desconto = Decimal(str(round(desconto, 2)))
         cotacao.valor_descontado = Decimal(str(novo_valor))
 
-        # Verificar limite de desconto
+        # Verificar limite de desconto — markup (desconto < 0) nao requer admin
         limite = CarviaConfigService.limite_desconto_percentual()
         if desconto > limite:
             cotacao.status = 'PENDENTE_ADMIN'

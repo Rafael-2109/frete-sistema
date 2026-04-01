@@ -221,6 +221,19 @@ Templates `criar_manual.html` e `criar_freteiro.html` exibem alerta de deprecaca
 - Fatura Subcontrato: criada primeiro, depois subcontratos sao anexados via AJAX
 - Fatura CarVia: criada vinculando operacoes (CTe antes de Fatura)
 
+### R13: Condicoes Comerciais — Propagacao e Visibilidade
+Cotacoes CarVia possuem campos de condicao de pagamento e responsavel do frete (controle financeiro).
+5 campos: `condicao_pagamento` (A_VISTA/PRAZO), `prazo_dias` (1-30), `responsavel_frete` (100_REMETENTE/100_DESTINATARIO/50_50/PERSONALIZADO), `percentual_remetente`, `percentual_destinatario`.
+
+**Propagacao automatica**: Cotacao → CarviaFrete (via `CarviaFreteService._criar_frete_completo()`).
+Campos existem FISICAMENTE em: `carvia_cotacoes`, `carvia_operacoes`, `carvia_fretes`.
+**CarviaOperacao**: campos existem mas NAO sao populados automaticamente (reservados para uso futuro).
+**CarviaFaturaCliente NAO tem os campos** — exibicao via lookup (fatura → operacoes → fretes).
+
+**Regra**: campos sao INFORMATIVOS — nao bloqueiam transicao de status em nenhum fluxo.
+**Percentuais**: sempre persistidos (ex: 50/50 grava 50.00 e 50.00), mesmo para opcoes fixas.
+**Conciliacao**: painel de documentos exibe condicoes comerciais como info extra (sem alterar matching).
+
 ### R9: Admin — Hard Delete com Auditoria
 GAP-20 previa apenas soft-delete (CANCELADO). `AdminService` permite hard delete com:
 1. Verificacao de bloqueios (PAGO, FATURADO com dependentes, conciliado)

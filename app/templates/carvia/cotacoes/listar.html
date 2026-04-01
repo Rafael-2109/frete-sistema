@@ -45,6 +45,7 @@
                             <th>Destino</th>
                             <th>Material</th>
                             <th class="text-end">Valor</th>
+                            <th class="text-center">Pagamento</th>
                             <th class="text-center">Status</th>
                             <th class="text-center">Data</th>
                         </tr>
@@ -77,6 +78,22 @@
                                 {{ cot.valor_tabela|valor_br }}
                                 {% else %}-{% endif %}
                             </td>
+                            <td class="text-center small">
+                                {% if cot.condicao_pagamento == 'A_VISTA' %}
+                                <span class="badge bg-success">A Vista</span>
+                                {% elif cot.condicao_pagamento == 'PRAZO' %}
+                                <span class="badge bg-info">Prazo {{ cot.prazo_dias or '?' }}d</span>
+                                {% else %}-{% endif %}
+                                {% if cot.responsavel_frete %}
+                                <br><small class="text-muted">
+                                    {% if cot.responsavel_frete == '100_REMETENTE' %}100% Rem.
+                                    {% elif cot.responsavel_frete == '100_DESTINATARIO' %}100% Dest.
+                                    {% elif cot.responsavel_frete == '50_50' %}50/50
+                                    {% elif cot.responsavel_frete == 'PERSONALIZADO' %}{{ cot.percentual_remetente|default(0)|int }}/{{ cot.percentual_destinatario|default(0)|int }}
+                                    {% endif %}
+                                </small>
+                                {% endif %}
+                            </td>
                             <td class="text-center">
                                 {% if cot.status == 'RASCUNHO' %}
                                 <span class="badge bg-secondary">Rascunho</span>
@@ -90,6 +107,9 @@
                                 <span class="badge bg-danger">Recusado</span>
                                 {% elif cot.status == 'CANCELADO' %}
                                 <span class="badge bg-dark">Cancelado</span>
+                                {% endif %}
+                                {% if cot.cotacao_manual %}
+                                <span class="badge bg-info ms-1" title="Cotacao manual"><i class="fas fa-pencil-alt"></i></span>
                                 {% endif %}
                                 {% if cot.alerta_saida_sem_nf %}
                                 <span class="badge bg-danger ms-1"

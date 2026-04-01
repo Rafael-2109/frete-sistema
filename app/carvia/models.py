@@ -231,6 +231,14 @@ class CarviaOperacao(db.Model):
 
     # Auditoria
     observacoes = db.Column(db.Text)
+
+    # Condicao de pagamento e responsavel do frete (propagado da cotacao)
+    condicao_pagamento = db.Column(db.String(20), nullable=True)   # A_VISTA | PRAZO
+    prazo_dias = db.Column(db.Integer, nullable=True)              # 1-30 se PRAZO
+    responsavel_frete = db.Column(db.String(30), nullable=True)    # 100_REMETENTE | 100_DESTINATARIO | 50_50 | PERSONALIZADO
+    percentual_remetente = db.Column(db.Numeric(5, 2), nullable=True)
+    percentual_destinatario = db.Column(db.Numeric(5, 2), nullable=True)
+
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
@@ -1457,6 +1465,13 @@ class CarviaCotacao(db.Model):
     # Observacoes
     observacoes = db.Column(db.Text, nullable=True)
 
+    # Condicao de pagamento e responsavel do frete (controle financeiro)
+    condicao_pagamento = db.Column(db.String(20), nullable=True)   # A_VISTA | PRAZO
+    prazo_dias = db.Column(db.Integer, nullable=True)              # 1-30 se PRAZO
+    responsavel_frete = db.Column(db.String(30), nullable=True)    # 100_REMETENTE | 100_DESTINATARIO | 50_50 | PERSONALIZADO
+    percentual_remetente = db.Column(db.Numeric(5, 2), nullable=True)
+    percentual_destinatario = db.Column(db.Numeric(5, 2), nullable=True)
+
     # Alerta: saida portaria sem NF
     alerta_saida_sem_nf = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
     alerta_saida_sem_nf_em = db.Column(db.DateTime, nullable=True)
@@ -2032,6 +2047,13 @@ class CarviaFrete(db.Model):
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
     observacoes = db.Column(db.Text)
+
+    # --- Condicao de pagamento e responsavel do frete (propagado da cotacao) ---
+    condicao_pagamento = db.Column(db.String(20), nullable=True)   # A_VISTA | PRAZO
+    prazo_dias = db.Column(db.Integer, nullable=True)              # 1-30 se PRAZO
+    responsavel_frete = db.Column(db.String(30), nullable=True)    # 100_REMETENTE | 100_DESTINATARIO | 50_50 | PERSONALIZADO
+    percentual_remetente = db.Column(db.Numeric(5, 2), nullable=True)
+    percentual_destinatario = db.Column(db.Numeric(5, 2), nullable=True)
 
     # --- Relationships ---
     embarque = db.relationship('Embarque')

@@ -335,6 +335,7 @@
                 <div class="carvia-conciliacao-row-secondary ps-4">
                     ${d.nome} &middot; ${d.data}
                     ${d.vencimento ? ' &middot; Venc: ' + d.vencimento : ''}
+                    ${d.condicao_pagamento || d.responsavel_frete_label ? ' &middot; <small class="text-info">' + (d.condicao_pagamento || '') + (d.condicao_pagamento && d.responsavel_frete_label ? ' | ' : '') + (d.responsavel_frete_label || '') + '</small>' : ''}
                 </div>
             `;
             docsLista.appendChild(div);

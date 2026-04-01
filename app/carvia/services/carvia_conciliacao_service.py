@@ -96,7 +96,7 @@ class CarviaConciliacaoService:
                 saldo = float(f.valor_total or 0) - float(f.total_conciliado or 0)
                 if saldo <= 0:
                     continue
-                docs.append({
+                doc = {
                     'tipo_documento': 'fatura_cliente',
                     'id': f.id,
                     'numero': f.numero_fatura,
@@ -106,7 +106,12 @@ class CarviaConciliacaoService:
                     'nome': f.nome_cliente or f.cnpj_cliente or '',
                     'data': f.data_emissao.strftime('%d/%m/%Y') if f.data_emissao else '',
                     'vencimento': f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '',
-                })
+                }
+                # Enriquecer com condicoes comerciais via operacoes → fretes
+                cond = CarviaConciliacaoService._buscar_condicoes_comerciais_fatura(f)
+                if cond:
+                    doc.update(cond)
+                docs.append(doc)
 
             # Receitas
             receitas = CarviaReceita.query.filter(
@@ -580,3 +585,44 @@ class CarviaConciliacaoService:
             'pendentes': pendentes,
             'valor_pendente': float(valor_pendente),
         }
+
+    @staticmethod
+    def _buscar_condicoes_comerciais_fatura(fatura) -> dict:
+        """Busca condicoes comerciais via cadeia fatura → operacoes → fretes.
+
+        Retorna dict com campos ou {} se nao encontrar.
+        Lookup: CarviaFrete onde operacao_id in (operacoes da fatura).
+        """
+        from app.carvia.models import CarviaFrete, CarviaOperacao
+
+        # Buscar operacoes vinculadas a esta fatura
+        ops = CarviaOperacao.query.filter_by(
+            fatura_cliente_id=fatura.id
+        ).all()
+        if not ops:
+            return {}
+
+        # Buscar o primeiro frete com dados comerciais
+        op_ids = [op.id for op in ops]
+        frete = CarviaFrete.query.filter(
+            CarviaFrete.operacao_id.in_(op_ids),
+            CarviaFrete.condicao_pagamento.isnot(None)
+            | CarviaFrete.responsavel_frete.isnot(None),
+        ).first()
+
+        if not frete:
+            return {}
+
+        resultado = {}
+        if frete.condicao_pagamento:
+            label_pgto = 'A Vista' if frete.condicao_pagamento == 'A_VISTA' else f'Prazo {frete.prazo_dias or "?"}d'
+            resultado['condicao_pagamento'] = label_pgto
+        if frete.responsavel_frete:
+            labels = {
+                '100_REMETENTE': '100% Rem.',
+                '100_DESTINATARIO': '100% Dest.',
+                '50_50': '50/50',
+                'PERSONALIZADO': f'{int(frete.percentual_remetente or 0)}/{int(frete.percentual_destinatario or 0)}',
+            }
+            resultado['responsavel_frete_label'] = labels.get(frete.responsavel_frete, frete.responsavel_frete)
+        return resultado

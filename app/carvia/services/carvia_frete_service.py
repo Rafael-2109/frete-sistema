@@ -103,6 +103,8 @@ class CarviaFreteService:
 
         # Mapa cotacao_id → valor_final_aprovado (preco VENDA)
         cotacao_valores = CarviaFreteService._carregar_cotacao_valores(itens_carvia)
+        # Mapa cotacao_id → dados comerciais (condicao pagamento, responsavel frete)
+        cotacao_dados = CarviaFreteService._carregar_cotacao_dados(itens_carvia)
 
         for (cnpj_emitente, cnpj_destino), itens_grupo in grupos.items():
             # Dedup: checar frete existente PRIMEIRO
@@ -133,6 +135,7 @@ class CarviaFreteService:
                 None
             )
             valor_venda_cotacao = cotacao_valores.get(cot_id_grupo)
+            dados_comerciais = cotacao_dados.get(cot_id_grupo)
 
             frete_id = CarviaFreteService._criar_frete_completo(
                 embarque=embarque,
@@ -141,6 +144,7 @@ class CarviaFreteService:
                 itens=itens_grupo,
                 usuario=usuario,
                 valor_venda_cotacao=valor_venda_cotacao,
+                cotacao_dados_comerciais=dados_comerciais,
             )
             if frete_id:
                 fretes_resultado.append(frete_id)
@@ -170,6 +174,7 @@ class CarviaFreteService:
         itens: list,
         usuario: str,
         valor_venda_cotacao: float = None,
+        cotacao_dados_comerciais: dict = None,
     ) -> Optional[int]:
         """Cria APENAS CarviaFrete com valores calculados.
 
@@ -237,6 +242,14 @@ class CarviaFreteService:
                 criado_em=agora_utc_naive(),
                 criado_por=usuario,
             )
+
+            # Propagar condicao de pagamento e responsavel do frete da cotacao
+            if cotacao_dados_comerciais:
+                frete.condicao_pagamento = cotacao_dados_comerciais.get('condicao_pagamento')
+                frete.prazo_dias = cotacao_dados_comerciais.get('prazo_dias')
+                frete.responsavel_frete = cotacao_dados_comerciais.get('responsavel_frete')
+                frete.percentual_remetente = cotacao_dados_comerciais.get('percentual_remetente')
+                frete.percentual_destinatario = cotacao_dados_comerciais.get('percentual_destinatario')
 
             # Copiar snapshot tabela de frete
             CarviaFreteService._copiar_snapshot_tabela(frete, embarque, itens)
@@ -517,6 +530,25 @@ class CarviaFreteService:
                 if cot and cot.valor_final_aprovado:
                     valores[cot_id] = float(cot.valor_final_aprovado)
         return valores
+
+    @staticmethod
+    def _carregar_cotacao_dados(itens_carvia: list) -> Dict[int, dict]:
+        """Carrega mapa cotacao_id → dados comerciais para propagacao downstream."""
+        from app.carvia.models import CarviaCotacao
+        dados = {}
+        for item in itens_carvia:
+            cot_id = item.carvia_cotacao_id
+            if cot_id and cot_id not in dados:
+                cot = db.session.get(CarviaCotacao, cot_id)
+                if cot:
+                    dados[cot_id] = {
+                        'condicao_pagamento': cot.condicao_pagamento,
+                        'prazo_dias': cot.prazo_dias,
+                        'responsavel_frete': cot.responsavel_frete,
+                        'percentual_remetente': float(cot.percentual_remetente) if cot.percentual_remetente is not None else None,
+                        'percentual_destinatario': float(cot.percentual_destinatario) if cot.percentual_destinatario is not None else None,
+                    }
+        return dados
 
     @staticmethod
     def _marcar_pedidos_embarcado(itens_carvia: list, usuario: str):

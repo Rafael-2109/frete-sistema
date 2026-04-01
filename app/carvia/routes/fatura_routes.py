@@ -361,6 +361,20 @@ def register_fatura_routes(bp):
             fatura_cliente_id=fatura_id
         ).all()
 
+        # Condicoes comerciais via lookup fretes (sem colunas na fatura)
+        condicoes_comerciais = None
+        if op_ids:
+            from app.carvia.models import CarviaFrete
+            frete_com_cond = CarviaFrete.query.filter(
+                CarviaFrete.operacao_id.in_(op_ids),
+                db.or_(
+                    CarviaFrete.condicao_pagamento.isnot(None),
+                    CarviaFrete.responsavel_frete.isnot(None),
+                ),
+            ).first()
+            if frete_com_cond:
+                condicoes_comerciais = frete_com_cond
+
         return render_template(
             'carvia/faturas_cliente/detalhe.html',
             fatura=fatura,
@@ -370,6 +384,7 @@ def register_fatura_routes(bp):
             subcontratos=subcontratos,
             faturas_transportadora=faturas_transportadora,
             ctes_complementares=ctes_complementares,
+            condicoes_comerciais=condicoes_comerciais,
         )
 
     @bp.route('/faturas-cliente/<int:fatura_id>/editar-valor', methods=['POST']) # type: ignore

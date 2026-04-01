@@ -183,9 +183,19 @@
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">Tipo Carga <span class="text-danger">*</span></label>
-                        <select name="tipo_carga" class="form-select" required>
+                        <select name="tipo_carga" id="selTipoCargaCriar" class="form-select" required
+                                onchange="toggleVeiculoCriar()">
                             <option value="FRACIONADA">Fracionada</option>
                             <option value="DIRETA">Direta</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-none" id="blocoVeiculoCriar">
+                        <label class="form-label">Veiculo</label>
+                        <select name="veiculo_id" class="form-select" id="selVeiculoCriar">
+                            <option value="">Selecione...</option>
+                            {% for v in veiculos_direta %}
+                            <option value="{{ v.id }}">{{ v.nome }} ({{ v.peso_maximo|int }} kg)</option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -365,6 +375,41 @@
                     </div>
                 </div>
 
+                {# Condicoes Comerciais #}
+                <h6 class="text-muted mb-2 mt-3">Condicoes Comerciais</h6>
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Condicao de Pagamento</label>
+                        <select name="condicao_pagamento" class="form-select" id="selCondicaoPgto" onchange="togglePrazoDias()">
+                            <option value="">Nao informado</option>
+                            <option value="A_VISTA">A Vista</option>
+                            <option value="PRAZO">Prazo</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2" id="blocoPrazoDias" style="display:none">
+                        <label class="form-label">Prazo (dias)</label>
+                        <input type="number" name="prazo_dias" class="form-control" id="inpPrazoDias" min="1" max="30" placeholder="1-30">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Pagador do Frete</label>
+                        <select name="responsavel_frete" class="form-select" id="selResponsavelFrete" onchange="togglePercentuais()">
+                            <option value="">Nao informado</option>
+                            <option value="100_REMETENTE">100% Remetente</option>
+                            <option value="100_DESTINATARIO">100% Destinatario</option>
+                            <option value="50_50">50/50</option>
+                            <option value="PERSONALIZADO">Personalizado</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2" id="blocoPercentualRem" style="display:none">
+                        <label class="form-label">% Remetente</label>
+                        <input type="number" name="percentual_remetente" class="form-control" id="inpPctRem" step="0.01" min="0" max="100">
+                    </div>
+                    <div class="col-md-2" id="blocoPercentualDest" style="display:none">
+                        <label class="form-label">% Destinatario</label>
+                        <input type="number" name="percentual_destinatario" class="form-control" id="inpPctDest" step="0.01" min="0" max="100">
+                    </div>
+                </div>
+
                 {# Observacoes #}
                 <div class="mb-3">
                     <label class="form-label">Observacoes</label>
@@ -386,6 +431,13 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/shared/viacep.js') }}"></script>
 <script>
+/* ===== Veiculo DIRETA (criar) ===== */
+function toggleVeiculoCriar() {
+    const tc = document.getElementById('selTipoCargaCriar').value;
+    const bloco = document.getElementById('blocoVeiculoCriar');
+    if (bloco) bloco.classList.toggle('d-none', tc !== 'DIRETA');
+}
+
 /* ===== Enderecos por cliente ===== */
 function carregarEnderecos() {
     const clienteId = document.getElementById('selCliente').value;
@@ -1120,5 +1172,26 @@ document.getElementById('formCotacao').addEventListener('submit', async function
         }
     });
 })();
+
+/* ===== Condicoes Comerciais: toggle campos ===== */
+function togglePrazoDias() {
+    const v = document.getElementById('selCondicaoPgto').value;
+    document.getElementById('blocoPrazoDias').style.display = v === 'PRAZO' ? '' : 'none';
+    if (v !== 'PRAZO') document.getElementById('inpPrazoDias').value = '';
+}
+
+function togglePercentuais() {
+    const v = document.getElementById('selResponsavelFrete').value;
+    const remEl = document.getElementById('inpPctRem');
+    const destEl = document.getElementById('inpPctDest');
+    const showCustom = v === 'PERSONALIZADO';
+    document.getElementById('blocoPercentualRem').style.display = showCustom ? '' : 'none';
+    document.getElementById('blocoPercentualDest').style.display = showCustom ? '' : 'none';
+
+    if (v === '100_REMETENTE') { remEl.value = '100'; destEl.value = '0'; }
+    else if (v === '100_DESTINATARIO') { remEl.value = '0'; destEl.value = '100'; }
+    else if (v === '50_50') { remEl.value = '50'; destEl.value = '50'; }
+    else if (!v) { remEl.value = ''; destEl.value = ''; }
+}
 </script>
 {% endblock %}

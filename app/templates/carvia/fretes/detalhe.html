@@ -490,7 +490,43 @@
     {# 7. SECOES FULL-WIDTH                                             #}
     {# ================================================================ #}
 
-    {# 7a. Observacoes #}
+    {# 7a. Condicoes Comerciais (propagadas da cotacao) #}
+    {% if frete.condicao_pagamento or frete.responsavel_frete %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-handshake"></i> Condicoes Comerciais
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Pagamento:</strong>
+                            {% if frete.condicao_pagamento == 'A_VISTA' %}A Vista
+                            {% elif frete.condicao_pagamento == 'PRAZO' %}Prazo ({{ frete.prazo_dias or '?' }} dias)
+                            {% else %}-{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Pagador do Frete:</strong>
+                            {% if frete.responsavel_frete == '100_REMETENTE' %}100% Remetente
+                            {% elif frete.responsavel_frete == '100_DESTINATARIO' %}100% Destinatario
+                            {% elif frete.responsavel_frete == '50_50' %}50/50
+                            {% elif frete.responsavel_frete == 'PERSONALIZADO' %}Personalizado
+                            {% else %}-{% endif %}
+                            {% if frete.percentual_remetente is not none and frete.percentual_destinatario is not none %}
+                            <br><small class="text-muted">Remetente: {{ frete.percentual_remetente }}% | Destinatario: {{ frete.percentual_destinatario }}%</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# 7b. Observacoes #}
     {% if frete.observacoes %}
     <div class="row">
         <div class="col-12">

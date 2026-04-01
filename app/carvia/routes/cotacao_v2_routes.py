@@ -757,6 +757,8 @@ def register_cotacao_v2_routes(bp):
             modelos_raw = CarviaModeloMoto.query.filter_by(ativo=True).order_by(
                 CarviaModeloMoto.nome.asc()
             ).all()
+            from app.veiculos.models import Veiculo
+            veiculos_direta = Veiculo.query.order_by(Veiculo.peso_maximo.asc()).all()
             return {
                 'clientes': CarviaClienteService.listar_clientes(apenas_ativos=True),
                 'modelos_moto_json': json_lib.dumps([{
@@ -767,6 +769,7 @@ def register_cotacao_v2_routes(bp):
                         * max(float(m.cubagem_minima or 300), 300) / 1_000_000, 3
                     ) if m.comprimento and m.largura and m.altura else None,
                 } for m in modelos_raw]),
+                'veiculos_direta': veiculos_direta,
             }
 
         if request.method == 'GET':
@@ -839,6 +842,12 @@ def register_cotacao_v2_routes(bp):
                 data_expedicao=datetime.strptime(data_exp, '%Y-%m-%d').date() if data_exp else None,
                 data_agenda=datetime.strptime(data_ag, '%Y-%m-%d').date() if data_ag else None,
                 observacoes=request.form.get('observacoes'),
+                # Condicao de pagamento e responsavel do frete
+                condicao_pagamento=request.form.get('condicao_pagamento') or None,
+                prazo_dias=request.form.get('prazo_dias', type=int),
+                responsavel_frete=request.form.get('responsavel_frete') or None,
+                percentual_remetente=request.form.get('percentual_remetente', type=float),
+                percentual_destinatario=request.form.get('percentual_destinatario', type=float),
             )
 
             if erro:
@@ -849,10 +858,13 @@ def register_cotacao_v2_routes(bp):
                     **_ctx_criar(),
                 )
 
-            # tipo_carga
+            # tipo_carga + veiculo (DIRETA only)
             tipo_carga = request.form.get('tipo_carga', 'FRACIONADA')
             if tipo_carga in ('DIRETA', 'FRACIONADA'):
                 cotacao.tipo_carga = tipo_carga
+            veiculo_id_form = request.form.get('veiculo_id', type=int)
+            if veiculo_id_form and tipo_carga == 'DIRETA':
+                cotacao.veiculo_id = veiculo_id_form
 
             # Adicionar motos (se tipo MOTO)
             if cotacao.tipo_material == 'MOTO':
@@ -1151,6 +1163,10 @@ def register_cotacao_v2_routes(bp):
         from app.carvia.services.config_service import CarviaConfigService
         limite_desconto = CarviaConfigService.limite_desconto_percentual()
 
+        # Veiculos para dropdown DIRETA
+        from app.veiculos.models import Veiculo
+        veiculos_direta = Veiculo.query.order_by(Veiculo.peso_maximo.asc()).all()
+
         return render_template(
             'carvia/cotacoes/detalhe.html',
             cotacao=cotacao,
@@ -1161,6 +1177,7 @@ def register_cotacao_v2_routes(bp):
             clientes=clientes,
             modelos_moto_json=modelos_moto_json,
             limite_desconto=limite_desconto,
+            veiculos_direta=veiculos_direta,
         )
 
     # ==================== API: ATUALIZAR COTACAO ====================
@@ -1204,8 +1221,42 @@ def register_cotacao_v2_routes(bp):
                     cotacao.dentro_tabela = None
                     cotacao.detalhes_calculo = None
                     cotacao.percentual_desconto = None
+                    cotacao.cotacao_manual = False
+                    cotacao.valor_manual = None
             if 'tipo_material' in data and data['tipo_material'] in ('CARGA_GERAL', 'MOTO'):
                 cotacao.tipo_material = data['tipo_material']
+
+            # Tipo carga + veiculo
+            if 'tipo_carga' in data:
+                new_tc = (data['tipo_carga'] or '').upper()
+                if new_tc in ('DIRETA', 'FRACIONADA') and new_tc != cotacao.tipo_carga:
+                    cotacao.tipo_carga = new_tc
+                    # Limpar veiculo se saiu de DIRETA
+                    if new_tc != 'DIRETA':
+                        cotacao.veiculo_id = None
+                    # Limpar pricing (tipo_carga mudou)
+                    cotacao.valor_tabela = None
+                    cotacao.valor_descontado = None
+                    cotacao.valor_final_aprovado = None
+                    cotacao.tabela_carvia_id = None
+                    cotacao.dentro_tabela = None
+                    cotacao.detalhes_calculo = None
+                    cotacao.percentual_desconto = None
+                    cotacao.cotacao_manual = False
+                    cotacao.valor_manual = None
+
+            if 'veiculo_id' in data:
+                novo_vid = int(data['veiculo_id']) if data['veiculo_id'] else None
+                if novo_vid != cotacao.veiculo_id:
+                    cotacao.veiculo_id = novo_vid
+                    # Reset pricing (veiculo mudou → preco diferente)
+                    cotacao.valor_tabela = None
+                    cotacao.valor_descontado = None
+                    cotacao.valor_final_aprovado = None
+                    cotacao.tabela_carvia_id = None
+                    cotacao.dentro_tabela = None
+                    cotacao.detalhes_calculo = None
+                    cotacao.percentual_desconto = None
 
             # Campos numericos
             for campo in ('peso', 'valor_mercadoria', 'volumes',
@@ -1235,6 +1286,18 @@ def register_cotacao_v2_routes(bp):
             if 'observacoes' in data:
                 cotacao.observacoes = data['observacoes'] or None
 
+            # Condicao de pagamento e responsavel do frete
+            if 'condicao_pagamento' in data:
+                cotacao.condicao_pagamento = data['condicao_pagamento'] or None
+            if 'prazo_dias' in data:
+                cotacao.prazo_dias = int(data['prazo_dias']) if data['prazo_dias'] else None
+            if 'responsavel_frete' in data:
+                cotacao.responsavel_frete = data['responsavel_frete'] or None
+            if 'percentual_remetente' in data:
+                cotacao.percentual_remetente = float(data['percentual_remetente']) if data['percentual_remetente'] is not None else None
+            if 'percentual_destinatario' in data:
+                cotacao.percentual_destinatario = float(data['percentual_destinatario']) if data['percentual_destinatario'] is not None else None
+
             # Endereco de entrega (override por cotacao)
             endereco_mudou = False
             for campo in ('entrega_uf', 'entrega_cidade', 'entrega_logradouro',
@@ -1257,6 +1320,8 @@ def register_cotacao_v2_routes(bp):
                 cotacao.dentro_tabela = None
                 cotacao.detalhes_calculo = None
                 cotacao.percentual_desconto = None
+                cotacao.cotacao_manual = False
+                cotacao.valor_manual = None
 
             db.session.commit()
             return jsonify({'sucesso': True, 'mensagem': 'Cotacao atualizada.'})
@@ -1309,7 +1374,15 @@ def register_cotacao_v2_routes(bp):
             if data.get('tipo_material') in ('CARGA_GERAL', 'MOTO'):
                 cotacao.tipo_material = data['tipo_material']
             if data.get('tipo_carga') in ('DIRETA', 'FRACIONADA'):
-                cotacao.tipo_carga = data['tipo_carga']
+                new_tc = data['tipo_carga']
+                if new_tc != cotacao.tipo_carga:
+                    # Limpar veiculo se saiu de DIRETA
+                    if new_tc != 'DIRETA':
+                        cotacao.veiculo_id = None
+                cotacao.tipo_carga = new_tc
+
+            if 'veiculo_id' in data:
+                cotacao.veiculo_id = int(data['veiculo_id']) if data['veiculo_id'] else None
 
             for campo in ('peso', 'valor_mercadoria', 'volumes',
                           'dimensao_c', 'dimensao_l', 'dimensao_a'):
@@ -1335,6 +1408,18 @@ def register_cotacao_v2_routes(bp):
             if 'observacoes' in data:
                 cotacao.observacoes = data['observacoes'] or None
 
+            # Condicao de pagamento e responsavel do frete
+            if 'condicao_pagamento' in data:
+                cotacao.condicao_pagamento = data['condicao_pagamento'] or None
+            if 'prazo_dias' in data:
+                cotacao.prazo_dias = int(data['prazo_dias']) if data['prazo_dias'] else None
+            if 'responsavel_frete' in data:
+                cotacao.responsavel_frete = data['responsavel_frete'] or None
+            if 'percentual_remetente' in data:
+                cotacao.percentual_remetente = float(data['percentual_remetente']) if data['percentual_remetente'] is not None else None
+            if 'percentual_destinatario' in data:
+                cotacao.percentual_destinatario = float(data['percentual_destinatario']) if data['percentual_destinatario'] is not None else None
+
             # Endereco de entrega (override por cotacao)
             endereco_mudou = False
             for campo in ('entrega_uf', 'entrega_cidade', 'entrega_logradouro',
@@ -1357,6 +1442,8 @@ def register_cotacao_v2_routes(bp):
                 cotacao.dentro_tabela = None
                 cotacao.detalhes_calculo = None
                 cotacao.percentual_desconto = None
+                cotacao.cotacao_manual = False
+                cotacao.valor_manual = None
 
             # --- Sync motos (se tipo=MOTO) ---
             if cotacao.tipo_material == 'MOTO' and 'motos' in data:
@@ -1533,6 +1620,54 @@ def register_cotacao_v2_routes(bp):
         except Exception as e:
             db.session.rollback()
             return jsonify({'erro': f'Erro: {e}'}), 500
+
+    # ==================== API: COTACAO MANUAL ====================
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/valor-manual', methods=['POST']) # type: ignore
+    @login_required
+    def api_valor_manual(cotacao_id): # type: ignore
+        """Define valor manual para cotacao (sem lookup de tabela)"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        try:
+            sucesso, erro = CotacaoV2Service.definir_valor_manual(
+                cotacao_id=cotacao_id,
+                valor=float(data.get('valor', 0)),
+                usuario=current_user.email,
+            )
+            if not sucesso:
+                return jsonify({'erro': erro}), 400
+
+            db.session.commit()
+            return jsonify({'sucesso': True, 'mensagem': 'Valor manual definido. Aguardando aprovacao.'})
+
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    # ==================== API: SUGESTAO DE VEICULO ====================
+
+    @bp.route('/api/cotacoes/sugerir-veiculo', methods=['POST']) # type: ignore
+    @login_required
+    def api_sugerir_veiculo(): # type: ignore
+        """Sugere veiculo por peso para carga direta"""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+
+        data = request.get_json()
+        peso = float(data.get('peso', 0)) if data else 0
+
+        veiculo_id = CotacaoV2Service.sugerir_veiculo(peso)
+        return jsonify({'veiculo_id': veiculo_id})
 
     # ==================== API: STATUS ====================
 

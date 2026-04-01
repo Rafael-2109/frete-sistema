@@ -90,6 +90,26 @@
                     <small class="text-muted d-block">Observacoes</small>
                     <p class="mb-0">{{ fatura.observacoes }}</p>
                     {% endif %}
+                    {% if condicoes_comerciais %}
+                    <hr>
+                    <small class="text-muted d-block mb-1">Condicoes Comerciais</small>
+                    <div class="row">
+                        <div class="col-6">
+                            <strong>Pagamento:</strong>
+                            {% if condicoes_comerciais.condicao_pagamento == 'A_VISTA' %}A Vista
+                            {% elif condicoes_comerciais.condicao_pagamento == 'PRAZO' %}Prazo ({{ condicoes_comerciais.prazo_dias or '?' }} dias)
+                            {% else %}-{% endif %}
+                        </div>
+                        <div class="col-6">
+                            <strong>Pagador:</strong>
+                            {% if condicoes_comerciais.responsavel_frete == '100_REMETENTE' %}100% Remetente
+                            {% elif condicoes_comerciais.responsavel_frete == '100_DESTINATARIO' %}100% Destinatario
+                            {% elif condicoes_comerciais.responsavel_frete == '50_50' %}50/50
+                            {% elif condicoes_comerciais.responsavel_frete == 'PERSONALIZADO' %}{{ condicoes_comerciais.percentual_remetente|default(0)|int }}/{{ condicoes_comerciais.percentual_destinatario|default(0)|int }}
+                            {% else %}-{% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

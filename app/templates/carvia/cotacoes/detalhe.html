@@ -18,6 +18,9 @@
             {% elif cotacao.status == 'CANCELADO' %}
             <span class="badge bg-dark">Cancelado</span>
             {% endif %}
+            {% if cotacao.cotacao_manual %}
+            <span class="badge bg-info">Manual</span>
+            {% endif %}
         </h2>
         <div class="d-flex gap-2">
             <button type="button" class="btn btn-primary btn-sm" onclick="salvarTudo()">
@@ -72,7 +75,7 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Tipo Carga <span class="text-danger">*</span></label>
-                            <select class="form-select" id="selTipoCarga">
+                            <select class="form-select" id="selTipoCarga" onchange="toggleVeiculoBlock()">
                                 <option value="FRACIONADA" {{ 'selected' if cotacao.tipo_carga == 'FRACIONADA' }}>Fracionada</option>
                                 <option value="DIRETA" {{ 'selected' if cotacao.tipo_carga == 'DIRETA' }}>Direta</option>
                             </select>
@@ -196,7 +199,7 @@
                             <div class="col-md-3">
                                 <label class="form-label">Peso (kg)</label>
                                 <input type="number" class="form-control" id="inpPeso" step="0.001"
-                                       value="{{ cotacao.peso or '' }}">
+                                       value="{{ cotacao.peso or '' }}" onblur="sugerirVeiculo()">
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Valor Mercadoria (R$)</label>
@@ -275,6 +278,44 @@
                                    onchange="salvarData('data_agenda', this.value)">
                         </div>
                     </div>
+                    {# Condicoes Comerciais #}
+                    <h6 class="text-muted mb-2 mt-3">Condicoes Comerciais</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Condicao de Pagamento</label>
+                            <select class="form-select" id="selCondicaoPgto" onchange="togglePrazoDias()">
+                                <option value="" {{ 'selected' if not cotacao.condicao_pagamento }}>Nao informado</option>
+                                <option value="A_VISTA" {{ 'selected' if cotacao.condicao_pagamento == 'A_VISTA' }}>A Vista</option>
+                                <option value="PRAZO" {{ 'selected' if cotacao.condicao_pagamento == 'PRAZO' }}>Prazo</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2" id="blocoPrazoDias" style="{{ '' if cotacao.condicao_pagamento == 'PRAZO' else 'display:none' }}">
+                            <label class="form-label">Prazo (dias)</label>
+                            <input type="number" class="form-control" id="inpPrazoDias" min="1" max="30"
+                                   value="{{ cotacao.prazo_dias or '' }}" placeholder="1-30">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Pagador do Frete</label>
+                            <select class="form-select" id="selResponsavelFrete" onchange="togglePercentuais()">
+                                <option value="" {{ 'selected' if not cotacao.responsavel_frete }}>Nao informado</option>
+                                <option value="100_REMETENTE" {{ 'selected' if cotacao.responsavel_frete == '100_REMETENTE' }}>100% Remetente</option>
+                                <option value="100_DESTINATARIO" {{ 'selected' if cotacao.responsavel_frete == '100_DESTINATARIO' }}>100% Destinatario</option>
+                                <option value="50_50" {{ 'selected' if cotacao.responsavel_frete == '50_50' }}>50/50</option>
+                                <option value="PERSONALIZADO" {{ 'selected' if cotacao.responsavel_frete == 'PERSONALIZADO' }}>Personalizado</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2" id="blocoPercentualRem" style="{{ '' if cotacao.responsavel_frete == 'PERSONALIZADO' else 'display:none' }}">
+                            <label class="form-label">% Remetente</label>
+                            <input type="number" class="form-control" id="inpPctRem" step="0.01" min="0" max="100"
+                                   value="{{ cotacao.percentual_remetente or '' }}">
+                        </div>
+                        <div class="col-md-2" id="blocoPercentualDest" style="{{ '' if cotacao.responsavel_frete == 'PERSONALIZADO' else 'display:none' }}">
+                            <label class="form-label">% Destinatario</label>
+                            <input type="number" class="form-control" id="inpPctDest" step="0.01" min="0" max="100"
+                                   value="{{ cotacao.percentual_destinatario or '' }}">
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label">Observacoes</label>
                         <textarea class="form-control" id="inpObs" rows="2">{{ cotacao.observacoes or '' }}</textarea>
@@ -387,10 +428,18 @@
             <div class="card mb-3">
                 <div class="card-header"><strong>Pricing</strong></div>
                 <div class="card-body">
+                    {# --- Valor Tabela ou Manual --- #}
+                    {% if cotacao.cotacao_manual %}
+                    <div class="mb-2">
+                        <small class="text-muted">Valor Manual</small>
+                        <div class="fs-5">{{ cotacao.valor_manual|valor_br if cotacao.valor_manual else '-' }}</div>
+                    </div>
+                    {% else %}
                     <div class="mb-2">
                         <small class="text-muted">Valor Tabela</small>
                         <div class="fs-5">{{ cotacao.valor_tabela|valor_br if cotacao.valor_tabela else '-' }}</div>
                     </div>
+                    {% if not cotacao.cotacao_manual %}
                     <div class="mb-2">
                         <small class="text-muted">Desconto</small>
                         <div>{{ cotacao.percentual_desconto|numero_br(2) if cotacao.percentual_desconto else '0' }}%
@@ -401,6 +450,8 @@
                         <small class="text-muted">Valor Descontado</small>
                         <div>{{ cotacao.valor_descontado|valor_br if cotacao.valor_descontado else '-' }}</div>
                     </div>
+                    {% endif %}
+                    {% endif %}
                     <hr>
                     <div class="mb-3">
                         <small class="text-muted">Valor Final</small>
@@ -410,44 +461,89 @@
                     </div>
 
                     {% if cotacao.status in ('RASCUNHO', 'PENDENTE_ADMIN') %}
+                    {# --- Dropdown veiculo (DIRETA only) --- #}
+                    <div id="blocoVeiculoDireta" class="{{ 'd-none' if cotacao.tipo_carga != 'DIRETA' }} mb-2">
+                        <label class="form-label small mb-1">
+                            Veiculo <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select form-select-sm" id="selVeiculo"
+                                onchange="salvarVeiculo()">
+                            <option value="">Selecione o veiculo...</option>
+                            {% for v in veiculos_direta %}
+                            <option value="{{ v.id }}"
+                                    data-peso-maximo="{{ v.peso_maximo }}"
+                                    {{ 'selected' if cotacao.veiculo_id == v.id }}>
+                                {{ v.nome }} (ate {{ v.peso_maximo|int }} kg)
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted" id="veiculoHint"></small>
+                    </div>
+
                     <button class="btn btn-primary btn-sm w-100 mb-2" onclick="calcularPreco()">
                         <i class="fas fa-calculator"></i> Calcular Preco
                     </button>
-                    {% if cotacao.valor_tabela %}
+                    <button class="btn btn-outline-secondary btn-sm w-100 mb-2" onclick="abrirCotacaoManual()">
+                        <i class="fas fa-pencil-alt"></i> Cotacao Manual
+                    </button>
+
+                    {# --- Bloco valor manual (colapsavel) --- #}
+                    <div id="blocoCotacaoManual" class="d-none mb-2">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">R$</span>
+                            <input type="number" class="form-control form-control-sm" id="inpValorManual"
+                                   step="0.01" min="0.01" placeholder="Valor do frete">
+                            <button class="btn btn-warning btn-sm" onclick="aplicarValorManual()">
+                                <i class="fas fa-check"></i> Definir
+                            </button>
+                        </div>
+                        <div class="alert alert-warning py-1 small mt-1 mb-0">
+                            <i class="fas fa-info-circle"></i> Valor manual requer aprovacao do administrador.
+                        </div>
+                    </div>
+
+                    {# --- Desconto / Markup (so quando tem valor_tabela e NAO e manual) --- #}
+                    {% if cotacao.valor_tabela and not cotacao.cotacao_manual %}
                     <div class="mb-2">
                         <div class="row g-2 mb-1">
                             <div class="col-6">
                                 <label class="form-label small mb-0">Desconto (%)</label>
                                 <input type="number" class="form-control form-control-sm" id="inpDescontoPct"
-                                       step="0.01" min="0" max="100"
+                                       step="0.01"
                                        value="{{ cotacao.percentual_desconto or 0 }}"
                                        oninput="syncDescontoPct()">
                             </div>
                             <div class="col-6">
                                 <label class="form-label small mb-0">Valor Final (R$)</label>
                                 <input type="number" class="form-control form-control-sm" id="inpDescontoValor"
-                                       step="0.01" min="0"
+                                       step="0.01"
                                        value="{{ cotacao.valor_descontado or cotacao.valor_tabela or '' }}"
                                        oninput="syncDescontoValor()">
                             </div>
                         </div>
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <small class="text-muted">Limite: {{ limite_desconto }}%</small>
-                            <button class="btn btn-outline-primary btn-sm" onclick="aplicarDesconto()">Aplicar Desconto</button>
+                            <button class="btn btn-outline-primary btn-sm" onclick="aplicarDesconto()">Aplicar</button>
                         </div>
                         <div class="alert alert-info py-1 small mb-1">
-                            <i class="fas fa-info-circle"></i> Descontos acima de {{ limite_desconto }}% requerem aprovacao do administrador.
+                            <i class="fas fa-info-circle"></i> Descontos acima de {{ limite_desconto }}% requerem aprovacao. Valores acima da tabela sao livres.
                         </div>
                     </div>
                     {% endif %}
                     {% if cotacao.status == 'PENDENTE_ADMIN' %}
                     <div class="alert alert-warning py-1 small mb-2">
                         <i class="fas fa-exclamation-triangle"></i>
+                        {% if cotacao.cotacao_manual %}
+                        Cotacao manual — valor definido pela vendedora. Requer aprovacao do administrador.
+                        {% else %}
                         Desconto de {{ cotacao.percentual_desconto|numero_br(2) }}% excede limite de {{ limite_desconto }}%.
-                        Requer aprovacao do administrador antes de prosseguir.
+                        Requer aprovacao do administrador.
+                        {% endif %}
                     </div>
                     {% if current_user.perfil == 'administrador' %}
-                    <button class="btn btn-success btn-sm w-100 mb-1" onclick="adminAprovar()">Aprovar Desconto</button>
+                    <button class="btn btn-success btn-sm w-100 mb-1" onclick="adminAprovar()">
+                        {% if cotacao.cotacao_manual %}Aprovar Valor Manual{% else %}Aprovar Desconto{% endif %}
+                    </button>
                     <button class="btn btn-danger btn-sm w-100 mb-1" onclick="adminRejeitar()">Rejeitar</button>
                     {% endif %}
                     {% endif %}
@@ -825,6 +921,7 @@ async function salvarTudo() {
         endereco_destino_id: destinoId,
         tipo_material: tipoMat,
         tipo_carga: document.getElementById('selTipoCarga').value,
+        veiculo_id: parseInt(document.getElementById('selVeiculo')?.value) || null,
         peso: parseFloat(document.getElementById('inpPeso').value) || null,
         valor_mercadoria: parseFloat(document.getElementById('inpValorMerc').value) || null,
         volumes: parseInt(document.getElementById('inpVolumes').value) || null,
@@ -834,6 +931,12 @@ async function salvarTudo() {
         data_expedicao: document.getElementById('inpDataExp').value || null,
         data_agenda: document.getElementById('inpDataAg').value || null,
         observacoes: document.getElementById('inpObs').value || null,
+        // Condicoes comerciais
+        condicao_pagamento: document.getElementById('selCondicaoPgto').value || null,
+        prazo_dias: parseInt(document.getElementById('inpPrazoDias').value) || null,
+        responsavel_frete: document.getElementById('selResponsavelFrete').value || null,
+        percentual_remetente: document.getElementById('inpPctRem').value !== '' ? parseFloat(document.getElementById('inpPctRem').value) : null,
+        percentual_destinatario: document.getElementById('inpPctDest').value !== '' ? parseFloat(document.getElementById('inpPctDest').value) : null,
     };
 
     // Incluir endereco de entrega (override cotacao) se inline visivel
@@ -910,6 +1013,61 @@ function aplicarDesconto() {
     const pct = parseFloat(document.getElementById('inpDescontoPct').value || 0);
     apiCall(`/carvia/api/cotacoes/${cotacaoId}/desconto`, 'POST', {percentual_desconto: pct}).then(d => {
         if (d.sucesso) location.reload(); else alert(d.erro);
+    });
+}
+
+/* ===== Cotacao Manual ===== */
+function abrirCotacaoManual() {
+    const bloco = document.getElementById('blocoCotacaoManual');
+    bloco.classList.toggle('d-none');
+    if (!bloco.classList.contains('d-none')) {
+        document.getElementById('inpValorManual').focus();
+    }
+}
+
+function aplicarValorManual() {
+    const valor = parseFloat(document.getElementById('inpValorManual').value || 0);
+    if (valor <= 0) { alert('Informe um valor positivo.'); return; }
+    if (!confirm('Definir R$ ' + valor.toFixed(2) + ' como valor manual?\nA cotacao ira para aprovacao do admin.')) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/valor-manual`, 'POST', {valor: valor}).then(d => {
+        if (d.sucesso) location.reload(); else alert(d.erro);
+    });
+}
+
+/* ===== Veiculo DIRETA ===== */
+function toggleVeiculoBlock() {
+    const tc = document.getElementById('selTipoCarga').value;
+    const bloco = document.getElementById('blocoVeiculoDireta');
+    if (bloco) {
+        bloco.classList.toggle('d-none', tc !== 'DIRETA');
+    }
+}
+
+async function sugerirVeiculo() {
+    const tc = document.getElementById('selTipoCarga').value;
+    if (tc !== 'DIRETA') return;
+
+    const peso = parseFloat(document.getElementById('inpPeso')?.value) || 0;
+    if (peso <= 0) return;
+
+    const data = await apiCall('/carvia/api/cotacoes/sugerir-veiculo', 'POST', {peso: peso});
+    if (data.veiculo_id) {
+        const sel = document.getElementById('selVeiculo');
+        if (sel) {
+            sel.value = data.veiculo_id;
+            const hint = document.getElementById('veiculoHint');
+            if (hint) hint.textContent = 'Sugerido pelo peso';
+            salvarVeiculo();
+        }
+    }
+}
+
+function salvarVeiculo() {
+    const veiculoId = parseInt(document.getElementById('selVeiculo').value) || null;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}`, 'PUT', {veiculo_id: veiculoId}).then(d => {
+        if (!d.sucesso) alert(d.erro || 'Erro ao salvar veiculo.');
+        const hint = document.getElementById('veiculoHint');
+        if (hint) hint.textContent = '';
     });
 }
 
@@ -1171,6 +1329,27 @@ document.addEventListener('DOMContentLoaded', function() {
         el.addEventListener('change', () => _salvarEnderecoCotacaoDebounce(id));
     });
 });
+
+/* ===== Condicoes Comerciais: toggle campos ===== */
+function togglePrazoDias() {
+    const v = document.getElementById('selCondicaoPgto').value;
+    document.getElementById('blocoPrazoDias').style.display = v === 'PRAZO' ? '' : 'none';
+    if (v !== 'PRAZO') document.getElementById('inpPrazoDias').value = '';
+}
+
+function togglePercentuais() {
+    const v = document.getElementById('selResponsavelFrete').value;
+    const remEl = document.getElementById('inpPctRem');
+    const destEl = document.getElementById('inpPctDest');
+    const showCustom = v === 'PERSONALIZADO';
+    document.getElementById('blocoPercentualRem').style.display = showCustom ? '' : 'none';
+    document.getElementById('blocoPercentualDest').style.display = showCustom ? '' : 'none';
+
+    if (v === '100_REMETENTE') { remEl.value = '100'; destEl.value = '0'; }
+    else if (v === '100_DESTINATARIO') { remEl.value = '0'; destEl.value = '100'; }
+    else if (v === '50_50') { remEl.value = '50'; destEl.value = '50'; }
+    else if (!v) { remEl.value = ''; destEl.value = ''; }
+}
 
 /* ===== Init ===== */
 document.addEventListener('DOMContentLoaded', function() {

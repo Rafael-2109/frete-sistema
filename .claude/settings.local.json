@@ -189,7 +189,8 @@
       "Bash(/tmp/passo5_verificar.py:*)",
       "Bash(pip install:*)",
       "Bash(set -a)",
-      "Bash(set +a)"
+      "Bash(set +a)",
+      "Bash(PYTHONPATH=src python -m pytest tests/ -v --timeout=60 --tb=short)"
     ],
     "deny": [],
     "defaultMode": "auto"
