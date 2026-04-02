@@ -42,9 +42,13 @@
                 <i class="fas fa-plus"></i> Criar CTe CarVia
             </button>
             {% if nf.chave_acesso_nf and nf.chave_acesso_nf|length == 44 %}
-            <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal"
-                    data-bs-target="#modalEmitirCteSsw" title="Emitir CTe automaticamente no SSW">
-                <i class="fas fa-bolt"></i> Emitir CTe SSW
+            <button type="button" class="btn btn-warning btn-sm" title="Emitir apenas CTe no SSW"
+                    onclick="abrirModalEmissaoSsw('cte')">
+                <i class="fas fa-bolt"></i> Emitir CTe
+            </button>
+            <button type="button" class="btn btn-success btn-sm" title="Emitir CTe e gerar fatura no SSW"
+                    onclick="abrirModalEmissaoSsw('cte_fatura')">
+                <i class="fas fa-file-invoice"></i> CTe + Fatura
             </button>
             {% endif %}
             <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalCancelarNf" title="Cancelar NF">
@@ -541,6 +545,29 @@ if (cteValorModalInput && btnCriarCte) {
 }
 
 // ── Emissao CTe SSW ──
+let modoEmissaoSsw = 'cte'; // 'cte' ou 'cte_fatura'
+
+function abrirModalEmissaoSsw(modo) {
+    modoEmissaoSsw = modo;
+    const titulo = document.getElementById('modalEmitirCteSswTitle');
+    const secaoFatura = document.getElementById('secaoFatura');
+    const btnSubmit = document.getElementById('btnEmitirCteSsw');
+
+    if (modo === 'cte_fatura') {
+        titulo.innerHTML = '<i class="fas fa-file-invoice"></i> Emitir CTe + Fatura SSW';
+        secaoFatura.classList.remove('d-none');
+        btnSubmit.className = 'btn btn-success';
+        btnSubmit.innerHTML = '<i class="fas fa-file-invoice"></i> Emitir CTe + Fatura';
+    } else {
+        titulo.innerHTML = '<i class="fas fa-bolt"></i> Emitir CTe SSW';
+        secaoFatura.classList.add('d-none');
+        btnSubmit.className = 'btn btn-warning';
+        btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Emitir CTe';
+    }
+
+    new bootstrap.Modal(document.getElementById('modalEmitirCteSsw')).show();
+}
+
 (function() {
     const form = document.getElementById('formEmitirCteSsw');
     if (!form) return;
@@ -587,10 +614,28 @@ if (cteValorModalInput && btnCriarCte) {
         const payload = {
             uf_origem: form.uf_origem.value || null,
             placa: form.placa.value || 'ARMAZEM',
-            cnpj_tomador: form.cnpj_tomador.value || null,
             frete_valor: parseFloat(form.frete_valor.value) || 0,
-            data_vencimento: form.data_vencimento.value || null,
         };
+
+        // Fatura: incluir cnpj_tomador e vencimento apenas no modo cte_fatura
+        if (modoEmissaoSsw === 'cte_fatura') {
+            const cnpj = form.cnpj_tomador.value;
+            const venc = form.data_vencimento.value;
+            if (!cnpj || cnpj.length !== 14) {
+                statusErro.classList.remove('d-none');
+                statusErro.textContent = 'CNPJ Tomador obrigatorio (14 digitos) para gerar fatura';
+                btnSubmit.disabled = false;
+                return;
+            }
+            if (!venc) {
+                statusErro.classList.remove('d-none');
+                statusErro.textContent = 'Vencimento obrigatorio para gerar fatura';
+                btnSubmit.disabled = false;
+                return;
+            }
+            payload.cnpj_tomador = cnpj;
+            payload.data_vencimento = venc;
+        }
 
         // Coletar medidas de moto (se preenchidas)
         const medidas = [];
@@ -617,7 +662,9 @@ if (cteValorModalInput && btnCriarCte) {
                 statusErro.classList.remove('d-none');
                 statusErro.textContent = data.erro || 'Erro ao enfileirar';
                 btnSubmit.disabled = false;
-                btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Emitir CTe SSW';
+                btnSubmit.innerHTML = modoEmissaoSsw === 'cte_fatura'
+                    ? '<i class="fas fa-file-invoice"></i> Emitir CTe + Fatura'
+                    : '<i class="fas fa-bolt"></i> Emitir CTe';
             }
         })
         .catch(err => {
@@ -648,7 +695,9 @@ if (cteValorModalInput && btnCriarCte) {
                             statusSucesso.innerHTML += ` <a href="/carvia/operacoes/${data.operacao_id}" class="btn btn-sm btn-outline-success ms-2">Ver Operacao</a>`;
                         }
                         btnSubmit.disabled = false;
-                        btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Emitir CTe SSW';
+                        btnSubmit.innerHTML = modoEmissaoSsw === 'cte_fatura'
+                    ? '<i class="fas fa-file-invoice"></i> Emitir CTe + Fatura'
+                    : '<i class="fas fa-bolt"></i> Emitir CTe';
                     } else if (data.status === 'ERRO') {
                         clearInterval(pollingInterval);
                         statusMsg.textContent = '';
@@ -670,7 +719,7 @@ if (cteValorModalInput && btnCriarCte) {
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-bolt"></i> Emitir CTe SSW</h5>
+                <h5 class="modal-title" id="modalEmitirCteSswTitle"><i class="fas fa-bolt"></i> Emitir CTe SSW</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="formEmitirCteSsw">
@@ -710,16 +759,20 @@ if (cteValorModalInput && btnCriarCte) {
                            placeholder="600.00">
                 </div>
 
-                <div class="mb-3">
-                    <label class="form-label">CNPJ Tomador (para fatura)</label>
-                    <input type="text" name="cnpj_tomador" class="form-control" maxlength="14"
-                           placeholder="14 digitos sem formatacao"
-                           value="{{ nf.cnpj_emitente|replace('.', '')|replace('/', '')|replace('-', '') if nf.cnpj_emitente else '' }}">
-                </div>
+                <div id="secaoFatura" class="d-none">
+                    <hr>
+                    <p class="fw-bold mb-2"><i class="fas fa-file-invoice"></i> Dados da Fatura</p>
+                    <div class="mb-3">
+                        <label class="form-label">CNPJ Tomador <span class="text-danger">*</span></label>
+                        <input type="text" name="cnpj_tomador" class="form-control" maxlength="14"
+                               placeholder="14 digitos sem formatacao"
+                               value="{{ nf.cnpj_emitente|replace('.', '')|replace('/', '')|replace('-', '') if nf.cnpj_emitente else '' }}">
+                    </div>
 
-                <div class="mb-3">
-                    <label class="form-label">Vencimento da Fatura</label>
-                    <input type="date" name="data_vencimento" class="form-control">
+                    <div class="mb-3">
+                        <label class="form-label">Vencimento da Fatura <span class="text-danger">*</span></label>
+                        <input type="date" name="data_vencimento" class="form-control">
+                    </div>
                 </div>
 
                 <hr>
@@ -754,7 +807,7 @@ if (cteValorModalInput && btnCriarCte) {
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="submit" class="btn btn-warning" id="btnEmitirCteSsw">
-                    <i class="fas fa-bolt"></i> Emitir CTe SSW
+                    <i class="fas fa-bolt"></i> Emitir
                 </button>
             </div>
             </form>

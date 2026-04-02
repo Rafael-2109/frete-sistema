@@ -393,6 +393,7 @@ BANCO_JOURNAL_MAP = {
     '756': 10,    # SICOOB
     '237': 388,   # BRADESCO
     '033': 1046,  # AGIS (Santander DTVM)
+    '274': 1068,  # VORTX GRAFENO (Banco Grafeno)
 }
 
 import re
@@ -402,12 +403,23 @@ def _extrair_journal_destino(payment_ref):
 
     Formato esperado: '...Banco 756 Agencia 4351 Conta 45078-2...'
     Retorna journal_id (int) ou None.
+
+    Fallback: se codigo bancario nao esta no mapa, tenta match por nome
+    do journal no payment_ref (ex: 'VORTX', 'SICOOB').
     """
     if not payment_ref:
         return None
+    # Tentativa 1: codigo bancario
     match = re.search(r'[Bb]anco\s+(\d+)', payment_ref)
     if match:
-        return BANCO_JOURNAL_MAP.get(match.group(1))
+        result = BANCO_JOURNAL_MAP.get(match.group(1))
+        if result:
+            return result
+    # Fallback: nome do journal no payment_ref
+    ref_upper = payment_ref.upper()
+    for name, journal_id in JOURNAL_MAP.items():
+        if name in ref_upper:
+            return journal_id
     return None
 
 def levantar_pares_transferencia_interna(data_inicio=None, data_fim=None, valor=None, journal=None):

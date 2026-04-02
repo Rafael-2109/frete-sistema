@@ -106,7 +106,7 @@ domain = [
 |----------|--------|-------|
 | Ambos extratos nao conciliados | `criar_transferencia_interna_e_conciliar()` | stmt_pag_id, stmt_rec_id, journal_pag_id, journal_rec_id, amount, date |
 | Recebimento conciliado, pagamento pendente | `conciliar_pagamento_transferencia_existente()` | stmt_pag_id, amount, date, journal_pag_id |
-| Sit 2 falhou (payment consolidado/data errada) | `rastrear_cadeia_documental()` | stmt_pag_id — retorna diagnostico, NAO executa |
+| Sit 2 falhou (payment consolidado/data errada) — caminho principal | `rastrear_cadeia_documental()` | stmt_pag_id — retorna diagnostico, NAO executa |
 | Levantar todos os pares pendentes | `levantar_pares_transferencia_interna()` | — (aceita args de filtro) |
 
 Codigo completo: [references/codigo-operacional.md](references/codigo-operacional.md)
@@ -171,7 +171,11 @@ Linha de extrato com NACOM GOYA / 61.724.241
 
 > Ver [codigo-operacional.md](references/codigo-operacional.md) secao "Situacao 2"
 
-## Situacao 2b — Rastreamento de Cadeia Documental
+## Situacao 2b — Rastreamento de Cadeia Documental (caminho principal)
+
+**Contexto**: Apesar do nome "2b", este e o **caminho operacional principal** para casos
+onde o payment nao e encontrado por busca direta (valor/data). A Sit 2 frequentemente
+escala para 2b porque payments consolidados e com data retroativa sao cenarios comuns.
 
 **Quando**: Sit 2 falha (payment nao encontrado por valor/data). Tipicamente:
 - Payment **consolidado** (valor agregado, ex: R$547.733,45 = 36x R$14.999,99)
@@ -185,6 +189,10 @@ Linha de extrato com NACOM GOYA / 61.724.241
 
 **Cadeia rastreada**: stmt_pag → payment_ref (destino) → credito reconciliado no destino
 → partial_reconcile → payment do recebimento → paired_payment → move_line PENDENTES
+
+**Regra D+0**: O match de credito no destino usa `date = stmt.date` (mesma data exata).
+Depositos creditam em D+0 por regra operacional. Se o agente quiser investigar
+inconsistencias, pode buscar janela ampliada, mas o match real e SEMPRE D+0.
 
 > Ver [codigo-operacional.md](references/codigo-operacional.md) secao "Situacao 2b"
 
@@ -229,8 +237,10 @@ Usado por `rastrear_cadeia_documental()` para identificar journal destino a part
 | 756 | SICOOB | 10 |
 | 237 | BRADESCO | 388 |
 | 033 | AGIS (Santander DTVM) | 1046 |
+| 274 | VORTX GRAFENO (Banco Grafeno) | 1068 |
 
 Extraido via regex `Banco\s+(\d+)` do campo `payment_ref` dos extratos GRAFENO.
+Fallback: se codigo bancario nao esta no mapa, buscar nome do journal no payment_ref (JOURNAL_MAP).
 
 ---
 

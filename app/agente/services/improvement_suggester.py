@@ -90,6 +90,12 @@ CRITERIOS DE QUALIDADE:
 - Se nenhuma sessao revelar algo util, retorne [] (array vazio)
 - severity=critical: causa erro/frustacao recorrente. warning: melhoria significativa. info: nice-to-have
 
+REGRA ANTI-DUPLICATA:
+- Sessoes com ERROS REPETIDOS identicos (mesmo texto de erro 3+ vezes) sao sintoma de BUG TECNICO,
+  NAO de "skill faltando". Categorizar como gotcha_report, NUNCA como skill_suggestion.
+- VERIFICAR <inventario_skills> E <sugestoes_existentes> ANTES de categorizar como skill_suggestion.
+  Se a funcionalidade JA EXISTE no inventario, usar instruction_request (agente nao soube usar).
+
 RESPONDA APENAS o JSON array, sem markdown, sem comentarios."""
 
 
@@ -279,22 +285,31 @@ def _validate_suggestions(suggestions: list) -> List[Dict[str, Any]]:
     return valid[:MAX_SUGGESTIONS]
 
 
-def _dedup_against_open(
+def _dedup_against_existing(
     suggestions: List[Dict[str, Any]],
     open_items: list,
+    rejected_items: list | None = None,
 ) -> List[Dict[str, Any]]:
-    """Remove sugestoes duplicadas contra itens abertos."""
-    if not open_items:
-        return suggestions
+    """Remove sugestoes duplicadas contra itens abertos E rejeitados recentes.
 
-    open_keys = {
-        (item.category, item.title[:50].lower())
-        for item in open_items
-    }
+    Filtra em dois niveis:
+    1. open_items: sugestoes em andamento (proposed/responded) — match por (category, title[:50])
+    2. rejected_items: sugestoes rejeitadas nos ultimos 7 dias — evita re-geracao ciclica
+    """
+    existing_keys: set[tuple[str, str]] = set()
+
+    for item in (open_items or []):
+        existing_keys.add((item.category, item.title[:50].lower()))
+
+    for item in (rejected_items or []):
+        existing_keys.add((item.category, item.title[:50].lower()))
+
+    if not existing_keys:
+        return suggestions
 
     return [
         s for s in suggestions
-        if (s['category'], s['title'][:50].lower()) not in open_keys
+        if (s['category'], s['title'][:50].lower()) not in existing_keys
     ]
 
 
@@ -333,6 +348,7 @@ def _fetch_recent_sessions(hours: int) -> List[Dict[str, Any]]:
 def _generate_batch_suggestions(
     sessions_data: List[Dict[str, Any]],
     open_items: list,
+    rejected_items: list | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Gera sugestoes de melhoria via Sonnet analisando batch de sessoes.
@@ -346,18 +362,19 @@ def _generate_batch_suggestions(
     """
     batch_text = _format_batch(sessions_data)
 
-    # Informar sugestoes abertas para o LLM evitar duplicatas
-    open_summary = ""
-    if open_items:
-        open_lines = [
+    # Informar sugestoes abertas E rejeitadas recentes para o LLM evitar duplicatas
+    existing_summary = ""
+    all_existing = list(open_items or []) + list(rejected_items or [])
+    if all_existing:
+        existing_lines = [
             f"- [{item.category}] {item.title} (status={item.status})"
-            for item in open_items[:10]
+            for item in all_existing[:15]
         ]
-        open_summary = (
-            "\n\n<sugestoes_abertas>\n"
-            "Estas sugestoes ja estao em andamento — NAO duplique:\n"
-            + '\n'.join(open_lines)
-            + "\n</sugestoes_abertas>"
+        existing_summary = (
+            "\n\n<sugestoes_existentes>\n"
+            "Estas sugestoes ja foram avaliadas ou estao em andamento — NAO duplique:\n"
+            + '\n'.join(existing_lines)
+            + "\n</sugestoes_existentes>"
         )
 
     # Inventario de skills/subagentes para evitar skill_suggestion duplicada
@@ -379,7 +396,7 @@ def _generate_batch_suggestions(
             f"<batch_sessoes count=\"{len(sessions_data)}\">\n"
             f"{batch_text}\n"
             f"</batch_sessoes>"
-            f"{open_summary}"
+            f"{existing_summary}"
             f"{inventory_block}"
         )
 
@@ -399,7 +416,7 @@ def _generate_batch_suggestions(
 
         result_text = response.content[0].text.strip()
         suggestions = _validate_suggestions(_parse_json_array(result_text))
-        suggestions = _dedup_against_open(suggestions, open_items)
+        suggestions = _dedup_against_existing(suggestions, open_items, rejected_items)
 
         logger.info(
             f"[IMPROVEMENT] Batch: {len(suggestions)} sugestoes de {len(sessions_data)} sessoes "
@@ -556,7 +573,8 @@ def executar_batch_improvement(db_instance) -> Dict[str, Any]:
         # Passo 3: Gerar novas sugestoes
         # =========================================================
         open_items = AgentImprovementDialogue.get_open_by_category()
-        suggestions = _generate_batch_suggestions(sessions_data, open_items)
+        rejected_items = AgentImprovementDialogue.get_recently_rejected(days=7)
+        suggestions = _generate_batch_suggestions(sessions_data, open_items, rejected_items)
 
         # Extrair session_ids das sessoes analisadas
         all_session_ids = [sd['session_id'] for sd in sessions_data]

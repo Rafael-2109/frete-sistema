@@ -1192,6 +1192,21 @@ class AgentImprovementDialogue(db.Model):
         ).all()
 
     @classmethod
+    def get_recently_rejected(cls, days: int = 7) -> List['AgentImprovementDialogue']:
+        """
+        Retorna sugestoes rejeitadas nos ultimos N dias.
+
+        Evita re-geracao ciclica: Sonnet nao deve sugerir novamente
+        algo que o Claude Code ja avaliou e descartou.
+        """
+        from app.utils.timezone import agora_utc_naive
+        cutoff = agora_utc_naive() - __import__('datetime').timedelta(days=days)
+        return cls.query.filter(
+            cls.status == 'rejected',
+            cls.updated_at >= cutoff,
+        ).all()
+
+    @classmethod
     def upsert_response(
         cls,
         suggestion_key: str,
