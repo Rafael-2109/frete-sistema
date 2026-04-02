@@ -15,10 +15,15 @@ Fluxo completo:
   10. [--baixar-dacte] Baixar DACTE PDF e XML
 
 IMPORTANTE:
-  - Filial DEVE ser CAR para emissao de CT-e (POP-C01)
+  - Filial depende da UF de origem: SP=CAR, RJ=GIG (ver UF_FILIAL_MAP no service)
   - Placa ARMAZEM = frete fracionado (cliente trouxe ao armazem)
   - Pre-CTRC so tem valor fiscal APOS autorizacao SEFAZ (opcao 007)
   - Chave NF-e de 44 digitos — sistema auto-preenche dados da NF
+  - Pos-simular: SSW usa paineis HTML "Aviso" (nao JS dialogs) para:
+    * Email pagador → clicar "E-mail nao disponivel"
+    * Cliente bloqueado → desbloqueio automatico (ssw1105, f2=S)
+    * GNRE/Guia recolhimento → clicar "Continuar" (CFOP 5932, RJ→RJ)
+    * Resumo → "1. Gravar" (concluindo('C'))
 
 Fonte: POP-C01 (pops/POP-C01-emitir-cte-fracionado.md)
 
@@ -601,26 +606,35 @@ async def emitir_cte(args):
                     mensagem="Preview. Nenhuma acao executada.",
                 )
 
-            # ── 6. Clicar ► para simular/calcular frete ──
-            # O botao ► principal chama calculafrete(this)
+            # ── 6. SIMULAR + tratar Avisos HTML + GRAVAR ──
+            #
+            # Apos calculafrete(), o SSW exibe uma SEQUENCIA de paineis HTML
+            # "Aviso" (nao JS dialogs). A ordem tipica:
+            #   1. Email: "Informe e-mail do cliente pagador"
+            #      → clicar "E-mail não está disponível"
+            #   2. (Opcional) Bloqueio: "Cliente pagador bloqueado para transporte"
+            #      → abrir ssw1105, mudar f2=S, confirmar, voltar e re-simular
+            #   3. (Opcional) GNRE/ICMS: "ICMS deve ser recolhido antecipadamente"
+            #      → clicar "Continuar"
+            #   4. Resumo: mostra valores calculados
+            #      → clicar "1. Gravar" (concluindo('C'))
+            #
+            # JS dialogs sao raros mas mantemos handler como fallback.
+
             dialogs = []
             ctrc_num = None
+            avisos_tratados = []
 
             async def on_dialog(dialog):
                 nonlocal ctrc_num
                 msg = dialog.message
-                msg_lower = msg.lower()
                 dialogs.append({"tipo": dialog.type, "msg": msg})
-
                 if dialog.type == "confirm":
-                    if "email" in msg_lower or "e-mail" in msg_lower or "disponivel" in msg_lower:
-                        await dialog.dismiss()  # Email nao disponivel -> NAO
-                    elif "confirma" in msg_lower or "gravar" in msg_lower or "emiss" in msg_lower:
-                        await dialog.accept()   # Confirma -> SIM
+                    if "email" in msg.lower() or "disponivel" in msg.lower():
+                        await dialog.dismiss()
                     else:
                         await dialog.accept()
                 else:
-                    # Alert — capturar numero CTRC
                     m = re.search(r'(\d{2,6})', msg)
                     if m and not ctrc_num:
                         ctrc_num = m.group(1)
@@ -629,59 +643,171 @@ async def emitir_cte(args):
             popup.on("dialog", on_dialog)
 
             try:
-                # ── 6. Clicar ► (calculafrete) = SIMULAR ──
+                # ── 6a. Simular ──
                 try:
                     await popup.evaluate("calculafrete(this)")
                 except Exception:
                     pass
-
                 await asyncio.sleep(8)
                 await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
                 await capturar_screenshot_local(popup, "06_pos_simular")
 
-                # ── 7. Tratar "Email nao disponivel" (popup SSW customizado) ──
-                # calculafrete pode disparar email dialog antes do resumo
-                try:
-                    await popup.evaluate("""() => {
+                # ── 6b. Tratar paineis Aviso em sequencia ──
+                MAX_AVISOS = 6  # Seguranca contra loop infinito
+                for aviso_idx in range(MAX_AVISOS):
+                    body = await popup.evaluate(
+                        "() => document.body ? document.body.innerText.substring(0,5000) : ''"
+                    )
+                    body_lower = body.lower()
+
+                    # --- Aviso: Email ---
+                    if 'disponível' in body_lower and 'e-mail' in body_lower:
+                        await popup.evaluate("""() => {
+                            const links = document.querySelectorAll('a');
+                            for (const el of links) {
+                                if (el.textContent.toLowerCase().includes('disponível')) {
+                                    el.click(); return true;
+                                }
+                            }
+                            return false;
+                        }""")
+                        avisos_tratados.append("EMAIL_DISPENSADO")
+                        await asyncio.sleep(5)
+                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+                        await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_email")
+                        continue
+
+                    # --- Aviso: Cliente bloqueado ---
+                    if 'bloqueado' in body_lower and 'transporte' in body_lower:
+                        avisos_tratados.append("CLIENTE_BLOQUEADO_DESBLOQUEANDO")
+                        await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_bloqueio")
+
+                        # Abrir ssw1105 para desbloquear
+                        html_1105 = await interceptar_ajax_response(
+                            popup, popup,
+                            "ajaxEnvia('', 1, 'ssw1105?act=ENV&f2=' + "
+                            "document.getElementById('IDX_CLI_PAG_CNPJ').value)",
+                            timeout_s=15
+                        )
+                        if html_1105:
+                            await injetar_html_no_dom(popup, html_1105)
+                            await asyncio.sleep(2)
+                            await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+                            # Mudar Transportar de N para S
+                            await popup.evaluate("""() => {
+                                const el = document.querySelector('input[name="f2"]');
+                                if (el) { el.value = 'S'; }
+                            }""")
+                            # Confirmar (EN2)
+                            confirm_html = await interceptar_ajax_response(
+                                popup, popup, "ajaxEnvia('EN2', 0)", timeout_s=15
+                            )
+                            if confirm_html:
+                                await injetar_html_no_dom(popup, confirm_html)
+                                await asyncio.sleep(2)
+                            avisos_tratados.append("CLIENTE_DESBLOQUEADO")
+
+                        # Voltar ao formulario: fechar Aviso e re-simular
+                        # O popup agora mostra ssw1105 — precisamos voltar ao 004.
+                        # Fechar popup causa TargetClosedError, entao re-abrimos.
+                        try:
+                            await popup.close()
+                        except Exception:
+                            pass
+
+                        # Re-abrir 004 e re-preencher
+                        popup = await abrir_opcao_popup(context, main_frame, 4, timeout_s=30)
+                        await asyncio.sleep(2)
+                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+                        await popup.evaluate("ajaxEnvia('NORMAL', 1)")
+                        await asyncio.sleep(5)
+                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+
+                        # Re-preencher campos
+                        campo_p = popup.locator('input[name="f13"]')
+                        await campo_p.click()
+                        await campo_p.fill(placa)
+                        await campo_p.press("Tab")
+                        await asyncio.sleep(3)
+
+                        campo_c = popup.locator('input[name="chaveAcesso"]')
+                        await campo_c.wait_for(state="attached", timeout=8000)
+                        await campo_c.click(force=True)
+                        await campo_c.fill(chave_nfe, force=True)
+                        await asyncio.sleep(1)
+                        await popup.mouse.click(10, 500)
+                        await asyncio.sleep(10)
+
+                        await popup.evaluate("showhide('parc')")
+                        await asyncio.sleep(1)
+                        campo_f = popup.locator('input[name="id_frt_inf_frete_peso"]')
+                        await campo_f.click(force=True)
+                        await campo_f.fill(frete_peso, force=True)
+                        try:
+                            await popup.evaluate("fechafrtparc('C')")
+                        except Exception:
+                            pass
+                        await asyncio.sleep(2)
+
+                        # Re-registrar dialog handler no novo popup
+                        popup.on("dialog", on_dialog)
+
+                        # Re-simular
+                        try:
+                            await popup.evaluate("calculafrete(this)")
+                        except Exception:
+                            pass
+                        await asyncio.sleep(8)
+                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+                        continue
+
+                    # --- Aviso: GNRE/Guia de Recolhimento ---
+                    if ('guia de recolhimento' in body_lower or
+                            'gnre' in body_lower or
+                            'recolhido antecipadamente' in body_lower):
+                        avisos_tratados.append("GNRE_CONTINUAR")
+                        await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_gnre")
+                        await popup.evaluate("""() => {
+                            const links = document.querySelectorAll('a');
+                            for (const el of links) {
+                                if (el.textContent.trim().toLowerCase().includes('continuar')) {
+                                    el.click(); return true;
+                                }
+                            }
+                            return false;
+                        }""")
+                        await asyncio.sleep(3)
+                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+                        continue
+
+                    # --- Resumo com opcao Gravar (concluindo) ---
+                    has_gravar = await popup.evaluate("""() => {
                         const links = document.querySelectorAll('a');
                         for (const el of links) {
-                            const t = el.textContent.toLowerCase();
-                            if (t.includes('disponível') || t.includes('disponivel')) {
-                                el.click(); return true;
-                            }
+                            const o = el.getAttribute('onclick') || '';
+                            if (o.includes("concluindo('C')")) return true;
                         }
                         return false;
                     }""")
-                except Exception:
-                    pass
-                await asyncio.sleep(5)
-                await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
-                await capturar_screenshot_local(popup, "07_pos_email")
+                    if has_gravar:
+                        avisos_tratados.append("RESUMO_GRAVAR")
+                        await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_resumo")
+                        break  # Sair do loop para gravar
 
-                # ── 8. GRAVAR no painel de resumo ──
-                # O botao REAL eh "1. Gravar" com onclick concluindo('C')
-                # NAO confundir com "1. Gravar CTRC/Subcontrato/NFPS" (ajaxEnvia #res_con#)
+                    # Nenhum aviso reconhecido — pode ser formulario vazio ou erro
+                    break
+
+                # ── 7. GRAVAR pre-CTRC ──
+                await capturar_screenshot_local(popup, "08_pre_gravar")
                 try:
                     await popup.evaluate("concluindo('C')")
                 except Exception:
-                    # Fallback: clicar no link
-                    await popup.evaluate("""() => {
-                        const links = document.querySelectorAll('a[onclick]');
-                        for (const el of links) {
-                            if (el.getAttribute('onclick') && el.getAttribute('onclick').includes("concluindo('C')")) {
-                                el.click(); return true;
-                            }
-                        }
-                        return false;
-                    }""")
-
-                await asyncio.sleep(10)  # Esperar gravar + possiveis dialogs
+                    pass
+                await asyncio.sleep(12)
                 await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
                 await capturar_screenshot_local(popup, "08_pos_gravar")
 
-                # ── 9. Extrair CTRC do formulario pos-gravar ──
-                # Apos concluindo('C'), o SSW volta ao formulario vazio
-                # com "CTRC anterior: 000094-9" mostrando o ultimo gravado
+                # ── 8. Extrair CTRC ──
                 page_closed = False
                 try:
                     await popup.evaluate("1")
@@ -692,19 +818,13 @@ async def emitir_cte(args):
                     body = await popup.evaluate(
                         "() => document.body ? document.body.innerText.substring(0,8000) : ''"
                     )
-                    # Extrair de "CTRC anterior: 000094-9" → pegar 94
                     m = re.search(r'CTRC\s*anterior\s*:?\s*0*(\d+)', body, re.IGNORECASE)
                     if m:
                         ctrc_num = m.group(1)
-
-                    # Fallback: campo hidden ou input com valor do CTRC
                     if not ctrc_num:
                         ctrc_num = await popup.evaluate("""() => {
-                            // Tentar campo que mostra CTRC anterior
                             const el = document.querySelector('input[name="seq_ant"]');
                             if (el && el.value && el.value.trim()) return el.value.trim();
-                            const el2 = document.getElementById('seq_ctrc');
-                            if (el2 && el2.value && el2.value.trim()) return el2.value.trim();
                             return null;
                         }""")
 
@@ -713,6 +833,7 @@ async def emitir_cte(args):
                 resultado = {
                     "ctrc": ctrc_num,
                     "dialogs": dialogs,
+                    "avisos_tratados": avisos_tratados,
                     "popup_fechou": page_closed,
                 }
 

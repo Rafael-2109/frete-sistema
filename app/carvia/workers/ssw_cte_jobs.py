@@ -98,7 +98,9 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
 
             # ── Fase B: Baixar XML/DACTE via consultar_ctrc_101 e importar ──
             try:
-                resultado_consulta = _executar_consulta_101(emissao.ctrc_numero)
+                resultado_consulta = _executar_consulta_101(
+                    emissao.ctrc_numero, filial=emissao.filial_ssw or 'CAR'
+                )
                 if resultado_consulta.get('sucesso'):
                     # Mesclar paths de XML/DACTE no resultado
                     resultado_cte['xml'] = resultado_consulta.get('xml')
@@ -187,7 +189,7 @@ def _montar_args_cte(emissao):
         chave_nfe=nf.chave_acesso_nf,
         placa=emissao.placa or 'ARMAZEM',
         frete_peso=float(emissao.frete_valor or 0),
-        filial='CAR',
+        filial=emissao.filial_ssw or 'CAR',
         medidas=medidas,
         enviar_sefaz=True,
         consultar_101=True,
@@ -225,7 +227,7 @@ def _executar_script_cte(args):
     return asyncio.run(emitir_cte(args))
 
 
-def _executar_consulta_101(ctrc_numero):
+def _executar_consulta_101(ctrc_numero, filial='CAR'):
     """Executa consultar_ctrc_101.py para baixar XML e DACTE do CTe emitido."""
     if SSW_SCRIPTS not in sys.path:
         sys.path.insert(0, SSW_SCRIPTS)
@@ -235,7 +237,7 @@ def _executar_consulta_101(ctrc_numero):
     args_101 = argparse.Namespace(
         ctrc=str(ctrc_numero),
         nf=None,
-        filial='CAR',
+        filial=filial,
         baixar_xml=True,
         baixar_dacte=True,
         output_dir='/tmp/ssw_operacoes/consulta_101',

@@ -30,12 +30,47 @@ ERROS_SSW = {
 }
 
 
+# Mapeamento UF → filial SSW para emissao de CTe
+UF_FILIAL_MAP = {
+    'SP': 'CAR',
+    'RJ': 'GIG',
+}
+
+
 class SswEmissaoService:
     """Orquestra emissao de CTe no SSW e importacao dos resultados."""
 
     @staticmethod
+    def resolver_filial(uf_origem):
+        """Resolve filial SSW a partir da UF de origem.
+
+        Args:
+            uf_origem: UF de 2 letras (ex: 'SP', 'RJ')
+
+        Returns:
+            str: sigla da filial SSW ('CAR', 'GIG', etc.)
+
+        Raises:
+            ValueError se UF nao mapeada
+        """
+        uf = (uf_origem or '').upper().strip()
+        if not uf:
+            raise ValueError("UF de origem obrigatoria para emissao de CTe")
+
+        filial = UF_FILIAL_MAP.get(uf)
+        if not filial:
+            ufs_validas = ', '.join(sorted(UF_FILIAL_MAP.keys()))
+            raise ValueError(
+                f"CTe com origem {uf} ainda nao mapeado. "
+                f"UFs disponiveis: {ufs_validas}. "
+                f"Contate suporte para configurar nova filial."
+            )
+        return filial
+
+    @staticmethod
     def preparar_emissao(nf_id, placa, cnpj_tomador, frete_valor,
-                         data_vencimento, medidas_motos, usuario):
+                         data_vencimento, medidas_motos, usuario,
+                         uf_origem=None):
         """Valida inputs, cria CarviaEmissaoCte, enfileira job RQ.
 
         Args:
@@ -46,6 +81,7 @@ class SswEmissaoService:
             data_vencimento: Data vencimento fatura (date ou None)
             medidas_motos: Lista de [{modelo_id, qtd}] ou None
             usuario: Username do usuario autenticado
+            uf_origem: UF de origem (SP, RJ). Se None, usa uf_emitente da NF.
 
         Returns:
             dict com {emissao_id, job_id, status}
@@ -66,6 +102,10 @@ class SswEmissaoService:
                 f"NF {nf_id} nao possui chave de acesso valida "
                 f"(tem {len(nf.chave_acesso_nf or '')} digitos, precisa 44)"
             )
+
+        # 1b. Resolver UF → filial SSW
+        uf = (uf_origem or nf.uf_emitente or '').upper().strip()
+        filial_ssw = SswEmissaoService.resolver_filial(uf)
 
         # 2. Verificar mutex (emissao em andamento para esta NF)
         em_andamento = CarviaEmissaoCte.query.filter(
@@ -95,6 +135,8 @@ class SswEmissaoService:
             nf_id=nf_id,
             status='PENDENTE',
             placa=placa or 'ARMAZEM',
+            uf_origem=uf,
+            filial_ssw=filial_ssw,
             cnpj_tomador=cnpj_limpo,
             frete_valor=frete_valor,
             data_vencimento=data_vencimento if hasattr(data_vencimento, 'strftime') else None,
@@ -130,7 +172,8 @@ class SswEmissaoService:
 
     @staticmethod
     def preparar_emissao_lote(nf_ids, placa, cnpj_tomador, frete_valor,
-                              data_vencimento, medidas_motos, usuario):
+                              data_vencimento, medidas_motos, usuario,
+                              uf_origem=None):
         """Cria N emissoes individuais na fila RQ (uma por NF).
 
         Returns:
@@ -147,6 +190,7 @@ class SswEmissaoService:
                     data_vencimento=data_vencimento,
                     medidas_motos=medidas_motos,
                     usuario=usuario,
+                    uf_origem=uf_origem,
                 )
                 resultado['nf_id'] = nf_id
                 resultados.append(resultado)

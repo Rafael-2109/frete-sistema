@@ -192,6 +192,8 @@ class CarviaEmissaoCte(db.Model):
     job_id = db.Column(db.String(100))
     ctrc_numero = db.Column(db.String(20))
     placa = db.Column(db.String(20), nullable=False, default='ARMAZEM')
+    uf_origem = db.Column(db.String(2))
+    filial_ssw = db.Column(db.String(10))
     cnpj_tomador = db.Column(db.String(20))
     frete_valor = db.Column(db.Numeric(15, 2))
     data_vencimento = db.Column(db.Date)

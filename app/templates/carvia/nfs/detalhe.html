@@ -585,6 +585,7 @@ if (cteValorModalInput && btnCriarCte) {
         statusEtapa.textContent = '';
 
         const payload = {
+            uf_origem: form.uf_origem.value || null,
             placa: form.placa.value || 'ARMAZEM',
             cnpj_tomador: form.cnpj_tomador.value || null,
             frete_valor: parseFloat(form.frete_valor.value) || 0,
@@ -678,6 +679,23 @@ if (cteValorModalInput && btnCriarCte) {
                     Emissao automatica de CTe no SSW para NF {{ nf.numero_nf }}.
                     Chave: <code>{{ nf.chave_acesso_nf[:20] }}...{{ nf.chave_acesso_nf[-8:] }}</code>
                 </p>
+
+                <div class="mb-3">
+                    <label class="form-label">UF Origem <span class="text-danger">*</span></label>
+                    <select name="uf_origem" class="form-select" id="ufOrigemCte" required>
+                        <option value="">Selecione...</option>
+                        <option value="SP" {% if nf.uf_emitente == 'SP' %}selected{% endif %}>SP — Filial CAR</option>
+                        <option value="RJ" {% if nf.uf_emitente == 'RJ' %}selected{% endif %}>RJ — Filial GIG</option>
+                    </select>
+                    <div class="form-text">
+                        Define a filial SSW para emissao.
+                        {% if nf.uf_emitente and nf.uf_emitente not in ('SP', 'RJ') %}
+                        <span class="text-danger fw-bold">
+                            UF emitente {{ nf.uf_emitente }} nao mapeada — contate suporte.
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
 
                 <div class="mb-3">
                     <label class="form-label">Placa Coleta</label>

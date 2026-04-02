@@ -1081,6 +1081,7 @@ def register_api_routes(bp):
             cnpj_tomador: str (14 digitos, para fatura 437)
             frete_valor: float (R$ frete peso)
             data_vencimento: str (YYYY-MM-DD)
+            uf_origem: str (UF 2 letras: SP, RJ. Auto-detecta da NF se omitido)
             medidas: list[{modelo_id: int, qtd: int}]
 
         Returns 202:
@@ -1124,6 +1125,7 @@ def register_api_routes(bp):
                 data_vencimento=data_vencimento,
                 medidas_motos=medidas,
                 usuario=current_user.email,
+                uf_origem=data.get('uf_origem'),
             )
             resultado['status_url'] = (
                 f'/carvia/api/emissao-cte/{resultado["emissao_id"]}/status'
@@ -1216,6 +1218,7 @@ def register_api_routes(bp):
                 data_vencimento=data_vencimento,
                 medidas_motos=data.get('medidas'),
                 usuario=current_user.email,
+                uf_origem=data.get('uf_origem'),
             )
             return jsonify({'emissoes': resultados}), 202
 
