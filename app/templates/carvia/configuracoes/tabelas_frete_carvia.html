@@ -4,9 +4,23 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-table"></i> Tabelas de Frete CarVia</h2>
-        <button type="button" class="btn btn-primary btn-sm" onclick="abrirNovaTabela()">
-            <i class="fas fa-plus"></i> Nova Tabela
-        </button>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.exportar_tabelas_frete') }}"
+               class="btn btn-outline-success btn-sm" title="Exportar Excel">
+                <i class="fas fa-file-excel"></i> Exportar
+            </a>
+            <a href="{{ url_for('carvia.baixar_template_importacao', entity='tabelas-frete') }}"
+               class="btn btn-outline-secondary btn-sm" title="Baixar planilha modelo">
+                <i class="fas fa-download"></i> Template
+            </a>
+            <button type="button" class="btn btn-outline-warning btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#modalImportarTabelas">
+                <i class="fas fa-file-upload"></i> Importar
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="abrirNovaTabela()">
+                <i class="fas fa-plus"></i> Nova Tabela
+            </button>
+        </div>
     </div>
 
     {% set carvia_active = 'configuracoes' %}
@@ -695,4 +709,54 @@ function desativarCombinacao(nome, origem, destino, tipo) {
     .catch(function(err) { alert(err.message); });
 }
 </script>
+
+{# Modal Importar Tabelas de Frete #}
+<div class="modal fade" id="modalImportarTabelas" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST"
+                  action="{{ url_for('carvia.importar_tabelas_frete') }}"
+                  enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-upload"></i> Importar Tabelas de Frete
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        Planilha <strong>.xlsx</strong> com 2 abas:
+                        <br><strong>Aba 1 — Tabelas Frete</strong>: colunas obrigatorias
+                        <strong>UF Origem</strong>, <strong>UF Destino</strong>,
+                        <strong>Nome Tabela</strong>, <strong>Tipo Carga</strong> (DIRETA/FRACIONADA),
+                        <strong>Modalidade</strong>.
+                        Opcionais: Grupo Cliente, campos de pricing, ICMS Incluso (Sim/Nao), Ativo.
+                        <br><strong>Aba 2 — Precos Moto</strong> (opcional): colunas
+                        <strong>Nome Tabela</strong>, <strong>UF Origem</strong>,
+                        <strong>UF Destino</strong>, <strong>Tipo Carga</strong>,
+                        <strong>Modalidade</strong>, <strong>Categoria Moto</strong>,
+                        <strong>Valor Unitario</strong>.
+                        <br>Linhas existentes serao atualizadas (UPSERT).
+                        <a href="{{ url_for('carvia.baixar_template_importacao', entity='tabelas-frete') }}"
+                           class="alert-link">Baixar template</a>.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Arquivo Excel (.xlsx) *</label>
+                        <input type="file" class="form-control" name="arquivo"
+                               accept=".xlsx" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="fas fa-upload"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}

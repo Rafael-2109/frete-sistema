@@ -4,9 +4,23 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-motorcycle"></i> Modelos de Moto</h2>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoModelo">
-            <i class="fas fa-plus"></i> Novo Modelo
-        </button>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.exportar_modelos_moto') }}"
+               class="btn btn-outline-success btn-sm" title="Exportar Excel">
+                <i class="fas fa-file-excel"></i> Exportar
+            </a>
+            <a href="{{ url_for('carvia.baixar_template_importacao', entity='modelos-moto') }}"
+               class="btn btn-outline-secondary btn-sm" title="Baixar planilha modelo">
+                <i class="fas fa-download"></i> Template
+            </a>
+            <button type="button" class="btn btn-outline-warning btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#modalImportarModelosMoto">
+                <i class="fas fa-file-upload"></i> Importar
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoModelo">
+                <i class="fas fa-plus"></i> Novo Modelo
+            </button>
+        </div>
     </div>
 
     {% set carvia_active = 'configuracoes' %}
@@ -487,4 +501,47 @@ function testarRegex(btn) {
     });
 }
 </script>
+
+{# Modal Importar Modelos Moto #}
+<div class="modal fade" id="modalImportarModelosMoto" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST"
+                  action="{{ url_for('carvia.importar_modelos_moto') }}"
+                  enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-upload"></i> Importar Modelos de Moto
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        Planilha <strong>.xlsx</strong> com colunas obrigatorias:
+                        <strong>Nome</strong>, <strong>Comprimento (cm)</strong>,
+                        <strong>Largura (cm)</strong>, <strong>Altura (cm)</strong>.
+                        Opcionais: Categoria, Regex Pattern, Ativo.
+                        Linhas com mesmo Nome serao atualizadas (UPSERT).
+                        <a href="{{ url_for('carvia.baixar_template_importacao', entity='modelos-moto') }}"
+                           class="alert-link">Baixar template</a>.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Arquivo Excel (.xlsx) *</label>
+                        <input type="file" class="form-control" name="arquivo"
+                               accept=".xlsx" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="fas fa-upload"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}

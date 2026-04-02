@@ -17,6 +17,9 @@ from app.carvia.models import (
     CarviaCustoEntrega, CarviaFaturaCliente,
     CarviaFaturaTransportadora, CarviaDespesa,
     CarviaReceita,
+    CarviaModeloMoto, CarviaCategoriaMoto,
+    CarviaCidadeAtendida, CarviaTabelaFrete,
+    CarviaGrupoCliente, CarviaPrecoCategoriaMoto,
 )
 from app.utils.timezone import agora_utc_naive
 
@@ -869,3 +872,202 @@ def register_exportacao_routes(bp):
         return _gerar_excel(df, 'Receitas', 'receitas')
 
     # Sessoes Cotacao: REMOVIDO (feature obsoleta, 22/03/2026)
+
+    # =====================================================================
+    # 10. Modelos de Moto
+    # =====================================================================
+    @bp.route('/api/exportar/modelos-moto')
+    @login_required
+    def exportar_modelos_moto():
+        """Exporta modelos de moto para Excel"""
+        if _check_access():
+            return redirect(url_for('main.dashboard'))
+
+        items = CarviaModeloMoto.query.order_by(CarviaModeloMoto.nome.asc()).all()
+
+        if not items:
+            flash('Nenhum dado para exportar.', 'warning')
+            return redirect(url_for('carvia.listar_modelos_moto'))
+
+        data = []
+        for m in items:
+            comp = float(m.comprimento or 0)
+            larg = float(m.largura or 0)
+            alt = float(m.altura or 0)
+            volume_m3 = comp * larg * alt / 1_000_000
+            data.append({
+                'Nome': m.nome or '',
+                'Categoria': m.categoria.nome if m.categoria else '',
+                'Comprimento (cm)': comp,
+                'Largura (cm)': larg,
+                'Altura (cm)': alt,
+                'Cubagem (m3)': round(volume_m3, 4),
+                'Peso Cubado (kg)': round(volume_m3 * 300, 3),
+                'Regex Pattern': m.regex_pattern or '',
+                'Ativo': _fmt_bool(m.ativo),
+                'Criado Em': _fmt_datetime(m.criado_em),
+                'Criado Por': m.criado_por or '',
+            })
+
+        df = pd.DataFrame(data)
+        return _gerar_excel(df, 'Modelos Moto', 'modelos_moto')
+
+    # =====================================================================
+    # 11. Cidades Atendidas
+    # =====================================================================
+    @bp.route('/api/exportar/cidades-atendidas')
+    @login_required
+    def exportar_cidades_atendidas():
+        """Exporta cidades atendidas para Excel"""
+        if _check_access():
+            return redirect(url_for('main.dashboard'))
+
+        items = CarviaCidadeAtendida.query.order_by(
+            CarviaCidadeAtendida.uf_destino.asc(),
+            CarviaCidadeAtendida.nome_cidade.asc(),
+        ).all()
+
+        if not items:
+            flash('Nenhum dado para exportar.', 'warning')
+            return redirect(url_for('carvia.listar_cidades_carvia'))
+
+        data = []
+        for c in items:
+            data.append({
+                'Codigo IBGE': c.codigo_ibge or '',
+                'Nome Cidade': c.nome_cidade or '',
+                'UF Origem': c.uf_origem or '',
+                'UF Destino': c.uf_destino or '',
+                'Nome Tabela': c.nome_tabela or '',
+                'Lead Time (dias)': c.lead_time if c.lead_time is not None else '',
+                'Ativo': _fmt_bool(c.ativo),
+                'Criado Em': _fmt_datetime(c.criado_em),
+                'Criado Por': c.criado_por or '',
+            })
+
+        df = pd.DataFrame(data)
+        return _gerar_excel(df, 'Cidades Atendidas', 'cidades_atendidas')
+
+    # =====================================================================
+    # 12. Tabelas de Frete
+    # =====================================================================
+    @bp.route('/api/exportar/tabelas-frete')
+    @login_required
+    def exportar_tabelas_frete():
+        """Exporta tabelas de frete para Excel"""
+        if _check_access():
+            return redirect(url_for('main.dashboard'))
+
+        query = CarviaTabelaFrete.query.order_by(
+            CarviaTabelaFrete.nome_tabela.asc(),
+            CarviaTabelaFrete.uf_origem.asc(),
+            CarviaTabelaFrete.uf_destino.asc(),
+            CarviaTabelaFrete.modalidade.asc(),
+        )
+
+        # Filtro opcional: so ativos
+        ativo_filtro = request.args.get('ativo', '')
+        if ativo_filtro == '1':
+            query = query.filter(CarviaTabelaFrete.ativo.is_(True))
+
+        items = query.all()
+
+        if not items:
+            flash('Nenhum dado para exportar.', 'warning')
+            return redirect(url_for('carvia.listar_tabelas_carvia'))
+
+        # Pre-cache grupos
+        grupos = {g.id: g.nome for g in CarviaGrupoCliente.query.all()}
+
+        data = []
+        for t in items:
+            data.append({
+                'UF Origem': t.uf_origem or '',
+                'UF Destino': t.uf_destino or '',
+                'Nome Tabela': t.nome_tabela or '',
+                'Tipo Carga': t.tipo_carga or '',
+                'Modalidade': t.modalidade or '',
+                'Grupo Cliente': grupos.get(t.grupo_cliente_id, '') if t.grupo_cliente_id else '',
+                'R$/kg': float(t.valor_kg) if t.valor_kg is not None else '',
+                'Frete Min Peso': float(t.frete_minimo_peso) if t.frete_minimo_peso is not None else '',
+                '% Valor': float(t.percentual_valor) if t.percentual_valor is not None else '',
+                'Frete Min Valor': float(t.frete_minimo_valor) if t.frete_minimo_valor is not None else '',
+                '% GRIS': float(t.percentual_gris) if t.percentual_gris is not None else '',
+                'GRIS Min': float(t.gris_minimo) if t.gris_minimo is not None else '',
+                '% ADV': float(t.percentual_adv) if t.percentual_adv is not None else '',
+                'ADV Min': float(t.adv_minimo) if t.adv_minimo is not None else '',
+                '% RCA': float(t.percentual_rca) if t.percentual_rca is not None else '',
+                'Pedagio/100kg': float(t.pedagio_por_100kg) if t.pedagio_por_100kg is not None else '',
+                'Despacho': float(t.valor_despacho) if t.valor_despacho is not None else '',
+                'CTe': float(t.valor_cte) if t.valor_cte is not None else '',
+                'TAS': float(t.valor_tas) if t.valor_tas is not None else '',
+                'ICMS Incluso': _fmt_bool(t.icms_incluso),
+                'ICMS Proprio %': float(t.icms_proprio) if t.icms_proprio is not None else '',
+                'Ativo': _fmt_bool(t.ativo),
+                'Criado Em': _fmt_datetime(t.criado_em),
+                'Criado Por': t.criado_por or '',
+            })
+
+        df = pd.DataFrame(data)
+
+        # ----- Sheet 2: Precos por Categoria de Moto -----
+        precos = CarviaPrecoCategoriaMoto.query.join(
+            CarviaTabelaFrete,
+            CarviaPrecoCategoriaMoto.tabela_frete_id == CarviaTabelaFrete.id,
+        ).join(
+            CarviaCategoriaMoto,
+            CarviaPrecoCategoriaMoto.categoria_moto_id == CarviaCategoriaMoto.id,
+        ).order_by(
+            CarviaTabelaFrete.nome_tabela.asc(),
+            CarviaCategoriaMoto.ordem.asc(),
+        ).all()
+
+        precos_data = []
+        # Pre-cache tabelas por id para resolver campos
+        tabelas_by_id = {t.id: t for t in items}
+        cats_by_id = {
+            c.id: c.nome
+            for c in CarviaCategoriaMoto.query.all()
+        }
+
+        for p in precos:
+            tab = tabelas_by_id.get(p.tabela_frete_id)
+            if not tab:
+                # Tabela filtrada (ex: inativa) — buscar direto
+                tab = CarviaTabelaFrete.query.get(p.tabela_frete_id)
+            if not tab:
+                continue
+            precos_data.append({
+                'Nome Tabela': tab.nome_tabela or '',
+                'UF Origem': tab.uf_origem or '',
+                'UF Destino': tab.uf_destino or '',
+                'Tipo Carga': tab.tipo_carga or '',
+                'Modalidade': tab.modalidade or '',
+                'Grupo Cliente': grupos.get(tab.grupo_cliente_id, '') if tab.grupo_cliente_id else '',
+                'Categoria Moto': cats_by_id.get(p.categoria_moto_id, ''),
+                'Valor Unitario': float(p.valor_unitario) if p.valor_unitario is not None else '',
+                'Ativo': _fmt_bool(p.ativo),
+            })
+
+        df_precos = pd.DataFrame(precos_data)
+
+        # Gerar Excel com 2 sheets
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Tabelas Frete')
+            _ajustar_largura_colunas(df, writer.sheets['Tabelas Frete'])
+
+            if not df_precos.empty:
+                df_precos.to_excel(writer, index=False, sheet_name='Precos Moto')
+                _ajustar_largura_colunas(df_precos, writer.sheets['Precos Moto'])
+
+        output.seek(0)
+        timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M')
+        filename = f'carvia_tabelas_frete_{timestamp}.xlsx'
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename,
+        )

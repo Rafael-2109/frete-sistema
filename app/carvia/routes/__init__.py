@@ -20,6 +20,7 @@ def register_routes(bp):
     from app.carvia.routes.cte_complementar_routes import register_cte_complementar_routes
     from app.carvia.routes.custo_entrega_routes import register_custo_entrega_routes
     from app.carvia.routes.exportacao_routes import register_exportacao_routes
+    from app.carvia.routes.importacao_config_routes import register_importacao_config_routes
     from app.carvia.routes.tabela_carvia_routes import register_tabela_carvia_routes
     from app.carvia.routes.admin_routes import register_admin_routes
     from app.carvia.routes.cliente_routes import register_cliente_routes
@@ -43,6 +44,7 @@ def register_routes(bp):
     register_cte_complementar_routes(bp)
     register_custo_entrega_routes(bp)
     register_exportacao_routes(bp)
+    register_importacao_config_routes(bp)
     register_tabela_carvia_routes(bp)
     register_admin_routes(bp)
     register_cliente_routes(bp)
