@@ -581,7 +581,11 @@ def _stream_chat_response(
 
                 elif event.type == 'error':
                     response_state['error_message'] = event.content
-                    event_queue.put(_sse_event('error', {'message': event.content}))
+                    error_data = {'message': event.content}
+                    # Propagar error_type para frontend (auto-retry em process_error)
+                    if event.metadata.get('error_type'):
+                        error_data['error_type'] = event.metadata['error_type']
+                    event_queue.put(_sse_event('error', error_data))
 
                 elif event.type == 'interrupt_ack':
                     # FASE 5: Interrupt acknowledgment do ClaudeSDKClient
@@ -1195,11 +1199,25 @@ def _save_messages_to_db(
                 )
 
             # Atualiza sdk_session_id se não expirou
+            _sdk_id_valid = False
             if sdk_session_id and not session_expired:
-                session.set_sdk_session_id(sdk_session_id)
+                # Defense-in-depth: só salvar se for UUID válido
+                try:
+                    import uuid as _uuid_validate
+                    _uuid_validate.UUID(sdk_session_id)
+                    session.set_sdk_session_id(sdk_session_id)
+                    _sdk_id_valid = True
+                except (ValueError, AttributeError):
+                    logger.warning(
+                        f"[AGENTE] sdk_session_id inválido (não UUID), "
+                        f"descartado: {sdk_session_id[:20]}..."
+                    )
 
                 # Backup do transcript JSONL do disco para o DB.
                 # Permite restaurar o JSONL caso o worker Render recicle.
+                # Só faz backup se SDK session ID era UUID válido.
+                if not _sdk_id_valid:
+                    sdk_session_id = None
                 try:
                     from .sdk.session_persistence import backup_session_transcript
                     transcript_content = backup_session_transcript(sdk_session_id)

@@ -1367,7 +1367,16 @@ def process_teams_task_async(
                             tools_used=tools_used if tools_used else None,
                         )
                     if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
-                        session.set_sdk_session_id(new_sdk_session_id)
+                        # Defense-in-depth: só salvar se for UUID válido
+                        try:
+                            import uuid as _uuid
+                            _uuid.UUID(new_sdk_session_id)
+                            session.set_sdk_session_id(new_sdk_session_id)
+                        except (ValueError, AttributeError):
+                            logger.warning(
+                                f"[TEAMS-ASYNC] sdk_session_id inválido (não UUID), "
+                                f"descartado: {new_sdk_session_id[:20]}..."
+                            )
 
                     # GAP 2: Custo — SDK prioritário, fallback cálculo local
                     from app.agente.routes import _calculate_cost

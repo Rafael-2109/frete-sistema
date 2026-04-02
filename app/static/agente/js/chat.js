@@ -50,6 +50,11 @@ const TOKEN_BUDGET = 200000;
 let currentEventSource = null;
 let isGenerating = false;
 
+// Auto-retry: revive sessão após error_recovery (exit code 1 por inatividade)
+let _lastUserMessage = null;
+let _autoRetryCount = 0;
+const _MAX_AUTO_RETRIES = 1;
+
 // ============================================
 // ELEMENTOS DOM
 // ============================================
@@ -764,6 +769,8 @@ async function sendMessage(event) {
 
     // Adiciona mensagem do usuário
     addMessage(message, 'user');
+    _lastUserMessage = message;  // Auto-retry: guarda para possível retry
+    _autoRetryCount = 0;         // Reset retry counter para cada nova mensagem
     messageInput.value = '';
     sendBtn.disabled = true;
 
@@ -1217,13 +1224,33 @@ function processSSEEvent(eventType, data, state) {
                 break;
             }
 
-            case 'error':
+            case 'error': {
                 hideTyping();
                 hideThinkingPanel();
 
                 // FEAT-030: Finaliza todos os items pendentes (timeline e todos)
                 finalizePendingTimelineItems('error');
                 finalizePendingTodos(false);  // Não marca como completed, apenas para o spinner
+
+                // Auto-retry: se process_error (exit code 1 por inatividade) e temos
+                // a última mensagem, retry transparente em vez de mostrar erro.
+                const isProcessError = data.error_type === 'process_error';
+                if (isProcessError && _lastUserMessage && _autoRetryCount < _MAX_AUTO_RETRIES) {
+                    _autoRetryCount++;
+                    console.log(`[SSE] Process error detected, scheduling auto-retry #${_autoRetryCount}`);
+                    addMessage('🔄 Reconectando sessão...', 'assistant');
+                    setTimeout(() => {
+                        // Remove a mensagem "Reconectando..." antes de reenviar
+                        const msgs = document.querySelectorAll('.message.assistant');
+                        const lastMsg = msgs[msgs.length - 1];
+                        if (lastMsg && lastMsg.textContent.includes('Reconectando')) {
+                            lastMsg.remove();
+                        }
+                        messageInput.value = _lastUserMessage;
+                        sendMessage(null);
+                    }, 2000);
+                    break;
+                }
 
                 // FEAT-030: Trata sessão expirada
                 if (data.session_expired) {
@@ -1233,6 +1260,7 @@ function processSSEEvent(eventType, data, state) {
                     addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
                 }
                 break;
+            }
 
             case 'memory_saved':
                 // FEAT-031: Notificação sutil quando memória é salva

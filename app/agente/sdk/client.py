@@ -1104,6 +1104,7 @@ class _StreamParseState:
     last_message_id: Optional[str] = None
     done_emitted: bool = False
     result_session_id: Optional[str] = None
+    got_result_message: bool = False  # True quando ResultMessage/SystemMessage setou session_id real
 
     # Diagnóstico de tempo
     stream_start_time: float = field(default_factory=time.time)
@@ -1579,6 +1580,7 @@ Nunca invente informações."""
             sdk_sid = message.data.get('session_id') if hasattr(message, 'data') else None
             if sdk_sid:
                 state.result_session_id = sdk_sid
+                state.got_result_message = True
                 logger.info(f"[AGENT_SDK] SDK session_id from init: {sdk_sid[:12]}...")
             return events
 
@@ -1834,6 +1836,7 @@ Nunca invente informações."""
         if isinstance(message, ResultMessage):
             # CRÍTICO: Capturar session_id REAL do SDK para resume
             state.result_session_id = message.session_id
+            state.got_result_message = True
 
             # SDK 0.1.46+: stop_reason indica motivo do encerramento
             stop_reason = getattr(message, 'stop_reason', '') or ''
@@ -3107,6 +3110,18 @@ Nunca invente informações."""
         pool_key = our_session_id or ''
         existing = get_pooled_client(pool_key)
         resume_id = sdk_session_id
+        # Validar que resume_id é UUID válido — dados envenenados no DB
+        # (ex: "teams_19:xxx") causam exit code 1 permanente se não filtrados.
+        if resume_id:
+            try:
+                import uuid as _uuid_check
+                _uuid_check.UUID(resume_id)
+            except (ValueError, AttributeError):
+                logger.warning(
+                    f"[AGENT_SDK_PERSISTENT] sdk_session_id inválido (não UUID), "
+                    f"ignorando resume: {resume_id[:20]}..."
+                )
+                resume_id = None
         if not existing and resume_id:
             options = self._with_resume(options, resume_id)
             logger.info(f"[AGENT_SDK_PERSISTENT] Resuming session: {resume_id[:12]}...")
@@ -3142,7 +3157,22 @@ Nunca invente informações."""
                         f"retentando sem resume | session={pool_key[:8]}..."
                     )
                     from dataclasses import replace as _dc_replace
-                    options = _dc_replace(options, resume=None, fork_session=False)
+                    options = _dc_replace(options, resume=None, fork_session=False, session_id=None)
+                    # Deletar JSONLs stale para evitar que CLI ache arquivo corrompido
+                    try:
+                        from .session_persistence import _get_session_path
+                        import os as _os
+                        for _stale_id in [pool_key, resume_id]:
+                            if _stale_id:
+                                _stale_path = _get_session_path(_stale_id)
+                                if _os.path.exists(_stale_path):
+                                    _os.remove(_stale_path)
+                                    logger.info(
+                                        f"[AGENT_SDK_PERSISTENT] Stale JSONL deleted: "
+                                        f"{_stale_id[:8]}..."
+                                    )
+                    except Exception:
+                        pass  # best-effort cleanup
                     pooled = await get_or_create_client(
                         session_id=pool_key,
                         options=options,
@@ -3244,7 +3274,7 @@ Nunca invente informações."""
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
                         'total_cost_usd': 0,
-                        'session_id': state.result_session_id,
+                        'session_id': state.result_session_id if state.got_result_message else None,
                         'tool_calls': len(state.tool_calls),
                         'self_corrected': correction is not None if correction else False,
                     }
@@ -3270,11 +3300,24 @@ Nunca invente informações."""
                     type='done',
                     content={'text': state.full_text, 'input_tokens': state.input_tokens,
                              'output_tokens': state.output_tokens, 'total_cost_usd': 0,
-                             'session_id': state.result_session_id,
+                             'session_id': state.result_session_id if state.got_result_message else None,
                              'tool_calls': len(state.tool_calls), 'error_recovery': True},
                     metadata={'error_type': 'process_error'}
                 )
             # Nota: streaming_done_event é None no path persistente (DC-5)
+            # Evictar client morto do pool para que próximo request crie um novo
+            try:
+                from .client_pool import _registry, _registry_lock
+                with _registry_lock:
+                    evicted = _registry.pop(pool_key, None)
+                if evicted:
+                    evicted.connected = False
+                    logger.info(
+                        f"[AGENT_SDK_PERSISTENT] Dead client evicted after ProcessError: "
+                        f"{pool_key[:8]}..."
+                    )
+            except Exception:
+                pass  # best-effort pool cleanup
 
         except CLINotFoundError as e:
             # CLINotFoundError é subclasse de CLIConnectionError — DEVE vir antes
@@ -3291,7 +3334,7 @@ Nunca invente informações."""
                     type='done',
                     content={'text': state.full_text, 'input_tokens': state.input_tokens,
                              'output_tokens': state.output_tokens, 'total_cost_usd': 0,
-                             'session_id': state.result_session_id,
+                             'session_id': state.result_session_id if state.got_result_message else None,
                              'error_recovery': True},
                     metadata={'error_type': 'cli_not_found'}
                 )
@@ -3348,7 +3391,7 @@ Nunca invente informações."""
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
                         'total_cost_usd': 0,
-                        'session_id': state.result_session_id,
+                        'session_id': state.result_session_id if state.got_result_message else None,
                         'tool_calls': len(state.tool_calls),
                         'error_recovery': True,
                     },
@@ -3370,7 +3413,7 @@ Nunca invente informações."""
                     type='done',
                     content={'text': state.full_text, 'input_tokens': state.input_tokens,
                              'output_tokens': state.output_tokens, 'total_cost_usd': 0,
-                             'session_id': state.result_session_id,
+                             'session_id': state.result_session_id if state.got_result_message else None,
                              'error_recovery': True},
                     metadata={'error_type': 'json_decode_error'}
                 )
@@ -3416,7 +3459,7 @@ Nunca invente informações."""
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
                         'total_cost_usd': 0,
-                        'session_id': state.result_session_id,
+                        'session_id': state.result_session_id if state.got_result_message else None,
                         'tool_calls': len(state.tool_calls),
                         'error_recovery': True,
                     },
@@ -3458,7 +3501,7 @@ Nunca invente informações."""
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
                         'total_cost_usd': 0,
-                        'session_id': state.result_session_id,
+                        'session_id': state.result_session_id if state.got_result_message else None,
                         'tool_calls': len(state.tool_calls),
                         'error_recovery': True,
                     },
@@ -3575,7 +3618,7 @@ Nunca invente informações."""
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
                         'total_cost_usd': 0,
-                        'session_id': state.result_session_id,
+                        'session_id': state.result_session_id if state.got_result_message else None,
                         'tool_calls': len(state.tool_calls),
                         'self_corrected': correction is not None if correction else False,
                     }
@@ -3605,7 +3648,7 @@ Nunca invente informações."""
                     type='done',
                     content={'text': state.full_text, 'input_tokens': state.input_tokens,
                              'output_tokens': state.output_tokens, 'total_cost_usd': 0,
-                             'session_id': state.result_session_id,
+                             'session_id': state.result_session_id if state.got_result_message else None,
                              'tool_calls': len(state.tool_calls), 'error_recovery': True},
                     metadata={'error_type': 'process_error'}
                 )
@@ -3629,7 +3672,7 @@ Nunca invente informações."""
                     type='done',
                     content={'text': state.full_text, 'input_tokens': state.input_tokens,
                              'output_tokens': state.output_tokens, 'total_cost_usd': 0,
-                             'session_id': state.result_session_id,
+                             'session_id': state.result_session_id if state.got_result_message else None,
                              'error_recovery': True},
                     metadata={'error_type': 'cli_not_found'}
                 )
@@ -3670,7 +3713,7 @@ Nunca invente informações."""
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
                         'total_cost_usd': 0,
-                        'session_id': state.result_session_id,
+                        'session_id': state.result_session_id if state.got_result_message else None,
                         'tool_calls': len(state.tool_calls),
                         'error_recovery': True,
                     },
@@ -3693,7 +3736,7 @@ Nunca invente informações."""
                     type='done',
                     content={'text': state.full_text, 'input_tokens': state.input_tokens,
                              'output_tokens': state.output_tokens, 'total_cost_usd': 0,
-                             'session_id': state.result_session_id,
+                             'session_id': state.result_session_id if state.got_result_message else None,
                              'error_recovery': True},
                     metadata={'error_type': 'json_decode_error'}
                 )
@@ -3745,7 +3788,7 @@ Nunca invente informações."""
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
                         'total_cost_usd': 0,
-                        'session_id': state.result_session_id,
+                        'session_id': state.result_session_id if state.got_result_message else None,
                         'tool_calls': len(state.tool_calls),
                         'error_recovery': True,
                     },
@@ -3790,7 +3833,7 @@ Nunca invente informações."""
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
                         'total_cost_usd': 0,
-                        'session_id': state.result_session_id,
+                        'session_id': state.result_session_id if state.got_result_message else None,
                         'tool_calls': len(state.tool_calls),
                         'error_recovery': True,
                     },
