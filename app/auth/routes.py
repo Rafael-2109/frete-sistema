@@ -147,6 +147,7 @@ def aprovar_usuario(user_id):
         usuario.sistema_logistica = form.sistema_logistica.data  # ✅ NOVO
         usuario.sistema_motochefe = form.sistema_motochefe.data  # ✅ NOVO
         usuario.sistema_carvia = form.sistema_carvia.data
+        usuario.acesso_comissao_carvia = form.acesso_comissao_carvia.data
 
         db.session.commit()
         flash(f'Usuário {usuario.nome} aprovado com sucesso!', 'success')
@@ -157,6 +158,7 @@ def aprovar_usuario(user_id):
     form.sistema_logistica.data = usuario.sistema_logistica  # ✅ NOVO
     form.sistema_motochefe.data = usuario.sistema_motochefe  # ✅ NOVO
     form.sistema_carvia.data = usuario.sistema_carvia
+    form.acesso_comissao_carvia.data = usuario.acesso_comissao_carvia
 
     return render_template('auth/aprovar_usuario.html', form=form, usuario=usuario)
 
@@ -222,6 +224,7 @@ def editar_usuario(user_id):
         usuario.sistema_logistica = form.sistema_logistica.data  # ✅ NOVO
         usuario.sistema_motochefe = form.sistema_motochefe.data  # ✅ NOVO
         usuario.sistema_carvia = form.sistema_carvia.data
+        usuario.acesso_comissao_carvia = form.acesso_comissao_carvia.data
 
         db.session.commit()
         flash(f'Usuário {usuario.nome} atualizado com sucesso!', 'success')
@@ -240,6 +243,7 @@ def editar_usuario(user_id):
     form.sistema_logistica.data = usuario.sistema_logistica  # ✅ NOVO
     form.sistema_motochefe.data = usuario.sistema_motochefe  # ✅ NOVO
     form.sistema_carvia.data = usuario.sistema_carvia
+    form.acesso_comissao_carvia.data = usuario.acesso_comissao_carvia
 
     return render_template('auth/editar_usuario.html', form=form, usuario=usuario)
 

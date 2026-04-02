@@ -37,6 +37,7 @@ class AprovarUsuarioForm(FlaskForm):
     sistema_logistica = BooleanField('Acesso ao Sistema de Logística')
     sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
     sistema_carvia = BooleanField('Acesso ao Sistema CarVia')
+    acesso_comissao_carvia = BooleanField('Acesso a Comissoes CarVia')
     observacoes = TextAreaField('Observações', validators=[Optional()])
     submit = SubmitField('Aprovar Usuário')
 
@@ -62,6 +63,7 @@ class EditarUsuarioForm(FlaskForm):
     sistema_logistica = BooleanField('Acesso ao Sistema de Logística')
     sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
     sistema_carvia = BooleanField('Acesso ao Sistema CarVia')
+    acesso_comissao_carvia = BooleanField('Acesso a Comissoes CarVia')
     status = SelectField('Status', choices=[
         ('ativo', 'Ativo'),
         ('bloqueado', 'Bloqueado'),

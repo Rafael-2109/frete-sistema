@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-percentage"></i> {{ fechamento.numero_fechamento }}
+                <span class="badge carvia-badge-{{ fechamento.status|lower }}">{{ fechamento.status }}</span>
+            </h2>
+            <p class="text-muted mb-0">
+                Criado em {{ fechamento.criado_em|formatar_data_hora_brasil if fechamento.criado_em else '-' }}
+                por {{ fechamento.criado_por or '-' }}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.listar_comissoes') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'comissoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="row g-4">
+        <!-- Dados do Fechamento -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados do Fechamento</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Vendedor</small>
+                            <strong>{{ fechamento.vendedor_nome }}</strong>
+                            {% if fechamento.vendedor_email %}
+                            <br><small class="text-muted">{{ fechamento.vendedor_email }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Percentual</small>
+                            <h4 class="mb-0">{{ "%.2f"|format(fechamento.percentual * 100) }}%</h4>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Periodo</small>
+                            <strong>{{ fechamento.data_inicio.strftime('%d/%m/%Y') }}</strong>
+                            a
+                            <strong>{{ fechamento.data_fim.strftime('%d/%m/%Y') }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Qtd CTes</small>
+                            <strong>{{ fechamento.qtd_ctes }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Total Bruto</small>
+                            <strong>{{ fechamento.total_bruto|valor_br }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Total Comissao</small>
+                            <h4 class="mb-0 text-success">{{ fechamento.total_comissao|valor_br }}</h4>
+                        </div>
+                    </div>
+                    {% if fechamento.observacoes %}
+                    <hr>
+                    <small class="text-muted d-block">Observacoes</small>
+                    <p class="mb-0">{{ fechamento.observacoes }}</p>
+                    {% endif %}
+                    {% if fechamento.status == 'PAGO' %}
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Data Pagamento</small>
+                            <strong>{{ fechamento.data_pagamento.strftime('%d/%m/%Y') if fechamento.data_pagamento else '-' }}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted d-block">Pago Por</small>
+                            <strong>{{ fechamento.pago_por or '-' }}</strong>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Acoes de Status -->
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-tasks"></i> Acoes</h5>
+                </div>
+                <div class="card-body">
+                    {% if fechamento.status == 'PENDENTE' %}
+                    <div class="d-flex gap-2 flex-wrap mb-3">
+                        <button type="button" class="btn btn-success"
+                                data-bs-toggle="modal" data-bs-target="#modalDataPagamento">
+                            <i class="fas fa-check"></i> Marcar como PAGO
+                        </button>
+                        <form method="POST" action="{{ url_for('carvia.atualizar_status_comissao', comissao_id=fechamento.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="status" value="CANCELADO">
+                            <button type="submit" class="btn btn-danger"
+                                    onclick="return confirm('Cancelar este fechamento de comissao?')">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </form>
+                    </div>
+                    <hr>
+                    <h6>Incluir CTe</h6>
+                    <div class="input-group input-group-sm mb-2">
+                        <input type="number" class="form-control" id="inputIncluirCte"
+                               placeholder="ID da operacao (CTe)">
+                        <button class="btn btn-outline-primary" type="button" onclick="incluirCte()">
+                            <i class="fas fa-plus"></i> Incluir
+                        </button>
+                    </div>
+                    <small class="text-muted">Informe o ID do CTe CarVia para incluir no fechamento.</small>
+                    {% elif fechamento.status == 'PAGO' %}
+                    <div class="alert alert-success mb-0">
+                        <i class="fas fa-check-circle"></i> Comissao paga em
+                        {{ fechamento.data_pagamento.strftime('%d/%m/%Y') if fechamento.data_pagamento else '-' }}.
+                    </div>
+                    {% elif fechamento.status == 'CANCELADO' %}
+                    <div class="alert alert-danger mb-0">
+                        <i class="fas fa-times-circle"></i> Comissao cancelada.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTes do Fechamento -->
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTes ({{ ctes_ativos|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if ctes_ativos %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>CTe</th>
+                            <th>Data Emissao</th>
+                            <th>Cliente</th>
+                            <th>Destino</th>
+                            <th class="text-end">Valor CTe</th>
+                            <th class="text-end">Comissao</th>
+                            {% if fechamento.status == 'PENDENTE' %}
+                            <th class="text-center">Acao</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in ctes_ativos %}
+                        <tr id="cte-row-{{ c.operacao_id }}">
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=c.operacao_id) }}"
+                                   class="fw-bold">{{ c.cte_numero }}</a>
+                            </td>
+                            <td>{{ c.cte_data_emissao.strftime('%d/%m/%Y') if c.cte_data_emissao else '-' }}</td>
+                            <td>{{ c.operacao.nome_cliente if c.operacao else '-' }}</td>
+                            <td>{{ (c.operacao.cidade_destino or '') ~ ' - ' ~ (c.operacao.uf_destino or '') if c.operacao else '-' }}</td>
+                            <td class="text-end">{{ c.valor_cte_snapshot|valor_br }}</td>
+                            <td class="text-end"><strong>{{ c.valor_comissao|valor_br }}</strong></td>
+                            {% if fechamento.status == 'PENDENTE' %}
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        onclick="excluirCte({{ c.operacao_id }}, '{{ c.cte_numero }}')"
+                                        title="Remover do fechamento">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-active">
+                            <td colspan="4"><strong>Total</strong></td>
+                            <td class="text-end"><strong>{{ fechamento.total_bruto|valor_br }}</strong></td>
+                            <td class="text-end"><strong>{{ fechamento.total_comissao|valor_br }}</strong></td>
+                            {% if fechamento.status == 'PENDENTE' %}<td></td>{% endif %}
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-muted">
+                <i class="fas fa-info-circle"></i> Nenhum CTe no fechamento.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- CTes Excluidos (historico) -->
+    {% if ctes_excluidos %}
+    <div class="card mt-3">
+        <div class="card-header">
+            <h6 class="mb-0 text-muted"><i class="fas fa-history"></i> CTes Excluidos ({{ ctes_excluidos|length }})</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 text-muted">
+                    <thead>
+                        <tr>
+                            <th>CTe</th>
+                            <th>Valor CTe</th>
+                            <th>Excluido Por</th>
+                            <th>Excluido Em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in ctes_excluidos %}
+                        <tr>
+                            <td>{{ c.cte_numero }}</td>
+                            <td>{{ c.valor_cte_snapshot|valor_br }}</td>
+                            <td>{{ c.excluido_por or '-' }}</td>
+                            <td>{{ c.excluido_em|formatar_data_hora_brasil if c.excluido_em else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# Modal de data de pagamento #}
+{% with form_action=url_for('carvia.atualizar_status_comissao', comissao_id=fechamento.id), form_status='PAGO' %}
+    {% include 'carvia/_modal_data_pagamento.html' %}
+{% endwith %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+const comissaoId = {{ fechamento.id }};
+
+function incluirCte() {
+    const input = document.getElementById('inputIncluirCte');
+    const operacaoId = parseInt(input.value);
+    if (!operacaoId) { alert('Informe o ID do CTe.'); return; }
+
+    fetch(`/carvia/api/comissoes/${comissaoId}/incluir-cte`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ operacao_id: operacaoId }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.erro) { alert(data.erro); return; }
+        location.reload();
+    })
+    .catch(err => alert('Erro: ' + err.message));
+}
+
+function excluirCte(operacaoId, cteNumero) {
+    if (!confirm(`Remover ${cteNumero} do fechamento?`)) return;
+
+    fetch(`/carvia/api/comissoes/${comissaoId}/excluir-cte`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ operacao_id: operacaoId }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.erro) { alert(data.erro); return; }
+        location.reload();
+    })
+    .catch(err => alert('Erro: ' + err.message));
+}
+
+// Default date on modal open
+(function() {
+    'use strict';
+    var modalEl = document.getElementById('modalDataPagamento');
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function() {
+            var input = document.getElementById('dataPagamentoInput');
+            if (input && !input.value) {
+                input.value = new Date().toISOString().slice(0, 10);
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

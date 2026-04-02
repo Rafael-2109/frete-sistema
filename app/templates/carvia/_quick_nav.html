@@ -2,7 +2,7 @@
    Uso: {% set carvia_active = 'operacoes' %} {% include 'carvia/_quick_nav.html' %}
    Valores validos para carvia_active: dashboard, importar, nfs, operacoes, subcontratos,
    ctes_complementares, custos_entrega, fretes, faturas_cliente, faturas_transportadora,
-   despesas, receitas, fluxo_caixa, conciliacao, extrato_bancario, configuracoes, gerencial
+   despesas, receitas, comissoes, fluxo_caixa, conciliacao, extrato_bancario, configuracoes, gerencial
 #}
 <nav class="carvia-quick-nav mb-3" aria-label="Navegacao rapida CarVia">
     {# --- Visao Geral --- #}
@@ -85,6 +85,12 @@
 
     {# --- Financeiro --- #}
     <span class="carvia-quick-nav-sep"></span>
+    {% if current_user.is_authenticated and current_user.sistema_carvia and (current_user.perfil == 'administrador' or current_user.acesso_comissao_carvia) %}
+    <a href="{{ url_for('carvia.listar_comissoes') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'comissoes' else 'btn-outline-secondary' }}">
+        Comissoes
+    </a>
+    {% endif %}
     <a href="{{ url_for('carvia.fluxo_caixa') }}"
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'fluxo_caixa' else 'btn-outline-secondary' }}">
         Fluxo Caixa

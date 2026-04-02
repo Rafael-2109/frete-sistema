@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-plus"></i> Novo Fechamento de Comissao</h2>
+        <a href="{{ url_for('carvia.listar_comissoes') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'comissoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {% if pct_warning %}
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i> {{ pct_warning }}
+    </div>
+    {% endif %}
+
+    <form method="POST" id="formComissao">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Dados do Fechamento -->
+        <div class="card mb-3">
+            <div class="card-header"><strong>Dados do Fechamento</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="vendedor_nome" class="form-label">Vendedor *</label>
+                        <input type="text" class="form-control" id="vendedor_nome" name="vendedor_nome"
+                               required placeholder="Nome do vendedor">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="vendedor_email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="vendedor_email" name="vendedor_email"
+                               placeholder="email@exemplo.com">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="percentual" class="form-label">Percentual (%) *</label>
+                        <input type="number" class="form-control" id="percentual" name="percentual"
+                               step="0.01" min="0.01" max="100" required
+                               value="{{ pct_display if pct_display is not none else '' }}"
+                               placeholder="Ex: 5.00">
+                        <div class="form-text">Valor sera aplicado como percentual sobre o valor do CTe.</div>
+                    </div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-3">
+                        <label for="data_inicio" class="form-label">Periodo Inicio *</label>
+                        <input type="date" class="form-control" id="data_inicio" name="data_inicio" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="data_fim" class="form-label">Periodo Fim *</label>
+                        <input type="date" class="form-control" id="data_fim" name="data_fim" required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-outline-primary w-100" onclick="buscarCtes()">
+                            <i class="fas fa-search"></i> Buscar CTes
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="observacoes" class="form-label">Observacoes</label>
+                        <input type="text" class="form-control" id="observacoes" name="observacoes"
+                               placeholder="Opcional">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTes Elegiveis -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>CTes Elegiveis</strong>
+                <div>
+                    <span id="resumoCtes" class="text-muted me-3"></span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll()">
+                        <i class="fas fa-check-double"></i> Selecionar Todos
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="tabelaCtes">
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-info-circle"></i> Selecione o periodo e clique em "Buscar CTes".
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resumo e Submit -->
+        <div class="card mb-3" id="cardResumo" style="display: none;">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Resumo:</strong>
+                    <span id="resumoSelecionados">0 CTes selecionados</span> |
+                    Total Bruto: <strong id="resumoBruto">R$ 0,00</strong> |
+                    Comissao (<span id="resumoPct">0</span>%): <strong id="resumoComissao">R$ 0,00</strong>
+                </div>
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-save"></i> Criar Fechamento
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+let ctesData = [];
+
+function buscarCtes() {
+    const inicio = document.getElementById('data_inicio').value;
+    const fim = document.getElementById('data_fim').value;
+
+    if (!inicio || !fim) {
+        alert('Selecione o periodo.');
+        return;
+    }
+
+    const url = `/carvia/api/comissoes/ctes-elegiveis?data_inicio=${inicio}&data_fim=${fim}`;
+    fetch(url, { headers: { 'X-CSRFToken': csrfToken } })
+        .then(r => r.json())
+        .then(data => {
+            if (data.erro) { alert(data.erro); return; }
+            ctesData = data.ctes || [];
+            renderCtes();
+        })
+        .catch(err => alert('Erro: ' + err.message));
+}
+
+function renderCtes() {
+    const container = document.getElementById('tabelaCtes');
+
+    if (ctesData.length === 0) {
+        container.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-info-circle"></i> Nenhum CTe elegivel encontrado no periodo.</div>';
+        document.getElementById('cardResumo').style.display = 'none';
+        return;
+    }
+
+    let html = '<div class="table-responsive"><table class="table table-hover mb-0 carvia-table"><thead><tr>';
+    html += '<th class="text-center"><input type="checkbox" id="checkAll" onchange="toggleAll()"></th>';
+    html += '<th>CTe</th><th>Data Emissao</th><th>Cliente</th><th>Destino</th><th class="text-end">Valor CTe</th>';
+    html += '</tr></thead><tbody>';
+
+    ctesData.forEach(cte => {
+        const dataFmt = cte.cte_data_emissao ? new Date(cte.cte_data_emissao + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+        const valorFmt = cte.cte_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        html += `<tr>`;
+        html += `<td class="text-center"><input type="checkbox" name="operacao_ids" value="${cte.id}" class="cte-check" onchange="atualizarResumo()" checked></td>`;
+        html += `<td><strong>${cte.cte_numero || 'OP-' + cte.id}</strong></td>`;
+        html += `<td>${dataFmt}</td>`;
+        html += `<td>${cte.nome_cliente || cte.cnpj_cliente}</td>`;
+        html += `<td>${cte.cidade_destino || ''} - ${cte.uf_destino || ''}</td>`;
+        html += `<td class="text-end">${valorFmt}</td>`;
+        html += `</tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+
+    document.getElementById('cardResumo').style.display = '';
+    atualizarResumo();
+}
+
+function toggleAll() {
+    const checks = document.querySelectorAll('.cte-check');
+    const allChecked = Array.from(checks).every(c => c.checked);
+    checks.forEach(c => c.checked = !allChecked);
+    const checkAll = document.getElementById('checkAll');
+    if (checkAll) checkAll.checked = !allChecked;
+    atualizarResumo();
+}
+
+function atualizarResumo() {
+    const checks = document.querySelectorAll('.cte-check:checked');
+    const pctInput = document.getElementById('percentual');
+    const pct = parseFloat(pctInput.value) || 0;
+
+    let totalBruto = 0;
+    let count = 0;
+
+    checks.forEach(c => {
+        const cte = ctesData.find(x => x.id == c.value);
+        if (cte) {
+            totalBruto += cte.cte_valor;
+            count++;
+        }
+    });
+
+    const totalComissao = totalBruto * pct / 100;
+
+    document.getElementById('resumoSelecionados').textContent = count + ' CTes selecionados';
+    document.getElementById('resumoBruto').textContent = totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    document.getElementById('resumoPct').textContent = pct.toFixed(2);
+    document.getElementById('resumoComissao').textContent = totalComissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    document.getElementById('resumoCtes').textContent = `${count} de ${ctesData.length} selecionados`;
+}
+
+// Recalcular ao mudar percentual
+document.getElementById('percentual').addEventListener('input', atualizarResumo);
+</script>
+{% endblock %}

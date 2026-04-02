@@ -72,6 +72,11 @@ from app.carvia.models.admin import CarviaAdminAudit  # noqa: F401
 # Frete + Emissao CTe
 from app.carvia.models.frete import CarviaFrete, CarviaEmissaoCte  # noqa: F401
 
+# Comissao
+from app.carvia.models.comissao import (  # noqa: F401
+    CarviaComissaoFechamento, CarviaComissaoFechamentoCte,
+)
+
 
 __all__ = [
     # Documentos
@@ -99,4 +104,6 @@ __all__ = [
     'CarviaAdminAudit',
     # Frete
     'CarviaFrete', 'CarviaEmissaoCte',
+    # Comissao
+    'CarviaComissaoFechamento', 'CarviaComissaoFechamentoCte',
 ]

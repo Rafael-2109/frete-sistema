@@ -370,6 +370,11 @@
                 <a href="{{ url_for('carvia.listar_cidades_carvia') }}" class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-map-marked-alt"></i> Cidades Atendidas
                 </a>
+                {% if current_user.perfil == 'administrador' %}
+                <a href="{{ url_for('carvia.exportar_relatorio_gerencial') }}" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-file-excel"></i> Relatorio Gerencial
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>

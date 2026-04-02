@@ -20,6 +20,7 @@ from app.carvia.models import (
     CarviaModeloMoto, CarviaCategoriaMoto,
     CarviaCidadeAtendida, CarviaTabelaFrete,
     CarviaGrupoCliente, CarviaPrecoCategoriaMoto,
+    CarviaComissaoFechamento, CarviaComissaoFechamentoCte,
 )
 from app.utils.timezone import agora_utc_naive
 
@@ -1064,6 +1065,114 @@ def register_exportacao_routes(bp):
         output.seek(0)
         timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M')
         filename = f'carvia_tabelas_frete_{timestamp}.xlsx'
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    # =====================================================================
+    # 14. Comissoes
+    # =====================================================================
+    @bp.route('/api/exportar/comissoes')  # type: ignore
+    @login_required
+    def exportar_comissoes():  # type: ignore
+        """Exporta comissoes para Excel (2 sheets: Fechamentos + CTes)"""
+        if _check_access():
+            return redirect(url_for('main.dashboard'))
+
+        # Verificar acesso a comissao
+        if not (
+            getattr(current_user, 'acesso_comissao_carvia', False)
+            or getattr(current_user, 'perfil', '') == 'administrador'
+        ):
+            return redirect(url_for('main.dashboard'))
+
+        status_filtro = request.args.get('status', '')
+        vendedor_filtro = request.args.get('vendedor', '')
+
+        query = db.session.query(CarviaComissaoFechamento)
+        if status_filtro:
+            query = query.filter(CarviaComissaoFechamento.status == status_filtro)
+        if vendedor_filtro:
+            busca_like = f'%{vendedor_filtro}%'
+            query = query.filter(
+                db.or_(
+                    CarviaComissaoFechamento.vendedor_nome.ilike(busca_like),
+                    CarviaComissaoFechamento.vendedor_email.ilike(busca_like),
+                )
+            )
+
+        fechamentos = query.order_by(CarviaComissaoFechamento.criado_em.desc()).all()
+
+        # Sheet 1: Fechamentos
+        fechamentos_data = []
+        fechamento_ids = []
+        for f in fechamentos:
+            fechamentos_data.append({
+                'Numero': f.numero_fechamento,
+                'Vendedor': f.vendedor_nome,
+                'Email Vendedor': f.vendedor_email or '',
+                'Periodo Inicio': _fmt_date(f.data_inicio),
+                'Periodo Fim': _fmt_date(f.data_fim),
+                'Percentual (%)': float(f.percentual * 100) if f.percentual else 0,
+                'Qtd CTes': f.qtd_ctes,
+                'Total Bruto': float(f.total_bruto or 0),
+                'Total Comissao': float(f.total_comissao or 0),
+                'Status': f.status,
+                'Data Pagamento': _fmt_date(f.data_pagamento),
+                'Pago Por': f.pago_por or '',
+                'Criado Em': _fmt_datetime(f.criado_em),
+                'Criado Por': f.criado_por or '',
+                'Observacoes': f.observacoes or '',
+            })
+            fechamento_ids.append(f.id)
+
+        df_fechamentos = pd.DataFrame(fechamentos_data)
+
+        # Sheet 2: CTes (de todos os fechamentos filtrados)
+        ctes_data = []
+        if fechamento_ids:
+            ctes = CarviaComissaoFechamentoCte.query.filter(
+                CarviaComissaoFechamentoCte.fechamento_id.in_(fechamento_ids),
+                CarviaComissaoFechamentoCte.excluido.is_(False),
+            ).order_by(
+                CarviaComissaoFechamentoCte.fechamento_id.asc(),
+                CarviaComissaoFechamentoCte.cte_data_emissao.asc(),
+            ).all()
+
+            for c in ctes:
+                ctes_data.append({
+                    'Fechamento': c.fechamento.numero_fechamento if c.fechamento else '',
+                    'CTe Numero': c.cte_numero,
+                    'Data Emissao': _fmt_date(c.cte_data_emissao),
+                    'Valor CTe': float(c.valor_cte_snapshot or 0),
+                    'Percentual (%)': float(c.percentual_snapshot * 100) if c.percentual_snapshot else 0,
+                    'Valor Comissao': float(c.valor_comissao or 0),
+                    'Cliente': c.operacao.nome_cliente if c.operacao else '',
+                    'UF Destino': c.operacao.uf_destino if c.operacao else '',
+                    'Incluido Por': c.incluido_por or '',
+                    'Incluido Em': _fmt_datetime(c.incluido_em),
+                })
+
+        df_ctes = pd.DataFrame(ctes_data)
+
+        # Gerar Excel com 2 sheets
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_fechamentos.to_excel(writer, index=False, sheet_name='Fechamentos')
+            if not df_fechamentos.empty:
+                _ajustar_largura_colunas(df_fechamentos, writer.sheets['Fechamentos'])
+
+            df_ctes.to_excel(writer, index=False, sheet_name='CTes')
+            if not df_ctes.empty:
+                _ajustar_largura_colunas(df_ctes, writer.sheets['CTes'])
+
+        output.seek(0)
+        timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M')
+        filename = f'carvia_comissoes_{timestamp}.xlsx'
 
         return send_file(
             output,
