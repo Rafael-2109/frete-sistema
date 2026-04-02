@@ -1,0 +1,277 @@
+"""
+Modelos de Faturas CarVia — Faturas Cliente e Transportadora
+"""
+
+from sqlalchemy import func
+
+from app import db
+from app.utils.timezone import agora_utc_naive
+
+
+class CarviaFaturaCliente(db.Model):
+    """Faturas CarVia emitidas ao cliente — agrupa N CTes CarVia"""
+    __tablename__ = 'carvia_faturas_cliente'
+
+    __table_args__ = (
+        db.UniqueConstraint('numero_fatura', 'cnpj_cliente', name='uq_fatura_cliente_num_cnpj'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    cnpj_cliente = db.Column(db.String(20), nullable=False, index=True)
+    nome_cliente = db.Column(db.String(255))
+    numero_fatura = db.Column(db.String(50), nullable=False, index=True)
+    data_emissao = db.Column(db.Date, nullable=False)
+    valor_total = db.Column(db.Numeric(15, 2), nullable=False)
+    vencimento = db.Column(db.Date)
+    arquivo_pdf_path = db.Column(db.String(500))
+    arquivo_nome_original = db.Column(db.String(255))
+
+    # Campos adicionais extraidos do PDF SSW
+    tipo_frete = db.Column(db.String(10))  # CIF ou FOB
+    quantidade_documentos = db.Column(db.Integer)
+    valor_mercadoria = db.Column(db.Numeric(15, 2))
+    valor_icms = db.Column(db.Numeric(15, 2))
+    aliquota_icms = db.Column(db.String(20))  # Ex: "12.00%"
+    valor_pedagio = db.Column(db.Numeric(15, 2))
+    vencimento_original = db.Column(db.Date)
+    cancelada = db.Column(db.Boolean, default=False)
+
+    # Dados do pagador (cliente que paga a fatura)
+    pagador_endereco = db.Column(db.String(500))
+    pagador_cep = db.Column(db.String(10))
+    pagador_cidade = db.Column(db.String(100))
+    pagador_uf = db.Column(db.String(2))
+    pagador_ie = db.Column(db.String(20))
+    pagador_telefone = db.Column(db.String(30))
+
+    # PENDENTE, PAGA, CANCELADA (GAP-01: EMITIDA removido — status morto no fluxo)
+    status = db.Column(db.String(20), default='PENDENTE')
+
+    # Auditoria de pagamento
+    pago_por = db.Column(db.String(100))
+    pago_em = db.Column(db.DateTime)
+
+    # Conciliacao bancaria
+    total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    conciliado = db.Column(db.Boolean, nullable=False, default=False)
+
+    observacoes = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=False)
+
+    # Relacionamentos
+    itens = db.relationship(
+        'CarviaFaturaClienteItem',
+        backref='fatura_cliente',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    @staticmethod
+    def gerar_numero_fatura():
+        """Gera proximo numero sequencial FAT-###."""
+        max_num = db.session.query(
+            func.max(CarviaFaturaCliente.numero_fatura)
+        ).filter(
+            CarviaFaturaCliente.numero_fatura.ilike('FAT-%'),
+        ).scalar()
+
+        next_num = 1
+        if max_num:
+            try:
+                next_num = int(max_num.replace('FAT-', '')) + 1
+            except (ValueError, TypeError):
+                pass
+        return f'FAT-{next_num:03d}'
+
+    def __repr__(self):
+        return f'<CarviaFaturaCliente {self.numero_fatura} ({self.status})>'
+
+
+class CarviaFaturaClienteItem(db.Model):
+    """Itens de detalhe por CTe de uma fatura cliente SSW"""
+    __tablename__ = 'carvia_fatura_cliente_itens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fatura_cliente_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_faturas_cliente.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+
+    # CTe referenciado
+    cte_numero = db.Column(db.String(20))
+    cte_data_emissao = db.Column(db.Date)
+
+    # Contraparte: Remetente (FOB) ou Destinatario (CIF)
+    contraparte_cnpj = db.Column(db.String(20))
+    contraparte_nome = db.Column(db.String(255))
+
+    # NF referenciada
+    nf_numero = db.Column(db.String(20))
+
+    # FKs para linking cross-documento
+    operacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_operacoes.id'),
+        nullable=True,
+        index=True
+    )
+    nf_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_nfs.id'),
+        nullable=True,
+        index=True
+    )
+
+    # Valores
+    valor_mercadoria = db.Column(db.Numeric(15, 2))
+    peso_kg = db.Column(db.Numeric(15, 3))
+    base_calculo = db.Column(db.Numeric(15, 2))
+    icms = db.Column(db.Numeric(15, 2))
+    iss = db.Column(db.Numeric(15, 2))
+    st = db.Column(db.Numeric(15, 2))
+    frete = db.Column(db.Numeric(15, 2))
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+
+    # Relacionamentos de linking
+    operacao = db.relationship('CarviaOperacao', lazy='joined')
+    nf = db.relationship('CarviaNf', lazy='joined')
+
+    def __repr__(self):
+        return f'<CarviaFaturaClienteItem cte={self.cte_numero} fatura={self.fatura_cliente_id}>'
+
+
+class CarviaFaturaTransportadoraItem(db.Model):
+    """Itens de detalhe por subcontrato de uma fatura transportadora"""
+    __tablename__ = 'carvia_fatura_transportadora_itens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fatura_transportadora_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_faturas_transportadora.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True
+    )
+
+    # FKs para linking cross-documento
+    subcontrato_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_subcontratos.id'),
+        nullable=True,
+        index=True
+    )
+    operacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_operacoes.id'),
+        nullable=True,
+        index=True
+    )
+    nf_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_nfs.id'),
+        nullable=True,
+        index=True
+    )
+
+    # CTe referenciado (display)
+    cte_numero = db.Column(db.String(20))
+    cte_data_emissao = db.Column(db.Date)
+
+    # Contraparte: cliente da operacao
+    contraparte_cnpj = db.Column(db.String(20))
+    contraparte_nome = db.Column(db.String(255))
+
+    # NF referenciada (display)
+    nf_numero = db.Column(db.String(20))
+
+    # Valores
+    valor_mercadoria = db.Column(db.Numeric(15, 2))
+    peso_kg = db.Column(db.Numeric(15, 3))
+    valor_frete = db.Column(db.Numeric(15, 2))
+    valor_cotado = db.Column(db.Numeric(15, 2))
+    valor_acertado = db.Column(db.Numeric(15, 2))
+
+    # Auditoria
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+
+    # Relacionamentos
+    subcontrato = db.relationship('CarviaSubcontrato', lazy='joined')
+    operacao = db.relationship('CarviaOperacao', lazy='joined')
+    nf = db.relationship('CarviaNf', lazy='joined')
+
+    def __repr__(self):
+        return f'<CarviaFaturaTransportadoraItem sub={self.subcontrato_id} fatura={self.fatura_transportadora_id}>'
+
+
+class CarviaFaturaTransportadora(db.Model):
+    """Faturas recebidas dos subcontratados — agrupa N CTes de 1 transportadora"""
+    __tablename__ = 'carvia_faturas_transportadora'
+
+    __table_args__ = (
+        db.UniqueConstraint('numero_fatura', 'transportadora_id', name='uq_fatura_transp_num_transp'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    transportadora_id = db.Column(
+        db.Integer,
+        db.ForeignKey('transportadoras.id'),
+        nullable=False
+    )
+    numero_fatura = db.Column(db.String(50), nullable=False, index=True)
+    data_emissao = db.Column(db.Date, nullable=False)
+    valor_total = db.Column(db.Numeric(15, 2), nullable=False)
+    vencimento = db.Column(db.Date)
+    arquivo_pdf_path = db.Column(db.String(500))
+    arquivo_nome_original = db.Column(db.String(255))
+
+    # PENDENTE, EM_CONFERENCIA, CONFERIDO, DIVERGENTE
+    status_conferencia = db.Column(db.String(20), default='PENDENTE')
+    conferido_por = db.Column(db.String(100))
+    conferido_em = db.Column(db.DateTime)
+
+    # Status de pagamento (independente de status_conferencia)
+    # PENDENTE, PAGO
+    status_pagamento = db.Column(db.String(20), default='PENDENTE', index=True)
+    pago_por = db.Column(db.String(100))
+    pago_em = db.Column(db.DateTime)
+
+    # Conciliacao bancaria
+    total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    conciliado = db.Column(db.Boolean, nullable=False, default=False)
+
+    observacoes = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100), nullable=False)
+
+    # Relacionamentos
+    transportadora = db.relationship('Transportadora', lazy='joined')
+    itens = db.relationship(
+        'CarviaFaturaTransportadoraItem',
+        backref='fatura_transportadora',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    @staticmethod
+    def gerar_numero_fatura():
+        """Gera proximo numero sequencial FTRANSP-###."""
+        max_num = db.session.query(
+            func.max(CarviaFaturaTransportadora.numero_fatura)
+        ).filter(
+            CarviaFaturaTransportadora.numero_fatura.ilike('FTRANSP-%'),
+        ).scalar()
+
+        next_num = 1
+        if max_num:
+            try:
+                next_num = int(max_num.replace('FTRANSP-', '')) + 1
+            except (ValueError, TypeError):
+                pass
+        return f'FTRANSP-{next_num:03d}'
+
+    def __repr__(self):
+        return f'<CarviaFaturaTransportadora {self.numero_fatura} ({self.status_conferencia})>'
