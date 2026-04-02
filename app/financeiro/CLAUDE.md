@@ -226,6 +226,7 @@ NAO copiar a funcao localmente — importar do modulo compartilhado.
 | **rastreando-odoo** | Parcial | Rastrear NFs, auditar reconciliacoes (leitura) |
 | **razao-geral-odoo** | Parcial | Exportar razao geral (account.move.line em massa) |
 | **conciliando-odoo-po** | Nao | Opera em POs, mas compartilha `app.odoo.utils` |
+| **conciliando-transferencias-internas** | Nao | Transferencias entre bancos NACOM GOYA (is_internal_transfer). Direto via XML-RPC, NAO usa pipeline financeiro local. Sit 1/2/2b |
 
 ### References da Skill executando-odoo-financeiro
 

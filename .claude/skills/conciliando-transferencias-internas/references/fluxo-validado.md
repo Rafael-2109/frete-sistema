@@ -102,3 +102,51 @@ odoo.execute_kw('account.move.line', 'reconcile', [[3370304, 3134195]], {})
 6. account_id DEVE ser ULTIMO write antes de action_post
 7. partner_id=1 (NACOM GOYA - FB) funciona para transferencias internas
 8. "cannot marshal None" em action_post/reconcile = SUCESSO (ignorar)
+
+---
+
+## Algoritmo: Rastreamento de Cadeia (Situacao 2b)
+
+Exemplo real: stmt 10793 (GRAFENO, -R$14.999,99, 22/09/2025, pendente)
+
+### Cadeia rastreada:
+
+1. stmt 10793 → payment_ref contem "Banco 756" → destino = SICOOB (journal 10)
+2. SICOOB 22/09, +R$14.999,99, reconciliado → stmt 33427 encontrado
+3. move_line PENDENTES (26868) do stmt 33427, reconciled=True → partial_reconcile → counterpart
+4. counterpart → move_id → payment PSIC/2025/05955 (date=18/09, R$547.733,45)
+5. PSIC/2025/05955 → paired_payment → PGRA1/2025/05329 (date=18/09, R$547.733,45)
+6. PGRA1/2025/05329 → move_line PENDENTES (26868), reconciled=False, credit=547.733,45
+
+### Diagnostico retornado:
+
+```python
+{
+    'found': True,
+    'stmt_date': '2025-09-22', 'stmt_amount': 14999.99,
+    'paired_payment': {'name': 'PGRA1/2025/05329', 'date': '2025-09-18', 'amount': 547733.45},
+    'pendentes_line_id': 3163630,
+    'date_mismatch': True,    # 18/09 != 22/09
+    'is_partial': True,       # 547733.45 != 14999.99
+}
+```
+
+### Decisao:
+
+- `date_mismatch=True` + `is_partial=True` → REPORTAR ao usuario
+- Se confirmado: `preparar_extrato_e_reconciliar(10793, 3163630, ref='PGRA1/2025/05329')`
+- Odoo cria partial_reconcile de R$14.999,99, reduzindo residual para R$532.733,46
+
+### Por que Sit 2 direta falha neste caso:
+
+```python
+# Busca por valor/data exatos:
+payments = search([['amount', '=', 14999.99], ['date', '=', '2025-09-22']])
+# → retorna [] porque payment tem amount=547733.45 e date=2025-09-18
+```
+
+### Validacao pendente:
+
+Caso 10793 NAO foi executado (usuario determinou desconciliar errados antes).
+Caso 10797 (GRAFENO→BRADESCO) e Sit 2 pura — payment 05597 existe com data correta.
+Ambos aguardam decisao operacional.

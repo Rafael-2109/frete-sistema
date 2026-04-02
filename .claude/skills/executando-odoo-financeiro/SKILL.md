@@ -17,6 +17,7 @@ description: >-
   - Split/consolidar PO, usar **conciliando-odoo-po**
   - Validar match NF x PO, usar **validacao-nf-po**
   - Exportar razao geral, usar **razao-geral-odoo**
+  - Transferencia interna entre bancos NACOM GOYA (extrato com NACOM GOYA/61.724.241), usar **conciliando-transferencias-internas**
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -30,6 +31,7 @@ allowed-tools: Read, Bash, Glob, Grep
 | Exportar balancete/razao geral | **razao-geral-odoo** | Relatorio contabil, nao operacao |
 | Split/consolidar PO | **conciliando-odoo-po** | Operacao de PO, nao financeira |
 | Criar CTe/despesas extras | **integracao-odoo** | Lancamento fiscal, nao financeiro |
+| Transferencia interna entre bancos NACOM GOYA | **conciliando-transferencias-internas** | Extrato com NACOM GOYA/61.724.241 e par espelhado em outro journal = is_internal_transfer |
 
 ---
 

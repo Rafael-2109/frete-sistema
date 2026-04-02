@@ -106,6 +106,7 @@ domain = [
 |----------|--------|-------|
 | Ambos extratos nao conciliados | `criar_transferencia_interna_e_conciliar()` | stmt_pag_id, stmt_rec_id, journal_pag_id, journal_rec_id, amount, date |
 | Recebimento conciliado, pagamento pendente | `conciliar_pagamento_transferencia_existente()` | stmt_pag_id, amount, date, journal_pag_id |
+| Sit 2 falhou (payment consolidado/data errada) | `rastrear_cadeia_documental()` | stmt_pag_id — retorna diagnostico, NAO executa |
 | Levantar todos os pares pendentes | `levantar_pares_transferencia_interna()` | — (aceita args de filtro) |
 
 Codigo completo: [references/codigo-operacional.md](references/codigo-operacional.md)
@@ -125,7 +126,9 @@ NUNCA FAZER:
 SEMPRE FAZER:
 - SEMPRE usar get_odoo_connection() de app.odoo.utils.connection
 - SEMPRE filtrar: is_reconciled=False, to_check=False
-- SEMPRE usar tolerancia ZERO dias (mesma data exata) no matching
+- SEMPRE usar tolerancia ZERO dias (mesma data exata) no matching DIRETO (Sit 1 e Sit 2)
+- Para Sit 2b (cadeia): data do payment PODE divergir — REPORTAR ao usuario ANTES de reconciliar
+- NUNCA auto-reconciliar Sit 2b com date_mismatch=True sem confirmacao do usuario
 - SEMPRE excluir payment_ref contendo "fav" ou "movimenta" (case-insensitive via .lower())
 - SEMPRE verificar is_reconciled apos cada operacao
 - SEMPRE reportar resultado por par antes de prosseguir ao proximo
@@ -141,10 +144,15 @@ Linha de extrato com NACOM GOYA / 61.724.241
 │       │   ├── SIM → SITUACAO 1 (criar is_internal_transfer + conciliar ambos)
 │       │   └── Recebimento reconciliado + Pagamento nao?
 │       │       └── SIM → SITUACAO 2 (encontrar titulo pagamento + conciliar)
-│       └── NAO: Sem par → Investigar manualmente
-└── Filtros de exclusao:
-    ├── payment_ref contendo "FAV" → EXCLUIR (pagamento a terceiro)
-    └── payment_ref contendo "Movimentação" → EXCLUIR (sem par no destino)
+│       └── NAO (sem par direto ou Sit 2 nao achou payment):
+│           └── rastrear_cadeia_documental(stmt_id)?
+│               ├── found=True → SITUACAO 2b (reportar + reconciliar se confirmado)
+│               └── found=False → Sem resolucao automatica (reportar ao usuario)
+├── Filtros de exclusao:
+│   ├── payment_ref contendo "FAV" → EXCLUIR (pagamento a terceiro)
+│   └── payment_ref contendo "Movimentação" → EXCLUIR (sem par no destino)
+└── Pos-conciliacao:
+    └── Verificar: payment.date != stmt.date? → REPORTAR INCONSISTENCIA
 ```
 
 ## Situacao 1 — Ambos extratos nao conciliados
@@ -162,6 +170,25 @@ Linha de extrato com NACOM GOYA / 61.724.241
 **Fluxo**: Buscar `account.payment` existente (is_internal_transfer=True, mesmo valor/data) → Buscar linha PENDENTES(26868) nao reconciliada → Conciliar extrato de pagamento.
 
 > Ver [codigo-operacional.md](references/codigo-operacional.md) secao "Situacao 2"
+
+## Situacao 2b — Rastreamento de Cadeia Documental
+
+**Quando**: Sit 2 falha (payment nao encontrado por valor/data). Tipicamente:
+- Payment **consolidado** (valor agregado, ex: R$547.733,45 = 36x R$14.999,99)
+- Payment com **data errada** (criado retroativamente com data divergente)
+- Payment por **outro journal** que nao o esperado
+
+**Fluxo**: Chamar `rastrear_cadeia_documental(stmt_pag_id)` → Se `found=True`:
+1. Verificar `date_mismatch` e `is_partial`
+2. Se algum True → **reportar ao usuario ANTES de executar**
+3. Se confirmado → `preparar_extrato_e_reconciliar(stmt_pag_id, pendentes_line_id)`
+
+**Cadeia rastreada**: stmt_pag → payment_ref (destino) → credito reconciliado no destino
+→ partial_reconcile → payment do recebimento → paired_payment → move_line PENDENTES
+
+> Ver [codigo-operacional.md](references/codigo-operacional.md) secao "Situacao 2b"
+
+---
 
 ## Preparacao do Extrato (GOTCHA CRITICO)
 
@@ -192,6 +219,20 @@ Linha de extrato com NACOM GOYA / 61.724.241
 | 1046 | AGIS GARANTIDA | Agis |
 | 1054 | BRADESCO (copia) | Bradesco |
 | 1068 | VORTX GRAFENO | Vortx |
+
+## Banco → Journal (Codigo Bancario no payment_ref)
+
+Usado por `rastrear_cadeia_documental()` para identificar journal destino a partir do payment_ref:
+
+| Codigo | Banco | Journal ID |
+|--------|-------|-----------|
+| 756 | SICOOB | 10 |
+| 237 | BRADESCO | 388 |
+| 033 | AGIS (Santander DTVM) | 1046 |
+
+Extraido via regex `Banco\s+(\d+)` do campo `payment_ref` dos extratos GRAFENO.
+
+---
 
 ## Error Handling
 

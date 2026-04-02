@@ -214,6 +214,7 @@ Import extrato saida ──> Matching CNPJ+valor ──> Aprovacao ──> Proce
 | Erros comuns ao executar payments | `.claude/skills/executando-odoo-financeiro/references/erros-comuns.md` |
 | IDs de contas de juros por empresa | `.claude/skills/executando-odoo-financeiro/references/contas-por-empresa.md` |
 | IDs fixos Odoo (journals, accounts) | `.claude/references/odoo/IDS_FIXOS.md` |
+| Transferencias internas entre bancos NACOM GOYA | `.claude/skills/conciliando-transferencias-internas/SKILL.md` (Sit 1, 2, 2b) |
 | Wizard vs API (por que NAO usamos bank rec widget) | `scripts/analise_baixa_titulos/WIZARD_VS_API_ANALISE.md` |
 | Conciliacao multi-company (titulo CD + extrato FB) | `scripts/analise_baixa_titulos/ANALISE_CONCILIACAO_EXTRATO_MULTICOMPANY.md` |
 | Constantes (contas, journals, mapeamentos) | `app/financeiro/constants.py` |
