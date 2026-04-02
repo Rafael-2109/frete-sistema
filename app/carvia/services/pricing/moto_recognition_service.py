@@ -107,8 +107,10 @@ class MotoRecognitionService:
                         return modelo.nome
                 except re.error:
                     pass
-            # Match por nome exato
-            if modelo.nome.upper() in texto_upper:
+            # Match por nome com word boundary (evita falso positivo:
+            # modelo "RET" nao deve matchear em "PRETA")
+            nome_escaped = re.escape(modelo.nome.upper())
+            if re.search(r'(?<![A-Za-z])' + nome_escaped + r'(?![A-Za-z])', texto_upper):
                 return modelo.nome
 
         # 2. Motos convencionais (Honda, Yamaha, etc.)

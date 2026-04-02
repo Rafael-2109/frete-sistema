@@ -652,6 +652,7 @@ class CTeXMLParserCarvia(CTeXMLParser):
             'cte_data_emissao': self.get_data_emissao(),
             'tipo_cte': self.get_tipo_cte(),
             'tipo_cte_descricao': self.get_tipo_cte_descricao(),
+            'info_complementar': self.get_info_complementar(),
             # Rota
             'uf_origem': rota.get('uf_origem'),
             'cidade_origem': rota.get('cidade_origem'),

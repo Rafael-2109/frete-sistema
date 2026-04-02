@@ -291,9 +291,15 @@
                             <td>
                                 <select class="form-select form-select-sm carvia-cte-classificacao"
                                         data-indice="{{ loop.index0 }}" style="width:auto; font-size:0.78rem;">
-                                    <option value="CTE_CARVIA" {{ 'selected' if cte.classificacao != 'CTE_SUBCONTRATO' }}>CTe CarVia</option>
+                                    <option value="CTE_CARVIA" {{ 'selected' if cte.classificacao == 'CTE_CARVIA' }}>CTe CarVia</option>
                                     <option value="CTE_SUBCONTRATO" {{ 'selected' if cte.classificacao == 'CTE_SUBCONTRATO' }}>CTe Subcontrato</option>
+                                    <option value="CTE_COMPLEMENTAR" {{ 'selected' if cte.classificacao == 'CTE_COMPLEMENTAR' }}>CTe Complementar</option>
                                 </select>
+                                {% if cte.classificacao == 'CTE_COMPLEMENTAR' and cte.info_complementar %}
+                                    <div class="small text-info mt-1">
+                                        <i class="fas fa-link"></i> Ref: {{ cte.info_complementar.chave_cte_original[:20] }}...
+                                    </div>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="carvia-editable-cell" data-campo="cidade_origem">{{ cte.cidade_origem or '?' }}</span>/<span class="carvia-editable-cell" data-campo="uf_origem">{{ cte.uf_origem or '?' }}</span>
@@ -318,6 +324,10 @@
                                             <i class="fas fa-exclamation-triangle"></i> Nao cadastrada
                                         </span>
                                     {% endif %}
+                                {% elif cte.classificacao == 'CTE_COMPLEMENTAR' %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-plus-circle"></i> Complementar
+                                    </span>
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}

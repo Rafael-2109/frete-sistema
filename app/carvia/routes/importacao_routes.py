@@ -195,8 +195,8 @@ def register_importacao_routes(bp):
         if not all([chave, indice is not None, nova_classificacao]):
             return {'sucesso': False, 'erro': 'Campos obrigatorios: importacao_chave, indice, nova_classificacao.'}, 400
 
-        if nova_classificacao not in ('CTE_CARVIA', 'CTE_SUBCONTRATO'):
-            return {'sucesso': False, 'erro': 'Classificacao deve ser CTE_CARVIA ou CTE_SUBCONTRATO.'}, 400
+        if nova_classificacao not in ('CTE_CARVIA', 'CTE_SUBCONTRATO', 'CTE_COMPLEMENTAR'):
+            return {'sucesso': False, 'erro': 'Classificacao deve ser CTE_CARVIA, CTE_SUBCONTRATO ou CTE_COMPLEMENTAR.'}, 400
 
         resultado = _obter_importacao_temp(current_user.id, chave)
         if not resultado:
@@ -578,6 +578,9 @@ def register_importacao_routes(bp):
             subs = resultado_salvo.get('subcontratos_criados', 0)
             if subs:
                 partes.append(f'{subs} CTes Subcontrato')
+            comps = resultado_salvo.get('ctes_comp_criados', 0)
+            if comps:
+                partes.append(f'{comps} CTes Complementar')
             fats = resultado_salvo.get('faturas_criadas', 0)
             if fats:
                 partes.append(f'{fats} Faturas')
@@ -605,6 +608,8 @@ def register_importacao_routes(bp):
         # - Se so NFs -> listagem de NFs
         if resultado_salvo.get('operacoes_criadas', 0) > 0:
             return redirect(url_for('carvia.listar_operacoes'))
+        elif resultado_salvo.get('ctes_comp_criados', 0) > 0:
+            return redirect(url_for('carvia.listar_ctes_complementares'))
         elif resultado_salvo.get('faturas_criadas', 0) > 0:
             return redirect(url_for('carvia.listar_faturas_cliente'))
         else:

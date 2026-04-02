@@ -11,6 +11,7 @@ Fluxo:
 6. Cria registros no banco:
    - CarviaNf + CarviaNfItem (NFs de mercadoria)
    - CarviaOperacao + junction (CTe CarVia)
+   - CarviaCteComplementar (CTe Complementar, vinculado ao CTe original)
    - CarviaSubcontrato (CTe Subcontratado, vinculado via NFs compartilhadas)
    - CarviaFaturaCliente ou CarviaFaturaTransportadora (faturas PDF)
 """
@@ -26,7 +27,8 @@ from app import db
 from sqlalchemy.exc import IntegrityError
 from app.carvia.models import (
     CarviaNf, CarviaNfItem, CarviaOperacao, CarviaOperacaoNf, CarviaSubcontrato,
-    CarviaFaturaCliente, CarviaFaturaClienteItem, CarviaFaturaTransportadora
+    CarviaFaturaCliente, CarviaFaturaClienteItem, CarviaFaturaTransportadora,
+    CarviaCteComplementar
 )
 from app.carvia.services.parsers.nfe_xml_parser import NFeXMLParser
 from app.carvia.services.parsers.cte_xml_parser_carvia import CTeXMLParserCarvia
@@ -290,6 +292,19 @@ class ImportacaoService:
                     'ambiente CARVIA_CNPJ para separar CTes CarVia de Subcontratos.'
                 )
 
+        # Reclassificar CTes complementares (tpCTe=1) emitidos pela CarVia
+        # CTe complementar NAO e uma operacao — e um acrescimo ao CTe original
+        for cte in ctes_parseados:
+            if (
+                cte.get('tipo_cte') == '1'
+                and cte.get('classificacao') == 'CTE_CARVIA'
+            ):
+                cte['classificacao'] = 'CTE_COMPLEMENTAR'
+                logger.info(
+                    "CTe %s reclassificado como COMPLEMENTAR (tpCTe=1)",
+                    cte.get('cte_numero'),
+                )
+
         # Pre-check: verificar transportadoras para CTes subcontrato e faturas
         transportadoras_nao_encontradas = {}
 
@@ -530,6 +545,8 @@ class ImportacaoService:
                            if c.get('classificacao') == 'CTE_CARVIA']
             ctes_subcontrato = [c for c in ctes_data
                                 if c.get('classificacao') == 'CTE_SUBCONTRATO']
+            ctes_complementar = [c for c in ctes_data
+                                 if c.get('classificacao') == 'CTE_COMPLEMENTAR']
 
             # 3. Criar Operacoes a partir dos CTes CarVia
             for cte_data in ctes_carvia:
@@ -660,6 +677,101 @@ class ImportacaoService:
                     logger.error(f"Erro ao criar operacao: {e}")
                     erros.append(
                         f"Erro ao criar operacao CTe {cte_data.get('cte_numero')}: {e}"
+                    )
+
+            # 3.5 Criar CTe Complementar a partir de CTes tipo complementar
+            ctes_comp_criados = []
+            for cte_data in ctes_complementar:
+                try:
+                    info_comp = cte_data.get('info_complementar') or {}
+                    chave_original = info_comp.get('chave_cte_original')
+
+                    if not chave_original:
+                        erros.append(
+                            f"CTe Comp {cte_data.get('cte_numero')}: "
+                            f"sem chave do CTe original no XML"
+                        )
+                        continue
+
+                    # Buscar operacao original pela chave do CTe complementado
+                    operacao_original = CarviaOperacao.query.filter_by(
+                        cte_chave_acesso=chave_original
+                    ).first()
+
+                    if not operacao_original:
+                        erros.append(
+                            f"CTe Comp {cte_data.get('cte_numero')}: "
+                            f"CTe original nao encontrado "
+                            f"(chave: {chave_original[:20]}...)"
+                        )
+                        continue
+
+                    # Dedup por chave de acesso
+                    cte_chave = cte_data.get('cte_chave_acesso')
+                    if cte_chave:
+                        comp_existente = CarviaCteComplementar.query.filter_by(
+                            cte_chave_acesso=cte_chave
+                        ).first()
+                        if comp_existente:
+                            logger.info(
+                                "CTe Comp ja importado: chave=%s", cte_chave
+                            )
+                            ctes_comp_criados.append(comp_existente)
+                            continue
+
+                    numero_comp = CarviaCteComplementar.gerar_numero_comp()
+                    cte_comp = CarviaCteComplementar(
+                        numero_comp=numero_comp,
+                        operacao_id=operacao_original.id,
+                        cte_valor=float(cte_data.get('cte_valor') or 0),
+                        cte_numero=str(cte_data.get('cte_numero') or '') or None,
+                        cte_chave_acesso=cte_chave,
+                        cte_data_emissao=self._parsear_data_cte(
+                            cte_data.get('cte_data_emissao')
+                        ),
+                        cnpj_cliente=operacao_original.cnpj_cliente,
+                        nome_cliente=operacao_original.nome_cliente,
+                        status='RASCUNHO',
+                        observacoes=info_comp.get('motivo'),
+                        criado_por=criado_por,
+                    )
+
+                    # Salvar XML path se disponivel
+                    if cte_data.get('cte_xml_path'):
+                        cte_comp.cte_xml_path = cte_data['cte_xml_path']
+
+                    with db.session.begin_nested():
+                        db.session.add(cte_comp)
+                        db.session.flush()
+
+                    # Vincular ao CarviaFrete pela operacao
+                    from app.carvia.models import CarviaFrete
+                    frete = CarviaFrete.query.filter_by(
+                        operacao_id=operacao_original.id
+                    ).first()
+                    if frete:
+                        cte_comp.frete_id = frete.id
+
+                    ctes_comp_criados.append(cte_comp)
+                    logger.info(
+                        "CTe Complementar criado: %s → op=%s (CTe original: %s)",
+                        numero_comp, operacao_original.id,
+                        operacao_original.cte_numero,
+                    )
+
+                except IntegrityError as e:
+                    db.session.rollback()
+                    logger.warning(
+                        "CTe Comp duplicado (IntegrityError): %s", e
+                    )
+                    erros.append(
+                        f"CTe Comp {cte_data.get('cte_numero')} "
+                        f"ignorado (duplicata)"
+                    )
+                except Exception as e:
+                    logger.error("Erro ao criar CTe Complementar: %s", e)
+                    erros.append(
+                        f"Erro CTe Comp {cte_data.get('cte_numero')}: {e}"
                     )
 
             # 4. Criar Subcontratos a partir dos CTes de transportadoras
@@ -834,6 +946,7 @@ class ImportacaoService:
                 'nfs_reutilizadas': len(nfs_reutilizadas),
                 'operacoes_criadas': len(operacoes_criadas),
                 'subcontratos_criados': len(subcontratos_criados),
+                'ctes_comp_criados': len(ctes_comp_criados),
                 'faturas_criadas': len(faturas_criadas),
                 'nfs_sem_cte': nfs_sem_cte_count,
                 'erros': erros,
@@ -847,6 +960,7 @@ class ImportacaoService:
                 'nfs_criadas': 0,
                 'operacoes_criadas': 0,
                 'subcontratos_criados': 0,
+                'ctes_comp_criados': 0,
                 'faturas_criadas': 0,
                 'erros': [f'Erro fatal: {e}'] + erros,
             }

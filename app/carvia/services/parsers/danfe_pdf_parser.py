@@ -186,6 +186,37 @@ class DanfePDFParser:
         """Extrai todos os tokens que parecem numeros (ex: '7.360,87', '64,000', '1')"""
         return re.findall(r'\d[\d.,]*\d|\d', linha)
 
+    def _split_valores_concatenados(self, texto: str) -> tuple:
+        """Separa quantidade e valor unitario concatenados sem espaco.
+
+        pdfplumber pode colar colunas estreitas: "9,00002.546,1000"
+        = qty "9,0000" + unit "2.546,1000"
+
+        Chamado apenas quando _parse_valor_br falha (2 virgulas/pontos decimais).
+
+        Returns:
+            (quantidade, valor_unitario) como floats, ou (None, None)
+        """
+        # Strategy 1: V.UNIT com separador de milhar (ponto)
+        # "9,00002.546,1000" → "9,0" + "002.546,1000" (ambos parseiam corretamente)
+        m = re.match(r'^(\d+,\d+?)(\d\.[\d.,]+)$', texto)
+        if m:
+            qty = self._parse_valor_br(m.group(1))
+            val = self._parse_valor_br(m.group(2))
+            if qty is not None and val is not None:
+                return (qty, val)
+
+        # Strategy 2: V.UNIT sem milhar, apenas decimal (virgula)
+        # "9,0000546,1000" → "9,0" + "000546,1000"
+        m = re.match(r'^(\d+,\d+?)(\d+,\d+)$', texto)
+        if m:
+            qty = self._parse_valor_br(m.group(1))
+            val = self._parse_valor_br(m.group(2))
+            if qty is not None and val is not None:
+                return (qty, val)
+
+        return (None, None)
+
     # --- Metodos de extracao ---
 
     def get_chave_acesso(self) -> Optional[str]:
@@ -812,6 +843,21 @@ class DanfePDFParser:
                     cidade = self._completar_cidade_cross_line(linhas, i, cidade)
                     return (uf, cidade)
 
+        # Strategy 1c: 'CIDADE - UF Fone/Tel' (sem CEP, com telefone como guard)
+        # Ex: "RIO DE JANEIRO - RJ Fone/Fax: 21997900188" (DANFEs Laiouns/Maino)
+        for i in range(limite):
+            match = re.search(
+                r'([A-ZÀ-Ú][A-ZÀ-Ú\s]+?)\s*-\s*([A-Z]{2})\s+(?:Fone|Tel)',
+                linhas[i],
+                re.IGNORECASE,
+            )
+            if match:
+                cidade = match.group(1).strip()
+                uf = match.group(2)
+                if uf in self._UFS_BRASIL and len(cidade) >= 2:
+                    cidade = self._completar_cidade_cross_line(linhas, i, cidade)
+                    return (uf, cidade)
+
         # Strategy 2: 'CIDADE/UF' pattern (sem hifen)
         for i in range(limite):
             match = re.search(
@@ -993,11 +1039,12 @@ class DanfePDFParser:
         logger.debug(f"get_itens_produto: {len(prod_starts)} secao(oes) produto, range L{inicio}..L{fim_idx}")
 
         # Agrupar por produto: linha com NCM inicia produto, linhas sem NCM sao continuacao
-        # NCM (8 dig) + O/CST (1-3 dig, possivelmente split: "3 00") + CFOP (4 dig, OPCIONAL)
+        # NCM (8 dig) + O/CST (1-3 dig, possivelmente split: "3 00" ou "1/10") + CFOP (4 dig, OPCIONAL)
         # DANFEs compactas (ex: Laiouns) omitem CFOP. Guard: apos NCM+CST exigir unidade
         # (1-5 chars alfa) em ate 2 tokens para evitar falsos positivos sem CFOP.
         # CFOP pode vir formatado com ponto (ex: 6.403 em vez de 6403) — \d\.?\d{3}
-        ncm_pattern = re.compile(r'\d{8}\s+\d{1,3}(?:\s+\d{2})?(?:\s+\d\.?\d{3}|\s+[A-Za-z]{1,5}\s)')
+        # O/CST pode usar barra (ex: 1/10) em vez de espaco/concatenado — [/\s]+
+        ncm_pattern = re.compile(r'\d{8}\s+\d{1,3}(?:[/\s]+\d{2})?(?:\s+\d\.?\d{3}|\s+[A-Za-z]{1,5}\s)')
 
         # --- Dois niveis de filtro para linhas sem NCM ---
 
@@ -1175,10 +1222,10 @@ class DanfePDFParser:
             continuacoes = []
 
         # Tentar com CFOP primeiro (mais especifico, menos falsos positivos)
-        # NCM (8 dig) + O/CST skip (1-3 dig, possivelmente split) + CFOP (4 dig, com ponto opcional)
-        # Ex: "20057000 3 00 6101" ou "87116000 460 5405" ou "87116000 100 6.403" — todos funcionam
+        # NCM (8 dig) + O/CST skip (1-3 dig, split por espaco ou barra) + CFOP (4 dig, com ponto opcional)
+        # Ex: "20057000 3 00 6101" ou "87116000 460 5405" ou "87116000 1/10 6403" — todos funcionam
         match = re.search(
-            r'(\d{8})\s+\d{1,3}(?:\s+\d{2})?\s+(\d\.?\d{3})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+            r'(\d{8})\s+\d{1,3}(?:[/\s]+\d{2})?\s+(\d\.?\d{3})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
             ncm_line,
         )
         if match:
@@ -1188,13 +1235,25 @@ class DanfePDFParser:
             quantidade = self._parse_valor_br(match.group(4))
             valor_unitario = self._parse_valor_br(match.group(5))
 
-            # Extrair valor total: numeros apos NCM
-            texto_apos = ncm_line[match.start():]
-            numeros = re.findall(r'[\d.,]+', texto_apos)
-            # [NCM, CST, CFOP, QTD, V.UNIT, V.DESC, V.LIQ, BASE_ICMS, V.ICMS, V.IPI, ...]
+            # Fix: pdfplumber pode concatenar QTD e V.UNIT sem espaco (colunas estreitas)
+            # Ex: "9,00002.546,1000" = qty "9,0000" + unit "2.546,1000"
+            if quantidade is None:
+                qty, val = self._split_valores_concatenados(match.group(4))
+                if qty is not None:
+                    quantidade = qty
+                    valor_unitario = val
+
+            # Valor total: preferir calculo QTD*V.UNIT (independente de layout de colunas)
             valor_total_item = None
-            if len(numeros) >= 7:
-                valor_total_item = self._parse_valor_br(numeros[6])
+            if quantidade and valor_unitario:
+                valor_total_item = round(quantidade * valor_unitario, 2)
+            else:
+                # Fallback: extrair por posicao (fragil, depende do layout)
+                texto_apos = ncm_line[match.start():]
+                numeros = re.findall(r'[\d.,]+', texto_apos)
+                # [NCM, CST, CFOP, QTD, V.UNIT, V.DESC, V.LIQ, ...]
+                if len(numeros) >= 7:
+                    valor_total_item = self._parse_valor_br(numeros[6])
 
             texto_antes = ncm_line[:match.start()].strip()
             codigo, descricao = self._separar_codigo_descricao(texto_antes)
@@ -1202,7 +1261,7 @@ class DanfePDFParser:
             # Fallback SEM CFOP: NCM (8 dig) + CST (1-3 dig) + UNIDADE (alfa) + QTD + V.UNIT
             # Ex: "87116000 110 UN 5,0000 2.786,37 13.931,85"
             match_no_cfop = re.search(
-                r'(\d{8})\s+\d{1,3}(?:\s+\d{2})?\s+([A-Za-z]{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+                r'(\d{8})\s+\d{1,3}(?:[/\s]+\d{2})?\s+([A-Za-z]{1,5})\s+([\d.,]+)\s+([\d.,]+)',
                 ncm_line,
             )
             if not match_no_cfop:
@@ -1214,13 +1273,24 @@ class DanfePDFParser:
             quantidade = self._parse_valor_br(match_no_cfop.group(3))
             valor_unitario = self._parse_valor_br(match_no_cfop.group(4))
 
-            # Extrair valor total: numeros apos NCM
-            texto_apos = ncm_line[match_no_cfop.start():]
-            numeros = re.findall(r'[\d.,]+', texto_apos)
-            # SEM CFOP: [NCM, CST, QTD, V.UNIT, V.TOTAL, ...]
+            # Fix: concatenacao QTD+V.UNIT (mesmo tratamento do path com CFOP)
+            if quantidade is None:
+                qty, val = self._split_valores_concatenados(match_no_cfop.group(3))
+                if qty is not None:
+                    quantidade = qty
+                    valor_unitario = val
+
+            # Valor total: preferir calculo QTD*V.UNIT
             valor_total_item = None
-            if len(numeros) >= 5:
-                valor_total_item = self._parse_valor_br(numeros[4])
+            if quantidade and valor_unitario:
+                valor_total_item = round(quantidade * valor_unitario, 2)
+            else:
+                # Fallback: extrair por posicao
+                texto_apos = ncm_line[match_no_cfop.start():]
+                numeros = re.findall(r'[\d.,]+', texto_apos)
+                # SEM CFOP: [NCM, CST, QTD, V.UNIT, V.TOTAL, ...]
+                if len(numeros) >= 5:
+                    valor_total_item = self._parse_valor_br(numeros[4])
 
             texto_antes = ncm_line[:match_no_cfop.start()].strip()
             codigo, descricao = self._separar_codigo_descricao(texto_antes)
