@@ -198,7 +198,7 @@ def register_fatura_routes(bp):
 
                 # Gerar itens de detalhe a partir das operacoes
                 if operacoes:
-                    from app.carvia.services.linking_service import LinkingService
+                    from app.carvia.services.documentos.linking_service import LinkingService
                     linker = LinkingService()
                     linker.criar_itens_fatura_cliente_from_operacoes(fatura.id)
                     # Expandir: criar itens para NFs do CTe não presentes
@@ -606,7 +606,7 @@ def register_fatura_routes(bp):
             )
 
             # Gerar itens de detalhe
-            from app.carvia.services.linking_service import LinkingService
+            from app.carvia.services.documentos.linking_service import LinkingService
             linker = LinkingService()
             linker.criar_itens_fatura_cliente_from_operacoes(fatura.id)
             # Expandir: criar itens para NFs do CTe não presentes
@@ -890,7 +890,7 @@ def register_fatura_routes(bp):
                     )
 
             # Gerar itens de detalhe incrementalmente
-            from app.carvia.services.linking_service import LinkingService
+            from app.carvia.services.documentos.linking_service import LinkingService
             LinkingService().criar_itens_fatura_transportadora_incremental(
                 fatura.id, [sub.id for sub in subcontratos]
             )
@@ -1097,7 +1097,7 @@ def register_fatura_routes(bp):
         valor_acertado_total = sum(float(s.valor_final or 0) for s in subcontratos)
 
         # Resumo de conferencia individual
-        from app.carvia.services.conferencia_service import ConferenciaService
+        from app.carvia.services.documentos.conferencia_service import ConferenciaService
         conferencia_resumo = ConferenciaService().resumo_conferencia_fatura(fatura_id)
 
         # Cross-links: itens, NFs, faturas cliente

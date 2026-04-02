@@ -252,7 +252,7 @@ class EmbarqueCarViaService:
             from app.embarques.models import Embarque
             embarque = db.session.get(Embarque, embarque_id)
             if embarque and embarque.data_embarque:
-                from app.carvia.services.carvia_frete_service import CarviaFreteService
+                from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
                 CarviaFreteService.lancar_frete_carvia(
                     embarque_id=embarque_id,
                     usuario='sistema',

@@ -351,7 +351,7 @@ def register_operacao_routes(bp):
 
             # Auto-cubagem para motos (se empresa configurada)
             try:
-                from app.carvia.services.moto_recognition_service import (
+                from app.carvia.services.pricing.moto_recognition_service import (
                     MotoRecognitionService,
                 )
                 moto_svc = MotoRecognitionService()
@@ -424,7 +424,7 @@ def register_operacao_routes(bp):
 
                 # Re-executar auto-cubagem se empresa usa cubagem (R3)
                 try:
-                    from app.carvia.services.moto_recognition_service import MotoRecognitionService
+                    from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
                     moto_svc = MotoRecognitionService()
                     if operacao.cnpj_cliente and moto_svc.empresa_usa_cubagem(operacao.cnpj_cliente):
                         resultado_cub = moto_svc.calcular_peso_cubado_operacao(operacao.id)
@@ -578,7 +578,7 @@ def register_operacao_routes(bp):
                     ))
 
                 # Cotar automaticamente
-                from app.carvia.services.cotacao_service import CotacaoService
+                from app.carvia.services.pricing.cotacao_service import CotacaoService
                 cotacao = CotacaoService().cotar_subcontrato(
                     operacao_id=operacao_id,
                     transportadora_id=transportadora_id,
@@ -1044,7 +1044,7 @@ def register_operacao_routes(bp):
 
         try:
             from flask import jsonify
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             resultado = CotacaoService().cotar_subcontrato_com_descritivo(
                 operacao_id=operacao_id,
                 transportadora_id=sub.transportadora_id,
@@ -1081,7 +1081,7 @@ def register_operacao_routes(bp):
                 except (ValueError, TypeError):
                     pass
 
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             cotacao = CotacaoService().cotar_subcontrato(
                 operacao_id=operacao_id,
                 transportadora_id=sub.transportadora_id,

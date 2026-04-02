@@ -164,7 +164,7 @@ def register_api_routes(bp):
         try:
             # Se tem categorias_moto, usar CarviaTabelaService diretamente
             if categorias_moto:
-                from app.carvia.services.carvia_tabela_service import CarviaTabelaService
+                from app.carvia.services.pricing.carvia_tabela_service import CarviaTabelaService
                 svc = CarviaTabelaService()
                 opcoes = svc.cotar_carvia(
                     peso=peso,
@@ -177,7 +177,7 @@ def register_api_routes(bp):
                 )
                 return jsonify({'sucesso': True, 'opcoes': opcoes})
 
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             service = CotacaoService()
             opcoes = service.cotar_todas_opcoes(
                 peso, valor, uf_destino, cidade_destino, uf_origem
@@ -205,7 +205,7 @@ def register_api_routes(bp):
             return jsonify({'erro': 'operacao_id e transportadora_id sao obrigatorios'}), 400
 
         try:
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             service = CotacaoService()
             resultado = service.cotar_subcontrato(
                 operacao_id=int(operacao_id),
@@ -679,7 +679,7 @@ def register_api_routes(bp):
             return jsonify({'erro': 'Operacao nao encontrada'}), 404
 
         try:
-            from app.carvia.services.dacte_generator_service import DacteGeneratorService
+            from app.carvia.services.documentos.dacte_generator_service import DacteGeneratorService
             service = DacteGeneratorService()
             pdf_bytes = service.gerar_dacte_pdf('operacao', operacao_id)
 
@@ -722,7 +722,7 @@ def register_api_routes(bp):
             return jsonify({'erro': 'Subcontrato nao encontrado'}), 404
 
         try:
-            from app.carvia.services.dacte_generator_service import DacteGeneratorService
+            from app.carvia.services.documentos.dacte_generator_service import DacteGeneratorService
             service = DacteGeneratorService()
             pdf_bytes = service.gerar_dacte_pdf('subcontrato', subcontrato_id)
 
@@ -848,7 +848,7 @@ def register_api_routes(bp):
             return jsonify({'erro': 'Acesso negado'}), 403
 
         try:
-            from app.carvia.services.conferencia_service import ConferenciaService
+            from app.carvia.services.documentos.conferencia_service import ConferenciaService
             service = ConferenciaService()
             resultado = service.calcular_opcoes_conferencia(sub_id)
             return jsonify(resultado)
@@ -883,7 +883,7 @@ def register_api_routes(bp):
             return jsonify({'erro': 'status deve ser APROVADO ou DIVERGENTE'}), 400
 
         try:
-            from app.carvia.services.conferencia_service import ConferenciaService
+            from app.carvia.services.documentos.conferencia_service import ConferenciaService
             service = ConferenciaService()
             resultado = service.registrar_conferencia(
                 subcontrato_id=sub_id,
@@ -1115,7 +1115,7 @@ def register_api_routes(bp):
                 }), 400
 
         try:
-            from app.carvia.services.ssw_emissao_service import SswEmissaoService
+            from app.carvia.services.documentos.ssw_emissao_service import SswEmissaoService
             resultado = SswEmissaoService.preparar_emissao(
                 nf_id=nf_id,
                 placa=placa,
@@ -1207,7 +1207,7 @@ def register_api_routes(bp):
                 }), 400
 
         try:
-            from app.carvia.services.ssw_emissao_service import SswEmissaoService
+            from app.carvia.services.documentos.ssw_emissao_service import SswEmissaoService
             resultados = SswEmissaoService.preparar_emissao_lote(
                 nf_ids=nf_ids,
                 placa=data.get('placa', 'ARMAZEM'),

@@ -28,7 +28,7 @@ def register_gerencial_routes(bp):
             flash('Acesso negado. Voce nao tem permissao para o sistema CarVia.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.gerencial_service import GerencialService
+        from app.carvia.services.financeiro.gerencial_service import GerencialService
         from app.utils.timezone import agora_brasil_naive
 
         hoje = agora_brasil_naive().date()

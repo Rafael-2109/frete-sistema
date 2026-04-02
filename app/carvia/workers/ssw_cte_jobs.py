@@ -47,7 +47,7 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
     app = create_app()
     with app.app_context():
         from app.carvia.models import CarviaEmissaoCte
-        from app.carvia.services.ssw_emissao_service import SswEmissaoService
+        from app.carvia.services.documentos.ssw_emissao_service import SswEmissaoService
         from app.utils.timezone import agora_utc_naive
 
         emissao = db.session.get(CarviaEmissaoCte, emissao_id)

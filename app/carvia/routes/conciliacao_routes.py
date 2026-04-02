@@ -66,7 +66,7 @@ def register_conciliacao_routes(bp):
             return redirect(url_for('main.dashboard'))
 
         import json
-        from app.carvia.services.carvia_conciliacao_service import CarviaConciliacaoService
+        from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
         resumo = CarviaConciliacaoService.obter_resumo()
 
@@ -101,7 +101,7 @@ def register_conciliacao_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.carvia_conciliacao_service import CarviaConciliacaoService
+        from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
         # Filtros
         hoje = date.today()
@@ -173,7 +173,7 @@ def register_conciliacao_routes(bp):
             return jsonify({'erro': 'Arquivo deve ser .ofx'}), 400
 
         try:
-            from app.carvia.services.carvia_ofx_service import importar_extrato_ofx
+            from app.carvia.services.financeiro.carvia_ofx_service import importar_extrato_ofx
 
             conteudo = arquivo.read()
             resultado = importar_extrato_ofx(
@@ -215,7 +215,7 @@ def register_conciliacao_routes(bp):
         if tipo_match not in ('receber', 'pagar'):
             return jsonify({'erro': 'Tipo deve ser receber ou pagar'}), 400
 
-        from app.carvia.services.carvia_conciliacao_service import CarviaConciliacaoService
+        from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
         docs = CarviaConciliacaoService.obter_documentos_elegiveis(tipo_match)
         return jsonify({'documentos': docs})
@@ -244,7 +244,7 @@ def register_conciliacao_routes(bp):
             return jsonify({'erro': 'Nenhum documento selecionado'}), 400
 
         try:
-            from app.carvia.services.carvia_conciliacao_service import CarviaConciliacaoService
+            from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
             resultado = CarviaConciliacaoService.conciliar(
                 int(extrato_linha_id),
@@ -282,7 +282,7 @@ def register_conciliacao_routes(bp):
         extrato_linha_id = data.get('extrato_linha_id')
 
         try:
-            from app.carvia.services.carvia_conciliacao_service import CarviaConciliacaoService
+            from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
             if conciliacao_id:
                 resultado = CarviaConciliacaoService.desconciliar(
@@ -320,7 +320,7 @@ def register_conciliacao_routes(bp):
             return jsonify({'erro': 'Acesso negado'}), 403
 
         from app.carvia.models import CarviaExtratoLinha
-        from app.carvia.services.carvia_conciliacao_service import CarviaConciliacaoService
+        from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
         linha = db.session.get(CarviaExtratoLinha, linha_id)
         if not linha:
@@ -377,7 +377,7 @@ def register_conciliacao_routes(bp):
             return jsonify({'erro': 'Arquivo deve ser .csv'}), 400
 
         try:
-            from app.carvia.services.carvia_csv_razao_service import (
+            from app.carvia.services.financeiro.carvia_csv_razao_service import (
                 parsear_csv_banco,
                 match_csv_com_extrato,
             )
@@ -465,7 +465,7 @@ def register_conciliacao_routes(bp):
             return jsonify({'erro': 'Job expirado ou invalido'}), 400
 
         try:
-            from app.carvia.services.carvia_csv_razao_service import aplicar_matches
+            from app.carvia.services.financeiro.carvia_csv_razao_service import aplicar_matches
 
             job = _csv_jobs[job_id]
             matches = job['resultado']['auto_matched']
@@ -508,7 +508,7 @@ def register_conciliacao_routes(bp):
             return jsonify({'erro': 'csv_index e extrato_id obrigatorios'}), 400
 
         try:
-            from app.carvia.services.carvia_csv_razao_service import aplicar_matches
+            from app.carvia.services.financeiro.carvia_csv_razao_service import aplicar_matches
 
             job = _csv_jobs[job_id]
             pendentes = job['resultado']['pendentes_manual']
@@ -694,7 +694,7 @@ def register_conciliacao_routes(bp):
             return jsonify({'erro': 'campo obrigatorio'}), 400
 
         try:
-            from app.carvia.services.carvia_csv_razao_service import atualizar_campo_extrato
+            from app.carvia.services.financeiro.carvia_csv_razao_service import atualizar_campo_extrato
 
             resultado = atualizar_campo_extrato(int(extrato_id), campo, valor)
             db.session.commit()

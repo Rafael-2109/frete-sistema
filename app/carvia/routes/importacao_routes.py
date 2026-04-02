@@ -523,7 +523,7 @@ def register_importacao_routes(bp):
                 return redirect(url_for('carvia.importar'))
 
             # Processar com ImportacaoService
-            from app.carvia.services.importacao_service import ImportacaoService
+            from app.carvia.services.parsers.importacao_service import ImportacaoService
             service = ImportacaoService()
             resultado = service.processar_arquivos(
                 arquivos_bytes,
@@ -556,7 +556,7 @@ def register_importacao_routes(bp):
             flash('Nenhuma importacao pendente ou sessao expirada. Faca o upload novamente.', 'warning')
             return redirect(url_for('carvia.importar'))
 
-        from app.carvia.services.importacao_service import ImportacaoService
+        from app.carvia.services.parsers.importacao_service import ImportacaoService
         service = ImportacaoService()
 
         resultado_salvo = service.salvar_importacao(

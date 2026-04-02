@@ -156,7 +156,7 @@ def register_importacao_config_routes(bp):
         if err_redirect:
             return err_redirect
 
-        from app.carvia.services.importacao_config_service import ImportacaoConfigService
+        from app.carvia.services.parsers.importacao_config_service import ImportacaoConfigService
 
         svc = ImportacaoConfigService()
         return _processar_importacao(
@@ -180,7 +180,7 @@ def register_importacao_config_routes(bp):
         if err_redirect:
             return err_redirect
 
-        from app.carvia.services.importacao_config_service import ImportacaoConfigService
+        from app.carvia.services.parsers.importacao_config_service import ImportacaoConfigService
 
         svc = ImportacaoConfigService()
         return _processar_importacao(
@@ -204,7 +204,7 @@ def register_importacao_config_routes(bp):
         if err_redirect:
             return err_redirect
 
-        from app.carvia.services.importacao_config_service import ImportacaoConfigService
+        from app.carvia.services.parsers.importacao_config_service import ImportacaoConfigService
 
         svc = ImportacaoConfigService()
         return _processar_importacao(

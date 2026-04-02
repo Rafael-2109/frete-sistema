@@ -283,7 +283,7 @@ class CotacaoV2Service:
         _cidade = cidade_entrega or (destino.fisico_cidade if destino else None)
 
         try:
-            from app.carvia.services.carvia_tabela_service import CarviaTabelaService
+            from app.carvia.services.pricing.carvia_tabela_service import CarviaTabelaService
             svc = CarviaTabelaService()
 
             origem = cotacao.endereco_origem
@@ -357,7 +357,7 @@ class CotacaoV2Service:
         _cidade = cidade_entrega or (destino.fisico_cidade if destino else None)
 
         try:
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             svc = CotacaoService()
 
             if not _cidade or not _uf:
@@ -453,7 +453,7 @@ class CotacaoV2Service:
     ) -> Tuple[bool, Optional[str]]:
         """Aplica desconto na cotacao. Se > limite, muda para PENDENTE_ADMIN."""
         from app.carvia.models import CarviaCotacao
-        from app.carvia.services.config_service import CarviaConfigService
+        from app.carvia.services.pricing.config_service import CarviaConfigService
 
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
@@ -595,7 +595,7 @@ class CotacaoV2Service:
         Se desconto implícito excede limite, bloqueia para aprovação admin.
         """
         from app.carvia.models import CarviaCotacao
-        from app.carvia.services.config_service import CarviaConfigService
+        from app.carvia.services.pricing.config_service import CarviaConfigService
 
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
@@ -709,7 +709,7 @@ class CotacaoV2Service:
 
         # Limpar embarque: provisorio + reais (nao-bloqueante)
         try:
-            from app.carvia.services.embarque_carvia_service import EmbarqueCarViaService
+            from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
             EmbarqueCarViaService.remover_itens_cotacao(cotacao_id)
         except Exception as e:
             logger.warning("Erro ao limpar embarque da cotacao: %s", e)

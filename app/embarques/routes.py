@@ -1416,7 +1416,7 @@ def imprimir_embarque_completo(embarque_id):
             })
 
     # Prepara dados de cada separação CARVIA (via resolver centralizado)
-    from app.carvia.services.embarque_carvia_service import EmbarqueCarViaService
+    from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
 
     carvia_separacoes_data = []
     for lote_id in lotes_carvia:
@@ -3010,7 +3010,7 @@ def _imprimir_separacao_carvia(embarque_id, separacao_lote_id):
 
     embarque = Embarque.query.get_or_404(embarque_id)
 
-    from app.carvia.services.embarque_carvia_service import EmbarqueCarViaService
+    from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
     dados = EmbarqueCarViaService.resolver_lote_carvia(separacao_lote_id)
 
     if not dados or not dados['cotacao']:

@@ -61,7 +61,7 @@ class MargemService:
     def _melhor_custo_subcontrato(cotacao) -> float:
         """Busca o melhor (menor) custo de subcontrato para a cotacao."""
         try:
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             svc = CotacaoService()
 
             destino = cotacao.endereco_destino

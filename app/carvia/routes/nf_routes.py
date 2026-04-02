@@ -176,7 +176,7 @@ def register_nf_routes(bp):
                     faturas_transp_por_nf[nf_id].append(fat_transp)
 
         # Batch: peso cubado por NF (2 queries)
-        from app.carvia.services.moto_recognition_service import MotoRecognitionService
+        from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
         moto_svc = MotoRecognitionService()
         peso_cubado_por_nf = moto_svc.calcular_peso_cubado_batch(nf_ids) if nf_ids else {}
 
@@ -229,7 +229,7 @@ def register_nf_routes(bp):
         faturas_transportadora = nf.get_faturas_transportadora()
 
         # Calcular peso cubado a partir dos itens + modelos moto
-        from app.carvia.services.moto_recognition_service import MotoRecognitionService
+        from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
         moto_svc = MotoRecognitionService()
         resultado_cubagem = moto_svc.calcular_peso_cubado_nf(nf.id)
         peso_cubado = (

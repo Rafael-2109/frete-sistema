@@ -79,7 +79,7 @@ def _remover_movimentacao(tipo_doc, doc_id):
 
 def _obter_saldo_atual():
     """Helper para obter saldo atual da conta."""
-    from app.carvia.services.fluxo_caixa_service import FluxoCaixaService
+    from app.carvia.services.financeiro.fluxo_caixa_service import FluxoCaixaService
     return FluxoCaixaService().obter_saldo_conta()
 
 
@@ -152,7 +152,7 @@ def register_fluxo_caixa_routes(bp):
             direcao = 'todos'
 
         # Buscar dados
-        from app.carvia.services.fluxo_caixa_service import FluxoCaixaService
+        from app.carvia.services.financeiro.fluxo_caixa_service import FluxoCaixaService
         service = FluxoCaixaService()
         saldo_conta = service.obter_saldo_conta()
 
@@ -545,7 +545,7 @@ def register_fluxo_caixa_routes(bp):
         if data_fim < data_inicio:
             data_fim = data_inicio
 
-        from app.carvia.services.fluxo_caixa_service import FluxoCaixaService
+        from app.carvia.services.financeiro.fluxo_caixa_service import FluxoCaixaService
         service = FluxoCaixaService()
         extrato = service.obter_extrato(data_inicio, data_fim)
         saldo_conta = service.obter_saldo_conta()

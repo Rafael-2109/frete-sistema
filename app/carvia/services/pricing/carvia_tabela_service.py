@@ -351,7 +351,7 @@ class CarviaTabelaService:
                 )
 
             # 3. Calcular com cada tabela
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             cotacao_svc = CotacaoService()
 
             opcoes = []

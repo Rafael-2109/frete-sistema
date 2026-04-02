@@ -371,7 +371,7 @@ def registrar_movimento():
                     # CarviaFreteService cria CarviaOperacao + CarviaSubcontrato + CarviaFrete
                     if registro.embarque_id:
                         try:
-                            from app.carvia.services.carvia_frete_service import CarviaFreteService
+                            from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
                             fretes = CarviaFreteService.lancar_frete_carvia(
                                 embarque_id=registro.embarque_id,
                                 usuario=current_user.email,
@@ -763,7 +763,7 @@ def adicionar_embarque():
             
             # Hook CarVia: gerar fretes (vinculacao apos saida)
             try:
-                from app.carvia.services.carvia_frete_service import CarviaFreteService
+                from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
                 fretes = CarviaFreteService.lancar_frete_carvia(
                     embarque_id=embarque_id,
                     usuario=current_user.email,

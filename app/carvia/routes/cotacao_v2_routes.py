@@ -24,7 +24,7 @@ def register_cotacao_v2_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         status = request.args.get('status')
         cliente_id = request.args.get('cliente_id', type=int)
@@ -87,7 +87,7 @@ def register_cotacao_v2_routes(bp):
             conteudo = arquivo.read()
 
             if ext == 'xml':
-                from app.carvia.services.nfe_xml_parser import NFeXMLParser
+                from app.carvia.services.parsers.nfe_xml_parser import NFeXMLParser
                 parser = NFeXMLParser(conteudo)
                 if not parser.is_valid():
                     return jsonify({'erro': 'XML invalido.'}), 400
@@ -95,7 +95,7 @@ def register_cotacao_v2_routes(bp):
                     return jsonify({'erro': 'XML nao e NF-e (modelo 55).'}), 400
                 dados = parser.get_todas_informacoes()
             else:
-                from app.carvia.services.danfe_pdf_parser import DanfePDFParser
+                from app.carvia.services.parsers.danfe_pdf_parser import DanfePDFParser
                 parser = DanfePDFParser(pdf_bytes=conteudo)
                 if not parser.is_valid():
                     return jsonify({'erro': 'PDF invalido ou sem texto extraivel.'}), 400
@@ -168,7 +168,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
         from app.carvia.models import CarviaClienteEndereco
 
         arquivo = request.files.get('arquivo')
@@ -185,13 +185,13 @@ def register_cotacao_v2_routes(bp):
 
             # 1. Parsear
             if ext == 'xml':
-                from app.carvia.services.nfe_xml_parser import NFeXMLParser
+                from app.carvia.services.parsers.nfe_xml_parser import NFeXMLParser
                 parser = NFeXMLParser(conteudo)
                 if not parser.is_valid() or not parser.is_nfe():
                     return jsonify({'erro': 'XML invalido ou nao e NF-e.'}), 400
                 dados = parser.get_todas_informacoes()
             else:
-                from app.carvia.services.danfe_pdf_parser import DanfePDFParser
+                from app.carvia.services.parsers.danfe_pdf_parser import DanfePDFParser
                 parser = DanfePDFParser(pdf_bytes=conteudo)
                 if not parser.is_valid():
                     return jsonify({'erro': 'PDF invalido.'}), 400
@@ -291,7 +291,7 @@ def register_cotacao_v2_routes(bp):
             motos_reconhecidas = []
             if eh_moto:
                 try:
-                    from app.carvia.services.moto_recognition_service import MotoRecognitionService
+                    from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
                     from app.carvia.models import CarviaModeloMoto
                     modelos_db = CarviaModeloMoto.query.filter_by(ativo=True).all()
                     modelos_by_nome = {m.nome: m for m in modelos_db}
@@ -395,7 +395,7 @@ def register_cotacao_v2_routes(bp):
             CarviaNf, CarviaPedido, CarviaPedidoItem,
             CarviaClienteEndereco,
         )
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         nf = db.session.get(CarviaNf, nf_id)
         if not nf:
@@ -493,7 +493,7 @@ def register_cotacao_v2_routes(bp):
             motos_reconhecidas = []
             if eh_moto:
                 try:
-                    from app.carvia.services.moto_recognition_service import MotoRecognitionService
+                    from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
                     from app.carvia.models import CarviaModeloMoto
                     modelos_db = CarviaModeloMoto.query.filter_by(ativo=True).all()
                     modelos_by_nome = {m.nome: m for m in modelos_db}
@@ -635,7 +635,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         data = request.get_json()
         if not data:
@@ -748,7 +748,7 @@ def register_cotacao_v2_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         def _ctx_criar():
             """Contexto compartilhado GET + erro POST."""
@@ -780,7 +780,7 @@ def register_cotacao_v2_routes(bp):
                 **_ctx_criar(),
             )
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         # Preservar nf_id para re-render em caso de erro
         nf_id_param = request.form.get('nf_id_existente', type=int)
@@ -1155,11 +1155,11 @@ def register_cotacao_v2_routes(bp):
         } for m in modelos_raw])
 
         # Clientes e enderecos para edicao
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
         clientes = CarviaClienteService.listar_clientes(apenas_ativos=True)
 
         # Limite desconto para UI
-        from app.carvia.services.config_service import CarviaConfigService
+        from app.carvia.services.pricing.config_service import CarviaConfigService
         limite_desconto = CarviaConfigService.limite_desconto_percentual()
 
         # Veiculos para dropdown DIRETA
@@ -1507,7 +1507,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         data = request.get_json()
         if not data:
@@ -1568,7 +1568,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         try:
             resultado, erro = CotacaoV2Service.calcular_preco(cotacao_id)
@@ -1590,7 +1590,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         data = request.get_json()
         if not data:
@@ -1629,7 +1629,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         data = request.get_json()
         if not data:
@@ -1660,7 +1660,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         data = request.get_json()
         peso = float(data.get('peso', 0)) if data else 0
@@ -1677,7 +1677,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         try:
             sucesso, erro = CotacaoV2Service.marcar_enviado(
@@ -1697,7 +1697,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         try:
             sucesso, erro = CotacaoV2Service.registrar_aprovacao_cliente(
@@ -1717,7 +1717,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         try:
             sucesso, erro = CotacaoV2Service.registrar_recusa_cliente(cotacao_id)
@@ -1736,7 +1736,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         data = request.get_json()
         if not data:
@@ -1760,7 +1760,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         try:
             sucesso, erro = CotacaoV2Service.cancelar(cotacao_id)
@@ -1779,7 +1779,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         try:
             sucesso, erro = CotacaoV2Service.reabrir(
@@ -1801,7 +1801,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'perfil', '') == 'administrador':
             return jsonify({'erro': 'Apenas administradores.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         try:
             sucesso, erro = CotacaoV2Service.admin_aprovar(
@@ -1823,7 +1823,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'perfil', '') == 'administrador':
             return jsonify({'erro': 'Apenas administradores.'}), 403
 
-        from app.carvia.services.cotacao_v2_service import CotacaoV2Service
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
 
         try:
             sucesso, erro = CotacaoV2Service.admin_rejeitar(cotacao_id)
@@ -1890,7 +1890,7 @@ def register_cotacao_v2_routes(bp):
 
             # 1. Parsear arquivo
             if ext == 'xml':
-                from app.carvia.services.nfe_xml_parser import NFeXMLParser
+                from app.carvia.services.parsers.nfe_xml_parser import NFeXMLParser
                 parser = NFeXMLParser(conteudo)
                 if not parser.is_valid():
                     return jsonify({'erro': 'XML invalido.'}), 400
@@ -1898,7 +1898,7 @@ def register_cotacao_v2_routes(bp):
                     return jsonify({'erro': 'XML nao e NF-e (modelo 55). Pode ser CTe.'}), 400
                 dados = parser.get_todas_informacoes()
             else:
-                from app.carvia.services.danfe_pdf_parser import DanfePDFParser
+                from app.carvia.services.parsers.danfe_pdf_parser import DanfePDFParser
                 parser = DanfePDFParser(pdf_bytes=conteudo)
                 if not parser.is_valid():
                     return jsonify({'erro': 'PDF invalido ou sem texto extraivel.'}), 400
@@ -2040,7 +2040,7 @@ def register_cotacao_v2_routes(bp):
             # 7. Expandir provisorio no embarque (nao-bloqueante)
             resultado_expansao = None
             try:
-                from app.carvia.services.embarque_carvia_service import EmbarqueCarViaService
+                from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
                 resultado_expansao = EmbarqueCarViaService.expandir_provisorio(
                     carvia_cotacao_id=cotacao_id,
                     pedido_id=pedido.id,
@@ -2146,7 +2146,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         origens = CarviaClienteService.listar_origens_globais()
         return jsonify({
@@ -2172,7 +2172,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         data = request.get_json()
         if not data:
@@ -2193,7 +2193,7 @@ def register_cotacao_v2_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         data = request.get_json()
         if not data:
@@ -2457,7 +2457,7 @@ def register_cotacao_v2_routes(bp):
 
         # --- Disparar emissao via SswEmissaoService ---
         try:
-            from app.carvia.services.ssw_emissao_service import SswEmissaoService
+            from app.carvia.services.documentos.ssw_emissao_service import SswEmissaoService
             resultados = SswEmissaoService.preparar_emissao_lote(
                 nf_ids=nf_ids,
                 placa=placa,

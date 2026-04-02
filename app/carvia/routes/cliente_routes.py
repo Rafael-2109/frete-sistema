@@ -23,7 +23,7 @@ def register_cliente_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         busca = request.args.get('busca', '').strip()
         apenas_ativos = request.args.get('ativos', '1') == '1'
@@ -53,7 +53,7 @@ def register_cliente_routes(bp):
         if request.method == 'GET':
             return render_template('carvia/clientes/criar.html')
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         nome_comercial = request.form.get('nome_comercial', '').strip()
         observacoes = request.form.get('observacoes', '').strip() or None
@@ -88,7 +88,7 @@ def register_cliente_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         cliente = CarviaClienteService.buscar_por_id(cliente_id)
         if not cliente:
@@ -111,7 +111,7 @@ def register_cliente_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         cliente = CarviaClienteService.buscar_por_id(cliente_id)
         if not cliente:
@@ -150,7 +150,7 @@ def register_cliente_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         data = request.get_json()
         if not data:
@@ -214,7 +214,7 @@ def register_cliente_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         data = request.get_json()
         if not data:
@@ -240,7 +240,7 @@ def register_cliente_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         try:
             sucesso, erro = CarviaClienteService.remover_endereco(endereco_id)
@@ -266,7 +266,7 @@ def register_cliente_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
         origens = CarviaClienteService.listar_origens_globais()
 
         return render_template(
@@ -281,7 +281,7 @@ def register_cliente_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         data = request.get_json()
         if not data:
@@ -329,7 +329,7 @@ def register_cliente_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.cliente_service import CarviaClienteService
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         data = request.get_json()
         if not data:

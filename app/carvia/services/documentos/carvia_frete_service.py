@@ -451,7 +451,7 @@ class CarviaFreteService:
     def _calcular_custo_cotacao(operacao_id: int, transportadora_id: int) -> Optional[float]:
         """Calcula custo via CotacaoService.cotar_subcontrato() (FRACIONADA ou fallback)."""
         try:
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             svc = CotacaoService()
             resultado = svc.cotar_subcontrato(
                 operacao_id=operacao_id,
@@ -494,7 +494,7 @@ class CarviaFreteService:
     def _calcular_venda(uf_destino, cidade_destino, peso, valor_mercadoria, cnpj_cliente) -> Optional[float]:
         """Calcula preco de venda pela tabela CarVia."""
         try:
-            from app.carvia.services.carvia_tabela_service import CarviaTabelaService
+            from app.carvia.services.pricing.carvia_tabela_service import CarviaTabelaService
             svc = CarviaTabelaService()
 
             opcoes = svc.cotar_carvia(

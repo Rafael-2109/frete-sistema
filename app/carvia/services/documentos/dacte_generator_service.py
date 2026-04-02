@@ -92,7 +92,7 @@ class DacteGeneratorService:
                 )
                 return None
 
-            from app.carvia.services.cte_xml_parser_carvia import CTeXMLParserCarvia
+            from app.carvia.services.parsers.cte_xml_parser_carvia import CTeXMLParserCarvia
             parser = CTeXMLParserCarvia(xml_bytes)
             dados = parser.get_todas_informacoes_dacte()
 

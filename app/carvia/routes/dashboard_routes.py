@@ -185,7 +185,7 @@ def register_dashboard_routes(bp):
         # Saldo da conta (isolado — falha nao zera stats basicas)
         if 'saldo_conta' not in stats:
             try:
-                from app.carvia.services.fluxo_caixa_service import FluxoCaixaService
+                from app.carvia.services.financeiro.fluxo_caixa_service import FluxoCaixaService
                 stats['saldo_conta'] = FluxoCaixaService().obter_saldo_conta() or 0
             except Exception as e:
                 logger.warning(f"Erro ao obter saldo conta CarVia: {e}")
@@ -194,7 +194,7 @@ def register_dashboard_routes(bp):
         # Faturamento comparativo mes atual vs anterior (isolado)
         if 'faturamento' not in stats:
             try:
-                from app.carvia.services.gerencial_service import GerencialService
+                from app.carvia.services.financeiro.gerencial_service import GerencialService
                 stats['faturamento'] = GerencialService().obter_faturamento_comparativo()
             except Exception as e:
                 logger.warning(f"Erro ao obter faturamento comparativo CarVia: {e}")

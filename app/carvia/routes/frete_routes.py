@@ -435,7 +435,7 @@ def register_frete_routes(bp):
             db.session.flush()
 
             # 4. Gerar itens de detalhe da fatura
-            from app.carvia.services.linking_service import LinkingService
+            from app.carvia.services.documentos.linking_service import LinkingService
             linker = LinkingService()
             linker.criar_itens_fatura_transportadora_incremental(fatura.id, [sub.id])
 

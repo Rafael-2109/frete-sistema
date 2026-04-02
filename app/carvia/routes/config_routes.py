@@ -434,7 +434,7 @@ def register_config_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.carvia_tabela_service import CarviaTabelaService
+        from app.carvia.services.pricing.carvia_tabela_service import CarviaTabelaService
         svc = CarviaTabelaService()
         precos = svc.buscar_precos_categoria(tid)
         return jsonify({'sucesso': True, 'precos': precos})
@@ -759,7 +759,7 @@ def register_config_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.services.config_service import CarviaConfigService
+        from app.carvia.services.pricing.config_service import CarviaConfigService
         configs = CarviaConfigService.listar_todas()
 
         return render_template(
@@ -774,7 +774,7 @@ def register_config_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.services.config_service import CarviaConfigService
+        from app.carvia.services.pricing.config_service import CarviaConfigService
 
         data = request.get_json()
         if not data:

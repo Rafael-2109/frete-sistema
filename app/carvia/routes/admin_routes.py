@@ -81,7 +81,7 @@ def register_admin_routes(bp):
             flash('Motivo obrigatorio (minimo 10 caracteres).', 'danger')
             return redirect(request.referrer or url_for(config['redirect']))
 
-        from app.carvia.services.admin_service import AdminService
+        from app.carvia.services.admin.admin_service import AdminService
         service = AdminService()
 
         metodo = getattr(service, config['metodo'])
@@ -106,7 +106,7 @@ def register_admin_routes(bp):
     @require_admin
     def admin_editar(tipo, id):
         """Edicao completa de qualquer entidade CarVia (todos os campos)."""
-        from app.carvia.services.admin_service import AdminService
+        from app.carvia.services.admin.admin_service import AdminService
         service = AdminService()
 
         ModelClass = service._get_model_class(tipo)
@@ -164,7 +164,7 @@ def register_admin_routes(bp):
     @require_admin
     def admin_relink_nfs(id):
         """Re-vincula/desvincula NFs de uma operacao."""
-        from app.carvia.services.admin_service import AdminService
+        from app.carvia.services.admin.admin_service import AdminService
         service = AdminService()
 
         motivo = request.form.get('motivo', '').strip()
@@ -196,7 +196,7 @@ def register_admin_routes(bp):
     @require_admin
     def admin_converter(tipo_origem, id):
         """Converter uma entidade de um tipo para outro."""
-        from app.carvia.services.admin_service import AdminService
+        from app.carvia.services.admin.admin_service import AdminService
         service = AdminService()
 
         # Determinar tipo destino
@@ -273,7 +273,7 @@ def register_admin_routes(bp):
     @require_admin
     def admin_auditoria():
         """Visualizador de registros de auditoria admin."""
-        from app.carvia.services.admin_service import AdminService
+        from app.carvia.services.admin.admin_service import AdminService
         service = AdminService()
 
         page = request.args.get('page', 1, type=int)

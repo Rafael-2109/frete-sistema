@@ -154,7 +154,7 @@ def register_subcontrato_routes(bp):
                     ))
 
                 # Cotar automaticamente
-                from app.carvia.services.cotacao_service import CotacaoService
+                from app.carvia.services.pricing.cotacao_service import CotacaoService
                 cotacao = CotacaoService().cotar_subcontrato(
                     operacao_id=operacao_id,
                     transportadora_id=transportadora_id,
@@ -312,7 +312,7 @@ def register_subcontrato_routes(bp):
             sub.operacao_id = nova_operacao_id
 
             # Recotar com base na nova operacao
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             cotacao = CotacaoService().cotar_subcontrato(
                 operacao_id=nova_operacao_id,
                 transportadora_id=sub.transportadora_id,
@@ -382,7 +382,7 @@ def register_subcontrato_routes(bp):
             return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
 
         try:
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             cotacao = CotacaoService().cotar_subcontrato(
                 operacao_id=sub.operacao_id,
                 transportadora_id=sub.transportadora_id,
@@ -434,7 +434,7 @@ def register_subcontrato_routes(bp):
                 sub.valor_cotado = valor_override
                 msg = f'Valor recotado manualmente: R$ {valor_override:.2f}'
             else:
-                from app.carvia.services.cotacao_service import CotacaoService
+                from app.carvia.services.pricing.cotacao_service import CotacaoService
                 cotacao = CotacaoService().cotar_subcontrato(
                     operacao_id=sub.operacao_id,
                     transportadora_id=sub.transportadora_id,
@@ -475,7 +475,7 @@ def register_subcontrato_routes(bp):
             return {'sucesso': False, 'erro': 'Subcontrato sem transportadora.'}, 400
 
         try:
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             cotacao = CotacaoService().cotar_subcontrato(
                 operacao_id=sub.operacao_id,
                 transportadora_id=sub.transportadora_id,

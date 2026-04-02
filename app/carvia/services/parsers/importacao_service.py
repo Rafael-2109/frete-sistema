@@ -435,7 +435,7 @@ class ImportacaoService:
                             # chave_acesso_nf, agora a NF real tem — pode
                             # gerar novas junctions via nfs_referenciadas_json
                             try:
-                                from app.carvia.services.linking_service import LinkingService
+                                from app.carvia.services.documentos.linking_service import LinkingService
                                 linker = LinkingService()
                                 junc_count = linker.vincular_nf_a_operacoes_orfas(nf)
                                 if junc_count > 0:
@@ -483,7 +483,7 @@ class ImportacaoService:
                         # Re-linking retroativo: resolver vinculos pendentes
                         # quando NF chega depois de CTe ou Fatura
                         try:
-                            from app.carvia.services.linking_service import LinkingService
+                            from app.carvia.services.documentos.linking_service import LinkingService
                             linker = LinkingService()
 
                             # CTe→NF: criar junction via nfs_referenciadas_json
@@ -559,7 +559,7 @@ class ImportacaoService:
 
                             # Re-linking: atualizar itens de fatura orfaos
                             try:
-                                from app.carvia.services.linking_service import LinkingService
+                                from app.carvia.services.documentos.linking_service import LinkingService
                                 linker = LinkingService()
                                 linker.vincular_operacao_a_itens_fatura_orfaos(op_existente)
                             except Exception as e_link:
@@ -606,7 +606,7 @@ class ImportacaoService:
                     # Re-linking retroativo: atualizar itens de fatura
                     # que referenciam este CTe mas foram importados antes
                     try:
-                        from app.carvia.services.linking_service import LinkingService
+                        from app.carvia.services.documentos.linking_service import LinkingService
                         linker = LinkingService()
                         fat_count = linker.vincular_operacao_a_itens_fatura_orfaos(operacao)
                         if fat_count > 0:
@@ -621,7 +621,7 @@ class ImportacaoService:
 
                     # Auto-cubagem para motos (se empresa configurada)
                     try:
-                        from app.carvia.services.moto_recognition_service import (
+                        from app.carvia.services.pricing.moto_recognition_service import (
                             MotoRecognitionService,
                         )
                         moto_svc = MotoRecognitionService()
@@ -716,7 +716,7 @@ class ImportacaoService:
 
                             # Gravar itens de detalhe CTe (apenas para CarviaFaturaCliente)
                             if isinstance(fatura, CarviaFaturaCliente):
-                                from app.carvia.services.linking_service import LinkingService
+                                from app.carvia.services.documentos.linking_service import LinkingService
                                 linker = LinkingService()
 
                                 itens_detalhe = fat_data.get('itens_detalhe', [])
@@ -883,7 +883,7 @@ class ImportacaoService:
         fluxo de classificacao CNPJ e criacao de operacao/subcontrato
         funcione sem alteracao.
         """
-        from app.carvia.services.dacte_pdf_parser import DactePDFParser
+        from app.carvia.services.parsers.dacte_pdf_parser import DactePDFParser
 
         parser = DactePDFParser(pdf_bytes=conteudo)
         if not parser.is_valid():

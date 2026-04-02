@@ -268,7 +268,7 @@ class SswEmissaoService:
         if xml_path and os.path.exists(xml_path):
             emissao.xml_path = xml_path
             try:
-                from app.carvia.services.importacao_service import ImportacaoService
+                from app.carvia.services.parsers.importacao_service import ImportacaoService
                 svc = ImportacaoService()
 
                 # Processar XML como importacao CarVia
@@ -320,7 +320,7 @@ class SswEmissaoService:
         if pdf_path and os.path.exists(pdf_path):
             emissao.fatura_pdf_path = pdf_path
             try:
-                from app.carvia.services.importacao_service import ImportacaoService
+                from app.carvia.services.parsers.importacao_service import ImportacaoService
                 svc = ImportacaoService()
 
                 with open(pdf_path, 'rb') as f:

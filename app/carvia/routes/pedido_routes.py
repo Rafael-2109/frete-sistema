@@ -227,7 +227,7 @@ def register_pedido_routes(bp):
             # 2. Expandir provisorio no embarque (se cotacao esta em algum)
             resultado_expansao = None
             try:
-                from app.carvia.services.embarque_carvia_service import EmbarqueCarViaService
+                from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
                 resultado_expansao = EmbarqueCarViaService.expandir_provisorio(
                     carvia_cotacao_id=pedido.cotacao_id,
                     pedido_id=pedido_id,

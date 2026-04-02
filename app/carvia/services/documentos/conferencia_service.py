@@ -98,7 +98,7 @@ class ConferenciaService:
         }
 
         try:
-            from app.carvia.services.cotacao_service import CotacaoService
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
             cotacao_svc = CotacaoService()
 
             # Buscar todas opcoes para a transportadora do subcontrato
