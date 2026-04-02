@@ -142,6 +142,13 @@
   ],
   "indices": [
     {
+      "name": "idx_faturamento_pedido",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_faturamento_produto_data_fatura",
       "columns": [
         "data_fatura"
@@ -196,13 +203,6 @@
       "columns": [
         "cnpj_cliente",
         "data_fatura"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_faturamento_pedido",
-      "columns": [
-        "origem"
       ],
       "unique": false
     }

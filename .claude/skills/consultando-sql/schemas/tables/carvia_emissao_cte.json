@@ -44,13 +44,11 @@
     },
     {
       "name": "uf_origem",
-      "type": "varchar(2)",
-      "description": "UF de origem da operacao (SP, RJ). Define filial SSW."
+      "type": "varchar(2)"
     },
     {
       "name": "filial_ssw",
-      "type": "varchar(10)",
-      "description": "Filial SSW derivada da UF: SP=CAR, RJ=GIG"
+      "type": "varchar(10)"
     },
     {
       "name": "cnpj_tomador",

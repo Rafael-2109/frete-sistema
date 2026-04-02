@@ -1,0 +1,105 @@
+{
+  "name": "carvia_comissao_fechamentos",
+  "description": "Tabela carvia_comissao_fechamentos",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_fechamento",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "vendedor_nome",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "vendedor_email",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "data_inicio",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "data_fim",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "percentual",
+      "type": "numeric(5,4)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_ctes",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "total_bruto",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "total_comissao",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "pago_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "pago_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "data_pagamento",
+      "type": "date"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_comissao_fechamentos_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

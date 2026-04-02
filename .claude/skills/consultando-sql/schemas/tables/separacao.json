@@ -229,32 +229,9 @@
   ],
   "indices": [
     {
-      "name": "idx_sep_nf_cd",
-      "columns": [
-        "nf_cd"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_lote_status",
-      "columns": [
-        "separacao_lote_id",
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_cotacao",
       "columns": [
         "cotacao_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_falta_item_sync",
-      "columns": [
-        "falta_item",
-        "sincronizado_nf"
       ],
       "unique": false
     },
@@ -274,9 +251,11 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
+      "name": "idx_sep_pedido_produto_sync",
       "columns": [
-        "separacao_lote_id"
+        "num_pedido",
+        "cod_produto",
+        "sincronizado_nf"
       ],
       "unique": false
     },
@@ -288,11 +267,9 @@
       "unique": false
     },
     {
-      "name": "idx_sep_pedido_produto_sync",
+      "name": "ix_separacao_separacao_lote_id",
       "columns": [
-        "num_pedido",
-        "cod_produto",
-        "sincronizado_nf"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -301,6 +278,13 @@
       "columns": [
         "cod_produto",
         "qtd_saldo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_nf_cd",
+      "columns": [
+        "nf_cd"
       ],
       "unique": false
     },
@@ -321,17 +305,17 @@
       "unique": false
     },
     {
-      "name": "idx_sep_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_falta_pgto_sync",
       "columns": [
         "falta_pagamento",
         "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -360,10 +344,26 @@
       "unique": false
     },
     {
+      "name": "idx_sep_falta_item_sync",
+      "columns": [
+        "falta_item",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_sep_expedicao",
       "columns": [
         "expedicao",
         "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_lote_status",
+      "columns": [
+        "separacao_lote_id",
+        "status"
       ],
       "unique": false
     }

@@ -63,13 +63,6 @@
   ],
   "indices": [
     {
-      "name": "ix_recursos_producao_cod_produto",
-      "columns": [
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_recursos_producao_linha_producao",
       "columns": [
         "linha_producao"
@@ -81,6 +74,13 @@
       "columns": [
         "cod_produto",
         "linha_producao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_recursos_producao_cod_produto",
+      "columns": [
+        "cod_produto"
       ],
       "unique": false
     }

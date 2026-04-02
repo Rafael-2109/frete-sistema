@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 244,
+  "total_relationships": 246,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -90,6 +90,18 @@
       "from_table": "carvia_cliente_enderecos",
       "from_column": "cliente_id",
       "to_table": "carvia_clientes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_comissao_fechamento_ctes",
+      "from_column": "fechamento_id",
+      "to_table": "carvia_comissao_fechamentos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_comissao_fechamento_ctes",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
       "to_column": "id"
     },
     {

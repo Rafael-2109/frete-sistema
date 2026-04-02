@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 166,
+  "total_tabelas": 168,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -283,6 +283,24 @@
         "nome_comercial",
         "observacoes",
         "criado_por"
+      ]
+    },
+    {
+      "name": "carvia_comissao_fechamento_ctes",
+      "description": "Tabela carvia_comissao_fechamento_ctes",
+      "key_fields": [
+        "fechamento_id",
+        "operacao_id",
+        "cte_numero"
+      ]
+    },
+    {
+      "name": "carvia_comissao_fechamentos",
+      "description": "Tabela carvia_comissao_fechamentos",
+      "key_fields": [
+        "numero_fechamento",
+        "vendedor_nome",
+        "vendedor_email"
       ]
     },
     {
