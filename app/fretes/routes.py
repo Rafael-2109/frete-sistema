@@ -1289,29 +1289,31 @@ def _calcular_componentes_analise(frete, tabela_dados, transportadora_config):
     frete_valor = (
         (valor_mercadoria * (tab_percentual_valor / 100)) if tab_percentual_valor else 0
     )
-    frete_base = detalhes.get("frete_base", frete_peso + frete_valor)
+    # NOTA: CalculadoraFrete retorna Decimal (via _Q() quantize).
+    # Convertemos para float aqui para evitar TypeError em aritmetica Decimal/float downstream.
+    frete_base = float(detalhes.get("frete_base", frete_peso + frete_valor))
 
     # Componentes adicionais (com valores mínimos aplicados)
-    gris = detalhes.get("gris", 0)
-    adv = detalhes.get("adv", 0)
-    rca = detalhes.get("rca", 0)
-    pedagio = detalhes.get("pedagio", 0)
-    tas = detalhes.get("valor_tas", 0)
-    despacho = detalhes.get("valor_despacho", 0)
-    valor_cte_tabela = detalhes.get("valor_cte", 0)
+    gris = float(detalhes.get("gris", 0))
+    adv = float(detalhes.get("adv", 0))
+    rca = float(detalhes.get("rca", 0))
+    pedagio = float(detalhes.get("pedagio", 0))
+    tas = float(detalhes.get("valor_tas", 0))
+    despacho = float(detalhes.get("valor_despacho", 0))
+    valor_cte_tabela = float(detalhes.get("valor_cte", 0))
 
     # Componentes antes e depois do mínimo
-    componentes_antes = detalhes.get("componentes_antes_minimo", 0)
-    componentes_depois = detalhes.get("componentes_apos_minimo", 0)
+    componentes_antes = float(detalhes.get("componentes_antes_minimo", 0))
+    componentes_depois = float(detalhes.get("componentes_apos_minimo", 0))
 
     # Totais
-    total_liquido_antes_minimo = detalhes.get("frete_liquido_antes_minimo", 0)
-    total_liquido = resultado_calculo.get("valor_bruto", 0)  # Valor sem ICMS após mínimo
-    total_bruto_cotacao = resultado_calculo.get("valor_com_icms", 0)
-    valor_liquido_transportadora = resultado_calculo.get("valor_liquido", 0)
+    total_liquido_antes_minimo = float(detalhes.get("frete_liquido_antes_minimo", 0))
+    total_liquido = float(resultado_calculo.get("valor_bruto", 0))  # Valor sem ICMS após mínimo
+    total_bruto_cotacao = float(resultado_calculo.get("valor_com_icms", 0))
+    valor_liquido_transportadora = float(resultado_calculo.get("valor_liquido", 0))
 
     # ICMS
-    percentual_icms_cotacao = resultado_calculo.get("icms_aplicado", 0)
+    percentual_icms_cotacao = float(resultado_calculo.get("icms_aplicado", 0))
     valor_icms_cotacao = total_bruto_cotacao - total_liquido if percentual_icms_cotacao > 0 else 0
 
     # Ajuste de mínimo
