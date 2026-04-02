@@ -27,10 +27,10 @@ from app.utils.memory_cache import TTLCache
 _dashboard_cache = TTLCache(ttl=120)
 
 # 🔒 Importar decoradores de permissão
-from app.utils.auth_decorators import require_financeiro, require_profiles
-from app.embarques.models import Embarque, EmbarqueItem
-from app.faturamento.models import RelatorioFaturamentoImportado
-from app.fretes.models import (
+from app.utils.auth_decorators import require_financeiro, require_profiles # type: ignore # noqa: E402
+from app.embarques.models import Embarque, EmbarqueItem # type: ignore # noqa: E402
+from app.faturamento.models import RelatorioFaturamentoImportado # type: ignore # noqa: E402
+from app.fretes.models import ( # type: ignore # noqa: E402
     FreteLancado,
     Frete,
     FaturaFrete,
@@ -39,9 +39,9 @@ from app.fretes.models import (
     AprovacaoFrete,
     ConhecimentoTransporte,
 )
-from app.fretes.email_models import EmailAnexado
-from app.utils.email_handler import EmailHandler
-from app.fretes.forms import (
+from app.fretes.email_models import EmailAnexado # type: ignore # noqa: E402
+from app.utils.email_handler import EmailHandler # type: ignore # noqa: E402
+from app.fretes.forms import ( # type: ignore # noqa: E402
     FreteForm,
     FaturaFreteForm,
     DespesaExtraForm,
@@ -50,10 +50,10 @@ from app.fretes.forms import (
     FiltroFaturasForm,
     FiltroFreteirosForm,
 )
-from app.utils.calculadora_frete import calcular_valor_frete_pela_tabela
-from app.utils.valores_brasileiros import converter_valor_brasileiro
-from app.utils.cnpj_utils import normalizar_cnpj
-from app.utils.tabela_frete_manager import TabelaFreteManager
+from app.utils.calculadora_frete import calcular_valor_frete_pela_tabela # type: ignore # noqa: E402
+from app.utils.valores_brasileiros import converter_valor_brasileiro # type: ignore # noqa: E402
+from app.utils.cnpj_utils import normalizar_cnpj # type: ignore # noqa: E402
+from app.utils.tabela_frete_manager import TabelaFreteManager # type: ignore # noqa: E402
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -1282,7 +1282,7 @@ def _calcular_componentes_analise(frete, tabela_dados, transportadora_config):
 
     # Peso considerado
     peso_minimo_tabela = tab_frete_minimo_peso
-    peso_considerado = detalhes.get("peso_para_calculo", peso_real)
+    peso_considerado = float(detalhes.get("peso_para_calculo", peso_real))
 
     # Frete base (peso + valor)
     frete_peso = (peso_considerado * tab_valor_kg) if tab_valor_kg else 0

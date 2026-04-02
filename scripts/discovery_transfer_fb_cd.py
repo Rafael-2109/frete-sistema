@@ -22,12 +22,12 @@ import json
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from app import create_app
+from app import create_app # type: ignore # noqa: E402
 
 app = create_app()
 
 with app.app_context():
-    from app.odoo.utils.connection import get_odoo_connection
+    from app.odoo.utils.connection import get_odoo_connection # type: ignore # noqa: E402
 
     odoo = get_odoo_connection()
 
@@ -85,12 +85,12 @@ with app.app_context():
     try:
         partners_cd = odoo.search_read(
             'res.partner',
-            [['l10n_br_cnpj_cpf', 'ilike', '61724241000330']],
-            fields=['id', 'name', 'l10n_br_cnpj_cpf', 'company_id', 'is_company'],
+            [['l10n_br_cnpj', 'ilike', '61724241000330']],
+            fields=['id', 'name', 'l10n_br_cnpj', 'company_id', 'is_company'],
         )
         resultados['partners_cd'] = partners_cd
         for p in partners_cd:
-            print(f"  ID={p['id']} | {p['name']} | CNPJ={p.get('l10n_br_cnpj_cpf')} "
+            print(f"  ID={p['id']} | {p['name']} | CNPJ={p.get('l10n_br_cnpj')} "
                   f"| company={p.get('company_id')} | is_company={p.get('is_company')}")
         if not partners_cd:
             print("  NENHUM encontrado!")
@@ -102,12 +102,12 @@ with app.app_context():
     try:
         partners_fb = odoo.search_read(
             'res.partner',
-            [['l10n_br_cnpj_cpf', 'ilike', '61724241000178']],
-            fields=['id', 'name', 'l10n_br_cnpj_cpf', 'company_id', 'is_company'],
+            [['l10n_br_cnpj', 'ilike', '61724241000178']],
+            fields=['id', 'name', 'l10n_br_cnpj', 'company_id', 'is_company'],
         )
         resultados['partners_fb'] = partners_fb
         for p in partners_fb:
-            print(f"  ID={p['id']} | {p['name']} | CNPJ={p.get('l10n_br_cnpj_cpf')} "
+            print(f"  ID={p['id']} | {p['name']} | CNPJ={p.get('l10n_br_cnpj')} "
                   f"| company={p.get('company_id')} | is_company={p.get('is_company')}")
     except Exception as e:
         print(f"  ERRO: {e}")

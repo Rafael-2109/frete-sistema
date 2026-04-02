@@ -257,10 +257,14 @@ class RecebimentoLfService:
         """
         try:
             # 1. Descobrir partner_id do Nacom Goya FB no Odoo da LF
-            fb_partners = odoo.execute_kw('res.partner', 'search', [[
-                ['company_id', 'in', [self.COMPANY_LF, False]],
-                ['l10n_br_cnpj_cpf', '=', self.CNPJ_FB],
-            ]], {'limit': 1})
+            fb_partners = None
+            try:
+                fb_partners = odoo.execute_kw('res.partner', 'search', [[
+                    ['company_id', 'in', [self.COMPANY_LF, False]],
+                    ['l10n_br_cnpj', '=', self.CNPJ_FB],
+                ]], {'limit': 1})
+            except Exception as e:
+                logger.warning(f"Busca partner por l10n_br_cnpj falhou: {e}")
 
             if not fb_partners:
                 # Fallback: tentar campo vat
@@ -577,7 +581,7 @@ class RecebimentoLfService:
         Returns:
             Lista de linhas com product_id e product_name preenchidos
         """
-        codigos = list({l['cProd'] for l in linhas if l.get('cProd')})
+        codigos = list({l['cProd'] for l in linhas if l.get('cProd')}) # type: ignore # noqa: E741
         if not codigos:
             return linhas
 
@@ -710,11 +714,11 @@ class RecebimentoLfService:
                     if lot_ids_to_fetch:
                         try:
                             lots = odoo.execute_kw(
-                                'stock.lot', 'read',
+                                'stock.lot', 'read', # type: ignore # noqa: E741
                                 [list(set(lot_ids_to_fetch))],
                                 {'fields': ['id', 'name', 'expiration_date']}
                             )
-                            lots_data = {l['id']: l for l in lots}
+                            lots_data = {l['id']: l for l in lots} # type: ignore # noqa: E741
                         except Exception as e_lot:
                             logger.warning(f"Erro ao buscar lotes batch: {e_lot}")
 

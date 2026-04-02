@@ -2326,8 +2326,8 @@ def resumo_frete(cotacao_id):
                 transportadora_optante=embarque.transportadora_optante or False
             )
             
-            valor_frete_bruto = resultado_frete['valor_bruto']
-            valor_frete_liquido = resultado_frete['valor_liquido']
+            valor_frete_bruto = float(resultado_frete['valor_bruto'])
+            valor_frete_liquido = float(resultado_frete['valor_liquido'])
             frete_por_kg = valor_frete_liquido / peso_total if peso_total > 0 else 0
             
             print(f"[DEBUG] ✅ CARGA DIRETA calculada:")
@@ -2385,8 +2385,8 @@ def resumo_frete(cotacao_id):
                         transportadora_optante=(embarque and embarque.transportadora_optante) or False
                     )
                     
-                    valor_frete_bruto += resultado_frete_cnpj['valor_com_icms']  # ✅ CORREÇÃO: Usar valor COM ICMS
-                    valor_frete_liquido += resultado_frete_cnpj['valor_bruto']   # ✅ CORREÇÃO: Usar valor SEM ICMS
+                    valor_frete_bruto += float(resultado_frete_cnpj['valor_com_icms'])  # ✅ CORREÇÃO: Usar valor COM ICMS
+                    valor_frete_liquido += float(resultado_frete_cnpj['valor_bruto'])   # ✅ CORREÇÃO: Usar valor SEM ICMS
                     cnpjs_calculados += 1
                     
                     print(f"[DEBUG]   ✅ CNPJ {cnpj} (Peso: {peso_cnpj}kg, Valor: R${valor_cnpj:.2f}): R${resultado_frete_cnpj['valor_bruto']:.2f} (SEM ICMS), R${resultado_frete_cnpj['valor_com_icms']:.2f} (COM ICMS)")
@@ -2564,8 +2564,8 @@ def resumo_frete(cotacao_id):
                     transportadora_optante=(embarque and embarque.transportadora_optante) or False
                 )
                 
-                grupo['frete_calculado']['valor_total'] = resultado_cnpj['valor_com_icms']  # ✅ CORREÇÃO: COM ICMS
-                grupo['frete_calculado']['valor_liquido'] = resultado_cnpj['valor_bruto']   # ✅ CORREÇÃO: SEM ICMS
+                grupo['frete_calculado']['valor_total'] = float(resultado_cnpj['valor_com_icms'])  # ✅ CORREÇÃO: COM ICMS
+                grupo['frete_calculado']['valor_liquido'] = float(resultado_cnpj['valor_bruto'])   # ✅ CORREÇÃO: SEM ICMS
             else:
                 # Fallback: rateia proporcionalmente
                 proporcao = grupo['peso_total'] / peso_total if peso_total > 0 else 0

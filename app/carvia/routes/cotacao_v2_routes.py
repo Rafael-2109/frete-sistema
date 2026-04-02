@@ -2223,9 +2223,9 @@ def register_cotacao_v2_routes(bp):
     # Emissao CTe SSW a partir da Cotacao
     # ==================================================================
 
-    @bp.route('/api/cotacoes/<int:cotacao_id>/preview-emissao-cte', methods=['GET'])
+    @bp.route('/api/cotacoes/<int:cotacao_id>/preview-emissao-cte', methods=['GET']) # type: ignore
     @login_required
-    def api_preview_emissao_cte(cotacao_id):
+    def api_preview_emissao_cte(cotacao_id): # type: ignore
         """Preview dos dados que serao usados para emissao de CTe.
 
         Valida premissas (APROVADO, NFs completas) e retorna
@@ -2359,9 +2359,9 @@ def register_cotacao_v2_routes(bp):
             'captcha': captcha,
         })
 
-    @bp.route('/api/cotacoes/<int:cotacao_id>/emitir-cte', methods=['POST'])
+    @bp.route('/api/cotacoes/<int:cotacao_id>/emitir-cte', methods=['POST']) # type: ignore
     @login_required
-    def api_emitir_cte_cotacao(cotacao_id):
+    def api_emitir_cte_cotacao(cotacao_id): # type: ignore
         """Dispara emissao de CTe SSW para todas NFs da cotacao.
 
         Body JSON:

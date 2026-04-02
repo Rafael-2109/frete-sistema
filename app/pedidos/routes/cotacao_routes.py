@@ -257,8 +257,8 @@ def register_cotacao_routes(bp):
                             db.func.coalesce(db.func.sum(CarviaCotacaoMoto.quantidade), 0),
                             db.func.coalesce(db.func.sum(CarviaCotacaoMoto.peso_cubado_total), 0),
                         ).filter_by(cotacao_id=carvia_cot_id).first()
-                        carvia_volumes = int(agg[0]) or None
-                        carvia_peso_cubado = float(agg[1]) or None #
+                        carvia_volumes = int(agg[0]) or None #type: ignore # noqa: E741
+                        carvia_peso_cubado = float(agg[1]) or None # type: ignore # noqa: E741
                     except Exception:
                         pass
 
