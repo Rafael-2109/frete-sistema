@@ -227,16 +227,10 @@
   ],
   "indices": [
     {
-      "name": "idx_ei_uf_destino",
+      "name": "idx_ei_embarque_status",
       "columns": [
-        "uf_destino"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_ei_nota_fiscal",
-      "columns": [
-        "nota_fiscal"
+        "embarque_id",
+        "status"
       ],
       "unique": false
     },
@@ -255,10 +249,9 @@
       "unique": false
     },
     {
-      "name": "idx_ei_embarque_status",
+      "name": "idx_ei_uf_destino",
       "columns": [
-        "embarque_id",
-        "status"
+        "uf_destino"
       ],
       "unique": false
     },
@@ -266,6 +259,13 @@
       "name": "idx_ei_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ei_nota_fiscal",
+      "columns": [
+        "nota_fiscal"
       ],
       "unique": false
     }

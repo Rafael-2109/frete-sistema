@@ -235,13 +235,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_numero_nf_venda",
-      "columns": [
-        "numero_nf_venda"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_tipo_documento",
       "columns": [
         "tipo_documento"
@@ -249,52 +242,9 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_odoo_dfe",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "idx_nfd_tipo_documento",
-      "columns": [
-        "tipo_documento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_odoo_nf_venda",
-      "columns": [
-        "odoo_nf_venda_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_status_odoo_monit",
-      "columns": [
-        "status_odoo",
-        "status_monitoramento"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_odoo_nf_venda_id",
       "columns": [
         "odoo_nf_venda_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_origem_registro",
-      "columns": [
-        "origem_registro"
       ],
       "unique": false
     },
@@ -348,13 +298,6 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_numero_nfd",
       "columns": [
         "numero_nfd"
@@ -370,9 +313,24 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_nf_venda",
+      "name": "ix_nf_devolucao_status",
       "columns": [
-        "numero_nf_venda"
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_status_odoo_monit",
+      "columns": [
+        "status_odoo",
+        "status_monitoramento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_origem_registro",
+      "columns": [
+        "origem_registro"
       ],
       "unique": false
     },
@@ -388,6 +346,48 @@
       "name": "idx_nfd_data_registro",
       "columns": [
         "data_registro"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nf_venda",
+      "columns": [
+        "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_nf_venda",
+      "columns": [
+        "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_odoo_dfe",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_nfd_tipo_documento",
+      "columns": [
+        "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_odoo_nf_venda",
+      "columns": [
+        "odoo_nf_venda_id"
       ],
       "unique": false
     }

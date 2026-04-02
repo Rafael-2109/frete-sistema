@@ -43,6 +43,16 @@
       "default": "ARMAZEM"
     },
     {
+      "name": "uf_origem",
+      "type": "varchar(2)",
+      "description": "UF de origem da operacao (SP, RJ). Define filial SSW."
+    },
+    {
+      "name": "filial_ssw",
+      "type": "varchar(10)",
+      "description": "Filial SSW derivada da UF: SP=CAR, RJ=GIG"
+    },
+    {
       "name": "cnpj_tomador",
       "type": "varchar(20)"
     },

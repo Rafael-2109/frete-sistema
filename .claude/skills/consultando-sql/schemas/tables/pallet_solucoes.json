@@ -147,9 +147,9 @@
   ],
   "indices": [
     {
-      "name": "idx_solucao_nf_venda",
+      "name": "ix_pallet_solucoes_credito_id",
       "columns": [
-        "nf_venda"
+        "credito_id"
       ],
       "unique": false
     },
@@ -184,16 +184,16 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_credito_id",
+      "name": "ix_pallet_solucoes_tipo",
       "columns": [
-        "credito_id"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_tipo",
+      "name": "idx_solucao_nf_venda",
       "columns": [
-        "tipo"
+        "nf_venda"
       ],
       "unique": false
     }
