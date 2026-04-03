@@ -3,6 +3,7 @@ Testes para MotoRecognitionService — regex de reconhecimento de motos.
 
 Foco: falsos positivos onde nomes curtos de modelo (RET, DOT, POP, etc.)
 aparecem como substring de palavras comuns (PRETA, DOTACAO, POPULAR).
+Tambem cobre: gate NCM, persistencia via modelo_moto_id.
 """
 
 from unittest.mock import MagicMock
@@ -27,10 +28,17 @@ def _fake_modelo(nome: str, regex_pattern: str = None) -> MagicMock:
     return m
 
 
-def _match(texto: str, modelos_nomes: list[str], codigo_produto: str = None) -> str | None:
+def _match(
+    texto: str,
+    modelos_nomes: list[str],
+    codigo_produto: str = None,
+    ncm: str = None,
+) -> str | None:
     """Wrapper para _match_descricao com mocks."""
     modelos = [_fake_modelo(n) for n in modelos_nomes]
-    return MotoRecognitionService._match_descricao(texto, modelos, codigo_produto)
+    return MotoRecognitionService._match_descricao(
+        texto, modelos, codigo_produto, ncm=ncm,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +46,7 @@ def _match(texto: str, modelos_nomes: list[str], codigo_produto: str = None) -> 
 # ---------------------------------------------------------------------------
 
 class TestRegexVeiculoEletricoModelos:
-    """Garante que \b impede match dentro de palavras."""
+    """Garante que \\b impede match dentro de palavras."""
 
     @pytest.mark.parametrize("texto,esperado", [
         ("RET", "RET"),
@@ -161,6 +169,54 @@ class TestMatchDescricaoNomeFalsoPositivo:
             )
 
 
+# ---------------------------------------------------------------------------
+# Gate NCM — rejeitar itens que nao sao motos/veiculos
+# ---------------------------------------------------------------------------
+
+class TestGateNCM:
+    """NCM 8711* = moto/veiculo. Qualquer outro NCM rejeita match."""
+
+    @pytest.mark.parametrize("ncm,deve_matchear", [
+        # NCM de motos — DEVE matchear
+        ("87116000", True),       # moto eletrica
+        ("87114000", True),       # moto >500cc
+        ("8711.60.00", True),     # formatado com pontos
+        ("87119000", True),       # outros
+        ("8711", True),           # prefixo curto
+        # NCM de nao-motos — NAO deve matchear
+        ("39269090", False),      # plasticos
+        ("84818099", False),      # valvulas
+        ("73269090", False),      # ferro/aco
+        ("20089900", False),      # conservas (palmito)
+        ("9401", False),          # moveis
+        # NCM vazio/nulo — DEVE matchear (sem gate)
+        (None, True),
+        ("", True),
+    ])
+    def test_gate_ncm(self, ncm, deve_matchear):
+        resultado = _match("MOTO RET 1000W", ["RET"], ncm=ncm)
+        if deve_matchear:
+            assert resultado == "RET", f"NCM {ncm} deveria permitir match"
+        else:
+            assert resultado is None, f"NCM {ncm} deveria bloquear match"
+
+    def test_ncm_bloqueia_falso_positivo_cor(self):
+        """Item de plastico com cor PRETA — NCM bloqueia antes do regex."""
+        resultado = _match(
+            "CAPA PRETA PARA MOTO", ["RET"],
+            ncm="39269090",
+        )
+        assert resultado is None
+
+    def test_ncm_moto_permite_match_real(self):
+        """Item com NCM de moto eletrica DEVE matchear."""
+        resultado = _match(
+            "SCOOTER RET 1000W PRETA", ["RET"],
+            ncm="87116000",
+        )
+        assert resultado == "RET"
+
+
 class TestMatchDescricaoConvencional:
     """Motos convencionais (marca + cilindrada)."""
 
@@ -208,7 +264,6 @@ class TestMatchDescricaoEletrico:
 
     def test_modelo_sem_keyword(self):
         """Modelo eletrico sem keyword MOTO/SCOOTER/BIKE nao matcheia via camada 3."""
-        # Sem modelos DB, sem convencional, sem keyword → None
         resultado = _match("VEICULO X12 ELETRICO", [])
         assert resultado is None
 
@@ -274,4 +329,20 @@ class TestMatchDescricaoCasosReais:
         resultado = _match(descricao, modelos_db)
         assert resultado == esperado, (
             f"Descricao: '{descricao}' → esperado {esperado}, got {resultado}"
+        )
+
+    @pytest.mark.parametrize("descricao,ncm,modelos_db,esperado", [
+        # Item de alimento com cor — NCM bloqueia
+        ("PALMITO PRETA 500G", "20089900", ["RET"], None),
+        # Item de moto com cor — NCM permite, word boundary protege
+        ("MOTO ELETRICA PRETA 1000W", "87116000", ["RET"], None),
+        # Item de moto com modelo real — NCM permite, modelo matcha
+        ("MOTO RET 1000W PRETA", "87116000", ["RET"], "RET"),
+        # Item sem NCM — match normal (sem gate)
+        ("MOTO RET 1000W", None, ["RET"], "RET"),
+    ])
+    def test_cenario_real_com_ncm(self, descricao, ncm, modelos_db, esperado):
+        resultado = _match(descricao, modelos_db, ncm=ncm)
+        assert resultado == esperado, (
+            f"Descricao: '{descricao}' NCM: {ncm} → esperado {esperado}, got {resultado}"
         )

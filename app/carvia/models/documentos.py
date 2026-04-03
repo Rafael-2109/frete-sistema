@@ -114,14 +114,23 @@ class CarviaNfItem(db.Model):
     valor_unitario = db.Column(db.Numeric(15, 4))
     valor_total_item = db.Column(db.Numeric(15, 2))
 
+    # Modelo de moto detectado (persistido na importacao, editavel manualmente)
+    modelo_moto_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_modelos_moto.id'),
+        nullable=True,
+        index=True,
+    )
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
-    # Relacionamento
+    # Relacionamentos
     nf = db.relationship(
         'CarviaNf',
         backref=db.backref('itens', lazy='dynamic', cascade='all, delete-orphan')
     )
+    modelo_moto = db.relationship('CarviaModeloMoto', lazy='select')
 
     def __repr__(self):
         return f'<CarviaNfItem {self.codigo_produto} qtd={self.quantidade}>'

@@ -46,6 +46,11 @@
       "type": "numeric(15,2)"
     },
     {
+      "name": "modelo_moto_id",
+      "type": "integer",
+      "description": "FK → carvia_modelos_moto.id — modelo de moto detectado na importacao ou editado manualmente"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"
@@ -55,6 +60,10 @@
     {
       "column": "nf_id",
       "references": "carvia_nfs.id"
+    },
+    {
+      "column": "modelo_moto_id",
+      "references": "carvia_modelos_moto.id"
     }
   ],
   "indices": [
@@ -62,6 +71,13 @@
       "name": "ix_carvia_nf_itens_nf_id",
       "columns": [
         "nf_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_nf_itens_modelo_moto_id",
+      "columns": [
+        "modelo_moto_id"
       ],
       "unique": false
     }

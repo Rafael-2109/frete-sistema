@@ -247,14 +247,16 @@ def register_config_routes(bp):
                     'mensagem': f'Regex invalido: {e}',
                 })
 
-        # 2. Testar match por nome (fallback do moto_recognition_service)
-        if nome and nome.upper() in texto.upper():
-            return jsonify({
-                'sucesso': True,
-                'match': True,
-                'metodo': 'nome',
-                'mensagem': f'Match por nome: "{nome}"',
-            })
+        # 2. Testar match por nome com word boundary (evita "RET" in "PRETA")
+        if nome:
+            nome_esc = re.escape(nome.upper())
+            if re.search(r'(?<![A-Za-z])' + nome_esc + r'(?![A-Za-z])', texto.upper()):
+                return jsonify({
+                    'sucesso': True,
+                    'match': True,
+                    'metodo': 'nome',
+                    'mensagem': f'Match por nome: "{nome}"',
+                })
 
         return jsonify({
             'sucesso': True,

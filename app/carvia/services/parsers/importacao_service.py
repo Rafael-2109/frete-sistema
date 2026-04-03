@@ -493,6 +493,22 @@ class ImportacaoService:
                                 )
                                 db.session.add(item)
 
+                        # Detectar e persistir modelos de moto nos itens
+                        try:
+                            from app.carvia.services.pricing.moto_recognition_service import (
+                                MotoRecognitionService,
+                            )
+                            moto_count = MotoRecognitionService().detectar_e_persistir_nf(nf.id)
+                            if moto_count > 0:
+                                logger.info(
+                                    f"Auto-deteccao motos NF {nf.numero_nf}: "
+                                    f"{moto_count} modelo(s) persistido(s)"
+                                )
+                        except Exception as e_moto:
+                            logger.warning(
+                                f"Erro auto-deteccao motos NF {nf.id}: {e_moto}"
+                            )
+
                         nfs_criadas.append(nf)
 
                         # Re-linking retroativo: resolver vinculos pendentes
@@ -1303,6 +1319,17 @@ class ImportacaoService:
                 valor_total_item=item_data.get('valor_total_item'),
             )
             db.session.add(item)
+
+        # Detectar e persistir modelos de moto nos itens
+        try:
+            from app.carvia.services.pricing.moto_recognition_service import (
+                MotoRecognitionService,
+            )
+            MotoRecognitionService().detectar_e_persistir_nf(stub.id)
+        except Exception as e_moto:
+            logger.warning(
+                f"Erro auto-deteccao motos stub NF {stub.id}: {e_moto}"
+            )
 
         logger.info(
             f"NF stub FATURA_REFERENCIA promovida para {novo_tipo}: "

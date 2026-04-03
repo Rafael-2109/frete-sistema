@@ -77,10 +77,16 @@ class MotoRecognitionService:
         return volume_m3 * cubagem * qtd
 
     @staticmethod
-    def _match_descricao(texto: str, modelos: list, codigo_produto: str = None) -> Optional[str]:
+    def _match_descricao(
+        texto: str,
+        modelos: list,
+        codigo_produto: str = None,
+        ncm: str = None,
+    ) -> Optional[str]:
         """Match descricao contra lista de modelos pre-carregada (sem query DB).
 
         Ordem de prioridade:
+        0. Gate NCM: se NCM presente e nao comeca com 8711, pular (nao e moto)
         1. Patterns customizados de CarviaModeloMoto (regex_pattern ou nome exato)
         2. Motos convencionais (MARCA + cilindrada: CG 160, BIZ 125)
         3. Veiculos eletricos (keyword MOTO/SCOOTER/BIKE + modelo conhecido)
@@ -90,12 +96,19 @@ class MotoRecognitionService:
             texto: Descricao do produto
             modelos: Lista de CarviaModeloMoto (ja carregados)
             codigo_produto: Codigo do produto (opcional, usado como fallback)
+            ncm: NCM do item (opcional). Se presente e nao 8711*, rejeita match
 
         Returns:
             Nome do modelo matcheado ou None
         """
         if not texto:
             return None
+
+        # Gate NCM: se item tem NCM e NAO e veiculo/moto (8711*), pular
+        if ncm:
+            ncm_limpo = re.sub(r'[.\-\s]', '', ncm).strip()
+            if ncm_limpo and not ncm_limpo.startswith('8711'):
+                return None
 
         texto_upper = texto.upper().strip()
 
@@ -136,27 +149,29 @@ class MotoRecognitionService:
 
         return None
 
-    def extrair_modelo(self, texto: str, codigo_produto: str = None) -> Optional[str]:
+    def extrair_modelo(
+        self, texto: str, codigo_produto: str = None, ncm: str = None,
+    ) -> Optional[str]:
         """
         Extrai modelo de moto do texto da descricao.
-
-        Tenta primeiro patterns customizados de CarviaModeloMoto,
-        depois veiculos eletricos por keyword, depois convencional.
 
         Args:
             texto: Descricao do produto
             codigo_produto: Codigo do produto (opcional, usado como fallback)
+            ncm: NCM do item (opcional). Se presente e nao 8711*, rejeita
 
         Returns:
             Nome normalizado do modelo (ex: 'CG 160', 'X12', 'JET') ou None
         """
         from app.carvia.models import CarviaModeloMoto
         modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
-        return self._match_descricao(texto, modelos, codigo_produto)
+        return self._match_descricao(texto, modelos, codigo_produto, ncm=ncm)
 
     def identificar_motos_operacao(self, operacao_id: int) -> List[Dict]:
         """
-        Para cada NF da operacao, para cada item da NF, tenta match.
+        Para cada NF da operacao, lista itens com modelo de moto.
+
+        Le do campo persistido item.modelo_moto_id (preenchido na importacao).
 
         Args:
             operacao_id: ID da CarviaOperacao
@@ -167,39 +182,32 @@ class MotoRecognitionService:
               'modelo_moto_id', 'quantidade'}]
         """
         from app.carvia.models import CarviaOperacao, CarviaNfItem, CarviaOperacaoNf
+        from app.carvia.models import CarviaModeloMoto
 
         operacao = db.session.get(CarviaOperacao, operacao_id)
         if not operacao:
             return []
 
-        # Buscar todos os itens de NFs vinculadas
+        # Buscar itens com modelo_moto_id persistido
         itens = db.session.query(CarviaNfItem).join(
             CarviaOperacaoNf,
             CarviaOperacaoNf.nf_id == CarviaNfItem.nf_id
         ).filter(
-            CarviaOperacaoNf.operacao_id == operacao_id
+            CarviaOperacaoNf.operacao_id == operacao_id,
+            CarviaNfItem.modelo_moto_id.isnot(None),
         ).all()
 
         resultados = []
-        from app.carvia.models import CarviaModeloMoto
-
         for item in itens:
-            modelo_nome = self.extrair_modelo(item.descricao, item.codigo_produto)
-            if modelo_nome:
-                # Tentar encontrar modelo cadastrado
-                modelo_db = CarviaModeloMoto.query.filter(
-                    CarviaModeloMoto.nome == modelo_nome,
-                    CarviaModeloMoto.ativo == True,  # noqa: E712
-                ).first()
-
-                resultados.append({
-                    'item_id': item.id,
-                    'codigo_produto': item.codigo_produto,
-                    'descricao': item.descricao,
-                    'modelo_match': modelo_nome,
-                    'modelo_moto_id': modelo_db.id if modelo_db else None,
-                    'quantidade': float(item.quantidade or 1),
-                })
+            modelo = db.session.get(CarviaModeloMoto, item.modelo_moto_id)
+            resultados.append({
+                'item_id': item.id,
+                'codigo_produto': item.codigo_produto,
+                'descricao': item.descricao,
+                'modelo_match': modelo.nome if modelo else None,
+                'modelo_moto_id': item.modelo_moto_id,
+                'quantidade': float(item.quantidade or 1),
+            })
 
         return resultados
 
@@ -279,33 +287,35 @@ class MotoRecognitionService:
 
     def calcular_peso_cubado_nf(self, nf_id: int) -> Optional[Dict]:
         """
-        Calcula peso cubado total de uma NF baseado em motos nos itens.
+        Calcula peso cubado total de uma NF a partir do modelo persistido nos itens.
+
+        Le item.modelo_moto_id (preenchido na importacao ou via edicao manual).
+        NAO re-executa deteccao — apenas consulta o campo salvo.
 
         Args:
             nf_id: ID da CarviaNf
 
         Returns:
-            Dict com resultado ou None se nenhum match:
+            Dict com resultado ou None se nenhum item com modelo:
             {'peso_cubado_total': float, 'itens': [...]}
         """
         from app.carvia.models import CarviaNfItem, CarviaModeloMoto
 
-        itens = CarviaNfItem.query.filter_by(nf_id=nf_id).all()
+        itens = CarviaNfItem.query.filter(
+            CarviaNfItem.nf_id == nf_id,
+            CarviaNfItem.modelo_moto_id.isnot(None),
+        ).all()
         if not itens:
             return None
-
-        modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
-        modelos_by_nome = {m.nome: m for m in modelos}
 
         itens_calculados = []
         peso_cubado_total = 0
 
         for item in itens:
-            modelo_nome = self._match_descricao(item.descricao, modelos, item.codigo_produto)
-            if not modelo_nome or modelo_nome not in modelos_by_nome:
+            modelo = db.session.get(CarviaModeloMoto, item.modelo_moto_id)
+            if not modelo:
                 continue
 
-            modelo = modelos_by_nome[modelo_nome]
             qtd = float(item.quantidade or 1)
             peso_item = self._calcular_peso_modelo(modelo, qtd)
 
@@ -332,7 +342,9 @@ class MotoRecognitionService:
 
     def calcular_peso_cubado_batch(self, nf_ids: List[int]) -> Dict[int, float]:
         """
-        Calcula peso cubado para multiplas NFs em batch (2 queries).
+        Calcula peso cubado para multiplas NFs em batch a partir do persistido.
+
+        Le item.modelo_moto_id — NAO re-executa deteccao.
 
         Args:
             nf_ids: Lista de IDs de CarviaNf
@@ -345,17 +357,20 @@ class MotoRecognitionService:
 
         from app.carvia.models import CarviaNfItem, CarviaModeloMoto
 
-        modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
-        if not modelos:
-            return {}
-
-        modelos_by_nome = {m.nome: m for m in modelos}
-
         itens = CarviaNfItem.query.filter(
-            CarviaNfItem.nf_id.in_(nf_ids)
+            CarviaNfItem.nf_id.in_(nf_ids),
+            CarviaNfItem.modelo_moto_id.isnot(None),
         ).all()
         if not itens:
             return {}
+
+        # Carregar modelos em batch
+        modelo_ids = {item.modelo_moto_id for item in itens}
+        modelos_by_id = {
+            m.id: m for m in CarviaModeloMoto.query.filter(
+                CarviaModeloMoto.id.in_(modelo_ids)
+            ).all()
+        }
 
         itens_por_nf = defaultdict(list)
         for item in itens:
@@ -365,10 +380,9 @@ class MotoRecognitionService:
         for nf_id in nf_ids:
             peso_cubado = 0.0
             for item in itens_por_nf.get(nf_id, []):
-                modelo_nome = self._match_descricao(item.descricao, modelos, item.codigo_produto)
-                if not modelo_nome or modelo_nome not in modelos_by_nome:
+                modelo = modelos_by_id.get(item.modelo_moto_id)
+                if not modelo:
                     continue
-                modelo = modelos_by_nome[modelo_nome]
                 qtd = float(item.quantidade or 1)
                 peso_cubado += self._calcular_peso_modelo(modelo, qtd)
 
@@ -433,6 +447,100 @@ class MotoRecognitionService:
             'por_categoria': por_categoria,
             'total_motos': total_motos,
             'nao_categorizados': nao_categorizados,
+        }
+
+    def detectar_e_persistir_nf(self, nf_id: int) -> int:
+        """
+        Roda deteccao automatica nos itens de uma NF e persiste modelo_moto_id.
+
+        Chamado na importacao (uma vez). Itens que ja tem modelo_moto_id
+        sao ignorados (preserva override manual).
+
+        Args:
+            nf_id: ID da CarviaNf
+
+        Returns:
+            Quantidade de itens que receberam modelo
+        """
+        from app.carvia.models import CarviaNfItem, CarviaModeloMoto
+
+        itens = CarviaNfItem.query.filter_by(nf_id=nf_id).filter(
+            CarviaNfItem.modelo_moto_id.is_(None)
+        ).all()
+        if not itens:
+            return 0
+
+        modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
+        modelos_by_nome = {m.nome: m for m in modelos}
+        count = 0
+
+        for item in itens:
+            modelo_nome = self._match_descricao(
+                item.descricao, modelos, item.codigo_produto, ncm=item.ncm,
+            )
+            if not modelo_nome or modelo_nome not in modelos_by_nome:
+                continue
+
+            item.modelo_moto_id = modelos_by_nome[modelo_nome].id
+            count += 1
+
+        if count > 0:
+            db.session.flush()
+            logger.info(
+                "detectar_e_persistir_nf: nf_id=%d — %d item(ns) com modelo",
+                nf_id, count,
+            )
+
+        return count
+
+    def reprocessar_itens_nf(self, nf_id: int) -> Dict:
+        """
+        Re-roda deteccao em TODOS os itens da NF (limpa e re-detecta).
+
+        Usado quando o usuario clica 'Re-processar motos' na tela de detalhe.
+
+        Args:
+            nf_id: ID da CarviaNf
+
+        Returns:
+            {'total_itens': int, 'detectados': int, 'limpos': int}
+        """
+        from app.carvia.models import CarviaNfItem, CarviaModeloMoto
+
+        itens = CarviaNfItem.query.filter_by(nf_id=nf_id).all()
+        if not itens:
+            return {'total_itens': 0, 'detectados': 0, 'limpos': 0}
+
+        modelos = CarviaModeloMoto.query.filter_by(ativo=True).all()
+        modelos_by_nome = {m.nome: m for m in modelos}
+
+        detectados = 0
+        limpos = 0
+
+        for item in itens:
+            modelo_nome = self._match_descricao(
+                item.descricao, modelos, item.codigo_produto, ncm=item.ncm,
+            )
+            if modelo_nome and modelo_nome in modelos_by_nome:
+                novo_id = modelos_by_nome[modelo_nome].id
+                if item.modelo_moto_id != novo_id:
+                    item.modelo_moto_id = novo_id
+                detectados += 1
+            else:
+                if item.modelo_moto_id is not None:
+                    item.modelo_moto_id = None
+                    limpos += 1
+
+        db.session.flush()
+        logger.info(
+            "reprocessar_itens_nf: nf_id=%d — %d detectados, %d limpos de %d total",
+            nf_id, detectados, limpos, len(itens),
+        )
+
+        return {
+            'total_itens': len(itens),
+            'detectados': detectados,
+            'limpos': limpos,
         }
 
     def empresa_usa_cubagem(self, cnpj: str) -> bool:

@@ -292,8 +292,13 @@
 
     <!-- Itens de Produto -->
     <div class="card mt-4">
-        <div class="card-header">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-boxes"></i> Itens de Produto ({{ itens|length }})</h5>
+            {% if itens and nf.status != 'CANCELADA' %}
+            <button type="button" class="btn btn-outline-info btn-sm" id="btnReprocessarMotos" title="Re-detectar modelos de moto em todos os itens">
+                <i class="fas fa-sync-alt"></i> Re-processar motos
+            </button>
+            {% endif %}
         </div>
         <div class="card-body p-0">
             {% if itens %}
@@ -301,6 +306,7 @@
                 <table class="table table-sm table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
+                            <th>Modelo Moto</th>
                             <th>Cubagem</th>
                             <th>Codigo</th>
                             <th>Descricao</th>
@@ -316,11 +322,20 @@
                         {% for item in itens %}
                         {% set cub = cubagem_por_item.get(item.id) %}
                         <tr>
+                            <td style="min-width: 160px;">
+                                <select class="form-select form-select-sm modelo-moto-select"
+                                        data-item-id="{{ item.id }}"
+                                        {% if nf.status == 'CANCELADA' %}disabled{% endif %}>
+                                    <option value="">— Nenhum —</option>
+                                    {# Opcoes carregadas via JS #}
+                                </select>
+                                <input type="hidden" class="modelo-moto-atual" value="{{ item.modelo_moto_id or '' }}">
+                            </td>
                             <td>
                                 {% if cub %}
                                 <span class="text-info fw-semibold">{{ cub.peso_cubado_item|numero_br(1) }} kg</span>
                                 <div class="small text-muted" style="white-space: nowrap;">
-                                    {{ cub.modelo }} — {{ cub.comprimento_cm|numero_br(0) }}x{{ cub.largura_cm|numero_br(0) }}x{{ cub.altura_cm|numero_br(0) }} cm
+                                    {{ cub.comprimento_cm|numero_br(0) }}x{{ cub.largura_cm|numero_br(0) }}x{{ cub.altura_cm|numero_br(0) }} cm
                                     {% if cub.peso_medio %}
                                     | {{ cub.peso_medio|numero_br(1) }} kg/un
                                     {% else %}
@@ -820,22 +835,90 @@ function abrirModalEmissaoSsw(modo) {
 </div>
 
 <script>
-// Carregar modelos de moto para o select
+// Carregar modelos de moto para TODOS os selects (itens + emissao SSW)
 fetch('/carvia/api/modelos-moto')
     .then(r => r.json())
     .then(data => {
-        if (data.modelos) {
-            document.querySelectorAll('select[name="modelo_id"]').forEach(sel => {
-                data.modelos.forEach(m => {
-                    const opt = document.createElement('option');
-                    opt.value = m.id;
-                    opt.textContent = `${m.nome} (${m.comprimento}x${m.largura}x${m.altura} cm)`;
-                    sel.appendChild(opt);
-                });
+        if (!data.modelos) return;
+
+        // Selects do modal emissao SSW
+        document.querySelectorAll('select[name="modelo_id"]').forEach(sel => {
+            data.modelos.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = `${m.nome} (${m.comprimento}x${m.largura}x${m.altura} cm)`;
+                sel.appendChild(opt);
             });
-        }
+        });
+
+        // Selects de modelo por item (tabela de itens)
+        document.querySelectorAll('.modelo-moto-select').forEach(sel => {
+            data.modelos.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.nome;
+                sel.appendChild(opt);
+            });
+            // Selecionar valor persistido
+            const atual = sel.closest('td').querySelector('.modelo-moto-atual')?.value;
+            if (atual) sel.value = atual;
+        });
     })
     .catch(() => {});
+
+// Alterar modelo de moto de um item (inline)
+document.querySelectorAll('.modelo-moto-select').forEach(sel => {
+    sel.addEventListener('change', function() {
+        const itemId = this.dataset.itemId;
+        const modeloId = this.value ? parseInt(this.value) : null;
+
+        fetch(`/carvia/api/nf-item/${itemId}/modelo-moto`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({modelo_moto_id: modeloId}),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                this.classList.add('border-success');
+                setTimeout(() => this.classList.remove('border-success'), 1500);
+            } else {
+                alert(data.erro || 'Erro ao salvar');
+            }
+        })
+        .catch(err => alert('Erro de conexao: ' + err.message));
+    });
+});
+
+// Re-processar motos (re-deteccao)
+document.getElementById('btnReprocessarMotos')?.addEventListener('click', function() {
+    if (!confirm('Re-detectar modelos de moto em todos os itens?\nOverrides manuais serao substituidos.')) return;
+
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+
+    fetch(`/carvia/nfs/{{ nf.id }}/reprocessar-motos`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(`Re-processamento concluido:\n${data.detectados} modelo(s) detectado(s)\n${data.limpos} modelo(s) removido(s)\n${data.total_itens} item(ns) total`);
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao reprocessar');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync-alt"></i> Re-processar motos';
+        }
+    })
+    .catch(err => {
+        alert('Erro de conexao: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i> Re-processar motos';
+    });
+});
 
 // Adicionar linha de modelo
 document.getElementById('btnAddMedida')?.addEventListener('click', function() {

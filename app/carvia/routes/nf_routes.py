@@ -4,7 +4,7 @@ Rotas de NF Venda CarVia — Listagem, detalhe e cancelamento de NFs importadas
 
 import logging
 from collections import defaultdict
-from flask import render_template, request, flash, redirect, url_for
+from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
@@ -229,7 +229,7 @@ def register_nf_routes(bp):
         faturas_cliente = nf.get_faturas_cliente()
         faturas_transportadora = nf.get_faturas_transportadora()
 
-        # Calcular peso cubado a partir dos itens + modelos moto
+        # Peso cubado a partir do modelo_moto_id persistido nos itens
         from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
         moto_svc = MotoRecognitionService()
         resultado_cubagem = moto_svc.calcular_peso_cubado_nf(nf.id)
@@ -384,3 +384,89 @@ def register_nf_routes(bp):
             flash(f'Erro ao cancelar NF: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
+
+    # ==================== RE-PROCESSAR MOTOS ====================
+
+    @bp.route('/nfs/<int:nf_id>/reprocessar-motos', methods=['POST'])
+    @login_required
+    def reprocessar_motos_nf(nf_id):
+        """Re-roda deteccao de motos nos itens da NF e persiste resultado."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            return jsonify({'erro': 'NF nao encontrada.'}), 404
+
+        try:
+            from app.carvia.services.pricing.moto_recognition_service import (
+                MotoRecognitionService,
+            )
+            moto_svc = MotoRecognitionService()
+            resultado = moto_svc.reprocessar_itens_nf(nf.id)
+            db.session.commit()
+
+            logger.info(
+                "Re-processamento motos NF %d por %s: %s",
+                nf.id, current_user.email, resultado,
+            )
+            return jsonify({
+                'sucesso': True,
+                'total_itens': resultado['total_itens'],
+                'detectados': resultado['detectados'],
+                'limpos': resultado['limpos'],
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao reprocessar motos NF %d: %s", nf_id, e)
+            return jsonify({'erro': str(e)}), 500
+
+    # ==================== EDITAR MODELO MOTO EM ITEM ====================
+
+    @bp.route('/api/nf-item/<int:item_id>/modelo-moto', methods=['POST'])
+    @login_required
+    def editar_modelo_moto_item(item_id):
+        """Altera o modelo de moto de um item de NF (override manual)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaNfItem
+
+        item = db.session.get(CarviaNfItem, item_id)
+        if not item:
+            return jsonify({'erro': 'Item nao encontrado.'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        modelo_moto_id = data.get('modelo_moto_id')
+
+        # None/0 = limpar modelo
+        if not modelo_moto_id:
+            item.modelo_moto_id = None
+            db.session.commit()
+            logger.info(
+                "Modelo moto removido: item_id=%d por=%s",
+                item_id, current_user.email,
+            )
+            return jsonify({'sucesso': True, 'modelo_moto_id': None, 'modelo_nome': None})
+
+        # Validar que modelo existe
+        from app.carvia.models import CarviaModeloMoto
+        modelo = db.session.get(CarviaModeloMoto, modelo_moto_id)
+        if not modelo:
+            return jsonify({'erro': f'Modelo {modelo_moto_id} nao encontrado.'}), 404
+
+        item.modelo_moto_id = modelo.id
+        db.session.commit()
+
+        logger.info(
+            "Modelo moto alterado: item_id=%d modelo=%s por=%s",
+            item_id, modelo.nome, current_user.email,
+        )
+        return jsonify({
+            'sucesso': True,
+            'modelo_moto_id': modelo.id,
+            'modelo_nome': modelo.nome,
+        })

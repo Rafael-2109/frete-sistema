@@ -570,9 +570,13 @@ class EmbarqueCarViaService:
                 if modelo_upper in cubado_por_modelo:
                     peso_cubado_nf += cubado_por_modelo[modelo_upper]
                 else:
-                    # Fallback: tentar match parcial (ex: "POP" in "BIKE ELETRICA POP")
+                    # Fallback: match com word boundary (evita "RET" in "PRETA")
+                    import re as _re
                     for nome, cubado in cubado_por_modelo.items():
-                        if nome in modelo_upper or modelo_upper in nome:
+                        nome_esc = _re.escape(nome)
+                        modelo_esc = _re.escape(modelo_upper)
+                        if (_re.search(r'(?<![A-Za-z])' + nome_esc + r'(?![A-Za-z])', modelo_upper)
+                                or _re.search(r'(?<![A-Za-z])' + modelo_esc + r'(?![A-Za-z])', nome)):
                             peso_cubado_nf += cubado
                             break
         peso_cubado_nf = round(peso_cubado_nf, 2)
