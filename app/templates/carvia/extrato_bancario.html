@@ -61,10 +61,21 @@
         </div>
     </div>
 
+    {# FILTROS RAPIDOS DE PERIODO #}
+    <div class="d-flex align-items-center gap-2 mb-2">
+        <small class="text-muted">Periodo:</small>
+        <div class="btn-group btn-group-sm" id="btnGroupPeriodo">
+            <button type="button" class="btn btn-outline-primary" data-dias="30">30d</button>
+            <button type="button" class="btn btn-outline-primary" data-dias="60">60d</button>
+            <button type="button" class="btn btn-outline-primary" data-dias="90">90d</button>
+            <button type="button" class="btn btn-outline-primary" data-dias="180">180d</button>
+        </div>
+    </div>
+
     {# FILTROS #}
     <div class="card mb-3">
         <div class="card-body py-2">
-            <form method="GET" class="row g-2 align-items-end">
+            <form method="GET" id="formFiltros" class="row g-2 align-items-end">
                 <div class="col-md-2">
                     <label class="form-label small">De</label>
                     <input type="date" name="data_inicio" class="form-control form-control-sm"
@@ -83,7 +94,7 @@
                         <option value="DEBITO" {{ 'selected' if tipo_filtro == 'DEBITO' }}>Debito</option>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <label class="form-label small">Status</label>
                     <select name="status" class="form-select form-select-sm">
                         <option value="">Todos</option>
@@ -95,7 +106,12 @@
                 <div class="col-md-1">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
-                           placeholder="Descricao, memo..." value="{{ busca }}">
+                           placeholder="Descricao..." value="{{ busca }}">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small">Fatura</label>
+                    <input type="text" name="fatura" class="form-control form-control-sm"
+                           placeholder="FAT-001..." value="{{ fatura }}">
                 </div>
                 <div class="col-md-1">
                     <label class="form-label small">Valor Min</label>
@@ -107,7 +123,7 @@
                     <input type="number" name="valor_max" class="form-control form-control-sm"
                            step="0.01" placeholder="0,00" value="{{ valor_max }}">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <label class="form-label small">Razao Social</label>
                     <input type="text" name="razao_social" class="form-control form-control-sm"
                            placeholder="Nome..." value="{{ razao_social }}">
@@ -294,11 +310,14 @@
             const conteudo = document.getElementById('detalheDocConteudo');
             const erro = document.getElementById('detalheDocErro');
             const btnAbrir = document.getElementById('btnAbrirDocumento');
+            const badgesDiv = document.getElementById('detalheDocBadges');
 
             loading.classList.remove('d-none');
             conteudo.classList.add('d-none');
             erro.classList.add('d-none');
             btnAbrir.classList.add('d-none');
+            badgesDiv.classList.add('d-none');
+            badgesDiv.innerHTML = '';
 
             modal.show();
 
@@ -315,6 +334,26 @@
 
                 document.getElementById('detalheDocTitulo').textContent = data.titulo;
                 document.getElementById('detalheDocNumero').textContent = data.numero || '-';
+
+                // Badges CTes e NFs (retornados como arrays pela API)
+                let badgesHTML = '';
+                if (data.cte_numeros && data.cte_numeros.length) {
+                    data.cte_numeros.forEach(n => {
+                        badgesHTML += `<span class="badge bg-secondary me-1" style="font-size:0.7rem">${n}</span>`;
+                    });
+                }
+                if (data.nf_numeros && data.nf_numeros.length) {
+                    data.nf_numeros.slice(0, 8).forEach(n => {
+                        badgesHTML += `<span class="badge bg-info me-1" style="font-size:0.7rem">NF ${n}</span>`;
+                    });
+                    if (data.nf_numeros.length > 8) {
+                        badgesHTML += `<small class="text-muted">+${data.nf_numeros.length - 8} NFs</small>`;
+                    }
+                }
+                if (badgesHTML) {
+                    badgesDiv.innerHTML = badgesHTML;
+                    badgesDiv.classList.remove('d-none');
+                }
 
                 // Popular campos dinamicos
                 const tbody = document.getElementById('detalheDocCampos');
@@ -416,6 +455,37 @@
                     el.innerHTML = textoOriginal;
                 }
             });
+        });
+    });
+    // Botoes rapidos de periodo
+    const form = document.getElementById('formFiltros');
+    const inputInicio = form.querySelector('[name="data_inicio"]');
+    const inputFim = form.querySelector('[name="data_fim"]');
+
+    function calcDiasRetroativos() {
+        // Calcula quantos dias entre data_inicio e data_fim (para highlight do botao ativo)
+        const inicio = new Date(inputInicio.value);
+        const fim = new Date(inputFim.value);
+        const hoje = new Date();
+        hoje.setHours(0,0,0,0);
+        fim.setHours(0,0,0,0);
+        if (Math.abs(fim - hoje) > 86400000) return null; // fim != hoje
+        const diff = Math.round((fim - inicio) / 86400000);
+        return [30, 60, 90, 180].includes(diff) ? diff : null;
+    }
+
+    const diasAtivo = calcDiasRetroativos();
+    document.querySelectorAll('#btnGroupPeriodo [data-dias]').forEach(btn => {
+        const dias = parseInt(btn.dataset.dias);
+        if (dias === diasAtivo) btn.classList.add('active');
+
+        btn.addEventListener('click', () => {
+            const hoje = new Date();
+            const inicio = new Date(hoje);
+            inicio.setDate(inicio.getDate() - dias);
+            inputInicio.value = inicio.toISOString().split('T')[0];
+            inputFim.value = hoje.toISOString().split('T')[0];
+            form.submit();
         });
     });
 })();

@@ -40,6 +40,7 @@ class CarviaConciliacaoService:
             - valor_min: float (valor absoluto minimo)
             - valor_max: float (valor absoluto maximo)
             - razao_social: str (pesquisa em razao_social)
+            - fatura: str (busca por numero_fatura vinculada via conciliacao)
         """
         from app.carvia.models import CarviaExtratoLinha
 
@@ -81,6 +82,37 @@ class CarviaConciliacaoService:
                 termo_rs = f"%{filtros['razao_social']}%"
                 query = query.filter(
                     CarviaExtratoLinha.razao_social.ilike(termo_rs)
+                )
+            if filtros.get('fatura'):
+                from app.carvia.models import (
+                    CarviaConciliacao, CarviaFaturaCliente, CarviaFaturaTransportadora,
+                )
+                termo_fat = f"%{filtros['fatura']}%"
+                # Subquery: IDs de linhas vinculadas a faturas com numero matching
+                fat_cli_ids = db.session.query(
+                    CarviaConciliacao.extrato_linha_id
+                ).filter(
+                    CarviaConciliacao.tipo_documento == 'fatura_cliente',
+                    CarviaConciliacao.documento_id.in_(
+                        db.session.query(CarviaFaturaCliente.id).filter(
+                            CarviaFaturaCliente.numero_fatura.ilike(termo_fat)
+                        )
+                    )
+                )
+                fat_transp_ids = db.session.query(
+                    CarviaConciliacao.extrato_linha_id
+                ).filter(
+                    CarviaConciliacao.tipo_documento == 'fatura_transportadora',
+                    CarviaConciliacao.documento_id.in_(
+                        db.session.query(CarviaFaturaTransportadora.id).filter(
+                            CarviaFaturaTransportadora.numero_fatura.ilike(termo_fat)
+                        )
+                    )
+                )
+                query = query.filter(
+                    CarviaExtratoLinha.id.in_(
+                        fat_cli_ids.union(fat_transp_ids)
+                    )
                 )
 
         return query.all()

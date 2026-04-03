@@ -1584,3 +1584,153 @@ def register_fatura_routes(bp):
                 'destino': f'{op.cidade_destino}/{op.uf_destino}' if op.cidade_destino else '-',
             } for op in operacoes],
         })
+
+    # ==================== VINCULAR/DESVINCULAR CTe COMP ↔ FATURA CLIENTE ====================
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/vincular-cte-comp', methods=['POST']) # type: ignore
+    @login_required
+    def api_vincular_cte_comp_fatura_cliente(fatura_id): # type: ignore
+        """Vincula CTe complementar a fatura cliente: status -> FATURADO, seta FK."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        if fatura.status in ('PAGA', 'CANCELADA'):
+            return jsonify({'sucesso': False, 'erro': f'Fatura {fatura.status} nao aceita vinculos.'}), 400
+
+        data = request.get_json(silent=True) or {}
+        cte_comp_id = data.get('cte_comp_id')
+        if not cte_comp_id:
+            return jsonify({'sucesso': False, 'erro': 'cte_comp_id obrigatorio.'}), 400
+
+        try:
+            cte_comp = db.session.query(CarviaCteComplementar).filter(
+                CarviaCteComplementar.id == cte_comp_id,
+                CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
+                CarviaCteComplementar.fatura_cliente_id.is_(None),
+            ).with_for_update().first()
+
+            if not cte_comp:
+                return jsonify({'sucesso': False, 'erro': 'CTe complementar nao encontrado ou ja faturado.'}), 400
+
+            cte_comp.fatura_cliente_id = fatura.id
+            cte_comp.status = 'FATURADO'
+
+            # Recalcular valor_total da fatura
+            soma_ops = db.session.query(
+                func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
+            ).filter(CarviaOperacao.fatura_cliente_id == fatura.id).scalar()
+
+            soma_comp = db.session.query(
+                func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0)
+            ).filter(CarviaCteComplementar.fatura_cliente_id == fatura.id).scalar()
+
+            fatura.valor_total = (soma_ops or 0) + (soma_comp or 0)
+            db.session.commit()
+
+            logger.info(
+                f"CTe Comp #{cte_comp_id} ({cte_comp.numero_comp}) vinculado a fatura "
+                f"cliente #{fatura_id} por {current_user.email}. "
+                f"Valor total: R$ {fatura.valor_total:.2f}"
+            )
+            return jsonify({'sucesso': True, 'valor_total': float(fatura.valor_total or 0)})
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao vincular CTe Comp #{cte_comp_id} a fatura #{fatura_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/desvincular-cte-comp/<int:cte_comp_id>', methods=['POST']) # type: ignore
+    @login_required
+    def api_desvincular_cte_comp_fatura_cliente(fatura_id, cte_comp_id): # type: ignore
+        """Desvincula CTe complementar de fatura cliente: reverte status, limpa FK."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        if fatura.status in ('PAGA', 'CANCELADA'):
+            return jsonify({'sucesso': False, 'erro': f'Fatura {fatura.status} nao permite desvincular.'}), 400
+
+        try:
+            cte_comp = db.session.query(CarviaCteComplementar).filter(
+                CarviaCteComplementar.id == cte_comp_id,
+                CarviaCteComplementar.fatura_cliente_id == fatura_id,
+            ).with_for_update().first()
+
+            if not cte_comp:
+                return jsonify({'sucesso': False, 'erro': 'CTe complementar nao encontrado nesta fatura.'}), 404
+
+            cte_comp.fatura_cliente_id = None
+            cte_comp.status = 'EMITIDO'
+
+            # Recalcular valor_total
+            soma_ops = db.session.query(
+                func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
+            ).filter(CarviaOperacao.fatura_cliente_id == fatura.id).scalar()
+
+            soma_comp = db.session.query(
+                func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0)
+            ).filter(CarviaCteComplementar.fatura_cliente_id == fatura.id).scalar()
+
+            fatura.valor_total = (soma_ops or 0) + (soma_comp or 0)
+            db.session.commit()
+
+            logger.info(
+                f"CTe Comp #{cte_comp_id} desvinculado de fatura cliente #{fatura_id} "
+                f"por {current_user.email}"
+            )
+            return jsonify({'sucesso': True, 'valor_total': float(fatura.valor_total or 0)})
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao desvincular CTe Comp #{cte_comp_id} de fatura #{fatura_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/ctes-comp-disponiveis-fatura') # type: ignore
+    @login_required
+    def api_ctes_comp_disponiveis_fatura(): # type: ignore
+        """Lista CTe complementares disponiveis para vincular a fatura cliente (R5)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        busca = request.args.get('busca', '')
+        cnpj_cliente = request.args.get('cnpj_cliente', '')
+
+        query = db.session.query(CarviaCteComplementar).filter(
+            CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
+            CarviaCteComplementar.fatura_cliente_id.is_(None),
+        )
+
+        if cnpj_cliente:
+            query = query.filter(CarviaCteComplementar.cnpj_cliente == cnpj_cliente)
+
+        if busca:
+            busca_like = f'%{busca}%'
+            query = query.filter(db.or_(
+                CarviaCteComplementar.numero_comp.ilike(busca_like),
+                CarviaCteComplementar.cte_numero.ilike(busca_like),
+                CarviaCteComplementar.nome_cliente.ilike(busca_like),
+                CarviaCteComplementar.observacoes.ilike(busca_like),
+            ))
+
+        comps = query.order_by(CarviaCteComplementar.cte_data_emissao.desc().nullslast()).limit(50).all()
+
+        return jsonify({
+            'sucesso': True,
+            'ctes_comp': [{
+                'id': c.id,
+                'numero_comp': c.numero_comp,
+                'cte_numero': c.cte_numero,
+                'nome_cliente': c.nome_cliente,
+                'cnpj_cliente': c.cnpj_cliente,
+                'cte_valor': float(c.cte_valor) if c.cte_valor else None,
+                'status': c.status,
+                'operacao_id': c.operacao_id,
+            } for c in comps],
+        })

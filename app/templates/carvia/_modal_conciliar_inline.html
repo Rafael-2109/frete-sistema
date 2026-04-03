@@ -67,6 +67,68 @@
 (function() {
     let linhaAtual = null;
 
+    const formatCNPJ = c => {
+        if (!c || c.length < 14) return c || '';
+        const d = c.replace(/\D/g, '');
+        if (d.length !== 14) return c;
+        return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    };
+
+    function buildEnrichedHTML(doc) {
+        let html = '';
+        if (doc.tipo_documento === 'fatura_cliente') {
+            // Remetente / Destinatario
+            const resp = doc.responsavel_frete || '';
+            if (doc.remetente_nome || (doc.destinatarios && doc.destinatarios.length)) {
+                const remEmph = ['100_REMETENTE', '50_50'].includes(resp) ? 'carvia-tomador-emphasis' : '';
+                const destEmph = ['100_DESTINATARIO', '50_50'].includes(resp) ? 'carvia-tomador-emphasis' : '';
+                html += `<span style="font-size:0.72rem">`;
+                if (doc.remetente_nome) {
+                    html += `<span class="${remEmph}">Rem: ${doc.remetente_nome}</span>`;
+                }
+                if (doc.destinatarios && doc.destinatarios.length) {
+                    const destLabel = doc.destinatarios[0].nome || formatCNPJ(doc.destinatarios[0].cnpj);
+                    html += `${doc.remetente_nome ? ' &middot; ' : ''}<span class="${destEmph}">Dest: ${destLabel}</span>`;
+                    if (doc.destinatarios.length > 1) {
+                        html += ` <small class="text-muted">(+${doc.destinatarios.length - 1})</small>`;
+                    }
+                }
+                html += `</span> `;
+            }
+            // Badges CTe + NF
+            if (doc.cte_numeros && doc.cte_numeros.length) {
+                doc.cte_numeros.forEach(n => {
+                    html += `<span class="badge bg-secondary me-1" style="font-size:0.58rem">${n}</span>`;
+                });
+            }
+            if (doc.nf_numeros && doc.nf_numeros.length) {
+                doc.nf_numeros.slice(0, 5).forEach(n => {
+                    html += `<span class="badge bg-info me-1" style="font-size:0.58rem">NF ${n}</span>`;
+                });
+                if (doc.nf_numeros.length > 5) {
+                    html += `<small class="text-muted">+${doc.nf_numeros.length - 5} NFs</small>`;
+                }
+            }
+            // Condicoes comerciais
+            if (doc.condicao_pagamento || doc.responsavel_frete_label) {
+                html += `<small class="text-info ms-1">${doc.condicao_pagamento || ''}${doc.condicao_pagamento && doc.responsavel_frete_label ? ' | ' : ''}${doc.responsavel_frete_label || ''}</small>`;
+            }
+        } else if (doc.tipo_documento === 'fatura_transportadora') {
+            if (doc.cnpj_transportadora) {
+                html += `<small class="text-muted">${formatCNPJ(doc.cnpj_transportadora)}</small> `;
+            }
+            if (doc.cte_numeros && doc.cte_numeros.length) {
+                doc.cte_numeros.forEach(n => {
+                    html += `<span class="badge bg-secondary me-1" style="font-size:0.58rem">${n}</span>`;
+                });
+            }
+        } else {
+            // Despesa, custo_entrega, receita — data/vencimento
+            html += `<small class="text-muted">${doc.data || ''}${doc.vencimento ? ' &middot; Venc: ' + doc.vencimento : ''}</small>`;
+        }
+        return html;
+    }
+
     window.abrirModalConciliar = function(linhaId) {
         const modal = new bootstrap.Modal(document.getElementById('modalConciliarInline'));
         const loading = document.getElementById('concInlineLoading');
@@ -118,6 +180,7 @@
                     scoreBadge = `<span class="badge bg-secondary" style="font-size:0.6rem">&#9733;</span>`;
                 }
 
+                // Linha principal
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><input type="checkbox" class="form-check-input conc-inline-check"
@@ -138,6 +201,15 @@
                     </td>
                 `;
                 tbody.appendChild(tr);
+
+                // Linha secundaria com info enriquecida
+                const enriched = buildEnrichedHTML(doc);
+                if (enriched) {
+                    const trEnriched = document.createElement('tr');
+                    trEnriched.className = 'carvia-enriched-row';
+                    trEnriched.innerHTML = `<td></td><td colspan="6" style="padding-top:0; border-top:0">${enriched}</td>`;
+                    tbody.appendChild(trEnriched);
+                }
             });
 
             // Habilitar/desabilitar inputs ao marcar checkbox

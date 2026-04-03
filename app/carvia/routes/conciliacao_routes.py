@@ -24,7 +24,7 @@ CSV Razao Social:
 
 import logging
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -105,6 +105,7 @@ def register_conciliacao_routes(bp):
 
         # Filtros
         hoje = date.today()
+        default_inicio = hoje - timedelta(days=30)
         tipo = request.args.get('tipo', '')
         status = request.args.get('status', '')
         data_inicio_str = request.args.get('data_inicio', '')
@@ -113,6 +114,7 @@ def register_conciliacao_routes(bp):
         valor_min_str = request.args.get('valor_min', '')
         valor_max_str = request.args.get('valor_max', '')
         razao_social = request.args.get('razao_social', '')
+        fatura = request.args.get('fatura', '')
 
         filtros = {}
         if tipo:
@@ -124,11 +126,11 @@ def register_conciliacao_routes(bp):
             if data_inicio_str:
                 filtros['data_inicio'] = date.fromisoformat(data_inicio_str)
             else:
-                filtros['data_inicio'] = hoje.replace(day=1)
-                data_inicio_str = filtros['data_inicio'].isoformat()
+                filtros['data_inicio'] = default_inicio
+                data_inicio_str = default_inicio.isoformat()
         except ValueError:
-            filtros['data_inicio'] = hoje.replace(day=1)
-            data_inicio_str = filtros['data_inicio'].isoformat()
+            filtros['data_inicio'] = default_inicio
+            data_inicio_str = default_inicio.isoformat()
 
         try:
             if data_fim_str:
@@ -154,6 +156,8 @@ def register_conciliacao_routes(bp):
                 pass
         if razao_social:
             filtros['razao_social'] = razao_social
+        if fatura:
+            filtros['fatura'] = fatura
 
         linhas = CarviaConciliacaoService.obter_linhas_extrato(filtros)
         resumo = CarviaConciliacaoService.obter_resumo()
@@ -170,6 +174,7 @@ def register_conciliacao_routes(bp):
             valor_min=valor_min_str,
             valor_max=valor_max_str,
             razao_social=razao_social,
+            fatura=fatura,
         )
 
     # ===================================================================
@@ -618,44 +623,84 @@ def register_conciliacao_routes(bp):
         try:
             if tipo == 'fatura_cliente':
                 from app.carvia.models import CarviaFaturaCliente
+                from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
                 doc = db.session.get(CarviaFaturaCliente, doc_id)
                 if not doc:
                     return jsonify({'erro': 'Fatura cliente nao encontrada'}), 404
+
+                # Enriquecer com CTes, NFs, remetente, destinatarios
+                enrichment = CarviaConciliacaoService._enriquecer_fatura_cliente_para_conciliacao(doc)
+                cond = CarviaConciliacaoService._buscar_condicoes_comerciais_fatura(doc)
+
+                campos = [
+                    {'label': 'Cliente', 'valor': doc.nome_cliente or '-'},
+                    {'label': 'CNPJ', 'valor': doc.cnpj_cliente or '-'},
+                    {'label': 'Data Emissao', 'valor': _fmt_data(doc.data_emissao)},
+                    {'label': 'Vencimento', 'valor': _fmt_data(doc.vencimento)},
+                    {'label': 'Valor Total', 'valor': _fmt_valor(doc.valor_total)},
+                    {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
+                    {'label': 'Saldo', 'valor': _calc_saldo(doc.valor_total, doc.total_conciliado)},
+                    {'label': 'Status', 'valor': doc.status or '-'},
+                ]
+
+                # Remetente
+                if enrichment.get('remetente_nome'):
+                    campos.append({
+                        'label': 'Embarcador (Rem.)',
+                        'valor': f"{enrichment['remetente_nome']} ({enrichment.get('remetente_cnpj', '')})",
+                    })
+
+                # Destinatarios
+                if enrichment.get('destinatarios'):
+                    dests = [d.get('nome') or d.get('cnpj', '') for d in enrichment['destinatarios']]
+                    campos.append({'label': 'Destinatario(s)', 'valor': ', '.join(dests)})
+
+                # Condicoes comerciais
+                if cond.get('condicao_pagamento'):
+                    campos.append({'label': 'Cond. Pagamento', 'valor': cond['condicao_pagamento']})
+                if cond.get('responsavel_frete_label'):
+                    campos.append({'label': 'Resp. Frete', 'valor': cond['responsavel_frete_label']})
+
                 return jsonify({
                     'titulo': 'Fatura Cliente',
                     'numero': doc.numero_fatura,
                     'url': f'/carvia/faturas-cliente/{doc.id}',
-                    'campos': [
-                        {'label': 'Cliente', 'valor': doc.nome_cliente or '-'},
-                        {'label': 'CNPJ', 'valor': doc.cnpj_cliente or '-'},
-                        {'label': 'Data Emissao', 'valor': _fmt_data(doc.data_emissao)},
-                        {'label': 'Vencimento', 'valor': _fmt_data(doc.vencimento)},
-                        {'label': 'Valor Total', 'valor': _fmt_valor(doc.valor_total)},
-                        {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
-                        {'label': 'Saldo', 'valor': _calc_saldo(doc.valor_total, doc.total_conciliado)},
-                        {'label': 'Status', 'valor': doc.status or '-'},
-                    ],
+                    'campos': campos,
+                    'cte_numeros': enrichment.get('cte_numeros', []),
+                    'nf_numeros': enrichment.get('nf_numeros', []),
                 })
 
             elif tipo == 'fatura_transportadora':
-                from app.carvia.models import CarviaFaturaTransportadora
+                from app.carvia.models import CarviaFaturaTransportadora, CarviaSubcontrato
                 doc = db.session.get(CarviaFaturaTransportadora, doc_id)
                 if not doc:
                     return jsonify({'erro': 'Fatura transportadora nao encontrada'}), 404
                 nome_transp = doc.transportadora.razao_social if doc.transportadora else '-'
+                cnpj_transp = doc.transportadora.cnpj if doc.transportadora else '-'
+
+                # CTes dos subcontratos vinculados
+                subs = CarviaSubcontrato.query.filter_by(
+                    fatura_transportadora_id=doc.id
+                ).all()
+                cte_numeros = [s.cte_numero for s in subs if s.cte_numero]
+
+                campos = [
+                    {'label': 'Transportadora', 'valor': nome_transp},
+                    {'label': 'CNPJ Transportadora', 'valor': cnpj_transp},
+                    {'label': 'Data Emissao', 'valor': _fmt_data(doc.data_emissao)},
+                    {'label': 'Vencimento', 'valor': _fmt_data(doc.vencimento)},
+                    {'label': 'Valor Total', 'valor': _fmt_valor(doc.valor_total)},
+                    {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
+                    {'label': 'Saldo', 'valor': _calc_saldo(doc.valor_total, doc.total_conciliado)},
+                    {'label': 'Status Pagamento', 'valor': doc.status_pagamento or '-'},
+                ]
+
                 return jsonify({
                     'titulo': 'Fatura Transportadora',
                     'numero': doc.numero_fatura,
                     'url': f'/carvia/faturas-transportadora/{doc.id}',
-                    'campos': [
-                        {'label': 'Transportadora', 'valor': nome_transp},
-                        {'label': 'Data Emissao', 'valor': _fmt_data(doc.data_emissao)},
-                        {'label': 'Vencimento', 'valor': _fmt_data(doc.vencimento)},
-                        {'label': 'Valor Total', 'valor': _fmt_valor(doc.valor_total)},
-                        {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
-                        {'label': 'Saldo', 'valor': _calc_saldo(doc.valor_total, doc.total_conciliado)},
-                        {'label': 'Status Pagamento', 'valor': doc.status_pagamento or '-'},
-                    ],
+                    'campos': campos,
+                    'cte_numeros': cte_numeros,
                 })
 
             elif tipo == 'despesa':

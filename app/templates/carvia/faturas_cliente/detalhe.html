@@ -174,8 +174,16 @@
                     <p class="text-muted small mb-0">
                         Soma CTe: R$ {{ "%.2f"|format(operacoes|selectattr('cte_valor')|map(attribute='cte_valor')|sum) }}
                     </p>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <h6 class="mb-0">CTe Complementares: {{ ctes_complementares|length }}</h6>
+                        {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                        <button type="button" class="btn btn-outline-success btn-xs"
+                                data-bs-toggle="modal" data-bs-target="#modalVincularComp">
+                            <i class="fas fa-plus"></i> Vincular
+                        </button>
+                        {% endif %}
+                    </div>
                     {% if ctes_complementares %}
-                    <h6 class="mt-2">CTe Complementares: {{ ctes_complementares|length }}</h6>
                     <p class="text-muted small mb-0">
                         Soma Complementar: {{ ctes_complementares|selectattr('cte_valor')|map(attribute='cte_valor')|sum|valor_br }}
                     </p>
@@ -390,6 +398,9 @@
                             <th>Operacao</th>
                             <th>Valor</th>
                             <th>Status</th>
+                            {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                            <th class="text-center" style="width:80px;">Acao</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -408,6 +419,15 @@
                             </td>
                             <td class="valor-col">{{ comp.cte_valor|valor_br }}</td>
                             <td><span class="badge carvia-badge-{{ comp.status|lower }}">{{ comp.status }}</span></td>
+                            {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                            <td class="text-center">
+                                <button type="button" class="btn btn-outline-danger btn-xs"
+                                        onclick="desvincularComp({{ comp.id }}, '{{ comp.numero_comp }}')"
+                                        title="Desvincular CTe Complementar">
+                                    <i class="fas fa-unlink"></i>
+                                </button>
+                            </td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -493,6 +513,30 @@
                     <div class="spinner-border spinner-border-sm text-primary"></div> Buscando...
                 </div>
                 <div id="opVincularResultados" class="list-group" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal: Vincular CTe Complementar a Fatura -->
+{% if fatura.status not in ('PAGA', 'CANCELADA') %}
+<div class="modal fade" id="modalVincularComp" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-link"></i> Vincular CTe Complementar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="buscaCompVincular"
+                           placeholder="Buscar por numero, CTe ou cliente...">
+                </div>
+                <div id="compVincularLoading" class="text-center py-3" style="display:none;">
+                    <div class="spinner-border spinner-border-sm text-primary"></div> Buscando...
+                </div>
+                <div id="compVincularResultados" class="list-group" style="max-height:400px; overflow-y:auto;"></div>
             </div>
         </div>
     </div>
@@ -678,6 +722,91 @@ function vincularOp(opId, cteNumero) {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
         body: JSON.stringify({operacao_id: opId}),
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.erro || 'desconhecido'));
+        }
+    });
+}
+
+// ─── Vincular CTe Complementar ───
+var buscaComp = document.getElementById('buscaCompVincular');
+var compResultados = document.getElementById('compVincularResultados');
+var compLoading = document.getElementById('compVincularLoading');
+var debounceComp;
+
+if (buscaComp) {
+    document.getElementById('modalVincularComp')?.addEventListener('show.bs.modal', function() {
+        buscarCompsDisponiveis('');
+    });
+
+    buscaComp.addEventListener('input', function() {
+        clearTimeout(debounceComp);
+        debounceComp = setTimeout(function() {
+            buscarCompsDisponiveis(buscaComp.value);
+        }, 300);
+    });
+}
+
+function buscarCompsDisponiveis(busca) {
+    if (!compResultados) return;
+    compLoading.style.display = 'block';
+    compResultados.innerHTML = '';
+
+    var cnpj = '{{ fatura.cnpj_cliente or "" }}';
+    var url = '/carvia/api/ctes-comp-disponiveis-fatura?busca=' + encodeURIComponent(busca);
+    if (cnpj) url += '&cnpj_cliente=' + encodeURIComponent(cnpj);
+
+    fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            compLoading.style.display = 'none';
+            if (!data.sucesso || !data.ctes_comp.length) {
+                compResultados.innerHTML = '<div class="text-center text-muted py-3">Nenhum CTe complementar disponivel.</div>';
+                return;
+            }
+            data.ctes_comp.forEach(function(comp) {
+                var item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'list-group-item list-group-item-action py-2';
+                item.innerHTML =
+                    '<div class="d-flex justify-content-between">' +
+                        '<strong>' + comp.numero_comp + '</strong>' +
+                        '<span>' + (comp.cte_valor ? 'R$ ' + comp.cte_valor.toFixed(2) : '-') + '</span>' +
+                    '</div>' +
+                    '<small class="text-muted">CTe ' + (comp.cte_numero || '-') + ' | ' +
+                    (comp.nome_cliente || '-') + ' | Op #' + (comp.operacao_id || '-') +
+                    ' | <span class="badge bg-secondary">' + comp.status + '</span></small>';
+                item.addEventListener('click', function() {
+                    vincularComp(comp.id, comp.numero_comp);
+                });
+                compResultados.appendChild(item);
+            });
+        });
+}
+
+function vincularComp(compId, numComp) {
+    if (!confirm('Vincular ' + numComp + ' a esta fatura? Status mudara para FATURADO.')) return;
+    fetch('/carvia/faturas-cliente/' + faturaId + '/vincular-cte-comp', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({cte_comp_id: compId}),
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.erro || 'desconhecido'));
+        }
+    });
+}
+
+function desvincularComp(compId, numComp) {
+    if (!confirm('Desvincular ' + numComp + ' desta fatura? Status voltara para EMITIDO.')) return;
+    fetch('/carvia/faturas-cliente/' + faturaId + '/desvincular-cte-comp/' + compId, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
     }).then(function(r) { return r.json(); }).then(function(data) {
         if (data.sucesso) {
             location.reload();
