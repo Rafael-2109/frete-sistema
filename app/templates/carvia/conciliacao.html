@@ -87,18 +87,28 @@
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header py-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong class="small">Extrato Bancario</strong>
-                        <div class="d-flex gap-1">
-                            <select id="filtroStatusExtrato" class="form-select form-select-sm" style="width:auto;font-size:0.75rem">
-                                <option value="" selected>Todos</option>
-                                <option value="PENDENTE">Pendentes</option>
-                                <option value="PARCIAL">Parciais</option>
-                                <option value="CONCILIADO">Conciliados</option>
-                                <option value="RECEBIMENTO">Recebimento</option>
-                            </select>
+                    <div class="d-flex flex-column gap-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong class="small">Extrato Bancario</strong>
                             <input type="text" id="filtroBuscaExtrato" class="form-control form-control-sm"
-                                   placeholder="Buscar..." style="width:120px;font-size:0.75rem">
+                                   placeholder="Buscar..." style="width:130px;font-size:0.75rem">
+                        </div>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <select id="filtroTipoExtrato" class="form-select form-select-sm" style="width:auto;font-size:0.7rem">
+                                <option value="" selected>Tipo: Todos</option>
+                                <option value="CREDITO">Credito</option>
+                                <option value="DEBITO">Debito</option>
+                            </select>
+                            <select id="filtroStatusExtrato" class="form-select form-select-sm" style="width:auto;font-size:0.7rem">
+                                <option value="" selected>Status: Todos</option>
+                                <option value="PENDENTE">Pendente</option>
+                                <option value="PARCIAL">Parcial</option>
+                                <option value="CONCILIADO">Conciliado</option>
+                            </select>
+                            <input type="number" id="filtroValorMinExtrato" class="form-control form-control-sm"
+                                   placeholder="Val min" step="0.01" style="width:75px;font-size:0.7rem">
+                            <input type="number" id="filtroValorMaxExtrato" class="form-control form-control-sm"
+                                   placeholder="Val max" step="0.01" style="width:75px;font-size:0.7rem">
                         </div>
                     </div>
                 </div>
@@ -138,6 +148,28 @@
                         Selecione uma linha do extrato para ver documentos elegiveis
                     </div>
                     <div id="docsLista" class="d-none"></div>
+                </div>
+                {# Legenda de criterios de match #}
+                <div class="card-footer py-1 px-2">
+                    <details class="small">
+                        <summary class="text-muted" style="font-size:0.7rem;cursor:pointer">
+                            <i class="fas fa-info-circle"></i> Criterios de match sugestivo
+                        </summary>
+                        <div class="mt-1 text-muted" style="font-size:0.68rem;line-height:1.4">
+                            <div>
+                                <span class="badge carvia-badge-score-alto" style="font-size:0.6rem">&#9733;&#9733;&#9733;</span>
+                                <strong>Alto</strong> (score &ge; 80%) &mdash;
+                                <span class="badge carvia-badge-score-medio" style="font-size:0.6rem">&#9733;&#9733;</span>
+                                <strong>Medio</strong> (score &ge; 55%)
+                            </div>
+                            <div class="mt-1">
+                                <strong>Valor (50%)</strong>: diferenca entre valor do extrato e saldo do documento<br>
+                                <strong>Data (30%)</strong>: proximidade entre data do extrato e vencimento do documento<br>
+                                <strong>Nome (20%)</strong>: similaridade entre descricao do extrato e nome do documento
+                            </div>
+                            <div class="mt-1 fst-italic">Sugestivo — nao impede a selecao manual de qualquer documento.</div>
+                        </div>
+                    </details>
                 </div>
             </div>
         </div>

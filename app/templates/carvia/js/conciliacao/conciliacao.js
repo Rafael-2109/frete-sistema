@@ -483,15 +483,21 @@
 
     // Filtros client-side
     function aplicarFiltrosExtrato() {
+        const tipo = document.getElementById('filtroTipoExtrato').value;
         const status = document.getElementById('filtroStatusExtrato').value;
         const busca = document.getElementById('filtroBuscaExtrato').value.toLowerCase();
+        const valMin = parseFloat(document.getElementById('filtroValorMinExtrato')?.value) || 0;
+        const valMax = parseFloat(document.getElementById('filtroValorMaxExtrato')?.value) || Infinity;
+
         const filtradas = todasLinhas.filter(l => {
-            // Filtro especial: RECEBIMENTO = valor > 0 (credito)
-            if (status === 'RECEBIMENTO') {
-                if (l.valor <= 0) return false;
-            } else if (status) {
-                if (l.status !== status) return false;
-            }
+            // Tipo (CREDITO/DEBITO)
+            if (tipo && l.tipo !== tipo) return false;
+            // Status conciliacao
+            if (status && l.status !== status) return false;
+            // Faixa de valor (sobre valor absoluto)
+            const absVal = Math.abs(l.valor);
+            if (absVal < valMin || absVal > valMax) return false;
+            // Busca texto
             if (busca && !(l.descricao || '').toLowerCase().includes(busca)
                       && !(l.razao_social || '').toLowerCase().includes(busca)) return false;
             return true;
@@ -499,6 +505,10 @@
         renderizarLinhas(filtradas);
     }
 
-    document.getElementById('filtroStatusExtrato')?.addEventListener('change', aplicarFiltrosExtrato);
-    document.getElementById('filtroBuscaExtrato')?.addEventListener('input', aplicarFiltrosExtrato);
+    ['filtroTipoExtrato', 'filtroStatusExtrato'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', aplicarFiltrosExtrato);
+    });
+    ['filtroBuscaExtrato', 'filtroValorMinExtrato', 'filtroValorMaxExtrato'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', aplicarFiltrosExtrato);
+    });
 })();
