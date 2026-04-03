@@ -256,6 +256,232 @@ def register_frete_routes(bp):
         )
 
     # ------------------------------------------------------------------
+    # Backfill Frete (criar CarviaFrete retroativamente)
+    # ------------------------------------------------------------------
+
+    @bp.route('/fretes/backfill', methods=['GET', 'POST'])  # type: ignore
+    @login_required
+    def backfill_frete_carvia():  # type: ignore
+        """Criar CarviaFrete retroativamente para NFs sem embarque.
+
+        GET: Exibe NFs com mesmo emitente+destinatario + parametros da tabela.
+        POST: Cria CarviaFrete com parametros (possivelmente editados).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        nf_id = request.args.get('nf_id', type=int)
+
+        if request.method == 'GET':
+            if not nf_id:
+                flash('NF semente nao informada.', 'danger')
+                return redirect(url_for('carvia.listar_nfs'))
+
+            seed_nf = CarviaNf.query.get_or_404(nf_id)
+            if seed_nf.status != 'ATIVA':
+                flash('NF cancelada nao pode ser usada como semente.', 'danger')
+                return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
+
+            # Buscar todas NFs com mesmo emitente + destinatario
+            todas_nfs = CarviaNf.query.filter(
+                CarviaNf.cnpj_emitente == seed_nf.cnpj_emitente,
+                CarviaNf.cnpj_destinatario == seed_nf.cnpj_destinatario,
+                CarviaNf.status == 'ATIVA',
+            ).order_by(CarviaNf.criado_em.desc()).all()
+
+            # Carregar operacoes vinculadas para cada NF (CTe CarVia info)
+            from app.carvia.models import CarviaOperacaoNf
+            nf_operacoes = {}
+            operacao_ids_set = set()
+            for nf in todas_nfs:
+                junctions = CarviaOperacaoNf.query.filter_by(nf_id=nf.id).all()
+                ops = []
+                for j in junctions:
+                    op = CarviaOperacao.query.get(j.operacao_id)
+                    if op:
+                        ops.append(op)
+                        operacao_ids_set.add(op.id)
+                nf_operacoes[nf.id] = ops
+
+            # Auto-link: se exatamente 1 CarviaOperacao compartilhada
+            auto_operacao = None
+            if len(operacao_ids_set) == 1:
+                auto_operacao = CarviaOperacao.query.get(operacao_ids_set.pop())
+
+            valor_venda_sugerido = None
+            if auto_operacao and auto_operacao.cte_valor:
+                valor_venda_sugerido = float(auto_operacao.cte_valor)
+
+            return render_template(
+                'carvia/fretes/backfill.html',
+                seed_nf=seed_nf,
+                todas_nfs=todas_nfs,
+                nf_operacoes=nf_operacoes,
+                auto_operacao=auto_operacao,
+                valor_venda_sugerido=valor_venda_sugerido,
+            )
+
+        # --- POST: Criar CarviaFrete ---
+        from app.utils.timezone import agora_utc_naive
+        from app.utils.valores_brasileiros import converter_valor_brasileiro
+
+        seed_nf_id = request.form.get('seed_nf_id', type=int)
+        if not seed_nf_id:
+            flash('NF semente nao informada.', 'danger')
+            return redirect(url_for('carvia.listar_nfs'))
+
+        seed_nf = CarviaNf.query.get_or_404(seed_nf_id)
+        nf_ids = request.form.getlist('nf_ids', type=int)
+        tipo_carga = request.form.get('tipo_carga', '').strip()
+        transportadora_id = request.form.get('transportadora_id', type=int)
+
+        # Validacoes
+        if not nf_ids:
+            flash('Selecione pelo menos uma NF.', 'danger')
+            return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
+
+        if tipo_carga not in ('FRACIONADA', 'DIRETA'):
+            flash('Tipo de carga invalido.', 'danger')
+            return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
+
+        if not transportadora_id:
+            flash('Selecione uma transportadora.', 'danger')
+            return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
+
+        # Carregar NFs selecionadas
+        selected_nfs = CarviaNf.query.filter(
+            CarviaNf.id.in_(nf_ids),
+            CarviaNf.status == 'ATIVA',
+        ).all()
+
+        if not selected_nfs:
+            flash('Nenhuma NF ativa selecionada.', 'danger')
+            return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
+
+        # Validar UF destino
+        uf_destino = seed_nf.uf_destinatario or ''
+        cidade_destino = seed_nf.cidade_destinatario or ''
+        if not uf_destino:
+            flash('NF semente sem UF destinatario — nao e possivel criar frete.', 'danger')
+            return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
+
+        # Dedup: verificar overlap com fretes backfill existentes
+        submitted_nf_nums = {nf.numero_nf for nf in selected_nfs}
+        fretes_existentes = CarviaFrete.query.filter(
+            CarviaFrete.embarque_id.is_(None),
+            CarviaFrete.cnpj_emitente == seed_nf.cnpj_emitente,
+            CarviaFrete.cnpj_destino == seed_nf.cnpj_destinatario,
+        ).all()
+
+        for fe in fretes_existentes:
+            existing_nums = set((fe.numeros_nfs or '').split(','))
+            overlap = submitted_nf_nums & existing_nums
+            if overlap:
+                flash(
+                    f'NFs {", ".join(sorted(overlap))} ja existem no frete backfill #{fe.id}.',
+                    'danger',
+                )
+                return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
+
+        # Agregar totais
+        peso_total = sum(float(nf.peso_bruto or 0) for nf in selected_nfs)
+        valor_total_nfs = sum(float(nf.valor_total or 0) for nf in selected_nfs)
+        numeros_nfs = ','.join(nf.numero_nf for nf in selected_nfs if nf.numero_nf)
+
+        # Obter valor_cotado (custo)
+        valor_cotado_str = request.form.get('valor_cotado', '').strip()
+        try:
+            valor_cotado = converter_valor_brasileiro(valor_cotado_str) if valor_cotado_str else 0
+        except (ValueError, TypeError):
+            valor_cotado = 0
+
+        # Obter valor_venda
+        valor_venda_str = request.form.get('valor_venda', '').strip()
+        try:
+            valor_venda = converter_valor_brasileiro(valor_venda_str) if valor_venda_str else None
+        except (ValueError, TypeError):
+            valor_venda = None
+
+        # Auto-link operacao (re-validar no POST)
+        from app.carvia.models import CarviaOperacaoNf
+        operacao_ids_post = set()
+        for nf in selected_nfs:
+            junctions = CarviaOperacaoNf.query.filter_by(nf_id=nf.id).all()
+            for j in junctions:
+                operacao_ids_post.add(j.operacao_id)
+        auto_operacao_id = operacao_ids_post.pop() if len(operacao_ids_post) == 1 else None
+
+        try:
+            frete = CarviaFrete(
+                embarque_id=None,  # backfill — sem embarque
+                transportadora_id=transportadora_id,
+                cnpj_emitente=seed_nf.cnpj_emitente,
+                nome_emitente=seed_nf.nome_emitente or '',
+                cnpj_destino=seed_nf.cnpj_destinatario,
+                nome_destino=seed_nf.nome_destinatario or '',
+                uf_destino=uf_destino,
+                cidade_destino=cidade_destino,
+                tipo_carga=tipo_carga,
+                peso_total=peso_total,
+                valor_total_nfs=valor_total_nfs,
+                quantidade_nfs=len(selected_nfs),
+                numeros_nfs=numeros_nfs,
+                valor_cotado=float(valor_cotado) if valor_cotado else 0,
+                valor_considerado=float(valor_cotado) if valor_cotado else 0,
+                valor_venda=float(valor_venda) if valor_venda else None,
+                operacao_id=auto_operacao_id,
+                status='PENDENTE',
+                criado_em=agora_utc_naive(),
+                criado_por=current_user.email,
+                observacoes=request.form.get('observacoes', '').strip() or 'Backfill manual',
+            )
+
+            # Salvar snapshot da tabela (parametros possivelmente editados)
+            tabela_campos = {
+                'tabela_nome_tabela': 'tabela_nome_tabela',
+                'tabela_valor_kg': 'tabela_valor_kg',
+                'tabela_percentual_valor': 'tabela_percentual_valor',
+                'tabela_frete_minimo_valor': 'tabela_frete_minimo_valor',
+                'tabela_frete_minimo_peso': 'tabela_frete_minimo_peso',
+                'tabela_icms_proprio': 'tabela_icms_proprio',
+                'tabela_icms_incluso': 'tabela_icms_incluso',
+                'tabela_percentual_gris': 'tabela_percentual_gris',
+                'tabela_gris_minimo': 'tabela_gris_minimo',
+                'tabela_pedagio_por_100kg': 'tabela_pedagio_por_100kg',
+                'tabela_valor_tas': 'tabela_valor_tas',
+                'tabela_percentual_adv': 'tabela_percentual_adv',
+                'tabela_adv_minimo': 'tabela_adv_minimo',
+                'tabela_percentual_rca': 'tabela_percentual_rca',
+                'tabela_valor_despacho': 'tabela_valor_despacho',
+                'tabela_valor_cte': 'tabela_valor_cte',
+            }
+            for form_name, attr_name in tabela_campos.items():
+                raw = request.form.get(form_name, '').strip()
+                if raw:
+                    if attr_name == 'tabela_nome_tabela':
+                        setattr(frete, attr_name, raw)
+                    elif attr_name == 'tabela_icms_incluso':
+                        setattr(frete, attr_name, raw.lower() in ('true', '1', 'on'))
+                    else:
+                        try:
+                            setattr(frete, attr_name, float(raw))
+                        except (ValueError, TypeError):
+                            pass
+
+            db.session.add(frete)
+            db.session.commit()
+
+            flash(f'Frete backfill #{frete.id} criado com sucesso!', 'success')
+            return redirect(url_for('carvia.detalhe_frete_carvia', id=frete.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception('Erro ao criar frete backfill: %s', e)
+            flash(f'Erro ao criar frete: {e}', 'danger')
+            return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
+
+    # ------------------------------------------------------------------
     # Lancar CTe (busca por NF)
     # ------------------------------------------------------------------
 

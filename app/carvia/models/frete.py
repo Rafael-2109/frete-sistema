@@ -24,7 +24,7 @@ class CarviaFrete(db.Model):
     # --- Chaves ---
     embarque_id = db.Column(
         db.Integer, db.ForeignKey('embarques.id'),
-        nullable=False, index=True
+        nullable=True, index=True  # nullable para backfill (sem embarque)
     )
     transportadora_id = db.Column(
         db.Integer, db.ForeignKey('transportadoras.id'),
@@ -147,9 +147,14 @@ class CarviaFrete(db.Model):
     )
 
     __table_args__ = (
-        db.UniqueConstraint(
+        # Partial unique index: dedup apenas para fretes COM embarque.
+        # Fretes backfill (embarque_id=NULL) nao tem essa restricao.
+        # Gerenciado pela migration tornar_embarque_id_nullable_carvia_fretes.
+        db.Index(
+            'uq_carvia_frete_embarque_cnpj_notnull',
             'embarque_id', 'cnpj_emitente', 'cnpj_destino',
-            name='uq_carvia_frete_embarque_cnpj'
+            unique=True,
+            postgresql_where=db.text('embarque_id IS NOT NULL'),
         ),
     )
 

@@ -1226,3 +1226,237 @@ def register_api_routes(bp):
             db.session.rollback()
             logger.error(f"Erro ao enfileirar lote CTe: {e}")
             return jsonify({'erro': str(e)}), 500
+
+    # ------------------------------------------------------------------
+    # Backfill Frete — Cotacao + Recalculo
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/fretes/cotar-backfill', methods=['POST'])
+    @login_required
+    def api_cotar_backfill():
+        """Cotacao para backfill — busca melhor tabela e retorna parametros editaveis.
+
+        NAO usa ICMS da cidade — apenas icms_proprio da tabela (regra CarVia).
+        Retorna parametros completos + breakdown para edicao no frontend.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json() or {}
+        transportadora_id = data.get('transportadora_id')
+        peso = float(data.get('peso', 0) or 0)
+        valor_mercadoria = float(data.get('valor_mercadoria', 0) or 0)
+        uf_destino = (data.get('uf_destino') or '').strip().upper()
+        cidade_destino = (data.get('cidade_destino') or '').strip() or None
+
+        if not transportadora_id or peso <= 0 or not uf_destino:
+            return jsonify({
+                'sucesso': False,
+                'erro': 'transportadora_id, peso e uf_destino obrigatorios',
+            }), 400
+
+        try:
+            from app.carvia.services.pricing.cotacao_service import CotacaoService
+            from app.tabelas.models import TabelaFrete
+            from app.transportadoras.models import Transportadora
+            from app.utils.calculadora_frete import CalculadoraFrete
+            from app.utils.tabela_frete_manager import TabelaFreteManager
+
+            svc = CotacaoService()
+            transportadora = db.session.get(Transportadora, int(transportadora_id))
+            if not transportadora:
+                return jsonify({'sucesso': False, 'erro': 'Transportadora nao encontrada'}), 400
+
+            # Buscar tabelas via CidadeAtendida → grupo empresarial → TabelaFrete
+            grupo_ids = svc._obter_grupo_transportadora(int(transportadora_id))
+            tabelas = []
+
+            if cidade_destino:
+                cidade_obj = svc._resolver_cidade(cidade_destino, uf_destino)
+                if cidade_obj:
+                    vinculos = svc._buscar_vinculos_cidade(cidade_obj.codigo_ibge)
+                    for vinculo in vinculos:
+                        if vinculo.transportadora_id not in grupo_ids:
+                            continue
+                        query = TabelaFrete.query.filter(
+                            TabelaFrete.transportadora_id.in_(grupo_ids),
+                            TabelaFrete.uf_destino == uf_destino,
+                            TabelaFrete.nome_tabela == vinculo.nome_tabela,
+                        )
+                        tabelas.extend(query.all())
+
+            # Fallback: busca direta por transportadora + UF
+            if not tabelas:
+                tabelas = TabelaFrete.query.filter(
+                    TabelaFrete.transportadora_id.in_(grupo_ids),
+                    TabelaFrete.uf_destino == uf_destino,
+                ).all()
+
+            if not tabelas:
+                return jsonify({
+                    'sucesso': False,
+                    'erro': f'Sem tabela para {transportadora.razao_social} → {uf_destino}',
+                })
+
+            # Calcular com cada tabela, pegar a melhor
+            tabelas_unicas = {t.id: t for t in tabelas}
+            melhor = None
+            melhor_tabela_dados = None
+
+            for tabela in tabelas_unicas.values():
+                try:
+                    tabela_dados = TabelaFreteManager.preparar_dados_tabela(tabela)
+                    resultado = CalculadoraFrete.calcular_frete_unificado(
+                        peso=peso,
+                        valor_mercadoria=valor_mercadoria,
+                        tabela_dados=tabela_dados,
+                        cidade=None,  # CarVia: apenas icms_proprio
+                    )
+                    if resultado and 'valor_com_icms' in resultado:
+                        valor = float(resultado['valor_com_icms'])
+                        if melhor is None or valor < melhor['valor']:
+                            melhor = {
+                                'valor': valor,
+                                'tabela_frete_id': tabela.id,
+                                'tabela_nome': tabela.nome_tabela,
+                                'resultado': resultado,
+                            }
+                            melhor_tabela_dados = tabela_dados
+                except Exception as e:
+                    logger.warning("Erro ao calcular com tabela %s: %s", tabela.id, e)
+                    continue
+
+            if not melhor:
+                return jsonify({
+                    'sucesso': False,
+                    'erro': 'Nenhuma tabela conseguiu calcular o frete',
+                })
+
+            # Montar parametros editaveis
+            resultado = melhor['resultado']
+            detalhes = resultado.get('detalhes', {})
+            parametros = {
+                'valor_kg': float(melhor_tabela_dados.get('valor_kg', 0) or 0),
+                'percentual_valor': float(melhor_tabela_dados.get('percentual_valor', 0) or 0),
+                'frete_minimo_valor': float(melhor_tabela_dados.get('frete_minimo_valor', 0) or 0),
+                'frete_minimo_peso': float(melhor_tabela_dados.get('frete_minimo_peso', 0) or 0),
+                'icms_proprio': float(melhor_tabela_dados.get('icms_proprio', 0) or 0),
+                'icms_incluso': bool(melhor_tabela_dados.get('icms_incluso', False)),
+                'percentual_gris': float(melhor_tabela_dados.get('percentual_gris', 0) or 0),
+                'gris_minimo': float(melhor_tabela_dados.get('gris_minimo', 0) or 0),
+                'pedagio_por_100kg': float(melhor_tabela_dados.get('pedagio_por_100kg', 0) or 0),
+                'valor_tas': float(melhor_tabela_dados.get('valor_tas', 0) or 0),
+                'percentual_adv': float(melhor_tabela_dados.get('percentual_adv', 0) or 0),
+                'adv_minimo': float(melhor_tabela_dados.get('adv_minimo', 0) or 0),
+                'percentual_rca': float(melhor_tabela_dados.get('percentual_rca', 0) or 0),
+                'valor_despacho': float(melhor_tabela_dados.get('valor_despacho', 0) or 0),
+                'valor_cte': float(melhor_tabela_dados.get('valor_cte', 0) or 0),
+            }
+
+            breakdown = {
+                'frete_base': float(detalhes.get('frete_base', 0)),
+                'gris': float(detalhes.get('gris', 0)),
+                'adv': float(detalhes.get('adv', 0)),
+                'rca': float(detalhes.get('rca', 0)),
+                'pedagio': float(detalhes.get('pedagio', 0)),
+                'valor_tas': float(detalhes.get('valor_tas', 0)),
+                'valor_despacho': float(detalhes.get('valor_despacho', 0)),
+                'valor_cte': float(detalhes.get('valor_cte', 0)),
+                'frete_minimo_aplicado': detalhes.get('frete_minimo_aplicado', False),
+                'valor_bruto': float(resultado.get('valor_bruto', 0)),
+                'valor_com_icms': float(resultado.get('valor_com_icms', 0)),
+                'icms_aplicado': float(resultado.get('icms_aplicado', 0)),
+            }
+
+            return jsonify({
+                'sucesso': True,
+                'valor_cotado': round(melhor['valor'], 2),
+                'tabela_frete_id': melhor['tabela_frete_id'],
+                'tabela_nome': melhor['tabela_nome'],
+                'parametros': parametros,
+                'breakdown': breakdown,
+            })
+
+        except Exception as e:
+            logger.error("Erro cotacao backfill: %s", e, exc_info=True)
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/fretes/recalcular', methods=['POST'])
+    @login_required
+    def api_recalcular_frete():
+        """Recalcula frete com parametros customizados (editados pelo usuario).
+
+        Aceita todos os parametros da tabela + peso/valor e retorna
+        valor recalculado + breakdown. NAO usa ICMS da cidade.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json() or {}
+        peso = float(data.get('peso', 0) or 0)
+        valor_mercadoria = float(data.get('valor_mercadoria', 0) or 0)
+        parametros = data.get('parametros', {})
+
+        if peso <= 0:
+            return jsonify({'sucesso': False, 'erro': 'peso obrigatorio'}), 400
+
+        try:
+            from app.utils.calculadora_frete import CalculadoraFrete
+
+            # Montar tabela_dados a partir dos parametros editados
+            tabela_dados = {
+                'valor_kg': float(parametros.get('valor_kg', 0) or 0),
+                'percentual_valor': float(parametros.get('percentual_valor', 0) or 0),
+                'frete_minimo_valor': float(parametros.get('frete_minimo_valor', 0) or 0),
+                'frete_minimo_peso': float(parametros.get('frete_minimo_peso', 0) or 0),
+                'icms_proprio': float(parametros.get('icms_proprio', 0) or 0),
+                'icms_incluso': bool(parametros.get('icms_incluso', False)),
+                'percentual_gris': float(parametros.get('percentual_gris', 0) or 0),
+                'gris_minimo': float(parametros.get('gris_minimo', 0) or 0),
+                'pedagio_por_100kg': float(parametros.get('pedagio_por_100kg', 0) or 0),
+                'valor_tas': float(parametros.get('valor_tas', 0) or 0),
+                'percentual_adv': float(parametros.get('percentual_adv', 0) or 0),
+                'adv_minimo': float(parametros.get('adv_minimo', 0) or 0),
+                'percentual_rca': float(parametros.get('percentual_rca', 0) or 0),
+                'valor_despacho': float(parametros.get('valor_despacho', 0) or 0),
+                'valor_cte': float(parametros.get('valor_cte', 0) or 0),
+                'nome_tabela': parametros.get('nome_tabela', ''),
+                'icms': 0,  # nao usar ICMS generico
+                'icms_destino': 0,  # nao usar ICMS destino
+            }
+
+            resultado = CalculadoraFrete.calcular_frete_unificado(
+                peso=peso,
+                valor_mercadoria=valor_mercadoria,
+                tabela_dados=tabela_dados,
+                cidade=None,  # CarVia: apenas icms_proprio
+            )
+
+            if not resultado or 'valor_com_icms' not in resultado:
+                return jsonify({'sucesso': False, 'erro': 'Calculo retornou vazio'})
+
+            detalhes = resultado.get('detalhes', {})
+            breakdown = {
+                'frete_base': float(detalhes.get('frete_base', 0)),
+                'gris': float(detalhes.get('gris', 0)),
+                'adv': float(detalhes.get('adv', 0)),
+                'rca': float(detalhes.get('rca', 0)),
+                'pedagio': float(detalhes.get('pedagio', 0)),
+                'valor_tas': float(detalhes.get('valor_tas', 0)),
+                'valor_despacho': float(detalhes.get('valor_despacho', 0)),
+                'valor_cte': float(detalhes.get('valor_cte', 0)),
+                'frete_minimo_aplicado': detalhes.get('frete_minimo_aplicado', False),
+                'valor_bruto': float(resultado.get('valor_bruto', 0)),
+                'valor_com_icms': float(resultado.get('valor_com_icms', 0)),
+                'icms_aplicado': float(resultado.get('icms_aplicado', 0)),
+            }
+
+            return jsonify({
+                'sucesso': True,
+                'valor_cotado': round(float(resultado['valor_com_icms']), 2),
+                'breakdown': breakdown,
+            })
+
+        except Exception as e:
+            logger.error("Erro recalcular frete: %s", e, exc_info=True)
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500

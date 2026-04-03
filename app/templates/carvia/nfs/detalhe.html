@@ -41,6 +41,10 @@
                     data-bs-target="#modalCriarCte" title="Criar CTe CarVia a partir desta NF">
                 <i class="fas fa-plus"></i> Criar CTe CarVia
             </button>
+            <a href="{{ url_for('carvia.backfill_frete_carvia', nf_id=nf.id) }}"
+               class="btn btn-warning btn-sm" title="Criar Frete Backfill (sem embarque)">
+                <i class="fas fa-history"></i> Criar Frete
+            </a>
             {% if nf.chave_acesso_nf and nf.chave_acesso_nf|length == 44 %}
             <button type="button" class="btn btn-warning btn-sm" title="Emitir apenas CTe no SSW"
                     onclick="abrirModalEmissaoSsw('cte')">

@@ -1,0 +1,689 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-history"></i> Criar Frete Backfill</h2>
+            <p class="text-muted mb-0">
+                <strong>{{ seed_nf.nome_emitente or seed_nf.cnpj_emitente }}</strong>
+                <i class="fas fa-arrow-right mx-1"></i>
+                <strong>{{ seed_nf.nome_destinatario or seed_nf.cnpj_destinatario }}</strong>
+            </p>
+        </div>
+        <a href="{{ url_for('carvia.detalhe_nf', nf_id=seed_nf.id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'fretes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    {% if auto_operacao %}
+    <div class="alert alert-info d-flex align-items-center mb-4">
+        <i class="fas fa-link me-2"></i>
+        <div>
+            CTe CarVia encontrado: <strong>{{ auto_operacao.cte_numero }}</strong>
+            | Valor: <strong>{{ auto_operacao.cte_valor|valor_br if auto_operacao.cte_valor else '-' }}</strong>
+            | Data: {{ auto_operacao.cte_data_emissao.strftime('%d/%m/%Y') if auto_operacao.cte_data_emissao else '-' }}
+            <br><small class="text-muted">O frete sera vinculado automaticamente a este CTe.</small>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" id="formBackfill">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="seed_nf_id" value="{{ seed_nf.id }}">
+
+        {# ============================================================ #}
+        {# CARD 1 — Selecionar NFs                                      #}
+        {# ============================================================ #}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-file-alt"></i> Selecionar NFs (mesmo emitente e destinatario)</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-select-all">
+                    Selecionar Todas
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 carvia-table">
+                        <thead>
+                            <tr>
+                                <th width="30"><input type="checkbox" id="check-all"></th>
+                                <th>NF</th>
+                                <th>Data Importacao</th>
+                                <th>Peso</th>
+                                <th>Valor</th>
+                                <th>CTe CarVia</th>
+                                <th>Valor CTe</th>
+                                <th>Data CTe</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for nf in todas_nfs %}
+                            {% set ops = nf_operacoes.get(nf.id, []) %}
+                            <tr data-peso="{{ nf.peso_bruto or 0 }}" data-valor="{{ nf.valor_total or 0 }}">
+                                <td>
+                                    <input type="checkbox" name="nf_ids" value="{{ nf.id }}"
+                                           class="nf-check"
+                                           {% if nf.id == seed_nf.id %}checked{% endif %}>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('carvia.detalhe_nf', nf_id=nf.id) }}" class="fw-bold">
+                                        {{ nf.numero_nf }}
+                                    </a>
+                                    {% if nf.id == seed_nf.id %}
+                                    <span class="badge bg-info ms-1">semente</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ nf.criado_em.strftime('%d/%m/%Y') if nf.criado_em else '-' }}</td>
+                                <td>{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }} kg</td>
+                                <td class="valor-col">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</td>
+                                <td>
+                                    {% if ops %}
+                                        {% for op in ops %}
+                                        <span class="badge bg-info">{{ op.cte_numero }}</span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="valor-col">
+                                    {% if ops %}
+                                        {% for op in ops %}
+                                        {{ op.cte_valor|valor_br if op.cte_valor else '-' }}
+                                        {% endfor %}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td>
+                                    {% if ops %}
+                                        {% for op in ops %}
+                                        {{ op.cte_data_emissao.strftime('%d/%m/%Y') if op.cte_data_emissao else '-' }}
+                                        {% endfor %}
+                                    {% else %}-{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {# ============================================================ #}
+        {# CARD 2 — Dados de Frete                                      #}
+        {# ============================================================ #}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-truck"></i> Dados de Frete</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo de Carga <span class="text-danger">*</span></label>
+                        <select class="form-select" name="tipo_carga" id="tipo_carga" required>
+                            <option value="">Selecionar...</option>
+                            <option value="FRACIONADA">FRACIONADA</option>
+                            <option value="DIRETA">DIRETA</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Transportadora <span class="text-danger">*</span></label>
+                        <input type="text" id="busca-transportadora" class="form-control"
+                               placeholder="Buscar transportadora..." autocomplete="off">
+                        <input type="hidden" name="transportadora_id" id="transportadora_id">
+                        <div id="transportadora-results" class="carvia-autocomplete-results" style="display:none"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">
+                            Valor Venda (R$)
+                            {% if valor_venda_sugerido %}
+                            <span class="badge bg-info">Auto: {{ valor_venda_sugerido|valor_br }}</span>
+                            {% endif %}
+                        </label>
+                        <input type="text" class="form-control" name="valor_venda" id="valor_venda"
+                               value="{{ valor_venda_sugerido|valor_br|replace('R$ ', '') if valor_venda_sugerido else '' }}"
+                               placeholder="Ex: 5.000,00">
+                    </div>
+                </div>
+                <div class="row g-3 mt-1">
+                    <div class="col-12">
+                        <label class="form-label">Observacoes</label>
+                        <input type="text" class="form-control" name="observacoes" placeholder="Opcional...">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ============================================================ #}
+        {# CARD 3 — Parametros da Tabela (editaveis)                    #}
+        {# ============================================================ #}
+        <div class="card mb-4" id="card-parametros" style="display:none">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-sliders-h"></i> Parametros da Tabela</h5>
+                <span class="text-muted" id="nome-tabela-display"></span>
+            </div>
+            <div class="card-body">
+                {# Inputs hidden para enviar no POST #}
+                <input type="hidden" name="tabela_nome_tabela" id="h_tabela_nome_tabela">
+                <input type="hidden" name="valor_cotado" id="h_valor_cotado">
+
+                {# Modo DIRETA: input manual #}
+                <div id="secao-manual" style="display:none">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Valor Custo Manual (R$) <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-lg" id="valor_custo_manual"
+                                   placeholder="Ex: 1.500,00">
+                        </div>
+                        <div class="col-md-8">
+                            <p class="text-muted mt-4">
+                                Para carga DIRETA, informe o valor do frete manualmente.
+                                Opcionalmente, selecione uma transportadora para carregar parametros de referencia.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {# Modo FRACIONADA: parametros editaveis #}
+                <div id="secao-parametros" style="display:none">
+                    <div class="row g-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Valor/kg</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_valor_kg" data-param="valor_kg">
+                            <input type="hidden" name="tabela_valor_kg" id="h_tabela_valor_kg">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">% Valor</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_percentual_valor" data-param="percentual_valor">
+                            <input type="hidden" name="tabela_percentual_valor" id="h_tabela_percentual_valor">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Frete Min R$</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_frete_minimo_valor" data-param="frete_minimo_valor">
+                            <input type="hidden" name="tabela_frete_minimo_valor" id="h_tabela_frete_minimo_valor">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Frete Min Peso</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_frete_minimo_peso" data-param="frete_minimo_peso">
+                            <input type="hidden" name="tabela_frete_minimo_peso" id="h_tabela_frete_minimo_peso">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">ICMS Proprio %</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_icms_proprio" data-param="icms_proprio">
+                            <input type="hidden" name="tabela_icms_proprio" id="h_tabela_icms_proprio">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">ICMS Incluso</label>
+                            <select class="form-select param-input" id="p_icms_incluso" data-param="icms_incluso">
+                                <option value="false">Nao</option>
+                                <option value="true">Sim</option>
+                            </select>
+                            <input type="hidden" name="tabela_icms_incluso" id="h_tabela_icms_incluso">
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-2">
+                            <label class="form-label">GRIS %</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_percentual_gris" data-param="percentual_gris">
+                            <input type="hidden" name="tabela_percentual_gris" id="h_tabela_percentual_gris">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">GRIS Min</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_gris_minimo" data-param="gris_minimo">
+                            <input type="hidden" name="tabela_gris_minimo" id="h_tabela_gris_minimo">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Pedagio/100kg</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_pedagio_por_100kg" data-param="pedagio_por_100kg">
+                            <input type="hidden" name="tabela_pedagio_por_100kg" id="h_tabela_pedagio_por_100kg">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">TAS</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_valor_tas" data-param="valor_tas">
+                            <input type="hidden" name="tabela_valor_tas" id="h_tabela_valor_tas">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">ADV %</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_percentual_adv" data-param="percentual_adv">
+                            <input type="hidden" name="tabela_percentual_adv" id="h_tabela_percentual_adv">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">ADV Min</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_adv_minimo" data-param="adv_minimo">
+                            <input type="hidden" name="tabela_adv_minimo" id="h_tabela_adv_minimo">
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-2">
+                            <label class="form-label">RCA %</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_percentual_rca" data-param="percentual_rca">
+                            <input type="hidden" name="tabela_percentual_rca" id="h_tabela_percentual_rca">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Despacho</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_valor_despacho" data-param="valor_despacho">
+                            <input type="hidden" name="tabela_valor_despacho" id="h_tabela_valor_despacho">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Valor CTe</label>
+                            <input type="number" step="0.01" class="form-control param-input" id="p_valor_cte" data-param="valor_cte">
+                            <input type="hidden" name="tabela_valor_cte" id="h_tabela_valor_cte">
+                        </div>
+                    </div>
+
+                    {# Breakdown #}
+                    <hr class="my-3">
+                    <div class="row" id="breakdown-row">
+                        <div class="col-md-12">
+                            <div class="d-flex flex-wrap gap-3 mb-2" id="breakdown-items">
+                                <div><small class="text-muted">Frete Base</small><br><strong id="bd_frete_base">-</strong></div>
+                                <div><small class="text-muted">GRIS</small><br><strong id="bd_gris">-</strong></div>
+                                <div><small class="text-muted">ADV</small><br><strong id="bd_adv">-</strong></div>
+                                <div><small class="text-muted">RCA</small><br><strong id="bd_rca">-</strong></div>
+                                <div><small class="text-muted">Pedagio</small><br><strong id="bd_pedagio">-</strong></div>
+                                <div><small class="text-muted">TAS</small><br><strong id="bd_tas">-</strong></div>
+                                <div><small class="text-muted">Despacho</small><br><strong id="bd_despacho">-</strong></div>
+                                <div><small class="text-muted">CTe</small><br><strong id="bd_cte">-</strong></div>
+                                <div class="border-start ps-3"><small class="text-muted">Subtotal</small><br><strong id="bd_bruto">-</strong></div>
+                                <div><small class="text-muted">ICMS</small><br><strong id="bd_icms">-</strong></div>
+                            </div>
+                            <div class="bg-light p-2 rounded d-inline-block">
+                                <span class="text-muted">VALOR CUSTO TOTAL:</span>
+                                <strong class="fs-4 ms-2" id="bd_total">-</strong>
+                                <span class="badge bg-warning ms-2" id="bd_minimo_badge" style="display:none">Frete minimo aplicado</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {# Alerta fallback #}
+                <div class="alert alert-warning mt-3" id="alerta-fallback" style="display:none">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="alerta-fallback-msg"></span>
+                    <br><small>Informe o valor de custo manualmente abaixo.</small>
+                    <div class="mt-2">
+                        <input type="text" class="form-control" id="valor_custo_fallback"
+                               placeholder="Valor custo manual (R$)" style="max-width:250px">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ============================================================ #}
+        {# CARD 4 — Resumo                                              #}
+        {# ============================================================ #}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Resumo</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">NFs Selecionadas</small>
+                        <strong class="fs-5" id="resumo-qtd">0</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">Peso Total</small>
+                        <strong class="fs-5" id="resumo-peso">0 kg</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">Valor NFs</small>
+                        <strong class="fs-5" id="resumo-valor">R$ 0,00</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">Custo</small>
+                        <strong class="fs-5" id="resumo-custo">-</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">Venda</small>
+                        <strong class="fs-5" id="resumo-venda">-</strong>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">Margem</small>
+                        <strong class="fs-5" id="resumo-margem">-</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Acoes #}
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success btn-lg" id="btn-criar">
+                <i class="fas fa-plus"></i> Criar Frete
+            </button>
+            <a href="{{ url_for('carvia.detalhe_nf', nf_id=seed_nf.id) }}" class="btn btn-outline-secondary btn-lg">
+                Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    // --- Constantes ---
+    var UF_DESTINO = '{{ seed_nf.uf_destinatario or "" }}';
+    var CIDADE_DESTINO = '{{ seed_nf.cidade_destinatario or "" }}';
+    var CSRF = '{{ csrf_token() }}';
+
+    // --- Elementos ---
+    var checkAll = document.getElementById('check-all');
+    var btnSelectAll = document.getElementById('btn-select-all');
+    var nfChecks = document.querySelectorAll('.nf-check');
+    var tipoCarga = document.getElementById('tipo_carga');
+    var transportadoraInput = document.getElementById('busca-transportadora');
+    var transportadoraId = document.getElementById('transportadora_id');
+    var transportadoraResults = document.getElementById('transportadora-results');
+    var cardParametros = document.getElementById('card-parametros');
+    var secaoManual = document.getElementById('secao-manual');
+    var secaoParametros = document.getElementById('secao-parametros');
+    var alertaFallback = document.getElementById('alerta-fallback');
+    var hValorCotado = document.getElementById('h_valor_cotado');
+
+    // --- Formatacao ---
+    function formatBRL(v) {
+        if (v == null || isNaN(v)) return '-';
+        return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    // --- Resumo NFs ---
+    function atualizarResumo() {
+        var qtd = 0, peso = 0, valor = 0;
+        nfChecks.forEach(function(cb) {
+            if (cb.checked) {
+                qtd++;
+                var tr = cb.closest('tr');
+                peso += parseFloat(tr.dataset.peso || 0);
+                valor += parseFloat(tr.dataset.valor || 0);
+            }
+        });
+        document.getElementById('resumo-qtd').textContent = qtd;
+        document.getElementById('resumo-peso').textContent = peso.toFixed(1) + ' kg';
+        document.getElementById('resumo-valor').textContent = formatBRL(valor);
+        atualizarResumoMargem();
+    }
+
+    function atualizarResumoMargem() {
+        var custoStr = hValorCotado.value;
+        var custo = parseFloat(custoStr) || 0;
+        var vendaInput = document.getElementById('valor_venda');
+        var vendaStr = (vendaInput.value || '').replace(/\./g, '').replace(',', '.');
+        var venda = parseFloat(vendaStr) || 0;
+
+        document.getElementById('resumo-custo').textContent = custo > 0 ? formatBRL(custo) : '-';
+        document.getElementById('resumo-venda').textContent = venda > 0 ? formatBRL(venda) : '-';
+
+        if (custo > 0 && venda > 0) {
+            var margem = venda - custo;
+            var pct = (margem / venda * 100).toFixed(1);
+            document.getElementById('resumo-margem').textContent = formatBRL(margem) + ' (' + pct + '%)';
+            document.getElementById('resumo-margem').className = margem >= 0 ? 'fs-5 text-success' : 'fs-5 text-danger';
+        } else {
+            document.getElementById('resumo-margem').textContent = '-';
+            document.getElementById('resumo-margem').className = 'fs-5';
+        }
+    }
+
+    // --- Check all ---
+    checkAll.addEventListener('change', function() {
+        nfChecks.forEach(function(cb) { cb.checked = checkAll.checked; });
+        atualizarResumo();
+    });
+    btnSelectAll.addEventListener('click', function() {
+        checkAll.checked = true;
+        nfChecks.forEach(function(cb) { cb.checked = true; });
+        atualizarResumo();
+    });
+    nfChecks.forEach(function(cb) {
+        cb.addEventListener('change', atualizarResumo);
+    });
+
+    // --- Tipo Carga toggle ---
+    tipoCarga.addEventListener('change', function() {
+        var tipo = tipoCarga.value;
+        if (tipo === 'DIRETA') {
+            cardParametros.style.display = '';
+            secaoManual.style.display = '';
+            secaoParametros.style.display = 'none';
+            alertaFallback.style.display = 'none';
+        } else if (tipo === 'FRACIONADA') {
+            cardParametros.style.display = '';
+            secaoManual.style.display = 'none';
+            secaoParametros.style.display = '';
+            alertaFallback.style.display = 'none';
+            // Se transportadora ja selecionada, buscar cotacao
+            if (transportadoraId.value) {
+                buscarCotacao();
+            }
+        } else {
+            cardParametros.style.display = 'none';
+        }
+    });
+
+    // --- Valor custo manual (DIRETA) ---
+    var valorCustoManual = document.getElementById('valor_custo_manual');
+    valorCustoManual.addEventListener('input', function() {
+        var v = (this.value || '').replace(/\./g, '').replace(',', '.');
+        hValorCotado.value = parseFloat(v) || 0;
+        atualizarResumoMargem();
+    });
+
+    // --- Valor custo fallback ---
+    var valorCustoFallback = document.getElementById('valor_custo_fallback');
+    valorCustoFallback.addEventListener('input', function() {
+        var v = (this.value || '').replace(/\./g, '').replace(',', '.');
+        hValorCotado.value = parseFloat(v) || 0;
+        atualizarResumoMargem();
+    });
+
+    // --- Valor venda change ---
+    document.getElementById('valor_venda').addEventListener('input', atualizarResumoMargem);
+
+    // --- Transportadora autocomplete ---
+    var debounceTimer = null;
+    transportadoraInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        var query = this.value.trim();
+        if (query.length < 2) {
+            transportadoraResults.style.display = 'none';
+            return;
+        }
+        debounceTimer = setTimeout(function() {
+            fetch('/carvia/api/opcoes-transportadora?busca=' + encodeURIComponent(query) + '&uf_destino=' + UF_DESTINO)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    transportadoraResults.innerHTML = '';
+                    (data.opcoes || []).forEach(function(t) {
+                        var div = document.createElement('div');
+                        div.className = 'carvia-autocomplete-item p-2';
+                        div.style.cursor = 'pointer';
+                        div.textContent = t.razao_social + (t.cnpj ? ' (' + t.cnpj + ')' : '');
+                        div.addEventListener('click', function() {
+                            transportadoraInput.value = t.razao_social;
+                            transportadoraId.value = t.id;
+                            transportadoraResults.style.display = 'none';
+                            onTransportadoraSelecionada();
+                        });
+                        transportadoraResults.appendChild(div);
+                    });
+                    transportadoraResults.style.display = data.opcoes && data.opcoes.length ? '' : 'none';
+                });
+        }, 300);
+    });
+
+    // Fechar autocomplete ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (!transportadoraInput.contains(e.target) && !transportadoraResults.contains(e.target)) {
+            transportadoraResults.style.display = 'none';
+        }
+    });
+
+    function onTransportadoraSelecionada() {
+        if (tipoCarga.value === 'FRACIONADA') {
+            buscarCotacao();
+        }
+    }
+
+    // --- Totais das NFs selecionadas ---
+    function getTotais() {
+        var peso = 0, valor = 0;
+        nfChecks.forEach(function(cb) {
+            if (cb.checked) {
+                var tr = cb.closest('tr');
+                peso += parseFloat(tr.dataset.peso || 0);
+                valor += parseFloat(tr.dataset.valor || 0);
+            }
+        });
+        return {peso: peso, valor: valor};
+    }
+
+    // --- Buscar cotacao (FRACIONADA) ---
+    function buscarCotacao() {
+        var totais = getTotais();
+        if (totais.peso <= 0 || !transportadoraId.value) return;
+
+        fetch('/carvia/api/fretes/cotar-backfill', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({
+                peso: totais.peso,
+                valor_mercadoria: totais.valor,
+                uf_destino: UF_DESTINO,
+                cidade_destino: CIDADE_DESTINO,
+                transportadora_id: parseInt(transportadoraId.value)
+            })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.sucesso) {
+                alertaFallback.style.display = 'none';
+                secaoParametros.style.display = '';
+                preencherParametros(data.parametros, data.tabela_nome);
+                atualizarBreakdown(data.breakdown, data.valor_cotado);
+                hValorCotado.value = data.valor_cotado;
+                atualizarResumoMargem();
+            } else {
+                secaoParametros.style.display = 'none';
+                alertaFallback.style.display = '';
+                document.getElementById('alerta-fallback-msg').textContent = data.erro || 'Erro na cotacao';
+            }
+        })
+        .catch(function(err) {
+            secaoParametros.style.display = 'none';
+            alertaFallback.style.display = '';
+            document.getElementById('alerta-fallback-msg').textContent = 'Erro de comunicacao: ' + err;
+        });
+    }
+
+    // --- Preencher parametros nos inputs ---
+    function preencherParametros(params, nomeTabela) {
+        document.getElementById('nome-tabela-display').textContent = nomeTabela || '';
+        document.getElementById('h_tabela_nome_tabela').value = nomeTabela || '';
+
+        var campos = ['valor_kg', 'percentual_valor', 'frete_minimo_valor', 'frete_minimo_peso',
+            'icms_proprio', 'percentual_gris', 'gris_minimo', 'pedagio_por_100kg',
+            'valor_tas', 'percentual_adv', 'adv_minimo', 'percentual_rca', 'valor_despacho', 'valor_cte'];
+
+        campos.forEach(function(c) {
+            var input = document.getElementById('p_' + c);
+            if (input) input.value = params[c] || 0;
+            var hidden = document.getElementById('h_tabela_' + c);
+            if (hidden) hidden.value = params[c] || 0;
+        });
+
+        // ICMS incluso (select)
+        var icmsIncluso = document.getElementById('p_icms_incluso');
+        icmsIncluso.value = params.icms_incluso ? 'true' : 'false';
+        document.getElementById('h_tabela_icms_incluso').value = params.icms_incluso ? 'true' : 'false';
+    }
+
+    // --- Atualizar breakdown visual ---
+    function atualizarBreakdown(bd, total) {
+        document.getElementById('bd_frete_base').textContent = formatBRL(bd.frete_base);
+        document.getElementById('bd_gris').textContent = formatBRL(bd.gris);
+        document.getElementById('bd_adv').textContent = formatBRL(bd.adv);
+        document.getElementById('bd_rca').textContent = formatBRL(bd.rca);
+        document.getElementById('bd_pedagio').textContent = formatBRL(bd.pedagio);
+        document.getElementById('bd_tas').textContent = formatBRL(bd.valor_tas);
+        document.getElementById('bd_despacho').textContent = formatBRL(bd.valor_despacho);
+        document.getElementById('bd_cte').textContent = formatBRL(bd.valor_cte);
+        document.getElementById('bd_bruto').textContent = formatBRL(bd.valor_bruto);
+        document.getElementById('bd_icms').textContent = bd.icms_aplicado ? (bd.icms_aplicado + '%') : '0%';
+        document.getElementById('bd_total').textContent = formatBRL(total);
+        document.getElementById('bd_minimo_badge').style.display = bd.frete_minimo_aplicado ? '' : 'none';
+    }
+
+    // --- Recalcular ao editar parametro ---
+    var recalcTimer = null;
+    document.querySelectorAll('.param-input').forEach(function(input) {
+        input.addEventListener('input', function() {
+            // Sync com hidden
+            var param = this.dataset.param;
+            var hidden = document.getElementById('h_tabela_' + param);
+            if (hidden) hidden.value = this.value;
+
+            clearTimeout(recalcTimer);
+            recalcTimer = setTimeout(recalcular, 500);
+        });
+        input.addEventListener('change', function() {
+            var param = this.dataset.param;
+            var hidden = document.getElementById('h_tabela_' + param);
+            if (hidden) hidden.value = this.value;
+            recalcular();
+        });
+    });
+
+    function recalcular() {
+        var totais = getTotais();
+        if (totais.peso <= 0) return;
+
+        var params = {};
+        document.querySelectorAll('.param-input').forEach(function(input) {
+            var key = input.dataset.param;
+            if (key === 'icms_incluso') {
+                params[key] = input.value === 'true';
+            } else {
+                params[key] = parseFloat(input.value) || 0;
+            }
+        });
+        params.nome_tabela = document.getElementById('h_tabela_nome_tabela').value;
+
+        fetch('/carvia/api/fretes/recalcular', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({
+                peso: totais.peso,
+                valor_mercadoria: totais.valor,
+                parametros: params
+            })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.sucesso) {
+                atualizarBreakdown(data.breakdown, data.valor_cotado);
+                hValorCotado.value = data.valor_cotado;
+                atualizarResumoMargem();
+            }
+        });
+    }
+
+    // --- Recalcular ao mudar NFs (se parametros ja carregados) ---
+    nfChecks.forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            if (secaoParametros.style.display !== 'none' && tipoCarga.value === 'FRACIONADA') {
+                recalcular();
+            }
+        });
+    });
+
+    // --- Init ---
+    atualizarResumo();
+
+})();
+</script>
+{% endblock %}
