@@ -23,7 +23,6 @@
     0x8a9bb0, // cinza-azulado
   ];
 
-  // Escala para converter cm → unidades 3D (1cm = 0.01 unidades, mas usamos 1:1 e ajustamos camera)
   var SCALE = 0.01; // 1cm = 0.01 unidades Three.js
 
   /**
@@ -88,6 +87,8 @@
     this.scene.add(fillLight);
 
     // Grupos
+    this.truckGroup = new THREE.Group();
+    this.scene.add(this.truckGroup);
     this.bayGroup = new THREE.Group();
     this.scene.add(this.bayGroup);
     this.motosGroup = new THREE.Group();
@@ -151,6 +152,7 @@
    */
   CargaRenderer.prototype.render = function (result, bay, colorMap) {
     // Limpar cena anterior
+    this._clearGroup(this.truckGroup);
     this._clearGroup(this.bayGroup);
     this._clearGroup(this.motosGroup);
     this._bayEdges = null;
@@ -169,16 +171,14 @@
     var bd = bay.d * SCALE;
     var bh = bay.h * SCALE;
 
-    // Centro do bau — usamos offset para centralizar a cena na origem
     var cx = bw / 2;
     var cy = bh / 2;
     var cz = bd / 2;
 
-    // Salvar centro para uso em setView
     this._bayCenter = { x: cx, y: cy, z: cz };
     this._baySize = { w: bw, d: bd, h: bh };
 
-    // --- Grid (proporcional ao bau, centrado) ---
+    // --- Grid ---
     var gridSize = Math.max(bw, bd) * 1.3;
     var gridDiv = Math.max(10, Math.round(gridSize / 0.5));
     var gridHelper = new THREE.GridHelper(gridSize, gridDiv, 0x444444, 0x282828);
@@ -196,7 +196,7 @@
     this.bayGroup.add(bayEdges);
     this._bayEdges = bayEdges;
 
-    // Chao do bau (semi-transparente)
+    // Chao do bau
     var floorGeom = new THREE.PlaneGeometry(bw, bd);
     var floorMat = new THREE.MeshBasicMaterial({
       color: this.theme === 'dark' ? 0x1a2332 : 0xdde1e6,
@@ -234,7 +234,7 @@
         );
         this.motosGroup.add(mesh);
 
-        // Wireframe da moto para melhor visibilidade
+        // Wireframe da moto
         var wireGeom = new THREE.EdgesGeometry(boxGeom);
         var wireMat = new THREE.LineBasicMaterial({
           color: 0x000000,
@@ -247,7 +247,7 @@
       }
     }
 
-    // Ajustar camera para enquadrar o bau inteiro
+    // Ajustar camera
     this._fitCamera(bw, bh, bd, cx, cy, cz);
   };
 
@@ -409,6 +409,7 @@
     window.removeEventListener('resize', this._onResize);
     document.removeEventListener('themechange', this._onThemeChange);
 
+    this._clearGroup(this.truckGroup);
     this._clearGroup(this.bayGroup);
     this._clearGroup(this.motosGroup);
 

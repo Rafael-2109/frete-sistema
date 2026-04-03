@@ -92,6 +92,7 @@
       opt.dataset.largura = v.largura_bau;
       opt.dataset.altura = v.altura_bau;
       opt.dataset.pesoMax = v.peso_maximo;
+      opt.dataset.nome = v.nome;
       select.appendChild(opt);
     }
 
@@ -278,6 +279,7 @@
       d: parseFloat(opt.dataset.largura),
       h: parseFloat(opt.dataset.altura),
       pesoMax: parseFloat(opt.dataset.pesoMax),
+      nome: opt.dataset.nome || opt.textContent.split('—')[0].trim(),
     };
 
     updateDimsDisplay(state.veiculoSelecionado);
@@ -335,6 +337,7 @@
       d: data.veiculo.largura_bau,
       h: data.veiculo.altura_bau,
       pesoMax: data.veiculo.peso_maximo,
+      nome: data.veiculo.nome,
     };
 
     // Montar lista de motos e executar pack
@@ -442,6 +445,8 @@
         w: parseFloat(compEl.value),
         d: parseFloat(largEl.value),
         h: parseFloat(altEl.value),
+        nome: state.veiculoSelecionado ? state.veiculoSelecionado.nome : '',
+        pesoMax: state.veiculoSelecionado ? state.veiculoSelecionado.pesoMax : 0,
       };
     }
 
