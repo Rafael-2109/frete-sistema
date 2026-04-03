@@ -604,7 +604,22 @@
     font-weight: 600;
 }
 
+/* Badge de score sugestivo (conciliacao) */
+.carvia-badge-score-alto {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+}
+
+.carvia-badge-score-medio {
+    --_badge-bg: var(--amber-50);
+    --_badge-color: hsl(0 0% 10%);
+}
+
 /* Light mode adjustments */
+[data-bs-theme="light"] .carvia-badge-score-alto {
+    --_badge-bg: hsl(145 65% 35%);
+}
+
 [data-bs-theme="light"] .carvia-badge-conciliado {
     --_badge-bg: hsl(145 65% 35%);
 }

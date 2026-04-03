@@ -35,6 +35,7 @@
                                 <th>Nome</th>
                                 <th class="text-end">Valor</th>
                                 <th class="text-end">Saldo</th>
+                                <th style="width:60px">Match</th>
                                 <th style="width:120px">Valor Alocado</th>
                             </tr>
                         </thead>
@@ -96,7 +97,20 @@
             }
             vazio.classList.add('d-none');
 
+            const pct = v => Math.round((v||0)*100) + '%';
             data.documentos.forEach(doc => {
+                // Badge de score sugestivo
+                let scoreBadge = '';
+                if (doc.score_label === 'ALTO') {
+                    const det = doc.score_detalhes || {};
+                    scoreBadge = `<span class="badge carvia-badge-score-alto" style="font-size:0.6rem" title="Val:${pct(det.valor)} Dt:${pct(det.data)} Nm:${pct(det.nome)}">&#9733;&#9733;&#9733;</span>`;
+                } else if (doc.score_label === 'MEDIO') {
+                    const det = doc.score_detalhes || {};
+                    scoreBadge = `<span class="badge carvia-badge-score-medio" style="font-size:0.6rem" title="Val:${pct(det.valor)} Dt:${pct(det.data)} Nm:${pct(det.nome)}">&#9733;&#9733;</span>`;
+                } else if (doc.score_label === 'BAIXO') {
+                    scoreBadge = `<span class="badge bg-secondary" style="font-size:0.6rem">&#9733;</span>`;
+                }
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><input type="checkbox" class="form-check-input conc-inline-check"
@@ -109,6 +123,7 @@
                     <td class="text-end carvia-conciliacao-valor">
                         ${parseFloat(doc.saldo).toLocaleString('pt-BR', {minimumFractionDigits:2})}
                     </td>
+                    <td class="text-center">${scoreBadge}</td>
                     <td>
                         <input type="number" class="form-control form-control-sm conc-inline-valor"
                                step="0.01" min="0.01" max="${doc.saldo}" value="${doc.saldo}"

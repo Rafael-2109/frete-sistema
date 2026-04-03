@@ -49,6 +49,10 @@ class CarviaConciliacaoService:
         )
 
         if filtros:
+            if filtros.get('tipo'):
+                query = query.filter(
+                    CarviaExtratoLinha.tipo == filtros['tipo']
+                )
             if filtros.get('status'):
                 query = query.filter(
                     CarviaExtratoLinha.status_conciliacao == filtros['status']

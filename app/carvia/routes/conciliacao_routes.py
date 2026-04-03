@@ -105,6 +105,7 @@ def register_conciliacao_routes(bp):
 
         # Filtros
         hoje = date.today()
+        tipo = request.args.get('tipo', '')
         status = request.args.get('status', '')
         data_inicio_str = request.args.get('data_inicio', '')
         data_fim_str = request.args.get('data_fim', '')
@@ -114,6 +115,8 @@ def register_conciliacao_routes(bp):
         razao_social = request.args.get('razao_social', '')
 
         filtros = {}
+        if tipo:
+            filtros['tipo'] = tipo
         if status:
             filtros['status'] = status
 
@@ -159,6 +162,7 @@ def register_conciliacao_routes(bp):
             'carvia/extrato_bancario.html',
             linhas=linhas,
             resumo=resumo,
+            tipo_filtro=tipo,
             status_filtro=status,
             data_inicio=data_inicio_str,
             data_fim=data_fim_str,
@@ -236,6 +240,17 @@ def register_conciliacao_routes(bp):
         from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
         docs = CarviaConciliacaoService.obter_documentos_elegiveis(tipo_match)
+
+        # Scoring sugestivo (opcional — quando linha_id informado)
+        linha_id = request.args.get('linha_id', type=int)
+        if linha_id:
+            from app.carvia.models import CarviaExtratoLinha
+            from app.carvia.services.financeiro.carvia_sugestao_service import pontuar_documentos
+
+            linha = db.session.get(CarviaExtratoLinha, linha_id)
+            if linha:
+                docs = pontuar_documentos(linha, docs)
+
         return jsonify({'documentos': docs})
 
     # ===================================================================
@@ -346,6 +361,10 @@ def register_conciliacao_routes(bp):
 
         tipo_match = 'receber' if linha.tipo == 'CREDITO' else 'pagar'
         docs = CarviaConciliacaoService.obter_documentos_elegiveis(tipo_match)
+
+        # Scoring sugestivo
+        from app.carvia.services.financeiro.carvia_sugestao_service import pontuar_documentos
+        docs = pontuar_documentos(linha, docs)
 
         # Conciliacoes existentes desta linha
         conciliacoes_existentes = []

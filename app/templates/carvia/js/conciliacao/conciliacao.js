@@ -141,7 +141,10 @@
         docsPlaceholder.classList.remove('d-none');
         docsLista.classList.add('d-none');
 
-        fetch(`/carvia/api/conciliacao/documentos-elegiveis?tipo=${tipoMatchAtual}`)
+        // Scoring sugestivo: passa linha_id quando 1 unica linha selecionada
+        const linhaParam = linhasSelecionadas.length === 1
+            ? `&linha_id=${linhasSelecionadas[0].id}` : '';
+        fetch(`/carvia/api/conciliacao/documentos-elegiveis?tipo=${tipoMatchAtual}${linhaParam}`)
         .then(r => r.json())
         .then(data => {
             todosDocs = data.documentos || [];
@@ -263,13 +266,24 @@
                               d.tipo_documento === 'custo_entrega' ? 'CE' :
                               d.tipo_documento === 'receita' ? 'REC' : 'DESP';
 
+            // Badge de score sugestivo
+            const pct = v => Math.round((v||0)*100) + '%';
+            let scoreBadge = '';
+            if (d.score_label === 'ALTO') {
+                const det = d.score_detalhes || {};
+                scoreBadge = `<span class="badge carvia-badge-score-alto ms-1" style="font-size:0.6rem" title="Val:${pct(det.valor)} Dt:${pct(det.data)} Nm:${pct(det.nome)}">&#9733;&#9733;&#9733;</span>`;
+            } else if (d.score_label === 'MEDIO') {
+                const det = d.score_detalhes || {};
+                scoreBadge = `<span class="badge carvia-badge-score-medio ms-1" style="font-size:0.6rem" title="Val:${pct(det.valor)} Dt:${pct(det.data)} Nm:${pct(det.nome)}">&#9733;&#9733;</span>`;
+            }
+
             div.innerHTML = `
                 <div class="carvia-conciliacao-row-primary d-flex justify-content-between align-items-center">
                     <div>
                         <input type="checkbox" class="form-check-input me-1 doc-check"
                                data-tipo="${d.tipo_documento}" data-id="${d.id}" data-saldo="${d.saldo}">
                         <span class="badge bg-secondary" style="font-size:0.65rem">${tipoLabel}</span>
-                        <span>${d.numero}</span>
+                        <span>${d.numero}</span>${scoreBadge}
                     </div>
                     <span class="carvia-conciliacao-valor">${fmtNum(d.saldo)}</span>
                 </div>
