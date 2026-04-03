@@ -860,6 +860,11 @@ class ImportacaoService:
                                         op = linker.resolver_operacao_por_cte(cte_num)
                                         if op:
                                             operacao_id = op.id
+                                        else:
+                                            # Fallback: CTe pode ser Complementar
+                                            cte_comp = linker.resolver_cte_complementar_por_cte(cte_num)
+                                            if cte_comp and cte_comp.operacao_id:
+                                                operacao_id = cte_comp.operacao_id
                                     if nf_num:
                                         nf_obj = linker.resolver_nf_por_numero(
                                             nf_num, cnpj_contraparte
@@ -927,6 +932,19 @@ class ImportacaoService:
                                         f"Fatura {fatura.id}: "
                                         f"{bind_stats['operacoes_vinculadas']} operacao(oes) "
                                         f"vinculada(s) com status FATURADO"
+                                    )
+
+                                # Binding CTe Complementares: vincular CTe Comps
+                                # referenciados nos itens e recalcular valor_total.
+                                comp_stats = linker.vincular_ctes_complementares_da_fatura(
+                                    fatura.id
+                                )
+                                if comp_stats['cte_comp_vinculados'] > 0:
+                                    logger.info(
+                                        f"Fatura {fatura.id}: "
+                                        f"{comp_stats['cte_comp_vinculados']} CTe Comp(s) "
+                                        f"vinculado(s). Valor: R$ {comp_stats['valor_total_anterior']:.2f} "
+                                        f"-> R$ {comp_stats['valor_total_novo']:.2f}"
                                     )
 
                         faturas_criadas.append(fatura)

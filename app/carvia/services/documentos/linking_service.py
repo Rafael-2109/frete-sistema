@@ -53,6 +53,30 @@ class LinkingService:
         return operacao
 
     @staticmethod
+    def resolver_cte_complementar_por_cte(cte_numero):
+        """Resolve cte_numero (string) -> CarviaCteComplementar.
+
+        Fallback quando resolver_operacao_por_cte() retorna None.
+        Busca CTe Complementares pelo campo cte_numero (numero real do CTe),
+        NAO pelo numero_comp (COMP-###).
+
+        Normaliza zeros a esquerda: "00000121" == "121".
+        Returns CarviaCteComplementar ou None.
+        """
+        if not cte_numero:
+            return None
+
+        from app.carvia.models import CarviaCteComplementar
+
+        cte_norm = cte_numero.lstrip('0') or '0'
+        cte_comp = CarviaCteComplementar.query.filter(
+            func.ltrim(CarviaCteComplementar.cte_numero, '0') == cte_norm,
+            CarviaCteComplementar.status != 'CANCELADO',
+        ).first()
+
+        return cte_comp
+
+    @staticmethod
     def resolver_nf_por_numero(nf_numero, contraparte_cnpj=None):
         """Resolve nf_numero (string) -> CarviaNf.
 
@@ -558,6 +582,100 @@ class LinkingService:
         return stats
 
     # ------------------------------------------------------------------
+    # vincular_ctes_complementares_da_fatura: binding CTe Comp -> fatura
+    # ------------------------------------------------------------------
+
+    def vincular_ctes_complementares_da_fatura(self, fatura_id):
+        """Vincula CTe Complementares a fatura via itens e recalcula valor_total.
+
+        Busca itens da fatura cujo cte_numero corresponde a um CarviaCteComplementar.
+        Para cada CTe Comp encontrado com fatura_cliente_id IS NULL:
+        - Seta fatura_cliente_id e atualiza status para FATURADO.
+        Apos binding, recalcula valor_total = sum(ops.cte_valor) + sum(comps.cte_valor).
+
+        Returns:
+            dict com: cte_comp_vinculados, valor_total_anterior, valor_total_novo
+        """
+        from app.carvia.models import (
+            CarviaFaturaCliente, CarviaFaturaClienteItem,
+            CarviaCteComplementar, CarviaOperacao,
+        )
+
+        stats = {
+            'cte_comp_vinculados': 0,
+            'valor_total_anterior': 0,
+            'valor_total_novo': 0,
+        }
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            return stats
+
+        stats['valor_total_anterior'] = float(fatura.valor_total or 0)
+
+        # Buscar itens da fatura que tem cte_numero
+        itens = CarviaFaturaClienteItem.query.filter(
+            CarviaFaturaClienteItem.fatura_cliente_id == fatura_id,
+            CarviaFaturaClienteItem.cte_numero.isnot(None),
+        ).all()
+
+        cte_numeros = [item.cte_numero for item in itens if item.cte_numero]
+        if not cte_numeros:
+            stats['valor_total_novo'] = stats['valor_total_anterior']
+            return stats
+
+        # Buscar CTe Comps cujo cte_numero bate com algum item
+        # e que ainda nao estao vinculados a esta fatura
+        for cte_num in cte_numeros:
+            cte_comp = self.resolver_cte_complementar_por_cte(cte_num)
+            if not cte_comp:
+                continue
+            if cte_comp.fatura_cliente_id == fatura_id:
+                continue  # ja vinculado
+            if cte_comp.fatura_cliente_id is not None:
+                logger.warning(
+                    f"CTe Comp {cte_comp.id} ja vinculado a fatura "
+                    f"{cte_comp.fatura_cliente_id}, ignorando fatura {fatura_id}"
+                )
+                continue
+
+            cte_comp.fatura_cliente_id = fatura_id
+            if cte_comp.status in ('RASCUNHO', 'EMITIDO'):
+                cte_comp.status = 'FATURADO'
+            stats['cte_comp_vinculados'] += 1
+            logger.info(
+                f"Backward binding CTe Comp: comp={cte_comp.id} "
+                f"({cte_comp.numero_comp}) -> fatura_cliente_id={fatura_id} "
+                f"status=FATURADO"
+            )
+
+        # Recalcular valor_total = sum(ops) + sum(comps)
+        soma_ops = db.session.query(
+            func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
+        ).filter(CarviaOperacao.fatura_cliente_id == fatura_id).scalar()
+
+        soma_comp = db.session.query(
+            func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0)
+        ).filter(CarviaCteComplementar.fatura_cliente_id == fatura_id).scalar()
+
+        novo_total = float(soma_ops or 0) + float(soma_comp or 0)
+        if novo_total != stats['valor_total_anterior'] and novo_total > 0:
+            fatura.valor_total = novo_total
+            stats['valor_total_novo'] = novo_total
+            logger.info(
+                f"Fatura {fatura_id}: valor_total recalculado "
+                f"R$ {stats['valor_total_anterior']:.2f} -> R$ {novo_total:.2f} "
+                f"(ops={float(soma_ops or 0):.2f} + comp={float(soma_comp or 0):.2f})"
+            )
+        else:
+            stats['valor_total_novo'] = stats['valor_total_anterior']
+
+        if stats['cte_comp_vinculados'] > 0:
+            db.session.flush()
+
+        return stats
+
+    # ------------------------------------------------------------------
     # vincular_itens_fatura_cliente: resolve FKs em itens existentes
     # ------------------------------------------------------------------
 
@@ -588,6 +706,7 @@ class LinkingService:
 
         stats = {
             'operacoes_resolvidas': 0,
+            'cte_comp_resolvidos': 0,
             'nfs_resolvidas': 0,
             'nfs_via_junction': 0,
             'nfs_criadas_referencia': 0,
@@ -606,6 +725,27 @@ class LinkingService:
                     logger.info(
                         f"Linking: fat_cli_item={item.id} cte={item.cte_numero} -> op={operacao.id}"
                     )
+                else:
+                    # Fallback: CTe pode ser Complementar (cte_numero no CarviaCteComplementar)
+                    cte_comp = self.resolver_cte_complementar_por_cte(item.cte_numero)
+                    if cte_comp and cte_comp.operacao_id:
+                        item.operacao_id = cte_comp.operacao_id
+                        stats['cte_comp_resolvidos'] += 1
+                        logger.info(
+                            f"Linking via CTe Comp: fat_cli_item={item.id} "
+                            f"cte={item.cte_numero} -> comp={cte_comp.id} "
+                            f"({cte_comp.numero_comp}) -> op={cte_comp.operacao_id}"
+                        )
+
+                        # Binding entidade: vincular CTe Comp a esta fatura
+                        if cte_comp.fatura_cliente_id is None:
+                            cte_comp.fatura_cliente_id = fatura_id
+                            if cte_comp.status in ('RASCUNHO', 'EMITIDO'):
+                                cte_comp.status = 'FATURADO'
+                            logger.info(
+                                f"CTe Comp binding: comp={cte_comp.id} "
+                                f"-> fatura_cliente_id={fatura_id} status=FATURADO"
+                            )
 
             # Resolver nf_id via nf_numero + contraparte_cnpj (3 niveis)
             if item.nf_id is None and item.nf_numero:
