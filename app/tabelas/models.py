@@ -37,6 +37,8 @@ class TabelaFrete(db.Model):
 
     criado_por = db.Column(db.String(120), nullable=False)  # usuário que criou a tabela
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)  # horário do cadastro automático
+    atualizado_por = db.Column(db.String(120), nullable=True)  # usuário que fez a última atualização
+    atualizado_em = db.Column(db.DateTime, nullable=True)  # horário da última atualização
 
     transportadora = db.relationship('Transportadora', backref='tabelas_frete')
 

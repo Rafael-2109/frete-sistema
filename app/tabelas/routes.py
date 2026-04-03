@@ -240,7 +240,8 @@ def importar_tabela_frete():
                 if tabela_frete:
                     # Atualiza tabela existente
                     TabelaFreteManager.atribuir_campos_tabela(tabela_frete, dados_csv)
-                    tabela_frete.criado_por = current_user.nome    
+                    tabela_frete.atualizado_por = current_user.nome
+                    tabela_frete.atualizado_em = agora_utc_naive()
                 else:
                     # Cria nova tabela
                     tabela_frete = TabelaFrete(
@@ -721,8 +722,12 @@ def editar_tabela_frete(tabela_id):
             tabela.uf_origem = sanitize_string(form.uf_origem.data)
             tabela.uf_destino = sanitize_string(form.uf_destino.data)
             tabela.tipo_carga = sanitize_string(form.tipo_carga.data)
-            tabela.criado_por = sanitize_string(current_user.nome)
-            
+
+            # Registrar quem atualizou (sem sobrescrever criado_por original)
+            from app.utils.timezone import agora_utc_naive
+            tabela.atualizado_por = sanitize_string(current_user.nome)
+            tabela.atualizado_em = agora_utc_naive()
+
             # Prepara e atribui campos de frete usando TabelaFreteManager com conversão brasileira
             dados_tabela = TabelaFreteManager.preparar_dados_formulario(form, converter_valor_brasileiro)
             # Aplica sanitização no nome_tabela e modalidade
@@ -730,8 +735,19 @@ def editar_tabela_frete(tabela_id):
                 dados_tabela['nome_tabela'] = sanitize_string(dados_tabela['nome_tabela'])
             if 'modalidade' in dados_tabela:
                 dados_tabela['modalidade'] = sanitize_string(dados_tabela['modalidade'])
-            
+
             TabelaFreteManager.atribuir_campos_tabela(tabela, dados_tabela)
+
+            # Criar registro de histórico (snapshot da edição)
+            historico = HistoricoTabelaFrete(
+                transportadora_id=tabela.transportadora_id,
+                uf_origem=tabela.uf_origem,
+                uf_destino=tabela.uf_destino,
+                tipo_carga=tabela.tipo_carga,
+                criado_por=sanitize_string(current_user.nome)
+            )
+            TabelaFreteManager.atribuir_campos_tabela(historico, dados_tabela)
+            db.session.add(historico)
 
             logger.info(f"💾 Salvando alterações da tabela {tabela_id}")
             db.session.commit()
