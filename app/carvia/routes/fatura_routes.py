@@ -36,7 +36,10 @@ def register_fatura_routes(bp):
         page = request.args.get('page', 1, type=int)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        cliente_filtro = request.args.get('cliente', '')
         tipo_frete_filtro = request.args.get('tipo_frete', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -58,15 +61,32 @@ def register_fatura_routes(bp):
             query = query.filter(CarviaFaturaCliente.status == status_filtro)
         if tipo_frete_filtro:
             query = query.filter(CarviaFaturaCliente.tipo_frete == tipo_frete_filtro)
+        if cliente_filtro:
+            cliente_like = f'%{cliente_filtro}%'
+            query = query.filter(
+                db.or_(
+                    CarviaFaturaCliente.nome_cliente.ilike(cliente_like),
+                    CarviaFaturaCliente.cnpj_cliente.ilike(cliente_like),
+                )
+            )
         if busca:
             busca_like = f'%{busca}%'
             query = query.filter(
-                db.or_(
-                    CarviaFaturaCliente.nome_cliente.ilike(busca_like),
-                    CarviaFaturaCliente.cnpj_cliente.ilike(busca_like),
-                    CarviaFaturaCliente.numero_fatura.ilike(busca_like),
-                )
+                CarviaFaturaCliente.numero_fatura.ilike(busca_like),
             )
+
+        if data_emissao_de:
+            try:
+                dt_de = datetime.strptime(data_emissao_de, '%Y-%m-%d').date()
+                query = query.filter(CarviaFaturaCliente.data_emissao >= dt_de)
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                dt_ate = datetime.strptime(data_emissao_ate, '%Y-%m-%d').date()
+                query = query.filter(CarviaFaturaCliente.data_emissao <= dt_ate)
+            except ValueError:
+                pass
 
         # Ordenacao dinamica
         sortable_columns = {
@@ -86,6 +106,21 @@ def register_fatura_routes(bp):
 
         paginacao = query.paginate(page=page, per_page=25, error_out=False)
 
+        # Batch: CTes vinculados por fatura (numeros + ids para badges inline)
+        from collections import defaultdict
+        ops_por_fatura = defaultdict(list)
+        fat_ids = [f.id for f, _ in paginacao.items]
+        if fat_ids:
+            rows_ops = db.session.query(
+                CarviaOperacao.fatura_cliente_id,
+                CarviaOperacao.id,
+                CarviaOperacao.cte_numero,
+            ).filter(
+                CarviaOperacao.fatura_cliente_id.in_(fat_ids)
+            ).all()
+            for fat_id, op_id, cte_num in rows_ops:
+                ops_por_fatura[fat_id].append({'id': op_id, 'cte_numero': cte_num})
+
         today = date.today()
 
         return render_template(
@@ -95,9 +130,13 @@ def register_fatura_routes(bp):
             status_filtro=status_filtro,
             tipo_frete_filtro=tipo_frete_filtro,
             busca=busca,
+            cliente_filtro=cliente_filtro,
+            data_emissao_de=data_emissao_de,
+            data_emissao_ate=data_emissao_ate,
             sort=sort,
             direction=direction,
             today=today,
+            ops_por_fatura=ops_por_fatura,
         )
 
     @bp.route('/faturas-cliente/nova', methods=['GET', 'POST']) # type: ignore

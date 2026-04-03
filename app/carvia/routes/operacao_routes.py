@@ -3,6 +3,9 @@ Rotas de Operacoes CarVia — CRUD operacoes + subcontratos
 """
 
 import logging
+from collections import defaultdict
+from datetime import datetime
+
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
@@ -32,6 +35,9 @@ def register_operacao_routes(bp):
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo', '')
         uf_filtro = request.args.get('uf_destino', '')
+        uf_origem_filtro = request.args.get('uf_origem', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -56,14 +62,44 @@ def register_operacao_routes(bp):
         if uf_filtro:
             query = query.filter(CarviaOperacao.uf_destino == uf_filtro.upper())
 
+        if uf_origem_filtro:
+            query = query.filter(CarviaOperacao.uf_origem == uf_origem_filtro.upper())
+
+        if data_emissao_de:
+            try:
+                dt_de = datetime.strptime(data_emissao_de, '%Y-%m-%d').date()
+                query = query.filter(CarviaOperacao.cte_data_emissao >= dt_de)
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                dt_ate = datetime.strptime(data_emissao_ate, '%Y-%m-%d').date()
+                query = query.filter(CarviaOperacao.cte_data_emissao <= dt_ate)
+            except ValueError:
+                pass
+
         if busca:
             busca_like = f'%{busca}%'
+            # Subquery: buscar por embarcador/destinatario via NFs vinculadas
+            from app.carvia.models import CarviaNf
+            nf_match_subq = db.session.query(
+                CarviaOperacaoNf.operacao_id
+            ).join(
+                CarviaNf, CarviaOperacaoNf.nf_id == CarviaNf.id
+            ).filter(
+                db.or_(
+                    CarviaNf.nome_emitente.ilike(busca_like),
+                    CarviaNf.nome_destinatario.ilike(busca_like),
+                )
+            ).subquery()
+
             query = query.filter(
                 db.or_(
                     CarviaOperacao.nome_cliente.ilike(busca_like),
                     CarviaOperacao.cnpj_cliente.ilike(busca_like),
                     CarviaOperacao.cte_numero.ilike(busca_like),
                     CarviaOperacao.cidade_destino.ilike(busca_like),
+                    CarviaOperacao.id.in_(nf_match_subq),
                 )
             )
 
@@ -85,23 +121,52 @@ def register_operacao_routes(bp):
 
         paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
+        # Batch: NFs vinculadas por operacao (numeros + ids para badges inline)
+        # + destinatario/embarcador por operacao
+        from app.carvia.models import CarviaNf
+        nfs_por_op = defaultdict(list)
+        dest_por_op = {}
+        op_ids = [op.id for op, _ in paginacao.items]
+        if op_ids:
+            rows_nf = db.session.query(
+                CarviaOperacaoNf.operacao_id,
+                CarviaNf.id,
+                CarviaNf.numero_nf,
+                CarviaNf.nome_destinatario,
+                CarviaNf.nome_emitente,
+            ).join(
+                CarviaNf, CarviaOperacaoNf.nf_id == CarviaNf.id
+            ).filter(
+                CarviaOperacaoNf.operacao_id.in_(op_ids)
+            ).all()
+            seen_nf = set()
+            for oid, nf_id, num_nf, dest, emit in rows_nf:
+                key = (oid, nf_id)
+                if key not in seen_nf:
+                    seen_nf.add(key)
+                    nfs_por_op[oid].append({'id': nf_id, 'numero_nf': num_nf})
+                if oid not in dest_por_op:
+                    dest_por_op[oid] = {'destinatario': dest, 'embarcador': emit}
+
         # Subquery: info de subcontrato (transportadora subcontratada + cte subcontrato)
         from app.transportadoras.models import Transportadora
-        sub_info_raw = db.session.query(
-            CarviaSubcontrato.operacao_id,
-            Transportadora.razao_social,
-            CarviaSubcontrato.cte_numero,
-        ).join(
-            Transportadora, CarviaSubcontrato.transportadora_id == Transportadora.id
-        ).filter(
-            CarviaSubcontrato.status != 'CANCELADO',
-        ).order_by(CarviaSubcontrato.operacao_id, CarviaSubcontrato.id).all()
-
         sub_info = {}
-        for op_id, razao, cte_num in sub_info_raw:
-            if op_id not in sub_info:
-                sub_info[op_id] = {'transp_nome': razao, 'sub_cte': cte_num, 'count': 0}
-            sub_info[op_id]['count'] += 1
+        if op_ids:
+            sub_info_raw = db.session.query(
+                CarviaSubcontrato.operacao_id,
+                Transportadora.razao_social,
+                CarviaSubcontrato.cte_numero,
+            ).join(
+                Transportadora, CarviaSubcontrato.transportadora_id == Transportadora.id
+            ).filter(
+                CarviaSubcontrato.status != 'CANCELADO',
+                CarviaSubcontrato.operacao_id.in_(op_ids),
+            ).order_by(CarviaSubcontrato.operacao_id, CarviaSubcontrato.id).all()
+
+            for op_id, razao, cte_num in sub_info_raw:
+                if op_id not in sub_info:
+                    sub_info[op_id] = {'transp_nome': razao, 'sub_cte': cte_num, 'count': 0}
+                sub_info[op_id]['count'] += 1
 
         return render_template(
             'carvia/listar_operacoes.html',
@@ -110,10 +175,15 @@ def register_operacao_routes(bp):
             status_filtro=status_filtro,
             tipo_filtro=tipo_filtro,
             uf_filtro=uf_filtro,
+            uf_origem_filtro=uf_origem_filtro,
+            data_emissao_de=data_emissao_de,
+            data_emissao_ate=data_emissao_ate,
             busca=busca,
             sort=sort,
             direction=direction,
             sub_info=sub_info,
+            nfs_por_op=nfs_por_op,
+            dest_por_op=dest_por_op,
         )
 
     @bp.route('/operacoes/<int:operacao_id>')

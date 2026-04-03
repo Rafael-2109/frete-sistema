@@ -3,6 +3,8 @@ Rotas de CTe Subcontrato CarVia — Listagem e detalhe de subcontratos
 """
 
 import logging
+from datetime import datetime
+
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
 
@@ -30,6 +32,9 @@ def register_subcontrato_routes(bp):
         transp_filtro = request.args.get('transportadora', '')
         transp_id_param = request.args.get('transportadora_id', type=int)
         fatura_filtro = request.args.get('fatura', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
+        uf_origem_filtro = request.args.get('uf_origem', '')
         sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -45,6 +50,22 @@ def register_subcontrato_routes(bp):
             query = query.filter(CarviaSubcontrato.fatura_transportadora_id.isnot(None))
         elif fatura_filtro == 'SEM':
             query = query.filter(CarviaSubcontrato.fatura_transportadora_id.is_(None))
+
+        if data_emissao_de:
+            try:
+                dt_de = datetime.strptime(data_emissao_de, '%Y-%m-%d').date()
+                query = query.filter(CarviaSubcontrato.cte_data_emissao >= dt_de)
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                dt_ate = datetime.strptime(data_emissao_ate, '%Y-%m-%d').date()
+                query = query.filter(CarviaSubcontrato.cte_data_emissao <= dt_ate)
+            except ValueError:
+                pass
+
+        if uf_origem_filtro:
+            query = query.filter(CarviaOperacao.uf_origem == uf_origem_filtro.upper())
 
         # Join Transportadora se transp_filtro ou busca precisam
         if transp_filtro or transp_id_param or busca:
@@ -98,6 +119,9 @@ def register_subcontrato_routes(bp):
             busca=busca,
             transp_filtro=transp_filtro,
             fatura_filtro=fatura_filtro,
+            data_emissao_de=data_emissao_de,
+            data_emissao_ate=data_emissao_ate,
+            uf_origem_filtro=uf_origem_filtro,
             sort=sort,
             direction=direction,
         )

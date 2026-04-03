@@ -3,6 +3,7 @@ Rotas de Exportacao Excel CarVia — Todas as entidades
 """
 
 import logging
+from datetime import datetime
 from io import BytesIO
 
 import pandas as pd
@@ -98,6 +99,8 @@ def register_exportacao_routes(bp):
         tipo_filtro = request.args.get('tipo_fonte', '')
         status_filtro = request.args.get('status', '')
         uf_filtro = request.args.get('uf_destino', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -112,6 +115,17 @@ def register_exportacao_routes(bp):
 
         if tipo_filtro:
             query = query.filter(CarviaNf.tipo_fonte == tipo_filtro)
+
+        if data_emissao_de:
+            try:
+                query = query.filter(CarviaNf.data_emissao >= datetime.strptime(data_emissao_de, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                query = query.filter(CarviaNf.data_emissao <= datetime.strptime(data_emissao_ate, '%Y-%m-%d').date())
+            except ValueError:
+                pass
 
         if busca:
             busca_like = f'%{busca}%'
@@ -200,6 +214,9 @@ def register_exportacao_routes(bp):
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo', '')
         uf_filtro = request.args.get('uf_destino', '')
+        uf_origem_filtro = request.args.get('uf_origem', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -211,6 +228,18 @@ def register_exportacao_routes(bp):
             query = query.filter(CarviaOperacao.tipo_entrada == tipo_filtro)
         if uf_filtro:
             query = query.filter(CarviaOperacao.uf_destino == uf_filtro.upper())
+        if uf_origem_filtro:
+            query = query.filter(CarviaOperacao.uf_origem == uf_origem_filtro.upper())
+        if data_emissao_de:
+            try:
+                query = query.filter(CarviaOperacao.cte_data_emissao >= datetime.strptime(data_emissao_de, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                query = query.filter(CarviaOperacao.cte_data_emissao <= datetime.strptime(data_emissao_ate, '%Y-%m-%d').date())
+            except ValueError:
+                pass
         if busca:
             busca_like = f'%{busca}%'
             query = query.filter(
@@ -290,6 +319,9 @@ def register_exportacao_routes(bp):
         busca = request.args.get('busca', '')
         transp_filtro = request.args.get('transportadora', '')
         fatura_filtro = request.args.get('fatura', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
+        uf_origem_filtro = request.args.get('uf_origem', '')
         sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -305,6 +337,20 @@ def register_exportacao_routes(bp):
             query = query.filter(CarviaSubcontrato.fatura_transportadora_id.isnot(None))
         elif fatura_filtro == 'SEM':
             query = query.filter(CarviaSubcontrato.fatura_transportadora_id.is_(None))
+
+        if data_emissao_de:
+            try:
+                query = query.filter(CarviaSubcontrato.cte_data_emissao >= datetime.strptime(data_emissao_de, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                query = query.filter(CarviaSubcontrato.cte_data_emissao <= datetime.strptime(data_emissao_ate, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+
+        if uf_origem_filtro:
+            query = query.filter(CarviaOperacao.uf_origem == uf_origem_filtro.upper())
 
         if transp_filtro or busca:
             from app.transportadoras.models import Transportadora
@@ -382,6 +428,8 @@ def register_exportacao_routes(bp):
         operacao_filtro = request.args.get('operacao', '', type=str)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -391,6 +439,18 @@ def register_exportacao_routes(bp):
             query = query.filter(CarviaCteComplementar.operacao_id == int(operacao_filtro))
         if status_filtro:
             query = query.filter(CarviaCteComplementar.status == status_filtro)
+
+        if data_emissao_de:
+            try:
+                query = query.filter(CarviaCteComplementar.cte_data_emissao >= datetime.strptime(data_emissao_de, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                query = query.filter(CarviaCteComplementar.cte_data_emissao <= datetime.strptime(data_emissao_ate, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+
         if busca:
             busca_like = f'%{busca}%'
             query = query.filter(
@@ -560,7 +620,10 @@ def register_exportacao_routes(bp):
 
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        cliente_filtro = request.args.get('cliente', '')
         tipo_frete_filtro = request.args.get('tipo_frete', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -570,15 +633,29 @@ def register_exportacao_routes(bp):
             query = query.filter(CarviaFaturaCliente.status == status_filtro)
         if tipo_frete_filtro:
             query = query.filter(CarviaFaturaCliente.tipo_frete == tipo_frete_filtro)
+        if cliente_filtro:
+            cliente_like = f'%{cliente_filtro}%'
+            query = query.filter(
+                db.or_(
+                    CarviaFaturaCliente.nome_cliente.ilike(cliente_like),
+                    CarviaFaturaCliente.cnpj_cliente.ilike(cliente_like),
+                )
+            )
         if busca:
             busca_like = f'%{busca}%'
             query = query.filter(
-                db.or_(
-                    CarviaFaturaCliente.nome_cliente.ilike(busca_like),
-                    CarviaFaturaCliente.cnpj_cliente.ilike(busca_like),
-                    CarviaFaturaCliente.numero_fatura.ilike(busca_like),
-                )
+                CarviaFaturaCliente.numero_fatura.ilike(busca_like),
             )
+        if data_emissao_de:
+            try:
+                query = query.filter(CarviaFaturaCliente.data_emissao >= datetime.strptime(data_emissao_de, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                query = query.filter(CarviaFaturaCliente.data_emissao <= datetime.strptime(data_emissao_ate, '%Y-%m-%d').date())
+            except ValueError:
+                pass
 
         sortable_columns = {
             'numero_fatura': func.lpad(func.coalesce(CarviaFaturaCliente.numero_fatura, ''), 20, '0'),

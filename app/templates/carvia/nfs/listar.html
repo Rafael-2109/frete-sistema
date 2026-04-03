@@ -6,7 +6,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-file-alt"></i> NF Venda</h2>
         <div class="d-flex gap-2">
-            <a href="{{ url_for('carvia.exportar_nfs', busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, uf_destino=uf_filtro, sort=sort, direction=direction) }}"
+            <a href="{{ url_for('carvia.exportar_nfs', busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}"
                class="btn btn-outline-success btn-sm" title="Exportar Excel">
                 <i class="fas fa-file-excel"></i> Excel
             </a>
@@ -61,12 +61,22 @@
                     <input type="text" name="uf_destino" class="form-control form-control-sm"
                            maxlength="2" style="text-transform:uppercase" placeholder="UF" value="{{ uf_filtro }}">
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Emissao De</label>
+                    <input type="date" name="data_emissao_de" class="form-control form-control-sm"
+                           value="{{ data_emissao_de }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Emissao Ate</label>
+                    <input type="date" name="data_emissao_ate" class="form-control form-control-sm"
+                           value="{{ data_emissao_ate }}">
+                </div>
                 <div class="col-md-1">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if busca or tipo_filtro or status_filtro or cte_filtro or uf_filtro %}
+                {% if busca or tipo_filtro or status_filtro or cte_filtro or uf_filtro or data_emissao_de or data_emissao_ate %}
                 <div class="col-md-1">
                     <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i>
@@ -134,18 +144,12 @@
                                 <span class="badge carvia-badge-{{ nf.status|lower }}">{{ nf.status }}</span>
                             </td>
                             <td>
-                                {% if qtd_ctes %}
-                                    {% if qtd_ctes == 1 %}
-                                    {# Link direto para a operacao unica #}
-                                    {% set ops = nf.operacoes.all() %}
-                                    {% if ops %}
-                                    <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=ops[0].id) }}" class="badge bg-success text-decoration-none">1 CTe</a>
-                                    {% else %}
-                                    <span class="badge bg-success">1 CTe</span>
-                                    {% endif %}
-                                    {% else %}
-                                    <span class="badge bg-success">{{ qtd_ctes }} CTes</span>
-                                    {% endif %}
+                                {% set ctes = ctes_por_nf.get(nf.id, []) %}
+                                {% if ctes %}
+                                    {% for c in ctes %}
+                                    <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=c.id) }}"
+                                       class="badge bg-success text-decoration-none d-block mb-1">{{ c.cte_numero or ('CTe #' ~ c.id) }}</a>
+                                    {% endfor %}
                                 {% else %}
                                 <span class="badge bg-secondary">-</span>
                                 {% endif %}
@@ -198,7 +202,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.prev_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -206,7 +210,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=p, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -214,7 +218,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_nfs', page=paginacao.next_num, busca=busca, tipo_fonte=tipo_filtro, status=status_filtro, cte=cte_filtro, uf_destino=uf_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

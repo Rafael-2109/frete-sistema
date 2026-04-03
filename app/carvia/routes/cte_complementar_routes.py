@@ -3,7 +3,7 @@ Rotas de CTe Complementar CarVia — CRUD completo
 """
 
 import logging
-from datetime import date
+from datetime import date, datetime
 
 from flask import render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
@@ -30,6 +30,8 @@ def register_cte_complementar_routes(bp):
         operacao_filtro = request.args.get('operacao', '', type=str)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -39,6 +41,20 @@ def register_cte_complementar_routes(bp):
             query = query.filter(CarviaCteComplementar.operacao_id == int(operacao_filtro))
         if status_filtro:
             query = query.filter(CarviaCteComplementar.status == status_filtro)
+
+        if data_emissao_de:
+            try:
+                dt_de = datetime.strptime(data_emissao_de, '%Y-%m-%d').date()
+                query = query.filter(CarviaCteComplementar.cte_data_emissao >= dt_de)
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                dt_ate = datetime.strptime(data_emissao_ate, '%Y-%m-%d').date()
+                query = query.filter(CarviaCteComplementar.cte_data_emissao <= dt_ate)
+            except ValueError:
+                pass
+
         if busca:
             busca_like = f'%{busca}%'
             query = query.filter(
@@ -73,6 +89,8 @@ def register_cte_complementar_routes(bp):
             operacao_filtro=operacao_filtro,
             status_filtro=status_filtro,
             busca=busca,
+            data_emissao_de=data_emissao_de,
+            data_emissao_ate=data_emissao_ate,
             sort=sort,
             direction=direction,
             status_list=STATUS_CTE_COMP,

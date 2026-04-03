@@ -6,7 +6,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-file-invoice"></i> CTe Complementares</h2>
         <div class="d-flex gap-2">
-            <a href="{{ url_for('carvia.exportar_ctes_complementares', status=status_filtro, busca=busca, sort=sort, direction=direction) }}"
+            <a href="{{ url_for('carvia.exportar_ctes_complementares', status=status_filtro, busca=busca, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}"
                class="btn btn-outline-success btn-sm" title="Exportar Excel">
                 <i class="fas fa-file-excel"></i> Excel
             </a>
@@ -35,20 +35,30 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
                            placeholder="Numero, cliente, observacoes..." value="{{ busca }}">
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label small">Emissao De</label>
+                    <input type="date" name="data_emissao_de" class="form-control form-control-sm"
+                           value="{{ data_emissao_de }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Emissao Ate</label>
+                    <input type="date" name="data_emissao_ate" class="form-control form-control-sm"
+                           value="{{ data_emissao_ate }}">
+                </div>
+                <div class="col-md-1">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
-                        <i class="fas fa-search"></i> Filtrar
+                        <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if status_filtro or busca %}
-                <div class="col-md-2">
+                {% if status_filtro or busca or data_emissao_de or data_emissao_ate %}
+                <div class="col-md-1">
                     <a href="{{ url_for('carvia.listar_ctes_complementares') }}" class="btn btn-sm btn-outline-secondary w-100">
-                        <i class="fas fa-times"></i> Limpar
+                        <i class="fas fa-times"></i>
                     </a>
                 </div>
                 {% endif %}
@@ -115,7 +125,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_ctes_complementares', page=paginacao.prev_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_ctes_complementares', page=paginacao.prev_num, status=status_filtro, busca=busca, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -123,7 +133,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_ctes_complementares', page=p, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_ctes_complementares', page=p, status=status_filtro, busca=busca, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -131,7 +141,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_ctes_complementares', page=paginacao.next_num, status=status_filtro, busca=busca, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_ctes_complementares', page=paginacao.next_num, status=status_filtro, busca=busca, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

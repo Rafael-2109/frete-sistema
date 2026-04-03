@@ -4,6 +4,8 @@ Rotas de NF Venda CarVia — Listagem, detalhe e cancelamento de NFs importadas
 
 import logging
 from collections import defaultdict
+from datetime import datetime
+
 from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func
@@ -37,6 +39,8 @@ def register_nf_routes(bp):
         status_filtro = request.args.get('status', '')
         cte_filtro = request.args.get('cte', '')
         uf_filtro = request.args.get('uf_destino', '')
+        data_emissao_de = request.args.get('data_emissao_de', '')
+        data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
@@ -101,6 +105,20 @@ def register_nf_routes(bp):
         if uf_filtro:
             query = query.filter(CarviaNf.uf_destinatario == uf_filtro.upper())
 
+        # Filtro date range
+        if data_emissao_de:
+            try:
+                dt_de = datetime.strptime(data_emissao_de, '%Y-%m-%d').date()
+                query = query.filter(CarviaNf.data_emissao >= dt_de)
+            except ValueError:
+                pass
+        if data_emissao_ate:
+            try:
+                dt_ate = datetime.strptime(data_emissao_ate, '%Y-%m-%d').date()
+                query = query.filter(CarviaNf.data_emissao <= dt_ate)
+            except ValueError:
+                pass
+
         # Ordenacao dinamica
         sortable_columns = {
             'numero_nf': func.lpad(func.coalesce(CarviaNf.numero_nf, ''), 20, '0'),
@@ -123,6 +141,7 @@ def register_nf_routes(bp):
         faturas_por_nf = defaultdict(list)
         subcontratos_por_nf = defaultdict(list)
         faturas_transp_por_nf = defaultdict(list)
+        ctes_por_nf = defaultdict(list)
 
         if nf_ids:
             # Query 1: Faturas cliente via itens
@@ -176,6 +195,24 @@ def register_nf_routes(bp):
                     seen_fat_transp.add(key)
                     faturas_transp_por_nf[nf_id].append(fat_transp)
 
+            # Query 4: CTes vinculados por NF (numeros + ids para badges inline)
+            rows_cte = db.session.query(
+                CarviaOperacaoNf.nf_id,
+                CarviaOperacao.id,
+                CarviaOperacao.cte_numero,
+            ).join(
+                CarviaOperacao,
+                CarviaOperacaoNf.operacao_id == CarviaOperacao.id,
+            ).filter(
+                CarviaOperacaoNf.nf_id.in_(nf_ids)
+            ).all()
+            seen_cte = set()
+            for nf_id, op_id, cte_num in rows_cte:
+                key = (nf_id, op_id)
+                if key not in seen_cte:
+                    seen_cte.add(key)
+                    ctes_por_nf[nf_id].append({'id': op_id, 'cte_numero': cte_num})
+
         # Batch: peso cubado por NF (2 queries)
         from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
         moto_svc = MotoRecognitionService()
@@ -190,11 +227,14 @@ def register_nf_routes(bp):
             status_filtro=status_filtro,
             cte_filtro=cte_filtro,
             uf_filtro=uf_filtro,
+            data_emissao_de=data_emissao_de,
+            data_emissao_ate=data_emissao_ate,
             sort=sort,
             direction=direction,
             faturas_por_nf=faturas_por_nf,
             subcontratos_por_nf=subcontratos_por_nf,
             faturas_transp_por_nf=faturas_transp_por_nf,
+            ctes_por_nf=ctes_por_nf,
             peso_cubado_por_nf=peso_cubado_por_nf,
         )
 

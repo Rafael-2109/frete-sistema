@@ -6,7 +6,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-handshake"></i> CTe Subcontrato</h2>
         <div class="d-flex gap-2">
-            <a href="{{ url_for('carvia.exportar_subcontratos', status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, sort=sort, direction=direction) }}"
+            <a href="{{ url_for('carvia.exportar_subcontratos', status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, uf_origem=uf_origem_filtro, sort=sort, direction=direction) }}"
                class="btn btn-outline-success btn-sm" title="Exportar Excel">
                 <i class="fas fa-file-excel"></i> Excel
             </a>
@@ -59,17 +59,32 @@
                     <input type="hidden" id="filtro_transportadora_id" name="transportadora_id"
                            value="{{ request.args.get('transportadora_id', '') }}">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
                            placeholder="CTe, cliente, cidade..." value="{{ busca }}">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small">UF Orig.</label>
+                    <input type="text" name="uf_origem" class="form-control form-control-sm"
+                           maxlength="2" style="text-transform:uppercase" placeholder="UF" value="{{ uf_origem_filtro }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Emissao De</label>
+                    <input type="date" name="data_emissao_de" class="form-control form-control-sm"
+                           value="{{ data_emissao_de }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Emissao Ate</label>
+                    <input type="date" name="data_emissao_ate" class="form-control form-control-sm"
+                           value="{{ data_emissao_ate }}">
                 </div>
                 <div class="col-md-1">
                     <button type="submit" class="btn btn-sm btn-outline-primary w-100">
                         <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if status_filtro or busca or transp_filtro or fatura_filtro %}
+                {% if status_filtro or busca or transp_filtro or fatura_filtro or data_emissao_de or data_emissao_ate or uf_origem_filtro %}
                 <div class="col-md-1">
                     <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i>
@@ -160,7 +175,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.prev_num, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.prev_num, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, uf_origem=uf_origem_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -168,7 +183,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if p %}
                         <li class="page-item {{ 'active' if p == paginacao.page }}">
-                            <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=p, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=p, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, uf_origem=uf_origem_filtro, sort=sort, direction=direction) }}">{{ p }}</a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -176,7 +191,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.next_num, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_subcontratos', page=paginacao.next_num, status=status_filtro, busca=busca, transportadora=transp_filtro, fatura=fatura_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, uf_origem=uf_origem_filtro, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>
