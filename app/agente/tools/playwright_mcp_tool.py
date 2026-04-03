@@ -389,6 +389,7 @@ try:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
+            maxResultSizeChars=100_000,
         ),
     )
     async def browser_snapshot(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -926,6 +927,7 @@ try:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
+            maxResultSizeChars=100_000,
         ),
     )
     async def browser_read_content(args: Dict[str, Any]) -> Dict[str, Any]:

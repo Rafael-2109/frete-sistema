@@ -405,6 +405,7 @@ try:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
+            maxResultSizeChars=200_000,
         ),
         output_schema=SQL_OUTPUT_SCHEMA,
     )
