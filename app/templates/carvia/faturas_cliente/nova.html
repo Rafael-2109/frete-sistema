@@ -109,6 +109,33 @@
             </div>
         </div>
 
+        {% if entidades_pagador and entidades_pagador|length > 1 %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-user-tag"></i> Pagador do Frete</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Selecione quem sera o pagador desta fatura. Por padrao, o remetente.
+                </p>
+                {% for ent in entidades_pagador %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="pagador_cnpj"
+                           id="pagador_{{ loop.index }}" value="{{ ent.cnpj }}"
+                           {{ 'checked' if loop.first }}
+                           data-nome="{{ ent.nome }}">
+                    <label class="form-check-label" for="pagador_{{ loop.index }}">
+                        <strong>{{ ent.papel }}</strong>: {{ ent.nome or '-' }}
+                        <small class="text-muted d-block">{{ ent.cnpj }}</small>
+                    </label>
+                </div>
+                {% endfor %}
+                <input type="hidden" name="pagador_nome" id="pagador_nome_hidden"
+                       value="{{ entidades_pagador[0].nome if entidades_pagador else '' }}">
+            </div>
+        </div>
+        {% endif %}
+
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-list-check"></i> Selecionar Operacoes</h5>
@@ -228,6 +255,13 @@ document.getElementById('btn-select-all-comp')?.addEventListener('click', functi
     const checkAll = document.getElementById('check-all-comp');
     checkAll.checked = true;
     document.querySelectorAll('.comp-check').forEach(cb => cb.checked = true);
+});
+// Sincronizar nome do pagador ao trocar radio
+document.querySelectorAll('input[name="pagador_cnpj"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        var hidden = document.getElementById('pagador_nome_hidden');
+        if (hidden) hidden.value = this.dataset.nome || '';
+    });
 });
 </script>
 {% endblock %}

@@ -84,13 +84,29 @@
                         <option value="PARCIAL" {{ 'selected' if status_filtro == 'PARCIAL' }}>Parcial</option>
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
                            placeholder="Descricao, memo..." value="{{ busca }}">
                 </div>
                 <div class="col-md-1">
-                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                    <label class="form-label small">Valor Min</label>
+                    <input type="number" name="valor_min" class="form-control form-control-sm"
+                           step="0.01" placeholder="0,00" value="{{ valor_min }}">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small">Valor Max</label>
+                    <input type="number" name="valor_max" class="form-control form-control-sm"
+                           step="0.01" placeholder="0,00" value="{{ valor_max }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Razao Social</label>
+                    <input type="text" name="razao_social" class="form-control form-control-sm"
+                           placeholder="Nome..." value="{{ razao_social }}">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small">&nbsp;</label>
+                    <button type="submit" class="btn btn-sm btn-outline-primary d-block">
                         <i class="fas fa-search"></i>
                     </button>
                 </div>

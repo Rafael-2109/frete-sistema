@@ -547,6 +547,19 @@
     color: var(--text-muted);
 }
 
+/* Enfase no tomador (pagador do frete) na conciliacao */
+.carvia-tomador-emphasis {
+    font-weight: 700;
+    color: var(--semantic-success);
+    border-bottom: 2px solid var(--semantic-success);
+    padding-bottom: 1px;
+}
+
+[data-bs-theme="light"] .carvia-tomador-emphasis {
+    color: hsl(145 65% 30%);
+    border-bottom-color: hsl(145 65% 30%);
+}
+
 /* Linha selecionada */
 .carvia-conciliacao-selected {
     background: hsla(210 80% 55% / 0.08);

@@ -109,6 +109,9 @@ def register_conciliacao_routes(bp):
         data_inicio_str = request.args.get('data_inicio', '')
         data_fim_str = request.args.get('data_fim', '')
         busca = request.args.get('busca', '')
+        valor_min_str = request.args.get('valor_min', '')
+        valor_max_str = request.args.get('valor_max', '')
+        razao_social = request.args.get('razao_social', '')
 
         filtros = {}
         if status:
@@ -136,6 +139,18 @@ def register_conciliacao_routes(bp):
 
         if busca:
             filtros['busca'] = busca
+        if valor_min_str:
+            try:
+                filtros['valor_min'] = float(valor_min_str)
+            except ValueError:
+                pass
+        if valor_max_str:
+            try:
+                filtros['valor_max'] = float(valor_max_str)
+            except ValueError:
+                pass
+        if razao_social:
+            filtros['razao_social'] = razao_social
 
         linhas = CarviaConciliacaoService.obter_linhas_extrato(filtros)
         resumo = CarviaConciliacaoService.obter_resumo()
@@ -148,6 +163,9 @@ def register_conciliacao_routes(bp):
             data_inicio=data_inicio_str,
             data_fim=data_fim_str,
             busca=busca,
+            valor_min=valor_min_str,
+            valor_max=valor_max_str,
+            razao_social=razao_social,
         )
 
     # ===================================================================

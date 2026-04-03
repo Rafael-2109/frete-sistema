@@ -8,6 +8,12 @@
 
     const fmtBRL = v => parseFloat(v).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
     const fmtNum = v => parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:2});
+    const formatCNPJ = c => {
+        if (!c || c.length < 14) return c || '';
+        const d = c.replace(/\D/g, '');
+        if (d.length !== 14) return c;
+        return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    };
 
     // ===== Carregar linhas extrato =====
     function carregarLinhas() {
@@ -147,6 +153,88 @@
         });
     }
 
+    // ===== Construir secondary HTML enriquecido =====
+    function buildSecondaryHTML(d) {
+        let html = '';
+
+        if (d.tipo_documento === 'fatura_cliente') {
+            // Linha 1: Nome + CNPJ
+            html += `<div>${d.nome}`;
+            if (d.cnpj_cliente) {
+                html += ` <small class="text-muted">(${formatCNPJ(d.cnpj_cliente)})</small>`;
+            }
+            html += `</div>`;
+
+            // Linha 2: Remetente + Destinatario com enfase no tomador
+            const resp = d.responsavel_frete || '';
+            if (d.remetente_nome || (d.destinatarios && d.destinatarios.length)) {
+                const remEmph = ['100_REMETENTE', '50_50'].includes(resp) ? 'carvia-tomador-emphasis' : '';
+                const destEmph = ['100_DESTINATARIO', '50_50'].includes(resp) ? 'carvia-tomador-emphasis' : '';
+
+                html += `<div class="mt-1" style="font-size:0.75rem">`;
+                if (d.remetente_nome) {
+                    html += `<span class="${remEmph}">Rem: ${d.remetente_nome}</span>`;
+                }
+                if (d.destinatarios && d.destinatarios.length) {
+                    const destLabel = d.destinatarios[0].nome || formatCNPJ(d.destinatarios[0].cnpj);
+                    html += `${d.remetente_nome ? ' · ' : ''}<span class="${destEmph}">Dest: ${destLabel}</span>`;
+                    if (d.destinatarios.length > 1) {
+                        html += ` <small class="text-muted">(+${d.destinatarios.length - 1})</small>`;
+                    }
+                }
+                html += `</div>`;
+            }
+
+            // Linha 3: Badges CTe + NF
+            let badges = '';
+            if (d.cte_numeros && d.cte_numeros.length) {
+                d.cte_numeros.forEach(n => {
+                    badges += `<span class="badge bg-secondary me-1" style="font-size:0.6rem">${n}</span>`;
+                });
+            }
+            if (d.nf_numeros && d.nf_numeros.length) {
+                d.nf_numeros.slice(0, 5).forEach(n => {
+                    badges += `<span class="badge bg-info me-1" style="font-size:0.6rem">NF ${n}</span>`;
+                });
+                if (d.nf_numeros.length > 5) {
+                    badges += `<small class="text-muted">+${d.nf_numeros.length - 5} NFs</small>`;
+                }
+            }
+            if (badges) html += `<div class="mt-1">${badges}</div>`;
+
+            // Linha 4: Condicoes comerciais
+            if (d.condicao_pagamento || d.responsavel_frete_label) {
+                html += `<div><small class="text-info">${d.condicao_pagamento || ''}${d.condicao_pagamento && d.responsavel_frete_label ? ' | ' : ''}${d.responsavel_frete_label || ''}</small></div>`;
+            }
+
+            // Linha 5: Data + Vencimento
+            html += `<div class="text-muted" style="font-size:0.7rem">${d.data}${d.vencimento ? ' · Venc: ' + d.vencimento : ''}</div>`;
+
+        } else if (d.tipo_documento === 'fatura_transportadora') {
+            // Nome + CNPJ transportadora
+            html += `<div>${d.nome}`;
+            if (d.cnpj_transportadora) {
+                html += ` <small class="text-muted">(${formatCNPJ(d.cnpj_transportadora)})</small>`;
+            }
+            html += `</div>`;
+            // Badges CTe subcontratos
+            if (d.cte_numeros && d.cte_numeros.length) {
+                let badges = '';
+                d.cte_numeros.forEach(n => {
+                    badges += `<span class="badge bg-secondary me-1" style="font-size:0.6rem">${n}</span>`;
+                });
+                html += `<div class="mt-1">${badges}</div>`;
+            }
+            html += `<div class="text-muted" style="font-size:0.7rem">${d.data}${d.vencimento ? ' · Venc: ' + d.vencimento : ''}</div>`;
+
+        } else {
+            // Despesa, Custo Entrega, Receita — layout simples
+            html += `${d.nome} &middot; ${d.data}${d.vencimento ? ' &middot; Venc: ' + d.vencimento : ''}`;
+        }
+
+        return html;
+    }
+
     // ===== Renderizar docs =====
     function renderizarDocs(docs) {
         const docsPlaceholder = document.getElementById('docsPlaceholder');
@@ -171,7 +259,9 @@
             div.dataset.saldo = d.saldo;
 
             const tipoLabel = d.tipo_documento === 'fatura_cliente' ? 'FAT' :
-                              d.tipo_documento === 'fatura_transportadora' ? 'FTRANSP' : 'DESP';
+                              d.tipo_documento === 'fatura_transportadora' ? 'FTRANSP' :
+                              d.tipo_documento === 'custo_entrega' ? 'CE' :
+                              d.tipo_documento === 'receita' ? 'REC' : 'DESP';
 
             div.innerHTML = `
                 <div class="carvia-conciliacao-row-primary d-flex justify-content-between align-items-center">
@@ -184,9 +274,7 @@
                     <span class="carvia-conciliacao-valor">${fmtNum(d.saldo)}</span>
                 </div>
                 <div class="carvia-conciliacao-row-secondary ps-4">
-                    ${d.nome} &middot; ${d.data}
-                    ${d.vencimento ? ' &middot; Venc: ' + d.vencimento : ''}
-                    ${d.condicao_pagamento || d.responsavel_frete_label ? ' &middot; <small class="text-info">' + (d.condicao_pagamento || '') + (d.condicao_pagamento && d.responsavel_frete_label ? ' | ' : '') + (d.responsavel_frete_label || '') + '</small>' : ''}
+                    ${buildSecondaryHTML(d)}
                 </div>
             `;
             docsLista.appendChild(div);
@@ -333,14 +421,41 @@
         }
     });
 
-    // ===== Filtro busca docs =====
-    document.getElementById('filtroBuscaDocs')?.addEventListener('input', function() {
-        const termo = this.value.toLowerCase();
-        const filtrados = todosDocs.filter(d =>
-            (d.numero || '').toLowerCase().includes(termo) ||
-            (d.nome || '').toLowerCase().includes(termo)
-        );
+    // ===== Filtros docs (unificado) =====
+    function aplicarFiltrosDocs() {
+        const termo = (document.getElementById('filtroBuscaDocs')?.value || '').toLowerCase();
+        const valMin = parseFloat(document.getElementById('filtroValorMinDocs')?.value) || 0;
+        const valMax = parseFloat(document.getElementById('filtroValorMaxDocs')?.value) || Infinity;
+        const dataIni = document.getElementById('filtroDataIniDocs')?.value || '';
+        const dataFim = document.getElementById('filtroDataFimDocs')?.value || '';
+
+        const filtrados = todosDocs.filter(d => {
+            // Faixa de valor (sobre saldo)
+            if (d.saldo < valMin || d.saldo > valMax) return false;
+            // Data range (DD/MM/YYYY -> YYYY-MM-DD)
+            if ((dataIni || dataFim) && d.data) {
+                const parts = d.data.split('/');
+                if (parts.length === 3) {
+                    const dISO = parts[2] + '-' + parts[1] + '-' + parts[0];
+                    if (dataIni && dISO < dataIni) return false;
+                    if (dataFim && dISO > dataFim) return false;
+                }
+            }
+            // Busca texto: numero, nome, cnpj
+            if (termo &&
+                !(d.numero || '').toLowerCase().includes(termo) &&
+                !(d.nome || '').toLowerCase().includes(termo) &&
+                !(d.cnpj_cliente || '').toLowerCase().includes(termo) &&
+                !(d.cnpj_transportadora || '').toLowerCase().includes(termo))
+                return false;
+            return true;
+        });
         renderizarDocs(filtrados);
+    }
+
+    ['filtroBuscaDocs', 'filtroValorMinDocs', 'filtroValorMaxDocs',
+     'filtroDataIniDocs', 'filtroDataFimDocs'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', aplicarFiltrosDocs);
     });
 
     // ===== Init: carregar linhas pendentes via inline data =====

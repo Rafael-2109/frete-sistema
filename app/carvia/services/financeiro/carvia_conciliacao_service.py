@@ -37,6 +37,9 @@ class CarviaConciliacaoService:
             - data_inicio: date
             - data_fim: date
             - busca: str (pesquisa em descricao/memo)
+            - valor_min: float (valor absoluto minimo)
+            - valor_max: float (valor absoluto maximo)
+            - razao_social: str (pesquisa em razao_social)
         """
         from app.carvia.models import CarviaExtratoLinha
 
@@ -61,6 +64,19 @@ class CarviaConciliacaoService:
                         CarviaExtratoLinha.descricao.ilike(termo),
                         CarviaExtratoLinha.memo.ilike(termo),
                     )
+                )
+            if filtros.get('valor_min') is not None:
+                query = query.filter(
+                    db.func.abs(CarviaExtratoLinha.valor) >= filtros['valor_min']
+                )
+            if filtros.get('valor_max') is not None:
+                query = query.filter(
+                    db.func.abs(CarviaExtratoLinha.valor) <= filtros['valor_max']
+                )
+            if filtros.get('razao_social'):
+                termo_rs = f"%{filtros['razao_social']}%"
+                query = query.filter(
+                    CarviaExtratoLinha.razao_social.ilike(termo_rs)
                 )
 
         return query.all()
@@ -111,6 +127,9 @@ class CarviaConciliacaoService:
                 cond = CarviaConciliacaoService._buscar_condicoes_comerciais_fatura(f)
                 if cond:
                     doc.update(cond)
+                # Enriquecer com CTes, NFs, entidades do CTe
+                enrichment = CarviaConciliacaoService._enriquecer_fatura_cliente_para_conciliacao(f)
+                doc.update(enrichment)
                 docs.append(doc)
 
             # Receitas
@@ -146,8 +165,16 @@ class CarviaConciliacaoService:
                 if saldo <= 0:
                     continue
                 nome = ''
+                cnpj_transp = ''
                 if f.transportadora:
                     nome = f.transportadora.razao_social or ''
+                    cnpj_transp = f.transportadora.cnpj or ''
+                # CTe numeros dos subcontratos vinculados
+                from app.carvia.models import CarviaSubcontrato
+                subs = CarviaSubcontrato.query.filter_by(
+                    fatura_transportadora_id=f.id
+                ).all()
+                cte_numeros = [s.cte_numero for s in subs if s.cte_numero]
                 docs.append({
                     'tipo_documento': 'fatura_transportadora',
                     'id': f.id,
@@ -156,6 +183,8 @@ class CarviaConciliacaoService:
                     'total_conciliado': float(f.total_conciliado or 0),
                     'saldo': saldo,
                     'nome': nome,
+                    'cnpj_transportadora': cnpj_transp,
+                    'cte_numeros': cte_numeros,
                     'data': f.data_emissao.strftime('%d/%m/%Y') if f.data_emissao else '',
                     'vencimento': f.vencimento.strftime('%d/%m/%Y') if f.vencimento else '',
                 })
@@ -585,6 +614,79 @@ class CarviaConciliacaoService:
             'pendentes': pendentes,
             'valor_pendente': float(valor_pendente),
         }
+
+    @staticmethod
+    def _enriquecer_fatura_cliente_para_conciliacao(fatura) -> dict:
+        """Enriquece fatura_cliente com CTe/NF numbers, CNPJ, entidades.
+
+        Retorna dict com campos extras para exibicao na conciliacao:
+        - cnpj_cliente, cte_numeros, nf_numeros
+        - remetente_cnpj/nome, destinatarios[], responsavel_frete
+        """
+        from app.carvia.models import (
+            CarviaOperacao, CarviaOperacaoNf, CarviaNf, CarviaFrete,
+        )
+
+        resultado = {
+            'cnpj_cliente': fatura.cnpj_cliente or '',
+            'cte_numeros': [],
+            'nf_numeros': [],
+            'remetente_cnpj': '',
+            'remetente_nome': '',
+            'destinatarios': [],
+            'responsavel_frete': None,
+        }
+
+        # Operacoes vinculadas a esta fatura
+        ops = CarviaOperacao.query.filter_by(
+            fatura_cliente_id=fatura.id
+        ).all()
+        if not ops:
+            return resultado
+
+        op_ids = [op.id for op in ops]
+
+        # CTe numeros
+        resultado['cte_numeros'] = [
+            op.cte_numero for op in ops if op.cte_numero
+        ]
+
+        # NF numeros via junction
+        nf_rows = db.session.query(CarviaNf.numero_nf).join(
+            CarviaOperacaoNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+        ).filter(
+            CarviaOperacaoNf.operacao_id.in_(op_ids)
+        ).distinct().all()
+        resultado['nf_numeros'] = [r[0] for r in nf_rows if r[0]]
+
+        # Remetente (= cnpj_cliente da operacao, consistente por grupo CNPJ)
+        resultado['remetente_cnpj'] = ops[0].cnpj_cliente or ''
+        resultado['remetente_nome'] = ops[0].nome_cliente or ''
+
+        # Destinatarios (de NFs vinculadas)
+        dest_rows = db.session.query(
+            CarviaNf.cnpj_destinatario, CarviaNf.nome_destinatario
+        ).join(
+            CarviaOperacaoNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+        ).filter(
+            CarviaOperacaoNf.operacao_id.in_(op_ids),
+            CarviaNf.cnpj_destinatario.isnot(None),
+        ).distinct().all()
+
+        resultado['destinatarios'] = [
+            {'cnpj': r[0], 'nome': r[1] or ''}
+            for r in dest_rows if r[0]
+        ]
+
+        # Responsavel frete (para enfase tomador)
+        frete = CarviaFrete.query.filter(
+            CarviaFrete.operacao_id.in_(op_ids),
+            CarviaFrete.responsavel_frete.isnot(None),
+        ).first()
+        if frete:
+            resultado['responsavel_frete'] = frete.responsavel_frete
+
+        return resultado
 
     @staticmethod
     def _buscar_condicoes_comerciais_fatura(fatura) -> dict:

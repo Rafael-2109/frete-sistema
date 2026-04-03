@@ -49,9 +49,16 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-6">
-                            <small class="text-muted d-block">Cliente</small>
+                            <small class="text-muted d-block">Cliente (Pagador)</small>
                             <strong>{{ fatura.nome_cliente or '-' }}</strong>
                             <div class="small text-muted">{{ fatura.cnpj_cliente }}</div>
+                            {% if fatura.status not in ('PAGA', 'CANCELADA') and entidades_pagador|length > 1 %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 mt-1"
+                                    data-bs-toggle="modal" data-bs-target="#modalAlterarPagador"
+                                    title="Alterar pagador">
+                                <i class="fas fa-exchange-alt"></i> Alterar Pagador
+                            </button>
+                            {% endif %}
                         </div>
                         <div class="col-6">
                             <small class="text-muted d-block">Numero</small>
@@ -503,6 +510,45 @@
         'Movimentacao financeira e conciliacoes serao removidas',
     ]
 ) }}
+
+{# Modal Alterar Pagador #}
+{% if fatura.status not in ('PAGA', 'CANCELADA') and entidades_pagador|length > 1 %}
+<div class="modal fade" id="modalAlterarPagador" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> Alterar Pagador</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">
+                    Selecione o novo pagador para esta fatura. O CNPJ e nome na fatura serao atualizados.
+                </p>
+                {% for ent in entidades_pagador %}
+                <div class="form-check mb-3 p-3 border rounded {{ 'border-success' if ent.atual else '' }}">
+                    <input class="form-check-input" type="radio" name="novo_pagador"
+                           id="pagadorDetalhe_{{ loop.index }}"
+                           value="{{ ent.cnpj }}" data-nome="{{ ent.nome }}"
+                           {{ 'checked' if ent.atual }}>
+                    <label class="form-check-label" for="pagadorDetalhe_{{ loop.index }}">
+                        <strong>{{ ent.papel }}</strong>
+                        {% if ent.atual %}<span class="badge bg-secondary ms-1">Atual</span>{% endif %}
+                        <div>{{ ent.nome or '-' }}</div>
+                        <small class="text-muted">{{ ent.cnpj }}</small>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnConfirmarPagador">
+                    <i class="fas fa-check"></i> Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -592,6 +638,39 @@ function buscarOpsDisponiveis(busca) {
             });
         });
 }
+
+// ─── Alterar Pagador ───
+document.getElementById('btnConfirmarPagador')?.addEventListener('click', function() {
+    var selected = document.querySelector('input[name="novo_pagador"]:checked');
+    if (!selected) return;
+
+    var cnpj = selected.value;
+    var nome = selected.dataset.nome || '';
+
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    fetch('/carvia/faturas-cliente/' + faturaId + '/alterar-pagador', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({cnpj: cnpj, nome: nome}),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.erro || 'desconhecido'));
+            document.getElementById('btnConfirmarPagador').disabled = false;
+            document.getElementById('btnConfirmarPagador').innerHTML = '<i class="fas fa-check"></i> Confirmar';
+        }
+    })
+    .catch(function(err) {
+        alert('Erro: ' + err.message);
+        document.getElementById('btnConfirmarPagador').disabled = false;
+        document.getElementById('btnConfirmarPagador').innerHTML = '<i class="fas fa-check"></i> Confirmar';
+    });
+});
 
 function vincularOp(opId, cteNumero) {
     if (!confirm('Vincular ' + cteNumero + ' a esta fatura? Status mudara para FATURADO.')) return;

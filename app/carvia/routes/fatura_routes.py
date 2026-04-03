@@ -115,6 +115,8 @@ def register_fatura_routes(bp):
             observacoes = request.form.get('observacoes', '')
             operacao_ids = request.form.getlist('operacao_ids', type=int)
             cte_comp_ids = request.form.getlist('cte_comp_ids', type=int)
+            pagador_cnpj = request.form.get('pagador_cnpj', '').strip()
+            pagador_nome = request.form.get('pagador_nome', '').strip()
 
             if not cnpj_cliente or not data_emissao_str:
                 flash('CNPJ e data de emissao sao obrigatorios.', 'warning')
@@ -168,9 +170,16 @@ def register_fatura_routes(bp):
                 # Gerar numero automaticamente
                 numero_fatura = CarviaFaturaCliente.gerar_numero_fatura()
 
+                # Pagador: usar selecionado ou default (remetente)
+                fatura_cnpj = pagador_cnpj if pagador_cnpj else cnpj_cliente
+                fatura_nome = pagador_nome if pagador_cnpj else (
+                    operacoes[0].nome_cliente if operacoes else
+                    ctes_comp[0].nome_cliente if ctes_comp else ''
+                )
+
                 fatura = CarviaFaturaCliente(
-                    cnpj_cliente=cnpj_cliente,
-                    nome_cliente=operacoes[0].nome_cliente,
+                    cnpj_cliente=fatura_cnpj,
+                    nome_cliente=fatura_nome,
                     numero_fatura=numero_fatura,
                     data_emissao=data_emissao,
                     valor_total=valor_total,
@@ -296,12 +305,49 @@ def register_fatura_routes(bp):
                 CarviaCteComplementar.fatura_cliente_id.is_(None),
             ).order_by(CarviaCteComplementar.cte_data_emissao.desc().nullslast()).all()
 
+        # Extrair entidades pagador para selecao (step 2)
+        entidades_pagador = []
+        if cnpj_selecionado and operacoes_disponiveis:
+            from app.carvia.models import CarviaOperacaoNf, CarviaNf
+
+            # Remetente (= cnpj_cliente das operacoes, consistente por grupo)
+            rem_nome = operacoes_disponiveis[0].nome_cliente or ''
+            entidades_pagador.append({
+                'cnpj': cnpj_selecionado,
+                'nome': rem_nome,
+                'papel': 'Remetente',
+            })
+
+            # Destinatarios (de NFs vinculadas, distintos, excluindo remetente)
+            op_ids_disp = [op.id for op in operacoes_disponiveis]
+            dest_rows = db.session.query(
+                CarviaNf.cnpj_destinatario,
+                CarviaNf.nome_destinatario
+            ).join(
+                CarviaOperacaoNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+            ).filter(
+                CarviaOperacaoNf.operacao_id.in_(op_ids_disp),
+                CarviaNf.cnpj_destinatario.isnot(None),
+                CarviaNf.cnpj_destinatario != cnpj_selecionado,
+            ).distinct().all()
+
+            seen_cnpjs = {cnpj_selecionado}
+            for cnpj_dest, nome_dest in dest_rows:
+                if cnpj_dest and cnpj_dest not in seen_cnpjs:
+                    entidades_pagador.append({
+                        'cnpj': cnpj_dest,
+                        'nome': nome_dest or '',
+                        'papel': 'Destinatario',
+                    })
+                    seen_cnpjs.add(cnpj_dest)
+
         return render_template(
             'carvia/faturas_cliente/nova.html',
             clientes=clientes,
             cnpj_selecionado=cnpj_selecionado,
             operacoes_disponiveis=operacoes_disponiveis,
             ctes_comp_disponiveis=ctes_comp_disponiveis,
+            entidades_pagador=entidades_pagador,
         )
 
     @bp.route('/faturas-cliente/<int:fatura_id>') # type: ignore
@@ -375,6 +421,41 @@ def register_fatura_routes(bp):
             if frete_com_cond:
                 condicoes_comerciais = frete_com_cond
 
+        # Entidades pagador para modal alterar-pagador
+        entidades_pagador = []
+        if operacoes:
+            # Remetente
+            rem_cnpj = operacoes[0].cnpj_cliente or ''
+            rem_nome = operacoes[0].nome_cliente or ''
+            entidades_pagador.append({
+                'cnpj': rem_cnpj,
+                'nome': rem_nome,
+                'papel': 'Remetente',
+                'atual': (rem_cnpj == fatura.cnpj_cliente),
+            })
+
+            # Destinatarios (das NFs ja carregadas)
+            seen_cnpjs = {rem_cnpj} if rem_cnpj else set()
+            for nf in nfs:
+                cnpj_dest = nf.cnpj_destinatario
+                if cnpj_dest and cnpj_dest not in seen_cnpjs:
+                    entidades_pagador.append({
+                        'cnpj': cnpj_dest,
+                        'nome': nf.nome_destinatario or '',
+                        'papel': 'Destinatario',
+                        'atual': (cnpj_dest == fatura.cnpj_cliente),
+                    })
+                    seen_cnpjs.add(cnpj_dest)
+
+            # Se pagador atual nao e nenhum dos acima (caso import PDF)
+            if not any(e['atual'] for e in entidades_pagador):
+                entidades_pagador.insert(0, {
+                    'cnpj': fatura.cnpj_cliente or '',
+                    'nome': fatura.nome_cliente or '',
+                    'papel': 'Pagador Atual',
+                    'atual': True,
+                })
+
         return render_template(
             'carvia/faturas_cliente/detalhe.html',
             fatura=fatura,
@@ -385,6 +466,7 @@ def register_fatura_routes(bp):
             faturas_transportadora=faturas_transportadora,
             ctes_complementares=ctes_complementares,
             condicoes_comerciais=condicoes_comerciais,
+            entidades_pagador=entidades_pagador,
         )
 
     @bp.route('/faturas-cliente/<int:fatura_id>/editar-valor', methods=['POST']) # type: ignore
@@ -472,6 +554,63 @@ def register_fatura_routes(bp):
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/alterar-pagador', methods=['POST']) # type: ignore
+    @login_required
+    def alterar_pagador_fatura_cliente(fatura_id): # type: ignore
+        """Altera o pagador (cnpj_cliente/nome_cliente) de uma fatura cliente."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            return jsonify({'erro': 'Fatura nao encontrada'}), 404
+
+        if fatura.status in ('PAGA', 'CANCELADA'):
+            return jsonify({
+                'erro': f'Nao e possivel alterar pagador de fatura {fatura.status}'
+            }), 400
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados nao fornecidos'}), 400
+
+        novo_cnpj = data.get('cnpj', '').strip()
+        novo_nome = data.get('nome', '').strip()
+
+        if not novo_cnpj:
+            return jsonify({'erro': 'CNPJ do pagador e obrigatorio'}), 400
+
+        try:
+            from sqlalchemy.exc import IntegrityError
+
+            antigo_cnpj = fatura.cnpj_cliente
+            fatura.cnpj_cliente = novo_cnpj
+            fatura.nome_cliente = novo_nome or fatura.nome_cliente
+
+            db.session.commit()
+
+            logger.info(
+                "Pagador fatura %s alterado: %s -> %s por %s",
+                fatura.numero_fatura, antigo_cnpj, novo_cnpj,
+                current_user.email
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'cnpj_cliente': fatura.cnpj_cliente,
+                'nome_cliente': fatura.nome_cliente,
+            })
+
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({
+                'erro': 'Ja existe fatura com este numero para o novo pagador'
+            }), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao alterar pagador fatura %s: %s", fatura_id, e)
+            return jsonify({'erro': str(e)}), 500
 
     @bp.route('/faturas-cliente/<int:fatura_id>/status', methods=['POST']) # type: ignore
     @login_required

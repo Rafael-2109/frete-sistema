@@ -115,10 +115,22 @@
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header py-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong class="small">Documentos</strong>
-                        <input type="text" id="filtroBuscaDocs" class="form-control form-control-sm"
-                               placeholder="Buscar..." style="width:150px;font-size:0.75rem">
+                    <div class="d-flex flex-column gap-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong class="small">Documentos</strong>
+                            <input type="text" id="filtroBuscaDocs" class="form-control form-control-sm"
+                                   placeholder="Nome, CNPJ..." style="width:150px;font-size:0.75rem">
+                        </div>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <input type="number" id="filtroValorMinDocs" class="form-control form-control-sm"
+                                   placeholder="Valor min" step="0.01" style="width:85px;font-size:0.7rem">
+                            <input type="number" id="filtroValorMaxDocs" class="form-control form-control-sm"
+                                   placeholder="Valor max" step="0.01" style="width:85px;font-size:0.7rem">
+                            <input type="date" id="filtroDataIniDocs" class="form-control form-control-sm"
+                                   style="width:120px;font-size:0.7rem" title="Data inicio">
+                            <input type="date" id="filtroDataFimDocs" class="form-control form-control-sm"
+                                   style="width:120px;font-size:0.7rem" title="Data fim">
+                        </div>
                     </div>
                 </div>
                 <div class="carvia-conciliacao-panel" id="panelDocs">
