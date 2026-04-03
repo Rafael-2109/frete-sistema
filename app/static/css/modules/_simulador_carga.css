@@ -1,0 +1,315 @@
+/* Simulador 3D de Carga de Motos */
+
+.simulador-container {
+  display: flex;
+  gap: 0;
+  min-height: 600px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* --- Sidebar --- */
+
+.simulador-sidebar {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  padding: 16px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg-light);
+}
+
+.simulador-sidebar h6 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+
+.simulador-section {
+  margin-bottom: 16px;
+}
+
+/* --- Canvas --- */
+
+.simulador-canvas-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 600px;
+  height: 600px;
+  background: var(--bg-dark, #0d1117);
+}
+
+[data-bs-theme="light"] .simulador-canvas-wrap {
+  background: #f0f2f5;
+}
+
+.simulador-canvas-wrap canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* --- Moto Rows --- */
+
+.simulador-moto-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border-left: 3px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+  transition: border-color 0.2s;
+}
+
+.simulador-moto-select-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.simulador-moto-dims {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.simulador-moto-qty {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.simulador-qty-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.simulador-qty-input {
+  width: 48px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+}
+
+.simulador-remove-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+/* --- Stats --- */
+
+.simulador-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.simulador-stat-card {
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+}
+
+.simulador-stat-card .stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.simulador-stat-card .stat-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.simulador-stat-card.stat-success .stat-value { color: var(--semantic-success); }
+.simulador-stat-card.stat-danger .stat-value { color: var(--semantic-danger); }
+.simulador-stat-card.stat-info .stat-value { color: var(--semantic-info, #4a90d9); }
+.simulador-stat-card.stat-warning .stat-value { color: var(--semantic-warning); }
+
+.simulador-stat-alert {
+  animation: pulse-danger 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-danger {
+  from { opacity: 1; }
+  to { opacity: 0.7; }
+}
+
+/* --- View Controls --- */
+
+.simulador-views {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+[data-bs-theme="light"] .simulador-views {
+  background: rgba(0, 0, 0, 0.04);
+  border-top: 1px solid var(--border);
+}
+
+.simulador-view-btn {
+  padding: 4px 12px;
+  font-size: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+[data-bs-theme="light"] .simulador-view-btn {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.simulador-view-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.simulador-view-btn.active {
+  border-color: var(--semantic-info, #4a90d9);
+  background: color-mix(in srgb, var(--semantic-info, #4a90d9) 15%, transparent);
+  color: var(--semantic-info, #4a90d9);
+  font-weight: 600;
+}
+
+/* --- Legend --- */
+
+.simulador-legend {
+  position: absolute;
+  bottom: 50px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  z-index: 10;
+}
+
+[data-bs-theme="light"] .simulador-legend {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.simulador-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.simulador-legend-item:last-child {
+  margin-bottom: 0;
+}
+
+.simulador-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* --- Hints --- */
+
+.simulador-hints {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 8px 12px;
+}
+
+[data-bs-theme="light"] .simulador-hints {
+  color: var(--text-muted);
+}
+
+/* --- Dims Override --- */
+
+.simulador-dims-override {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.simulador-dims-override label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+  display: block;
+}
+
+.simulador-dims-override input {
+  font-size: 0.8rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* --- Add Button --- */
+
+.simulador-add-btn {
+  width: 100%;
+  padding: 6px;
+  font-size: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.simulador-add-btn:hover {
+  border-color: var(--semantic-info, #4a90d9);
+  color: var(--semantic-info, #4a90d9);
+}
+
+/* --- Peso info --- */
+
+.simulador-peso-info {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 768px) {
+  .simulador-container {
+    flex-direction: column;
+  }
+  .simulador-sidebar {
+    width: 100%;
+    min-width: unset;
+    max-width: unset;
+    max-height: 300px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .simulador-canvas-wrap {
+    min-height: 400px;
+  }
+}

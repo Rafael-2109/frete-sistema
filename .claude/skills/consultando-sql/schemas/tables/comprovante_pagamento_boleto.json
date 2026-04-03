@@ -186,16 +186,16 @@
   ],
   "indices": [
     {
-      "name": "idx_comp_data_vencimento",
+      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
       "columns": [
-        "data_vencimento"
+        "ofx_checknum"
       ],
       "unique": false
     },
     {
-      "name": "idx_comp_pagador_cnpj",
+      "name": "idx_comp_data_vencimento",
       "columns": [
-        "pagador_cnpj_cpf"
+        "data_vencimento"
       ],
       "unique": false
     },
@@ -207,9 +207,9 @@
       "unique": false
     },
     {
-      "name": "idx_comp_beneficiario_cnpj",
+      "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
-        "beneficiario_cnpj_cpf"
+        "tipo"
       ],
       "unique": false
     },
@@ -217,6 +217,13 @@
       "name": "idx_comp_ofx_checknum",
       "columns": [
         "ofx_checknum"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_beneficiario_cnpj",
+      "columns": [
+        "beneficiario_cnpj_cpf"
       ],
       "unique": false
     },
@@ -249,16 +256,9 @@
       "unique": true
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
+      "name": "idx_comp_pagador_cnpj",
       "columns": [
-        "ofx_checknum"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_comprovante_pagamento_boleto_tipo",
-      "columns": [
-        "tipo"
+        "pagador_cnpj_cpf"
       ],
       "unique": false
     },

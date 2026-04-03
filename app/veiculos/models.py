@@ -13,5 +13,14 @@ class Veiculo(db.Model):
     tipo_veiculo = db.Column(db.String(20), nullable=True)  # COMERCIAL ou PASSEIO
     multiplicador_pedagio = db.Column(db.Float, default=1.0)  # Multiplicador para cálculo de pedágio
 
+    # Dimensoes internas do bau (em centimetros) — para simulador de carga 3D
+    comprimento_bau = db.Column(db.Float, nullable=True)
+    largura_bau = db.Column(db.Float, nullable=True)
+    altura_bau = db.Column(db.Float, nullable=True)
+
+    def tem_dimensoes_bau(self):
+        """Retorna True se o veiculo tem todas as dimensoes do bau cadastradas"""
+        return bool(self.comprimento_bau and self.largura_bau and self.altura_bau)
+
     def __repr__(self):
         return f'<Veiculo {self.nome} ({self.peso_maximo} kg, {self.qtd_eixos} eixos)>'

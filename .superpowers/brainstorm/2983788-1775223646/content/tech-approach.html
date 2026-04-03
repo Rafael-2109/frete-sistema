@@ -1,0 +1,71 @@
+<h2>Tecnologia para Visualizacao 3D</h2>
+<p class="subtitle">Qual abordagem usar para renderizar as motos dentro do bau do veiculo?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Three.js (Recomendado)</h3>
+      <p><strong>Biblioteca 3D completa</strong> — a mais popular para WebGL</p>
+      <ul style="margin:8px 0;padding-left:20px;font-size:14px;opacity:0.85">
+        <li>Camera orbital (rotacionar, zoom, pan) nativo</li>
+        <li>Raycasting para selecao/drag de objetos</li>
+        <li>Iluminacao realista (sombras, reflexos)</li>
+        <li>Geometria de caixa perfeita para bau + motos</li>
+        <li>~170KB gzipped (modulo ES)</li>
+        <li>Ecossistema enorme, documentacao excelente</li>
+      </ul>
+      <div style="background:rgba(0,200,100,0.1);padding:8px;border-radius:6px;font-size:13px">
+        Melhor para: interacao complexa (drag, rotate, pick) + visual profissional
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>CSS 3D + Canvas 2D Hibrido</h3>
+      <p><strong>Zero dependencias</strong> — CSS perspective + Canvas para top-view</p>
+      <ul style="margin:8px 0;padding-left:20px;font-size:14px;opacity:0.85">
+        <li>CSS transforms para vista isometrica fixa</li>
+        <li>Canvas 2D para vista superior (planta baixa)</li>
+        <li>Sem camera orbital real (angulos pre-definidos)</li>
+        <li>Drag limitado a 2D projetado</li>
+        <li>0KB de dependencia extra</li>
+        <li>Mais simples de manter</li>
+      </ul>
+      <div style="background:rgba(200,150,0,0.1);padding:8px;border-radius:6px;font-size:13px">
+        Melhor para: MVP rapido, sem dependencia, visual funcional mas nao imersivo
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Babylon.js</h3>
+      <p><strong>Engine 3D completa</strong> — alternativa enterprise ao Three.js</p>
+      <ul style="margin:8px 0;padding-left:20px;font-size:14px;opacity:0.85">
+        <li>Tudo que Three.js faz + physics engine nativo</li>
+        <li>Inspector/debugger built-in</li>
+        <li>GUI system integrado</li>
+        <li>~400KB gzipped (mais pesado)</li>
+        <li>Documentacao Microsoft-backed</li>
+        <li>Overkill para geometria de caixas</li>
+      </ul>
+      <div style="background:rgba(200,100,0,0.1);padding:8px;border-radius:6px;font-size:13px">
+        Melhor para: se precisasse de fisica real ou cenas muito complexas (nao e o caso)
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;padding:16px;background:rgba(100,150,255,0.08);border-radius:8px;border-left:3px solid rgba(100,150,255,0.5)">
+  <strong style="font-size:15px">Recomendacao: Three.js (A)</strong>
+  <p style="margin:6px 0 0;font-size:14px;opacity:0.85">
+    Para o nivel de interacao desejado (auto-pack + drag manual + camera orbital + empilhamento),
+    Three.js e a escolha natural. CSS 3D nao suporta picking/drag real em 3D.
+    Babylon.js e overkill — nao precisamos de physics engine para caixas estaticas.
+    Three.js oferece o melhor equilibrio: poder suficiente, leve, e com CDN disponivel.
+  </p>
+</div>

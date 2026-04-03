@@ -1,0 +1,206 @@
+<h2>Design Final — Simulador 3D de Carga de Motos</h2>
+<p class="subtitle">Visao geral da feature: 2 telas, 1 algoritmo, 1 engine 3D</p>
+
+<div class="section">
+  <h3>1. Tela CarVia — Simulador Livre</h3>
+  <div class="mockup">
+    <div class="mockup-header">
+      /carvia/simulador-carga &nbsp;|&nbsp; Quick Nav: [Dashboard] [NFs] [CTe CarVia] ... [<strong style="color:#4a90d9">Simulador</strong>] [Config]
+    </div>
+    <div class="mockup-body" style="display:flex;gap:0;min-height:350px">
+      <!-- Sidebar -->
+      <div style="width:300px;min-width:300px;background:rgba(100,100,100,0.06);padding:14px;border-right:1px solid rgba(128,128,128,0.15);font-size:12px;overflow-y:auto">
+        <div style="font-weight:bold;margin-bottom:10px;font-size:14px;color:rgba(100,150,255,0.9)">
+          <span style="margin-right:6px">&#x1f69a;</span> Veiculo
+        </div>
+        <div style="background:rgba(100,100,100,0.08);padding:10px;border-radius:6px;margin-bottom:14px">
+          <select style="width:100%;padding:5px;font-size:12px;background:rgba(0,0,0,0.04);border:1px solid rgba(128,128,128,0.25);border-radius:4px;margin-bottom:8px">
+            <option>CARRETA — 27.000kg (1400×260×280cm)</option>
+          </select>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+            <div style="text-align:center;padding:4px;background:rgba(100,100,100,0.06);border-radius:3px">
+              <div style="opacity:0.5;font-size:9px">Comp.</div>
+              <div style="font-weight:bold">1400cm</div>
+            </div>
+            <div style="text-align:center;padding:4px;background:rgba(100,100,100,0.06);border-radius:3px">
+              <div style="opacity:0.5;font-size:9px">Larg.</div>
+              <div style="font-weight:bold">260cm</div>
+            </div>
+            <div style="text-align:center;padding:4px;background:rgba(100,100,100,0.06);border-radius:3px">
+              <div style="opacity:0.5;font-size:9px">Alt.</div>
+              <div style="font-weight:bold">280cm</div>
+            </div>
+          </div>
+          <div style="margin-top:6px;font-size:10px;opacity:0.5;text-align:center">
+            Dimensoes editaveis para veiculos fora do padrao
+          </div>
+        </div>
+
+        <div style="font-weight:bold;margin-bottom:10px;font-size:14px;color:rgba(0,180,100,0.9)">
+          <span style="margin-right:6px">&#x1f3cd;</span> Motos
+        </div>
+
+        <div style="background:rgba(74,144,217,0.08);padding:10px;border-radius:6px;margin-bottom:6px;border-left:3px solid rgba(74,144,217,0.5)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:bold;font-size:12px">Pop 110i</div>
+              <div style="font-size:10px;opacity:0.5">185×68×110cm | 97kg</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <button style="width:24px;height:24px;font-size:12px;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04);cursor:pointer">-</button>
+              <input style="width:40px;height:24px;text-align:center;font-size:13px;font-weight:bold;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04)" value="12">
+              <button style="width:24px;height:24px;font-size:12px;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04);cursor:pointer">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:rgba(232,133,76,0.08);padding:10px;border-radius:6px;margin-bottom:6px;border-left:3px solid rgba(232,133,76,0.5)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:bold;font-size:12px">CG 160</div>
+              <div style="font-size:10px;opacity:0.5">200×74×108cm | 128kg</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <button style="width:24px;height:24px;font-size:12px;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04)">-</button>
+              <input style="width:40px;height:24px;text-align:center;font-size:13px;font-weight:bold;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04)" value="8">
+              <button style="width:24px;height:24px;font-size:12px;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04)">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:rgba(103,194,106,0.08);padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid rgba(103,194,106,0.5)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:bold;font-size:12px">Biz 125</div>
+              <div style="font-size:10px;opacity:0.5">192×72×108cm | 105kg</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:3px">
+              <button style="width:24px;height:24px;font-size:12px;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04)">-</button>
+              <input style="width:40px;height:24px;text-align:center;font-size:13px;font-weight:bold;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04)" value="5">
+              <button style="width:24px;height:24px;font-size:12px;border:1px solid rgba(128,128,128,0.25);border-radius:4px;background:rgba(0,0,0,0.04)">+</button>
+            </div>
+          </div>
+        </div>
+
+        <button style="width:100%;padding:6px;font-size:11px;border:1px dashed rgba(128,128,128,0.35);border-radius:4px;background:transparent;cursor:pointer;opacity:0.7;margin-bottom:14px">+ Adicionar Modelo de Moto</button>
+
+        <hr style="margin:0 0 12px;opacity:0.15">
+
+        <div style="font-weight:bold;margin-bottom:10px;font-size:14px">Resultado</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:rgba(0,180,100,0.1);padding:10px;border-radius:6px;text-align:center">
+            <div style="font-size:22px;font-weight:bold;color:rgba(0,180,100,1)">25</div>
+            <div style="opacity:0.6;font-size:10px">motos posicionadas</div>
+          </div>
+          <div style="background:rgba(220,60,60,0.08);padding:10px;border-radius:6px;text-align:center">
+            <div style="font-size:22px;font-weight:bold;color:rgba(220,60,60,1)">0</div>
+            <div style="opacity:0.6;font-size:10px">nao couberam</div>
+          </div>
+          <div style="background:rgba(100,150,255,0.1);padding:10px;border-radius:6px;text-align:center">
+            <div style="font-size:22px;font-weight:bold;color:rgba(100,150,255,1)">82%</div>
+            <div style="opacity:0.6;font-size:10px">volume ocupado</div>
+          </div>
+          <div style="background:rgba(255,180,0,0.1);padding:10px;border-radius:6px;text-align:center">
+            <div style="font-size:22px;font-weight:bold;color:rgba(255,180,0,1)">2.760kg</div>
+            <div style="opacity:0.6;font-size:10px">peso total</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;font-size:10px;opacity:0.5;text-align:center">
+          Peso max. veiculo: 27.000kg | Folga: 24.240kg
+        </div>
+      </div>
+
+      <!-- Canvas 3D -->
+      <div style="flex:1;display:flex;flex-direction:column;background:rgba(15,18,25,0.7);position:relative">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center">
+          <div style="text-align:center">
+            <div style="font-size:56px;opacity:0.08;font-weight:bold;letter-spacing:6px">THREE.JS</div>
+            <div style="font-size:12px;opacity:0.2;margin-top:8px">Renderizacao 3D aqui</div>
+          </div>
+
+          <!-- Legenda flutuante -->
+          <div style="position:absolute;bottom:50px;left:12px;background:rgba(0,0,0,0.5);padding:8px 12px;border-radius:6px;font-size:11px;color:rgba(255,255,255,0.8)">
+            <div style="margin-bottom:4px;font-weight:bold;font-size:10px;opacity:0.6">LEGENDA</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+              <div style="width:12px;height:12px;background:#4a90d9;border-radius:2px"></div>
+              Pop 110i (12x)
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+              <div style="width:12px;height:12px;background:#e8854c;border-radius:2px"></div>
+              CG 160 (8x)
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:12px;height:12px;background:#67c26a;border-radius:2px"></div>
+              Biz 125 (5x)
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls bar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(0,0,0,0.3);border-top:1px solid rgba(255,255,255,0.05)">
+          <div style="font-size:10px;opacity:0.4;color:white">
+            Arrastar: rotacionar | Scroll: zoom | Shift+drag: pan
+          </div>
+          <div style="display:flex;gap:4px">
+            <button style="padding:4px 10px;font-size:10px;border:1px solid rgba(255,255,255,0.15);border-radius:3px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);cursor:pointer">Frontal</button>
+            <button style="padding:4px 10px;font-size:10px;border:1px solid rgba(255,255,255,0.15);border-radius:3px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);cursor:pointer">Lateral</button>
+            <button style="padding:4px 10px;font-size:10px;border:1px solid rgba(255,255,255,0.15);border-radius:3px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);cursor:pointer">Topo</button>
+            <button style="padding:4px 10px;font-size:10px;border:1px solid rgba(100,150,255,0.4);border-radius:3px;background:rgba(100,150,255,0.12);color:rgba(100,150,255,0.9);cursor:pointer;font-weight:bold">3D</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>2. Tela Embarque — Carga Real</h3>
+  <div class="mockup">
+    <div class="mockup-header">
+      /carvia/embarques/42/simulador-carga &nbsp;|&nbsp; Embarque #42 — CARRETA — Atacadao SP
+    </div>
+    <div class="mockup-body" style="min-height:100px;padding:16px;font-size:13px">
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div style="background:rgba(100,150,255,0.08);padding:8px 14px;border-radius:6px">
+          <div style="font-size:10px;opacity:0.5">Veiculo</div>
+          <div style="font-weight:bold">CARRETA (1400×260×280cm)</div>
+        </div>
+        <div style="background:rgba(0,180,100,0.08);padding:8px 14px;border-radius:6px">
+          <div style="font-size:10px;opacity:0.5">Motos (auto-detectadas das NFs)</div>
+          <div style="font-weight:bold">18x Pop 110i + 6x CG 160 + 2x Biz 125</div>
+        </div>
+        <div style="background:rgba(255,180,0,0.08);padding:8px 14px;border-radius:6px">
+          <div style="font-size:10px;opacity:0.5">Itens sem modelo</div>
+          <div style="font-weight:bold">1 item (manual)</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:11px;opacity:0.5;font-style:italic">
+        Mesmo canvas 3D do simulador livre, mas com dados carregados automaticamente do embarque.
+        Motos identificadas via regex_pattern do CarviaModeloMoto sobre descricoes das NFs.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;padding:16px;background:rgba(100,150,255,0.06);border-radius:8px;border-left:3px solid rgba(100,150,255,0.4)">
+  <strong style="font-size:15px">Arquitetura</strong>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;font-size:12px">
+    <div>
+      <div style="font-weight:bold;margin-bottom:4px;opacity:0.7">Backend (Flask)</div>
+      <ul style="padding-left:16px;margin:0;line-height:1.8">
+        <li>API catalogo: veiculos + modelos moto</li>
+        <li>API embarque: motos reais + veiculo</li>
+        <li>Migration: 3 campos em Veiculo</li>
+      </ul>
+    </div>
+    <div>
+      <div style="font-weight:bold;margin-bottom:4px;opacity:0.7">Frontend (JS)</div>
+      <ul style="padding-left:16px;margin:0;line-height:1.8">
+        <li>bin-packer.js — algoritmo 3D Guillotine</li>
+        <li>carga-renderer.js — Three.js scene</li>
+        <li>simulador-ui.js — controlador da tela</li>
+      </ul>
+    </div>
+  </div>
+</div>

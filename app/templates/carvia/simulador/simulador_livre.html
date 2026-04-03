@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  {% set carvia_active = 'simulador' %}
+  {% include 'carvia/_quick_nav.html' %}
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">
+      <i class="fas fa-cube me-2"></i>
+      Simulador 3D de Carga de Motos
+    </h4>
+  </div>
+
+  <div class="simulador-container">
+    <!-- Sidebar -->
+    <div class="simulador-sidebar">
+      <!-- Veiculo -->
+      <div class="simulador-section">
+        <h6><i class="fas fa-truck me-1"></i> Veículo</h6>
+        <select id="simulador-veiculo" class="form-select form-select-sm mb-2">
+          <option value="">Carregando...</option>
+        </select>
+        <div id="simulador-veiculos-sem-dims" class="text-muted" style="font-size:0.7rem;display:none"></div>
+
+        <div id="simulador-dims-display" style="display:none">
+          <small class="text-muted d-block mb-1">Dimensões editáveis (cm):</small>
+          <div class="simulador-dims-override">
+            <div>
+              <label for="simulador-override-comp">Comp.</label>
+              <input type="number" class="form-control form-control-sm" id="simulador-override-comp" min="1" step="1">
+            </div>
+            <div>
+              <label for="simulador-override-larg">Larg.</label>
+              <input type="number" class="form-control form-control-sm" id="simulador-override-larg" min="1" step="1">
+            </div>
+            <div>
+              <label for="simulador-override-alt">Alt.</label>
+              <input type="number" class="form-control form-control-sm" id="simulador-override-alt" min="1" step="1">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr class="my-2 opacity-25">
+
+      <!-- Motos -->
+      <div class="simulador-section">
+        <h6><i class="fas fa-motorcycle me-1"></i> Motos</h6>
+        <div id="simulador-motos-container">
+          <!-- Linhas de moto adicionadas dinamicamente -->
+        </div>
+        <button type="button" id="simulador-add-moto" class="simulador-add-btn mt-2">
+          + Adicionar Modelo de Moto
+        </button>
+      </div>
+
+      <hr class="my-2 opacity-25">
+
+      <!-- Resultado -->
+      <div class="simulador-section">
+        <h6>Resultado</h6>
+        <div class="simulador-stats">
+          <div class="simulador-stat-card stat-success">
+            <div class="stat-value" id="simulador-stat-posicionadas">—</div>
+            <div class="stat-label">motos posicionadas</div>
+          </div>
+          <div class="simulador-stat-card stat-danger">
+            <div class="stat-value" id="simulador-stat-rejeitadas">—</div>
+            <div class="stat-label">não couberam</div>
+          </div>
+          <div class="simulador-stat-card stat-info">
+            <div class="stat-value" id="simulador-stat-ocupacao">—</div>
+            <div class="stat-label">volume ocupado</div>
+          </div>
+          <div class="simulador-stat-card stat-warning">
+            <div class="stat-value" id="simulador-stat-peso">—</div>
+            <div class="stat-label">peso total</div>
+          </div>
+        </div>
+        <div class="simulador-peso-info" id="simulador-peso-max"></div>
+      </div>
+    </div>
+
+    <!-- Canvas 3D -->
+    <div class="simulador-canvas-wrap">
+      <div id="simulador-canvas" style="position:absolute;top:0;left:0;right:0;bottom:0"></div>
+
+      <!-- Legenda -->
+      <div id="simulador-legend" class="simulador-legend"></div>
+
+      <!-- Controles -->
+      <div class="d-flex justify-content-between align-items-center" style="position:absolute;bottom:0;left:0;right:0">
+        <div class="simulador-hints">
+          Arrastar: rotacionar | Scroll: zoom | Shift+drag: pan
+        </div>
+        <div class="simulador-views">
+          <button type="button" class="simulador-view-btn" data-view="front">Frontal</button>
+          <button type="button" class="simulador-view-btn" data-view="side">Lateral</button>
+          <button type="button" class="simulador-view-btn" data-view="top">Topo</button>
+          <button type="button" class="simulador-view-btn active" data-view="3d">3D</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="{{ url_for('static', filename='js/simulador-carga/bin-packer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/simulador-carga/carga-renderer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/simulador-carga/simulador-ui.js') }}"></script>
+{% endblock %}

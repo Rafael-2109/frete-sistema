@@ -113,6 +113,13 @@
     </a>
     {% endif %}
 
+    {# --- Ferramentas --- #}
+    <span class="carvia-quick-nav-sep"></span>
+    <a href="{{ url_for('carvia.simulador_carga') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'simulador' else 'btn-outline-secondary' }}">
+        <i class="fas fa-cube"></i> Simulador 3D
+    </a>
+
     {# --- Config --- #}
     <span class="carvia-quick-nav-sep"></span>
     <div class="btn-group">

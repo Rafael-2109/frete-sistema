@@ -259,16 +259,9 @@
   ],
   "indices": [
     {
-      "name": "ix_extrato_item_statement_line_id",
+      "name": "idx_extrato_item_lote",
       "columns": [
-        "statement_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_extrato_item_cnpj_pagador",
-      "columns": [
-        "cnpj_pagador"
+        "lote_id"
       ],
       "unique": false
     },
@@ -280,9 +273,23 @@
       "unique": false
     },
     {
+      "name": "ix_extrato_item_status_match",
+      "columns": [
+        "status_match"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_extrato_item_cnpj",
       "columns": [
         "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_extrato_item_statement_line_id",
+      "columns": [
+        "statement_line_id"
       ],
       "unique": false
     },
@@ -294,9 +301,9 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_status_match",
+      "name": "ix_extrato_item_lote_id",
       "columns": [
-        "status_match"
+        "lote_id"
       ],
       "unique": false
     },
@@ -308,9 +315,9 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_lote_id",
+      "name": "ix_extrato_item_status",
       "columns": [
-        "lote_id"
+        "status"
       ],
       "unique": false
     },
@@ -322,13 +329,6 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_extrato_item_odoo_partner",
       "columns": [
         "odoo_partner_id"
@@ -336,9 +336,9 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_item_lote",
+      "name": "ix_extrato_item_cnpj_pagador",
       "columns": [
-        "lote_id"
+        "cnpj_pagador"
       ],
       "unique": false
     }

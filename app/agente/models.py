@@ -1240,6 +1240,17 @@ class AgentImprovementDialogue(db.Model):
             existing.updated_at = agora_utc_naive()
             if existing.evidence_json:
                 flag_modified(existing, 'evidence_json')
+
+            # Atualizar status da versao anterior (bug fix: path existing nao atualizava v1)
+            prev_version = version - 1
+            prev = cls.query.filter_by(
+                suggestion_key=suggestion_key,
+                version=prev_version,
+            ).first()
+            if prev and prev.status not in (status, 'closed'):
+                prev.status = status
+                prev.updated_at = agora_utc_naive()
+
             return existing
 
         # Buscar v1 para copiar category/severity/title

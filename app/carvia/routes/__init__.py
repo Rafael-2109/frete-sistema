@@ -29,6 +29,7 @@ def register_routes(bp):
     from app.carvia.routes.frete_routes import register_frete_routes
     from app.carvia.routes.gerencial_routes import register_gerencial_routes
     from app.carvia.routes.comissao_routes import register_comissao_routes
+    from app.carvia.routes.simulador_routes import register_simulador_routes
 
     register_dashboard_routes(bp)
     register_importacao_routes(bp)
@@ -54,3 +55,4 @@ def register_routes(bp):
     register_frete_routes(bp)
     register_gerencial_routes(bp)
     register_comissao_routes(bp)
+    register_simulador_routes(bp)

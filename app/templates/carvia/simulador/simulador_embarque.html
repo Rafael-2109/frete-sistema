@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  {% set carvia_active = 'simulador' %}
+  {% include 'carvia/_quick_nav.html' %}
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">
+      <i class="fas fa-cube me-2"></i>
+      Simulador de Carga — Embarque #{{ embarque.numero }}
+    </h4>
+    <a href="{{ url_for('carvia.simulador_carga') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-sliders-h me-1"></i> Simulador Livre
+    </a>
+  </div>
+
+  <!-- Warning -->
+  <div id="simulador-warning" class="alert alert-warning" style="display:none">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <span></span>
+  </div>
+
+  <!-- Info Embarque -->
+  <div class="row g-2 mb-3">
+    <div class="col-auto">
+      <div class="card card-body py-2 px-3">
+        <small class="text-muted">Veículo</small>
+        <strong>{{ embarque.modalidade or 'Não definido' }}</strong>
+      </div>
+    </div>
+    <div class="col-auto">
+      <div class="card card-body py-2 px-3">
+        <small class="text-muted">Data</small>
+        <strong>{{ embarque.data.strftime('%d/%m/%Y') if embarque.data else '—' }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="simulador-container">
+    <!-- Canvas 3D (full width no modo embarque) -->
+    <div class="simulador-canvas-wrap" style="flex:1">
+      <div id="simulador-canvas" style="position:absolute;top:0;left:0;right:0;bottom:0"></div>
+
+      <!-- Legenda -->
+      <div id="simulador-legend" class="simulador-legend"></div>
+
+      <!-- Stats overlay -->
+      <div style="position:absolute;top:12px;left:12px;display:flex;gap:8px;z-index:10">
+        <div class="simulador-stat-card stat-success" style="min-width:80px;background:rgba(0,0,0,0.55);color:#fff;border-radius:6px">
+          <div class="stat-value" id="simulador-stat-posicionadas" style="color:var(--semantic-success)">—</div>
+          <div class="stat-label" style="color:rgba(255,255,255,0.6)">posicionadas</div>
+        </div>
+        <div class="simulador-stat-card stat-danger" style="min-width:80px;background:rgba(0,0,0,0.55);color:#fff;border-radius:6px">
+          <div class="stat-value" id="simulador-stat-rejeitadas" style="color:var(--semantic-danger)">—</div>
+          <div class="stat-label" style="color:rgba(255,255,255,0.6)">rejeitadas</div>
+        </div>
+        <div class="simulador-stat-card stat-info" style="min-width:80px;background:rgba(0,0,0,0.55);color:#fff;border-radius:6px">
+          <div class="stat-value" id="simulador-stat-ocupacao" style="color:var(--semantic-info,#4a90d9)">—</div>
+          <div class="stat-label" style="color:rgba(255,255,255,0.6)">ocupação</div>
+        </div>
+        <div class="simulador-stat-card stat-warning" style="min-width:80px;background:rgba(0,0,0,0.55);color:#fff;border-radius:6px">
+          <div class="stat-value" id="simulador-stat-peso" style="color:var(--semantic-warning)">—</div>
+          <div class="stat-label" style="color:rgba(255,255,255,0.6)">peso</div>
+        </div>
+      </div>
+      <div class="simulador-peso-info" id="simulador-peso-max" style="position:absolute;top:80px;left:12px;z-index:10;color:rgba(255,255,255,0.4)"></div>
+
+      <!-- Controles -->
+      <div class="d-flex justify-content-between align-items-center" style="position:absolute;bottom:0;left:0;right:0">
+        <div class="simulador-hints">
+          Arrastar: rotacionar | Scroll: zoom | Shift+drag: pan
+        </div>
+        <div class="simulador-views">
+          <button type="button" class="simulador-view-btn" data-view="front">Frontal</button>
+          <button type="button" class="simulador-view-btn" data-view="side">Lateral</button>
+          <button type="button" class="simulador-view-btn" data-view="top">Topo</button>
+          <button type="button" class="simulador-view-btn active" data-view="3d">3D</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Dados do embarque embutidos para o JS -->
+<script id="simulador-init-data" type="application/json">{{ dados_json|safe }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="{{ url_for('static', filename='js/simulador-carga/bin-packer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/simulador-carga/carga-renderer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/simulador-carga/simulador-ui.js') }}"></script>
+{% endblock %}

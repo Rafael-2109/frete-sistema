@@ -283,13 +283,6 @@
       "unique": false
     },
     {
-      "name": "idx_cte_chave_acesso",
-      "columns": [
-        "chave_acesso"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_conhecimento_transporte_ativo",
       "columns": [
         "ativo"
@@ -297,9 +290,24 @@
       "unique": false
     },
     {
+      "name": "idx_cte_chave_acesso",
+      "columns": [
+        "chave_acesso"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_conhecimento_transporte_odoo_status_codigo",
       "columns": [
         "odoo_status_codigo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_numero_serie",
+      "columns": [
+        "numero_cte",
+        "serie_cte"
       ],
       "unique": false
     },
@@ -318,24 +326,9 @@
       "unique": false
     },
     {
-      "name": "idx_cte_numero_serie",
-      "columns": [
-        "numero_cte",
-        "serie_cte"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_cte_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_cnpj_remetente",
-      "columns": [
-        "cnpj_remetente"
       ],
       "unique": false
     },
@@ -354,6 +347,13 @@
       "unique": false
     },
     {
+      "name": "idx_cte_cnpj_remetente",
+      "columns": [
+        "cnpj_remetente"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_cte_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
@@ -361,16 +361,16 @@
       "unique": false
     },
     {
-      "name": "idx_cte_data_emissao",
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
       "columns": [
-        "data_emissao"
+        "cte_complementa_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "name": "idx_cte_data_emissao",
       "columns": [
-        "cte_complementa_id"
+        "data_emissao"
       ],
       "unique": false
     },
@@ -389,16 +389,16 @@
       "unique": false
     },
     {
-      "name": "idx_cte_tipo",
+      "name": "ix_conhecimento_transporte_data_emissao",
       "columns": [
-        "tipo_cte"
+        "data_emissao"
       ],
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_data_emissao",
+      "name": "idx_cte_tipo",
       "columns": [
-        "data_emissao"
+        "tipo_cte"
       ],
       "unique": false
     },

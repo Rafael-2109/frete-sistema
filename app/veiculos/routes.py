@@ -35,10 +35,18 @@ def criar_veiculo():
             flash(f'Veículo "{nome}" já existe!', 'warning')
             return redirect(url_for('veiculos.admin_veiculos'))
         
+        # Dimensoes do bau (opcionais)
+        comprimento_bau = request.form.get('comprimento_bau', '').strip()
+        largura_bau = request.form.get('largura_bau', '').strip()
+        altura_bau = request.form.get('altura_bau', '').strip()
+
         # Criar veículo
         veiculo = Veiculo(
             nome=nome,
-            peso_maximo=peso_maximo
+            peso_maximo=peso_maximo,
+            comprimento_bau=float(comprimento_bau) if comprimento_bau else None,
+            largura_bau=float(largura_bau) if largura_bau else None,
+            altura_bau=float(altura_bau) if altura_bau else None,
         )
         
         db.session.add(veiculo)
@@ -95,6 +103,14 @@ def editar_veiculo():
         veiculo.peso_maximo = peso_maximo
         veiculo.tipo_veiculo = tipo_veiculo
         veiculo.qtd_eixos = qtd_eixos
+
+        # Dimensoes do bau
+        comp_bau = request.form.get('comprimento_bau', '').strip()
+        larg_bau = request.form.get('largura_bau', '').strip()
+        alt_bau = request.form.get('altura_bau', '').strip()
+        veiculo.comprimento_bau = float(comp_bau) if comp_bau else None
+        veiculo.largura_bau = float(larg_bau) if larg_bau else None
+        veiculo.altura_bau = float(alt_bau) if alt_bau else None
         
         # Calcular multiplicador baseado no tipo
         if tipo_veiculo == 'Carro':
@@ -163,7 +179,11 @@ def api_lista_veiculos():
         {
             'id': v.id,
             'nome': v.nome,
-            'peso_maximo': v.peso_maximo
+            'peso_maximo': v.peso_maximo,
+            'comprimento_bau': v.comprimento_bau,
+            'largura_bau': v.largura_bau,
+            'altura_bau': v.altura_bau,
+            'tem_dimensoes_bau': v.tem_dimensoes_bau(),
         } for v in veiculos
     ])
 

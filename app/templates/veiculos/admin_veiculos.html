@@ -73,7 +73,11 @@
                 <i class="fas fa-dollar-sign me-1"></i>
                 Fator Pedágio
               </th>
-              <th width="20%" class="text-center">
+              <th width="15%">
+                <i class="fas fa-cube me-1"></i>
+                Dimensões Baú
+              </th>
+              <th width="15%" class="text-center">
                 <i class="fas fa-cogs me-1"></i>
                 Ações
               </th>
@@ -120,17 +124,29 @@
                   <br><small class="text-muted">({{ veiculo.qtd_eixos or 2 }} eixos)</small>
                 {% endif %}
               </td>
+              <td class="align-middle">
+                {% if veiculo.comprimento_bau and veiculo.largura_bau and veiculo.altura_bau %}
+                  <small class="text-nowrap">
+                    {{ "%.0f"|format(veiculo.comprimento_bau) }}×{{ "%.0f"|format(veiculo.largura_bau) }}×{{ "%.0f"|format(veiculo.altura_bau) }}cm
+                  </small>
+                {% else %}
+                  <span class="text-muted"><small>Não cadastrado</small></span>
+                {% endif %}
+              </td>
               <td class="align-middle text-center">
                 <div class="btn-group" role="group">
-                  <button type="button" 
-                          class="btn btn-sm btn-outline-primary" 
-                          data-bs-toggle="modal" 
+                  <button type="button"
+                          class="btn btn-sm btn-outline-primary"
+                          data-bs-toggle="modal"
                           data-bs-target="#modalEditarVeiculo"
                           data-veiculo-id="{{ veiculo.id }}"
                           data-veiculo-nome="{{ veiculo.nome }}"
                           data-veiculo-peso="{{ veiculo.peso_maximo }}"
                           data-veiculo-tipo="{{ veiculo.tipo_veiculo or 'Carro' }}"
                           data-veiculo-eixos="{{ veiculo.qtd_eixos or 2 }}"
+                          data-veiculo-comp-bau="{{ veiculo.comprimento_bau or '' }}"
+                          data-veiculo-larg-bau="{{ veiculo.largura_bau or '' }}"
+                          data-veiculo-alt-bau="{{ veiculo.altura_bau or '' }}"
                           title="Editar Veículo">
                     <i class="fas fa-edit"></i>
                   </button>
@@ -212,6 +228,30 @@
             <br><small>• Carro: Fator = 1x (valor base)</small>
             <br><small>• Caminhão: Fator = número de eixos</small>
           </div>
+
+          <hr>
+          <h6 class="mb-3">
+            <i class="fas fa-cube me-1"></i>
+            Dimensões do Baú (cm) — Simulador 3D
+          </h6>
+          <div class="row g-2">
+            <div class="col-4">
+              <label for="comprimento_bau" class="form-label"><small>Comprimento</small></label>
+              <input type="number" class="form-control form-control-sm" id="comprimento_bau"
+                     name="comprimento_bau" step="1" min="0" placeholder="cm">
+            </div>
+            <div class="col-4">
+              <label for="largura_bau" class="form-label"><small>Largura</small></label>
+              <input type="number" class="form-control form-control-sm" id="largura_bau"
+                     name="largura_bau" step="1" min="0" placeholder="cm">
+            </div>
+            <div class="col-4">
+              <label for="altura_bau" class="form-label"><small>Altura</small></label>
+              <input type="number" class="form-control form-control-sm" id="altura_bau"
+                     name="altura_bau" step="1" min="0" placeholder="cm">
+            </div>
+          </div>
+          <small class="text-muted">Dimensões internas do baú para cálculo de capacidade de motos.</small>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -278,6 +318,30 @@
             <br><small>• Carro: Fator = 1x (valor base)</small>
             <br><small>• Caminhão: Fator = número de eixos</small>
           </div>
+
+          <hr>
+          <h6 class="mb-3">
+            <i class="fas fa-cube me-1"></i>
+            Dimensões do Baú (cm) — Simulador 3D
+          </h6>
+          <div class="row g-2">
+            <div class="col-4">
+              <label for="edit_comprimento_bau" class="form-label"><small>Comprimento</small></label>
+              <input type="number" class="form-control form-control-sm" id="edit_comprimento_bau"
+                     name="comprimento_bau" step="1" min="0" placeholder="cm">
+            </div>
+            <div class="col-4">
+              <label for="edit_largura_bau" class="form-label"><small>Largura</small></label>
+              <input type="number" class="form-control form-control-sm" id="edit_largura_bau"
+                     name="largura_bau" step="1" min="0" placeholder="cm">
+            </div>
+            <div class="col-4">
+              <label for="edit_altura_bau" class="form-label"><small>Altura</small></label>
+              <input type="number" class="form-control form-control-sm" id="edit_altura_bau"
+                     name="altura_bau" step="1" min="0" placeholder="cm">
+            </div>
+          </div>
+          <small class="text-muted">Dimensões internas do baú para cálculo de capacidade de motos.</small>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -334,7 +398,10 @@ document.getElementById('modalEditarVeiculo').addEventListener('show.bs.modal', 
     document.getElementById('edit_peso_maximo').value = button.getAttribute('data-veiculo-peso');
     document.getElementById('edit_tipo_veiculo').value = button.getAttribute('data-veiculo-tipo') || 'Carro';
     document.getElementById('edit_qtd_eixos').value = button.getAttribute('data-veiculo-eixos') || '2';
-    
+    document.getElementById('edit_comprimento_bau').value = button.getAttribute('data-veiculo-comp-bau') || '';
+    document.getElementById('edit_largura_bau').value = button.getAttribute('data-veiculo-larg-bau') || '';
+    document.getElementById('edit_altura_bau').value = button.getAttribute('data-veiculo-alt-bau') || '';
+
     // Atualizar fator de pedágio
     atualizarFatorPedagioEdit();
 });
