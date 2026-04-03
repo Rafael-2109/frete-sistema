@@ -1,5 +1,5 @@
 /**
- * BinPacker — Algoritmo 3D Guillotine para empacotamento de motos em bau de veiculo.
+ * BinPacker — Algoritmo 3D Maximal Rectangles para empacotamento de motos.
  *
  * Entrada: dimensoes do bau + lista de motos (modelo, dimensoes, quantidade).
  * Saida: posicoes 3D de cada moto colocada + lista de rejeitadas.
@@ -7,20 +7,22 @@
  * Regras de orientacao:
  * - Comprimento da moto SEMPRE horizontal (eixos X ou Z do bau, nunca Y)
  * - Largura e altura intercambiaveis (moto pode ser deitada)
- * - Resultado: ate 4 orientacoes validas por moto
+ * - Resultado: 4 orientacoes validas por moto
  *
- * Algoritmo: First Fit Decreasing (FFD) com subdivisao Guillotine.
- * Heuristica de posicionamento: Bottom-Left-Front (minimiza Y, depois Z, depois X).
+ * Algoritmo: Maximal Rectangles com First Fit Decreasing (FFD).
+ * Mantém espacos livres sobrepostos para maximizar aproveitamento.
+ * Heuristica: Bottom-Left-Front (minimiza Y, depois Z, depois X).
  */
 ;(function () {
   'use strict';
 
   var MAX_ITEMS = 200;
+  var EPS = 0.5; // tolerancia em cm para comparacoes de fit
 
   /**
    * Empacota motos dentro do bau.
-   * @param {{w: number, d: number, h: number}} bay - Dimensoes do bau (comprimento, largura, altura) em cm
-   * @param {Array<{id: number, nome: string, comprimento: number, largura: number, altura: number, qty: number, color: string}>} motoList
+   * @param {{w: number, d: number, h: number}} bay - Dimensoes do bau (comprimento, largura, altura) cm
+   * @param {Array} motoList - [{id, nome, comprimento, largura, altura, qty, color, peso_medio}]
    * @returns {{placed: Array, rejected: Array, bay: Object, stats: Object}}
    */
   function pack(bay, motoList) {
@@ -30,7 +32,7 @@
       items = items.slice(0, MAX_ITEMS);
     }
 
-    // Lista de espacos livres — inicia com o bau inteiro
+    // Lista de espacos livres maximos (podem se sobrepor)
     var freeSpaces = [{ x: 0, y: 0, z: 0, w: bay.w, d: bay.d, h: bay.h }];
     var placed = [];
     var rejected = [];
@@ -41,17 +43,20 @@
       var best = findBestFit(orientations, freeSpaces, bay);
 
       if (best) {
-        placed.push({
+        var placement = {
           moto: item,
-          x: best.space.x,
-          y: best.space.y,
-          z: best.space.z,
+          x: best.x,
+          y: best.y,
+          z: best.z,
           w: best.ow,
           d: best.od,
           h: best.oh,
           orientacao: best.orientIdx,
-        });
-        freeSpaces = splitAndMerge(freeSpaces, best);
+        };
+        placed.push(placement);
+
+        // Atualizar espacos livres: remover volume ocupado de todos os espacos
+        freeSpaces = subtractBox(freeSpaces, placement);
       } else {
         rejected.push(item);
       }
@@ -83,7 +88,7 @@
   }
 
   /**
-   * Expande a lista de motos (qty → itens individuais) e ordena por volume decrescente (FFD).
+   * Expande qty em itens individuais e ordena por volume decrescente (FFD).
    */
   function expandAndSort(motoList) {
     var items = [];
@@ -103,7 +108,6 @@
         });
       }
     }
-    // Ordenar por volume decrescente (maiores primeiro)
     items.sort(function (a, b) {
       return b.volume - a.volume;
     });
@@ -111,19 +115,9 @@
   }
 
   /**
-   * Gera orientacoes validas para um item.
-   * Regra: comprimento da moto deve ficar horizontal (eixo X ou Z do bau).
+   * Gera 4 orientacoes validas (comprimento nunca no eixo Y/vertical).
    *
-   * Convencao do bau:
-   *   X = comprimento_bau (width)
-   *   Z = largura_bau (depth)
-   *   Y = altura_bau (height, vertical)
-   *
-   * As 4 orientacoes validas (C nunca no eixo Y):
-   *   O1: C→X, L→Z, A→Y  (em pe, alinhada ao comprimento do bau)
-   *   O2: C→X, A→Z, L→Y  (deitada, alinhada)
-   *   O3: L→X, C→Z, A→Y  (em pe, rotacionada 90)
-   *   O4: A→X, C→Z, L→Y  (deitada e rotacionada)
+   * Convencao: ow→eixo X(largura bau), od→eixo Z(profundidade bau), oh→eixo Y(altura bau)
    */
   function getOrientations(item) {
     var C = item.comprimento;
@@ -131,54 +125,52 @@
     var A = item.altura;
 
     return [
-      { ow: C, od: L, oh: A, idx: 0 }, // O1: em pe, alinhada
-      { ow: C, od: A, oh: L, idx: 1 }, // O2: deitada, alinhada
-      { ow: L, od: C, oh: A, idx: 2 }, // O3: em pe, rotacionada 90
-      { ow: A, od: C, oh: L, idx: 3 }, // O4: deitada e rotacionada
+      { ow: C, od: L, oh: A, idx: 0 }, // O1: em pe, C ao longo de X
+      { ow: C, od: A, oh: L, idx: 1 }, // O2: deitada, C ao longo de X
+      { ow: L, od: C, oh: A, idx: 2 }, // O3: em pe, C ao longo de Z
+      { ow: A, od: C, oh: L, idx: 3 }, // O4: deitada, C ao longo de Z
     ];
   }
 
   /**
-   * Encontra o melhor espaco livre para colocar o item.
-   * Heuristica Bottom-Left-Front: minimiza Y (chao), depois Z, depois X.
+   * Encontra o melhor espaco para colocar o item.
+   * Heuristica: Bottom-Left-Front — minimiza Y, depois Z, depois X.
+   * Testa todas orientacoes em todos espacos livres.
    */
   function findBestFit(orientations, freeSpaces, bay) {
     var best = null;
     var bestScore = Infinity;
 
     for (var s = 0; s < freeSpaces.length; s++) {
-      var space = freeSpaces[s];
+      var sp = freeSpaces[s];
 
       for (var o = 0; o < orientations.length; o++) {
-        var orient = orientations[o];
+        var ori = orientations[o];
 
-        // Verifica se cabe no espaco livre
-        if (
-          orient.ow <= space.w + 0.01 &&
-          orient.od <= space.d + 0.01 &&
-          orient.oh <= space.h + 0.01
-        ) {
-          // Verifica se nao excede o bau
-          if (
-            space.x + orient.ow <= bay.w + 0.01 &&
-            space.z + orient.od <= bay.d + 0.01 &&
-            space.y + orient.oh <= bay.h + 0.01
-          ) {
-            // Score: prioriza chao (Y baixo), depois fundo (Z baixo), depois esquerda (X baixo)
-            var score = space.y * 1000000 + space.z * 1000 + space.x;
+        // Cabe neste espaco?
+        if (ori.ow > sp.w + EPS || ori.od > sp.d + EPS || ori.oh > sp.h + EPS) {
+          continue;
+        }
 
-            if (score < bestScore) {
-              bestScore = score;
-              best = {
-                space: space,
-                spaceIdx: s,
-                ow: orient.ow,
-                od: orient.od,
-                oh: orient.oh,
-                orientIdx: orient.idx,
-              };
-            }
-          }
+        // Cabe dentro do bau?
+        if (sp.x + ori.ow > bay.w + EPS || sp.z + ori.od > bay.d + EPS || sp.y + ori.oh > bay.h + EPS) {
+          continue;
+        }
+
+        // Score: prioriza chao (Y baixo), profundidade (Z baixo), esquerda (X baixo)
+        var score = sp.y * 1e8 + sp.z * 1e4 + sp.x;
+
+        if (score < bestScore) {
+          bestScore = score;
+          best = {
+            x: sp.x,
+            y: sp.y,
+            z: sp.z,
+            ow: ori.ow,
+            od: ori.od,
+            oh: ori.oh,
+            orientIdx: ori.idx,
+          };
         }
       }
     }
@@ -186,65 +178,109 @@
   }
 
   /**
-   * Apos colocar um item, subdivide o espaco e faz merge de espacos adjacentes.
+   * Maximal Rectangles: subtrai uma caixa de todos os espacos livres.
    *
-   * Subdivisao Guillotine: divide o espaco ocupado em ate 3 sub-espacos
-   * (direita, frente, cima) e remove o espaco original.
+   * Para cada espaco livre que intersecta a caixa colocada:
+   *   - Remove o espaco original
+   *   - Gera ate 6 novos espacos (um por face da intersecao)
+   *   - Mantem apenas espacos que nao estao contidos em outros
    */
-  function splitAndMerge(freeSpaces, placement) {
-    var sp = placement.space;
-    var pw = placement.ow;
-    var pd = placement.od;
-    var ph = placement.oh;
+  function subtractBox(freeSpaces, box) {
+    var bx1 = box.x, by1 = box.y, bz1 = box.z;
+    var bx2 = box.x + box.w, by2 = box.y + box.h, bz2 = box.z + box.d;
 
-    // Remover o espaco usado
     var newSpaces = [];
+
     for (var i = 0; i < freeSpaces.length; i++) {
-      if (freeSpaces[i] !== sp) {
-        newSpaces.push(freeSpaces[i]);
+      var sp = freeSpaces[i];
+      var sx1 = sp.x, sy1 = sp.y, sz1 = sp.z;
+      var sx2 = sp.x + sp.w, sy2 = sp.y + sp.h, sz2 = sp.z + sp.d;
+
+      // Se nao intersecta, manter intacto
+      if (bx1 >= sx2 - EPS || bx2 <= sx1 + EPS ||
+          by1 >= sy2 - EPS || by2 <= sy1 + EPS ||
+          bz1 >= sz2 - EPS || bz2 <= sz1 + EPS) {
+        newSpaces.push(sp);
+        continue;
+      }
+
+      // Intersecta — gerar ate 6 sub-espacos (faces livres)
+
+      // Espaco a ESQUERDA da caixa (X < box.x)
+      if (bx1 > sx1 + EPS) {
+        newSpaces.push({ x: sx1, y: sy1, z: sz1, w: bx1 - sx1, d: sp.d, h: sp.h });
+      }
+
+      // Espaco a DIREITA da caixa (X > box.x + box.w)
+      if (bx2 < sx2 - EPS) {
+        newSpaces.push({ x: bx2, y: sy1, z: sz1, w: sx2 - bx2, d: sp.d, h: sp.h });
+      }
+
+      // Espaco ATRAS da caixa (Z < box.z)
+      if (bz1 > sz1 + EPS) {
+        newSpaces.push({ x: sx1, y: sy1, z: sz1, w: sp.w, d: bz1 - sz1, h: sp.h });
+      }
+
+      // Espaco na FRENTE da caixa (Z > box.z + box.d)
+      if (bz2 < sz2 - EPS) {
+        newSpaces.push({ x: sx1, y: sy1, z: bz2, w: sp.w, d: sz2 - bz2, h: sp.h });
+      }
+
+      // Espaco ABAIXO da caixa (Y < box.y) — raro, mas possivel com empilhamento
+      if (by1 > sy1 + EPS) {
+        newSpaces.push({ x: sx1, y: sy1, z: sz1, w: sp.w, d: sp.d, h: by1 - sy1 });
+      }
+
+      // Espaco ACIMA da caixa (Y > box.y + box.h) — empilhamento
+      if (by2 < sy2 - EPS) {
+        newSpaces.push({ x: sx1, y: by2, z: sz1, w: sp.w, d: sp.d, h: sy2 - by2 });
       }
     }
 
-    // Sub-espaco 1: a DIREITA do item (mesmo Y e Z)
-    var restW = sp.w - pw;
-    if (restW > 1) {
-      newSpaces.push({
-        x: sp.x + pw,
-        y: sp.y,
-        z: sp.z,
-        w: restW,
-        d: sp.d,
-        h: sp.h,
-      });
+    // Remover espacos muito pequenos (< 10cm em qualquer dimensao)
+    var filtered = [];
+    for (var f = 0; f < newSpaces.length; f++) {
+      var ns = newSpaces[f];
+      if (ns.w >= 10 && ns.d >= 10 && ns.h >= 10) {
+        filtered.push(ns);
+      }
     }
 
-    // Sub-espaco 2: a FRENTE do item (mesmo X e Y, profundidade restante)
-    var restD = sp.d - pd;
-    if (restD > 1) {
-      newSpaces.push({
-        x: sp.x,
-        y: sp.y,
-        z: sp.z + pd,
-        w: pw, // apenas a largura do item (nao toda a largura do espaco)
-        d: restD,
-        h: sp.h,
-      });
-    }
+    // Remover espacos contidos em outros (manter apenas maximos)
+    return removeContained(filtered);
+  }
 
-    // Sub-espaco 3: ACIMA do item (empilhamento)
-    var restH = sp.h - ph;
-    if (restH > 1) {
-      newSpaces.push({
-        x: sp.x,
-        y: sp.y + ph,
-        z: sp.z,
-        w: pw, // apenas sobre o item
-        d: pd,
-        h: restH,
-      });
-    }
+  /**
+   * Remove espacos que estao totalmente contidos dentro de outro espaco.
+   * Garante que so mantemos "maximal rectangles".
+   */
+  function removeContained(spaces) {
+    if (spaces.length <= 1) return spaces;
 
-    return newSpaces;
+    var keep = [];
+    for (var i = 0; i < spaces.length; i++) {
+      var contained = false;
+      var a = spaces[i];
+
+      for (var j = 0; j < spaces.length; j++) {
+        if (i === j) continue;
+        var b = spaces[j];
+
+        // a esta contido em b?
+        if (a.x >= b.x - EPS && a.y >= b.y - EPS && a.z >= b.z - EPS &&
+            a.x + a.w <= b.x + b.w + EPS &&
+            a.y + a.h <= b.y + b.h + EPS &&
+            a.z + a.d <= b.z + b.d + EPS) {
+          contained = true;
+          break;
+        }
+      }
+
+      if (!contained) {
+        keep.push(a);
+      }
+    }
+    return keep;
   }
 
   // Exportar
