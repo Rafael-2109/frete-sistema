@@ -294,11 +294,18 @@
     <div class="card mt-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-boxes"></i> Itens de Produto ({{ itens|length }})</h5>
-            {% if itens and nf.status != 'CANCELADA' %}
-            <button type="button" class="btn btn-outline-info btn-sm" id="btnReprocessarMotos" title="Re-detectar modelos de moto em todos os itens">
-                <i class="fas fa-sync-alt"></i> Re-processar motos
-            </button>
-            {% endif %}
+            <div class="d-flex gap-2">
+                {% if nf.arquivo_pdf_path and nf.status != 'CANCELADA' %}
+                <button type="button" class="btn btn-outline-warning btn-sm" id="btnReprocessarPdf" title="Re-baixar PDF e re-parsear itens + motos">
+                    <i class="fas fa-file-pdf"></i> Re-parsear PDF
+                </button>
+                {% endif %}
+                {% if itens and nf.status != 'CANCELADA' %}
+                <button type="button" class="btn btn-outline-info btn-sm" id="btnReprocessarMotos" title="Re-detectar modelos de moto em todos os itens">
+                    <i class="fas fa-sync-alt"></i> Re-processar motos
+                </button>
+                {% endif %}
+            </div>
         </div>
         <div class="card-body p-0">
             {% if itens %}
@@ -887,6 +894,41 @@ document.querySelectorAll('.modelo-moto-select').forEach(sel => {
             }
         })
         .catch(err => alert('Erro de conexao: ' + err.message));
+    });
+});
+
+// Re-parsear PDF (itens + motos)
+document.getElementById('btnReprocessarPdf')?.addEventListener('click', function() {
+    if (!confirm('Re-baixar o PDF e re-parsear itens de produto?\nItens existentes serao preservados (descricoes truncadas serao atualizadas).')) return;
+
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Parseando...';
+
+    fetch(`/carvia/nfs/{{ nf.id }}/reprocessar-pdf`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            let msg = `Re-parseamento concluido:\n`;
+            msg += `${data.itens_parseados} item(ns) encontrado(s) no PDF\n`;
+            if (data.itens_inseridos > 0) msg += `${data.itens_inseridos} item(ns) inserido(s)\n`;
+            if (data.desc_atualizadas > 0) msg += `${data.desc_atualizadas} descricao(oes) atualizada(s)\n`;
+            msg += `${data.motos_detectadas} moto(s) detectada(s)`;
+            alert(msg);
+            location.reload();
+        } else {
+            alert(data.erro || 'Erro ao reprocessar PDF');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-file-pdf"></i> Re-parsear PDF';
+        }
+    })
+    .catch(err => {
+        alert('Erro de conexao: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-file-pdf"></i> Re-parsear PDF';
     });
 });
 

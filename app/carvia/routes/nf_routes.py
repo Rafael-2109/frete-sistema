@@ -461,6 +461,107 @@ def register_nf_routes(bp):
             logger.error("Erro ao reprocessar motos NF %d: %s", nf_id, e)
             return jsonify({'erro': str(e)}), 500
 
+    # ==================== REPROCESSAR PDF (itens + motos) ====================
+
+    @bp.route('/nfs/<int:nf_id>/reprocessar-pdf', methods=['POST'])
+    @login_required
+    def reprocessar_pdf_nf(nf_id):
+        """Re-baixa PDF do S3, re-parseia itens e roda deteccao de motos.
+
+        Util quando o parser foi corrigido apos a importacao original.
+        Se a NF ja tem itens, apenas atualiza descricoes truncadas e re-roda motos.
+        Se nao tem itens, insere todos do parse.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            return jsonify({'erro': 'NF nao encontrada.'}), 404
+
+        if not nf.arquivo_pdf_path:
+            return jsonify({'erro': 'NF sem arquivo PDF armazenado.'}), 400
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            from app.carvia.services.parsers.danfe_pdf_parser import DanfePDFParser
+            from app.carvia.models import CarviaNfItem
+            from app.carvia.services.pricing.moto_recognition_service import (
+                MotoRecognitionService,
+            )
+
+            storage = get_file_storage()
+            pdf_bytes = storage.download_file(nf.arquivo_pdf_path)
+            if not pdf_bytes:
+                return jsonify({'erro': 'Falha ao baixar PDF do storage.'}), 500
+
+            parser = DanfePDFParser(pdf_bytes=pdf_bytes)
+            if not parser.is_valid():
+                return jsonify({'erro': 'PDF invalido pelo parser.'}), 400
+
+            itens_parseados = parser.get_itens_produto()
+            itens_existentes = CarviaNfItem.query.filter_by(nf_id=nf.id).all()
+
+            itens_inseridos = 0
+            desc_atualizadas = 0
+
+            if not itens_existentes:
+                # Sem itens — inserir todos
+                for item_data in itens_parseados:
+                    item = CarviaNfItem(
+                        nf_id=nf.id,
+                        codigo_produto=item_data.get('codigo_produto'),
+                        descricao=item_data.get('descricao'),
+                        ncm=item_data.get('ncm'),
+                        cfop=item_data.get('cfop'),
+                        unidade=item_data.get('unidade'),
+                        quantidade=item_data.get('quantidade'),
+                        valor_unitario=item_data.get('valor_unitario'),
+                        valor_total_item=item_data.get('valor_total_item'),
+                    )
+                    db.session.add(item)
+                    itens_inseridos += 1
+                db.session.flush()
+            else:
+                # Com itens existentes — atualizar descricoes truncadas
+                for existente in itens_existentes:
+                    for item_data in itens_parseados:
+                        if (item_data.get('ncm') == existente.ncm
+                                and item_data.get('codigo_produto') == existente.codigo_produto):
+                            desc_nova = item_data.get('descricao', '')
+                            desc_atual = existente.descricao or ''
+                            if len(desc_nova) > len(desc_atual):
+                                existente.descricao = desc_nova
+                                desc_atualizadas += 1
+                            break
+                db.session.flush()
+
+            # Rodar deteccao de motos
+            moto_svc = MotoRecognitionService()
+            moto_resultado = moto_svc.reprocessar_itens_nf(nf.id)
+            db.session.commit()
+
+            logger.info(
+                "Reprocessamento PDF NF %d por %s: %d parseados, "
+                "%d inseridos, %d desc atualizadas, %d motos",
+                nf.id, current_user.email, len(itens_parseados),
+                itens_inseridos, desc_atualizadas,
+                moto_resultado.get('detectados', 0),
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'itens_parseados': len(itens_parseados),
+                'itens_inseridos': itens_inseridos,
+                'desc_atualizadas': desc_atualizadas,
+                'motos_detectadas': moto_resultado.get('detectados', 0),
+                'motos_limpas': moto_resultado.get('limpos', 0),
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao reprocessar PDF NF %d: %s", nf_id, e)
+            return jsonify({'erro': str(e)}), 500
+
     # ==================== EDITAR MODELO MOTO EM ITEM ====================
 
     @bp.route('/api/nf-item/<int:item_id>/modelo-moto', methods=['POST'])
