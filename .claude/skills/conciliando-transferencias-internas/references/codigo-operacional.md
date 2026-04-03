@@ -12,11 +12,12 @@ odoo = get_odoo_connection()
 def preparar_extrato_e_reconciliar(stmt_line_id, payment_pendentes_line_id, partner_id=1, ref=''):
     """Prepara extrato (draft→write→post) e reconcilia com payment."""
 
-    # 1. Buscar move_id do extrato
+    # 1. Buscar move_id do extrato + payment_ref original (preservar antes de sobrescrever)
     sl = odoo.execute_kw('account.bank.statement.line', 'search_read',
         [[['id', '=', stmt_line_id]]],
-        {'fields': ['move_id'], 'limit': 1})
+        {'fields': ['move_id', 'payment_ref'], 'limit': 1})
     move_id = sl[0]['move_id'][0]
+    original_ref = sl[0].get('payment_ref', '')
 
     # 2. Draft
     try:
@@ -24,20 +25,26 @@ def preparar_extrato_e_reconciliar(stmt_line_id, payment_pendentes_line_id, part
     except Exception as e:
         if "cannot marshal None" not in str(e): raise
 
-    # 3. Write partner + payment_ref na statement_line
+    # 3. Preservar payment_ref original em narration do move (rastreabilidade banco destino)
+    #    O ref original contem info como "Banco: 756 Agencia: 4351" — essencial para reprocessamento
+    if original_ref and original_ref != ref:
+        odoo.execute_kw('account.move', 'write',
+            [[move_id], {'narration': f'Ref original extrato: {original_ref}'}])
+
+    # 4. Write partner + payment_ref na statement_line
     odoo.execute_kw('account.bank.statement.line', 'write',
         [[stmt_line_id], {'partner_id': partner_id, 'payment_ref': ref}])
 
-    # 4. Re-buscar move_lines (IDs podem ter mudado!)
+    # 5. Re-buscar move_lines (IDs podem ter mudado!)
     lines = odoo.execute_kw('account.move.line', 'search_read',
         [[['move_id', '=', move_id]]],
         {'fields': ['id', 'account_id', 'debit', 'credit']})
 
-    # 5. Write name nas move_lines
+    # 6. Write name nas move_lines
     line_ids = [l['id'] for l in lines]
     odoo.execute_kw('account.move.line', 'write', [line_ids, {'name': ref}])
 
-    # 6. Write account_id TRANSITORIA → PENDENTES (ULTIMO!)
+    # 7. Write account_id TRANSITORIA → PENDENTES (ULTIMO!)
     for l in lines:
         if l['account_id'][0] == 22199:  # TRANSITORIA
             odoo.execute_kw('account.move.line', 'write',
@@ -45,20 +52,20 @@ def preparar_extrato_e_reconciliar(stmt_line_id, payment_pendentes_line_id, part
             extrato_pendentes_line_id = l['id']
             break
 
-    # 7. Post
+    # 8. Post
     try:
         odoo.execute_kw('account.move', 'action_post', [[move_id]])
     except Exception as e:
         if "cannot marshal None" not in str(e): raise
 
-    # 8. Reconciliar
+    # 9. Reconciliar
     try:
         odoo.execute_kw('account.move.line', 'reconcile',
             [[extrato_pendentes_line_id, payment_pendentes_line_id]], {})
     except Exception as e:
         if "cannot marshal None" not in str(e): raise
 
-    # 9. Verificar
+    # 10. Verificar
     sl = odoo.execute_kw('account.bank.statement.line', 'search_read',
         [[['id', '=', stmt_line_id]]],
         {'fields': ['is_reconciled', 'amount_residual'], 'limit': 1})
@@ -182,10 +189,23 @@ def conciliar_pagamento_transferencia_existente(stmt_pag_id, amount, date, journ
                     or p.get('destination_journal_id', [None])[0] == journal_pag_id]
 
     if not payments:
-        # Busca direta falhou — sugerir rastreamento de cadeia (Sit 2b)
+        # Busca direta falhou — AUTO-ESCALAR para Sit 2b (cadeia documental)
+        # MOTIVO: payments consolidados (N x valor) ou com data retroativa NAO sao
+        # encontrados por busca direta de amount+date. Sit 2b rastreia a cadeia
+        # documental real e e o CAMINHO PRINCIPAL para a maioria dos casos.
+        # Evidencia: Set/2025 — 5/162 encontrados por busca direta, 157 via cadeia.
+        cadeia = rastrear_cadeia_documental(stmt_pag_id)
+        if cadeia and cadeia.get('found'):
+            return {
+                'escalated_to_2b': True,
+                'cadeia': cadeia,
+                'auto_execute': not cadeia.get('date_mismatch') and not cadeia.get('is_partial'),
+                'reason': 'Busca direta por amount/date falhou — payment provavelmente consolidado ou retroativo',
+            }
         return {
-            'error': f'Payment is_internal_transfer nao encontrado para {amount} em {date}',
-            'fallback': 'Usar rastrear_cadeia_documental(stmt_pag_id) para busca via cadeia documental',
+            'error': f'Payment nao encontrado por busca direta nem por cadeia documental para stmt {stmt_pag_id}',
+            'busca_direta': f'amount={amount}, date={date}, journal={journal_pag_id}',
+            'cadeia_resultado': cadeia,
         }
 
     # 2. Buscar linha PENDENTES nao reconciliada

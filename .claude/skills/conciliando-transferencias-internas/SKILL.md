@@ -105,8 +105,8 @@ domain = [
 | Situacao | Funcao | Input |
 |----------|--------|-------|
 | Ambos extratos nao conciliados | `criar_transferencia_interna_e_conciliar()` | stmt_pag_id, stmt_rec_id, journal_pag_id, journal_rec_id, amount, date |
-| Recebimento conciliado, pagamento pendente | `conciliar_pagamento_transferencia_existente()` | stmt_pag_id, amount, date, journal_pag_id |
-| Sit 2 falhou (payment consolidado/data errada) — caminho principal | `rastrear_cadeia_documental()` | stmt_pag_id — retorna diagnostico, NAO executa |
+| Recebimento conciliado, pagamento pendente | `conciliar_pagamento_transferencia_existente()` | stmt_pag_id, amount, date, journal_pag_id — **auto-escala para 2b se busca direta falhar** |
+| Diagnostico de cadeia (chamado automaticamente por Sit 2) | `rastrear_cadeia_documental()` | stmt_pag_id — retorna diagnostico, NAO executa |
 | Levantar todos os pares pendentes | `levantar_pares_transferencia_interna()` | — (aceita args de filtro) |
 
 Codigo completo: [references/codigo-operacional.md](references/codigo-operacional.md)
@@ -168,6 +168,16 @@ Linha de extrato com NACOM GOYA / 61.724.241
 **Quando**: Recebimento (credito) ja conciliado com `is_internal_transfer` existente, mas pagamento (debito) ainda `is_reconciled=False`.
 
 **Fluxo**: Buscar `account.payment` existente (is_internal_transfer=True, mesmo valor/data) → Buscar linha PENDENTES(26868) nao reconciliada → Conciliar extrato de pagamento.
+
+**IMPORTANTE — AUTO-ESCALACAO PARA 2b**: Se a busca direta por amount+date NAO encontrar payment,
+a funcao `conciliar_pagamento_transferencia_existente()` **automaticamente** chama
+`rastrear_cadeia_documental()` (Sit 2b). Isso e necessario porque:
+- Payments **consolidados** (ex: R$547.733,45 = 36x R$14.999,99) nao matcham por amount
+- Payments **retroativos** (date do payment != date do extrato) nao matcham por date
+- **Evidencia real**: Set/2025 — busca direta encontrou apenas 5 de 162 extratos; os 157 restantes
+  exigiram rastreamento via cadeia documental
+
+Na pratica, **a maioria dos extratos sera resolvida via Sit 2b**, nao via busca direta.
 
 > Ver [codigo-operacional.md](references/codigo-operacional.md) secao "Situacao 2"
 
