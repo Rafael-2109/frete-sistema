@@ -749,11 +749,14 @@ def register_frete_routes(bp):
             if frete.numeros_nfs:
                 from app.carvia.models import CarviaOperacaoNf
                 nfs_lista = [nf.strip() for nf in frete.numeros_nfs.split(',') if nf.strip()]
+                datas_nfs = []
                 for nf_num in nfs_lista:
                     carvia_nf = CarviaNf.query.filter_by(
                         numero_nf=nf_num, status='ATIVA'
                     ).first()
                     if carvia_nf:
+                        if carvia_nf.data_emissao:
+                            datas_nfs.append(carvia_nf.data_emissao)
                         existe = CarviaOperacaoNf.query.filter_by(
                             operacao_id=op.id, nf_id=carvia_nf.id
                         ).first()
@@ -762,6 +765,10 @@ def register_frete_routes(bp):
                                 operacao_id=op.id, nf_id=carvia_nf.id
                             )
                             db.session.add(junction)
+
+                # Preencher data emissao do CTe com a maior data das NFs
+                if datas_nfs and not op.cte_data_emissao:
+                    op.cte_data_emissao = max(datas_nfs)
 
             db.session.commit()
 

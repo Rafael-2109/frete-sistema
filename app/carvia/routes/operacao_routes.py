@@ -390,6 +390,10 @@ def register_operacao_routes(bp):
                 flash('Cidade destino nao encontrada nas NFs selecionadas.', 'danger')
                 return render_template('carvia/criar_manual.html', form_data=form_data)
 
+            # Data emissao = maior data_emissao das NFs selecionadas
+            datas_nfs = [nf.data_emissao for nf in nfs_encontradas if nf.data_emissao]
+            data_emissao_cte = max(datas_nfs) if datas_nfs else None
+
             # Criar CarviaOperacao
             operacao = CarviaOperacao(
                 cnpj_cliente=cnpj_cliente,
@@ -402,6 +406,7 @@ def register_operacao_routes(bp):
                 valor_mercadoria=valor_total,
                 cte_valor=cte_valor,
                 cte_numero=CarviaOperacao.gerar_numero_cte(),
+                cte_data_emissao=data_emissao_cte,
                 tipo_entrada='MANUAL_SEM_CTE',
                 status='RASCUNHO',
                 observacoes=observacoes or None,

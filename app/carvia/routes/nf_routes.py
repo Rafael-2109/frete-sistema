@@ -348,6 +348,7 @@ def register_nf_routes(bp):
                 valor_mercadoria=nf.valor_total,
                 cte_valor=cte_valor,
                 cte_numero=CarviaOperacao.gerar_numero_cte(),
+                cte_data_emissao=nf.data_emissao,
                 tipo_entrada='MANUAL_SEM_CTE',
                 status='RASCUNHO',
                 observacoes=observacoes or None,
