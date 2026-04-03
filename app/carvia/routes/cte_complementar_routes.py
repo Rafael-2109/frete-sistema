@@ -30,7 +30,7 @@ def register_cte_complementar_routes(bp):
         operacao_filtro = request.args.get('operacao', '', type=str)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaCteComplementar)
@@ -58,7 +58,7 @@ def register_cte_complementar_routes(bp):
             'status': CarviaCteComplementar.status,
             'criado_em': CarviaCteComplementar.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaCteComplementar.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaCteComplementar.cte_data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:

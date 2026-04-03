@@ -129,7 +129,7 @@
                                 <th>CTe</th>
                                 <th>Destino</th>
                                 <th>Valor CTe</th>
-                                <th>Data</th>
+                                <th>Emissão</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -142,7 +142,9 @@
                                 <td>{{ op.cte_numero or '-' }}</td>
                                 <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
                                 <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
-                                <td>{{ op.criado_em.strftime('%d/%m/%Y') if op.criado_em else '-' }}</td>
+                                <td title="Importado em: {{ op.criado_em.strftime('%d/%m/%Y %H:%M') if op.criado_em else '-' }}">
+                                    {{ op.cte_data_emissao.strftime('%d/%m/%Y') if op.cte_data_emissao else op.criado_em.strftime('%d/%m/%Y') if op.criado_em else '-' }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>

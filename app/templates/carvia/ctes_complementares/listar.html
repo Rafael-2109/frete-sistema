@@ -71,7 +71,7 @@
                             <th>Cliente</th>
                             {{ th_sort('cte_valor', 'Valor', sort, direction, 'text-end') }}
                             {{ th_sort('status', 'Status', sort, direction) }}
-                            {{ th_sort('criado_em', 'Data Criacao', sort, direction) }}
+                            {{ th_sort('cte_data_emissao', 'Data Emissão', sort, direction) }}
                             <th></th>
                         </tr>
                     </thead>
@@ -94,7 +94,9 @@
                                     {{ comp.status }}
                                 </span>
                             </td>
-                            <td>{{ comp.criado_em.strftime('%d/%m/%Y') if comp.criado_em else '-' }}</td>
+                            <td title="Importado em: {{ comp.criado_em.strftime('%d/%m/%Y %H:%M') if comp.criado_em else '-' }}">
+                                {{ comp.cte_data_emissao.strftime('%d/%m/%Y') if comp.cte_data_emissao else comp.criado_em.strftime('%d/%m/%Y') if comp.criado_em else '-' }}
+                            </td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=comp.id) }}"
                                    class="btn btn-sm btn-outline-primary" title="Detalhes">

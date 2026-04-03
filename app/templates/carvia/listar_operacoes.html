@@ -92,7 +92,7 @@
                             <th>CTe Subcontrato</th>
                             <th>Tipo</th>
                             {{ th_sort('status', 'Status', sort, direction) }}
-                            {{ th_sort('criado_em', 'Criado em', sort, direction) }}
+                            {{ th_sort('cte_data_emissao', 'Data Emissão', sort, direction) }}
                             <th></th>
                         </tr>
                     </thead>
@@ -153,7 +153,9 @@
                                     {{ op.status }}
                                 </span>
                             </td>
-                            <td><small>{{ op.criado_em|formatar_data_hora_brasil if op.criado_em else '-' }}</small></td>
+                            <td title="Importado em: {{ op.criado_em|formatar_data_hora_brasil if op.criado_em else '-' }}">
+                                <small>{{ op.cte_data_emissao.strftime('%d/%m/%Y') if op.cte_data_emissao else op.criado_em.strftime('%d/%m/%Y') if op.criado_em else '-' }}</small>
+                            </td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}"
                                    class="btn btn-sm btn-outline-primary" title="Detalhes">

@@ -150,7 +150,7 @@ def register_dashboard_routes(bp):
 
             # Ultimas operacoes
             stats['ultimas_operacoes'] = db.session.query(CarviaOperacao).order_by(
-                CarviaOperacao.criado_em.desc()
+                CarviaOperacao.cte_data_emissao.desc().nullslast()
             ).limit(10).all()
 
         except Exception as e:

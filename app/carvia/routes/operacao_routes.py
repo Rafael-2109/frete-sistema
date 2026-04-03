@@ -32,7 +32,7 @@ def register_operacao_routes(bp):
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo', '')
         uf_filtro = request.args.get('uf_destino', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
         # Subquery: contar NFs vinculadas a cada operacao
@@ -74,9 +74,10 @@ def register_operacao_routes(bp):
             'peso_utilizado': CarviaOperacao.peso_utilizado,
             'cte_valor': CarviaOperacao.cte_valor,
             'status': CarviaOperacao.status,
+            'cte_data_emissao': CarviaOperacao.cte_data_emissao,
             'criado_em': CarviaOperacao.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaOperacao.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaOperacao.cte_data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:

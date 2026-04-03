@@ -37,7 +37,7 @@ def register_nf_routes(bp):
         status_filtro = request.args.get('status', '')
         cte_filtro = request.args.get('cte', '')
         uf_filtro = request.args.get('uf_destino', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
         # Subquery: contar CTes vinculados a cada NF
@@ -106,9 +106,10 @@ def register_nf_routes(bp):
             'numero_nf': func.lpad(func.coalesce(CarviaNf.numero_nf, ''), 20, '0'),
             'emitente': CarviaNf.nome_emitente,
             'valor_total': CarviaNf.valor_total,
+            'data_emissao': CarviaNf.data_emissao,
             'criado_em': CarviaNf.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaNf.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaNf.data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:

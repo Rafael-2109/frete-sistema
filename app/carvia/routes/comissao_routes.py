@@ -44,7 +44,7 @@ def register_comissao_routes(bp):
         page = request.args.get('page', 1, type=int)
         status_filtro = request.args.get('status', '')
         vendedor_filtro = request.args.get('vendedor', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'data_inicio')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaComissaoFechamento)
@@ -68,7 +68,7 @@ def register_comissao_routes(bp):
             'status': CarviaComissaoFechamento.status,
             'criado_em': CarviaComissaoFechamento.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaComissaoFechamento.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaComissaoFechamento.data_inicio)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:

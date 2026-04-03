@@ -37,7 +37,7 @@ def register_fatura_routes(bp):
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
         tipo_frete_filtro = request.args.get('tipo_frete', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
         # Subquery: contar operacoes vinculadas a cada fatura
@@ -78,7 +78,7 @@ def register_fatura_routes(bp):
             'status': CarviaFaturaCliente.status,
             'criado_em': CarviaFaturaCliente.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaFaturaCliente.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaFaturaCliente.data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
@@ -288,13 +288,13 @@ def register_fatura_routes(bp):
                 CarviaOperacao.cnpj_cliente == cnpj_selecionado,
                 CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
                 CarviaOperacao.fatura_cliente_id.is_(None),
-            ).order_by(CarviaOperacao.criado_em.desc()).all()
+            ).order_by(CarviaOperacao.cte_data_emissao.desc().nullslast()).all()
 
             ctes_comp_disponiveis = db.session.query(CarviaCteComplementar).filter(
                 CarviaCteComplementar.cnpj_cliente == cnpj_selecionado,
                 CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
                 CarviaCteComplementar.fatura_cliente_id.is_(None),
-            ).order_by(CarviaCteComplementar.criado_em.desc()).all()
+            ).order_by(CarviaCteComplementar.cte_data_emissao.desc().nullslast()).all()
 
         return render_template(
             'carvia/faturas_cliente/nova.html',
@@ -319,7 +319,7 @@ def register_fatura_routes(bp):
 
         operacoes = db.session.query(CarviaOperacao).filter(
             CarviaOperacao.fatura_cliente_id == fatura_id
-        ).order_by(CarviaOperacao.criado_em.desc()).all()
+        ).order_by(CarviaOperacao.cte_data_emissao.desc().nullslast()).all()
 
         # Cross-links: itens, NFs, subcontratos, faturas transportadora
         from app.carvia.models import (
@@ -645,7 +645,7 @@ def register_fatura_routes(bp):
             (str(t.id), t.razao_social) for t in transportadoras
         ]
 
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
         # Subquery: contar e somar valor dos subcontratos por fatura
@@ -714,7 +714,7 @@ def register_fatura_routes(bp):
             'status_conferencia': CarviaFaturaTransportadora.status_conferencia,
             'criado_em': CarviaFaturaTransportadora.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
@@ -1004,7 +1004,7 @@ def register_fatura_routes(bp):
                 CarviaSubcontrato.transportadora_id == transportadora_id,
                 CarviaSubcontrato.status.in_(['COTADO', 'CONFIRMADO']),
                 CarviaSubcontrato.fatura_transportadora_id.is_(None),
-            ).order_by(CarviaSubcontrato.criado_em.desc()).all()
+            ).order_by(CarviaSubcontrato.cte_data_emissao.desc().nullslast()).all()
 
             resultado = []
             for sub in subcontratos:
@@ -1090,7 +1090,7 @@ def register_fatura_routes(bp):
 
         subcontratos = db.session.query(CarviaSubcontrato).filter(
             CarviaSubcontrato.fatura_transportadora_id == fatura_id
-        ).order_by(CarviaSubcontrato.criado_em.desc()).all()
+        ).order_by(CarviaSubcontrato.cte_data_emissao.desc().nullslast()).all()
 
         # Calcular totais para conferencia
         valor_cotado_total = sum(float(s.valor_cotado or 0) for s in subcontratos)
@@ -1138,7 +1138,7 @@ def register_fatura_routes(bp):
         if op_ids:
             operacoes = CarviaOperacao.query.filter(
                 CarviaOperacao.id.in_(op_ids)
-            ).order_by(CarviaOperacao.criado_em.desc()).all()
+            ).order_by(CarviaOperacao.cte_data_emissao.desc().nullslast()).all()
 
         return render_template(
             'carvia/faturas_transportadora/detalhe.html',
@@ -1392,7 +1392,7 @@ def register_fatura_routes(bp):
                 CarviaOperacao.cidade_destino.ilike(busca_like),
             ))
 
-        operacoes = query.order_by(CarviaOperacao.criado_em.desc()).limit(50).all()
+        operacoes = query.order_by(CarviaOperacao.cte_data_emissao.desc().nullslast()).limit(50).all()
 
         return jsonify({
             'sucesso': True,

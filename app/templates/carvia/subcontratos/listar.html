@@ -94,7 +94,7 @@
                             <th>Cliente/Destino</th>
                             {{ th_sort('valor_final', 'Valor Final', sort, direction, 'text-end') }}
                             {{ th_sort('status', 'Status', sort, direction) }}
-                            {{ th_sort('criado_em', 'Criado em', sort, direction) }}
+                            {{ th_sort('cte_data_emissao', 'Data Emissão', sort, direction) }}
                             <th></th>
                         </tr>
                     </thead>
@@ -139,7 +139,9 @@
                                 </span>
                                 {% endif %}
                             </td>
-                            <td><small>{{ sub.criado_em|formatar_data_hora_brasil if sub.criado_em else '-' }}</small></td>
+                            <td title="Importado em: {{ sub.criado_em|formatar_data_hora_brasil if sub.criado_em else '-' }}">
+                                <small>{{ sub.cte_data_emissao.strftime('%d/%m/%Y') if sub.cte_data_emissao else sub.criado_em.strftime('%d/%m/%Y') if sub.criado_em else '-' }}</small>
+                            </td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}"
                                    class="btn btn-sm btn-outline-primary" title="Detalhes">

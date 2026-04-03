@@ -98,7 +98,7 @@ def register_exportacao_routes(bp):
         tipo_filtro = request.args.get('tipo_fonte', '')
         status_filtro = request.args.get('status', '')
         uf_filtro = request.args.get('uf_destino', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaNf)
@@ -146,9 +146,10 @@ def register_exportacao_routes(bp):
             'numero_nf': func.lpad(func.coalesce(CarviaNf.numero_nf, ''), 20, '0'),
             'emitente': CarviaNf.nome_emitente,
             'valor_total': CarviaNf.valor_total,
+            'data_emissao': CarviaNf.data_emissao,
             'criado_em': CarviaNf.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaNf.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaNf.data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
@@ -199,7 +200,7 @@ def register_exportacao_routes(bp):
         busca = request.args.get('busca', '')
         tipo_filtro = request.args.get('tipo', '')
         uf_filtro = request.args.get('uf_destino', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaOperacao)
@@ -227,9 +228,10 @@ def register_exportacao_routes(bp):
             'peso_utilizado': CarviaOperacao.peso_utilizado,
             'cte_valor': CarviaOperacao.cte_valor,
             'status': CarviaOperacao.status,
+            'cte_data_emissao': CarviaOperacao.cte_data_emissao,
             'criado_em': CarviaOperacao.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaOperacao.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaOperacao.cte_data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
@@ -288,7 +290,7 @@ def register_exportacao_routes(bp):
         busca = request.args.get('busca', '')
         transp_filtro = request.args.get('transportadora', '')
         fatura_filtro = request.args.get('fatura', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaSubcontrato).outerjoin(
@@ -333,9 +335,10 @@ def register_exportacao_routes(bp):
             'seq': CarviaSubcontrato.numero_sequencial_transportadora,
             'valor_final': func.coalesce(CarviaSubcontrato.valor_acertado, CarviaSubcontrato.valor_cotado),
             'status': CarviaSubcontrato.status,
+            'cte_data_emissao': CarviaSubcontrato.cte_data_emissao,
             'criado_em': CarviaSubcontrato.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaSubcontrato.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaSubcontrato.cte_data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
@@ -379,7 +382,7 @@ def register_exportacao_routes(bp):
         operacao_filtro = request.args.get('operacao', '', type=str)
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaCteComplementar)
@@ -406,7 +409,7 @@ def register_exportacao_routes(bp):
             'status': CarviaCteComplementar.status,
             'criado_em': CarviaCteComplementar.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaCteComplementar.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaCteComplementar.cte_data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
@@ -558,7 +561,7 @@ def register_exportacao_routes(bp):
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
         tipo_frete_filtro = request.args.get('tipo_frete', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaFaturaCliente)
@@ -586,7 +589,7 @@ def register_exportacao_routes(bp):
             'status': CarviaFaturaCliente.status,
             'criado_em': CarviaFaturaCliente.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaFaturaCliente.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaFaturaCliente.data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
@@ -641,7 +644,7 @@ def register_exportacao_routes(bp):
         data_emissao_ate = request.args.get('data_emissao_ate', '')
         data_vencimento_de = request.args.get('data_vencimento_de', '')
         data_vencimento_ate = request.args.get('data_vencimento_ate', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaFaturaTransportadora)
@@ -695,7 +698,7 @@ def register_exportacao_routes(bp):
             'status_conferencia': CarviaFaturaTransportadora.status_conferencia,
             'criado_em': CarviaFaturaTransportadora.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
@@ -1105,7 +1108,7 @@ def register_exportacao_routes(bp):
                 )
             )
 
-        fechamentos = query.order_by(CarviaComissaoFechamento.criado_em.desc()).all()
+        fechamentos = query.order_by(CarviaComissaoFechamento.data_inicio.desc().nullslast()).all()
 
         # Sheet 1: Fechamentos
         fechamentos_data = []

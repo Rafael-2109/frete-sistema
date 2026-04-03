@@ -30,7 +30,7 @@ def register_subcontrato_routes(bp):
         transp_filtro = request.args.get('transportadora', '')
         transp_id_param = request.args.get('transportadora_id', type=int)
         fatura_filtro = request.args.get('fatura', '')
-        sort = request.args.get('sort', 'criado_em')
+        sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaSubcontrato).outerjoin(
@@ -79,9 +79,10 @@ def register_subcontrato_routes(bp):
             # GAP-37: Usar COALESCE para ordenar por valor_final real
             'valor_final': func.coalesce(CarviaSubcontrato.valor_acertado, CarviaSubcontrato.valor_cotado),
             'status': CarviaSubcontrato.status,
+            'cte_data_emissao': CarviaSubcontrato.cte_data_emissao,
             'criado_em': CarviaSubcontrato.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaSubcontrato.criado_em)
+        sort_col = sortable_columns.get(sort, CarviaSubcontrato.cte_data_emissao)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
