@@ -1798,24 +1798,41 @@ def _format_messages_for_correction(messages: list, max_chars: int = 6000) -> st
 @login_required
 def api_list_sessions():
     """
-    Lista sessões do usuário.
+    Lista sessões do usuário com busca opcional.
 
-    GET /agente/api/sessions?limit=20
+    GET /agente/api/sessions?limit=50&q=texto
     """
     try:
         from .models import AgentSession
 
-        limit = request.args.get('limit', 20, type=int)
-        limit = min(limit, 50)
+        limit = request.args.get('limit', 50, type=int)
+        limit = min(limit, 100)
+        search_query = request.args.get('q', '', type=str).strip()
 
-        sessions = AgentSession.list_for_user(
-            user_id=current_user.id,
-            limit=limit,
-        )
+        if search_query and len(search_query) >= 2:
+            # Sessao B: busca server-side por titulo e ultima mensagem
+            # Escapar wildcards literais para evitar scans caros
+            safe_query = search_query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+            search_term = f'%{safe_query}%'
+            sessions = AgentSession.query.filter(
+                AgentSession.user_id == current_user.id,
+                db.or_(
+                    AgentSession.title.ilike(search_term, escape='\\'),
+                    AgentSession.last_message.ilike(search_term, escape='\\'),
+                )
+            ).order_by(
+                AgentSession.updated_at.desc(),
+            ).limit(limit).all()
+        else:
+            sessions = AgentSession.list_for_user(
+                user_id=current_user.id,
+                limit=limit,
+            )
 
         return jsonify({
             'success': True,
             'sessions': [s.to_dict() for s in sessions],
+            'query': search_query or None,
         })
 
     except Exception as e:

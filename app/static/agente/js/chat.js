@@ -2255,9 +2255,9 @@ async function loadSessions() {
     empty.style.display = 'none';
 
     try {
-        const response = await fetch('/agente/api/sessions?limit=20', {
+        const response = await fetch('/agente/api/sessions?limit=50', {
             headers: {
-                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
             }
         });
 
@@ -2310,6 +2310,10 @@ function renderSessions() {
             <div class="session-item-header">
                 <span class="session-item-title" title="${escapeHtml(session.title || 'Sem título')}">${escapeHtml(session.title || 'Sem título')}</span>
                 <div class="session-item-actions">
+                    <button class="export" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
+                            onclick="event.stopPropagation(); exportHistoricalSession(this.dataset.sid, this.dataset.title)" title="Exportar">
+                        <i class="fas fa-file-export"></i>
+                    </button>
                     <button onclick="event.stopPropagation(); renameSessionPrompt(${session.id})" title="Renomear">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -3477,5 +3481,257 @@ function updateContextUsage(contextData) {
             `Contexto ${Math.round(percent)}% usado — considere iniciar nova sessao para melhor performance`,
             8000
         );
+    }
+}
+
+
+// =============================================================
+// SESSAO B: BUSCA EM SESSOES
+// =============================================================
+
+/** Timer do debounce de busca */
+let _searchDebounceTimer = null;
+
+/**
+ * Busca debounced: espera 300ms apos ultima digitacao.
+ */
+function debouncedSearchSessions(query) {
+    const clearBtn = document.getElementById('sessions-search-clear');
+    if (clearBtn) clearBtn.style.display = query ? 'flex' : 'none';
+
+    if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
+    _searchDebounceTimer = setTimeout(() => searchSessions(query), 300);
+}
+
+/**
+ * Executa busca server-side de sessoes.
+ */
+async function searchSessions(query) {
+    const loading = document.getElementById('sessions-loading');
+    const empty = document.getElementById('sessions-empty');
+    const list = document.getElementById('sessions-list');
+
+    // Remover resultados anteriores e estado "no results"
+    list.querySelectorAll('.session-item, .sessions-no-results').forEach(el => el.remove());
+
+    if (loading) loading.style.display = 'block';
+    if (empty) empty.style.display = 'none';
+
+    try {
+        const q = encodeURIComponent(query.trim());
+        const url = q ? `/agente/api/sessions?limit=50&q=${q}` : '/agente/api/sessions?limit=50';
+
+        const response = await fetch(url, { headers: _csrfHeader() });
+        const data = await response.json();
+
+        if (loading) loading.style.display = 'none';
+
+        if (data.success && data.sessions.length > 0) {
+            sessionsList = data.sessions;
+            renderSessions();
+            updateSessionsCount(data.sessions.length);
+        } else if (query.trim()) {
+            // Busca sem resultados
+            sessionsList = [];
+            const noResults = document.createElement('div');
+            noResults.className = 'sessions-no-results';
+            noResults.innerHTML = `
+                <i class="fas fa-search fa-2x"></i>
+                <p>Nenhum resultado para "${escapeHtml(query)}"</p>
+            `;
+            list.appendChild(noResults);
+        } else {
+            sessionsList = data.sessions || [];
+            if (empty) empty.style.display = 'block';
+            updateSessionsCount(0);
+        }
+    } catch (error) {
+        console.error('[SEARCH] Erro na busca:', error);
+        if (loading) loading.style.display = 'none';
+    }
+}
+
+/**
+ * Limpa campo de busca e recarrega sessoes.
+ */
+function clearSessionSearch() {
+    const input = document.getElementById('sessions-search-input');
+    const clearBtn = document.getElementById('sessions-search-clear');
+    if (input) input.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    loadSessions();
+}
+
+
+// =============================================================
+// SESSAO B: EXPORT DE SESSOES HISTORICAS
+// =============================================================
+
+/**
+ * Exporta uma sessao historica buscando mensagens do banco.
+ * Mostra menu de formato (MD/PDF) antes de exportar.
+ */
+function exportHistoricalSession(sessionIdToExport, title) {
+    // Mini-menu de formato via confirm (simples e consistente)
+    const format = prompt(
+        'Formato de exportacao:\n\n1 - Markdown (.md)\n2 - PDF\n\nDigite 1 ou 2:',
+        '1'
+    );
+
+    if (!format) return;
+
+    const fmt = format.trim() === '2' ? 'pdf' : 'markdown';
+
+    showToast('Preparando exportacao...', 2000);
+
+    fetch(`/agente/api/sessions/${sessionIdToExport}/messages`, {
+        headers: _csrfHeader(),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success || !data.messages || data.messages.length === 0) {
+            showToast('Sessao sem mensagens para exportar', 3000);
+            return;
+        }
+
+        const conversationData = data.messages.map(msg => ({
+            role: msg.role === 'user' ? 'Usuario' : 'Assistente',
+            content: msg.content || '',
+            time: msg.timestamp
+                ? new Date(msg.timestamp).toLocaleString('pt-BR', {
+                    day: '2-digit', month: '2-digit',
+                    hour: '2-digit', minute: '2-digit'
+                })
+                : '',
+        }));
+
+        const timestamp = new Date().toLocaleString('pt-BR');
+        const exportTitle = title || 'Conversa';
+
+        if (fmt === 'markdown') {
+            exportHistoricalAsMarkdown(conversationData, timestamp, exportTitle);
+        } else {
+            exportHistoricalAsPDF(conversationData, timestamp, exportTitle);
+        }
+    })
+    .catch(e => {
+        showToast('Erro ao exportar sessao', 3000);
+        console.error('[EXPORT] Erro:', e);
+    });
+}
+
+/**
+ * Gera e baixa arquivo Markdown de sessao historica.
+ */
+function exportHistoricalAsMarkdown(data, timestamp, title) {
+    let markdown = `# ${title}\n\n`;
+    markdown += `**Exportado em:** ${timestamp}\n\n`;
+    markdown += `---\n\n`;
+
+    data.forEach(msg => {
+        const icon = msg.role === 'Usuario' ? '\u{1F464}' : '\u{1F916}';
+        markdown += `### ${icon} ${msg.role}\n`;
+        if (msg.time) markdown += `*${msg.time}*\n\n`;
+        markdown += `${msg.content}\n\n`;
+        markdown += `---\n\n`;
+    });
+
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conversa-nacom-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Markdown exportado', 2000);
+}
+
+/**
+ * Gera e abre janela de impressao PDF de sessao historica.
+ */
+function exportHistoricalAsPDF(data, timestamp, title) {
+    let html = `
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>${escapeHtml(title)}</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                    padding: 40px;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    color: #1f2328;
+                    line-height: 1.6;
+                }
+                h1 {
+                    color: #00a88a;
+                    border-bottom: 2px solid #00a88a;
+                    padding-bottom: 10px;
+                }
+                .meta {
+                    color: #57606a;
+                    font-size: 0.9em;
+                    margin-bottom: 30px;
+                }
+                .message {
+                    margin: 20px 0;
+                    padding: 15px;
+                    border-radius: 10px;
+                    page-break-inside: avoid;
+                }
+                .user {
+                    background: #e8f4fd;
+                    border-left: 4px solid #0284c7;
+                }
+                .assistant {
+                    background: #f0fdf4;
+                    border-left: 4px solid #00a88a;
+                }
+                .role {
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                    font-size: 0.85em;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                }
+                .time {
+                    color: #57606a;
+                    font-size: 0.8em;
+                }
+                .content {
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>${escapeHtml(title)}</h1>
+            <p class="meta">Exportado em ${timestamp} &bull; ${data.length} mensagens</p>
+    `;
+
+    data.forEach(msg => {
+        const cls = msg.role === 'Usuario' ? 'user' : 'assistant';
+        html += `
+            <div class="message ${cls}">
+                <div class="role">${escapeHtml(msg.role)} <span class="time">${escapeHtml(msg.time || '')}</span></div>
+                <div class="content">${escapeHtml(msg.content)}</div>
+            </div>
+        `;
+    });
+
+    html += '</body></html>';
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.onload = () => printWindow.print();
+        showToast('PDF pronto para impressao', 2000);
+    } else {
+        showToast('Popup bloqueado — permita popups para exportar PDF', 4000);
     }
 }

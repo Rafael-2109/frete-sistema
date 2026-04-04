@@ -349,6 +349,20 @@
                 <i class="fas fa-times"></i>
             </button>
         </div>
+        <!-- Sessao B: Campo de busca -->
+        <div class="sessions-search">
+            <div class="sessions-search-input-wrapper">
+                <i class="fas fa-search sessions-search-icon"></i>
+                <input type="text" id="sessions-search-input" class="sessions-search-input"
+                       placeholder="Buscar conversas..."
+                       oninput="debouncedSearchSessions(this.value)"
+                       autocomplete="off">
+                <button id="sessions-search-clear" class="sessions-search-clear" style="display: none;"
+                        onclick="clearSessionSearch()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
         <div class="sessions-modal-actions">
             <button class="btn-new-session" onclick="startNewSession(); closeSessionsModal();">
                 <i class="fas fa-plus me-2"></i>Nova Conversa

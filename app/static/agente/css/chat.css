@@ -838,6 +838,88 @@
     background: #e9ecef;
 }
 
+/* Sessao B: Campo de busca no modal de sessoes */
+.sessions-search {
+    padding: 12px 20px 0;
+}
+
+.sessions-search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.sessions-search-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--agent-text-secondary, #888);
+    font-size: 0.85rem;
+    pointer-events: none;
+}
+
+.sessions-search-input {
+    width: 100%;
+    padding: 9px 36px 9px 36px;
+    border: 1px solid var(--agent-border, rgba(255,255,255,0.15));
+    border-radius: 8px;
+    background: var(--agent-bg-secondary, rgba(255,255,255,0.05));
+    color: var(--agent-text-primary, #e0e0e0);
+    font-size: 0.88rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.sessions-search-input:focus {
+    border-color: var(--agent-accent, #667eea);
+}
+
+.sessions-search-input::placeholder {
+    color: var(--agent-text-secondary, #888);
+}
+
+.sessions-search-clear {
+    position: absolute;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--agent-text-secondary, #888);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+}
+
+.sessions-search-clear:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--agent-text-primary, #e0e0e0);
+}
+
+/* Sessao B: Botao export no session-item */
+.session-item-actions button.export {
+    color: var(--agent-text-secondary, #888);
+}
+
+.session-item-actions button.export:hover {
+    color: var(--agent-accent, #667eea);
+    background: rgba(102,126,234,0.12);
+}
+
+/* Sessao B: Resultado de busca vazio */
+.sessions-no-results {
+    padding: 30px 20px;
+    text-align: center;
+    color: var(--agent-text-secondary, #888);
+}
+
+.sessions-no-results i {
+    opacity: 0.3;
+    margin-bottom: 8px;
+}
+
 .sessions-modal-actions {
     padding: 12px 20px;
     border-bottom: 1px solid #e9ecef;
