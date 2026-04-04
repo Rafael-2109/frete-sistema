@@ -11,10 +11,13 @@ Uso:
   1. Em app/__init__.py: registrar set_pg_audit_context como before_request
   2. Em sync jobs: chamar set_audit_context() explicitamente antes das operacoes
 
-IMPORTANTE: Usa SET (session-level), NAO SET LOCAL (transaction-level).
-SET persiste entre commits na mesma conexao, garantindo que syncs com
+IMPORTANTE: Usa set_config() com is_local=false (session-level).
+Persiste entre commits na mesma conexao, garantindo que syncs com
 multiplos commits mantenham o contexto. A limpeza ocorre no before_request
 do proximo request (que sobrescreve) ou no pool_pre_ping (que cria nova conexao).
+
+NOTA: NAO usar "SET var = :param" — PostgreSQL nao aceita bind params em SET.
+Usar set_config('var', :param, false) que aceita bind params corretamente.
 """
 import logging
 from uuid import uuid4
@@ -31,9 +34,7 @@ def set_pg_audit_context():
     Propaga usuario e origem do request HTTP para session variables do PostgreSQL.
     Silencioso em caso de erro (nao deve impedir o request).
 
-    Usa SET (session-level) para persistir entre commits dentro do mesmo request.
-    O before_request SEMPRE roda antes de qualquer logica, garantindo que
-    conexoes reutilizadas do pool tenham contexto atualizado.
+    Usa set_config(name, value, is_local) onde is_local=false = session-level.
     """
     try:
         from app import db
@@ -50,20 +51,26 @@ def set_pg_audit_context():
             except Exception:
                 pass
 
-        db.session.execute(text("SET app.current_user = :u"), {'u': usuario})
-        db.session.execute(text("SET app.origin = :o"), {'o': origem})
+        # set_config(name, value, is_local): is_local=false = session-level (persiste entre commits)
+        db.session.execute(text("SELECT set_config('app.current_user', :u, false)"), {'u': usuario})
+        db.session.execute(text("SELECT set_config('app.origin', :o, false)"), {'o': origem})
         # Limpar session_id de sync anterior (evita contaminacao entre requests)
-        db.session.execute(text("SET app.session_id = ''"))
+        db.session.execute(text("SELECT set_config('app.session_id', '', false)"))
     except Exception as e:
         # Nao propagar — contexto ausente e aceitavel (trigger usa 'SISTEMA' como fallback)
         logger.debug(f"[AUDIT_CTX] Contexto PG nao setado: {e}")
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def set_audit_context(usuario='SISTEMA', origem='SYNC_ODOO', session_id=None):
     """
     Chamado explicitamente por sync jobs e workers (sem request context).
 
-    Usa SET (session-level) para persistir entre os multiplos commits
+    Usa set_config() com is_local=false para persistir entre os multiplos commits
     que os sync services fazem dentro de uma mesma operacao.
 
     Args:
@@ -76,11 +83,11 @@ def set_audit_context(usuario='SISTEMA', origem='SYNC_ODOO', session_id=None):
     try:
         from app import db
 
-        db.session.execute(text("SET app.current_user = :u"), {'u': usuario})
-        db.session.execute(text("SET app.origin = :o"), {'o': origem})
+        db.session.execute(text("SELECT set_config('app.current_user', :u, false)"), {'u': usuario})
+        db.session.execute(text("SELECT set_config('app.origin', :o, false)"), {'o': origem})
         # Sempre setar session_id ('' se nao fornecido) para evitar contaminacao
         # de session_id anterior na mesma conexao do pool
-        db.session.execute(text("SET app.session_id = :s"), {'s': session_id or ''})
+        db.session.execute(text("SELECT set_config('app.session_id', :s, false)"), {'s': session_id or ''})
     except Exception as e:
         logger.debug(f"[AUDIT_CTX] Contexto sync nao setado: {e}")
 
