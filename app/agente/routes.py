@@ -4213,38 +4213,9 @@ def api_get_briefing():
                 'count': int(import_match.group(1)),
             })
 
-        # memory_alerts
-        mem_match = re.search(
-            r'<memory_alerts\s+(.*?)/>',
-            xml_content,
-        )
-        if mem_match:
-            items.append({
-                'type': 'memory_alerts',
-                'details': mem_match.group(1).strip(),
-            })
-
-        # stale_empresa_memories
-        stale_match = re.search(
-            r'<stale_empresa_memories\s+count="(\d+)"',
-            xml_content,
-        )
-        if stale_match:
-            items.append({
-                'type': 'stale_memories',
-                'count': int(stale_match.group(1)),
-            })
-
-        # intelligence_report
-        intel_match = re.search(
-            r'<intelligence_report[^>]*>(.*?)</intelligence_report>',
-            xml_content, re.DOTALL,
-        )
-        if intel_match:
-            items.append({
-                'type': 'intelligence',
-                'content': intel_match.group(1).strip(),
-            })
+        # memory_alerts, stale_memories, intelligence — omitidos do card do usuario
+        # Sao informacoes internas da IA sem valor acionavel para operadores.
+        # Permanecem no XML injetado no prompt do agente (intersession_briefing.py).
 
         return jsonify({
             'success': True,
