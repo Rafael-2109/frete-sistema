@@ -2939,6 +2939,11 @@ fetch('/agente/api/health')
         // Silencioso
     });
 
+// Helper CSRF — definido antes de qualquer fetch que o use
+const _csrfHeader = () => ({
+    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+});
+
 // Sessao A: Carrega briefing inter-sessao ao iniciar nova sessao
 loadAndShowBriefing();
 
@@ -2946,10 +2951,6 @@ loadAndShowBriefing();
 // =============================================================
 // SESSAO A: PAINEL DE MEMORIAS
 // =============================================================
-
-const _csrfHeader = () => ({
-    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-});
 
 /**
  * Abre o painel lateral de memorias.
