@@ -1,0 +1,323 @@
+{
+  "table": "movimentacao_estoque",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Multi-fonte",
+      "description": "10+ caminhos de criacao: FaturamentoService (FATURAMENTO/VENDA), EntradaMaterialService (ENTRADA/COMPRA), PalletSyncService (REMESSA/SAIDA/DEVOLUCAO/RECUSA), ConsumoProducaoService (PRODUCAO/CONSUMO), RecebimentoFisicoOdooService (ENTRADA), estoque/routes.py (AJUSTE manual), ReversaoService (DEVOLUCAO)"
+    },
+    "alternatives": [
+      {
+        "system": "Odoo",
+        "service": "FaturamentoService",
+        "file": "app/odoo/services/faturamento_service.py",
+        "scheduler_step": 1,
+        "description": "tipo=FATURAMENTO, local=VENDA — quando NF de venda faturada (processar_faturamento.py:703,787)"
+      },
+      {
+        "system": "Odoo",
+        "service": "EntradaMaterialService",
+        "file": "app/odoo/services/entrada_material_service.py",
+        "scheduler_step": 6,
+        "description": "tipo=ENTRADA, local=COMPRA/RETORNO — de stock.picking incoming (:663)"
+      },
+      {
+        "system": "Odoo",
+        "service": "PalletSyncService",
+        "file": "app/pallet/services/sync_odoo_service.py",
+        "scheduler_step": 12,
+        "description": "tipo=REMESSA/SAIDA/DEVOLUCAO/RECUSA, local=PALLET — de account.move pallet (:250,503,742,1003)"
+      },
+      {
+        "system": "Local",
+        "service": "ConsumoProducaoService",
+        "file": "app/estoque/services/consumo_producao_service.py",
+        "description": "tipo=PRODUCAO/CONSUMO — cascata de producao com self-referential FK (:216,526)"
+      },
+      {
+        "system": "Odoo",
+        "service": "RecebimentoFisicoOdooService",
+        "file": "app/recebimento/services/recebimento_fisico_odoo_service.py",
+        "description": "tipo=ENTRADA — recebimento fisico com lotes (:568)"
+      },
+      {
+        "system": "Local",
+        "service": "estoque/routes.py",
+        "file": "app/estoque/routes.py",
+        "description": "tipo=usuario, local=ESTOQUE PRINCIPAL — ajustes manuais (:554)"
+      }
+    ]
+  },
+  "fields": {
+    "cod_produto": {
+      "provenance": "multi_source",
+      "rules": [
+        "Setado por todos os 10+ caminhos de criacao. Nunca modificado depois"
+      ]
+    },
+    "nome_produto": {
+      "provenance": "multi_source",
+      "rules": [
+        "De CadastroPalletizacao ou Odoo product name, dependendo do caller. Editavel manualmente (estoque/routes.py:859)"
+      ]
+    },
+    "data_movimentacao": {
+      "provenance": "multi_source",
+      "rules": [
+        "ENTRADA: date_done do Odoo stock.picking",
+        "FATURAMENTO: agora_utc_naive().date()",
+        "PRODUCAO/CONSUMO: data fornecida pelo usuario",
+        "PALLET: invoice_date do account.move Odoo",
+        "Editavel manualmente (estoque/routes.py:860)"
+      ]
+    },
+    "tipo_movimentacao": {
+      "provenance": "multi_source",
+      "rules": [
+        "Valores: ENTRADA, SAIDA, AJUSTE, PRODUCAO, CONSUMO, FATURAMENTO, REMESSA, DEVOLUCAO, RECUSA",
+        "Determinado pelo service que cria o registro"
+      ]
+    },
+    "local_movimentacao": {
+      "provenance": "multi_source",
+      "rules": [
+        "Valores: COMPRA, VENDA, PRODUCAO, AJUSTE, DEVOLUCAO, PALLET, RETORNO",
+        "COMPRA/RETORNO: EntradaMaterialService (RETORNO se vasilhame)",
+        "VENDA: FaturamentoService",
+        "PALLET: PalletSyncService"
+      ]
+    },
+    "qtd_movimentacao": {
+      "provenance": "multi_source",
+      "rules": [
+        "POSITIVO para ENTRADA/PRODUCAO",
+        "NEGATIVO para SAIDA/CONSUMO/FATURAMENTO: -abs(qtd_produto_faturado)",
+        "Editavel manualmente"
+      ]
+    },
+    "numero_nf": {
+      "provenance": "multi_source",
+      "rules": [
+        "FATURAMENTO: de account.move/name",
+        "PALLET: de l10n_br_numero_nota_fiscal Odoo",
+        "ENTRADA: NAO setado (purchase receipts nao tem NF neste campo)",
+        "Status muda para CANCELADO via faturamento_service.py:285 bulk UPDATE"
+      ]
+    },
+    "num_pedido": {
+      "provenance": "multi_source",
+      "rules": [
+        "ENTRADA: picking.origin ou picking name",
+        "FATURAMENTO: nf.origem (sale.order ref)",
+        "RECEBIMENTO: odoo_purchase_order_name"
+      ]
+    },
+    "tipo_origem": {
+      "provenance": "multi_source",
+      "rules": [
+        "Valores: ODOO, MANUAL, TAGPLUS, LEGADO",
+        "Automatico baseado no service: ODOO para sync services, MANUAL para routes/consumo"
+      ]
+    },
+    "status_nf": {
+      "provenance": "multi_source",
+      "rules": [
+        "Valores: FATURADO, CANCELADO",
+        "Setado na criacao para FATURAMENTO/PALLET. NAO setado para PRODUCAO/CONSUMO",
+        "Atualizado para CANCELADO em bulk UPDATE (faturamento_service.py:285)"
+      ]
+    },
+    "separacao_lote_id": {
+      "provenance": "propagated",
+      "rules": [
+        "Apenas FATURAMENTO: de separacao lote_id quando NF processada com lote (processar_faturamento.py:715,795)",
+        "Backfill retroativo quando lote encontrado depois (processar_faturamento.py:756)"
+      ]
+    },
+    "codigo_embarque": {
+      "provenance": "propagated",
+      "rules": [
+        "FK para embarques.id. Apenas FATURAMENTO com lote match (processar_faturamento.py:804)"
+      ]
+    },
+    "odoo_picking_id": {
+      "odoo_field": "stock.picking.id",
+      "odoo_model": "stock.picking",
+      "provenance": "sync",
+      "rules": [
+        "Apenas ENTRADA: id do picking Odoo (entrada_material_service.py:677)"
+      ]
+    },
+    "odoo_move_id": {
+      "odoo_field": "stock.move.id",
+      "odoo_model": "stock.move",
+      "provenance": "sync",
+      "rules": [
+        "Apenas ENTRADA: id do move Odoo (entrada_material_service.py:678)"
+      ]
+    },
+    "purchase_line_id": {
+      "odoo_field": "purchase_line_id",
+      "odoo_model": "stock.move",
+      "provenance": "sync",
+      "rules": [
+        "Apenas ENTRADA: purchase.order.line ID do Odoo (:679)"
+      ]
+    },
+    "pedido_compras_id": {
+      "provenance": "propagated",
+      "rules": [
+        "FK para PedidoCompras local. Apenas ENTRADA: matched por purchase origin (:680)"
+      ]
+    },
+    "recebimento_fisico_id": {
+      "provenance": "propagated",
+      "rules": [
+        "FK para recebimento_fisico. Apenas path recebimento_fisico_odoo (:583)"
+      ]
+    },
+    "recebimento_lote_id": {
+      "provenance": "propagated",
+      "rules": [
+        "FK para recebimento_lote. Apenas path recebimento_fisico (:584)"
+      ]
+    },
+    "lote_nome": {
+      "provenance": "propagated",
+      "rules": [
+        "Nome do lote. De recebimento_fisico (:585) ou recebimento_lf (:3922,3951)"
+      ]
+    },
+    "data_validade": {
+      "provenance": "propagated",
+      "rules": [
+        "De recebimento_lote.data_validade. Apenas recebimento (:586)"
+      ]
+    },
+    "operacao_producao_id": {
+      "provenance": "calculated",
+      "formula": "PROD_YYYYMMDD_HHMMSS_XXXX",
+      "rules": [
+        "Apenas PRODUCAO/CONSUMO: agrupa todos os moves de uma operacao (consumo_producao_service.py:226)"
+      ]
+    },
+    "tipo_origem_producao": {
+      "provenance": "calculated",
+      "rules": [
+        "Apenas PRODUCAO: RAIZ, CONSUMO_DIRETO, PRODUCAO_AUTO, CONSUMO_AUTO",
+        "Distingue tipo do no na arvore de producao (consumo_producao_service.py:227)"
+      ]
+    },
+    "cod_produto_raiz": {
+      "provenance": "propagated",
+      "rules": [
+        "Apenas PRODUCAO: produto raiz da cascata. Populado para todos os nos da arvore (:228)"
+      ]
+    },
+    "producao_pai_id": {
+      "provenance": "propagated",
+      "rules": [
+        "Self-referential FK. No raiz tem NULL. Filhos apontam para o move pai (:229)"
+      ]
+    },
+    "ordem_producao": {
+      "provenance": "manual",
+      "rules": [
+        "Apenas PRODUCAO: NULL na criacao para most paths",
+        "Preenchido retroativamente pelo usuario via modal (estoque/routes.py:2081) ou API manufatura (:921)",
+        "Propagado para filhos via _propagar_ordem_producao (estoque/routes.py:2123,2143)"
+      ]
+    },
+    "tipo_destinatario": {
+      "provenance": "sync",
+      "rules": [
+        "Apenas PALLET: 'TRANSPORTADORA' ou 'CLIENTE' do Odoo (sync_odoo_service.py:259,751)"
+      ]
+    },
+    "cnpj_destinatario": {
+      "provenance": "sync",
+      "rules": [
+        "Apenas PALLET: de Odoo partner"
+      ]
+    },
+    "nome_destinatario": {
+      "provenance": "sync",
+      "rules": [
+        "Apenas PALLET: de Odoo partner name"
+      ]
+    },
+    "baixado": {
+      "provenance": "multi_source",
+      "rules": [
+        "PALLET: False para REMESSA/SAIDA, True para DEVOLUCAO/RECUSA",
+        "Atualizado para True em baixa (sync_odoo_service.py:773, entrada_material_service.py:715)"
+      ]
+    },
+    "baixado_em": { "provenance": "system", "rules": ["Timestamp da baixa de pallet"] },
+    "baixado_por": { "provenance": "system", "rules": ["'SYNC_ODOO' ou 'Sistema Odoo (Retorno Automatico)'"] },
+    "movimento_baixado_id": {
+      "provenance": "propagated",
+      "rules": [
+        "Self-ref FK apontando para o move de devolucao/retorno que causou a baixa"
+      ]
+    },
+    "nf_remessa_origem": {
+      "provenance": "sync",
+      "rules": [
+        "Apenas DEVOLUCAO: reversed_entry_id lookup do Odoo — referencia NF de remessa original (:754)"
+      ]
+    },
+    "embarque_item_id": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — declarado no model (estoque/models.py:82), nunca populado por nenhum codigo"
+      ]
+    },
+    "cnpj_responsavel": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO em movimentacao_estoque — declarado (estoque/models.py:97) mas nunca populado. Campo homónimo em PalletCredito E populado"
+      ]
+    },
+    "nome_responsavel": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — declarado (estoque/models.py:98) mas nunca populado"
+      ]
+    },
+    "qtd_abatida": {
+      "provenance": "system",
+      "rules": [
+        "Default 0. Atualizado apenas por migration script (add_qtd_abatida_pallet.py:97), nenhum runtime updater encontrado"
+      ]
+    },
+    "observacao": {
+      "provenance": "multi_source",
+      "rules": [
+        "Texto descritivo auto-gerado por cada service (picking name + CNPJ, NF + lote, etc.)",
+        "Editavel manualmente (estoque/routes.py:862)",
+        "Pode ter append pos-criacao (sync_odoo_service.py:777 para pallet baixa)"
+      ]
+    },
+    "criado_por": {
+      "provenance": "multi_source",
+      "rules": [
+        "'Sistema Odoo' (EntradaMaterialService), 'SYNC_ODOO' (PalletSync), current_user.nome (manual), user param (producao), 'Sistema Recebimento' (recebimento_fisico)"
+      ]
+    },
+    "atualizado_por": {
+      "provenance": "system",
+      "rules": [
+        "Setado apenas em updates explicitos: 'Sistema - NF Cancelada no Odoo', 'ProcessadorFaturamento - Lote preenchido', current_user.nome (manual)"
+      ]
+    },
+    "ativo": {
+      "provenance": "system",
+      "rules": [
+        "Default True. Setado False quando NF cancelada no Odoo (faturamento_service.py:286). Soft-delete"
+      ]
+    },
+    "criado_em": { "provenance": "system", "formula": "agora_utc_naive()" },
+    "atualizado_em": { "provenance": "system", "formula": "agora_utc_naive() via onupdate" }
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "table": "saldo_standby",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Local",
+      "model": "SaldoStandby",
+      "service": "standby_api",
+      "file": "app/carteira/routes/standby_api.py",
+      "direction": "Manual -> Local",
+      "description": "Unico caminho de criacao: POST /api/standby/criar (standby_api.py:74). Snapshot de CarteiraPrincipal no momento da criacao"
+    },
+    "alternatives": []
+  },
+  "fields": {
+    "origem_separacao_lote_id": {
+      "provenance": "system",
+      "rules": [
+        "Sempre string vazia. Campo removido de CarteiraPrincipal, mantido por compatibilidade (:75)"
+      ]
+    },
+    "num_pedido": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "num_pedido",
+      "rules": [
+        "Snapshot na criacao, nunca atualizado"
+      ]
+    },
+    "cod_produto": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "cod_produto"
+    },
+    "cnpj_cliente": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "cnpj_cpf",
+      "rules": [
+        "ATENCAO: campo renomeado. CarteiraPrincipal usa cnpj_cpf, SaldoStandby usa cnpj_cliente"
+      ]
+    },
+    "nome_cliente": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "raz_social",
+      "rules": [
+        "Fallback: raz_social -> raz_social_red -> '' (:79)"
+      ]
+    },
+    "qtd_saldo": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "qtd_saldo_produto_pedido",
+      "rules": [
+        "SNAPSHOT — valor no momento da criacao do standby, NAO e atualizado em sincronia com a carteira"
+      ]
+    },
+    "valor_saldo": {
+      "provenance": "calculated",
+      "formula": "qtd_saldo * CarteiraPrincipal.preco_produto_pedido",
+      "rules": [
+        "Calculado na criacao (:81). Snapshot, nao atualizado"
+      ]
+    },
+    "peso_saldo": {
+      "provenance": "calculated",
+      "formula": "qtd_saldo * CadastroPalletizacao.peso_bruto (ou 0 se sem cadastro)",
+      "rules": [
+        "Requer lookup em CadastroPalletizacao (:82)"
+      ]
+    },
+    "pallet_saldo": {
+      "provenance": "calculated",
+      "formula": "qtd_saldo / CadastroPalletizacao.palletizacao (ou 0 se sem cadastro)",
+      "rules": [
+        "Requer lookup em CadastroPalletizacao (:83)"
+      ]
+    },
+    "data_pedido": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "data_pedido"
+    },
+    "tipo_standby": {
+      "provenance": "manual",
+      "rules": [
+        "Do POST request body (:85)",
+        "Valores: 'Saldo', 'Aguardar Comercial', 'Aguardar PCP'"
+      ]
+    },
+    "status_standby": {
+      "provenance": "manual",
+      "rules": [
+        "Criado como 'ATIVO' (:86)",
+        "Atualizado via POST /atualizar-status (:217)",
+        "Valores: ATIVO, BLOQ. COML., SALDO, CONFIRMADO"
+      ]
+    },
+    "resolucao_final": {
+      "provenance": "manual",
+      "rules": [
+        "NULL na criacao. Setado 'RETORNO_CARTEIRA' quando status=CONFIRMADO (:221)"
+      ]
+    },
+    "data_resolucao": {
+      "provenance": "system",
+      "rules": [
+        "Timestamp quando status=CONFIRMADO (agora_utc_naive()) (:219)"
+      ]
+    },
+    "resolvido_por": {
+      "provenance": "system",
+      "rules": [
+        "current_user.nome quando status=CONFIRMADO (:220)"
+      ]
+    },
+    "observacoes": {
+      "provenance": "manual",
+      "rules": [
+        "JSON array de {data, usuario, texto}. Appended via POST /adicionar-observacao (:182)",
+        "NAO e texto plano — e json.dumps(...)"
+      ]
+    },
+    "data_limite_standby": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — declarado no model (carteira/models.py:405), nunca setado por nenhum codigo"
+      ]
+    },
+    "dias_em_standby": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — default 0, schema diz 'Contador automatico' mas nenhum scheduler/job atualiza"
+      ]
+    },
+    "alertas_enviados": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — default 0, nenhum codigo de alerta incrementa este contador"
+      ]
+    },
+    "proximo_alerta": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — declarado no model (carteira/models.py:410), nunca setado"
+      ]
+    },
+    "observacoes_resolucao": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — declarado no model, nunca escrito por nenhum codigo"
+      ]
+    },
+    "criado_em": { "provenance": "system", "formula": "agora_utc_naive()" },
+    "criado_por": {
+      "provenance": "system",
+      "rules": [
+        "current_user.nome ou current_user.username ou 'Sistema' (:87-89)"
+      ]
+    }
+  }
+}

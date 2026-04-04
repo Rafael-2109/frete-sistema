@@ -1,0 +1,318 @@
+{
+  "table": "separacao",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Local",
+      "description": "9 caminhos de criacao: separacao_utils, separacao_api, carteira_simples_api, programacao_em_lote, ajuste_sincronizacao_service, sincronizar_items_service, recuperar_separacoes_perdidas"
+    },
+    "alternatives": []
+  },
+  "fields": {
+    "separacao_lote_id": {
+      "provenance": "calculated",
+      "formula": "gerar_lote_id() -> LOTE_YYYYMMDD_HHMMSS_NNN",
+      "rules": [
+        "Gerado automaticamente na criacao. Agrupa itens de um mesmo lote de separacao"
+      ]
+    },
+    "num_pedido": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "num_pedido",
+      "rules": [
+        "Copiado na criacao, nunca modificado depois"
+      ]
+    },
+    "data_pedido": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "data_pedido"
+    },
+    "cnpj_cpf": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "cnpj_cpf",
+      "rules": [
+        "Copiado na criacao E re-sincronizado apos cada sync Odoo via AtualizarDadosService (atualizar_dados_service.py:116)"
+      ]
+    },
+    "raz_social_red": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "raz_social_red",
+      "rules": [
+        "Re-sincronizado pos-Odoo-sync (atualizar_dados_service.py:120)"
+      ]
+    },
+    "nome_cidade": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "nome_cidade",
+      "rules": [
+        "Re-sincronizado pos-Odoo-sync (atualizar_dados_service.py:125)"
+      ]
+    },
+    "cod_uf": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "cod_uf",
+      "rules": [
+        "Re-sincronizado pos-Odoo-sync (atualizar_dados_service.py:130)"
+      ]
+    },
+    "cod_produto": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "cod_produto",
+      "rules": [
+        "Imutavel apos criacao"
+      ]
+    },
+    "nome_produto": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "nome_produto"
+    },
+    "observ_ped_1": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "observ_ped_1",
+      "rules": [
+        "Truncado a 700 chars. Re-sincronizado pos-Odoo-sync (atualizar_dados_service.py:152)"
+      ]
+    },
+    "tags_pedido": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "tags_pedido",
+      "rules": [
+        "Originalmente de Odoo order_id/tag_ids. Re-sincronizado pos-Odoo-sync (atualizar_dados_service.py:157)"
+      ]
+    },
+    "pedido_cliente": {
+      "provenance": "propagated",
+      "source_table": "carteira_principal",
+      "source_field": "pedido_cliente",
+      "rules": [
+        "Pode ser lazily fetchado do Odoo se ausente (pedido_cliente_utils.py:195, portal/routes_async.py:141)"
+      ]
+    },
+    "qtd_saldo": {
+      "provenance": "manual",
+      "rules": [
+        "Quantidade definida pelo usuario na criacao da separacao",
+        "Ajustada automaticamente por AjusteSincronizacaoService (ajuste_sincronizacao_service.py:346,649,699) quando Odoo muda quantidades",
+        "Tambem ajustada por reconciliacao NF (reconciliacao_separacao_nf.py:244)"
+      ]
+    },
+    "valor_saldo": {
+      "provenance": "calculated",
+      "formula": "qtd_saldo * preco_produto_pedido (de CarteiraPrincipal)",
+      "rules": [
+        "Recalculado quando qtd_saldo muda"
+      ]
+    },
+    "pallet": {
+      "provenance": "calculated",
+      "formula": "qtd_saldo / CadastroPalletizacao.palletizacao via calcular_peso_pallet_produto()",
+      "rules": [
+        "Recalculado em ajustes de sync e reconciliacao NF"
+      ]
+    },
+    "peso": {
+      "provenance": "calculated",
+      "formula": "qtd_saldo * CadastroPalletizacao.peso_bruto via calcular_peso_pallet_produto()"
+    },
+    "rota": {
+      "provenance": "calculated",
+      "formula": "Se incoterm=RED -> 'RED'; se FOB -> 'FOB'; senao -> buscar_rota_por_uf(cod_uf) via CadastroRota",
+      "rules": [
+        "Recalculada apos cada sync Odoo (atualizar_dados_service.py:136)"
+      ]
+    },
+    "sub_rota": {
+      "provenance": "calculated",
+      "formula": "buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade) via CadastroSubRota",
+      "rules": [
+        "Recalculada apos cada sync Odoo (atualizar_dados_service.py:146)"
+      ]
+    },
+    "tipo_envio": {
+      "provenance": "calculated",
+      "formula": "determinar_tipo_envio() em separacao_utils.py:18 — compara qtd selecionada vs total na carteira",
+      "rules": [
+        "Valores: 'total' ou 'parcial'"
+      ]
+    },
+    "status": {
+      "provenance": "calculated",
+      "rules": [
+        "AUTO-GERENCIADO por SQLAlchemy event listener before_insert/before_update (separacao/models.py:244-283)",
+        "Derivado de: nf_cd, sincronizado_nf, numero_nf, cotacao_id",
+        "Valores: PREVISAO, ABERTO, COTADO, FATURADO, NF no CD",
+        "Writes expliciitos em outros arquivos sao overridden pelo listener no proximo save",
+        "Excecao: PREVISAO e preservado explicitamente pelo listener"
+      ]
+    },
+    "sincronizado_nf": {
+      "provenance": "sync",
+      "rules": [
+        "Sempre False na criacao",
+        "Setado True por: processar_faturamento.py:938, reconciliacao_separacao_nf.py:257, recuperar_separacoes_perdidas.py:268",
+        "Reset False por: separacao/models.py:501 (cancelar_faturamento)",
+        "False = pendente (projeta estoque), True = faturado"
+      ]
+    },
+    "numero_nf": {
+      "provenance": "sync",
+      "rules": [
+        "Sempre NULL na criacao",
+        "Preenchido por reconciliacao NF (reconciliacao_separacao_nf.py:258)",
+        "Limpo em cancelamento (separacao/models.py:502, embarques/routes.py:1832)"
+      ]
+    },
+    "data_sincronizacao": {
+      "provenance": "system",
+      "rules": [
+        "Timestamp setado quando sincronizado_nf torna-se True. Limpo em cancelamento"
+      ]
+    },
+    "expedicao": {
+      "provenance": "manual",
+      "rules": [
+        "Data de expedicao definida pelo usuario",
+        "Tambem atualizada por: portal agendamentos (importar_agendamentos.py:353,391), Sendas service (service_verificacao_sendas.py:413), ajuste sync (ajuste_sincronizacao_service.py:353)"
+      ]
+    },
+    "agendamento": {
+      "provenance": "manual",
+      "rules": [
+        "Data de agendamento no cliente",
+        "Multiplos writers: separacao_api, separacoes_api, importar_agendamentos, portal Atacadao, portal Sendas, portal routes"
+      ]
+    },
+    "agendamento_confirmado": {
+      "provenance": "manual",
+      "rules": [
+        "Default False. Toggled por confirmacao do usuario (agendamento_confirmacao_api.py:46,105)",
+        "Tambem setado True automaticamente por callbacks dos portais Atacadao/Sendas"
+      ]
+    },
+    "protocolo": {
+      "provenance": "manual",
+      "rules": [
+        "Protocolo de agendamento. Escrito por portal imports e edits manuais"
+      ]
+    },
+    "nf_cd": {
+      "provenance": "manual",
+      "rules": [
+        "NF retornou ao CD. Setado True em cancelamento de embarque (embarques/routes.py:1795,1820)",
+        "Afeta calculo automatico de status pelo event listener"
+      ]
+    },
+    "data_embarque": {
+      "provenance": "system",
+      "rules": [
+        "CONTROLADO PELA PORTARIA — setado quando veiculo sai (portaria/routes.py:296,756)",
+        "Limpo em cancelamento de embarque (embarques/routes.py:975,1821,2053)",
+        "NAO e setado pelo modulo de embarques diretamente"
+      ]
+    },
+    "cotacao_id": {
+      "provenance": "manual",
+      "rules": [
+        "FK para cotacoes. Setado quando lote adicionado a cotacao (separacao/models.py:185)",
+        "Limpo em cancelamento de embarque ou remocao de cotacao (separacao/models.py:480)"
+      ]
+    },
+    "falta_item": {
+      "provenance": "manual",
+      "rules": [
+        "Default False. Toggled pelo usuario via API toggle (pedidos/routes/api_routes.py:225)"
+      ]
+    },
+    "falta_pagamento": {
+      "provenance": "calculated",
+      "rules": [
+        "Auto-setado True no INSERT via before_insert listener (separacao/models.py:207-239) se CarteiraPrincipal.cond_pgto_pedido contem 'ANTECIPADO'",
+        "Apos criacao, somente toggle manual pelo usuario (pedidos/routes/api_routes.py:268)"
+      ]
+    },
+    "obs_separacao": {
+      "provenance": "manual",
+      "rules": [
+        "Observacao definida pelo usuario (pedidos/routes/api_routes.py:341). Todos itens do lote atualizados juntos"
+      ]
+    },
+    "cidade_normalizada": {
+      "provenance": "calculated",
+      "formula": "LocalizacaoService.normalizar_cidade()",
+      "rules": [
+        "Populado lazily via gerar_resumo() (admin_routes.py:165) ou LocalizacaoService"
+      ]
+    },
+    "uf_normalizada": {
+      "provenance": "calculated",
+      "formula": "LocalizacaoService",
+      "rules": [
+        "Mesma logica de cidade_normalizada"
+      ]
+    },
+    "codigo_ibge": {
+      "provenance": "calculated",
+      "formula": "Derivado de cidade/UF via LocalizacaoService (localizacao.py:363,479)",
+      "rules": [
+        "Usado para calculo de frete"
+      ]
+    },
+    "roteirizacao": {
+      "provenance": "manual",
+      "rules": [
+        "NULL em todos os caminhos normais de criacao",
+        "Populado apenas no path de recuperacao (recuperar_separacoes_perdidas.py:261)"
+      ]
+    },
+    "separacao_impressa": {
+      "provenance": "system",
+      "rules": [
+        "Default False. Setado True quando impressao executada (admin_routes.py:34)"
+      ]
+    },
+    "separacao_impressa_em": {
+      "provenance": "system",
+      "rules": [
+        "Timestamp da impressao"
+      ]
+    },
+    "separacao_impressa_por": {
+      "provenance": "system",
+      "rules": [
+        "current_user.nome na impressao"
+      ]
+    },
+    "zerado_por_sync": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — declarado no model (separacao/models.py:47), lido em reconciliacao_separacao_nf.py:263, mas NENHUM codigo seta True. Reservado para uso futuro nunca implementado"
+      ]
+    },
+    "data_zeragem": {
+      "provenance": "system",
+      "rules": [
+        "CAMPO MORTO — declarado no model (separacao/models.py:48), nunca escrito por nenhum codigo"
+      ]
+    },
+    "criado_em": {
+      "provenance": "system",
+      "formula": "agora_utc_naive()"
+    },
+    "criado_por": {
+      "provenance": "system",
+      "rules": [
+        "Quase nunca populado — apenas em sincronizar_items_service.py:401. Todos os 8 outros caminhos deixam NULL"
+      ]
+    }
+  }
+}

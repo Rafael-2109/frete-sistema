@@ -1,0 +1,279 @@
+{
+  "table": "carteira_principal",
+  "version": "1.0.0",
+  "source": {
+    "primary": {
+      "system": "Odoo",
+      "model": "sale.order.line",
+      "service": "CarteiraService",
+      "file": "app/odoo/services/carteira_service.py",
+      "scheduler_step": 2,
+      "direction": "Odoo -> Local",
+      "method": "sincronizar_carteira_odoo_com_gestao_quantidades()"
+    },
+    "alternatives": []
+  },
+  "fields": {
+    "num_pedido": {
+      "odoo_field": "order_id/name",
+      "odoo_model": "sale.order",
+      "provenance": "sync"
+    },
+    "cod_produto": {
+      "odoo_field": "product_id/default_code",
+      "odoo_model": "product.product",
+      "provenance": "sync"
+    },
+    "pedido_cliente": {
+      "odoo_field": "order_id/l10n_br_pedido_compra",
+      "odoo_model": "sale.order",
+      "provenance": "sync"
+    },
+    "data_pedido": {
+      "odoo_field": "order_id/create_date",
+      "odoo_model": "sale.order",
+      "provenance": "sync"
+    },
+    "data_atual_pedido": {
+      "odoo_field": "order_id/date_order",
+      "odoo_model": "sale.order",
+      "provenance": "sync"
+    },
+    "status_pedido": {
+      "odoo_field": "order_id/state",
+      "odoo_model": "sale.order",
+      "provenance": "sync"
+    },
+    "cnpj_cpf": {
+      "odoo_field": "order_id/partner_id/l10n_br_cnpj",
+      "odoo_model": "res.partner",
+      "provenance": "sync",
+      "rules": [
+        "Se incoterm=RED/REDESPACHO (ID 16), endereco de entrega vem de carrier_id/l10n_br_partner_id em vez de partner_shipping_id"
+      ]
+    },
+    "raz_social": {
+      "odoo_field": "order_id/partner_id/l10n_br_razao_social",
+      "odoo_model": "res.partner",
+      "provenance": "sync"
+    },
+    "raz_social_red": {
+      "odoo_field": "order_id/partner_id/name",
+      "odoo_model": "res.partner",
+      "provenance": "sync"
+    },
+    "municipio": {
+      "odoo_field": "order_id/partner_id/l10n_br_municipio_id/name",
+      "odoo_model": "l10n_br_ciel_it_account.res.municipio",
+      "provenance": "sync"
+    },
+    "estado": {
+      "odoo_field": "order_id/partner_id/state_id/code",
+      "odoo_model": "res.country.state",
+      "provenance": "sync"
+    },
+    "vendedor": {
+      "odoo_field": "order_id/user_id",
+      "odoo_model": "res.users",
+      "provenance": "sync"
+    },
+    "equipe_vendas": {
+      "odoo_field": "order_id/team_id",
+      "odoo_model": "crm.team",
+      "provenance": "sync"
+    },
+    "nome_produto": {
+      "odoo_field": "product_id/name",
+      "odoo_model": "product.product",
+      "provenance": "sync"
+    },
+    "unid_medida_produto": {
+      "odoo_field": "product_id/uom_id",
+      "odoo_model": "uom.uom",
+      "provenance": "sync"
+    },
+    "embalagem_produto": {
+      "odoo_field": "product_id/categ_id/name",
+      "odoo_model": "product.category",
+      "provenance": "sync",
+      "rules": [
+        "Nivel 1 da hierarquia de categorias (ex: Conserva, Molho)"
+      ]
+    },
+    "materia_prima_produto": {
+      "odoo_field": "product_id/categ_id/parent_id/name",
+      "odoo_model": "product.category",
+      "provenance": "sync",
+      "rules": [
+        "Nivel 2 da hierarquia de categorias (ex: Palmito, Azeitona)"
+      ]
+    },
+    "categoria_produto": {
+      "odoo_field": "product_id/categ_id/parent_id/parent_id/name",
+      "odoo_model": "product.category",
+      "provenance": "sync",
+      "rules": [
+        "Nivel 3 (raiz) da hierarquia de categorias"
+      ]
+    },
+    "qtd_produto_pedido": {
+      "odoo_field": "product_uom_qty",
+      "odoo_model": "sale.order.line",
+      "provenance": "sync"
+    },
+    "qtd_cancelada_produto_pedido": {
+      "odoo_field": "qty_cancelado",
+      "odoo_model": "sale.order.line",
+      "provenance": "sync"
+    },
+    "preco_produto_pedido": {
+      "odoo_field": "price_unit",
+      "odoo_model": "sale.order.line",
+      "provenance": "sync"
+    },
+    "cond_pgto_pedido": {
+      "odoo_field": "order_id/payment_term_id",
+      "odoo_model": "account.payment.term",
+      "provenance": "sync"
+    },
+    "forma_pgto_pedido": {
+      "odoo_field": "order_id/payment_provider_id",
+      "odoo_model": "payment.provider",
+      "provenance": "sync"
+    },
+    "incoterm": {
+      "odoo_field": "order_id/incoterm",
+      "odoo_model": "account.incoterms",
+      "provenance": "sync",
+      "rules": [
+        "CIF = empresa entrega, FOB = cliente retira, RED = redespacho (ID 16 no Odoo)",
+        "RED/REDESPACHO muda fonte do endereco de entrega para carrier_id/l10n_br_partner_id"
+      ]
+    },
+    "metodo_entrega_pedido": {
+      "odoo_field": "order_id/carrier_id",
+      "odoo_model": "delivery.carrier",
+      "provenance": "sync"
+    },
+    "data_entrega_pedido": {
+      "odoo_field": "order_id/commitment_date",
+      "odoo_model": "sale.order",
+      "provenance": "sync"
+    },
+    "cliente_nec_agendamento": {
+      "odoo_field": "order_id/partner_id/agendamento",
+      "odoo_model": "res.partner",
+      "provenance": "sync"
+    },
+    "observ_ped_1": {
+      "odoo_field": "order_id/picking_note",
+      "odoo_model": "sale.order",
+      "provenance": "sync"
+    },
+    "cnpj_endereco_ent": {
+      "odoo_field": "order_id/partner_shipping_id/l10n_br_cnpj",
+      "odoo_model": "res.partner",
+      "provenance": "sync",
+      "rules": [
+        "Se incoterm=RED, usa carrier_id/l10n_br_partner_id/l10n_br_cnpj"
+      ]
+    },
+    "empresa_endereco_ent": {
+      "odoo_field": "order_id/partner_shipping_id/name",
+      "odoo_model": "res.partner",
+      "provenance": "sync",
+      "rules": [
+        "Se incoterm=RED, usa carrier_id/l10n_br_partner_id/name"
+      ]
+    },
+    "cep_endereco_ent": {
+      "odoo_field": "order_id/partner_shipping_id/zip",
+      "odoo_model": "res.partner",
+      "provenance": "sync",
+      "rules": [
+        "Se incoterm=RED, usa carrier_id/l10n_br_partner_id/zip"
+      ]
+    },
+    "nome_cidade": {
+      "odoo_field": "order_id/partner_shipping_id/l10n_br_municipio_id/name",
+      "odoo_model": "l10n_br_ciel_it_account.res.municipio",
+      "provenance": "sync",
+      "rules": [
+        "Se incoterm=RED, usa carrier_id/l10n_br_partner_id/l10n_br_municipio_id/name"
+      ]
+    },
+    "cod_uf": {
+      "odoo_field": "order_id/partner_shipping_id/l10n_br_municipio_id",
+      "odoo_model": "l10n_br_ciel_it_account.res.municipio",
+      "provenance": "sync",
+      "rules": [
+        "UF extraida do municipio. Se incoterm=RED, usa carrier_id"
+      ]
+    },
+    "bairro_endereco_ent": {
+      "odoo_field": "order_id/partner_shipping_id/l10n_br_endereco_bairro",
+      "odoo_model": "res.partner",
+      "provenance": "sync"
+    },
+    "rua_endereco_ent": {
+      "odoo_field": "order_id/partner_shipping_id/street",
+      "odoo_model": "res.partner",
+      "provenance": "sync"
+    },
+    "endereco_ent": {
+      "odoo_field": "order_id/partner_shipping_id/l10n_br_endereco_numero",
+      "odoo_model": "res.partner",
+      "provenance": "sync"
+    },
+    "telefone_endereco_ent": {
+      "odoo_field": "order_id/partner_shipping_id/phone",
+      "odoo_model": "res.partner",
+      "provenance": "sync"
+    },
+    "tags_pedido": {
+      "odoo_field": "order_id/tag_ids",
+      "odoo_model": "crm.tag",
+      "provenance": "sync",
+      "rules": [
+        "Array de IDs de tags serializado como string"
+      ]
+    },
+    "qtd_saldo_produto_pedido": {
+      "provenance": "calculated",
+      "formula": "qtd_produto_pedido - qtd_cancelada_produto_pedido - sum(faturamento_produto.qtd_produto_faturado)",
+      "rules": [
+        "NAO vem do Odoo — calculado localmente apos sync",
+        "Anteriormente importado de qty_saldo, removido em refactor (carteira_mapper.py:52)"
+      ]
+    },
+    "margem_bruta": {
+      "provenance": "calculated",
+      "formula": "Calculada por _obter_snapshot_custo() no CarteiraService",
+      "rules": [
+        "Usa ParametroCusteio e CustoFrete para calcular margem"
+      ]
+    },
+    "margem_bruta_percentual": {
+      "provenance": "calculated",
+      "formula": "margem_bruta / (preco * qtd) * 100"
+    },
+    "margem_liquida": {
+      "provenance": "calculated",
+      "formula": "Calculada por _calcular_margem_bruta() - despesas"
+    },
+    "margem_liquida_percentual": {
+      "provenance": "calculated",
+      "formula": "margem_liquida / (preco * qtd) * 100"
+    },
+    "comissao_percentual": {
+      "provenance": "calculated",
+      "formula": "Via RegraComissao por equipe_vendas"
+    },
+    "importante": {
+      "provenance": "manual",
+      "rules": [
+        "Flag definida pelo usuario na UI para priorizar pedido"
+      ]
+    }
+  }
+}

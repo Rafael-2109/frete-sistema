@@ -1,0 +1,140 @@
+{
+  "table": "faturamento_produto",
+  "version": "1.0.0",
+  "source": {
+    "primary": {
+      "system": "Odoo",
+      "model": "account.move.line",
+      "service": "FaturamentoService",
+      "file": "app/odoo/services/faturamento_service.py",
+      "scheduler_step": 1,
+      "direction": "Odoo -> Local",
+      "method": "sincronizar_faturamento_incremental()"
+    },
+    "alternatives": [
+      {
+        "system": "TagPlus",
+        "service": "ImportadorTagPlusV2",
+        "file": "app/integracoes/tagplus/importador_v2.py",
+        "description": "NFs de empresas que usam TagPlus em vez de Odoo. created_by='ImportTagPlus'"
+      }
+    ]
+  },
+  "fields": {
+    "numero_nf": {
+      "odoo_field": "move_id/name",
+      "odoo_model": "account.move",
+      "provenance": "sync"
+    },
+    "data_fatura": {
+      "odoo_field": "date",
+      "odoo_model": "account.move.line",
+      "provenance": "sync"
+    },
+    "origem": {
+      "odoo_field": "move_id/invoice_origin",
+      "odoo_model": "account.move",
+      "provenance": "sync",
+      "rules": [
+        "Contem o num_pedido do sale.order que originou a NF"
+      ]
+    },
+    "status_nf": {
+      "odoo_field": "move_id/state",
+      "odoo_model": "account.move",
+      "provenance": "sync",
+      "rules": [
+        "Valores: posted, cancel, draft. Cancelamento processado por _processar_cancelamento_nf()"
+      ]
+    },
+    "cnpj_cliente": {
+      "odoo_field": "partner_id/l10n_br_cnpj",
+      "odoo_model": "res.partner",
+      "provenance": "sync",
+      "rules": [
+        "DIFERENTE de carteira_principal que usa cnpj_cpf"
+      ]
+    },
+    "nome_cliente": {
+      "odoo_field": "partner_id/name",
+      "odoo_model": "res.partner",
+      "provenance": "sync",
+      "rules": [
+        "DIFERENTE de carteira_principal que usa raz_social/raz_social_red"
+      ]
+    },
+    "municipio": {
+      "odoo_field": "partner_id/l10n_br_municipio_id/name",
+      "odoo_model": "l10n_br_ciel_it_account.res.municipio",
+      "provenance": "sync",
+      "rules": [
+        "Formato original do Odoo: 'Cidade (UF)'. Pos-processamento separa em municipio e estado"
+      ]
+    },
+    "estado": {
+      "odoo_field": "partner_id/l10n_br_municipio_id",
+      "odoo_model": "l10n_br_ciel_it_account.res.municipio",
+      "provenance": "calculated",
+      "formula": "Extraido de municipio: 'Fortaleza (CE)' -> 'CE'",
+      "rules": [
+        "NAO vem direto do Odoo — derivado do campo municipio por split em '('"
+      ]
+    },
+    "vendedor": {
+      "odoo_field": "move_id/invoice_user_id/name",
+      "odoo_model": "res.users",
+      "provenance": "sync"
+    },
+    "equipe_vendas": {
+      "odoo_field": "move_id/team_id/name",
+      "odoo_model": "crm.team",
+      "provenance": "sync"
+    },
+    "incoterm": {
+      "odoo_field": "move_id/invoice_incoterm_id/name",
+      "odoo_model": "account.incoterms",
+      "provenance": "sync"
+    },
+    "cod_produto": {
+      "odoo_field": "product_id/default_code",
+      "odoo_model": "product.product",
+      "provenance": "sync"
+    },
+    "nome_produto": {
+      "odoo_field": "product_id/name",
+      "odoo_model": "product.product",
+      "provenance": "sync"
+    },
+    "peso_unitario_produto": {
+      "odoo_field": "product_id/weight",
+      "odoo_model": "product.product",
+      "provenance": "sync"
+    },
+    "qtd_produto_faturado": {
+      "odoo_field": "quantity",
+      "odoo_model": "account.move.line",
+      "provenance": "sync"
+    },
+    "valor_produto_faturado": {
+      "odoo_field": "price_total",
+      "odoo_model": "account.move.line",
+      "provenance": "sync"
+    },
+    "preco_produto_faturado": {
+      "odoo_field": "price_unit",
+      "odoo_model": "account.move.line",
+      "provenance": "calculated",
+      "formula": "valor_produto_faturado / qtd_produto_faturado",
+      "rules": [
+        "Originalmente importado de price_unit mas recalculado em _processar_campos_calculados()"
+      ]
+    },
+    "peso_total": {
+      "provenance": "calculated",
+      "formula": "peso_unitario_produto * qtd_produto_faturado",
+      "rules": [
+        "Calculado em _processar_campos_calculados() apos importacao"
+      ]
+    }
+  }
+}

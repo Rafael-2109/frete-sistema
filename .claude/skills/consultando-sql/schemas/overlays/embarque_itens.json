@@ -1,0 +1,208 @@
+{
+  "table": "embarque_itens",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Local",
+      "description": "Criados pelo fluxo de cotacao (cotacao/routes.py:1562 CarVia, :1602 Nacom), manual (embarques/routes.py:1068), e CarVia expansion (embarque_carvia_service.py:165)"
+    },
+    "alternatives": []
+  },
+  "fields": {
+    "embarque_id": {
+      "provenance": "propagated",
+      "rules": [
+        "FK para embarques.id. Setado na criacao, imutavel"
+      ]
+    },
+    "separacao_lote_id": {
+      "provenance": "propagated",
+      "source_table": "separacao",
+      "source_field": "separacao_lote_id",
+      "rules": [
+        "CarVia legado: pode ser atualizado in-place para 'CARVIA-NF-{id}' (embarque_carvia_service.py:226)"
+      ]
+    },
+    "cnpj_cliente": {
+      "provenance": "propagated",
+      "source_table": "separacao",
+      "source_field": "cnpj_cpf",
+      "rules": [
+        "Pode ser corrigido pos-criacao quando CNPJ do faturamento difere (embarques/routes.py:1520,1604)"
+      ]
+    },
+    "cliente": {
+      "provenance": "propagated",
+      "source_table": "separacao",
+      "source_field": "raz_social_red",
+      "rules": [
+        "Display name, nao mutavel apos criacao"
+      ]
+    },
+    "pedido": {
+      "provenance": "propagated",
+      "source_table": "separacao",
+      "source_field": "num_pedido"
+    },
+    "nota_fiscal": {
+      "provenance": "multi_source",
+      "rules": [
+        "Campo central com 8+ updaters across faturamento pipeline",
+        "Criacao: de Separacao.numero_nf se disponivel, senao NULL",
+        "Preenchido por: processar_faturamento.py:467,878, atualizar_nf_embarque.py:94,200, reconciliacao_service.py:163",
+        "CarVia expansion: embarque_carvia_service.py:228",
+        "Limpo quando NF cancelada no Odoo: faturamento_service.py:298",
+        "Limpo em cancelamento: embarques/routes.py:270,951"
+      ]
+    },
+    "peso": {
+      "provenance": "propagated",
+      "rules": [
+        "Inicialmente de Separacao.peso_total",
+        "Continuamente re-sincronizado por: sync_totais_service.py:178,220, atualizar_peso_service.py:287, sincronizar_items_service.py:436"
+      ]
+    },
+    "valor": {
+      "provenance": "propagated",
+      "rules": [
+        "Inicialmente de Separacao.valor_saldo_total",
+        "Re-sincronizado pelos mesmos services de peso"
+      ]
+    },
+    "pallets": {
+      "provenance": "calculated",
+      "formula": "De Separacao.pallet_total, recalculado via CadastroPalletizacao",
+      "rules": [
+        "Re-sincronizado por sync_totais_service.py:180, pallet_calculator.py:192, atualizar_peso_service.py:288"
+      ]
+    },
+    "volumes": {
+      "provenance": "manual",
+      "rules": [
+        "CarVia: agregado de moto data. Nacom: NULL ate preenchimento manual via form (embarques/routes.py:271)",
+        "CarVia deducao em expansion: embarque_carvia_service.py:206,231"
+      ]
+    },
+    "peso_cubado": {
+      "provenance": "propagated",
+      "rules": [
+        "Apenas CarVia: de CarviaCotacaoMoto.peso_cubado_total (cotacao/routes.py:1570)",
+        "NULL para itens Nacom"
+      ]
+    },
+    "protocolo_agendamento": {
+      "provenance": "propagated",
+      "source_table": "separacao",
+      "source_field": "protocolo",
+      "rules": [
+        "Formatado via formatar_protocolo(). Editavel via form (embarques/routes.py:272) e API agendamento (routes.py:2542)"
+      ]
+    },
+    "data_agenda": {
+      "provenance": "propagated",
+      "source_table": "separacao",
+      "source_field": "agendamento",
+      "rules": [
+        "String DD/MM/YYYY. Editavel via form e API agendamento"
+      ]
+    },
+    "agendamento_confirmado": {
+      "provenance": "manual",
+      "rules": [
+        "Default False. Atualizado via API agendamento (embarques/routes.py:2543)"
+      ]
+    },
+    "uf_destino": {
+      "provenance": "calculated",
+      "formula": "Resolvido via LocalizacaoService.obter_cidade_destino_embarque()",
+      "rules": [
+        "Setado na criacao, nao atualizado depois"
+      ]
+    },
+    "cidade_destino": {
+      "provenance": "calculated",
+      "formula": "Mesma logica de uf_destino"
+    },
+    "status": {
+      "provenance": "system",
+      "rules": [
+        "Default 'ativo'. Setado 'cancelado' em cancelamento de embarque (embarques/routes.py:959) ou remocao individual (routes.py:2031)",
+        "Tambem cancelado quando pedido Odoo cancelado (carteira_service.py:109)"
+      ]
+    },
+    "erro_validacao": {
+      "provenance": "calculated",
+      "rules": [
+        "NULL na criacao. Populado por multiplas passagens de validacao",
+        "Codigos: NF_PENDENTE_FATURAMENTO, NF_DIVERGENTE, NF_NAO_PREENCHIDA, CLIENTE_NAO_DEFINIDO, CNPJ_DIFERENTE",
+        "Setado em: embarques/routes.py (validar_nf_cliente), fretes/routes.py, processar_faturamento.py, atualizar_nf_embarque.py",
+        "Setado 'NF cancelada no Odoo' quando NF cancelada (faturamento_service.py:298-300)"
+      ]
+    },
+    "provisorio": {
+      "provenance": "system",
+      "rules": [
+        "Apenas CarVia: True se item sem NF ainda (cotacao/routes.py:1576,1945). False para Nacom",
+        "False quando provisorio expandido em itens reais (embarque_carvia_service.py:179)"
+      ]
+    },
+    "carvia_cotacao_id": {
+      "provenance": "propagated",
+      "rules": [
+        "Apenas CarVia: FK para cotacao CarVia (cotacao/routes.py:1577,1946). NULL para Nacom"
+      ]
+    },
+    "cotacao_id": {
+      "provenance": "propagated",
+      "rules": [
+        "FK para cotacoes. Setado na criacao via cotacao flow"
+      ]
+    },
+    "modalidade": {
+      "provenance": "propagated",
+      "rules": [
+        "Via TabelaFreteManager — APENAS para tipo_carga=FRACIONADA",
+        "Para DIRETA, modalidade fica no embarque pai",
+        "Atualizado em re-cotacao (cotacao/routes.py:2483,2491,2520)"
+      ]
+    },
+    "tabela_nome_tabela": {
+      "provenance": "propagated",
+      "rules": [
+        "Via TabelaFreteManager — APENAS para FRACIONADA. Para DIRETA, herdado do embarque",
+        "Atualizado em re-cotacao (cotacao/routes.py:1349)"
+      ]
+    },
+    "tabela_valor_kg": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager (FRACIONADA)"] },
+    "tabela_percentual_valor": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_frete_minimo_valor": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_frete_minimo_peso": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_icms": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_percentual_gris": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_pedagio_por_100kg": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_valor_tas": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_percentual_adv": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_percentual_rca": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_valor_despacho": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_valor_cte": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "tabela_icms_incluso": { "provenance": "propagated", "rules": ["Batch-set. Boolean"] },
+    "tabela_gris_minimo": { "provenance": "propagated", "rules": ["Batch-set. Default 0"] },
+    "tabela_adv_minimo": { "provenance": "propagated", "rules": ["Batch-set. Default 0"] },
+    "tabela_icms_proprio": { "provenance": "propagated", "rules": ["Batch-set"] },
+    "icms_destino": { "provenance": "propagated", "rules": ["De localidades via cotacao (FRACIONADA)"] },
+    "nf_pallet_cliente": { "provenance": "manual", "rules": ["NF pallet do cliente via form (embarques/routes.py:349)"] },
+    "qtd_pallet_cliente": { "provenance": "manual", "rules": ["Quantidade pallets cliente via form"] },
+    "nf_pallet_referencia": {
+      "provenance": "system",
+      "rules": [
+        "Auto-setado por faturamento (processar_faturamento.py:998,1008) — copia de nf_pallet_cliente ou embarque.nf_pallet_transportadora"
+      ]
+    },
+    "nf_pallet_origem": {
+      "provenance": "system",
+      "rules": [
+        "Valores: 'ITEM' ou 'EMBARQUE'. Auto-setado junto com nf_pallet_referencia"
+      ]
+    }
+  }
+}

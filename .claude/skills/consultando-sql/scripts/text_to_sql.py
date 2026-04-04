@@ -222,6 +222,23 @@ class SchemaProvider:
         # Cache de schemas detalhados já carregados
         self._table_cache = {}
 
+        # Carregar overlays de linhagem (proveniência, mapeamento Odoo, regras)
+        self._overlays = {}
+        overlays_dir = os.path.join(SCHEMAS_DIR, 'overlays')
+        if os.path.isdir(overlays_dir):
+            for fname in os.listdir(overlays_dir):
+                if fname.endswith('.json'):
+                    fpath = os.path.join(overlays_dir, fname)
+                    try:
+                        with open(fpath, 'r', encoding='utf-8') as f:
+                            overlay = json.load(f)
+                        tname = overlay.get('table', fname.replace('.json', ''))
+                        self._overlays[tname] = overlay
+                    except (json.JSONDecodeError, KeyError):
+                        logger.warning(f"Overlay de linhagem invalido: {fname}")
+            if self._overlays:
+                logger.info(f"Overlays de linhagem carregados: {len(self._overlays)} tabelas")
+
         # Indexar metadados core (business_rules, description) por nome de tabela
         self._core_metadata = {}
         for table in self.core_schema.get('tables', []):
@@ -230,6 +247,7 @@ class SchemaProvider:
         # Pré-carregar tabelas core fazendo MERGE:
         # - Campos/indices/FKs: do JSON individual (fonte de verdade)
         # - business_rules/description: do schema.json core (enriquecimento)
+        # - lineage: do overlay de linhagem (proveniência Odoo, regras)
         for table_name in list(self._core_metadata.keys()):
             individual_path = os.path.join(TABLES_DIR, f"{table_name}.json")
             try:
@@ -241,6 +259,9 @@ class SchemaProvider:
                     schema['business_rules'] = core['business_rules']
                 if core.get('description') and not schema.get('description'):
                     schema['description'] = core['description']
+                # Enriquecer com overlay de linhagem
+                if table_name in self._overlays:
+                    schema['lineage'] = self._overlays[table_name]
                 self._table_cache[table_name] = schema
             except (FileNotFoundError, json.JSONDecodeError):
                 # Fallback: usar core puro se JSON individual não existe
@@ -328,6 +349,9 @@ class SchemaProvider:
         try:
             with open(table_path, 'r', encoding='utf-8') as f:
                 schema = json.load(f)
+            # Enriquecer com overlay de linhagem se disponível
+            if table_name in self._overlays:
+                schema['lineage'] = self._overlays[table_name]
             self._table_cache[table_name] = schema
             return schema
         except (FileNotFoundError, json.JSONDecodeError):

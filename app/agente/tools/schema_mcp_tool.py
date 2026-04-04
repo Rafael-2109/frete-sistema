@@ -140,6 +140,83 @@ def _format_schema(schema: dict) -> str:
         for rule in rules:
             lines.append(f"  * {rule}")
 
+    # Linhagem de dados (proveniência, mapeamento Odoo, regras de transformação)
+    lineage = schema.get('lineage', {})
+    if lineage:
+        lines.append("\n🔗 Linhagem de Dados:")
+
+        # Fonte primária
+        source = lineage.get('source', {})
+        primary = source.get('primary', {})
+        if primary:
+            svc = primary.get('service', '?')
+            model = primary.get('model', '?')
+            step = primary.get('scheduler_step', '')
+            step_str = f" (step {step} scheduler)" if step else ""
+            direction = primary.get('direction', '')
+            lines.append(f"  Fonte: {primary.get('system', '?')} {model} via {svc}{step_str}")
+            if direction:
+                lines.append(f"  Direcao: {direction}")
+            if primary.get('description'):
+                lines.append(f"  {primary['description']}")
+
+        # Fontes alternativas
+        for alt in source.get('alternatives', []):
+            lines.append(f"  Fonte alternativa: {alt.get('system', '?')} via {alt.get('service', '?')}")
+            if alt.get('description'):
+                lines.append(f"    {alt['description']}")
+
+        # Agrupar campos por proveniência
+        field_lineage = lineage.get('fields', {})
+        odoo_fields = {k: v for k, v in field_lineage.items() if v.get('odoo_field')}
+        calc_fields = {k: v for k, v in field_lineage.items() if v.get('provenance') == 'calculated'}
+        propagated_fields = {k: v for k, v in field_lineage.items() if v.get('provenance') == 'propagated'}
+        manual_fields = {k: v for k, v in field_lineage.items() if v.get('provenance') == 'manual'}
+        multi_fields = {k: v for k, v in field_lineage.items() if v.get('provenance') == 'multi_source'}
+
+        if odoo_fields:
+            lines.append(f"\n  Campos Odoo ({len(odoo_fields)}):")
+            for fname, fdata in odoo_fields.items():
+                lines.append(f"    {fname} <- {fdata.get('odoo_model', '?')}: {fdata['odoo_field']}")
+                for rule in fdata.get('rules', []):
+                    lines.append(f"      * {rule}")
+
+        if calc_fields:
+            lines.append(f"\n  Campos calculados ({len(calc_fields)}):")
+            for fname, fdata in calc_fields.items():
+                formula = fdata.get('formula', '')
+                lines.append(f"    {fname} = {formula}" if formula else f"    {fname}")
+                for rule in fdata.get('rules', []):
+                    lines.append(f"      * {rule}")
+
+        if propagated_fields:
+            lines.append(f"\n  Campos propagados ({len(propagated_fields)}):")
+            for fname, fdata in propagated_fields.items():
+                src = fdata.get('source_table', '')
+                src_field = fdata.get('source_field', '')
+                if src and src_field:
+                    lines.append(f"    {fname} <- {src}.{src_field}")
+                elif src:
+                    lines.append(f"    {fname} <- {src}")
+                else:
+                    lines.append(f"    {fname}")
+                for rule in fdata.get('rules', []):
+                    lines.append(f"      * {rule}")
+
+        if multi_fields:
+            lines.append(f"\n  Campos multi-fonte ({len(multi_fields)}):")
+            for fname, fdata in multi_fields.items():
+                lines.append(f"    {fname}")
+                for rule in fdata.get('rules', []):
+                    lines.append(f"      * {rule}")
+
+        if manual_fields:
+            lines.append(f"\n  Campos manuais ({len(manual_fields)}):")
+            for fname, fdata in manual_fields.items():
+                lines.append(f"    {fname}")
+                for rule in fdata.get('rules', []):
+                    lines.append(f"      * {rule}")
+
     # Campos
     fields = schema.get('fields', [])
     lines.append(f"\n📊 Campos ({len(fields)} total):")

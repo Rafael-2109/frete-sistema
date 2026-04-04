@@ -1,0 +1,184 @@
+{
+  "table": "embarques",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Local",
+      "description": "Criados pelo fluxo de cotacao (cotacao/routes.py:1473 auto, pedidos/routes/cotacao_routes.py:185 manual, :399 FOB) ou como draft (embarques/routes.py:1091)"
+    },
+    "alternatives": []
+  },
+  "fields": {
+    "numero": {
+      "provenance": "calculated",
+      "formula": "obter_proximo_numero_embarque() — sequencial",
+      "rules": [
+        "Atribuido no flush, nunca modificado"
+      ]
+    },
+    "transportadora_id": {
+      "provenance": "manual",
+      "rules": [
+        "FK para transportadoras. Selecionada da cotacao na criacao (cotacao/routes.py:1474)",
+        "Pode ser override pelo motochefe (motochefe/routes/logistica.py:120)"
+      ]
+    },
+    "data_prevista_embarque": {
+      "provenance": "manual",
+      "rules": [
+        "NULL na criacao. Definida pelo usuario via form (embarques/routes.py:210)",
+        "Sincronizada para Separacao.expedicao no save (routes.py:439)"
+      ]
+    },
+    "data_embarque": {
+      "provenance": "system",
+      "rules": [
+        "NULL na criacao. Setado automaticamente pela portaria quando veiculo sai (portaria/routes.py:287,748)",
+        "Editavel manualmente via form (embarques/routes.py:205) e motochefe (motochefe/routes/logistica.py:121)",
+        "Limpo em desvinculacao de portaria (portaria/routes.py:825)"
+      ]
+    },
+    "status": {
+      "provenance": "calculated",
+      "rules": [
+        "Valores: draft, ativo, cancelado",
+        "draft: criado via /embarques/novo (routes.py:1091)",
+        "ativo: criado via cotacao (cotacao/routes.py:1475)",
+        "cancelado: via routes.py:939"
+      ]
+    },
+    "tipo_cotacao": {
+      "provenance": "manual",
+      "rules": [
+        "Valores: Automatica, Manual, FOB",
+        "Setado na criacao, nunca mutado depois"
+      ]
+    },
+    "tipo_carga": {
+      "provenance": "manual",
+      "rules": [
+        "Valores: FRACIONADA, DIRETA, FOB",
+        "Determina se tabela de frete fica no embarque (DIRETA) ou nos itens (FRACIONADA)"
+      ]
+    },
+    "valor_total": {
+      "provenance": "calculated",
+      "formula": "Soma dos valores dos itens ativos",
+      "rules": [
+        "Recalculado continuamente por: sync_totais_service.py:96, atualizar_peso_service.py:359, sincronizar_items_service.py:455, cotacao/routes.py:3829, embarques/routes.py:2676"
+      ]
+    },
+    "peso_total": {
+      "provenance": "calculated",
+      "formula": "Soma dos pesos dos itens ativos",
+      "rules": [
+        "Mesmos recalculadores de valor_total"
+      ]
+    },
+    "pallet_total": {
+      "provenance": "calculated",
+      "formula": "Soma dos pallets dos itens ativos",
+      "rules": [
+        "Mesmos recalculadores + pallet_calculator.py:203"
+      ]
+    },
+    "cotacao_id": {
+      "provenance": "propagated",
+      "rules": [
+        "FK para cotacoes. Setado na criacao a partir da cotacao gerada",
+        "Substituido em re-cotacao (cotacao/routes.py:1332)"
+      ]
+    },
+    "modalidade": {
+      "provenance": "propagated",
+      "rules": [
+        "Via TabelaFreteManager.atribuir_campos_objeto() na criacao — tipo de veiculo",
+        "Atualizado em re-cotacao (cotacao/routes.py:1338,3822)"
+      ]
+    },
+    "transportadora_optante": {
+      "provenance": "propagated",
+      "rules": [
+        "Copiado de Transportadora.optante na criacao (cotacao/routes.py:1485)",
+        "Nunca atualizado depois"
+      ]
+    },
+    "icms_destino": {
+      "provenance": "propagated",
+      "rules": [
+        "Da tabela de localidades via cotacao. Atualizado em re-cotacao"
+      ]
+    },
+    "tabela_nome_tabela": {
+      "provenance": "propagated",
+      "rules": [
+        "Via TabelaFreteManager.atribuir_campos_objeto() — APENAS para tipo_carga=DIRETA",
+        "Para FRACIONADA, os campos tabela_* ficam nos itens, nao no embarque",
+        "Atualizado em re-cotacao"
+      ]
+    },
+    "tabela_valor_kg": { "provenance": "propagated", "rules": ["Mesmo padrao de tabela_nome_tabela — batch-set por TabelaFreteManager"] },
+    "tabela_percentual_valor": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_frete_minimo_valor": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_frete_minimo_peso": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_icms": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_percentual_gris": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_pedagio_por_100kg": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_valor_tas": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_percentual_adv": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_percentual_rca": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_valor_despacho": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_valor_cte": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "tabela_icms_incluso": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager. Boolean"] },
+    "tabela_gris_minimo": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager. Default 0"] },
+    "tabela_adv_minimo": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager. Default 0"] },
+    "tabela_icms_proprio": { "provenance": "propagated", "rules": ["Batch-set por TabelaFreteManager"] },
+    "observacoes": {
+      "provenance": "manual",
+      "rules": [
+        "Texto livre via form (embarques/routes.py:216)"
+      ]
+    },
+    "motivo_cancelamento": {
+      "provenance": "manual",
+      "rules": [
+        "Setado apenas no cancelamento (embarques/routes.py:940)"
+      ]
+    },
+    "cancelado_em": { "provenance": "system", "rules": ["Timestamp do cancelamento"] },
+    "cancelado_por": { "provenance": "system", "rules": ["current_user.nome no cancelamento"] },
+    "impresso_em": { "provenance": "system", "rules": ["Timestamp da impressao (embarques/routes.py:1369,1484)"] },
+    "impresso_por": { "provenance": "system", "rules": ["Usuario que imprimiu"] },
+    "alterado_apos_impressao": {
+      "provenance": "system",
+      "rules": [
+        "Default False. Auto-flagged em qualquer mutacao pos-impressao (embarques/models.py:183 marcar_alterado_apos_impressao)"
+      ]
+    },
+    "nf_pallet_transportadora": {
+      "provenance": "manual",
+      "rules": [
+        "NF para remessa de pallet. Preenchido via form (embarques/routes.py:333)"
+      ]
+    },
+    "qtd_pallet_transportadora": { "provenance": "manual", "rules": ["Quantidade pallets via form"] },
+    "qtd_pallets_separados": { "provenance": "manual", "rules": ["Pallets fisicos enviados via form (embarques/routes.py:340)"] },
+    "qtd_pallets_trazidos": {
+      "provenance": "manual",
+      "rules": [
+        "Pallets fisicos retornados via form. Reset a 0 pelo rastreamento (rastreamento/services/odoo_integration_service.py:197)"
+      ]
+    },
+    "placa_veiculo": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado' no modelo"] },
+    "paletizado": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado'"] },
+    "laudo_anexado": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado'"] },
+    "embalagem_aprovada": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado'"] },
+    "transporte_aprovado": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado'"] },
+    "horario_carregamento": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado'"] },
+    "responsavel_carregamento": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado'"] },
+    "nome_motorista": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado'"] },
+    "cpf_motorista": { "provenance": "manual", "rules": ["Declarado 'Nao utilizado'"] },
+    "criado_em": { "provenance": "system", "formula": "agora_utc_naive()" },
+    "criado_por": { "provenance": "system", "rules": ["current_user.nome ou 'Sistema'"] }
+  }
+}

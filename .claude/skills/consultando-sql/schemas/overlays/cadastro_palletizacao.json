@@ -1,0 +1,94 @@
+{
+  "table": "cadastro_palletizacao",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Multi-fonte",
+      "description": "3 caminhos: Excel import (producao/routes.py:438), form UI (producao/routes.py:918), auto-create por CarteiraService (carteira_service.py:1669)"
+    },
+    "alternatives": [
+      {
+        "system": "Odoo",
+        "service": "CarteiraService",
+        "file": "app/odoo/services/carteira_service.py",
+        "description": "Auto-create via _garantir_cadastro_palletizacao_completo() (:1669) quando novo produto. Defaults: palletizacao=1.0, peso_bruto=1.0"
+      },
+      {
+        "system": "Local",
+        "service": "producao/routes.py",
+        "file": "app/producao/routes.py",
+        "description": "Excel bulk import (:438) com full replace, ou form individual (:918)"
+      },
+      {
+        "system": "Local",
+        "service": "estoque/routes.py",
+        "file": "app/estoque/routes.py",
+        "description": "Auto-create em import de estoque (:491) com placeholder 0"
+      }
+    ]
+  },
+  "fields": {
+    "cod_produto": {
+      "provenance": "multi_source",
+      "rules": [
+        "Unique index. De Odoo product_id/default_code (auto-create) ou Excel/form (manual). Imutavel apos criacao"
+      ]
+    },
+    "nome_produto": {
+      "provenance": "multi_source",
+      "rules": [
+        "De Odoo product name (auto-create) ou Excel/form (manual). Editavel via form (:985) e API (:1148)"
+      ]
+    },
+    "codigo_ean": {
+      "provenance": "multi_source",
+      "rules": [
+        "De Excel import (opcional) ou backfill Odoo via scripts/popular_ean_odoo.py:186 (product.template.barcode_nacom)"
+      ]
+    },
+    "palletizacao": {
+      "provenance": "multi_source",
+      "rules": [
+        "Caixas por pallet. Excel/form: valor real. Auto-create Odoo: 1.0 (safe default)",
+        "Editavel via form (:986) e API (:1149)",
+        "CRITICO: usado como divisor em calculo de pallets na separacao"
+      ]
+    },
+    "peso_bruto": {
+      "provenance": "multi_source",
+      "rules": [
+        "Peso por caixa em kg. Excel/form: valor real. Auto-create Odoo: 1.0 (safe default)",
+        "Editavel via form (:987) e API (:1150)",
+        "CRITICO: multiplicador em calculo de peso na separacao e frete"
+      ]
+    },
+    "altura_cm": { "provenance": "manual", "rules": ["Excel/form. Default 0. Editavel"] },
+    "largura_cm": { "provenance": "manual", "rules": ["Excel/form. Default 0. Editavel"] },
+    "comprimento_cm": { "provenance": "manual", "rules": ["Excel/form. Default 0. Editavel"] },
+    "tipo_embalagem": { "provenance": "manual", "rules": ["Excel import ou form"] },
+    "tipo_materia_prima": { "provenance": "manual", "rules": ["Excel import ou form"] },
+    "categoria_produto": { "provenance": "manual", "rules": ["Excel import ou form"] },
+    "subcategoria": {
+      "provenance": "manual",
+      "rules": [
+        "NUNCA setado na criacao (nenhum path encontrado). Somente editavel via API PUT (:1155)"
+      ]
+    },
+    "linha_producao": { "provenance": "manual", "rules": ["Excel import ou form (ex: L1, L2)"] },
+    "produto_comprado": { "provenance": "manual", "rules": ["Excel import. Default False"] },
+    "produto_produzido": { "provenance": "manual", "rules": ["Excel import. Default False"] },
+    "produto_vendido": { "provenance": "manual", "rules": ["Excel import. Default True"] },
+    "lead_time": { "provenance": "manual", "rules": ["Dias para lead time de compra. Excel import"] },
+    "lote_minimo_compra": { "provenance": "manual", "rules": ["Lote minimo de compra. Excel import"] },
+    "disparo_producao": { "provenance": "manual", "rules": ["Excel import"] },
+    "custo_produto": { "provenance": "manual", "rules": ["Excel import. Custo unitario"] },
+    "ativo": {
+      "provenance": "system",
+      "rules": [
+        "Default True. Soft-delete via :1012. Reativado em re-import (:433)"
+      ]
+    },
+    "created_at": { "provenance": "system", "formula": "agora_utc_naive()" },
+    "updated_at": { "provenance": "system", "formula": "agora_utc_naive() via onupdate" }
+  }
+}

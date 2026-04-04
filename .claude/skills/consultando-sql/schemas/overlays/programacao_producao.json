@@ -1,0 +1,70 @@
+{
+  "table": "programacao_producao",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Multi-fonte",
+      "description": "3 caminhos: Excel bulk import (producao/routes.py:632) com full replace, API individual (manufatura/necessidade_producao_routes.py:881), e automatizado por MRP (manufatura/necessidade_producao_service.py:464)"
+    },
+    "alternatives": []
+  },
+  "fields": {
+    "data_programacao": {
+      "provenance": "manual",
+      "rules": [
+        "Data programada para producao. Fornecida pelo usuario em todos os 3 paths",
+        "Editavel via PUT (necessidade_producao_routes.py:934)"
+      ]
+    },
+    "cod_produto": {
+      "provenance": "multi_source",
+      "rules": [
+        "Excel: coluna PRODUTO. API: user param. MRP: de calculo de demanda. Imutavel apos criacao"
+      ]
+    },
+    "nome_produto": {
+      "provenance": "multi_source",
+      "rules": [
+        "Excel: coluna DESCRICAO. API: de PlanoMestreProducao.nome_produto. MRP: de calculo"
+      ]
+    },
+    "qtd_programada": {
+      "provenance": "multi_source",
+      "rules": [
+        "Excel: coluna QTDE. API: user param. MRP: calculada da demanda",
+        "Editavel via PUT (necessidade_producao_routes.py:944)"
+      ]
+    },
+    "linha_producao": {
+      "provenance": "manual",
+      "rules": [
+        "Excel: coluna SECAO/MAQUINA. API: user param",
+        "NAO setado pelo path automatizado MRP"
+      ]
+    },
+    "cliente_produto": {
+      "provenance": "manual",
+      "rules": [
+        "Excel: coluna CLIENTE. API: user param. Representa 'marca'"
+      ]
+    },
+    "observacao_pcp": {
+      "provenance": "manual",
+      "rules": [
+        "Excel: coluna OP. API: user param",
+        "No Excel, overlaps com campo ordem_producao"
+      ]
+    },
+    "ordem_producao": {
+      "provenance": "manual",
+      "rules": [
+        "NUNCA setado na criacao em nenhum dos 3 paths — sempre NULL inicial",
+        "Preenchido retroativamente via API PUT (manufatura/recursos_producao_routes.py:921)"
+      ]
+    },
+    "created_at": { "provenance": "system", "formula": "agora_utc_naive()" },
+    "updated_at": { "provenance": "system", "formula": "agora_utc_naive() via onupdate" },
+    "created_by": { "provenance": "system", "rules": ["current_user.nome ou user string param"] },
+    "updated_by": { "provenance": "system", "rules": ["Setado apenas em edits (necessidade_producao_routes.py:949)"] }
+  }
+}
