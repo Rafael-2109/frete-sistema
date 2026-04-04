@@ -3259,6 +3259,155 @@
 }
 
 /* =============================================================
+   SESSAO E: IMPROVEMENT DIALOGUE + REVIEW MEMORIAS EMPRESA
+   ============================================================= */
+
+/* Filter select no painel de melhorias */
+.improvements-filter {
+    margin-bottom: 12px;
+}
+
+.improvements-filter select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--agent-border, rgba(255,255,255,0.15));
+    border-radius: 6px;
+    background: var(--agent-bg-secondary, rgba(255,255,255,0.05));
+    color: var(--agent-text-primary, #e0e0e0);
+    font-size: 0.82rem;
+}
+
+/* Card de sugestao de melhoria */
+.improvement-card {
+    background: var(--agent-bg-secondary, rgba(255,255,255,0.04));
+    border: 1px solid var(--agent-border, rgba(255,255,255,0.08));
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.improvement-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.improvement-card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--agent-text-primary, #e0e0e0);
+    flex: 1;
+}
+
+.improvement-card-badges {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.improvement-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+
+.improvement-badge.severity-critical {
+    background: rgba(220,53,69,0.15);
+    color: var(--danger, #dc3545);
+}
+
+.improvement-badge.severity-warning {
+    background: rgba(255,193,7,0.15);
+    color: var(--warning, #ffc107);
+}
+
+.improvement-badge.severity-info {
+    background: rgba(23,162,184,0.15);
+    color: var(--info, #17a2b8);
+}
+
+.improvement-badge.status-proposed {
+    background: rgba(102,126,234,0.15);
+    color: var(--agent-accent, #667eea);
+}
+
+.improvement-badge.status-responded {
+    background: rgba(40,167,69,0.15);
+    color: var(--success, #28a745);
+}
+
+.improvement-badge.status-rejected {
+    background: rgba(108,117,125,0.15);
+    color: var(--agent-text-secondary, #888);
+}
+
+.improvement-card-body {
+    font-size: 0.82rem;
+    color: var(--agent-text-primary, #d0d0d0);
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.improvement-card-category {
+    font-size: 0.7rem;
+    color: var(--agent-text-secondary, #888);
+}
+
+.improvement-card-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.improvement-card-actions button {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.improvement-btn-accept {
+    background: rgba(40,167,69,0.15);
+    color: var(--success, #28a745);
+}
+
+.improvement-btn-accept:hover {
+    background: rgba(40,167,69,0.25);
+}
+
+.improvement-btn-reject {
+    background: rgba(108,117,125,0.1);
+    color: var(--agent-text-secondary, #888);
+}
+
+.improvement-btn-reject:hover {
+    background: rgba(108,117,125,0.2);
+}
+
+/* Review badge para memorias empresa */
+.memory-meta-badge.reviewed {
+    background: rgba(40,167,69,0.15);
+    color: var(--success, #28a745);
+}
+
+.memory-meta-badge.needs-review {
+    background: rgba(255,193,7,0.15);
+    color: var(--warning, #ffc107);
+    cursor: pointer;
+}
+
+.memory-meta-badge.needs-review:hover {
+    background: rgba(255,193,7,0.25);
+}
+
+/* =============================================================
    SESSAO D: TOUR GUIADO DE PRIMEIRO ACESSO
    ============================================================= */
 

@@ -2927,6 +2927,31 @@ def api_feedback():
         user_id = current_user.id
         result = {'processed': True, 'action': feedback_type, 'memory_path': None}
 
+        # Sessao E (#17): Feedback positivo estruturado (antes era apenas logado)
+        if feedback_type == 'positive':
+            try:
+                from .models import AgentSession
+                session_record = AgentSession.query.filter_by(
+                    session_id=session_id, user_id=user_id
+                ).first()
+                if session_record and session_record.data:
+                    feedbacks = session_record.data.get('feedbacks', [])
+                    feedbacks.append({
+                        'type': 'positive',
+                        'context': feedback_data.get('context', '')[:500],
+                        'message_text': feedback_data.get('message_text', '')[:500],
+                        'timestamp': agora_utc_naive().isoformat(),
+                    })
+                    session_record.data['feedbacks'] = feedbacks
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(session_record, 'data')
+                    db.session.commit()
+                    logger.info(
+                        f"[FEEDBACK] Positivo registrado: session={session_id[:8]}..."
+                    )
+            except Exception as pos_err:
+                logger.debug(f"[FEEDBACK] Erro ao persistir positivo (ignorado): {pos_err}")
+
         # Feedback negativo enriquecido: persistir no session data + incrementar correction_count
         if feedback_type == 'negative':
             try:
@@ -3851,6 +3876,7 @@ def api_list_memories():
                 'effective_count': m.effective_count,
                 'is_cold': m.is_cold,
                 'has_potential_conflict': m.has_potential_conflict,
+                'reviewed_at': m.reviewed_at.isoformat() if m.reviewed_at else None,
                 'created_at': m.created_at.isoformat() if m.created_at else None,
                 'updated_at': m.updated_at.isoformat() if m.updated_at else None,
             }
@@ -4233,3 +4259,150 @@ def api_get_briefing():
             'success': False,
             'error': str(e),
         }), 500
+
+
+# =============================================================================
+# API - IMPROVEMENT DIALOGUE ADMIN (Sessao E #16)
+# =============================================================================
+
+@agente_bp.route('/api/improvement-dialogue/admin', methods=['GET'])
+@login_required
+def api_admin_improvement_dialogue():
+    """
+    Admin: lista sugestoes de melhoria do agente.
+
+    GET /agente/api/improvement-dialogue/admin?status=proposed&limit=20
+    """
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+
+    try:
+        from .models import AgentImprovementDialogue
+
+        status_filter = request.args.get('status', '', type=str).strip()
+        limit = min(request.args.get('limit', 20, type=int), 50)
+
+        query = AgentImprovementDialogue.query
+
+        if status_filter:
+            query = query.filter(AgentImprovementDialogue.status == status_filter)
+
+        items = query.order_by(
+            AgentImprovementDialogue.created_at.desc(),
+        ).limit(limit).all()
+
+        result = []
+        for item in items:
+            result.append({
+                'id': item.id,
+                'suggestion_key': item.suggestion_key,
+                'version': item.version,
+                'author': item.author,
+                'status': item.status,
+                'category': item.category,
+                'severity': item.severity,
+                'title': item.title,
+                'description': item.description,
+                'evidence_json': item.evidence_json,
+                'affected_files': item.affected_files,
+                'implementation_notes': item.implementation_notes,
+                'auto_implemented': item.auto_implemented,
+                'source_session_ids': item.source_session_ids,
+                'created_at': item.created_at.isoformat() if item.created_at else None,
+                'updated_at': item.updated_at.isoformat() if item.updated_at else None,
+            })
+
+        return jsonify({'success': True, 'items': result})
+
+    except Exception as e:
+        logger.error(f"[IMPROVEMENT] Erro ao listar sugestoes: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@agente_bp.route('/api/improvement-dialogue/<int:item_id>/respond', methods=['PUT'])
+@login_required
+def api_respond_improvement(item_id: int):
+    """
+    Admin: responde a uma sugestao de melhoria.
+
+    PUT /agente/api/improvement-dialogue/<id>/respond
+    Body: {"action": "accept"|"reject", "notes": "..."}
+    """
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+
+    try:
+        from .models import AgentImprovementDialogue
+
+        item = AgentImprovementDialogue.query.get(item_id)
+        if not item:
+            return jsonify({'success': False, 'error': 'Sugestao nao encontrada'}), 404
+
+        data = request.get_json()
+        action = data.get('action', '') if data else ''
+        notes = data.get('notes', '') if data else ''
+
+        if action == 'accept':
+            item.status = 'responded'
+            item.implementation_notes = notes or 'Aceito via UI admin'
+        elif action == 'reject':
+            item.status = 'rejected'
+            item.implementation_notes = notes or 'Rejeitado via UI admin'
+        else:
+            return jsonify({'success': False, 'error': 'action deve ser accept ou reject'}), 400
+
+        item.updated_at = agora_utc_naive()
+        db.session.commit()
+
+        logger.info(
+            f"[IMPROVEMENT] Sugestao {item.suggestion_key} {action}ed "
+            f"por user={current_user.id}"
+        )
+
+        return jsonify({'success': True, 'status': item.status})
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"[IMPROVEMENT] Erro ao responder: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =============================================================================
+# API - REVIEW MEMORIAS EMPRESA (Sessao E #18)
+# =============================================================================
+
+@agente_bp.route('/api/memories/<int:memory_id>/review', methods=['PUT'])
+@login_required
+def api_review_memory(memory_id: int):
+    """
+    Admin: marca memoria como revisada.
+
+    PUT /agente/api/memories/<id>/review
+    """
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+
+    try:
+        from .models import AgentMemory
+
+        memory = AgentMemory.query.get(memory_id)
+        if not memory:
+            return jsonify({'success': False, 'error': 'Memoria nao encontrada'}), 404
+
+        memory.reviewed_at = agora_utc_naive()
+        db.session.commit()
+
+        logger.info(
+            f"[MEMORIES] Memoria {memory_id} revisada por user={current_user.id} "
+            f"(path={memory.path})"
+        )
+
+        return jsonify({
+            'success': True,
+            'reviewed_at': memory.reviewed_at.isoformat(),
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"[MEMORIES] Erro ao revisar: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

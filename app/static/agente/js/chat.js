@@ -1523,7 +1523,10 @@ function sendFeedback(rating, context, extraData) {
     const payload = {
         session_id: sessionId,
         type: rating,
-        data: { context: (context || '').substring(0, 500) }
+        data: {
+            context: (context || '').substring(0, 500),
+            message_text: (context || '').substring(0, 500),  // Sessao E: inclui texto para feedback positivo
+        }
     };
     if (extraData) {
         Object.assign(payload.data, extraData);
@@ -2988,14 +2991,23 @@ function switchMemoryTab(tab) {
     });
 
     // Atualizar conteudo
-    document.getElementById('memories-tab-content').classList.toggle('active', tab === 'memories');
-    document.getElementById('summaries-tab-content').classList.toggle('active', tab === 'summaries');
+    document.getElementById('memories-tab-content')?.classList.toggle('active', tab === 'memories');
+    document.getElementById('summaries-tab-content')?.classList.toggle('active', tab === 'summaries');
+    document.getElementById('improvements-tab-content')?.classList.toggle('active', tab === 'improvements');
 
     // Carregar resumos na primeira vez
     if (tab === 'summaries') {
         const list = document.getElementById('summaries-list');
         if (list && !list.hasChildNodes()) {
             loadSessionSummaries();
+        }
+    }
+
+    // Sessao E: Carregar melhorias na primeira vez
+    if (tab === 'improvements') {
+        const list = document.getElementById('improvements-list');
+        if (list && !list.hasChildNodes()) {
+            loadImprovements('proposed');
         }
     }
 }
@@ -3117,6 +3129,16 @@ function renderMemoryCard(memory) {
         ? `<span class="memory-meta-badge">Usada ${memory.usage_count}x</span>`
         : '';
 
+    // Sessao E: Badge de review para memorias empresa
+    let reviewBadge = '';
+    if (memory.escopo === 'empresa') {
+        if (memory.reviewed_at) {
+            reviewBadge = `<span class="memory-meta-badge reviewed" id="review-badge-${memory.id}">Revisada</span>`;
+        } else {
+            reviewBadge = `<span class="memory-meta-badge needs-review" id="review-badge-${memory.id}" onclick="event.stopPropagation(); reviewMemory(${memory.id})" title="Clique para marcar como revisada">Revisar</span>`;
+        }
+    }
+
     return `
         <div class="memory-card" id="memory-card-${memory.id}">
             <div class="memory-card-header">
@@ -3132,7 +3154,7 @@ function renderMemoryCard(memory) {
             </div>
             <div class="memory-card-body" id="memory-body-${memory.id}">${displayContent}</div>
             <div class="memory-card-meta">
-                ${categoryBadge}${usageBadge}${conflictBadge}
+                ${categoryBadge}${usageBadge}${conflictBadge}${reviewBadge}
             </div>
         </div>
     `;
@@ -3734,6 +3756,156 @@ function exportHistoricalAsPDF(data, timestamp, title) {
     } else {
         showToast('Popup bloqueado — permita popups para exportar PDF', 4000);
     }
+}
+
+
+// =============================================================
+// SESSAO E: IMPROVEMENT DIALOGUE + REVIEW MEMORIAS EMPRESA
+// =============================================================
+
+/**
+ * Carrega sugestoes de melhoria do agente (admin-only).
+ */
+function loadImprovements(statusFilter) {
+    const loading = document.getElementById('improvements-loading');
+    const list = document.getElementById('improvements-list');
+    const empty = document.getElementById('improvements-empty');
+    const filter = document.getElementById('improvements-filter');
+
+    if (loading) loading.style.display = 'block';
+    if (empty) empty.style.display = 'none';
+    if (list) list.innerHTML = '';
+    if (filter) filter.style.display = 'block';
+
+    const url = statusFilter
+        ? `/agente/api/improvement-dialogue/admin?status=${statusFilter}&limit=20`
+        : '/agente/api/improvement-dialogue/admin?limit=20';
+
+    fetch(url, { headers: _csrfHeader() })
+        .then(r => r.json())
+        .then(data => {
+            if (loading) loading.style.display = 'none';
+
+            if (!data.success || !data.items || data.items.length === 0) {
+                if (empty) empty.style.display = 'flex';
+                return;
+            }
+
+            list.innerHTML = data.items.map(item => renderImprovementCard(item)).join('');
+        })
+        .catch(e => {
+            if (loading) loading.style.display = 'none';
+            if (empty) empty.style.display = 'flex';
+            console.error('[IMPROVEMENTS] Erro:', e);
+        });
+}
+
+/**
+ * Renderiza card de sugestao de melhoria.
+ */
+function renderImprovementCard(item) {
+    const severityClass = `severity-${item.severity || 'info'}`;
+    const statusClass = `status-${item.status || 'proposed'}`;
+    const statusLabel = { proposed: 'Pendente', responded: 'Aceita', rejected: 'Rejeitada', verified: 'Verificada' }[item.status] || item.status;
+    const categoryLabel = {
+        skill_suggestion: 'Skill',
+        instruction_request: 'Instrucao',
+        prompt_feedback: 'Prompt',
+        gotcha_report: 'Gotcha',
+        memory_feedback: 'Memoria',
+        skill_bug: 'Bug Skill',
+    }[item.category] || item.category;
+
+    const actionsHtml = item.status === 'proposed' ? `
+        <div class="improvement-card-actions">
+            <button class="improvement-btn-accept" onclick="respondImprovement(${item.id}, 'accept')">
+                <i class="fas fa-check me-1"></i>Aceitar
+            </button>
+            <button class="improvement-btn-reject" onclick="respondImprovement(${item.id}, 'reject')">
+                <i class="fas fa-times me-1"></i>Rejeitar
+            </button>
+        </div>
+    ` : '';
+
+    const notesHtml = item.implementation_notes
+        ? `<div class="improvement-card-category" style="margin-top:4px"><i class="fas fa-reply me-1"></i>${escapeHtml(item.implementation_notes)}</div>`
+        : '';
+
+    return `
+        <div class="improvement-card" id="improvement-card-${item.id}">
+            <div class="improvement-card-header">
+                <span class="improvement-card-title">${escapeHtml(item.title)}</span>
+                <div class="improvement-card-badges">
+                    <span class="improvement-badge ${severityClass}">${escapeHtml(item.severity)}</span>
+                    <span class="improvement-badge ${statusClass}">${escapeHtml(statusLabel)}</span>
+                </div>
+            </div>
+            <div class="improvement-card-body">${escapeHtml(item.description)}</div>
+            <div class="improvement-card-category"><i class="fas fa-tag me-1"></i>${escapeHtml(categoryLabel)} &bull; ${escapeHtml(item.suggestion_key)}</div>
+            ${notesHtml}
+            ${actionsHtml}
+        </div>
+    `;
+}
+
+/**
+ * Responde a uma sugestao de melhoria (accept/reject).
+ */
+function respondImprovement(itemId, action) {
+    const notes = action === 'reject'
+        ? prompt('Motivo da rejeicao (opcional):') || ''
+        : '';
+
+    fetch(`/agente/api/improvement-dialogue/${itemId}/respond`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ..._csrfHeader() },
+        body: JSON.stringify({ action, notes }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast(action === 'accept' ? 'Sugestao aceita' : 'Sugestao rejeitada', 2000);
+            // Recarregar lista
+            const filter = document.getElementById('improvements-status-filter');
+            loadImprovements(filter?.value || 'proposed');
+        } else {
+            showToast('Erro: ' + (data.error || 'Falha'), 3000);
+        }
+    })
+    .catch(e => {
+        showToast('Erro ao responder', 3000);
+        console.error('[IMPROVEMENTS] Erro respond:', e);
+    });
+}
+
+/**
+ * Marca uma memoria empresa como revisada (admin-only).
+ */
+function reviewMemory(memoryId) {
+    fetch(`/agente/api/memories/${memoryId}/review`, {
+        method: 'PUT',
+        headers: _csrfHeader(),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Memoria marcada como revisada', 2000);
+            // Atualizar badge no card
+            const badge = document.getElementById(`review-badge-${memoryId}`);
+            if (badge) {
+                badge.className = 'memory-meta-badge reviewed';
+                badge.textContent = 'Revisada';
+                badge.onclick = null;
+                badge.style.cursor = 'default';
+            }
+        } else {
+            showToast('Erro: ' + (data.error || 'Falha'), 3000);
+        }
+    })
+    .catch(e => {
+        showToast('Erro ao revisar', 3000);
+        console.error('[REVIEW] Erro:', e);
+    });
 }
 
 

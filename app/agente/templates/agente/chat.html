@@ -410,6 +410,11 @@
         <button class="memories-tab" data-tab="summaries" onclick="switchMemoryTab('summaries')">
             <i class="fas fa-file-alt me-1"></i>Resumos
         </button>
+        {% if current_user.perfil == 'administrador' %}
+        <button class="memories-tab" data-tab="improvements" onclick="switchMemoryTab('improvements')">
+            <i class="fas fa-lightbulb me-1"></i>Melhorias
+        </button>
+        {% endif %}
     </div>
     <div class="memories-panel-body">
         <!-- Aba Memorias -->
@@ -447,6 +452,28 @@
                 <small>Resumos sao gerados automaticamente apos conversas</small>
             </div>
         </div>
+        <!-- Sessao E: Aba Melhorias (admin-only) -->
+        {% if current_user.perfil == 'administrador' %}
+        <div id="improvements-tab-content" class="memories-tab-content">
+            <div class="memories-loading" id="improvements-loading" style="display: none;">
+                <i class="fas fa-spinner fa-spin me-2"></i>Carregando sugestoes...
+            </div>
+            <div id="improvements-filter" class="improvements-filter" style="display: none;">
+                <select id="improvements-status-filter" onchange="loadImprovements(this.value)">
+                    <option value="">Todas</option>
+                    <option value="proposed" selected>Pendentes</option>
+                    <option value="responded">Aceitas</option>
+                    <option value="rejected">Rejeitadas</option>
+                </select>
+            </div>
+            <div id="improvements-list"></div>
+            <div id="improvements-empty" class="memories-empty" style="display: none;">
+                <i class="fas fa-lightbulb fa-3x mb-3"></i>
+                <p>Nenhuma sugestao de melhoria</p>
+                <small>O agente gera sugestoes automaticamente apos sessoes</small>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
