@@ -142,9 +142,14 @@ def register_subcontrato_routes(bp):
             if not operacao:
                 flash('CTe CarVia nao encontrado.', 'warning')
                 return redirect(url_for('carvia.criar_subcontrato'))
-            if operacao.status in ('FATURADO', 'CANCELADO'):
-                flash('CTe CarVia faturado/cancelado nao aceita subcontratos.', 'warning')
+            if operacao.status == 'CANCELADO':
+                flash('CTe CarVia cancelado nao aceita subcontratos.', 'warning')
                 return redirect(url_for('carvia.criar_subcontrato'))
+            if operacao.status == 'FATURADO':
+                flash(
+                    'CTe CarVia ja faturado. O subcontrato sera criado de forma retroativa.',
+                    'info',
+                )
 
         if request.method == 'POST' and operacao:
             transportadora_id = request.form.get('transportadora_id', type=int)
@@ -231,16 +236,29 @@ def register_subcontrato_routes(bp):
 
         # GET — Passo 1 ou Passo 2
         operacoes_disponiveis = []
+        busca_op = ''
         if not operacao:
             # Passo 1: listar operacoes disponiveis para subcontratacao
-            operacoes_disponiveis = db.session.query(CarviaOperacao).filter(
-                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
-            ).order_by(CarviaOperacao.criado_em.desc()).limit(50).all()
+            busca_op = request.args.get('busca_op', '').strip()
+            query_ops = db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.status != 'CANCELADO',
+            )
+            if busca_op:
+                busca_like = f'%{busca_op}%'
+                query_ops = query_ops.filter(db.or_(
+                    CarviaOperacao.cte_numero.ilike(busca_like),
+                    CarviaOperacao.nome_cliente.ilike(busca_like),
+                    CarviaOperacao.cidade_destino.ilike(busca_like),
+                ))
+            operacoes_disponiveis = query_ops.order_by(
+                CarviaOperacao.criado_em.desc()
+            ).limit(100).all()
 
         return render_template(
             'carvia/subcontratos/criar.html',
             operacao=operacao,
             operacoes_disponiveis=operacoes_disponiveis,
+            busca_op=busca_op,
         )
 
     @bp.route('/subcontratos/<int:sub_id>') # type: ignore
@@ -276,9 +294,9 @@ def register_subcontrato_routes(bp):
         operacoes_disponiveis = []
         if sub.status not in ('FATURADO', 'CANCELADO', 'CONFERIDO'):
             operacoes_disponiveis = db.session.query(CarviaOperacao).filter(
-                CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
+                CarviaOperacao.status != 'CANCELADO',
                 CarviaOperacao.id != sub.operacao_id,
-            ).order_by(CarviaOperacao.criado_em.desc()).limit(50).all()
+            ).order_by(CarviaOperacao.criado_em.desc()).limit(100).all()
 
         return render_template(
             'carvia/subcontratos/detalhe.html',
@@ -319,8 +337,8 @@ def register_subcontrato_routes(bp):
             flash('CTe CarVia nao encontrado.', 'warning')
             return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
 
-        if nova_operacao.status in ('FATURADO', 'CANCELADO'):
-            flash('CTe CarVia faturado/cancelado nao aceita subcontratos.', 'warning')
+        if nova_operacao.status == 'CANCELADO':
+            flash('CTe CarVia cancelado nao aceita subcontratos.', 'warning')
             return redirect(url_for('carvia.detalhe_subcontrato', sub_id=sub_id))
 
         try:

@@ -1128,6 +1128,10 @@ def register_fatura_routes(bp):
                 }), 404
 
             # Reverter subcontrato + limpar CarviaFrete
+            # Status reverte para CONFIRMADO: subcontratos anexados manualmente
+            # passaram pelo fluxo COTADO→CONFIRMADO antes de FATURADO.
+            # (diferente de frete_routes.py que reverte para PENDENTE — la o sub
+            # foi auto-criado via processar_cte_subcontrato sem confirmacao manual)
             sub.fatura_transportadora_id = None
             sub.status = 'CONFIRMADO'
             # Propagar para CarviaFrete via frete_id (novo) ou subcontrato_id (deprecated)

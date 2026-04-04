@@ -395,6 +395,184 @@ def register_conciliacao_routes(bp):
         })
 
     # ===================================================================
+    # API: Matches por documento (document-first, para Fluxo de Caixa)
+    # ===================================================================
+
+    @bp.route('/api/conciliacao/matches-por-documento') # type: ignore
+    @login_required
+    def api_matches_por_documento(): # type: ignore
+        """Busca linhas de extrato candidatas para conciliar um documento.
+
+        Inverso de api_matches_linha: recebe tipo_doc+doc_id e retorna
+        CarviaExtratoLinha candidatas com scoring.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        tipo_doc = request.args.get('tipo_doc', '')
+        doc_id = request.args.get('doc_id', type=int)
+
+        if not tipo_doc or not doc_id:
+            return jsonify({'erro': 'tipo_doc e doc_id sao obrigatorios'}), 400
+
+        from app.carvia.models import (
+            CarviaFaturaCliente, CarviaFaturaTransportadora,
+            CarviaDespesa, CarviaCustoEntrega, CarviaReceita,
+            CarviaExtratoLinha,
+        )
+
+        # Carregar documento e determinar direcao/valor
+        doc_info = {}
+        if tipo_doc == 'fatura_cliente':
+            doc = db.session.get(CarviaFaturaCliente, doc_id)
+            if not doc:
+                return jsonify({'erro': 'Fatura cliente nao encontrada'}), 404
+            doc_info = {
+                'tipo_doc': tipo_doc,
+                'id': doc.id,
+                'numero': doc.numero_fatura,
+                'nome': doc.cnpj_cliente or '',
+                'valor': float(doc.valor_total or 0),
+                'total_conciliado': float(doc.total_conciliado or 0),
+                'saldo': float(doc.valor_total or 0) - float(doc.total_conciliado or 0),
+                'vencimento': doc.vencimento.strftime('%d/%m/%Y') if doc.vencimento else '',
+                'direcao': 'CREDITO',
+            }
+        elif tipo_doc == 'fatura_transportadora':
+            doc = db.session.get(CarviaFaturaTransportadora, doc_id)
+            if not doc:
+                return jsonify({'erro': 'Fatura transportadora nao encontrada'}), 404
+            nome = ''
+            if doc.transportadora:
+                nome = doc.transportadora.razao_social or ''
+            doc_info = {
+                'tipo_doc': tipo_doc,
+                'id': doc.id,
+                'numero': doc.numero_fatura,
+                'nome': nome,
+                'valor': float(doc.valor_total or 0),
+                'total_conciliado': float(doc.total_conciliado or 0),
+                'saldo': float(doc.valor_total or 0) - float(doc.total_conciliado or 0),
+                'vencimento': doc.vencimento.strftime('%d/%m/%Y') if doc.vencimento else '',
+                'direcao': 'DEBITO',
+            }
+        elif tipo_doc == 'despesa':
+            doc = db.session.get(CarviaDespesa, doc_id)
+            if not doc:
+                return jsonify({'erro': 'Despesa nao encontrada'}), 404
+            doc_info = {
+                'tipo_doc': tipo_doc,
+                'id': doc.id,
+                'numero': f'DESP-{doc.id:03d}',
+                'nome': doc.tipo_despesa or doc.descricao or '',
+                'valor': float(doc.valor or 0),
+                'total_conciliado': float(doc.total_conciliado or 0),
+                'saldo': float(doc.valor or 0) - float(doc.total_conciliado or 0),
+                'vencimento': doc.data_vencimento.strftime('%d/%m/%Y') if doc.data_vencimento else '',
+                'direcao': 'DEBITO',
+            }
+        elif tipo_doc == 'custo_entrega':
+            doc = db.session.get(CarviaCustoEntrega, doc_id)
+            if not doc:
+                return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
+            doc_info = {
+                'tipo_doc': tipo_doc,
+                'id': doc.id,
+                'numero': doc.numero_custo or f'CE-{doc.id:03d}',
+                'nome': doc.tipo_custo or '',
+                'valor': float(doc.valor or 0),
+                'total_conciliado': float(doc.total_conciliado or 0),
+                'saldo': float(doc.valor or 0) - float(doc.total_conciliado or 0),
+                'vencimento': doc.data_vencimento.strftime('%d/%m/%Y') if doc.data_vencimento else '',
+                'direcao': 'DEBITO',
+            }
+        elif tipo_doc == 'receita':
+            doc = db.session.get(CarviaReceita, doc_id)
+            if not doc:
+                return jsonify({'erro': 'Receita nao encontrada'}), 404
+            doc_info = {
+                'tipo_doc': tipo_doc,
+                'id': doc.id,
+                'numero': f'REC-{doc.id:03d}',
+                'nome': doc.descricao or '',
+                'valor': float(doc.valor or 0),
+                'total_conciliado': float(doc.total_conciliado or 0),
+                'saldo': float(doc.valor or 0) - float(doc.total_conciliado or 0),
+                'vencimento': doc.data_vencimento.strftime('%d/%m/%Y') if doc.data_vencimento else '',
+                'direcao': 'CREDITO',
+            }
+        else:
+            return jsonify({'erro': f'Tipo de documento invalido: {tipo_doc}'}), 400
+
+        # Buscar linhas de extrato candidatas (mesma direcao, com saldo)
+        direcao = doc_info['direcao']
+        valor_doc = doc_info['saldo']
+        if valor_doc <= 0:
+            return jsonify({
+                'documento': doc_info,
+                'linhas': [],
+                'mensagem': 'Documento ja totalmente conciliado.',
+            })
+
+        # Margem de busca: valor +-30% para pegar candidatas
+        margem = 0.30
+        valor_min = valor_doc * (1 - margem)
+        valor_max = valor_doc * (1 + margem)
+
+        linhas_candidatas = CarviaExtratoLinha.query.filter(
+            CarviaExtratoLinha.tipo == direcao,
+            CarviaExtratoLinha.status_conciliacao.in_(['PENDENTE', 'PARCIAL']),
+            db.func.abs(CarviaExtratoLinha.valor).between(valor_min, valor_max),
+        ).order_by(CarviaExtratoLinha.data.desc()).limit(20).all()
+
+        # Construir resposta com scoring simplificado
+        linhas_result = []
+        for ln in linhas_candidatas:
+            # Score por proximidade de valor
+            diff_pct = abs(abs(float(ln.valor)) - valor_doc) / valor_doc if valor_doc else 1
+            score_valor = max(0, 1 - diff_pct * 5)  # 0% diff=1.0, 20% diff=0.0
+
+            # Score por proximidade de data (se temos vencimento)
+            score_data = 0.3  # neutro
+            if ln.data and doc_info.get('vencimento'):
+                from datetime import datetime
+                try:
+                    venc = datetime.strptime(doc_info['vencimento'], '%d/%m/%Y').date()
+                    delta = abs((ln.data - venc).days)
+                    score_data = max(0, 1 - delta / 30)
+                except (ValueError, TypeError):
+                    pass
+
+            score = score_valor * 0.60 + score_data * 0.40
+
+            if score >= 0.80:
+                label = 'ALTO'
+            elif score >= 0.50:
+                label = 'MEDIO'
+            else:
+                label = 'BAIXO'
+
+            linhas_result.append({
+                'id': ln.id,
+                'data': ln.data.strftime('%d/%m/%Y') if ln.data else '',
+                'valor': float(ln.valor),
+                'tipo': ln.tipo,
+                'descricao': ln.descricao or '',
+                'razao_social': ln.razao_social or '',
+                'saldo_a_conciliar': ln.saldo_a_conciliar,
+                'score': round(score, 2),
+                'score_label': label,
+            })
+
+        # Ordenar por score desc
+        linhas_result.sort(key=lambda x: x['score'], reverse=True)
+
+        return jsonify({
+            'documento': doc_info,
+            'linhas': linhas_result,
+        })
+
+    # ===================================================================
     # CSV Razao Social: Upload
     # ===================================================================
 

@@ -19,6 +19,16 @@
             <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Passo 1 — Selecionar CTe CarVia</h5>
         </div>
         <div class="card-body">
+            <form method="GET" action="{{ url_for('carvia.criar_subcontrato') }}" class="mb-3">
+                <div class="input-group">
+                    <input type="text" name="busca_op" class="form-control"
+                           placeholder="Buscar por CTe, cliente ou destino..."
+                           value="{{ busca_op }}">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                </div>
+            </form>
             {% if operacoes_disponiveis %}
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0 carvia-table">
@@ -68,7 +78,7 @@
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-info-circle fa-3x mb-3 d-block opacity-50"></i>
                 <p>Nenhum CTe CarVia disponivel para subcontratacao.</p>
-                <p class="small">CTe CarVia precisa estar em status RASCUNHO, COTADO ou CONFIRMADO.</p>
+                <p class="small">CTe CarVia precisa estar em status ativo (nao cancelado).{% if busca_op %} Tente outra busca.{% endif %}</p>
             </div>
             {% endif %}
         </div>

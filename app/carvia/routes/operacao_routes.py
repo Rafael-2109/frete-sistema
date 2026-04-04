@@ -872,13 +872,18 @@ def register_operacao_routes(bp):
             operacao.status = 'CONFIRMADO'
 
             # Limpar operacao_id nos itens de fatura (nao exclui itens)
-            from app.carvia.models import CarviaFaturaClienteItem
+            from app.carvia.models import CarviaFaturaClienteItem, CarviaFrete
             itens = db.session.query(CarviaFaturaClienteItem).filter_by(
                 fatura_cliente_id=fatura_id,
                 operacao_id=operacao_id,
             ).all()
             for item in itens:
                 item.operacao_id = None
+
+            # Propagar para CarviaFrete (consistencia com api_desvincular_operacao_fatura_cliente)
+            CarviaFrete.query.filter_by(operacao_id=operacao_id).update(
+                {'fatura_cliente_id': None}
+            )
 
             db.session.commit()
 
@@ -933,17 +938,24 @@ def register_operacao_routes(bp):
             operacao.cte_valor = cte_valor
 
             # Se operacao faturada, recalcular valor_total da fatura
+            # (inclui CTe Complementares — consistente com api_desvincular_operacao_fatura_cliente)
             if operacao.fatura_cliente_id:
                 fatura = operacao.fatura_cliente
                 if fatura:
+                    from app.carvia.models import CarviaCteComplementar
                     soma = db.session.query(
                         func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
                     ).filter(
                         CarviaOperacao.fatura_cliente_id == fatura.id,
                     ).scalar()
-                    fatura.valor_total = soma
+                    soma_comp = db.session.query(
+                        func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0)
+                    ).filter(
+                        CarviaCteComplementar.fatura_cliente_id == fatura.id,
+                    ).scalar()
+                    fatura.valor_total = (soma or 0) + (soma_comp or 0)
                     logger.info(
-                        f"Fatura #{fatura.id}: valor_total recalculado para {soma} "
+                        f"Fatura #{fatura.id}: valor_total recalculado para {fatura.valor_total} "
                         f"(editar CTe #{operacao_id} por {current_user.email})"
                     )
 

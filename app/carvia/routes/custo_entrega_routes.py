@@ -268,6 +268,16 @@ def register_custo_entrega_routes(bp):
                 'carvia.detalhe_custo_entrega', custo_id=custo_id
             ))
 
+        if custo.status == 'PAGO':
+            flash(
+                'Custo de entrega pago nao pode ser editado. '
+                'Cancele e crie um novo se necessario.',
+                'warning',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_custo_entrega', custo_id=custo_id
+            ))
+
         if request.method == 'POST':
             cte_complementar_id_str = request.form.get('cte_complementar_id', '').strip()
             tipo_custo = request.form.get('tipo_custo', '').strip()

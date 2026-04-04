@@ -877,6 +877,10 @@ def register_frete_routes(bp):
 
         try:
             # Limpar FK novo (frete_id) no subcontrato
+            # Status reverte para PENDENTE: subcontratos criados via processar_cte_subcontrato
+            # nunca passaram pelo fluxo manual de COTADO→CONFIRMADO.
+            # (diferente de fatura_routes.py que reverte para CONFIRMADO — la o sub
+            # foi confirmado manualmente antes de ser anexado a fatura)
             sub.frete_id = None
             sub.fatura_transportadora_id = None
             sub.status = 'PENDENTE'

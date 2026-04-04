@@ -1,0 +1,102 @@
+{#
+  Modal de Pagamento com Conciliacao Opcional — CarVia
+  =====================================================
+  Fluxo document-first: usuario clica PAGO no Fluxo de Caixa,
+  modal busca linhas de extrato candidatas para conciliacao.
+
+  Usado em: fluxo_caixa.html (via JS, sem form_action)
+#}
+<div class="modal fade" id="modalPagarComConciliacao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-money-check-alt"></i>
+                    Registrar Pagamento
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {# Info do documento selecionado #}
+                <div id="pcDocInfo" class="alert alert-light mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>
+                            <strong id="pcDocTipo">-</strong>
+                            <span id="pcDocNumero" class="ms-1">-</span>
+                        </span>
+                        <strong id="pcDocValor">-</strong>
+                    </div>
+                    <small class="text-muted">
+                        <span id="pcDocNome">-</span>
+                        <span class="ms-2">Vencimento: <span id="pcDocVenc">-</span></span>
+                    </small>
+                </div>
+
+                {# Linhas de extrato candidatas #}
+                <h6 class="mb-2"><i class="fas fa-university"></i> Linhas de extrato correspondentes</h6>
+
+                <div id="pcLoading" class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm"></div>
+                    <span class="ms-2">Buscando correspondencias...</span>
+                </div>
+
+                <div id="pcLinhasContainer" class="d-none">
+                    <div class="table-responsive" style="max-height:220px; overflow-y:auto">
+                        <table class="table table-sm carvia-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width:30px"></th>
+                                    <th>Data</th>
+                                    <th>Descricao</th>
+                                    <th class="text-end">Valor</th>
+                                    <th class="text-end">Saldo</th>
+                                    <th style="width:60px">Match</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pcLinhasBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="pcSemLinhas" class="text-muted text-center py-3 d-none">
+                    <i class="fas fa-info-circle"></i> Nenhuma linha bancaria correspondente encontrada.
+                </div>
+
+                <hr class="my-3">
+
+                {# Data do pagamento #}
+                <div class="row align-items-end">
+                    <div class="col-md-4">
+                        <label for="pcDataPagamento" class="form-label">Data do Pagamento</label>
+                        <input type="date" class="form-control" id="pcDataPagamento" required>
+                    </div>
+                </div>
+
+                {# Confirmacao para pagar sem conciliacao #}
+                <div id="pcConfirmSemConc" class="alert alert-warning mt-3 d-none">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Deseja baixar esse pagamento mesmo sem conciliacao?</strong>
+                    <p class="mb-2 small">O pagamento sera registrado sem vinculo com extrato bancario.</p>
+                    <button type="button" class="btn btn-warning btn-sm" id="btnConfirmarSemConc">
+                        <i class="fas fa-check"></i> Sim, baixar sem conciliacao
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <div class="small text-muted" style="font-size:0.68rem">
+                    <span class="badge carvia-badge-score-alto" style="font-size:0.55rem">&#9733;&#9733;&#9733;</span> Valor+Data
+                    <span class="badge carvia-badge-score-medio ms-1" style="font-size:0.55rem">&#9733;&#9733;</span> Parcial
+                </div>
+                <div>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="btnPagarSemConc">
+                        <i class="fas fa-money-bill"></i> Pagar sem conciliacao
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm" id="btnPagarEConciliar" disabled>
+                        <i class="fas fa-check-double"></i> Pagar e Conciliar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

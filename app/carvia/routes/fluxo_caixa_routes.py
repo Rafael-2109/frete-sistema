@@ -179,7 +179,11 @@ def register_fluxo_caixa_routes(bp):
     @bp.route('/api/fluxo-caixa/pagar', methods=['POST'])
     @login_required
     def api_fluxo_caixa_pagar():
-        """Marca um lancamento como pago e cria movimentacao na conta."""
+        """Marca um lancamento como pago e cria movimentacao na conta.
+
+        Aceita extrato_linha_id opcional — se presente, tambem concilia
+        o documento com a linha de extrato via CarviaConciliacaoService.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
@@ -190,6 +194,7 @@ def register_fluxo_caixa_routes(bp):
         tipo_doc = data.get('tipo_doc')
         doc_id = data.get('id')
         data_pagamento_str = data.get('data_pagamento', '')
+        extrato_linha_id = data.get('extrato_linha_id')  # opcional
 
         if not tipo_doc or not doc_id:
             return jsonify({'erro': 'tipo_doc e id sao obrigatorios'}), 400
@@ -294,6 +299,50 @@ def register_fluxo_caixa_routes(bp):
             descricao = _gerar_descricao(tipo_doc, doc)
             _criar_movimentacao(tipo_doc, doc_id, valor_mov, descricao, usuario)
 
+            # Se extrato_linha_id fornecido, conciliar documento com linha bancaria
+            conciliou = False
+            if extrato_linha_id:
+                try:
+                    from app.carvia.models import CarviaConciliacao
+                    from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                        CarviaConciliacaoService,
+                    )
+
+                    # Guard: verificar se ja existe conciliacao para este par
+                    ja_existe = db.session.query(CarviaConciliacao).filter_by(
+                        extrato_linha_id=int(extrato_linha_id),
+                        tipo_documento=tipo_doc,
+                        documento_id=int(doc_id),
+                    ).first()
+
+                    if ja_existe:
+                        conciliou = True
+                        logger.info(
+                            f"Conciliacao ja existe para {tipo_doc} #{doc_id} "
+                            f"x linha #{extrato_linha_id} — skip"
+                        )
+                    else:
+                        CarviaConciliacaoService.conciliar(
+                            int(extrato_linha_id),
+                            [{
+                                'tipo_documento': tipo_doc,
+                                'documento_id': int(doc_id),
+                                'valor_alocado': valor_mov,
+                            }],
+                            usuario,
+                        )
+                        conciliou = True
+                        logger.info(
+                            f"Fluxo caixa: {tipo_doc} #{doc_id} conciliado com "
+                            f"extrato linha #{extrato_linha_id}"
+                        )
+                except (ValueError, Exception) as e:
+                    # Conciliacao falhou mas pagamento segue — nao bloqueia
+                    logger.warning(
+                        f"Conciliacao falhou para {tipo_doc} #{doc_id} "
+                        f"(linha #{extrato_linha_id}): {e}"
+                    )
+
             db.session.commit()
             saldo_atual = _obter_saldo_atual()
 
@@ -306,6 +355,7 @@ def register_fluxo_caixa_routes(bp):
                 'sucesso': True,
                 'novo_status': novo_status,
                 'saldo_atual': saldo_atual,
+                'conciliado': conciliou,
             })
 
         except IntegrityError:
@@ -400,6 +450,27 @@ def register_fluxo_caixa_routes(bp):
                     f"(pagamento pre-feature)"
                 )
 
+            # Reverter conciliacoes associadas (criadas via "Pagar e Conciliar")
+            from app.carvia.models import CarviaConciliacao
+            conciliacoes_doc = CarviaConciliacao.query.filter_by(
+                tipo_documento=tipo_doc,
+                documento_id=int(doc_id),
+            ).all()
+            if conciliacoes_doc:
+                from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                    CarviaConciliacaoService,
+                )
+                for conc in conciliacoes_doc:
+                    try:
+                        CarviaConciliacaoService.desconciliar(
+                            conc.id, current_user.email
+                        )
+                    except (ValueError, Exception) as e:
+                        logger.warning(
+                            f"Erro ao desconciliar #{conc.id} durante desfazer "
+                            f"{tipo_doc} #{doc_id}: {e}"
+                        )
+
             db.session.commit()
             saldo_atual = _obter_saldo_atual()
 
@@ -466,6 +537,8 @@ def register_fluxo_caixa_routes(bp):
                 doc = db.session.get(CarviaFaturaTransportadora, int(doc_id))
                 if not doc:
                     return jsonify({'erro': 'Fatura transportadora nao encontrada'}), 404
+                if doc.status_pagamento == 'PAGO':
+                    return jsonify({'erro': 'Fatura paga nao pode ter vencimento alterado'}), 400
                 if doc.status_conferencia == 'CONFERIDO':
                     return jsonify({'erro': 'Fatura conferida nao pode ter vencimento alterado'}), 400
                 doc.vencimento = novo_vencimento
