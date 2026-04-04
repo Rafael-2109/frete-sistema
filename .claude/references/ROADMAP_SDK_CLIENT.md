@@ -1,8 +1,9 @@
 # Migração: query() → ClaudeSDKClient — ROADMAP VIVO
 
-> **Última atualização**: 2026-03-09
-> **Status geral**: EM PROGRESSO
+> **Última atualização**: 2026-04-04
+> **Status geral**: EM PROGRESSO (pausado — Fases 4-5 pendentes)
 > **Progresso**: ██████░░░░ 60% (Fase 0 ✅ + Fase 1 ✅ + Fase 2 ✅ + Fase 3 ✅)
+> **Nota (04/04)**: `set_model()` e interrupt handling implementados (itens de Fase 4), mas V4.1-V4.3 e V5.1-V5.2 ainda pendentes. `toggle_mcp_server` nao implementado.
 > **POC**: CONCLUÍDA (2.15x speedup) — `scripts/poc_sdk_client.py`
 > **Rollback instantâneo**: `AGENT_PERSISTENT_SDK_CLIENT=false`
 

@@ -1,28 +1,28 @@
 # TODO: Perguntas de Usuarios NAO Cobertas pelas Skills
 
 **Criado em**: 05/02/2026
-**Status**: Brainstorm aprovado, aguardando priorizacao para implementacao
+**Atualizado em**: 04/04/2026
+**Status**: Parcialmente resolvido — gaps marcados abaixo. Pendentes = backlog de skills futuras.
 
 ---
 
-## GAP ESTRUTURAL #1: Nenhuma skill cruza a fronteira pre/pos-faturamento
+## ~~GAP ESTRUTURAL #1: Nenhuma skill cruza a fronteira pre/pos-faturamento~~ RESOLVIDO
 
-A linha divisoria e `Separacao.sincronizado_nf`. `gerindo-expedicao` opera ANTES, `monitorando-entregas` opera DEPOIS. Perguntas que cruzam essa fronteira ficam sem resposta.
+~~A linha divisoria e `Separacao.sincronizado_nf`. `gerindo-expedicao` opera ANTES, `monitorando-entregas` opera DEPOIS. Perguntas que cruzam essa fronteira ficam sem resposta.~~
+
+> **Resolvido por**: subagente `raio-x-pedido` (Mar 2026) — cruza pre/pos-faturamento em visao unificada.
 
 ---
 
 ## DOMINIO 1: CADEIA COMPLETA DO PEDIDO (Pedido -> Embarque -> Entrega)
 
-### 1.1 "Qual o status completo do pedido VCD123?" (RAIO-X)
-- **Frequencia**: DIARIA | **Complexidade**: 5+ tabelas
-- **Path**: `CarteiraPrincipal(num_pedido)` -> `Separacao(num_pedido)` -> `EmbarqueItem(separacao_lote_id)` -> `Embarque(id)` -> `FaturamentoProduto(numero_nf)` -> `EntregaMonitorada(numero_nf)`
-- **Gap**: Nenhuma skill conecta pedido->separacao->embarque->faturamento->entrega em resposta unica
+### ~~1.1 "Qual o status completo do pedido VCD123?" (RAIO-X)~~ RESOLVIDO
+> **Resolvido por**: subagente `raio-x-pedido`
+- ~~**Gap**: Nenhuma skill conecta pedido->separacao->embarque->faturamento->entrega em resposta unica~~
 
-### 1.2 "Quando entrega o pedido VCD123?"
-- **Frequencia**: DIARIA | **Complexidade**: 4-5 tabelas + logica condicional
-- **Path CASO 1** (nao faturado): `Separacao(sincronizado_nf=False)` -> `expedicao + lead_time teorico`
-- **Path CASO 2** (faturado): `Separacao(numero_nf)` -> `EntregaMonitorada(numero_nf)` -> `data_entrega_prevista` ou `AgendamentoEntrega(data_agendada)`
-- **Gap**: Nenhuma skill responde "quando entrega o pedido X" cruzando a barreira pre/pos-faturamento
+### ~~1.2 "Quando entrega o pedido VCD123?"~~ RESOLVIDO
+> **Resolvido por**: subagente `raio-x-pedido` (cruza pre/pos-faturamento)
+- ~~**Gap**: Nenhuma skill responde "quando entrega o pedido X" cruzando a barreira pre/pos-faturamento~~
 
 ### 1.3 "Quanto custou o frete do pedido VCD123?"
 - **Frequencia**: SEMANAL | **Complexidade**: 5+ tabelas
@@ -34,24 +34,18 @@ A linha divisoria e `Separacao.sincronizado_nf`. `gerindo-expedicao` opera ANTES
 - **Path**: `Separacao(num_pedido)` -> `EmbarqueItem(separacao_lote_id)` -> `embarque_id` -> `EmbarqueItem(WHERE embarque_id=X)` -> clientes, pedidos, NFs, destinos, pesos
 - **Gap**: Conceito de "co-passageiros de embarque" nao existe em nenhuma skill
 
-### 1.5 "Historico completo de entregas do pedido VCD123"
-- **Frequencia**: SEMANAL | **Complexidade**: 4+ tabelas
-- **Path**: `FaturamentoProduto(origem='VCD123')` -> `numero_nf` -> `EntregaMonitorada(numero_nf)` -> `AgendamentoEntrega` + `EventoEntrega` + `ComentarioNF`
-- **Gap**: `monitorando-entregas` parte da NF, nao do pedido. O campo `FaturamentoProduto.origem` (= num_pedido) e a chave, mas nenhuma skill usa esse caminho
+### ~~1.5 "Historico completo de entregas do pedido VCD123"~~ RESOLVIDO
+> **Resolvido por**: subagente `raio-x-pedido` (rastreia por pedido, nao por NF)
+- ~~**Gap**: `monitorando-entregas` parte da NF, nao do pedido~~
 
-### 1.6 "O que falta entregar do pedido VCD123?"
-- **Frequencia**: DIARIA | **Complexidade**: 3-4 tabelas
-- **Path**: `CarteiraPrincipal(num_pedido)` -> qtd total -> `FaturamentoProduto(origem='VCD123')` -> qtd faturada -> `EntregaMonitorada(entregue=True)` -> qtd entregue -> diferenca
-- **Gap**: Nenhuma skill calcula "saldo a entregar" cruzando carteira + faturamento + entrega
+### ~~1.6 "O que falta entregar do pedido VCD123?"~~ RESOLVIDO
+> **Resolvido por**: subagente `raio-x-pedido` (calcula saldo cruzando carteira+faturamento+entrega)
+- ~~**Gap**: Nenhuma skill calcula "saldo a entregar" cruzando carteira + faturamento + entrega~~
 
 
-### 1.7 "Quais pedidos do cliente X estao em transito?"
-- **Frequencia**: DIARIA | **Complexidade**: 3 tabelas
-- **Path**: `EntregaMonitorada(status_finalizacao IS NULL, data_embarque IS NOT NULL, nf_cd=False)` JOIN `FaturamentoProduto(numero_nf)` -> `origem` (= num_pedido)
-- **Estados complementares**:
-  - **Ainda nao saiu**: `EntregaMonitorada(data_embarque IS NULL, nf_cd=False)`
-  - **NF no CD (voltou)**: `EntregaMonitorada(nf_cd=True)`
-- **Gap**: `gerindo-expedicao` mostra pedidos em carteira. `monitorando-entregas` mostra NFs. Nenhuma skill mostra "pedidos em transito" por cliente
+### ~~1.7 "Quais pedidos do cliente X estao em transito?"~~ RESOLVIDO
+> **Resolvido por**: subagente `raio-x-pedido` (pedidos em transito por cliente)
+- ~~**Gap**: Nenhuma skill mostra "pedidos em transito" por cliente~~
 
 ---
 
@@ -223,10 +217,9 @@ A linha divisoria e `Separacao.sincronizado_nf`. `gerindo-expedicao` opera ANTES
 - **Path**: `CustoMensal(cod_produto, ano, mes)` -> `custo_liquido_medio` -> ultimos 3 meses
 - **Gap**: Modulo custeio sem skill
 
-### 6.3 "Resumo completo do produto palmito" (360 graus)
-- **Frequencia**: SEMANAL | **Complexidade**: 7+ tabelas
-- **Path**: `CadastroPalletizacao` + `ProgramacaoProducao(programados)` + `MovimentacaoEstoque(saldo)` + `CarteiraPrincipal(pendentes)` + `Separacao(separados)` + `FaturamentoProduto(faturados)` + `CustoConsiderado(custo)`
-- **Gap**: Nenhuma visao consolidada de produto cruzando todos os dominios
+### ~~6.3 "Resumo completo do produto palmito" (360 graus)~~ RESOLVIDO
+> **Resolvido por**: skill `visao-produto` (visao 360 cross-domain)
+- ~~**Gap**: Nenhuma visao consolidada de produto cruzando todos os dominios~~
 
 ### 6.4 "Produtos mais devolvidos nos ultimos 30 dias"
 - **Frequencia**: MENSAL | **Complexidade**: 2-3 tabelas
@@ -278,28 +271,29 @@ A linha divisoria e `Separacao.sincronizado_nf`. `gerindo-expedicao` opera ANTES
 
 ---
 
-## RESUMO: TOP 10 PERGUNTAS MAIS CRITICAS (por frequencia x impacto)
+## RESUMO: TOP PERGUNTAS PENDENTES (atualizado 04/04/2026)
 
-| # | Pergunta | Freq | Tabelas | Gap Principal |
-|---|----------|------|---------|---------------|
-| 1 | Status completo do pedido X | DIARIA | 5+ | Nenhuma skill cruza pre/pos-faturamento |
-| 2 | Quando entrega o pedido X? | DIARIA | 4-5 | Logica condicional pre/pos-faturamento |
-| 3 | Entregas atrasadas (agregado) | DIARIA | 1 | monitorando-entregas nao calcula atraso em dias |
-| 4 | Produtos que vao faltar em 7 dias | DIARIA | 3-4 | Sem alerta proativo de ruptura |
-| 5 | Divergencia CTe vs cotacao | DIARIA | 1-2 | Modelo tem metodos, skill nao expoe |
-| 6 | Pedidos em transito por cliente | DIARIA | 3 | Nenhuma skill mostra "em transito" |
-| 7 | Custo REAL de frete do pedido X | SEMANAL | 5+ | cotando-frete = teorico, sem historico pago |
-| 8 | Co-passageiros do embarque | SEMANAL | 3 | Conceito inexistente em skills |
-| 9 | Gasto de frete com cliente X (real) | SEMANAL | 2-3 | Sem agregacao de Frete.valor_pago por grupo |
-| 10 | O que falta entregar do pedido X | DIARIA | 3-4 | Sem cruzamento carteira+faturamento+entrega |
+> ~~Itens 1, 2, 6, 10 resolvidos pelo `raio-x-pedido`~~
+
+| # | Pergunta | Freq | Gap Principal |
+|---|----------|------|---------------|
+| 1 | Entregas atrasadas (agregado) | DIARIA | monitorando-entregas nao calcula atraso em dias |
+| 2 | Produtos que vao faltar em 7 dias | DIARIA | Sem alerta proativo de ruptura |
+| 3 | Divergencia CTe vs cotacao | DIARIA | Modelo tem metodos, skill nao expoe |
+| 4 | Custo REAL de frete do pedido X | SEMANAL | cotando-frete = teorico, sem historico pago |
+| 5 | Co-passageiros do embarque | SEMANAL | Conceito inexistente em skills |
+| 6 | Gasto de frete com cliente X (real) | SEMANAL | Sem agregacao de Frete.valor_pago por grupo |
+| 7 | Frete medio por kg por UF | MENSAL | Benchmark custo/kg nao existe |
+| 8 | Ranking transportadoras por velocidade | MENSAL | Tabelas BI existem, sem skill |
 
 ---
 
 ## 4 GAPS ESTRUTURAIS IDENTIFICADOS
 
-### Gap A: Travessia pre/pos-faturamento
-Skills operam em silos separados por `sincronizado_nf`. Nenhuma faz a ponte.
-**Impacto**: Perguntas 1.1, 1.2, 1.3, 1.5, 1.6, 1.7
+### ~~Gap A: Travessia pre/pos-faturamento~~ RESOLVIDO
+> **Resolvido por**: subagente `raio-x-pedido` (Mar 2026)
+~~Skills operam em silos separados por `sincronizado_nf`. Nenhuma faz a ponte.~~
+**Impacto original**: Perguntas 1.1, 1.2, 1.3, 1.5, 1.6, 1.7 — todos resolvidos exceto 1.3 (custo real frete)
 
 ### Gap B: Frete REAL vs TEORICO
 `cotando-frete` = tabelas de preco. Frete(valor_pago, valor_cte) + DespesaExtra = custos reais nao consultados.

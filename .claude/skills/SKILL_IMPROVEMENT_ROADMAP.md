@@ -135,9 +135,9 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 |---|-------|---------|------|--------|------|
 | 13 | `exportando-arquivos` | 1 | 36KB | DONE | 2026-02-26 |
 | 14 | `lendo-arquivos` | 1 | 32KB | DONE | 2026-02-26 |
-| 15 | `memoria-usuario` | 1 | 32KB | DONE | 2026-02-26 |
+| 15 | `memoria-usuario` | 1 | 32KB | DONE [DEPRECATED -> `gerindo-agente`] | 2026-02-26 |
 | 16 | `descobrindo-odoo-estrutura` | 1 | 32KB | DONE | 2026-02-26 |
-| 17 | `buscando-rotas` | 1 | 16KB | DONE | 2026-02-26 |
+| 17 | `buscando-rotas` | 1 | 16KB | DONE [DEPRECATED — funcionalidade absorvida por `cotando-frete`] | 2026-02-26 |
 
 ### P4 — Reference-Only (sem scripts proprios)
 
@@ -147,7 +147,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 | 19 | `conciliando-odoo-po` | 3 | 56KB | DONE | 2026-02-26 |
 | 20 | `validacao-nf-po` | 2 | 48KB | DONE | 2026-02-26 |
 | 21 | `recebimento-fisico-odoo` | 2 | 44KB | DONE | 2026-02-26 |
-| 22 | `frontend-design` | 2 | 44KB | DONE | 2026-02-26 |
+| 22 | `frontend-design` | 2 | 44KB | DONE [GLOBAL SKILL — sem diretorio local] | 2026-02-26 |
 | 23 | `razao-geral-odoo` | 0 | 16KB | DONE | 2026-02-26 |
 
 ### P5 — Skills Adicionadas Pos-Roadmap
