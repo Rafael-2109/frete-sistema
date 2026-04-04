@@ -260,16 +260,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cotacoes_cliente_id",
+      "name": "ix_carvia_cotacoes_veiculo_id",
       "columns": [
-        "cliente_id"
+        "veiculo_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cotacoes_veiculo_id",
+      "name": "ix_carvia_cotacoes_cliente_id",
       "columns": [
-        "veiculo_id"
+        "cliente_id"
       ],
       "unique": false
     },

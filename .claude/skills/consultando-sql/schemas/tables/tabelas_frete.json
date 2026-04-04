@@ -114,6 +114,16 @@
       "name": "criado_em",
       "type": "timestamp",
       "description": "horário do cadastro automático"
+    },
+    {
+      "name": "atualizado_por",
+      "type": "varchar(120)",
+      "description": "usuário que fez a última atualização"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "horário da última atualização"
     }
   ],
   "foreign_keys": [

@@ -1,0 +1,82 @@
+{
+  "name": "evento_supply_chain",
+  "description": "Tabela evento_supply_chain",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo_evento",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "entidade",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "entidade_id",
+      "type": "integer"
+    },
+    {
+      "name": "num_pedido",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "separacao_lote_id",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "quantidade_anterior",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "quantidade_nova",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "qtd_projetada_dia",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "dados_antes",
+      "type": "jsonb"
+    },
+    {
+      "name": "dados_depois",
+      "type": "jsonb"
+    },
+    {
+      "name": "campos_alterados",
+      "type": "array"
+    },
+    {
+      "name": "origem",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "session_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "registrado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "registrado_por",
+      "type": "varchar(100)"
+    }
+  ]
+}

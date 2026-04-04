@@ -154,30 +154,9 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_numero_nf",
-      "columns": [
-        "numero_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_status_finalizacao",
-      "columns": [
-        "status_finalizacao"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_entregue",
-      "columns": [
-        "entregue"
       ],
       "unique": false
     },
@@ -189,23 +168,16 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_embarque",
+      "name": "idx_em_status_finalizacao",
       "columns": [
-        "data_embarque"
+        "status_finalizacao"
       ],
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "name": "idx_em_entregue",
       "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_data_agenda",
-      "columns": [
-        "data_agenda"
+        "entregue"
       ],
       "unique": false
     },
@@ -217,9 +189,16 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_faturamento",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "data_faturamento"
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_embarque",
+      "columns": [
+        "data_embarque"
       ],
       "unique": false
     },
@@ -227,6 +206,27 @@
       "name": "idx_em_reagendar",
       "columns": [
         "reagendar"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_agenda",
+      "columns": [
+        "data_agenda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_faturamento",
+      "columns": [
+        "data_faturamento"
       ],
       "unique": false
     }
