@@ -71,6 +71,17 @@
                     </div>
                 </div>
 
+                <!-- Sessao A: Botao Memorias -->
+                <div class="header-control has-tooltip">
+                    <button class="btn-memories" onclick="openMemoriesPanel()" title="Memorias e Resumos">
+                        <i class="fas fa-brain"></i>
+                    </button>
+                    <div class="control-tooltip">
+                        <strong><i class="fas fa-brain"></i> Memorias</strong>
+                        <p>Veja o que a IA aprendeu sobre voce e resumos de sessoes anteriores.</p>
+                    </div>
+                </div>
+
                 <!-- FEAT-010: Toggle Plan Mode com Tooltip -->
                 <div class="header-control has-tooltip">
                     <label class="toggle-switch plan">
@@ -126,6 +137,14 @@
                 </div>
                 {% endif %}
 
+                <!-- Sessao A: Context Usage Indicator -->
+                <div class="context-indicator" id="context-indicator" style="display: none;" title="Uso do contexto">
+                    <div class="context-bar">
+                        <div class="context-bar-fill" id="context-bar-fill" style="width: 0%"></div>
+                    </div>
+                    <span class="context-text" id="context-text">0%</span>
+                </div>
+
                 <!-- DESIGN-001: Toggle de Tema Dark/Light -->
                 <button class="theme-toggle" onclick="toggleAgentTheme()" title="Alternar tema">
                     <i class="fas fa-sun theme-toggle__icon theme-toggle__icon--light"></i>
@@ -149,6 +168,9 @@
                             <i class="fas fa-plus me-2"></i>Nova Conversa
                         </a></li>
                         <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="#" onclick="openMemoriesPanel()">
+                            <i class="fas fa-brain me-2"></i>Memorias
+                        </a></li>
                         <li><a class="dropdown-item" href="#" onclick="toggleTimeline()">
                             <i class="fas fa-history me-2"></i>Timeline
                         </a></li>
@@ -342,6 +364,69 @@
                     <p>Nenhuma conversa ainda</p>
                     <small class="text-muted">Suas conversas aparecerão aqui</small>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sessao A: Painel Lateral de Memorias -->
+<div id="memories-panel-backdrop" class="memories-panel-backdrop" style="display: none;" onclick="closeMemoriesPanel()"></div>
+<div id="memories-panel" class="memories-panel" style="display: none;">
+    <div class="memories-panel-header">
+        <h5><i class="fas fa-brain me-2"></i>Memorias</h5>
+        <div class="memories-header-actions">
+            {% if current_user.perfil == 'administrador' %}
+            <select id="memories-user-selector" class="memories-user-select" onchange="loadMemories(this.value)">
+                <option value="{{ current_user.id }}">Minhas memorias</option>
+            </select>
+            {% endif %}
+            <button class="btn-close-modal" onclick="closeMemoriesPanel()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    <div class="memories-tab-nav">
+        <button class="memories-tab active" data-tab="memories" onclick="switchMemoryTab('memories')">
+            <i class="fas fa-brain me-1"></i>Memorias
+        </button>
+        <button class="memories-tab" data-tab="summaries" onclick="switchMemoryTab('summaries')">
+            <i class="fas fa-file-alt me-1"></i>Resumos
+        </button>
+    </div>
+    <div class="memories-panel-body">
+        <!-- Aba Memorias -->
+        <div id="memories-tab-content" class="memories-tab-content active">
+            <div class="memories-loading" id="memories-loading">
+                <i class="fas fa-spinner fa-spin me-2"></i>Carregando memorias...
+            </div>
+            <div id="memories-profile-section" style="display: none;">
+                <h6 class="memories-section-title"><i class="fas fa-user me-1"></i>Seu Perfil</h6>
+                <div id="memories-profile-content"></div>
+            </div>
+            <div id="memories-patterns-section" style="display: none;">
+                <h6 class="memories-section-title"><i class="fas fa-lightbulb me-1"></i>Padroes Aprendidos</h6>
+                <div id="memories-patterns-list"></div>
+            </div>
+            <div id="memories-others-section" style="display: none;">
+                <h6 class="memories-section-title"><i class="fas fa-folder me-1"></i>Outras Memorias</h6>
+                <div id="memories-others-list"></div>
+            </div>
+            <div id="memories-empty" class="memories-empty" style="display: none;">
+                <i class="fas fa-brain fa-3x mb-3"></i>
+                <p>Nenhuma memoria ainda</p>
+                <small>O agente aprendera com suas interacoes</small>
+            </div>
+        </div>
+        <!-- Aba Resumos -->
+        <div id="summaries-tab-content" class="memories-tab-content">
+            <div class="memories-loading" id="summaries-loading" style="display: none;">
+                <i class="fas fa-spinner fa-spin me-2"></i>Carregando resumos...
+            </div>
+            <div id="summaries-list"></div>
+            <div id="summaries-empty" class="memories-empty" style="display: none;">
+                <i class="fas fa-file-alt fa-3x mb-3"></i>
+                <p>Nenhum resumo disponivel</p>
+                <small>Resumos sao gerados automaticamente apos conversas</small>
             </div>
         </div>
     </div>

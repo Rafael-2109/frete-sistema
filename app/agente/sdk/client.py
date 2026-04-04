@@ -160,6 +160,50 @@ class AgentClient:
             )
             return ""
 
+    def get_context_usage(self) -> Optional[Dict[str, Any]]:
+        """
+        Retorna uso do context window via SDK get_context_usage().
+
+        Sessao A: Indicador de contexto consumido na UI.
+        Disponivel desde SDK 0.1.52. Best-effort: retorna None se indisponivel.
+
+        Returns:
+            {"used": int, "total": int, "percent": float} ou None
+        """
+        try:
+            from .client_pool import get_pooled_client
+            from ..config.permissions import get_session_id
+
+            pool_key = get_session_id() or ''
+            pooled = get_pooled_client(pool_key)
+
+            if not pooled or not pooled.connected:
+                return None
+
+            sdk_client = pooled.client
+            if not hasattr(sdk_client, 'get_context_usage'):
+                return None
+
+            # get_context_usage() e sincrono no SDK — retorna dict direto
+            usage = sdk_client.get_context_usage()
+            if not usage:
+                return None
+
+            used = usage.get('used', 0)
+            total = usage.get('total', 200000)
+            if total == 0:
+                return None
+
+            return {
+                'used': used,
+                'total': total,
+                'percent': round(used / total * 100, 1),
+            }
+
+        except Exception as e:
+            logger.debug(f"[AGENT_CLIENT] get_context_usage falhou (ignorado): {e}")
+            return None
+
     def _build_full_system_prompt(self, custom_instructions: str) -> str:
         """Concatena preset operacional + system_prompt formatado.
 

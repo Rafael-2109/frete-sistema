@@ -35,6 +35,12 @@ Endpoints:
 - GET  /agente/api/files     - Lista arquivos da sessão
 - DELETE /agente/api/files/<filename> - Remove arquivo
 - POST /agente/api/feedback  - Recebe feedback do usuário (FEAT-031)
+- GET  /agente/api/memories  - Lista memorias do usuario (Sessao A)
+- PUT  /agente/api/memories/<id> - Edita memoria (Sessao A)
+- DELETE /agente/api/memories/<id> - Deleta memoria (Sessao A)
+- GET  /agente/api/memories/users - Lista usuarios com memorias [admin] (Sessao A)
+- GET  /agente/api/sessions/summaries - Sessoes com resumos (Sessao A)
+- GET  /agente/api/briefing  - Briefing inter-sessao (Sessao A)
 """
 
 import logging
@@ -694,6 +700,15 @@ def _stream_chat_response(
                     structured = event.content.get('structured_output')
                     if structured is not None:
                         done_payload['structured_output'] = structured
+
+                    # Sessao A: Context usage — enriquece done payload
+                    try:
+                        context_usage = client.get_context_usage()
+                        if context_usage:
+                            done_payload['context_usage'] = context_usage
+                    except Exception:
+                        pass  # Best-effort: nao quebrar stream por falha de context usage
+
                     event_queue.put(_sse_event('done', done_payload))
 
                 return False  # Não é init, não precisa continue
@@ -3756,3 +3771,448 @@ def get_pending_improvements():
     except Exception as e:
         logger.error(f"[D8] Erro ao buscar pendentes: {e}")
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+
+# =============================================================================
+# API - MEMORIAS (Sessao A: Transparencia)
+# =============================================================================
+
+@agente_bp.route('/api/memories', methods=['GET'])
+@login_required
+def api_list_memories():
+    """
+    Lista memorias do usuario, separadas por tipo.
+
+    GET /agente/api/memories?user_id=N  (user_id so para admin)
+
+    Response:
+    {
+        "success": true,
+        "profile": {"id": N, "path": "...", "content": "...", ...} | null,
+        "patterns": [{"id": N, "path": "...", "content": "...", ...}],
+        "others": [...],
+        "target_user_id": N,
+        "target_user_name": "..."
+    }
+    """
+    try:
+        from .models import AgentMemory
+
+        # Admin pode ver memorias de outros usuarios
+        target_user_id = current_user.id
+        target_user_name = current_user.nome if hasattr(current_user, 'nome') else current_user.email
+
+        requested_user_id = request.args.get('user_id', type=int)
+        if requested_user_id and requested_user_id != current_user.id:
+            if current_user.perfil != 'administrador':
+                return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+            target_user_id = requested_user_id
+            # Buscar nome do usuario alvo
+            from app.auth.models import Usuario
+            target_user = Usuario.query.get(target_user_id)
+            target_user_name = target_user.nome if target_user else f'User #{target_user_id}'
+
+        all_memories = AgentMemory.query.filter_by(
+            user_id=target_user_id,
+            is_directory=False,
+        ).filter(
+            AgentMemory.is_cold == False  # noqa: E712
+        ).order_by(
+            AgentMemory.importance_score.desc(),
+            AgentMemory.updated_at.desc(),
+        ).all()
+
+        def _serialize(m):
+            return {
+                'id': m.id,
+                'path': m.path,
+                'content': m.content,
+                'category': m.category,
+                'escopo': m.escopo,
+                'importance_score': m.importance_score,
+                'usage_count': m.usage_count,
+                'effective_count': m.effective_count,
+                'is_cold': m.is_cold,
+                'has_potential_conflict': m.has_potential_conflict,
+                'created_at': m.created_at.isoformat() if m.created_at else None,
+                'updated_at': m.updated_at.isoformat() if m.updated_at else None,
+            }
+
+        profile = None
+        patterns = []
+        others = []
+
+        for m in all_memories:
+            if m.path and m.path.endswith('/user.xml'):
+                profile = _serialize(m)
+            elif m.path and m.path.endswith('/patterns.xml'):
+                patterns.append(_serialize(m))
+            else:
+                others.append(_serialize(m))
+
+        return jsonify({
+            'success': True,
+            'profile': profile,
+            'patterns': patterns,
+            'others': others,
+            'target_user_id': target_user_id,
+            'target_user_name': target_user_name,
+        })
+
+    except Exception as e:
+        logger.error(f"[MEMORIES] Erro ao listar memorias: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@agente_bp.route('/api/memories/<int:memory_id>', methods=['PUT'])
+@login_required
+def api_update_memory(memory_id: int):
+    """
+    Edita conteudo de uma memoria.
+
+    PUT /agente/api/memories/<id>
+    Body: {"content": "novo conteudo"}
+    """
+    try:
+        from .models import AgentMemory
+        from sqlalchemy.orm.attributes import flag_modified
+
+        memory = AgentMemory.query.get(memory_id)
+        if not memory:
+            return jsonify({'success': False, 'error': 'Memoria nao encontrada'}), 404
+
+        # Ownership check: admin pode editar qualquer, usuario so as suas
+        if current_user.perfil != 'administrador' and memory.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data or 'content' not in data:
+            return jsonify({'success': False, 'error': 'Campo content obrigatorio'}), 400
+
+        # Salvar versao anterior (usa classmethod para evitar race condition)
+        from .models import AgentMemoryVersion
+        AgentMemoryVersion.save_version(memory_id, memory.content, changed_by='user')
+
+        # Atualizar conteudo
+        memory.content = data['content']
+        memory.updated_at = agora_utc_naive()
+        flag_modified(memory, 'content')
+
+        db.session.commit()
+
+        logger.info(
+            f"[MEMORIES] Memoria {memory_id} editada por user={current_user.id} "
+            f"(path={memory.path})"
+        )
+
+        return jsonify({'success': True, 'message': 'Memoria atualizada'})
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"[MEMORIES] Erro ao editar memoria {memory_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@agente_bp.route('/api/memories/<int:memory_id>', methods=['DELETE'])
+@login_required
+def api_delete_memory(memory_id: int):
+    """
+    Deleta uma memoria.
+
+    DELETE /agente/api/memories/<id>
+    """
+    try:
+        from .models import AgentMemory
+
+        memory = AgentMemory.query.get(memory_id)
+        if not memory:
+            return jsonify({'success': False, 'error': 'Memoria nao encontrada'}), 404
+
+        # Ownership check
+        if current_user.perfil != 'administrador' and memory.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+
+        path = memory.path
+        db.session.delete(memory)
+        db.session.commit()
+
+        logger.info(
+            f"[MEMORIES] Memoria {memory_id} deletada por user={current_user.id} "
+            f"(path={path})"
+        )
+
+        return jsonify({'success': True, 'message': 'Memoria deletada'})
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"[MEMORIES] Erro ao deletar memoria {memory_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@agente_bp.route('/api/memories/users', methods=['GET'])
+@login_required
+def api_list_memory_users():
+    """
+    Admin-only: lista usuarios que possuem memorias.
+
+    GET /agente/api/memories/users
+
+    Response:
+    {
+        "success": true,
+        "users": [{"id": N, "nome": "...", "email": "...", "memory_count": N}]
+    }
+    """
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+
+    try:
+        from sqlalchemy import func
+        from .models import AgentMemory
+        from app.auth.models import Usuario
+
+        # Contar memorias por usuario (excluindo diretorios e cold)
+        user_counts = db.session.query(
+            AgentMemory.user_id,
+            func.count(AgentMemory.id).label('memory_count'),
+        ).filter(
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.is_cold == False,  # noqa: E712
+        ).group_by(
+            AgentMemory.user_id,
+        ).all()
+
+        user_ids = [uc[0] for uc in user_counts]
+        count_map = {uc[0]: uc[1] for uc in user_counts}
+
+        users = Usuario.query.filter(Usuario.id.in_(user_ids)).all() if user_ids else []
+
+        result = []
+        for u in users:
+            result.append({
+                'id': u.id,
+                'nome': u.nome if hasattr(u, 'nome') else u.email,
+                'email': u.email,
+                'memory_count': count_map.get(u.id, 0),
+            })
+
+        # Incluir memorias empresa (user_id=0)
+        empresa_count = count_map.get(0, 0)
+        if empresa_count > 0:
+            result.insert(0, {
+                'id': 0,
+                'nome': 'Empresa (compartilhadas)',
+                'email': '',
+                'memory_count': empresa_count,
+            })
+
+        # Ordenar por nome
+        result.sort(key=lambda x: x['nome'].lower() if x['nome'] else '')
+
+        return jsonify({'success': True, 'users': result})
+
+    except Exception as e:
+        logger.error(f"[MEMORIES] Erro ao listar usuarios: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =============================================================================
+# API - RESUMOS DE SESSAO (Sessao A: Transparencia)
+# =============================================================================
+
+@agente_bp.route('/api/sessions/summaries', methods=['GET'])
+@login_required
+def api_list_session_summaries():
+    """
+    Lista sessoes com resumos estruturados.
+
+    GET /agente/api/sessions/summaries?limit=20
+
+    Response:
+    {
+        "success": true,
+        "sessions": [
+            {
+                "id": N,
+                "session_id": "...",
+                "title": "...",
+                "message_count": N,
+                "created_at": "...",
+                "summary": {
+                    "resumo_geral": "...",
+                    "pedidos_tratados": [...],
+                    "decisoes_tomadas": [...],
+                    "tarefas_pendentes": [...],
+                    "alertas": [...]
+                }
+            }
+        ]
+    }
+    """
+    try:
+        from .models import AgentSession
+
+        limit = request.args.get('limit', 20, type=int)
+        limit = min(limit, 50)
+
+        sessions = AgentSession.query.filter(
+            AgentSession.user_id == current_user.id,
+            AgentSession.summary.isnot(None),
+        ).order_by(
+            AgentSession.updated_at.desc(),
+        ).limit(limit).all()
+
+        result = []
+        for s in sessions:
+            result.append({
+                'id': s.id,
+                'session_id': s.session_id,
+                'title': s.title or 'Sem titulo',
+                'message_count': s.message_count or 0,
+                'total_cost_usd': float(s.total_cost_usd or 0),
+                'created_at': s.created_at.isoformat() if s.created_at else None,
+                'updated_at': s.updated_at.isoformat() if s.updated_at else None,
+                'summary': s.summary,
+                'summary_updated_at': (
+                    s.summary_updated_at.isoformat()
+                    if s.summary_updated_at else None
+                ),
+            })
+
+        return jsonify({'success': True, 'sessions': result})
+
+    except Exception as e:
+        logger.error(f"[SUMMARIES] Erro ao listar resumos: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =============================================================================
+# API - BRIEFING INTER-SESSAO (Sessao A: Transparencia)
+# =============================================================================
+
+@agente_bp.route('/api/briefing', methods=['GET'])
+@login_required
+def api_get_briefing():
+    """
+    Retorna briefing inter-sessao como JSON estruturado.
+
+    GET /agente/api/briefing
+
+    Response:
+    {
+        "success": true,
+        "has_content": true,
+        "since": "04/04 09:30",
+        "items": [
+            {"type": "last_intent", "content": "..."},
+            {"type": "odoo_errors", "total": 3, "top": "..."},
+            {"type": "import_failures", "count": 2},
+            {"type": "memory_alerts", "details": "..."},
+            {"type": "stale_memories", "count": 5},
+            {"type": "intelligence", "content": "..."}
+        ]
+    }
+    """
+    try:
+        import re
+        from .services.intersession_briefing import build_intersession_briefing
+
+        xml_content = build_intersession_briefing(current_user.id)
+
+        if not xml_content:
+            return jsonify({
+                'success': True,
+                'has_content': False,
+                'since': None,
+                'items': [],
+            })
+
+        # Parsear XML para JSON estruturado (regex simples — XML pode ser malformado)
+        items = []
+
+        # Extrair since do header
+        since_match = re.search(r'since="([^"]*)"', xml_content)
+        since = since_match.group(1) if since_match else None
+
+        # last_session_intent
+        intent_match = re.search(
+            r'<last_session_intent\s+type="([^"]*)"(?:\s+remaining="(\d+)")?>(.*?)</last_session_intent>',
+            xml_content, re.DOTALL,
+        )
+        if intent_match:
+            items.append({
+                'type': 'last_intent',
+                'intent_type': intent_match.group(1),
+                'remaining': int(intent_match.group(2)) if intent_match.group(2) else 0,
+                'content': intent_match.group(3).strip(),
+            })
+
+        # odoo_sync_errors
+        odoo_match = re.search(
+            r'<odoo_sync_errors\s+total="(\d+)"[^>]*>(.*?)</odoo_sync_errors>',
+            xml_content, re.DOTALL,
+        )
+        if odoo_match:
+            items.append({
+                'type': 'odoo_errors',
+                'total': int(odoo_match.group(1)),
+                'details': odoo_match.group(2).strip(),
+            })
+
+        # import_failures
+        import_match = re.search(
+            r'<import_failures\s+count="(\d+)"',
+            xml_content,
+        )
+        if import_match:
+            items.append({
+                'type': 'import_failures',
+                'count': int(import_match.group(1)),
+            })
+
+        # memory_alerts
+        mem_match = re.search(
+            r'<memory_alerts\s+(.*?)/>',
+            xml_content,
+        )
+        if mem_match:
+            items.append({
+                'type': 'memory_alerts',
+                'details': mem_match.group(1).strip(),
+            })
+
+        # stale_empresa_memories
+        stale_match = re.search(
+            r'<stale_empresa_memories\s+count="(\d+)"',
+            xml_content,
+        )
+        if stale_match:
+            items.append({
+                'type': 'stale_memories',
+                'count': int(stale_match.group(1)),
+            })
+
+        # intelligence_report
+        intel_match = re.search(
+            r'<intelligence_report[^>]*>(.*?)</intelligence_report>',
+            xml_content, re.DOTALL,
+        )
+        if intel_match:
+            items.append({
+                'type': 'intelligence',
+                'content': intel_match.group(1).strip(),
+            })
+
+        return jsonify({
+            'success': True,
+            'has_content': len(items) > 0,
+            'since': since,
+            'items': items,
+        })
+
+    except Exception as e:
+        logger.error(f"[BRIEFING] Erro ao gerar briefing: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500

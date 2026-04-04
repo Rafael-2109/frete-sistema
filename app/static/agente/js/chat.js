@@ -1314,6 +1314,11 @@ function processSSEEvent(eventType, data, state) {
                 if (state.msgElement && state.text && state.text.trim()) {
                     injectFeedbackButtons(state.msgElement, state.text);
                 }
+
+                // Sessao A: Atualizar indicador de contexto
+                if (data.context_usage) {
+                    updateContextUsage(data.context_usage);
+                }
                 break;
 
             // P1-1: Sugestões de prompt contextuais (chips clicáveis)
@@ -2926,3 +2931,551 @@ fetch('/agente/api/health')
     .catch(() => {
         // Silencioso
     });
+
+// Sessao A: Carrega briefing inter-sessao ao iniciar nova sessao
+loadAndShowBriefing();
+
+
+// =============================================================
+// SESSAO A: PAINEL DE MEMORIAS
+// =============================================================
+
+const _csrfHeader = () => ({
+    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+});
+
+/**
+ * Abre o painel lateral de memorias.
+ */
+function openMemoriesPanel() {
+    const panel = document.getElementById('memories-panel');
+    const backdrop = document.getElementById('memories-panel-backdrop');
+    if (!panel) return;
+
+    panel.style.display = 'flex';
+    backdrop.style.display = 'block';
+
+    // Carregar lista de usuarios (admin) e memorias
+    const userSelector = document.getElementById('memories-user-selector');
+    if (userSelector && userSelector.options.length <= 1) {
+        loadMemoryUsers();
+    }
+
+    loadMemories();
+}
+
+/**
+ * Fecha o painel lateral de memorias.
+ */
+function closeMemoriesPanel() {
+    const panel = document.getElementById('memories-panel');
+    const backdrop = document.getElementById('memories-panel-backdrop');
+    if (panel) panel.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
+}
+
+/**
+ * Alterna entre abas Memorias e Resumos.
+ */
+function switchMemoryTab(tab) {
+    // Atualizar botoes
+    document.querySelectorAll('.memories-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+
+    // Atualizar conteudo
+    document.getElementById('memories-tab-content').classList.toggle('active', tab === 'memories');
+    document.getElementById('summaries-tab-content').classList.toggle('active', tab === 'summaries');
+
+    // Carregar resumos na primeira vez
+    if (tab === 'summaries') {
+        const list = document.getElementById('summaries-list');
+        if (list && !list.hasChildNodes()) {
+            loadSessionSummaries();
+        }
+    }
+}
+
+/**
+ * Admin: carrega lista de usuarios com memorias.
+ */
+function loadMemoryUsers() {
+    fetch('/agente/api/memories/users', { headers: _csrfHeader() })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const selector = document.getElementById('memories-user-selector');
+            if (!selector) return;
+
+            // Limpar opcoes alem da primeira
+            while (selector.options.length > 1) selector.remove(1);
+
+            data.users.forEach(u => {
+                // Nao duplicar o usuario atual (ja e a primeira opcao)
+                const currentUserId = selector.options[0]?.value;
+                if (String(u.id) === String(currentUserId)) return;
+
+                const opt = document.createElement('option');
+                opt.value = u.id;
+                opt.textContent = `${u.nome} (${u.memory_count})`;
+                selector.appendChild(opt);
+            });
+        })
+        .catch(e => console.debug('[MEMORIES] Erro ao carregar usuarios:', e));
+}
+
+/**
+ * Carrega memorias do usuario (ou do usuario selecionado pelo admin).
+ */
+function loadMemories(userId) {
+    const loading = document.getElementById('memories-loading');
+    const profileSection = document.getElementById('memories-profile-section');
+    const patternsSection = document.getElementById('memories-patterns-section');
+    const othersSection = document.getElementById('memories-others-section');
+    const emptyState = document.getElementById('memories-empty');
+
+    if (loading) loading.style.display = 'block';
+    [profileSection, patternsSection, othersSection, emptyState].forEach(el => {
+        if (el) el.style.display = 'none';
+    });
+
+    let url = '/agente/api/memories';
+    if (userId) url += `?user_id=${userId}`;
+
+    fetch(url, { headers: _csrfHeader() })
+        .then(r => r.json())
+        .then(data => {
+            if (loading) loading.style.display = 'none';
+
+            if (!data.success) {
+                if (emptyState) emptyState.style.display = 'flex';
+                return;
+            }
+
+            let hasContent = false;
+
+            // Perfil (user.xml)
+            if (data.profile) {
+                hasContent = true;
+                if (profileSection) profileSection.style.display = 'block';
+                document.getElementById('memories-profile-content').innerHTML =
+                    renderMemoryCard(data.profile);
+            }
+
+            // Padroes (patterns.xml)
+            if (data.patterns && data.patterns.length > 0) {
+                hasContent = true;
+                if (patternsSection) patternsSection.style.display = 'block';
+                document.getElementById('memories-patterns-list').innerHTML =
+                    data.patterns.map(p => renderMemoryCard(p)).join('');
+            }
+
+            // Outras memorias
+            if (data.others && data.others.length > 0) {
+                hasContent = true;
+                if (othersSection) othersSection.style.display = 'block';
+                document.getElementById('memories-others-list').innerHTML =
+                    data.others.map(m => renderMemoryCard(m)).join('');
+            }
+
+            if (!hasContent && emptyState) {
+                emptyState.style.display = 'flex';
+            }
+        })
+        .catch(e => {
+            if (loading) loading.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'flex';
+            console.error('[MEMORIES] Erro ao carregar:', e);
+        });
+}
+
+/**
+ * Renderiza um card de memoria.
+ */
+/** Cache de conteudo completo das memorias (evita truncar no edit) */
+const _memoryContentCache = {};
+
+function renderMemoryCard(memory) {
+    const pathShort = memory.path ? memory.path.split('/').pop() : 'memoria';
+    const fullContent = memory.content || '';
+    const displayContent = escapeHtml(fullContent.length > 2000 ? fullContent.substring(0, 2000) + '...' : fullContent);
+
+    // Cache conteudo completo para uso no edit
+    _memoryContentCache[memory.id] = fullContent;
+
+    const conflictBadge = memory.has_potential_conflict
+        ? '<span class="memory-meta-badge conflict">Conflito</span>'
+        : '';
+    const categoryBadge = memory.category
+        ? `<span class="memory-meta-badge">${escapeHtml(memory.category)}</span>`
+        : '';
+    const usageBadge = memory.usage_count > 0
+        ? `<span class="memory-meta-badge">Usada ${memory.usage_count}x</span>`
+        : '';
+
+    return `
+        <div class="memory-card" id="memory-card-${memory.id}">
+            <div class="memory-card-header">
+                <span class="memory-card-path" title="${escapeHtml(memory.path || '')}">${escapeHtml(pathShort)}</span>
+                <div class="memory-card-actions">
+                    <button onclick="startEditMemory(${memory.id})" title="Editar">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <button class="btn-delete" data-id="${memory.id}" data-name="${escapeHtml(pathShort)}" onclick="deleteMemory(this.dataset.id, this.dataset.name)" title="Deletar">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="memory-card-body" id="memory-body-${memory.id}">${displayContent}</div>
+            <div class="memory-card-meta">
+                ${categoryBadge}${usageBadge}${conflictBadge}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Inicia edicao inline de uma memoria.
+ */
+function startEditMemory(memoryId) {
+    const bodyEl = document.getElementById(`memory-body-${memoryId}`);
+    if (!bodyEl) return;
+
+    // Usa cache com conteudo completo (nao o DOM truncado)
+    const currentContent = _memoryContentCache[memoryId] || bodyEl.textContent || '';
+    bodyEl.innerHTML = `
+        <textarea class="memory-edit-textarea" id="memory-edit-${memoryId}">${escapeHtml(currentContent)}</textarea>
+        <div class="memory-edit-actions">
+            <button class="btn-cancel-edit" onclick="cancelEditMemory(${memoryId})">Cancelar</button>
+            <button class="btn-save" onclick="saveEditMemory(${memoryId})">Salvar</button>
+        </div>
+    `;
+
+    const textarea = document.getElementById(`memory-edit-${memoryId}`);
+    if (textarea) textarea.focus();
+}
+
+/**
+ * Cancela edicao de memoria.
+ */
+function cancelEditMemory(memoryId) {
+    // Recarregar memorias para restaurar estado
+    const selector = document.getElementById('memories-user-selector');
+    loadMemories(selector?.value);
+}
+
+/**
+ * Salva edicao de memoria via PUT.
+ */
+function saveEditMemory(memoryId) {
+    const textarea = document.getElementById(`memory-edit-${memoryId}`);
+    if (!textarea) return;
+
+    const newContent = textarea.value;
+
+    fetch(`/agente/api/memories/${memoryId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            ..._csrfHeader(),
+        },
+        body: JSON.stringify({ content: newContent }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Memoria atualizada', 2000);
+            const selector = document.getElementById('memories-user-selector');
+            loadMemories(selector?.value);
+        } else {
+            showToast('Erro: ' + (data.error || 'Falha ao salvar'), 3000);
+        }
+    })
+    .catch(e => {
+        showToast('Erro ao salvar memoria', 3000);
+        console.error('[MEMORIES] Erro save:', e);
+    });
+}
+
+/**
+ * Deleta memoria com confirmacao.
+ */
+function deleteMemory(memoryId, name) {
+    if (!confirm(`Deletar memoria "${name}"?`)) return;
+
+    fetch(`/agente/api/memories/${memoryId}`, {
+        method: 'DELETE',
+        headers: _csrfHeader(),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Memoria deletada', 2000);
+            // Remover card com animacao
+            const card = document.getElementById(`memory-card-${memoryId}`);
+            if (card) {
+                card.style.opacity = '0';
+                card.style.transform = 'translateX(20px)';
+                card.style.transition = 'all 0.3s';
+                setTimeout(() => card.remove(), 300);
+            }
+        } else {
+            showToast('Erro: ' + (data.error || 'Falha ao deletar'), 3000);
+        }
+    })
+    .catch(e => {
+        showToast('Erro ao deletar memoria', 3000);
+        console.error('[MEMORIES] Erro delete:', e);
+    });
+}
+
+
+// =============================================================
+// SESSAO A: RESUMOS DE SESSAO
+// =============================================================
+
+/**
+ * Carrega resumos estruturados de sessoes anteriores.
+ */
+function loadSessionSummaries() {
+    const loading = document.getElementById('summaries-loading');
+    const list = document.getElementById('summaries-list');
+    const emptyState = document.getElementById('summaries-empty');
+
+    if (loading) loading.style.display = 'block';
+    if (emptyState) emptyState.style.display = 'none';
+    if (list) list.innerHTML = '';
+
+    fetch('/agente/api/sessions/summaries?limit=20', { headers: _csrfHeader() })
+        .then(r => r.json())
+        .then(data => {
+            if (loading) loading.style.display = 'none';
+
+            if (!data.success || !data.sessions || data.sessions.length === 0) {
+                if (emptyState) emptyState.style.display = 'flex';
+                return;
+            }
+
+            list.innerHTML = data.sessions.map(s => renderSummaryCard(s)).join('');
+        })
+        .catch(e => {
+            if (loading) loading.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'flex';
+            console.error('[SUMMARIES] Erro ao carregar:', e);
+        });
+}
+
+/**
+ * Renderiza um card de resumo de sessao (accordion).
+ */
+function renderSummaryCard(session) {
+    const summary = session.summary || {};
+    const title = escapeHtml(session.title || 'Sem titulo');
+    const date = session.created_at
+        ? new Date(session.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+        : '';
+
+    let bodyHtml = '';
+
+    // Resumo geral
+    if (summary.resumo_geral) {
+        bodyHtml += `<div class="summary-section">
+            <div class="summary-section-label">Resumo</div>
+            <p style="margin:0">${escapeHtml(summary.resumo_geral)}</p>
+        </div>`;
+    }
+
+    // Pedidos tratados
+    if (summary.pedidos_tratados && summary.pedidos_tratados.length > 0) {
+        bodyHtml += `<div class="summary-section">
+            <div class="summary-section-label">Pedidos Tratados</div>
+            <ul>${summary.pedidos_tratados.map(p => `<li>${escapeHtml(String(p))}</li>`).join('')}</ul>
+        </div>`;
+    }
+
+    // Decisoes
+    if (summary.decisoes_tomadas && summary.decisoes_tomadas.length > 0) {
+        bodyHtml += `<div class="summary-section">
+            <div class="summary-section-label">Decisoes</div>
+            <ul>${summary.decisoes_tomadas.map(d => `<li>${escapeHtml(String(d))}</li>`).join('')}</ul>
+        </div>`;
+    }
+
+    // Tarefas pendentes
+    if (summary.tarefas_pendentes && summary.tarefas_pendentes.length > 0) {
+        bodyHtml += `<div class="summary-section">
+            <div class="summary-section-label">Tarefas Pendentes</div>
+            <ul>${summary.tarefas_pendentes.map(t => `<li>${escapeHtml(String(t))}</li>`).join('')}</ul>
+        </div>`;
+    }
+
+    // Alertas
+    if (summary.alertas && summary.alertas.length > 0) {
+        bodyHtml += `<div class="summary-section">
+            <div class="summary-section-label">Alertas</div>
+            <ul>${summary.alertas.map(a => `<li>${escapeHtml(String(a))}</li>`).join('')}</ul>
+        </div>`;
+    }
+
+    if (!bodyHtml) {
+        bodyHtml = '<p style="color:var(--agent-text-secondary);font-style:italic">Resumo nao detalhado</p>';
+    }
+
+    return `
+        <div class="summary-card" onclick="this.classList.toggle('expanded')">
+            <div class="summary-card-header">
+                <span class="summary-card-title">${title}</span>
+                <span class="summary-card-date">${date}</span>
+                <i class="fas fa-chevron-right summary-card-chevron"></i>
+            </div>
+            <div class="summary-card-body">${bodyHtml}</div>
+        </div>
+    `;
+}
+
+
+// =============================================================
+// SESSAO A: BRIEFING INTER-SESSAO
+// =============================================================
+
+/**
+ * Carrega e mostra briefing inter-sessao como card na area de mensagens.
+ * Executado uma vez por sessao nova (gate via sessionStorage).
+ */
+function loadAndShowBriefing() {
+    const today = new Date().toDateString();
+    const key = `briefing-shown-${today}-${sessionId || 'new'}`;
+    if (sessionStorage.getItem(key)) return;
+
+    fetch('/agente/api/briefing', { headers: _csrfHeader() })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.has_content && data.items && data.items.length > 0) {
+                renderBriefingCard(data);
+                sessionStorage.setItem(key, '1');
+            }
+        })
+        .catch(e => console.debug('[BRIEFING] Nao disponivel:', e));
+}
+
+/**
+ * Renderiza card de briefing na area de mensagens.
+ */
+function renderBriefingCard(data) {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+
+    const iconMap = {
+        'last_intent': { icon: 'fa-clipboard-list', cls: 'intent' },
+        'odoo_errors': { icon: 'fa-exclamation-triangle', cls: 'error' },
+        'import_failures': { icon: 'fa-file-import', cls: 'warning' },
+        'memory_alerts': { icon: 'fa-brain', cls: 'warning' },
+        'stale_memories': { icon: 'fa-clock', cls: 'info' },
+        'intelligence': { icon: 'fa-lightbulb', cls: 'info' },
+    };
+
+    const labelMap = {
+        'last_intent': item => item.intent_type === 'tarefa_pendente'
+            ? `Tarefa pendente: ${item.content}${item.remaining > 0 ? ` (+${item.remaining} outras)` : ''}`
+            : `Ultima sessao: ${item.content}`,
+        'odoo_errors': item => `${item.total} erro(s) Odoo — ${item.details}`,
+        'import_failures': item => `${item.count} falha(s) de importacao de pedidos`,
+        'memory_alerts': item => `Alertas de memoria: ${item.details}`,
+        'stale_memories': item => `${item.count} memoria(s) empresa sem revisao ha 60+ dias`,
+        'intelligence': item => item.content,
+    };
+
+    const itemsHtml = data.items.map(item => {
+        const info = iconMap[item.type] || { icon: 'fa-info-circle', cls: 'info' };
+        const label = labelMap[item.type] ? labelMap[item.type](item) : JSON.stringify(item);
+        return `
+            <div class="briefing-item">
+                <span class="briefing-item-icon ${info.cls}"><i class="fas ${info.icon}"></i></span>
+                <span>${escapeHtml(label)}</span>
+            </div>
+        `;
+    }).join('');
+
+    const sinceText = data.since ? `Desde ${data.since}` : '';
+
+    const card = document.createElement('div');
+    card.className = 'briefing-card';
+    card.id = 'briefing-card';
+    card.innerHTML = `
+        <button class="briefing-card-dismiss" onclick="dismissBriefingCard()" title="Fechar">
+            <i class="fas fa-times"></i>
+        </button>
+        <div class="briefing-card-header">
+            <span class="briefing-card-title"><i class="fas fa-bell me-1"></i>O que aconteceu</span>
+            <span class="briefing-card-since">${sinceText}</span>
+        </div>
+        <div class="briefing-items">${itemsHtml}</div>
+    `;
+
+    // Inserir apos a mensagem de boas-vindas (primeiro filho)
+    const welcomeMsg = chatMessages.querySelector('.message.assistant');
+    if (welcomeMsg && welcomeMsg.nextSibling) {
+        chatMessages.insertBefore(card, welcomeMsg.nextSibling);
+    } else {
+        chatMessages.appendChild(card);
+    }
+}
+
+/**
+ * Fecha o card de briefing com animacao.
+ */
+function dismissBriefingCard() {
+    const card = document.getElementById('briefing-card');
+    if (!card) return;
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(-8px)';
+    card.style.transition = 'all 0.3s';
+    setTimeout(() => card.remove(), 300);
+}
+
+
+// =============================================================
+// SESSAO A: INDICADOR DE CONTEXTO
+// =============================================================
+
+/** Flag para evitar toast repetido de warning de contexto */
+let _contextWarningShown = false;
+
+/**
+ * Atualiza o indicador de uso de contexto no header.
+ * Chamado pelo SSE event 'done' quando context_usage esta presente.
+ */
+function updateContextUsage(contextData) {
+    if (!contextData) return;
+
+    const percent = contextData.percent || 0;
+    const container = document.getElementById('context-indicator');
+    const bar = document.getElementById('context-bar-fill');
+    const text = document.getElementById('context-text');
+
+    if (!container) return;
+
+    // Mostrar indicador
+    container.style.display = 'flex';
+
+    // Atualizar barra e texto
+    if (bar) bar.style.width = Math.min(percent, 100) + '%';
+    if (text) text.textContent = Math.round(percent) + '%';
+
+    // Classes de warning
+    container.classList.remove('context-warning', 'context-critical');
+    if (percent >= 90) {
+        container.classList.add('context-critical');
+    } else if (percent >= 80) {
+        container.classList.add('context-warning');
+    }
+
+    // Alerta unico quando >= 80%
+    if (percent >= 80 && !_contextWarningShown) {
+        _contextWarningShown = true;
+        showToast(
+            `Contexto ${Math.round(percent)}% usado — considere iniciar nova sessao para melhor performance`,
+            8000
+        );
+    }
+}
