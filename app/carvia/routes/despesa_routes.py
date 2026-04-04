@@ -14,7 +14,7 @@ from app.carvia.models import CarviaDespesa
 
 logger = logging.getLogger(__name__)
 
-TIPOS_DESPESA = ['CONTABILIDADE', 'GRIS', 'SEGURO', 'OUTROS', 'DESCONSIDERAR']
+TIPOS_DESPESA = ['CONTABILIDADE', 'GRIS', 'SEGURO', 'OUTROS', 'DESCONSIDERAR', 'COMISSAO']
 STATUS_DESPESA = ['PENDENTE', 'PAGO', 'CANCELADO']
 
 

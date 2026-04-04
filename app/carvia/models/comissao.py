@@ -50,12 +50,22 @@ class CarviaComissaoFechamento(db.Model):
 
     observacoes = db.Column(db.Text)
 
+    # Despesa vinculada (gerada automaticamente na criacao)
+    despesa_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_despesas.id', ondelete='SET NULL'),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
     # Auditoria
     criado_por = db.Column(db.String(100), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
 
     # Relacionamentos
+    despesa = db.relationship('CarviaDespesa', foreign_keys=[despesa_id], lazy='joined')
     ctes = db.relationship(
         'CarviaComissaoFechamentoCte',
         backref='fechamento',

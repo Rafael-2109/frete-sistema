@@ -21,7 +21,8 @@ app/agente/services/
   ├── tool_skill_mapper.py       #   316 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
   ├── recommendations_engine.py  #   221 LOC — Recomendacoes rule-based para dashboard
   ├── suggestion_generator.py    #   216 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
-  └── sentiment_detector.py      #   177 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
+  ├── sentiment_detector.py      #   177 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
+  └── improvement_suggester.py   #   400 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
 ```
 
 ## Regras Criticas

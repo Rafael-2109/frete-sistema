@@ -579,6 +579,33 @@ class CarviaConciliacaoService:
                     doc.pago_por = None
                     logger.info("Despesa %s revertida para PENDENTE (desconciliacao)", doc.id)
 
+                # Propagar para comissao vinculada (se existir)
+                from app.carvia.models.comissao import CarviaComissaoFechamento
+                fechamento = CarviaComissaoFechamento.query.filter_by(
+                    despesa_id=documento_id,
+                ).first()
+                if fechamento:
+                    if agora_conciliado and fechamento.status == 'PENDENTE':
+                        fechamento.status = 'PAGO'
+                        fechamento.pago_em = agora_utc_naive()
+                        fechamento.pago_por = usuario
+                        fechamento.data_pagamento = (
+                            doc.pago_em.date() if doc.pago_em else None
+                        )
+                        logger.info(
+                            "Comissao %s quitada via conciliacao da despesa #%d por %s",
+                            fechamento.numero_fechamento, documento_id, usuario,
+                        )
+                    elif not agora_conciliado and fechamento.status == 'PAGO':
+                        fechamento.status = 'PENDENTE'
+                        fechamento.pago_em = None
+                        fechamento.pago_por = None
+                        fechamento.data_pagamento = None
+                        logger.info(
+                            "Comissao %s revertida para PENDENTE (desconciliacao despesa #%d)",
+                            fechamento.numero_fechamento, documento_id,
+                        )
+
         elif tipo_documento == 'custo_entrega':
             doc = db.session.get(CarviaCustoEntrega, documento_id)
             if doc:

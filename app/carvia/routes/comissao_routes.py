@@ -206,6 +206,67 @@ def register_comissao_routes(bp):
             ctes_excluidos=ctes_excluidos,
         )
 
+    # ==================== EDITAR ====================
+
+    @bp.route('/comissoes/<int:comissao_id>/editar', methods=['GET', 'POST'])  # type: ignore
+    @login_required
+    def editar_comissao(comissao_id):  # type: ignore
+        """Edita fechamento de comissao (apenas PENDENTE)"""
+        if not _pode_acessar_comissao():
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.models.comissao import CarviaComissaoFechamento
+        from app.carvia.services.financeiro.comissao_service import ComissaoService
+
+        fechamento = db.session.get(CarviaComissaoFechamento, comissao_id)
+        if not fechamento:
+            flash('Fechamento nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_comissoes'))
+
+        if fechamento.status != 'PENDENTE':
+            flash(f'Nao e possivel editar fechamento {fechamento.status}.', 'warning')
+            return redirect(url_for('carvia.detalhe_comissao', comissao_id=comissao_id))
+
+        if request.method == 'POST':
+            try:
+                dados = {}
+
+                vendedor_nome = request.form.get('vendedor_nome', '').strip()
+                if vendedor_nome:
+                    dados['vendedor_nome'] = vendedor_nome
+
+                dados['vendedor_email'] = request.form.get('vendedor_email', '').strip()
+                dados['observacoes'] = request.form.get('observacoes', '').strip()
+
+                percentual_str = request.form.get('percentual', '').strip()
+                if percentual_str:
+                    dados['percentual'] = Decimal(percentual_str.replace(',', '.'))
+
+                ComissaoService.editar_fechamento(
+                    fechamento_id=comissao_id,
+                    dados=dados,
+                    editado_por=current_user.email,
+                )
+
+                flash('Comissao atualizada com sucesso.', 'success')
+                return redirect(url_for('carvia.detalhe_comissao', comissao_id=comissao_id))
+
+            except ValueError as ve:
+                flash(str(ve), 'warning')
+            except Exception as e:
+                db.session.rollback()
+                logger.error("Erro ao editar comissao %d: %s", comissao_id, e)
+                flash(f'Erro: {e}', 'danger')
+
+        pct_display = float(fechamento.percentual * 100) if fechamento.percentual else 0
+
+        return render_template(
+            'carvia/comissoes/editar.html',
+            fechamento=fechamento,
+            pct_display=pct_display,
+        )
+
     # ==================== STATUS ====================
 
     @bp.route('/comissoes/<int:comissao_id>/status', methods=['POST'])  # type: ignore
@@ -328,6 +389,49 @@ def register_comissao_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error("Erro ao incluir CTe em comissao %d: %s", comissao_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    # ==================== API: Incluir CTes em Batch ====================
+
+    @bp.route('/api/comissoes/<int:comissao_id>/incluir-ctes-batch', methods=['POST'])  # type: ignore
+    @login_required
+    def api_incluir_ctes_batch(comissao_id):  # type: ignore
+        """Inclui multiplos CTes no fechamento via modal visual (JSON)"""
+        if not _pode_acessar_comissao():
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.financeiro.comissao_service import ComissaoService
+
+        data = request.get_json()
+        if not data or not data.get('operacao_ids'):
+            return jsonify({'erro': 'operacao_ids obrigatorio.'}), 400
+
+        try:
+            operacao_ids = [int(x) for x in data['operacao_ids']]
+            incluidos = ComissaoService.incluir_ctes_batch(
+                fechamento_id=comissao_id,
+                operacao_ids=operacao_ids,
+                incluido_por=current_user.email,
+            )
+
+            from app.carvia.models.comissao import CarviaComissaoFechamento
+            fechamento = db.session.get(CarviaComissaoFechamento, comissao_id)
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': f'{incluidos} CTe(s) incluido(s) com sucesso.',
+                'incluidos': incluidos,
+                'totais': {
+                    'qtd_ctes': fechamento.qtd_ctes,
+                    'total_bruto': float(fechamento.total_bruto),
+                    'total_comissao': float(fechamento.total_comissao),
+                },
+            })
+        except ValueError as ve:
+            return jsonify({'erro': str(ve)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao incluir CTes batch em comissao %d: %s", comissao_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
     # ==================== API: Excluir CTe ====================

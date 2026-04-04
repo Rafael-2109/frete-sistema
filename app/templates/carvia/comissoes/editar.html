@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-edit"></i> Editar {{ fechamento.numero_fechamento }}</h2>
+            <p class="text-muted mb-0">Apenas fechamentos PENDENTE podem ser editados.</p>
+        </div>
+        <a href="{{ url_for('carvia.detalhe_comissao', comissao_id=fechamento.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% set carvia_active = 'comissoes' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="row g-4">
+        <div class="col-md-8">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="card mb-3">
+                    <div class="card-header"><strong>Dados do Fechamento</strong></div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <label for="vendedor_nome" class="form-label">Vendedor *</label>
+                                <input type="text" class="form-control" id="vendedor_nome" name="vendedor_nome"
+                                       required value="{{ fechamento.vendedor_nome }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="vendedor_email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="vendedor_email" name="vendedor_email"
+                                       value="{{ fechamento.vendedor_email or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="percentual" class="form-label">Percentual (%) *</label>
+                                <input type="number" class="form-control" id="percentual" name="percentual"
+                                       step="0.01" min="0.01" max="100" required
+                                       value="{{ pct_display }}">
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-1">
+                            <div class="col-12">
+                                <label for="observacoes" class="form-label">Observacoes</label>
+                                <textarea class="form-control" id="observacoes" name="observacoes"
+                                          rows="2">{{ fechamento.observacoes or '' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Salvar Alteracoes
+                    </button>
+                    <a href="{{ url_for('carvia.detalhe_comissao', comissao_id=fechamento.id) }}"
+                       class="btn btn-outline-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Resumo (read-only) -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header"><strong>Resumo</strong></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted d-block">CTes no Fechamento</small>
+                        <strong>{{ fechamento.qtd_ctes }}</strong>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Total Bruto</small>
+                        <strong>{{ fechamento.total_bruto|valor_br }}</strong>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Periodo</small>
+                        <strong>{{ fechamento.data_inicio.strftime('%d/%m/%Y') }}</strong>
+                        a
+                        <strong>{{ fechamento.data_fim.strftime('%d/%m/%Y') }}</strong>
+                    </div>
+                    <hr>
+                    <div>
+                        <small class="text-muted d-block">Comissao Atual</small>
+                        <h4 class="mb-0 text-success">{{ fechamento.total_comissao|valor_br }}</h4>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted d-block">Preview (ao mudar %)</small>
+                        <h5 class="mb-0 text-primary" id="previewComissao">{{ fechamento.total_comissao|valor_br }}</h5>
+                    </div>
+                    {% if fechamento.despesa %}
+                    <hr>
+                    <div>
+                        <small class="text-muted d-block">Despesa Vinculada</small>
+                        <a href="{{ url_for('carvia.detalhe_despesa', despesa_id=fechamento.despesa.id) }}">
+                            #{{ fechamento.despesa.id }}
+                        </a>
+                        <span class="badge carvia-badge-{{ fechamento.despesa.status|lower }}">
+                            {{ fechamento.despesa.status }}
+                        </span>
+                        <div class="form-text">O valor da despesa sera atualizado automaticamente.</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+    const totalBruto = {{ fechamento.total_bruto|float }};
+    const pctInput = document.getElementById('percentual');
+    const preview = document.getElementById('previewComissao');
+
+    function atualizarPreview() {
+        const pct = parseFloat(pctInput.value) || 0;
+        const comissao = totalBruto * pct / 100;
+        preview.textContent = comissao.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    pctInput.addEventListener('input', atualizarPreview);
+})();
+</script>
+{% endblock %}

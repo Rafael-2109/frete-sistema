@@ -14,6 +14,12 @@
             </p>
         </div>
         <div class="d-flex gap-2">
+            {% if fechamento.status == 'PENDENTE' %}
+            <a href="{{ url_for('carvia.editar_comissao', comissao_id=fechamento.id) }}"
+               class="btn btn-outline-secondary">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+            {% endif %}
             <a href="{{ url_for('carvia.listar_comissoes') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
@@ -67,6 +73,22 @@
                     <small class="text-muted d-block">Observacoes</small>
                     <p class="mb-0">{{ fechamento.observacoes }}</p>
                     {% endif %}
+                    {% if fechamento.despesa %}
+                    <hr>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <small class="text-muted d-block">Despesa Vinculada</small>
+                            <a href="{{ url_for('carvia.detalhe_despesa', despesa_id=fechamento.despesa.id) }}"
+                               class="fw-bold">#{{ fechamento.despesa.id }} — {{ fechamento.despesa.descricao }}</a>
+                            <span class="badge carvia-badge-{{ fechamento.despesa.status|lower }}">
+                                {{ fechamento.despesa.status }}
+                            </span>
+                            {% if fechamento.despesa.conciliado %}
+                            <span class="badge bg-info text-dark">Conciliado</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
                     {% if fechamento.status == 'PAGO' %}
                     <hr>
                     <div class="row g-3">
@@ -94,7 +116,10 @@
                     {% if fechamento.status == 'PENDENTE' %}
                     <div class="d-flex gap-2 flex-wrap mb-3">
                         <button type="button" class="btn btn-success"
-                                data-bs-toggle="modal" data-bs-target="#modalDataPagamento">
+                                data-bs-toggle="modal" data-bs-target="#modalDataPagamento"
+                                {% if fechamento.despesa and not fechamento.despesa.conciliado %}
+                                title="Recomendado: pague via conciliacao bancaria da despesa vinculada"
+                                {% endif %}>
                             <i class="fas fa-check"></i> Marcar como PAGO
                         </button>
                         <form method="POST" action="{{ url_for('carvia.atualizar_status_comissao', comissao_id=fechamento.id) }}" class="d-inline">
@@ -106,16 +131,19 @@
                             </button>
                         </form>
                     </div>
-                    <hr>
-                    <h6>Incluir CTe</h6>
-                    <div class="input-group input-group-sm mb-2">
-                        <input type="number" class="form-control" id="inputIncluirCte"
-                               placeholder="ID da operacao (CTe)">
-                        <button class="btn btn-outline-primary" type="button" onclick="incluirCte()">
-                            <i class="fas fa-plus"></i> Incluir
-                        </button>
+                    {% if fechamento.despesa and not fechamento.despesa.conciliado %}
+                    <div class="alert alert-info py-2 mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        <small>Esta comissao tem despesa vinculada. O pagamento sera registrado automaticamente ao conciliar a despesa no extrato bancario.</small>
                     </div>
-                    <small class="text-muted">Informe o ID do CTe CarVia para incluir no fechamento.</small>
+                    {% endif %}
+                    <hr>
+                    <h6>Adicionar CTes</h6>
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            data-bs-toggle="modal" data-bs-target="#modalAdicionarCtes">
+                        <i class="fas fa-plus"></i> Buscar e Adicionar CTes
+                    </button>
+                    <small class="text-muted d-block mt-1">Busque CTes por periodo e selecione os que deseja incluir.</small>
                     {% elif fechamento.status == 'PAGO' %}
                     <div class="alert alert-success mb-0">
                         <i class="fas fa-check-circle"></i> Comissao paga em
@@ -233,31 +261,63 @@
 {% with form_action=url_for('carvia.atualizar_status_comissao', comissao_id=fechamento.id), form_status='PAGO' %}
     {% include 'carvia/_modal_data_pagamento.html' %}
 {% endwith %}
+
+{# Modal de adicionar CTes (seletor visual) #}
+{% if fechamento.status == 'PENDENTE' %}
+<div class="modal fade" id="modalAdicionarCtes" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus"></i> Adicionar CTes ao Fechamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Periodo Inicio</label>
+                        <input type="date" class="form-control" id="modalDataInicio"
+                               value="{{ fechamento.data_inicio.isoformat() }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Periodo Fim</label>
+                        <input type="date" class="form-control" id="modalDataFim"
+                               value="{{ fechamento.data_fim.isoformat() }}">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" class="btn btn-outline-primary w-100" onclick="buscarCtesModal()">
+                            <i class="fas fa-search"></i> Buscar CTes
+                        </button>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <span id="modalResumo" class="text-muted"></span>
+                    </div>
+                </div>
+                <div id="modalTabelaCtes">
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-info-circle"></i> Clique em "Buscar CTes" para encontrar CTes elegiveis.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnAdicionarSelecionados"
+                        onclick="adicionarCtesSelecionados()" disabled>
+                    <i class="fas fa-plus"></i> Adicionar Selecionados
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 const comissaoId = {{ fechamento.id }};
+let modalCtesData = [];
 
-function incluirCte() {
-    const input = document.getElementById('inputIncluirCte');
-    const operacaoId = parseInt(input.value);
-    if (!operacaoId) { alert('Informe o ID do CTe.'); return; }
-
-    fetch(`/carvia/api/comissoes/${comissaoId}/incluir-cte`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ operacao_id: operacaoId }),
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.erro) { alert(data.erro); return; }
-        location.reload();
-    })
-    .catch(err => alert('Erro: ' + err.message));
-}
-
+// === Excluir CTe existente ===
 function excluirCte(operacaoId, cteNumero) {
     if (!confirm(`Remover ${cteNumero} do fechamento?`)) return;
 
@@ -274,7 +334,116 @@ function excluirCte(operacaoId, cteNumero) {
     .catch(err => alert('Erro: ' + err.message));
 }
 
-// Default date on modal open
+// === Modal: Buscar CTes elegiveis ===
+function buscarCtesModal() {
+    const inicio = document.getElementById('modalDataInicio').value;
+    const fim = document.getElementById('modalDataFim').value;
+
+    if (!inicio || !fim) { alert('Selecione o periodo.'); return; }
+
+    const url = `/carvia/api/comissoes/ctes-elegiveis?data_inicio=${inicio}&data_fim=${fim}`;
+    fetch(url, { headers: { 'X-CSRFToken': csrfToken } })
+        .then(r => r.json())
+        .then(data => {
+            if (data.erro) { alert(data.erro); return; }
+            modalCtesData = data.ctes || [];
+            renderCtesModal();
+        })
+        .catch(err => alert('Erro: ' + err.message));
+}
+
+function renderCtesModal() {
+    const container = document.getElementById('modalTabelaCtes');
+    const btn = document.getElementById('btnAdicionarSelecionados');
+
+    if (modalCtesData.length === 0) {
+        container.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-info-circle"></i> Nenhum CTe elegivel encontrado no periodo.</div>';
+        btn.disabled = true;
+        document.getElementById('modalResumo').textContent = '';
+        return;
+    }
+
+    let html = '<div class="table-responsive"><table class="table table-hover table-sm mb-0 carvia-table"><thead><tr>';
+    html += '<th class="text-center"><input type="checkbox" id="modalCheckAll" onchange="modalToggleAll()" checked></th>';
+    html += '<th>CTe</th><th>Data Emissao</th><th>Cliente</th><th>Destino</th><th class="text-end">Valor CTe</th>';
+    html += '</tr></thead><tbody>';
+
+    modalCtesData.forEach(cte => {
+        const dataFmt = cte.cte_data_emissao
+            ? new Date(cte.cte_data_emissao + 'T12:00:00').toLocaleDateString('pt-BR')
+            : '-';
+        const valorFmt = cte.cte_valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        html += `<tr>`;
+        html += `<td class="text-center"><input type="checkbox" class="modal-cte-check" value="${cte.id}" onchange="atualizarResumoModal()" checked></td>`;
+        html += `<td><strong>${cte.cte_numero || 'OP-' + cte.id}</strong></td>`;
+        html += `<td>${dataFmt}</td>`;
+        html += `<td>${cte.nome_cliente || cte.cnpj_cliente}</td>`;
+        html += `<td>${cte.cidade_destino || ''} - ${cte.uf_destino || ''}</td>`;
+        html += `<td class="text-end">${valorFmt}</td>`;
+        html += `</tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+    btn.disabled = false;
+    atualizarResumoModal();
+}
+
+function modalToggleAll() {
+    const checks = document.querySelectorAll('.modal-cte-check');
+    const allChecked = Array.from(checks).every(c => c.checked);
+    checks.forEach(c => c.checked = !allChecked);
+    const checkAll = document.getElementById('modalCheckAll');
+    if (checkAll) checkAll.checked = !allChecked;
+    atualizarResumoModal();
+}
+
+function atualizarResumoModal() {
+    const checks = document.querySelectorAll('.modal-cte-check:checked');
+    const btn = document.getElementById('btnAdicionarSelecionados');
+    let total = 0;
+    checks.forEach(c => {
+        const cte = modalCtesData.find(x => x.id == c.value);
+        if (cte) total += cte.cte_valor;
+    });
+    document.getElementById('modalResumo').textContent =
+        `${checks.length} selecionado(s) — ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+    btn.disabled = checks.length === 0;
+}
+
+// === Modal: Adicionar selecionados ===
+function adicionarCtesSelecionados() {
+    const checks = document.querySelectorAll('.modal-cte-check:checked');
+    if (checks.length === 0) { alert('Selecione ao menos um CTe.'); return; }
+
+    const ids = Array.from(checks).map(c => parseInt(c.value));
+    const btn = document.getElementById('btnAdicionarSelecionados');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adicionando...';
+
+    fetch(`/carvia/api/comissoes/${comissaoId}/incluir-ctes-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ operacao_ids: ids }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.erro) {
+            alert(data.erro);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-plus"></i> Adicionar Selecionados';
+            return;
+        }
+        location.reload();
+    })
+    .catch(err => {
+        alert('Erro: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-plus"></i> Adicionar Selecionados';
+    });
+}
+
+// Default date on payment modal
 (function() {
     'use strict';
     var modalEl = document.getElementById('modalDataPagamento');

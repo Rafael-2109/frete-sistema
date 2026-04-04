@@ -234,7 +234,7 @@ Campos existem FISICAMENTE em: `carvia_cotacoes`, `carvia_operacoes`, `carvia_fr
 **Percentuais**: sempre persistidos (ex: 50/50 grava 50.00 e 50.00), mesmo para opcoes fixas.
 **Conciliacao**: painel de documentos exibe condicoes comerciais como info extra (sem alterar matching).
 
-### R9: Admin — Hard Delete com Auditoria
+### R14: Admin — Hard Delete com Auditoria
 GAP-20 previa apenas soft-delete (CANCELADO). `AdminService` permite hard delete com:
 1. Verificacao de bloqueios (PAGO, FATURADO com dependentes, conciliado)
 2. Serializacao completa (snapshot + filhos cascade) para `CarviaAdminAudit`
