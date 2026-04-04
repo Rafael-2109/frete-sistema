@@ -48,8 +48,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: var(--agent-gradient-header, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
-    color: white;
+    background: var(--agent-bg-primary, #0a1628);
+    color: var(--agent-text-primary, #f0f6fc);
     padding: 6px 12px;
     flex-shrink: 0;
     gap: 10px;
@@ -1520,20 +1520,50 @@
     }
 
     .chat-messages {
-        padding: 12px;
+        padding: 10px;
     }
 
     .message {
         max-width: 100%;
     }
 
-    .chat-input {
+    .message-avatar {
+        width: 26px;
+        height: 26px;
+        font-size: 0.65rem;
+    }
+
+    .message-bubble {
+        font-size: 0.82rem;
         padding: 8px 12px;
+    }
+
+    .message-time {
+        font-size: 0.62rem;
+    }
+
+    .chat-input {
+        padding: 6px 10px;
+    }
+
+    #message-input {
+        font-size: 0.88rem;
+    }
+
+    .input-hint small {
+        font-size: 0.62rem;
     }
 
     .sessions-modal-content {
         width: 95%;
         max-height: 90vh;
+    }
+
+    /* Fix #3: Navbar overlap — usar position sticky em vez de fixed no mobile */
+    .chat-fullscreen-wrapper {
+        position: fixed;
+        top: 56px;
+        z-index: 1020; /* Abaixo da navbar (1030) para nao sobrepor hamburger */
     }
 }
 
@@ -1543,20 +1573,119 @@
     }
 
     .chat-header {
-        padding: 6px 12px;
+        padding: 4px 8px;
+        gap: 6px;
+    }
+
+    .chat-header-left {
+        gap: 4px;
+    }
+
+    .chat-header-right {
+        gap: 4px;
     }
 
     .btn-sessions {
-        width: 32px;
-        height: 32px;
+        width: 30px;
+        height: 30px;
+        font-size: 0.75rem;
+    }
+
+    .btn-mobile-settings {
+        width: 30px;
+        height: 30px;
+        font-size: 0.75rem;
     }
 
     .chat-title h5 {
-        font-size: 0.85rem;
+        font-size: 0.78rem;
     }
 
     .btn-attach {
         display: none;
+    }
+
+    /* Fontes menores no mobile */
+    .message-bubble {
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+
+    .message-bubble h1, .message-bubble h2, .message-bubble h3,
+    .message-bubble h4, .message-bubble h5, .message-bubble h6 {
+        font-size: 0.88rem;
+    }
+
+    .message-bubble pre code {
+        font-size: 0.72rem;
+    }
+
+    .message-bubble ul, .message-bubble ol {
+        padding-left: 1.2em;
+    }
+
+    .message-bubble table {
+        font-size: 0.72rem;
+    }
+
+    /* Dropdown menu menor */
+    .dropdown-menu {
+        font-size: 0.82rem;
+    }
+
+    /* Typing indicator menor */
+    .typing-text {
+        font-size: 0.75rem;
+    }
+
+    /* Boas-vindas compacta */
+    .chat-messages .message:first-child .message-bubble h6 {
+        font-size: 0.85rem;
+    }
+
+    .chat-messages .message:first-child .message-bubble {
+        font-size: 0.78rem;
+    }
+
+    .chat-messages .message:first-child .message-bubble ul {
+        margin: 4px 0;
+    }
+
+    .chat-messages .message:first-child .message-bubble li {
+        margin: 2px 0;
+    }
+
+    /* Theme toggle menor */
+    .theme-toggle {
+        width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+    }
+
+    /* Status indicator */
+    .status-indicator {
+        font-size: 0.5rem;
+    }
+
+    /* Menu dropdown */
+    .btn-menu {
+        width: 28px;
+        height: 28px;
+        font-size: 0.75rem;
+    }
+
+    /* Context indicator compacto */
+    .context-indicator {
+        gap: 3px;
+    }
+
+    .context-bar {
+        width: 28px;
+        height: 4px;
+    }
+
+    .context-text {
+        font-size: 0.58rem;
     }
 }
 
@@ -3714,5 +3843,119 @@
         max-width: 280px;
         left: 10px !important;
         right: 10px !important;
+    }
+}
+
+/* =============================================================
+   MOBILE CONSOLIDADO — iPhone 13 Pro Max (428px) e menores
+   ============================================================= */
+@media (max-width: 480px) {
+    /* Briefing card compacto */
+    .briefing-card {
+        padding: 10px 12px;
+        margin: 0 10px 8px;
+    }
+
+    .briefing-card-title {
+        font-size: 0.78rem;
+    }
+
+    .briefing-item {
+        font-size: 0.75rem;
+    }
+
+    /* Memorias panel — fontes menores */
+    .memories-panel-header h5 {
+        font-size: 0.88rem;
+    }
+
+    .memories-tab {
+        font-size: 0.75rem;
+        padding: 8px 10px;
+    }
+
+    .memory-card-body {
+        font-size: 0.75rem;
+        max-height: 150px;
+    }
+
+    .memory-card-header {
+        margin-bottom: 4px;
+    }
+
+    .memory-meta-badge {
+        font-size: 0.6rem;
+    }
+
+    .memories-section-title {
+        font-size: 0.7rem;
+    }
+
+    /* Resumos compactos */
+    .summary-card-title {
+        font-size: 0.78rem;
+    }
+
+    .summary-card-body {
+        font-size: 0.75rem;
+    }
+
+    .summary-section-label {
+        font-size: 0.65rem;
+    }
+
+    /* Bottom sheet compacto */
+    .mobile-settings-title {
+        font-size: 0.82rem;
+    }
+
+    .mobile-settings-label {
+        font-size: 0.7rem;
+    }
+
+    .mobile-settings-select {
+        font-size: 0.82rem;
+        padding: 8px 10px;
+    }
+
+    .mobile-effort-btn {
+        font-size: 0.7rem;
+        padding: 6px 2px;
+    }
+
+    .mobile-settings-desc {
+        font-size: 0.75rem;
+    }
+
+    /* Improvement cards */
+    .improvement-card-title {
+        font-size: 0.78rem;
+    }
+
+    .improvement-card-body {
+        font-size: 0.75rem;
+    }
+
+    .improvement-badge {
+        font-size: 0.58rem;
+    }
+
+    /* Tour tooltip */
+    .tour-tooltip {
+        padding: 12px 14px;
+    }
+
+    .tour-tooltip-title {
+        font-size: 0.82rem;
+    }
+
+    .tour-tooltip-text {
+        font-size: 0.75rem;
+    }
+
+    /* Sessions search compacto */
+    .sessions-search-input {
+        font-size: 0.82rem;
+        padding: 7px 32px;
     }
 }

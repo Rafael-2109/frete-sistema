@@ -1437,19 +1437,8 @@ button:focus-visible {
         opacity: 0.5;
     }
 
-    /* FIX P1.2: Manter controles visiveis em tablet */
-    /* Override do chat.css que escondia .chat-header-center */
-    .chat-header-center {
-        display: flex !important;
-        gap: 6px;
-    }
-
-    /* Compactar seletor de modelo */
-    .model-select {
-        min-width: 80px;
-        padding: 3px 6px;
-        font-size: 0.7rem;
-    }
+    /* Sessao C: header-center agora escondido em mobile — bottom sheet substitui */
+    /* FIX P1.2 removido: controles mobile via bottom sheet (Sessao C) */
 
     /* Token budget mais compacto */
     .token-budget-container {
@@ -1457,31 +1446,8 @@ button:focus-visible {
     }
 }
 
-/* FIX P1.2: Mobile pequeno (480px) */
+/* Mobile pequeno (480px) — Sessao C: bottom sheet substitui header-center */
 @media (max-width: 480px) {
-    /* Manter header-center com toggles essenciais */
-    .chat-header-center {
-        display: flex !important;
-        gap: 4px;
-    }
-
-    /* Esconder seletor de modelo mas manter toggles */
-    .chat-header-center .header-control:first-child {
-        display: none;
-    }
-
-    /* Manter botao de anexar visivel */
-    .btn-attach {
-        display: flex !important;
-        width: 36px;
-        height: 36px;
-    }
-
-    /* Compactar toggles */
-    .toggle-switch {
-        transform: scale(0.9);
-    }
-
     /* Esconder tooltips em mobile */
     .control-tooltip {
         display: none !important;
