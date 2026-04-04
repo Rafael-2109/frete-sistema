@@ -3422,7 +3422,7 @@ function renderBriefingCard(data) {
         `;
     }).join('');
 
-    const sinceText = data.since ? `Desde ${data.since}` : '';
+    const sinceText = data.since ? `Desde ${escapeHtml(data.since)}` : '';
 
     const card = document.createElement('div');
     card.className = 'briefing-card';
@@ -3522,6 +3522,11 @@ function debouncedSearchSessions(query) {
     if (clearBtn) clearBtn.style.display = query ? 'flex' : 'none';
 
     if (_searchDebounceTimer) clearTimeout(_searchDebounceTimer);
+
+    // Min 2 chars para busca server-side (consistente com backend)
+    // Query vazia recarrega lista completa
+    if (query.trim().length === 1) return;
+
     _searchDebounceTimer = setTimeout(() => searchSessions(query), 300);
 }
 
