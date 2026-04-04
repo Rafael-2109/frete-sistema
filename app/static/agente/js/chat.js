@@ -3738,6 +3738,185 @@ function exportHistoricalAsPDF(data, timestamp, title) {
 
 
 // =============================================================
+// SESSAO D: TOUR GUIADO DE PRIMEIRO ACESSO
+// =============================================================
+
+const TOUR_STEPS = [
+    {
+        target: '#message-input',
+        title: 'Converse com a IA',
+        text: 'Digite sua pergunta aqui. O agente pode consultar pedidos, estoque, fretes e muito mais.',
+    },
+    {
+        target: '#model-selector',
+        title: 'Escolha o Modelo',
+        text: 'Haiku e rapido e economico. Sonnet e o equilibrado (recomendado). Opus e o mais potente.',
+        desktopOnly: true,
+    },
+    {
+        target: '#effort-selector',
+        title: 'Nivel de Raciocinio',
+        text: 'Controla o quanto a IA "pensa" antes de responder. Auto ajusta ao modelo. Use High para analises complexas.',
+        desktopOnly: true,
+    },
+    {
+        target: '.btn-sessions',
+        title: 'Historico de Conversas',
+        text: 'Acesse conversas anteriores, busque por assunto, e exporte para Markdown ou PDF.',
+    },
+    {
+        target: '.btn-memories',
+        title: 'Memorias da IA',
+        text: 'Veja o que a IA aprendeu sobre voce e resumos de sessoes anteriores. Voce pode editar ou remover memorias.',
+        desktopOnly: true,
+    },
+];
+
+let _tourCurrentStep = 0;
+let _tourOverlay = null;
+let _tourHighlight = null;
+let _tourTooltip = null;
+
+/**
+ * Inicia o tour se for o primeiro acesso do usuario.
+ */
+function maybeStartTour() {
+    if (localStorage.getItem('agent-tour-completed')) return;
+
+    // Delay para o DOM estar pronto e animacoes iniciais terminarem
+    setTimeout(() => startTour(), 1500);
+}
+
+/**
+ * Inicia o tour do zero.
+ */
+function startTour() {
+    _tourCurrentStep = 0;
+
+    // Criar overlay
+    _tourOverlay = document.createElement('div');
+    _tourOverlay.className = 'tour-overlay';
+    _tourOverlay.onclick = (e) => { if (e.target === _tourOverlay) endTour(); };
+    document.body.appendChild(_tourOverlay);
+
+    // Criar highlight
+    _tourHighlight = document.createElement('div');
+    _tourHighlight.className = 'tour-highlight';
+    document.body.appendChild(_tourHighlight);
+
+    // Criar tooltip
+    _tourTooltip = document.createElement('div');
+    _tourTooltip.className = 'tour-tooltip';
+    document.body.appendChild(_tourTooltip);
+
+    showTourStep();
+}
+
+/**
+ * Mostra o step atual do tour.
+ */
+function showTourStep() {
+    const isMobile = window.innerWidth < 768;
+    let step = TOUR_STEPS[_tourCurrentStep];
+
+    // Pular steps desktop-only em mobile
+    while (step && step.desktopOnly && isMobile) {
+        _tourCurrentStep++;
+        if (_tourCurrentStep >= TOUR_STEPS.length) {
+            endTour();
+            return;
+        }
+        step = TOUR_STEPS[_tourCurrentStep];
+    }
+
+    if (!step) {
+        endTour();
+        return;
+    }
+
+    const el = document.querySelector(step.target);
+    if (!el) {
+        // Elemento nao encontrado — pular step
+        _tourCurrentStep++;
+        if (_tourCurrentStep >= TOUR_STEPS.length) {
+            endTour();
+            return;
+        }
+        showTourStep();
+        return;
+    }
+
+    // Posicionar highlight
+    const rect = el.getBoundingClientRect();
+    const pad = 6;
+    _tourHighlight.style.top = (rect.top - pad) + 'px';
+    _tourHighlight.style.left = (rect.left - pad) + 'px';
+    _tourHighlight.style.width = (rect.width + pad * 2) + 'px';
+    _tourHighlight.style.height = (rect.height + pad * 2) + 'px';
+
+    // Posicionar tooltip abaixo do elemento (ou acima se nao cabe)
+    const total = TOUR_STEPS.filter(s => !s.desktopOnly || !isMobile).length;
+    const currentVisible = TOUR_STEPS.slice(0, _tourCurrentStep + 1).filter(s => !s.desktopOnly || !isMobile).length;
+    const isLast = _tourCurrentStep >= TOUR_STEPS.length - 1;
+
+    _tourTooltip.innerHTML = `
+        <div class="tour-tooltip-title">${step.title}</div>
+        <div class="tour-tooltip-text">${step.text}</div>
+        <div class="tour-tooltip-footer">
+            <span class="tour-tooltip-progress">${currentVisible} de ${total}</span>
+            <div class="tour-tooltip-actions">
+                <button class="tour-btn-skip" onclick="endTour()">Pular</button>
+                <button class="tour-btn-next" onclick="nextTourStep()">${isLast ? 'Concluir' : 'Proximo'}</button>
+            </div>
+        </div>
+    `;
+
+    // Posicionar tooltip
+    const tooltipH = 140; // Estimativa
+    const below = rect.bottom + 12;
+    const above = rect.top - tooltipH - 12;
+
+    if (below + tooltipH < window.innerHeight) {
+        _tourTooltip.style.top = below + 'px';
+    } else {
+        _tourTooltip.style.top = Math.max(8, above) + 'px';
+    }
+    _tourTooltip.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - 340)) + 'px';
+
+    // Re-trigger animation
+    _tourTooltip.style.animation = 'none';
+    _tourTooltip.offsetHeight; // reflow
+    _tourTooltip.style.animation = '';
+}
+
+/**
+ * Avanca para o proximo step.
+ */
+function nextTourStep() {
+    _tourCurrentStep++;
+    if (_tourCurrentStep >= TOUR_STEPS.length) {
+        endTour();
+        return;
+    }
+    showTourStep();
+}
+
+/**
+ * Finaliza o tour e marca como concluido.
+ */
+function endTour() {
+    localStorage.setItem('agent-tour-completed', '1');
+
+    if (_tourOverlay) { _tourOverlay.remove(); _tourOverlay = null; }
+    if (_tourHighlight) { _tourHighlight.remove(); _tourHighlight = null; }
+    if (_tourTooltip) { _tourTooltip.remove(); _tourTooltip = null; }
+}
+
+// Iniciar tour se primeiro acesso
+maybeStartTour();
+
+
+// =============================================================
 // SESSAO C: CONTROLES MOBILE (BOTTOM SHEET)
 // =============================================================
 
