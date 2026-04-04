@@ -1,0 +1,398 @@
+{
+  "table": "fretes",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Local",
+      "description": "2 caminhos de criacao: (1) Manual via NF — routes.py:processar_lancamento_frete(), (2) Automatico do embarque — routes.py:lancar_frete_automatico():3472. Ambos agrupam NFs por CNPJ do embarque"
+    },
+    "alternatives": []
+  },
+  "fields": {
+    "id": {
+      "provenance": "system",
+      "rules": [
+        "Auto-increment PK gerado pelo banco"
+      ]
+    },
+    "embarque_id": {
+      "provenance": "propagated",
+      "source_table": "embarques",
+      "source_field": "id",
+      "rules": [
+        "FK obrigatoria. Setado na criacao, nunca modificado"
+      ]
+    },
+    "cnpj_cliente": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "cnpj_cliente",
+      "rules": [
+        "Agrupado por CNPJ: todos os EmbarqueItens do mesmo embarque com mesmo CNPJ geram 1 frete"
+      ]
+    },
+    "nome_cliente": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "nome_cliente"
+    },
+    "transportadora_id": {
+      "provenance": "propagated",
+      "source_table": "embarques",
+      "source_field": "transportadora_id",
+      "rules": [
+        "FK obrigatoria. Herdado do embarque na criacao"
+      ]
+    },
+    "tipo_carga": {
+      "provenance": "propagated",
+      "source_table": "embarques",
+      "source_field": "tipo_carga",
+      "rules": [
+        "Valores: 'FRACIONADA' ou 'DIRETA'. Determina formula de calculo do valor_cotado"
+      ]
+    },
+    "modalidade": {
+      "provenance": "propagated",
+      "rules": [
+        "De TabelaFreteManager.preparar_dados_tabela() -> tabela_dados['modalidade']",
+        "Valores: VALOR, PESO, VAN, etc."
+      ]
+    },
+    "uf_destino": {
+      "provenance": "propagated",
+      "source_table": "embarque_itens",
+      "source_field": "uf_destino",
+      "rules": [
+        "Automatico: do primeiro EmbarqueItem do CNPJ no embarque (routes.py:3621)",
+        "Manual: do primeiro EmbarqueItem do embarque inteiro (routes.py:756) — pode diferir para FRACIONADA com multiplos CNPJs"
+      ]
+    },
+    "cidade_destino": {
+      "provenance": "propagated",
+      "source_table": "embarque_itens",
+      "source_field": "cidade_destino",
+      "rules": [
+        "Automatico: do primeiro EmbarqueItem do CNPJ no embarque (routes.py:3622)",
+        "Manual: do primeiro EmbarqueItem do embarque inteiro (routes.py:757) — pode diferir para FRACIONADA com multiplos CNPJs"
+      ]
+    },
+    "peso_total": {
+      "provenance": "calculated",
+      "formula": "sum(nf.peso_bruto) para todas as NFs do CNPJ no embarque",
+      "rules": [
+        "De RelatorioFaturamentoImportado. Calculado na criacao, nunca modificado"
+      ]
+    },
+    "valor_total_nfs": {
+      "provenance": "calculated",
+      "formula": "sum(nf.valor_total) para todas as NFs do CNPJ no embarque",
+      "rules": [
+        "De RelatorioFaturamentoImportado. Calculado na criacao, nunca modificado"
+      ]
+    },
+    "quantidade_nfs": {
+      "provenance": "calculated",
+      "formula": "len(itens_embarque_cnpj)"
+    },
+    "numeros_nfs": {
+      "provenance": "calculated",
+      "formula": "','.join([item.nota_fiscal for item in itens_embarque_cnpj])",
+      "rules": [
+        "CSV string. Usado em busca e match com CTe"
+      ]
+    },
+    "tabela_nome_tabela": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete copiado via TabelaFreteManager na criacao (tabela_frete_manager.py)",
+        "FRACIONADA: de EmbarqueItem.tabela_nome_tabela. DIRETA: de Embarque.tabela_nome_tabela",
+        "NUNCA atualizado apos criacao — e fotografia do momento"
+      ]
+    },
+    "tabela_valor_kg": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Taxa por kg"
+      ]
+    },
+    "tabela_percentual_valor": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Percentual sobre valor NF"
+      ]
+    },
+    "tabela_frete_minimo_valor": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Valor minimo de frete"
+      ]
+    },
+    "tabela_frete_minimo_peso": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Peso minimo (floor weight, NAO floor value)"
+      ]
+    },
+    "tabela_icms": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Aliquota ICMS"
+      ]
+    },
+    "tabela_percentual_gris": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Percentual GRIS (gerenciamento de risco)"
+      ]
+    },
+    "tabela_pedagio_por_100kg": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Pedagio por 100kg"
+      ]
+    },
+    "tabela_valor_tas": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Taxa TAS fixa"
+      ]
+    },
+    "tabela_percentual_adv": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Percentual ADV (ad valorem)"
+      ]
+    },
+    "tabela_percentual_rca": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Percentual RCA"
+      ]
+    },
+    "tabela_valor_despacho": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Taxa de despacho fixa"
+      ]
+    },
+    "tabela_valor_cte": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Taxa CTe fixa"
+      ]
+    },
+    "tabela_icms_incluso": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Se True, ICMS ja incluso nas taxas. Se False: valor_com_icms = valor_liquido / (1 - icms_rate)"
+      ]
+    },
+    "tabela_icms_destino": {
+      "provenance": "propagated",
+      "rules": [
+        "Na criacao: embarque.icms_destino ou item.icms_destino (default 0 se ausente)",
+        "LocalizacaoService por codigo IBGE e usado apenas em recalculo posterior, NAO na criacao"
+      ]
+    },
+    "tabela_gris_minimo": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Piso minimo de GRIS"
+      ]
+    },
+    "tabela_adv_minimo": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Piso minimo de ADV"
+      ]
+    },
+    "tabela_icms_proprio": {
+      "provenance": "propagated",
+      "rules": [
+        "Snapshot da tabela de frete. Se presente, overrida ICMS da cidade (prioridade sobre tabela_icms_destino)"
+      ]
+    },
+    "condicao_pagamento": {
+      "provenance": "propagated",
+      "rules": [
+        "Da tabela de frete ou manual. Condicao de pagamento da transportadora"
+      ]
+    },
+    "valor_cotado": {
+      "provenance": "calculated",
+      "formula": "calcular_valor_frete_pela_tabela(tabela_dados, peso_total, valor_total_nfs) -> resultado['valor_com_icms'] (float)",
+      "rules": [
+        "Calculado na criacao, NUNCA modificado depois",
+        "Internamente chama CalculadoraFrete.calcular_frete_unificado(peso, valor_mercadoria, tabela_dados)",
+        "FRACIONADA: calculo direto com peso/valor do CNPJ e tabela do item",
+        "DIRETA: calculo do frete total do embarque * (peso_cnpj / peso_total_embarque)",
+        "FOB-COLETA: valor_cotado=0 (transportadora='FOB - COLETA')",
+        "Componentes: frete_peso + frete_valor + GRIS + pedagio + TAS + ADV + RCA + despacho + CTe, com ICMS e frete minimo aplicados (calculadora_frete.py)"
+      ]
+    },
+    "valor_cte": {
+      "provenance": "manual",
+      "rules": [
+        "Valor cobrado pela transportadora. Preenchido manualmente ao registrar CTe (routes.py:editar_frete)",
+        "Tambem sugerido via buscar_ctes_relacionados() quando CTe importado do Odoo e vinculado"
+      ]
+    },
+    "valor_considerado": {
+      "provenance": "manual",
+      "rules": [
+        "Inicialmente = valor_cotado na criacao",
+        "Ajustado pelo usuario para o valor que a empresa considera valido",
+        "Se |valor_considerado - valor_cotado| > R$5: status = EM_TRATATIVA, requer_aprovacao = True"
+      ]
+    },
+    "valor_pago": {
+      "provenance": "manual",
+      "rules": [
+        "Valor efetivamente pago. Preenchido apos confirmacao de pagamento",
+        "Se |valor_pago - valor_cotado| > R$5: requer aprovacao"
+      ]
+    },
+    "numero_cte": {
+      "provenance": "manual",
+      "rules": [
+        "Numero do CTe. Preenchido manualmente em editar_frete",
+        "Match automatico via buscar_ctes_relacionados() contra tabela conhecimento_transporte"
+      ]
+    },
+    "data_emissao_cte": {
+      "provenance": "manual",
+      "rules": [
+        "Data de emissao do CTe. Preenchida manualmente"
+      ]
+    },
+    "vencimento": {
+      "provenance": "manual",
+      "rules": [
+        "Data de vencimento do frete",
+        "Auto-preenchido de FaturaFrete.vencimento se nao informado manualmente"
+      ]
+    },
+    "fatura_frete_id": {
+      "provenance": "system",
+      "rules": [
+        "FK para faturas_frete. Setado na criacao ou via processar_cte_frete_existente",
+        "Obrigatorio para editar campos de CTe"
+      ]
+    },
+    "frete_cte_id": {
+      "provenance": "system",
+      "rules": [
+        "FK para conhecimento_transporte. Setado quando usuario vincula CTe importado do Odoo ao frete",
+        "Match por: (1) NFs em comum, (2) CNPJ transportadora (8 primeiros digitos), (3) tomador_e_empresa = True"
+      ]
+    },
+    "odoo_dfe_id": {
+      "provenance": "system",
+      "rules": [
+        "ID do DFe no Odoo (l10n_br_ciel_it_account.dfe). Direcao: Sistema -> Odoo",
+        "DFe resolvido na etapa 1 (busca por chave CTe), mas persistido no banco apenas na etapa 16 (lancamento_odoo_service.py:1818)",
+        "Todos os 4 campos odoo_* sao escritos atomicamente na etapa 16",
+        "Limpo em rollback se lancamento falha (_rollback_frete_odoo)"
+      ]
+    },
+    "odoo_purchase_order_id": {
+      "provenance": "system",
+      "rules": [
+        "ID do purchase.order no Odoo. Direcao: Sistema -> Odoo",
+        "PO criado nas etapas 3-6, mas persistido no banco apenas na etapa 16 (lancamento_odoo_service.py:1819)",
+        "Company mapping: CNPJ 61724241000178->1(FB), 61724241000259->3(SC), 61724241000330->4(CD), 18467441000163->5(LF)",
+        "Limpo em rollback se lancamento falha"
+      ]
+    },
+    "odoo_invoice_id": {
+      "provenance": "system",
+      "rules": [
+        "ID da account.move (vendor bill) no Odoo. Direcao: Sistema -> Odoo",
+        "Invoice criada nas etapas 13-15, persistido no banco na etapa 16 (lancamento_odoo_service.py:1820)",
+        "Fiscal operation selecionada por company x (interna/interestadual) x (simples/normal)",
+        "Limpo em rollback se lancamento falha"
+      ]
+    },
+    "lancado_odoo_em": {
+      "provenance": "system",
+      "rules": [
+        "Timestamp do lancamento completo no Odoo. Direcao: Sistema -> Odoo",
+        "Setado na etapa 16 junto com os 3 IDs (lancamento_odoo_service.py:1821)",
+        "Apenas quando TODOS os 16 steps completam com sucesso"
+      ]
+    },
+    "lancado_odoo_por": {
+      "provenance": "system",
+      "rules": [
+        "Username de quem disparou o lancamento no Odoo. Direcao: Sistema -> Odoo"
+      ]
+    },
+    "status": {
+      "provenance": "calculated",
+      "rules": [
+        "Default 'PENDENTE' na criacao",
+        "Transicoes: PENDENTE -> EM_TRATATIVA (diferenca > R$5) -> APROVADO/REJEITADO -> LANCADO_ODOO / PAGO / CANCELADO",
+        "EM_TRATATIVA via route editar_frete: |valor_considerado - valor_cotado| > R$5 ou |valor_pago - valor_cotado| > R$5",
+        "APROVADO: setado por aprovacao manual (aprovado_por, aprovado_em)",
+        "LANCADO_ODOO: setado ao completar 16 steps Odoo com sucesso",
+        "CANCELADO: setado por cancelamento manual"
+      ]
+    },
+    "requer_aprovacao": {
+      "provenance": "calculated",
+      "rules": [
+        "Default False",
+        "Via route editar_frete: True quando |valor_considerado - valor_cotado| > R$5 ou |valor_pago - valor_cotado| > R$5",
+        "Via model requer_aprovacao_por_valor(): True quando |valor_considerado - valor_pago| > R$5 (par de campos diferente da route)"
+      ]
+    },
+    "aprovado_por": {
+      "provenance": "manual",
+      "rules": [
+        "Username de quem aprovou. Preenchido na aprovacao pelo financeiro"
+      ]
+    },
+    "aprovado_em": {
+      "provenance": "system",
+      "rules": [
+        "Timestamp da aprovacao"
+      ]
+    },
+    "observacoes_aprovacao": {
+      "provenance": "manual",
+      "rules": [
+        "Texto livre do aprovador"
+      ]
+    },
+    "considerar_diferenca": {
+      "provenance": "manual",
+      "rules": [
+        "Default False. Quando True, diferencas <= R$5 sao lancadas na conta_corrente_transportadoras",
+        "Decisao explicita do usuario para aceitar micro-diferencas"
+      ]
+    },
+    "criado_em": {
+      "provenance": "system",
+      "formula": "agora_utc_naive()"
+    },
+    "criado_por": {
+      "provenance": "system",
+      "rules": [
+        "current_user.nome na criacao"
+      ]
+    },
+    "lancado_em": {
+      "provenance": "system",
+      "rules": [
+        "Timestamp de lancamento. Na pratica, mesmo valor de criado_em"
+      ]
+    },
+    "lancado_por": {
+      "provenance": "system",
+      "rules": [
+        "Na pratica, mesmo valor de criado_por"
+      ]
+    }
+  }
+}

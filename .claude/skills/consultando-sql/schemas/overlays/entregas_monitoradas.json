@@ -1,0 +1,252 @@
+{
+  "table": "entregas_monitoradas",
+  "version": "2.0.0",
+  "source": {
+    "primary": {
+      "system": "Multi-fonte",
+      "description": "4 triggers chamam sincronizar_entrega_por_nf(): (1) FaturamentoService apos sync Odoo account.move, (2) embarques/routes.py ao ativar embarque, (3) portaria/routes.py ao registrar saida, (4) agendador.py cron noturno 23h (todas NFs)"
+    },
+    "alternatives": []
+  },
+  "fields": {
+    "id": {
+      "provenance": "system",
+      "rules": [
+        "Auto-increment PK gerado pelo banco"
+      ]
+    },
+    "numero_nf": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "numero_nf",
+      "rules": [
+        "Chave de idempotencia: sincronizar_entrega_por_nf() faz filter_by(numero_nf).first(), cria se nao existe, atualiza se existe",
+        "Index nao-unico — mesmo NF pode ter multiplos registros em caso de substituicao (substituida_por_nf_id)"
+      ]
+    },
+    "cliente": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "nome_cliente",
+      "rules": [
+        "Populado por sincronizar_entregas.py:103"
+      ]
+    },
+    "cnpj_cliente": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "cnpj_cliente",
+      "rules": [
+        "Populado por sincronizar_entregas.py:104"
+      ]
+    },
+    "transportadora": {
+      "provenance": "propagated",
+      "source_table": "embarques",
+      "source_field": "transportadora_id -> transportadoras.razao_social",
+      "rules": [
+        "STRING denormalizada via FK resolvida, NAO e FK direta para transportadoras",
+        "Mudancas no cadastro da transportadora NAO propagam para registros existentes",
+        "Populado por sincronizar_entregas.py:119-130"
+      ]
+    },
+    "municipio": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "municipio",
+      "rules": [
+        "Cidade destino. Populado por sincronizar_entregas.py:107"
+      ]
+    },
+    "uf": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "estado",
+      "rules": [
+        "UF destino. Populado por sincronizar_entregas.py:108"
+      ]
+    },
+    "vendedor": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "vendedor",
+      "rules": [
+        "Populado por sincronizar_entregas.py:110"
+      ]
+    },
+    "valor_nf": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "valor_total",
+      "rules": [
+        "Populado por sincronizar_entregas.py:109"
+      ]
+    },
+    "data_faturamento": {
+      "provenance": "propagated",
+      "source_table": "relatorio_faturamento_importado",
+      "source_field": "data_fatura",
+      "rules": [
+        "Populado por sincronizar_entregas.py:106"
+      ]
+    },
+    "data_embarque": {
+      "provenance": "propagated",
+      "source_table": "embarques",
+      "source_field": "data_embarque",
+      "rules": [
+        "Data de saida do veiculo. Populado por sincronizar_entregas.py:131",
+        "Para FOB: tratamento especial — data_embarque pode ser usada como data_hora_entrega_realizada (sincronizar_entregas.py:249-266)"
+      ]
+    },
+    "data_entrega_prevista": {
+      "provenance": "calculated",
+      "formula": "Calculo: (1) data_agenda se setada, (2) data_embarque + lead_time dias uteis (numpy.busday_offset), (3) NULL. Post-override: se incoterm contem 'FOB', substitui por embarque.data_prevista_embarque (sincronizar_entregas.py:252-256)",
+      "rules": [
+        "Recalculado a cada chamada de sincronizar_entrega_por_nf()",
+        "Lead time vem de CidadeAtendida (lookup por transportadora CNPJ + UF + cidade)",
+        "FOB override tem prioridade final — se tanto lead_time quanto FOB se aplicam, FOB vence",
+        "Historico de alteracoes rastreado em historico_data_prevista (tabela satelite)"
+      ]
+    },
+    "data_hora_entrega_realizada": {
+      "provenance": "manual",
+      "rules": [
+        "Timestamp informado pelo operador ao finalizar entrega (monitoramento/routes.py:537)",
+        "Excecao FOB: auto-setado = embarque.data_embarque (sincronizar_entregas.py:252)"
+      ]
+    },
+    "entregue": {
+      "provenance": "calculated",
+      "formula": "True quando status_finalizacao == 'Entregue' OR incoterm FOB",
+      "rules": [
+        "Default False",
+        "Setado True quando status_finalizacao = 'Entregue' (monitoramento/routes.py:537)",
+        "FOB: auto-setado True (sincronizar_entregas.py:254)"
+      ]
+    },
+    "lead_time": {
+      "provenance": "propagated",
+      "source_table": "cidade_atendida",
+      "source_field": "lead_time",
+      "rules": [
+        "Dias uteis de transito. Lookup por CNPJ transportadora + UF + cidade destino",
+        "Populado por sincronizar_entregas.py:218-247"
+      ]
+    },
+    "reagendar": {
+      "provenance": "manual",
+      "rules": [
+        "Default False. Toggled pelo operador quando cliente solicita reagendamento",
+        "Partial index em reagendar=true para dashboard operacional"
+      ]
+    },
+    "motivo_reagendamento": {
+      "provenance": "manual",
+      "rules": [
+        "Texto livre. Razao do reagendamento informada pelo operador"
+      ]
+    },
+    "data_agenda": {
+      "provenance": "multi_source",
+      "rules": [
+        "Sync: de EmbarqueItem.data_agenda (parsed de dd/mm/yyyy) via sincronizar_entregas.py:140-152",
+        "Manual: operador define via tela de monitoramento",
+        "Quando setada, tem PRIORIDADE sobre lead_time no calculo de data_entrega_prevista"
+      ]
+    },
+    "observacao_operacional": {
+      "provenance": "manual",
+      "rules": [
+        "Texto livre. Notas operacionais do monitoramento"
+      ]
+    },
+    "pendencia_financeira": {
+      "provenance": "manual",
+      "rules": [
+        "Default False. Flag setada pelo operador quando ha bloqueio financeiro",
+        "Tambem estruturado via PendenciaFinanceiraNF (app/financeiro/models.py:1872)"
+      ]
+    },
+    "resposta_financeiro": {
+      "provenance": "manual",
+      "rules": [
+        "Texto livre. Resposta da equipe financeira sobre a pendencia"
+      ]
+    },
+    "nf_cd": {
+      "provenance": "manual",
+      "rules": [
+        "Default False. Setado True quando NF retorna fisicamente ao CD (monitoramento/routes.py)",
+        "Side effect: Separacao vinculada (via separacao_lote_id) recebe nf_cd=True e data_embarque=NULL — resetada para nova tentativa",
+        "Partial index em nf_cd=true"
+      ]
+    },
+    "separacao_lote_id": {
+      "provenance": "propagated",
+      "rules": [
+        "VARCHAR (ex: LOTE_20251004_032844_195), NAO integer",
+        "Backfill via Pedido model: busca pedido pela NF, herda separacao_lote_id",
+        "Populado por sincronizar_entregas.py — conecta ao upstream (separacao) sem JOIN em runtime"
+      ]
+    },
+    "status_finalizacao": {
+      "provenance": "manual",
+      "rules": [
+        "NULL = em andamento (semantica invertida: NULL significa 'vivo', NAO 'nao definido')",
+        "Valores terminais: 'Entregue', 'Cancelada', 'Devolvida', 'Troca de NF', 'Sinistro', 'nao_finalizado'",
+        "Cancelada/Devolvida/Troca de NF: detectado pelo MonitoramentoSyncService em job assincrono (sincronizacao_incremental_definitiva.py via scheduler), que cria NFDevolucao + OcorrenciaDevolucao em batch — NAO e inline na finalizacao",
+        "FOB: auto-setado 'Entregue' (sincronizar_entregas.py:256)"
+      ]
+    },
+    "finalizado_por": {
+      "provenance": "system",
+      "rules": [
+        "Username de quem finalizou. Setado junto com status_finalizacao"
+      ]
+    },
+    "finalizado_em": {
+      "provenance": "system",
+      "rules": [
+        "Timestamp da finalizacao"
+      ]
+    },
+    "nova_nf": {
+      "provenance": "manual",
+      "rules": [
+        "Numero da NF substituta. Usado apenas quando status_finalizacao = 'Troca de NF'"
+      ]
+    },
+    "substituida_por_nf_id": {
+      "provenance": "system",
+      "rules": [
+        "Self-referential FK para entregas_monitoradas.id",
+        "Cadeia de substituicao de NF: registro antigo aponta para registro novo"
+      ]
+    },
+    "canhoto_arquivo": {
+      "provenance": "manual",
+      "rules": [
+        "Path do arquivo do canhoto assinado (local ou S3). Upload via tela de monitoramento"
+      ]
+    },
+    "teve_devolucao": {
+      "provenance": "calculated",
+      "rules": [
+        "Default False",
+        "Setado True quando: (1) operador registra devolucao no monitoramento, (2) motorista reporta retorno via rastreamento (OdooRastreamentoIntegrationService)",
+        "Pode ser True mesmo com devolucao parcial"
+      ]
+    },
+    "criado_em": {
+      "provenance": "system",
+      "formula": "agora_utc_naive()"
+    },
+    "criado_por": {
+      "provenance": "system",
+      "rules": [
+        "Setado na criacao. Pode ser nome do usuario ou 'Sistema' (cron noturno)"
+      ]
+    }
+  }
+}
