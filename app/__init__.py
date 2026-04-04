@@ -398,6 +398,13 @@ def create_app(config_name=None):
             """Monitora o início das requisições"""
             g.start_time = time.time()
 
+            # Audit Supply Chain: propaga contexto Flask → PostgreSQL session vars
+            try:
+                from app.supply_chain.services.context_middleware import set_pg_audit_context
+                set_pg_audit_context()
+            except Exception:
+                pass
+
             # Query Profiler: inicia contagem se habilitado
             if app.config.get("ENABLE_QUERY_PROFILING"):
                 start_profiling()
@@ -1295,5 +1302,8 @@ def create_app(config_name=None):
             prefix='/static/',
             max_age=31536000,  # 1 ano (assets usam ?v= para cache busting)
         )
+
+    # Registrar modelo EventoSupplyChain para Flask-Migrate detectar a tabela
+    from app.supply_chain.models import EventoSupplyChain  # noqa: F401
 
     return app

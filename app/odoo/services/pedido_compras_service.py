@@ -87,6 +87,15 @@ class PedidoComprasServiceOtimizado:
         self.logger.info(f"   Primeira execução: {primeira_execucao}")
         self.logger.info("=" * 80)
 
+        # Audit Supply Chain: contexto para triggers PostgreSQL
+        _audit_session_id = None
+        try:
+            from app.supply_chain.services.context_middleware import set_audit_context, gerar_session_id
+            _audit_session_id = gerar_session_id('SYNC_COMPRAS')
+            set_audit_context(usuario='Sistema - Sync Odoo', origem='SYNC_ODOO', session_id=_audit_session_id)
+        except Exception:
+            pass
+
         try:
             # Autenticar no Odoo
             uid = self.connection.authenticate()
@@ -152,6 +161,14 @@ class PedidoComprasServiceOtimizado:
             self.logger.info(f"   Linhas processadas: {resultado['linhas_processadas']}")
             self.logger.info(f"   Linhas ignoradas: {resultado['linhas_ignoradas']}")
             self.logger.info("=" * 80)
+
+            # Audit Supply Chain: enriquecer eventos com projecao D0
+            if _audit_session_id:
+                try:
+                    from app.supply_chain.services.enrichment_service import enriquecer_projecao
+                    enriquecer_projecao(_audit_session_id)
+                except Exception:
+                    pass
 
             return {
                 'sucesso': True,

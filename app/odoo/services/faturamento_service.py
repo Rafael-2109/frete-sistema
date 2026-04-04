@@ -618,12 +618,20 @@ class FaturamentoService:
 
         ✅ INCLUI: Sincronização completa de entregas, embarques e fretes
         """
+        # Audit Supply Chain: contexto para triggers PostgreSQL
+        _audit_session_id = None
+        try:
+            from app.supply_chain.services.context_middleware import set_audit_context, gerar_session_id
+            _audit_session_id = gerar_session_id('SYNC_FATURAMENTO')
+            set_audit_context(usuario='Sistema - Sync Odoo', origem='SYNC_ODOO', session_id=_audit_session_id)
+        except Exception:
+            pass
+
         try:
             import time
             from app import db
 
             start_time = time.time()
-
 
             # ⚡ Buscar dados do Odoo com MODO INCREMENTAL usando write_date
             resultado = self.obter_faturamento_otimizado(
@@ -1139,6 +1147,14 @@ class FaturamentoService:
             logger.info(f"   ⏱️ Tempo execução: {tempo_execucao:.2f}s")
             logger.info(f"   ❌ {contador_erros} erros principais + {len(stats_sincronizacao['erros_sincronizacao'])} erros de sincronização")
             
+            # Audit Supply Chain: enriquecer eventos com projecao D0
+            if _audit_session_id:
+                try:
+                    from app.supply_chain.services.enrichment_service import enriquecer_projecao
+                    enriquecer_projecao(_audit_session_id)
+                except Exception:
+                    pass
+
             return {
                 'sucesso': True,
                 'estatisticas': estatisticas,
@@ -1151,7 +1167,7 @@ class FaturamentoService:
                 'movimentacoes_estoque': stats_estoque,
                 'mensagem': f'🚀 Sincronização incremental completa: {contador_novos} novos, {contador_atualizados} atualizados, {stats_estoque["movimentacoes_criadas"]} movimentações de estoque, {stats_sincronizacao["relatorios_consolidados"]} relatórios consolidados + {stats_sincronizacao["fretes_lancados"]} fretes em {tempo_execucao:.2f}s'
             }
-            
+
         except Exception as e:
             db.session.rollback()
             logger.error(f"❌ ERRO na sincronização incremental completa: {e}")
