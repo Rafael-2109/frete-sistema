@@ -816,6 +816,7 @@ Nunca invente informações."""
         our_session_id: Optional[str] = None,
         output_format: Optional[Dict[str, Any]] = None,
         debug_mode: bool = False,
+        resume_messages_fallback: Optional[str] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming.
@@ -835,6 +836,7 @@ Nunca invente informações."""
             our_session_id: Nosso UUID de sessão (usado pelo path persistente como pool key)
             output_format: JSON Schema para structured output (SDK nativo)
             debug_mode: Se true E flag USE_STDERR_CALLBACK ativo, captura stderr do CLI
+            resume_messages_fallback: XML com mensagens JSONB para injetar se resume falhar
 
         Yields:
             StreamEvent com tipo e conteúdo
@@ -856,6 +858,7 @@ Nunca invente informações."""
             our_session_id=our_session_id,
             output_format=output_format,
             debug_mode=debug_mode,
+            resume_messages_fallback=resume_messages_fallback,
         ):
             yield event
 
@@ -871,6 +874,7 @@ Nunca invente informações."""
         output_format: Optional[Dict[str, Any]] = None,
         our_session_id: Optional[str] = None,
         stderr_queue: Optional['queue.SimpleQueue'] = None,
+        resume_state: Optional[Dict] = None,
     ) -> 'ClaudeAgentOptions':
         """
         Constrói ClaudeAgentOptions para ClaudeSDKClient.
@@ -1112,6 +1116,7 @@ Nunca invente informações."""
                 get_last_thinking=lambda: self._last_thinking_content,
                 get_model_name=lambda: str(self.settings.model),
                 set_injected_ids=lambda ids: setattr(self, '_last_injected_memory_ids', ids),
+                resume_state=resume_state,
             )
             hooks_list = list(options_dict["hooks"].keys())
             logger.debug(
@@ -1230,6 +1235,7 @@ Nunca invente informações."""
         our_session_id: Optional[str] = None,
         output_format: Optional[Dict[str, Any]] = None,
         debug_mode: bool = False,
+        resume_messages_fallback: Optional[str] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando ClaudeSDKClient persistente.
@@ -1254,6 +1260,7 @@ Nunca invente informações."""
             sdk_session_id: SDK session ID para resume (na primeira conexão)
             can_use_tool: Callback de permissão
             our_session_id: Nosso UUID de sessão (chave do pool)
+            resume_messages_fallback: XML com mensagens JSONB para injetar se resume falhar
 
         Yields:
             StreamEvent com tipo e conteúdo
@@ -1272,6 +1279,14 @@ Nunca invente informações."""
             if USE_STDERR_CALLBACK:
                 stderr_q = queue.SimpleQueue()
 
+        # ─── Estado compartilhado: resume fallback ───
+        # Dict mutável: se resume falhar, stream seta failed=True.
+        # Hook UserPromptSubmit injeta fallback no additionalContext.
+        resume_state = {
+            'failed': False,
+            'fallback': resume_messages_fallback,
+        }
+
         # ─── Construir options ───
         options = self._build_options(
             user_name=user_name,
@@ -1283,6 +1298,7 @@ Nunca invente informações."""
             output_format=output_format,
             our_session_id=our_session_id,
             stderr_queue=stderr_q,
+            resume_state=resume_state,
         )
 
         # ─── RESUME: só na primeira conexão ───
@@ -1341,6 +1357,15 @@ Nunca invente informações."""
                         f"[AGENT_SDK_PERSISTENT] Resume falhou (exit={exit_code}), "
                         f"retentando sem resume | session={pool_key[:8]}..."
                     )
+                    # Notificar frontend que o contexto foi perdido
+                    yield StreamEvent(
+                        type='warning',
+                        content='Não foi possível restaurar o contexto da sessão anterior. '
+                                'A conversa continua sem o histórico completo.',
+                        metadata={'reason': 'resume_failed', 'exit_code': exit_code}
+                    )
+                    # Sinalizar para o hook injetar fallback de mensagens
+                    resume_state['failed'] = True
                     from dataclasses import replace as _dc_replace
                     options = _dc_replace(options, resume=None, fork_session=False, session_id=None)
                     # Deletar JSONLs stale para evitar que CLI ache arquivo corrompido
@@ -1705,23 +1730,23 @@ Nunca invente informações."""
         """
         Retorna cópia do options com resume configurado.
 
-        Usa dataclasses.replace() para criar cópia imutável.
-        CLI requer --fork-session quando --session-id é combinado com --resume.
-        Sem fork_session, o CLI rejeita com exit code 1:
-        "Error: --session-id can only be used with --continue or --resume
-        if --fork-session is also specified."
+        Resume limpo: --resume X sem --session-id (evita --fork-session).
+
+        Contexto: session_id é setado em build_options (SDK 0.1.52+) para naming
+        deterministico do JSONL no primeiro turno. Mas ao resumir, --session-id +
+        --resume exige --fork-session, e "forkar X para X" causa exit code 1.
+        Solução: limpar session_id ao resumir. --resume X sozinho é suficiente —
+        CLI carrega {X}.jsonl e continua a mesma sessão.
 
         Args:
             options: ClaudeAgentOptions original
             sdk_session_id: Session ID do SDK para resume
 
         Returns:
-            Novo ClaudeAgentOptions com resume=sdk_session_id (e fork_session se necessário)
+            Novo ClaudeAgentOptions com resume=sdk_session_id (session_id limpo)
         """
         from dataclasses import replace
-        if getattr(options, 'session_id', None):
-            return replace(options, resume=sdk_session_id, fork_session=True)
-        return replace(options, resume=sdk_session_id)
+        return replace(options, resume=sdk_session_id, session_id=None, fork_session=False)
 
     async def get_response(
         self,

@@ -1224,6 +1224,17 @@ function processSSEEvent(eventType, data, state) {
                 break;
             }
 
+            case 'warning': {
+                // Resume de sessão falhou — notificar usuário
+                const warningMsg = data.content || data.message || 'Aviso do sistema';
+                const warnEl = createMessageElement(`⚠️ ${warningMsg}`, 'assistant');
+                warnEl.classList.add('message-warning');
+                chatMessages.appendChild(warnEl);
+                scrollToBottom();
+                console.warn(`[SSE] Warning: reason=${data.reason}`, data);
+                break;
+            }
+
             case 'error': {
                 hideTyping();
                 hideThinkingPanel();

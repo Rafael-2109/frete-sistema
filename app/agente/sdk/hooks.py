@@ -21,6 +21,7 @@ def build_hooks(
     get_last_thinking: callable,
     get_model_name: callable,
     set_injected_ids: callable,
+    resume_state: dict = None,
 ) -> dict:
     """Factory que cria hooks para ClaudeAgentOptions.
 
@@ -31,10 +32,15 @@ def build_hooks(
         get_last_thinking: getter para self._last_thinking_content
         get_model_name: getter para str(self.settings.model)
         set_injected_ids: setter para self._last_injected_memory_ids
+        resume_state: Dict mutavel compartilhado com o stream.
+            Chaves: 'failed' (bool), 'fallback' (str XML com mensagens JSONB).
+            Quando resume falha, stream seta failed=True. Hook injeta fallback.
 
     Returns:
         Dict formatado para options_dict["hooks"]
     """
+    if resume_state is None:
+        resume_state = {'failed': False, 'fallback': None}
     from claude_agent_sdk import (
         HookMatcher, PreToolUseHookInput, PostToolUseHookInput,
         PostToolUseFailureHookInput,
@@ -652,8 +658,27 @@ def build_hooks(
             except Exception as sc_err:
                 logger.debug(f"[HOOK:UserPromptSubmit] Session context falhou: {sc_err}")
 
-            if session_context or additional_context or correction_hint or debug_context or sql_admin_context:
-                full_context = session_context + (additional_context or "") + correction_hint + debug_context + sql_admin_context
+            # Resume fallback: injetar mensagens JSONB quando resume falhou
+            resume_fallback_context = ""
+            if resume_state.get('failed') and resume_state.get('fallback'):
+                resume_fallback_context = (
+                    "\n<resume_fallback_notice>"
+                    "IMPORTANTE: A sessão anterior não pôde ser restaurada via resume. "
+                    "Abaixo está o histórico recente da conversa extraído do banco de dados. "
+                    "Use este contexto para continuar a conversa de forma coerente. "
+                    "O usuário pode não saber que o contexto foi perdido."
+                    "</resume_fallback_notice>\n"
+                    + resume_state['fallback'] + "\n"
+                )
+                logger.info(
+                    f"[HOOK:UserPromptSubmit] Resume fallback injetado: "
+                    f"{len(resume_fallback_context)} chars"
+                )
+                # Limpar para não reinjetar nos próximos turnos
+                resume_state['failed'] = False
+
+            if session_context or additional_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context:
+                full_context = resume_fallback_context + session_context + (additional_context or "") + correction_hint + debug_context + sql_admin_context
                 # B2: Log de context budget por categoria
                 memory_tokens_est = len(full_context) // 4
                 logger.info(

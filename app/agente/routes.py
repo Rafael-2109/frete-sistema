@@ -271,6 +271,7 @@ async def _async_stream_sdk_client(
     """
     # Buscar sdk_session_id do banco para resume + restaurar transcript
     sdk_session_id_for_resume = None
+    resume_messages_fallback = None  # Fallback: mensagens JSONB se resume falhar
     if app and our_session_id:
         try:
             with app.app_context():
@@ -309,6 +310,27 @@ async def _async_stream_sdk_client(
                                 "[AGENTE] Sem transcript no DB para restaurar "
                                 "(primeira msg ou sessão antiga)"
                             )
+
+                        # Carregar mensagens JSONB como fallback caso resume falhe.
+                        # Se o resume funcionar, este fallback não é usado.
+                        try:
+                            messages = db_session.get_messages()
+                            if messages and len(messages) > 1:
+                                recent = messages[-10:]
+                                parts = ['<conversation_history_fallback reason="resume_failed">']
+                                for msg in recent:
+                                    role = msg.get('role', 'unknown')
+                                    content = (msg.get('content', '') or '')[:2000]
+                                    if content:
+                                        parts.append(f'<msg role="{role}">{content}</msg>')
+                                parts.append('</conversation_history_fallback>')
+                                resume_messages_fallback = '\n'.join(parts)
+                                logger.debug(
+                                    f"[AGENTE] Fallback JSONB preparado: "
+                                    f"{len(messages)} msgs, {len(resume_messages_fallback)} chars"
+                                )
+                        except Exception as fb_err:
+                            logger.debug(f"[AGENTE] Fallback JSONB falhou (ignorado): {fb_err}")
         except Exception as e:
             logger.warning(f"[AGENTE] Erro ao buscar sdk_session_id do DB: {e}")
 
@@ -362,6 +384,7 @@ async def _async_stream_sdk_client(
             our_session_id=our_session_id,
             debug_mode=debug_mode,
             output_format=output_format,
+            resume_messages_fallback=resume_messages_fallback,
         ):
             should_continue = _process_stream_event(event)
             if should_continue:
@@ -575,6 +598,13 @@ def _stream_chat_response(
                     todos = event.content.get('todos', [])
                     if todos:
                         event_queue.put(_sse_event('todos', {'todos': todos}))
+
+                elif event.type == 'warning':
+                    # Resume de sessão falhou — notificar frontend
+                    event_queue.put(_sse_event('warning', {
+                        'content': event.content,
+                        'reason': (event.metadata or {}).get('reason', ''),
+                    }))
 
                 elif event.type == 'error':
                     response_state['error_message'] = event.content

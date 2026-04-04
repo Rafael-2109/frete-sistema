@@ -2436,3 +2436,16 @@
         max-height: 200px;
     }
 }
+
+/* ─── Warning messages (resume falhou, etc.) ─── */
+.message-warning .message-bubble {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    color: #664d03;
+}
+
+[data-bs-theme="dark"] .message-warning .message-bubble {
+    background: rgba(255, 193, 7, 0.15);
+    border-color: rgba(255, 193, 7, 0.3);
+    color: #ffc107;
+}
