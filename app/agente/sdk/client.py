@@ -62,7 +62,7 @@ logger = logging.getLogger('sistema_fretes')
 # Re-exports para backward compatibility (testes patcham estes nomes
 # via patch.multiple('app.agente.sdk.client', ...)).
 # =====================================================================
-from .stream_parser import (  # noqa: F401 — re-exports para tests (patch.multiple)
+from .stream_parser import (  # noqa: E402 — re-exports para tests (patch.multiple)
     ToolCall,
     StreamEvent,
     AgentResponse,
