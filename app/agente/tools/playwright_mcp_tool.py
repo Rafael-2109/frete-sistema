@@ -53,6 +53,7 @@ _playwright = None
 _browser = None
 _context = None
 _page = None
+_browser_lock = asyncio.Lock()  # Protege _ensure_browser() contra acesso concorrente
 
 NAVIGATION_TIMEOUT = 60000  # 60 segundos
 DEFAULT_VIEWPORT = {"width": 1280, "height": 720}
@@ -124,42 +125,44 @@ async def _ensure_browser():
     Restaura storage_state (cookies/localStorage) se existir de sessao anterior.
     Configura viewport padrao e timeout de navegacao.
     Auto-close: fecha browser ocioso antes de criar novo (libera memória).
+    Thread-safe via _browser_lock (asyncio.Lock).
 
     Returns:
         Page instance do Playwright
     """
     global _playwright, _browser, _context, _page
 
-    # Auto-close browser ocioso (>5 min sem uso) para liberar memória
-    _check_browser_idle()
+    async with _browser_lock:
+        # Auto-close browser ocioso (>5 min sem uso) para liberar memória
+        _check_browser_idle()
 
-    if _page is not None:
+        if _page is not None:
+            _touch_browser_activity()
+            return _page
+
+        from playwright.async_api import async_playwright
+
+        _playwright = await async_playwright().start()
+        _browser = await _playwright.chromium.launch(headless=True)
+
+        context_opts: Dict[str, Any] = {"viewport": DEFAULT_VIEWPORT}
+
+        # Restaurar cookies/localStorage de sessao anterior (isolado por sessao)
+        storage_path = _get_storage_path()
+        if os.path.exists(storage_path):
+            try:
+                context_opts["storage_state"] = storage_path
+                logger.info(f"[BROWSER] Restaurando storage_state de {storage_path}")
+            except Exception as e:
+                logger.warning(f"[BROWSER] Falha ao restaurar storage_state (ignorado): {e}")
+
+        _context = await _browser.new_context(**context_opts)
+        _page = await _context.new_page()
+        _page.set_default_navigation_timeout(NAVIGATION_TIMEOUT)
+
         _touch_browser_activity()
+        logger.info("[BROWSER] Browser inicializado (headless Chromium)")
         return _page
-
-    from playwright.async_api import async_playwright
-
-    _playwright = await async_playwright().start()
-    _browser = await _playwright.chromium.launch(headless=True)
-
-    context_opts: Dict[str, Any] = {"viewport": DEFAULT_VIEWPORT}
-
-    # Restaurar cookies/localStorage de sessao anterior (isolado por sessao)
-    storage_path = _get_storage_path()
-    if os.path.exists(storage_path):
-        try:
-            context_opts["storage_state"] = storage_path
-            logger.info(f"[BROWSER] Restaurando storage_state de {storage_path}")
-        except Exception as e:
-            logger.warning(f"[BROWSER] Falha ao restaurar storage_state (ignorado): {e}")
-
-    _context = await _browser.new_context(**context_opts)
-    _page = await _context.new_page()
-    _page.set_default_navigation_timeout(NAVIGATION_TIMEOUT)
-
-    _touch_browser_activity()
-    logger.info("[BROWSER] Browser inicializado (headless Chromium)")
-    return _page
 
 
 async def _save_storage_state():

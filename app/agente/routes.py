@@ -17,10 +17,9 @@ FEAT-031: Sistema de Hooks para Memória Persistente
 - TOOL HOOKS: Instrumenta tool calls para analytics
 - FEEDBACK: Processa feedback do usuário
 
-Arquitetura v2: query() + resume (self-contained, sem estado persistente)
-- Cada request HTTP usa query() standalone (spawna CLI, executa, limpa)
-- resume=sdk_session_id restaura contexto da conversa anterior
-- Sem SessionPool, sem locks, sem connect/disconnect
+Arquitetura v3: ClaudeSDKClient persistente via client_pool (daemon thread pool)
+- Resume via sdk_session_id restaura contexto da conversa anterior
+- Hooks SDK para auditoria, memorias e subagentes
 
 Endpoints:
 - GET  /agente/              - Página de chat
@@ -243,7 +242,7 @@ def api_chat():
 
 
 # =============================================================================
-# STREAMING: Função async para query() + resume (self-contained)
+# STREAMING: Função async para ClaudeSDKClient persistente (v3)
 # =============================================================================
 
 async def _async_stream_sdk_client(
@@ -265,12 +264,10 @@ async def _async_stream_sdk_client(
     output_format: dict = None,
 ):
     """
-    Streaming via query() + resume — self-contained, sem pool.
+    Orquestra streaming via ClaudeSDKClient persistente (v3).
 
-    ARQUITETURA v2:
-    - Cada chamada usa query() standalone (sem ClaudeSDKClient, sem SessionPool)
-    - resume=sdk_session_id restaura contexto da conversa anterior
-    - Sem locks, sem connect/disconnect, sem retry de recreate
+    Restaura sdk_session_id do banco para resume + transcript.
+    Constroi opcoes, hooks e contexto de memoria antes de chamar stream_response().
     """
     # Buscar sdk_session_id do banco para resume + restaurar transcript
     sdk_session_id_for_resume = None
@@ -672,7 +669,7 @@ def _stream_chat_response(
                 return False  # Não é init, não precisa continue
 
             # =============================================================
-            # Streaming via query() + resume (self-contained)
+            # Streaming via ClaudeSDKClient persistente (v3)
             # =============================================================
             await _async_stream_sdk_client(
                 client=client,
@@ -814,8 +811,8 @@ def _stream_chat_response(
                 if response_state.get('our_session_id'):
                     cancel_pending(response_state['our_session_id'])
                     cleanup_session_context(response_state['our_session_id'])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"[SSE] Cleanup session context falhou (ignorado): {e}")
 
             if not none_sent:
                 try:
@@ -1107,8 +1104,8 @@ def run_post_session_processing(
                         try:
                             with app.app_context():
                                 db.session.remove()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"[EXTRACTION] db.session.remove falhou em background: {e}")
 
                 thread = Thread(
                     target=_run_extraction_background,
@@ -3430,6 +3427,7 @@ async def async_stream_test():
 # =============================================================================
 
 @agente_bp.route('/api/intelligence-report', methods=['POST'])
+@csrf.exempt
 def save_intelligence_report():
     """
     Persiste relatorio de inteligencia do agente (D7 do cron semanal).

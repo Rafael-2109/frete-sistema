@@ -5,8 +5,7 @@ Conforme documentação oficial Anthropic:
 - https://platform.claude.com/docs/pt-BR/agent-sdk/sessions
 - https://platform.claude.com/docs/pt-BR/agent-sdk/cost-tracking
 
-Arquitetura v2: query() + resume (self-contained, sem estado persistente).
-Arquitetura v3 (flag): ClaudeSDKClient persistente via client_pool.py.
+Arquitetura v3: ClaudeSDKClient persistente via client_pool.py.
 Cost tracking é feito com deduplicação por message.id.
 """
 

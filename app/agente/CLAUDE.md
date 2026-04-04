@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~25.6K | **Arquivos**: 46 | **Atualizado**: 30/03/2026
+**LOC**: ~25.3K | **Arquivos**: 49 | **Atualizado**: 04/04/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -29,13 +29,16 @@ app/agente/                          # Root — 5 arquivos
 │   ├── __init__.py
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
-├── sdk/                             # Integracao com Claude Agent SDK — 6 arquivos
+├── sdk/                             # Integracao com Claude Agent SDK — 9 arquivos
 │   ├── __init__.py
-│   ├── client.py                    # Client principal (streaming, hooks, prompt injection)
+│   ├── client.py                    # Client principal (streaming, build_options, parse)
 │   ├── client_pool.py               # Pool de clients reutilizaveis
 │   ├── cost_tracker.py              # Rastreamento de custos por sessao
+│   ├── hooks.py                     # 8 SDK hook closures (build_hooks() factory)
+│   ├── memory_injection.py          # Pipeline multi-tier de injecao de memorias
 │   ├── pending_questions.py         # AskUserQuestion (dual event: sync + async)
-│   └── session_persistence.py       # Persistencia JSONL de sessoes SDK
+│   ├── session_persistence.py       # Persistencia JSONL de sessoes SDK
+│   └── stream_parser.py             # Dataclasses + classificacao de erros de tool
 ├── services/                        # Servicos de inteligencia — 13 arquivos (ver services/CLAUDE.md)
 │   ├── __init__.py
 │   ├── CLAUDE.md                    # Sub-guia com regras R1-R5 dos services
