@@ -3735,3 +3735,89 @@ function exportHistoricalAsPDF(data, timestamp, title) {
         showToast('Popup bloqueado — permita popups para exportar PDF', 4000);
     }
 }
+
+
+// =============================================================
+// SESSAO C: CONTROLES MOBILE (BOTTOM SHEET)
+// =============================================================
+
+/**
+ * Abre o bottom sheet de configuracoes mobile.
+ * Sincroniza valores atuais do header desktop para os controles mobile.
+ */
+function openMobileSettings() {
+    const sheet = document.getElementById('mobile-settings-sheet');
+    const backdrop = document.getElementById('mobile-settings-backdrop');
+    if (!sheet) return;
+
+    // Sync estado atual: desktop → mobile
+    const desktopModel = document.getElementById('model-selector');
+    const mobileModel = document.getElementById('mobile-model-selector');
+    if (desktopModel && mobileModel) {
+        mobileModel.value = desktopModel.value;
+    }
+
+    // Sync effort
+    const desktopActive = document.querySelector('#effort-selector .effort-btn.active');
+    if (desktopActive) {
+        const activeEffort = desktopActive.dataset.effort;
+        document.querySelectorAll('.mobile-effort-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.effort === activeEffort);
+        });
+    }
+
+    // Sync plan mode
+    const desktopPlan = document.getElementById('plan-mode-toggle');
+    const mobilePlan = document.getElementById('mobile-plan-mode-toggle');
+    if (desktopPlan && mobilePlan) {
+        mobilePlan.checked = desktopPlan.checked;
+    }
+
+    sheet.style.display = 'block';
+    backdrop.style.display = 'block';
+}
+
+/**
+ * Fecha o bottom sheet.
+ */
+function closeMobileSettings() {
+    const sheet = document.getElementById('mobile-settings-sheet');
+    const backdrop = document.getElementById('mobile-settings-backdrop');
+    if (sheet) sheet.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
+}
+
+/**
+ * Sincroniza mudanca de um controle mobile para o controle desktop correspondente.
+ * O desktop control ja tem os event handlers que persistem no localStorage.
+ */
+function syncMobileSetting(type, value) {
+    switch (type) {
+        case 'model': {
+            const desktopModel = document.getElementById('model-selector');
+            if (desktopModel) {
+                desktopModel.value = value;
+                desktopModel.dispatchEvent(new Event('change'));
+            }
+            break;
+        }
+        case 'effort': {
+            // Ativar o botao desktop correspondente
+            const desktopBtn = document.querySelector(`#effort-selector .effort-btn[data-effort="${value}"]`);
+            if (desktopBtn) desktopBtn.click();
+            // Atualizar visual mobile
+            document.querySelectorAll('.mobile-effort-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.effort === value);
+            });
+            break;
+        }
+        case 'plan': {
+            const desktopPlan = document.getElementById('plan-mode-toggle');
+            if (desktopPlan && desktopPlan.checked !== value) {
+                desktopPlan.checked = value;
+                desktopPlan.dispatchEvent(new Event('change'));
+            }
+            break;
+        }
+    }
+}

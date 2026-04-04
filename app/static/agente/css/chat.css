@@ -3091,3 +3091,169 @@
         max-width: 160px;
     }
 }
+
+/* =============================================================
+   SESSAO C: CONTROLES MOBILE — BOTTOM SHEET
+   ============================================================= */
+
+/* Botao settings — hidden em desktop, visivel em mobile */
+.btn-mobile-settings {
+    display: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.1);
+    color: white;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.btn-mobile-settings:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+[data-bs-theme="light"] .btn-mobile-settings {
+    background: rgba(0,0,0,0.06);
+    border-color: rgba(0,0,0,0.12);
+    color: #555;
+}
+
+@media (max-width: 768px) {
+    .btn-mobile-settings {
+        display: flex;
+    }
+}
+
+/* Backdrop */
+.mobile-settings-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1059;
+}
+
+/* Bottom sheet */
+.mobile-settings-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--agent-bg-primary, #1a1a2e);
+    border-top: 1px solid var(--agent-border, rgba(255,255,255,0.1));
+    border-radius: 16px 16px 0 0;
+    z-index: 1060;
+    animation: slideUpSheet 0.3s ease;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+@keyframes slideUpSheet {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+/* Handle bar (drag indicator) */
+.mobile-settings-handle {
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 4px;
+    cursor: pointer;
+}
+
+.mobile-settings-handle-bar {
+    width: 40px;
+    height: 4px;
+    background: var(--agent-text-secondary, rgba(255,255,255,0.2));
+    border-radius: 2px;
+}
+
+/* Body */
+.mobile-settings-body {
+    padding: 8px 20px 24px;
+}
+
+.mobile-settings-title {
+    font-size: 0.9rem;
+    color: var(--agent-text-primary, #e0e0e0);
+    margin: 0 0 16px 0;
+    font-weight: 600;
+}
+
+/* Groups */
+.mobile-settings-group {
+    margin-bottom: 16px;
+}
+
+.mobile-settings-label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--agent-text-secondary, #999);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.mobile-settings-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--agent-border, rgba(255,255,255,0.15));
+    border-radius: 8px;
+    background: var(--agent-bg-secondary, rgba(255,255,255,0.05));
+    color: var(--agent-text-primary, #e0e0e0);
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.mobile-settings-select:focus {
+    border-color: var(--agent-accent, #667eea);
+}
+
+/* Effort buttons — segmented control */
+.mobile-effort-selector {
+    display: flex;
+    gap: 4px;
+    background: var(--agent-bg-secondary, rgba(255,255,255,0.04));
+    border-radius: 8px;
+    padding: 3px;
+}
+
+.mobile-effort-btn {
+    flex: 1;
+    padding: 8px 4px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--agent-text-secondary, #999);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mobile-effort-btn:hover {
+    color: var(--agent-text-primary, #e0e0e0);
+}
+
+.mobile-effort-btn.active {
+    background: var(--agent-accent, #667eea);
+    color: white;
+}
+
+/* Toggle row */
+.mobile-settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+}
+
+.mobile-settings-desc {
+    font-size: 0.82rem;
+    color: var(--agent-text-primary, #d0d0d0);
+}
