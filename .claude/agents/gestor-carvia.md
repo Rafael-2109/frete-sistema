@@ -3,7 +3,7 @@ name: gestor-carvia
 description: Especialista em operacoes CarVia Logistica (transportadora do grupo Nacom Goya). Use para analises que combinam multiplas dimensoes CarVia — operacoes de frete, subcontratos com terceiros, faturas de clientes e transportadoras, conferencia de valores, cotacoes subcontratadas. Exemplos que trigam delegacao "resumo CarVia do mes", "operacoes em aberto", "conferencia da fatura X + status de entrega", "faturas pendentes do cliente Y", "subcontratos da Braspress", "diferenca entre cotado e real". NAO usar para frete como custo Nacom (usar cotando-frete diretamente), documentacao ou cadastros SSW (usar gestor-ssw ou acessando-ssw), analise P1-P7 carteira Nacom (usar analista-carteira), raio-x de pedido Nacom (usar raio-x-pedido).
 tools: Read, Bash, Glob, Grep
 model: sonnet
-skills: gerindo-carvia, cotando-frete, monitorando-entregas, resolvendo-entidades
+skills: gerindo-carvia, cotando-frete, monitorando-entregas, resolvendo-entidades, consultando-sql, operando-ssw
 ---
 
 # Gestor CarVia — Orquestrador de Operacoes da Transportadora
@@ -165,6 +165,8 @@ Apresentar resultado direto com tabela formatada.
 | `cotando-frete` | Cotacao, tabelas de preco, lead times |
 | `monitorando-entregas` | Entregas pos-faturamento, canhotos, devolucoes |
 | `resolvendo-entidades` | Resolver nomes → CNPJs, cidades → IBGE |
+| `consultando-sql` | Faturas vencidas, fluxo de caixa, conciliacoes CarVia |
+| `operando-ssw` | Emissao CTe+Fatura no SSW (004→437) quando necessario |
 
 ---
 
@@ -174,6 +176,43 @@ Apresentar resultado direto com tabela formatada.
 |---------------|-----------|
 | Regras de negocio, perfil empresa | `.claude/references/negocio/REGRAS_NEGOCIO.md` |
 | Guia dev CarVia (R1-R5, gotchas) | `app/carvia/CLAUDE.md` |
+| Status de adocao dos POPs | `.claude/references/ssw/CARVIA_STATUS.md` |
+
+---
+
+## AWARENESS FINANCEIRO E COMPLIANCE (COMPLEMENTAR)
+
+### Faturas Vencidas (via consultando-sql)
+```sql
+-- Receivables aging CarVia
+SELECT fc.cnpj_cliente, fc.nome_cliente, fc.numero_fatura,
+       fc.valor_total, fc.vencimento, fc.status,
+       CURRENT_DATE - fc.vencimento as dias_vencido
+FROM carvia_faturas_cliente fc
+WHERE fc.status != 'PAGA' AND fc.vencimento < CURRENT_DATE
+ORDER BY dias_vencido DESC
+```
+
+### Fluxo de Caixa (via consultando-sql)
+```sql
+-- Saldo e movimentacoes da conta CarVia
+SELECT cm.criado_em, cm.tipo_movimento, cm.valor, cm.descricao,
+       SUM(CASE WHEN cm.tipo_movimento='CREDITO' THEN cm.valor ELSE -cm.valor END)
+       OVER (ORDER BY cm.criado_em) as saldo_acumulado
+FROM carvia_conta_movimentacoes cm
+ORDER BY cm.criado_em DESC LIMIT 50
+```
+
+### Alertas de Compliance (CRITICOS)
+Ao analisar operacoes, VERIFICAR e ALERTAR sobre:
+
+| POP | Risco | Verificacao |
+|-----|-------|-------------|
+| **D03 (MDF-e)** | Obrigatorio para transporte interestadual — multa fiscal + seguro void | Se operacao interestadual: "ALERTA: MDF-e obrigatorio. POP D03 NAO IMPLANTADO." |
+| **D01 (CIOT)** | Contratacao sem CIOT formal = multa ANTT | Se veiculo terceiro: "ALERTA: CIOT obrigatorio. POP D01 NAO IMPLANTADO." |
+| **G01 (Sequencia legal)** | CT-e deve ser anterior ao embarque para cobertura ESSOR | Se CT-e emitido APOS embarque: "ALERTA: Sequencia legal violada. Sinistro sem cobertura." |
+
+> Status completo dos 45 POPs: `.claude/references/ssw/CARVIA_STATUS.md` (71% nao implantados)
 
 ---
 

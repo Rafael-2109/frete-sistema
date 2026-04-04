@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 11/03/2026
+**Ultima Atualizacao**: 04/04/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -22,6 +22,12 @@
 | SSW escrita (cadastrar/criar no SSW) | "cadastre unidade CGR", "cadastrar cidades MS", "criar unidade parceira no SSW" | -> `operando-ssw` |
 | PORTAL ATACADAO (automacao web Hodie Booking) | "portal Atacadao", "site do Atacadao", "Hodie Booking", "entrar no portal", "imprimir protocolo no site", "agendar no portal" + OBRIGATORIO mencionar portal/site/Hodie | -> `operando-portal-atacadao` |
 | CARVIA (frete subcontratado) | "operacoes CarVia", "subcontratos pendentes", "cotar subcontrato", "faturas CarVia", "conferencia transportadora" | -> `gerindo-carvia` |
+| FINANCEIRO (reconciliacao, auditoria, baixas) | "inconsistencias", "SEM_MATCH", "reconciliar extrato", "auditoria Local vs Odoo", "titulos divergentes" | -> Subagente `auditor-financeiro` |
+| CUSTO DE FRETE (divergencia, CTe, despesas extras) | "divergencia CTe", "custo real frete", "conta corrente transportadora", "despesas extras", "frete % receita" | -> Subagente `controlador-custo-frete` |
+| RECEBIMENTO (pipeline, DFEs, picking) | "DFE bloqueado", "primeira compra", "match NF x PO", "picking nao valida", "quality check" | -> Subagente `gestor-recebimento` |
+| DEVOLUCOES (NFD, retornos, descarte) | "devolucoes pendentes", "status NFD", "De-Para confianca", "descarte vs retorno", "produtos devolvidos" | -> Subagente `gestor-devolucoes` |
+| ESTOQUE/PRODUCAO (ruptura, projecao, programacao) | "vai faltar", "estoque comprometido", "producao vs programada", "giro estoque", "estoque parado" | -> Subagente `gestor-estoque-producao` |
+| PERFORMANCE LOGISTICA (entregas, ranking, KPIs) | "entregas atrasadas", "lead time", "ranking transportadoras", "mes a mes", "em transito" | -> Subagente `analista-performance-logistica` |
 | SENTRY (erros, issues, monitoring) | "issues do Sentry", "erros em producao", "bugs no Sentry", "resolver issue", "root cause analysis", "500 errors", "Seer" | -> `consultando-sentry` |
 | LOCALIZAR ROTA/TELA/API | "onde fica X?", "qual URL de Y?", "quais APIs de Z?", "como acesso tela de W?" | -> `mcp__routes__search_routes` (MCP tool, agente web) / Grep+Glob (Claude Code) |
 | AGENTE (memorias, sessoes, diagnosticos) | "memorias do usuario", "sessoes anteriores", "health score agente", "knowledge graph", "consolidar memorias", "padroes aprendidos" | -> `gerindo-agente` |
@@ -97,6 +103,16 @@ Se a resposta esta no reference -> NAO usar skill.
 | resolvendo-problemas vs prd-generator | Problema que precisa **solucao** -> resolvendo-problemas. Feature que precisa **spec** antes de implementar -> prd-generator |
 | consultando-sentry vs diagnosticando-banco | **Erros de aplicacao** (exceptions, 500, issues) -> consultando-sentry. **Saude do banco** (indices, vacuum, cache) -> diagnosticando-banco. Sinal: "issues", "Sentry", "bugs" -> sentry. "queries lentas", "indices" -> banco |
 | consultando-sentry vs resolvendo-problemas | **Diagnostico rapido** (ver issue, stacktrace) -> consultando-sentry. **Investigacao profunda** (multi-arquivo, root cause complexo) -> resolvendo-problemas. Combinavel: sentry para dados + resolvendo-problemas para fix |
+| auditor-financeiro vs especialista-odoo | **Reconciliacao/auditoria local** (CNAB, extrato, contas a receber/pagar) -> auditor-financeiro. **Operacao Odoo pura** (rastrear NF, criar pagamento) -> especialista-odoo. Sinal: "inconsistencia", "SEM_MATCH" -> auditor. "rastrear NF" -> especialista |
+| auditor-financeiro vs controlador-custo-frete | **Contas a receber/pagar, extratos, reconciliacao** -> auditor-financeiro. **Frete, CTe, despesas extras, transportadoras** -> controlador-custo-frete. Sinal: "titulo", "extrato", "CNAB" -> auditor. "frete", "CTe", "transportadora" -> controlador |
+| controlador-custo-frete vs cotando-frete | **Custo REAL** (valor_pago, divergencia CTe, despesas extras) -> controlador-custo-frete. **Cotacao TEORICA** (tabela de preco, estimativa) -> cotando-frete. Sinal: "quanto gastei", "divergencia" -> controlador. "quanto custa", "qual preco" -> cotando |
+| controlador-custo-frete vs gestor-carvia | **Frete Nacom** (custo outbound, transportadora contratada) -> controlador-custo-frete. **Frete CarVia** (receita, subcontrato, fatura CarVia) -> gestor-carvia. Sinal: "CarVia", "subcontrato" -> gestor-carvia. Sem qualificador -> controlador |
+| gestor-recebimento vs especialista-odoo | **Pipeline operacional** (status DFEs, bloqueios, troubleshooting) -> gestor-recebimento. **Execucao Odoo** (criar pagamento, reconciliar) -> especialista-odoo. Sinal: "DFE bloqueado", "picking falhou" -> recebimento. "executar no Odoo" -> especialista |
+| gestor-devolucoes vs monitorando-entregas | **Devolucao** (NFD, retorno, descarte, De-Para) -> gestor-devolucoes. **Entrega** (status, canhoto, embarque) -> monitorando-entregas. Sinal: "devolucao", "NFD", "retorno" -> devolucoes. "entregou?", "canhoto" -> entregas |
+| gestor-estoque-producao vs gerindo-expedicao | **Estoque/producao** (ruptura, projecao, giro, programacao) -> gestor-estoque-producao. **Expedicao** (separacao, agendamento, embarque) -> gerindo-expedicao. Sinal: "vai faltar", "producao" -> estoque. "separacao", "embarcar" -> expedicao |
+| gestor-estoque-producao vs visao-produto | **Estoque agregado** (ruptura multi-produto, giro, parado) -> gestor-estoque-producao. **Produto individual 360** (cadastro+estoque+custo+faturamento) -> visao-produto. Sinal: "quais vao faltar" -> estoque. "tudo sobre palmito" -> visao |
+| analista-performance-logistica vs monitorando-entregas | **Agregado/ranking** (lead time medio, taxa sucesso, comparacao mes) -> analista-performance. **Individual** (NF 12345 entregou?) -> monitorando-entregas. Sinal: "ranking", "media", "percentual" -> performance. NF/numero especifico -> entregas |
+| analista-performance-logistica vs controlador-custo-frete | **Performance entrega** (atraso, sucesso, lead time) -> analista-performance. **Custo frete** (valor, divergencia, despesa) -> controlador-custo-frete. Sinal: "atrasadas", "ranking" -> performance. "custo", "divergencia" -> controlador |
 
 ---
 

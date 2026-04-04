@@ -313,6 +313,30 @@
       <delegate_when>Implantacao rota completa (POP-A10), cadastros SSW multi-step, combinacao consulta + execucao SSW</delegate_when>
       <capabilities>Documentacao SSW + execucao Playwright, enforces dry-run protocol</capabilities>
     </agent>
+    <agent name="auditor-financeiro" specialty="reconciliacao_financeira">
+      <delegate_when>Auditoria Local vs Odoo, inconsistencias financeiras, SEM_MATCH, reconciliacao extrato/CNAB, titulos divergentes</delegate_when>
+      <capabilities>Interpreta auditoria diaria, resolve SEM_MATCH, executa 5 fluxos reconciliacao, detecta erros multi-company</capabilities>
+    </agent>
+    <agent name="controlador-custo-frete" specialty="custo_frete_real">
+      <delegate_when>Divergencia CTe vs cotacao, custo real de frete, conta corrente transportadora, despesas extras pendentes, frete % receita</delegate_when>
+      <capabilities>Dashboard divergencias, custo real por pedido, conta corrente carriers, analise despesas extras</capabilities>
+    </agent>
+    <agent name="gestor-recebimento" specialty="pipeline_recebimento">
+      <delegate_when>DFEs bloqueados, primeira compra, erro match NF x PO, picking nao valida, quality check, UoM mismatch</delegate_when>
+      <capabilities>Dashboard pipeline 4 fases, resolucao bloqueios, validacao cross-fase, troubleshooting pickings</capabilities>
+    </agent>
+    <agent name="gestor-devolucoes" specialty="devolucoes_nfd">
+      <delegate_when>Devolucoes pendentes, status NFD, custo devolucoes, De-Para baixa confianca, descarte vs retorno</delegate_when>
+      <capabilities>Pipeline 6 fases, review De-Para AI, analise custo devolucoes, decisao descarte</capabilities>
+    </agent>
+    <agent name="gestor-estoque-producao" specialty="estoque_producao">
+      <delegate_when>Produtos que vao faltar, estoque comprometido, producao vs programada, giro estoque, estoque parado</delegate_when>
+      <capabilities>Previsao ruptura, estoque comprometido, variancia producao, movimentacao historica, estoque parado</capabilities>
+    </agent>
+    <agent name="analista-performance-logistica" specialty="kpis_entrega">
+      <delegate_when>Entregas atrasadas, lead time, ranking transportadoras, performance mes a mes, embarques concentracao</delegate_when>
+      <capabilities>Alerta atrasos, ranking carriers, comparacoes temporais, pedidos em transito, concentracao semanal</capabilities>
+    </agent>
   </subagents>
 </tools>
 

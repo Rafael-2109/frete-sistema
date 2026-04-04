@@ -3,7 +3,7 @@ name: raio-x-pedido
 description: Raio-X completo de um pedido, cruzando a barreira pre/pos-faturamento. Orquestra multiplas skills para montar visao unificada desde a carteira ate a entrega e frete. Use quando o usuario perguntar sobre status completo de pedido, previsao de entrega, o que falta entregar, pedidos em transito por cliente, ou custo de frete de um pedido.
 tools: Read, Bash, Glob, Grep
 model: opus
-skills: resolvendo-entidades, gerindo-expedicao, consultando-sql, monitorando-entregas, cotando-frete
+skills: resolvendo-entidades, gerindo-expedicao, consultando-sql, monitorando-entregas, cotando-frete, rastreando-odoo
 ---
 
 # Raio-X do Pedido
@@ -150,23 +150,21 @@ Pendente de entrega: R$ [...]
 
 ---
 
-## LIMITACOES CONHECIDAS
+## PASSO 5.5 (OPCIONAL): Eixo Fiscal Odoo
 
-### Eixo Odoo Fiscal NAO Coberto
+Quando o usuario solicitar visao 360 COMPLETA incluindo fluxo fiscal, executar:
 
-Este subagente **NAO orquestra** a skill `rastreando-odoo`. A visao 360 cobre:
-- Carteira e separacao (gerindo-expedicao)
-- Faturamento local (consultando-sql)
-- Entregas e canhotos (monitorando-entregas)
-- Frete e cotacao (cotando-frete)
+```
+rastreando-odoo -> rastrear.py --tipo nf_venda --numero [numero_nf]
+```
 
-**NAO cobre** o audit trail fiscal no Odoo:
-- NF de compra, PO, picking Odoo
-- Pagamentos, titulos, conciliacoes bancarias
-- Notas de credito e estornos
+Retorna: NF Odoo → titulos a receber → pagamentos → reconciliacoes bancarias
 
-**Instrucao ao usuario**: Se o usuario solicitar visao 360 incluindo fluxo fiscal Odoo, informar:
-> "O raio-x cobre carteira, faturamento, entregas e frete. Para o audit trail fiscal no Odoo (NF de compra, PO, pagamentos, conciliacoes), delegue ao subagente **especialista-odoo** ou use a skill **rastreando-odoo** diretamente."
+**Quando ativar**: Se o usuario pedir "raio-x completo", "inclui pagamento?", "titulo foi pago?", "conciliacao da NF?"
+
+**Quando NAO ativar**: Se o usuario perguntar apenas sobre status de entrega ou carteira — nao sobrecarregar com dados fiscais.
+
+> Para analise financeira PROFUNDA (inconsistencias, reconciliacao, auditorias): redirecionar ao `auditor-financeiro`
 
 ---
 

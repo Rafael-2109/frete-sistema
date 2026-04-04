@@ -137,6 +137,12 @@ Gotchas rapidos:
 | `desenvolvedor-integracao-odoo` | Criar/modificar integracoes Odoo (dev-only, nao exposto ao agente web) |
 | `gestor-carvia` | Operacoes CarVia cross-dimensional (ops + entregas + frete) |
 | `gestor-ssw` | Operacoes SSW multi-step (POP-A10, cadastros) |
+| `auditor-financeiro` | Reconciliacao financeira, auditoria Local vs Odoo, SEM_MATCH |
+| `controlador-custo-frete` | Custo real frete, divergencia CTe, conta corrente transportadoras |
+| `gestor-recebimento` | Pipeline recebimento 4 fases, DFEs bloqueados, troubleshooting |
+| `gestor-devolucoes` | Devolucoes NFD, De-Para AI, descarte vs retorno |
+| `gestor-estoque-producao` | Ruptura, estoque comprometido, producao vs programada |
+| `analista-performance-logistica` | KPIs entrega, ranking transportadoras, atrasos (read-only) |
 
 ### Confiabilidade de Output (OBRIGATORIO)
 
