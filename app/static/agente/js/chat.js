@@ -4089,6 +4089,267 @@ maybeStartTour();
 
 
 // =============================================================
+// SESSAO F #21: SPRINT-4 MIGRADO DE INLINE (voice, export DOM, favorites)
+// =============================================================
+
+// --- VOICE INPUT (Web Speech API) ---
+let recognition = null;
+let isRecording = false;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function initVoiceInput() {
+    const voiceBtn = document.getElementById('voice-btn');
+    if (!SpeechRecognition) {
+        if (voiceBtn) { voiceBtn.disabled = true; voiceBtn.title = 'Navegador nao suporta entrada por voz'; }
+        return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
+        isRecording = true;
+        voiceBtn.classList.add('recording');
+        voiceBtn.querySelector('i').className = 'fas fa-stop';
+        showVoiceFeedback('Ouvindo...', '');
+    };
+
+    recognition.onresult = (event) => {
+        const textarea = document.getElementById('message-input');
+        let finalTranscript = '';
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) { finalTranscript += transcript; }
+            else { interimTranscript += transcript; }
+        }
+        if (interimTranscript) showVoiceFeedback('Ouvindo...', interimTranscript);
+        if (finalTranscript) {
+            const currentText = textarea.value;
+            const separator = currentText && !currentText.endsWith(' ') ? ' ' : '';
+            textarea.value = currentText + separator + finalTranscript;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    };
+
+    recognition.onerror = (event) => {
+        stopVoiceInput();
+        if (event.error === 'not-allowed') {
+            alert('Permissao de microfone negada. Permita acesso nas configuracoes do navegador.');
+        }
+    };
+
+    recognition.onend = () => stopVoiceInput();
+}
+
+function toggleVoiceInput() {
+    if (!recognition) { alert('Entrada por voz nao suportada.'); return; }
+    if (isRecording) { recognition.stop(); } else { recognition.start(); }
+}
+
+function stopVoiceInput() {
+    isRecording = false;
+    const voiceBtn = document.getElementById('voice-btn');
+    if (voiceBtn) {
+        voiceBtn.classList.remove('recording');
+        voiceBtn.querySelector('i').className = 'fas fa-microphone';
+    }
+    hideVoiceFeedback();
+}
+
+function showVoiceFeedback(status, transcript) {
+    let feedback = document.querySelector('.voice-feedback');
+    if (!feedback) {
+        feedback = document.createElement('div');
+        feedback.className = 'voice-feedback';
+        feedback.innerHTML = '<i class="fas fa-microphone"></i><div><div class="voice-text"></div><div class="voice-transcript"></div></div>';
+        document.body.appendChild(feedback);
+    }
+    feedback.querySelector('.voice-text').textContent = status;
+    feedback.querySelector('.voice-transcript').textContent = transcript;
+    feedback.classList.add('active');
+}
+
+function hideVoiceFeedback() {
+    const feedback = document.querySelector('.voice-feedback');
+    if (feedback) feedback.classList.remove('active');
+}
+
+// --- EXPORT CONVERSA DOM (sessao ativa) ---
+function exportConversation(format) {
+    const messages = document.querySelectorAll('#chat-messages .message');
+    if (messages.length <= 1) { showToast('Nenhuma mensagem para exportar', 2000); return; }
+
+    const conversationData = [];
+    const timestamp = new Date().toLocaleString('pt-BR');
+
+    messages.forEach((msg, index) => {
+        if (index === 0) return;
+        const isUser = msg.classList.contains('user');
+        const bubble = msg.querySelector('.message-bubble');
+        const time = msg.querySelector('.message-time');
+        if (bubble) {
+            conversationData.push({
+                role: isUser ? 'Usuario' : 'Assistente',
+                content: bubble.innerText || bubble.textContent,
+                time: time ? time.textContent : ''
+            });
+        }
+    });
+
+    if (format === 'markdown') { exportAsMarkdown(conversationData, timestamp); }
+    else if (format === 'pdf') { exportAsPDF(conversationData, timestamp); }
+}
+
+function exportAsMarkdown(data, timestamp) {
+    let markdown = `# Conversa com Nacom Goya IA\n\n**Exportado em:** ${timestamp}\n\n---\n\n`;
+    data.forEach(msg => {
+        const icon = msg.role === 'Usuario' ? '\u{1F464}' : '\u{1F916}';
+        markdown += `### ${icon} ${msg.role}\n`;
+        if (msg.time) markdown += `*${msg.time}*\n\n`;
+        markdown += `${msg.content}\n\n---\n\n`;
+    });
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conversa-nacom-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Markdown exportado', 2000);
+}
+
+function exportAsPDF(data, timestamp) {
+    let html = `<html><head><meta charset="UTF-8"><style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; color: #1f2328; line-height: 1.6; }
+        h1 { color: #00a88a; border-bottom: 2px solid #00a88a; padding-bottom: 10px; }
+        .meta { color: #57606a; font-size: 0.9em; margin-bottom: 30px; }
+        .message { margin: 20px 0; padding: 15px; border-radius: 10px; page-break-inside: avoid; }
+        .user { background: #e8f4fd; border-left: 4px solid #0284c7; }
+        .assistant { background: #f0fdf4; border-left: 4px solid #00a88a; }
+        .role { font-weight: 600; margin-bottom: 8px; } .time { font-size: 0.8em; color: #8b949e; }
+        .content { white-space: pre-wrap; }
+        pre { background: #1f2328; color: #f0f6fc; padding: 12px; border-radius: 6px; overflow-x: auto; }
+    </style></head><body><h1>Conversa com Nacom Goya IA</h1><div class="meta">Exportado em: ${timestamp}</div>`;
+    data.forEach(msg => {
+        const cls = msg.role === 'Usuario' ? 'user' : 'assistant';
+        html += `<div class="message ${cls}"><div class="role">${escapeHtml(msg.role)} <span class="time">${escapeHtml(msg.time || '')}</span></div><div class="content">${escapeHtml(msg.content)}</div></div>`;
+    });
+    html += '</body></html>';
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.onload = () => printWindow.print();
+        showToast('PDF pronto para impressao', 2000);
+    } else {
+        showToast('Popup bloqueado — permita popups para exportar PDF', 4000);
+    }
+}
+
+// --- FAVORITOS ---
+let favorites = JSON.parse(localStorage.getItem('agent-favorites') || '[]');
+let favoritesViewActive = false;
+
+function initFavorites() {
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === 1 && node.classList.contains('message')) addFavoriteButton(node);
+            });
+        });
+    });
+    const chatMsgs = document.getElementById('chat-messages');
+    if (chatMsgs) {
+        observer.observe(chatMsgs, { childList: true });
+        chatMsgs.querySelectorAll('.message').forEach(addFavoriteButton);
+    }
+    createFavoritesModeIndicator();
+}
+
+function addFavoriteButton(messageEl) {
+    if (messageEl.querySelector('h6') || messageEl.querySelector('.message-actions')) return;
+    const messageId = generateMessageId(messageEl);
+    messageEl.dataset.messageId = messageId;
+    const content = messageEl.querySelector('.message-content');
+    if (!content) return;
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'message-actions';
+    const isFav = favorites.includes(messageId);
+    actionsDiv.innerHTML = `<button class="btn-favorite ${isFav ? 'favorited' : ''}" aria-label="${isFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" onclick="toggleFavorite('${messageId}')"><i class="fa${isFav ? 's' : 'r'} fa-star"></i></button>`;
+    content.appendChild(actionsDiv);
+}
+
+function generateMessageId(messageEl) {
+    const bubble = messageEl.querySelector('.message-bubble');
+    const content = bubble ? bubble.textContent.substring(0, 50) : '';
+    const isUser = messageEl.classList.contains('user');
+    return `${isUser ? 'user' : 'assistant'}-${hashCode(content)}`;
+}
+
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) { hash = ((hash << 5) - hash) + str.charCodeAt(i); hash = hash & hash; }
+    return Math.abs(hash).toString(36);
+}
+
+function toggleFavorite(messageId) {
+    const index = favorites.indexOf(messageId);
+    const btn = document.querySelector(`[data-message-id="${messageId}"] .btn-favorite`);
+    if (index === -1) {
+        favorites.push(messageId);
+        if (btn) { btn.classList.add('favorited'); btn.querySelector('i').className = 'fas fa-star'; btn.setAttribute('aria-label', 'Remover dos favoritos'); }
+    } else {
+        favorites.splice(index, 1);
+        if (btn) { btn.classList.remove('favorited'); btn.querySelector('i').className = 'far fa-star'; btn.setAttribute('aria-label', 'Adicionar aos favoritos'); }
+        if (favoritesViewActive) {
+            const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
+            if (messageEl) messageEl.classList.add('hidden-by-filter');
+        }
+    }
+    localStorage.setItem('agent-favorites', JSON.stringify(favorites));
+}
+
+function createFavoritesModeIndicator() {
+    const chatContainer = document.querySelector('.chat-container');
+    if (!chatContainer) return;
+    const indicator = document.createElement('div');
+    indicator.className = 'favorites-mode-indicator';
+    indicator.id = 'favorites-indicator';
+    indicator.setAttribute('role', 'status');
+    indicator.innerHTML = '<i class="fas fa-star"></i><span>Mostrando apenas favoritos</span><button onclick="toggleFavoritesView()" aria-label="Sair do modo favoritos"><i class="fas fa-times"></i> Sair</button>';
+    const progressBar = document.getElementById('progress-bar-container');
+    if (progressBar) { progressBar.after(indicator); }
+    else { const header = document.querySelector('.chat-header'); if (header) header.after(indicator); }
+}
+
+function toggleFavoritesView() {
+    favoritesViewActive = !favoritesViewActive;
+    const indicator = document.getElementById('favorites-indicator');
+    const messages = document.querySelectorAll('#chat-messages .message');
+    if (favoritesViewActive) {
+        indicator.classList.add('active');
+        messages.forEach((msg, index) => {
+            if (index === 0) return;
+            const messageId = msg.dataset.messageId;
+            if (!favorites.includes(messageId)) msg.classList.add('hidden-by-filter');
+        });
+    } else {
+        indicator.classList.remove('active');
+        messages.forEach(msg => msg.classList.remove('hidden-by-filter'));
+    }
+}
+
+// Inicializar voice e favorites
+document.addEventListener('DOMContentLoaded', initVoiceInput);
+document.addEventListener('DOMContentLoaded', initFavorites);
+
+
+// =============================================================
 // SESSAO C: CONTROLES MOBILE (BOTTOM SHEET)
 // =============================================================
 

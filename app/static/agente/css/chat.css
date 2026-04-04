@@ -3259,6 +3259,203 @@
 }
 
 /* =============================================================
+   SESSAO F #21: ESTILOS MIGRADOS DE INLINE (drop overlay, voice, favorites)
+   ============================================================= */
+
+/* Drop overlay (ex-P3.6 inline) */
+.drop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 212, 170, 0.1);
+    border: 3px dashed var(--agent-accent-primary, #00d4aa);
+    border-radius: var(--agent-radius-lg, 16px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+}
+
+.drop-overlay.active {
+    display: flex;
+}
+
+.drop-overlay-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px;
+    background: var(--agent-bg-secondary, #111d2e);
+    border-radius: var(--agent-radius-lg, 16px);
+    box-shadow: var(--agent-shadow-xl, 0 20px 40px rgba(0,0,0,0.6));
+    animation: dropPulse 1.5s ease-in-out infinite;
+}
+
+.drop-overlay-content i {
+    font-size: 3rem;
+    color: var(--agent-accent-primary, #00d4aa);
+}
+
+.drop-overlay-content span {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--agent-text-primary, #f0f6fc);
+}
+
+.drop-overlay-content small {
+    font-size: 0.8rem;
+    color: var(--agent-text-muted, #6e7681);
+}
+
+@keyframes dropPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+/* Status indicator styles (ex-inline) */
+.status-indicator.connecting i {
+    color: var(--agent-warning, #f59e0b) !important;
+}
+
+.status-indicator.offline i {
+    color: var(--agent-danger, #ef4444) !important;
+}
+
+/* Voice input (ex-SPRINT-4 inline) */
+.btn-voice {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--agent-radius-md, 10px);
+    border: 1px solid var(--agent-border-color, rgba(240, 246, 252, 0.1));
+    background: var(--agent-bg-tertiary, #1a2942);
+    color: var(--agent-text-secondary, #8b949e);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.btn-voice:hover {
+    background: var(--agent-bg-hover, #243554);
+    color: var(--agent-accent-primary, #00d4aa);
+    border-color: var(--agent-accent-primary, #00d4aa);
+}
+
+.btn-voice.recording {
+    background: var(--agent-danger, #ef4444) !important;
+    color: white !important;
+    border-color: var(--agent-danger, #ef4444) !important;
+    animation: voicePulse 1s ease-in-out infinite;
+}
+
+.btn-voice.recording i { animation: none; }
+.btn-voice:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@keyframes voicePulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+}
+
+.voice-feedback {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--agent-bg-secondary, #111d2e);
+    color: var(--agent-text-primary, #f0f6fc);
+    padding: 12px 24px;
+    border-radius: var(--agent-radius-lg, 16px);
+    box-shadow: var(--agent-shadow-xl, 0 20px 40px rgba(0,0,0,0.6));
+    display: none;
+    align-items: center;
+    gap: 12px;
+    z-index: 1100;
+    border: 1px solid var(--agent-border-color, rgba(240, 246, 252, 0.1));
+}
+
+.voice-feedback.active { display: flex; animation: fadeInUp 0.3s ease; }
+.voice-feedback i { color: var(--agent-danger, #ef4444); font-size: 1.2rem; }
+.voice-feedback .voice-text { font-size: 0.9rem; }
+.voice-feedback .voice-transcript {
+    font-style: italic;
+    color: var(--agent-text-secondary, #8b949e);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Favorite buttons (ex-SPRINT-4 inline) */
+.message-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    margin-top: 4px;
+}
+
+.message:hover .message-actions { opacity: 1; }
+
+.btn-favorite {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--agent-radius-sm, 6px);
+    border: none;
+    background: transparent;
+    color: var(--agent-text-muted, #6e7681);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.btn-favorite:hover {
+    background: var(--agent-warning-muted, rgba(245, 158, 11, 0.15));
+    color: var(--agent-warning, #f59e0b);
+}
+
+.btn-favorite.favorited { color: var(--agent-warning, #f59e0b); }
+.btn-favorite.favorited i { font-weight: 900; }
+
+.favorites-mode-indicator {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--agent-warning-muted, rgba(245, 158, 11, 0.15));
+    border-bottom: 1px solid var(--agent-warning, #f59e0b);
+    color: var(--agent-warning, #f59e0b);
+    font-size: 0.85rem;
+}
+
+.favorites-mode-indicator.active { display: flex; }
+
+.favorites-mode-indicator button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--agent-radius-sm, 6px);
+}
+
+.favorites-mode-indicator button:hover {
+    background: var(--agent-warning, #f59e0b);
+    color: var(--agent-bg-primary, #0a1628);
+}
+
+.message.hidden-by-filter { display: none !important; }
+
+/* =============================================================
    SESSAO E: IMPROVEMENT DIALOGUE + REVIEW MEMORIAS EMPRESA
    ============================================================= */
 
