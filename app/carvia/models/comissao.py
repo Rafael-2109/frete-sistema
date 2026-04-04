@@ -33,7 +33,7 @@ class CarviaComissaoFechamento(db.Model):
     data_fim = db.Column(db.Date, nullable=False)
 
     # Percentual aplicado (snapshot no momento da criacao, ex: 0.05 = 5%)
-    percentual = db.Column(db.Numeric(5, 4), nullable=False)
+    percentual = db.Column(db.Numeric(10, 8), nullable=False)
 
     # Totais denormalizados (recalculados ao incluir/excluir CTe)
     qtd_ctes = db.Column(db.Integer, nullable=False, default=0)
@@ -143,7 +143,7 @@ class CarviaComissaoFechamentoCte(db.Model):
     cte_numero = db.Column(db.String(20), nullable=False)
     cte_data_emissao = db.Column(db.Date, nullable=False)
     valor_cte_snapshot = db.Column(db.Numeric(15, 2), nullable=False)
-    percentual_snapshot = db.Column(db.Numeric(5, 4), nullable=False)
+    percentual_snapshot = db.Column(db.Numeric(10, 8), nullable=False)
     valor_comissao = db.Column(db.Numeric(15, 2), nullable=False)
 
     # Soft-exclusao (manter auditoria)
