@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+
+{% block title %}Orcamento Pessoal{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0"><i class="fas fa-calculator"></i> Orcamento Mensal</h4>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnMesAnterior" title="Mes anterior">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <input type="month" id="seletorMes" class="form-control form-control-sm" style="width:160px">
+      <button class="btn btn-outline-secondary btn-sm" id="btnMesProximo" title="Proximo mes">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Limite Global -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row align-items-center">
+        <div class="col-md-4">
+          <label class="form-label fw-bold mb-0">Limite Global Mensal</label>
+          <small class="text-muted d-block">Teto total de despesas do mes</small>
+        </div>
+        <div class="col-md-3">
+          <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input type="number" id="limiteGlobal" class="form-control" step="100" min="0" placeholder="0,00">
+          </div>
+        </div>
+        <div class="col-md-5">
+          <span id="gastoGlobalInfo" class="text-muted"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabela de Categorias -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-list"></i> Limites por Categoria</span>
+      <button class="btn btn-outline-info btn-sm" id="btnCopiarMes">
+        <i class="fas fa-copy"></i> Copiar do Mes Anterior
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" id="tabelaCategorias">
+          <thead>
+            <tr>
+              <th>Grupo</th>
+              <th>Categoria</th>
+              <th class="text-end">Gasto Mes Anterior</th>
+              <th class="text-end">Gasto Mes Atual</th>
+              <th style="width:180px">Limite (R$)</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyCategorias">
+            <tr><td colspan="5" class="text-center text-muted py-4">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Acoes -->
+  <div class="d-flex gap-2 mb-4">
+    <button class="btn btn-primary" id="btnSalvar">
+      <i class="fas fa-save"></i> Salvar Orcamento
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token() }}';
+const hoje = new Date();
+let mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+
+// Inicializar
+$('#seletorMes').val(mesAtual);
+carregarOrcamento();
+
+// Navegacao de mes
+$('#seletorMes').on('change', function() {
+  mesAtual = $(this).val();
+  carregarOrcamento();
+});
+
+$('#btnMesAnterior').on('click', function() {
+  const d = new Date(mesAtual + '-01');
+  d.setMonth(d.getMonth() - 1);
+  mesAtual = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  $('#seletorMes').val(mesAtual);
+  carregarOrcamento();
+});
+
+$('#btnMesProximo').on('click', function() {
+  const d = new Date(mesAtual + '-01');
+  d.setMonth(d.getMonth() + 1);
+  mesAtual = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  $('#seletorMes').val(mesAtual);
+  carregarOrcamento();
+});
+
+function formatarValor(v) {
+  if (v === null || v === undefined) return '-';
+  return v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function carregarOrcamento() {
+  $.get(`{{ url_for('pessoal.pessoal_orcamento.obter_orcamento') }}?mes=${mesAtual}`, function(resp) {
+    if (!resp.sucesso) return;
+
+    // Limite global
+    $('#limiteGlobal').val(resp.limite_global || '');
+
+    // Info de gasto global
+    const totalGasto = resp.categorias.reduce((s, c) => s + c.gasto_atual, 0);
+    const totalAnterior = resp.categorias.reduce((s, c) => s + c.gasto_anterior, 0);
+    let info = `Gasto atual: R$ ${formatarValor(totalGasto)}`;
+    if (resp.limite_global) {
+      const pct = ((totalGasto / resp.limite_global) * 100).toFixed(1);
+      const cls = pct > 100 ? 'text-danger' : pct > 80 ? 'text-warning' : 'text-success';
+      info += ` <span class="${cls}">(${pct}% do limite)</span>`;
+    }
+    $('#gastoGlobalInfo').html(info);
+
+    // Tabela de categorias
+    let grupoAnterior = '';
+    const rows = resp.categorias.map(cat => {
+      const separador = cat.grupo !== grupoAnterior
+        ? `<tr class="table-light"><td colspan="5" class="fw-bold small text-uppercase">${cat.grupo}</td></tr>`
+        : '';
+      grupoAnterior = cat.grupo;
+
+      return separador + `
+        <tr data-cat-id="${cat.id}">
+          <td class="small text-muted">${cat.grupo}</td>
+          <td><i class="fas ${cat.icone || 'fa-tag'} me-1"></i> ${cat.nome}</td>
+          <td class="text-end text-muted">${formatarValor(cat.gasto_anterior)}</td>
+          <td class="text-end">${formatarValor(cat.gasto_atual)}</td>
+          <td>
+            <input type="number" class="form-control form-control-sm input-limite"
+                   data-cat-id="${cat.id}" step="100" min="0"
+                   value="${cat.limite !== null ? cat.limite : ''}"
+                   placeholder="-">
+          </td>
+        </tr>`;
+    }).join('');
+
+    $('#tbodyCategorias').html(rows || '<tr><td colspan="5" class="text-center text-muted py-4">Nenhuma categoria encontrada.</td></tr>');
+  });
+}
+
+// Salvar
+$('#btnSalvar').on('click', function() {
+  const limites = [];
+  $('.input-limite').each(function() {
+    const val = $(this).val();
+    if (val !== '') {
+      limites.push({
+        categoria_id: parseInt($(this).data('cat-id')),
+        valor_limite: parseFloat(val),
+      });
+    }
+  });
+
+  $.ajax({
+    url: '{{ url_for("pessoal.pessoal_orcamento.salvar_orcamento") }}',
+    method: 'POST',
+    contentType: 'application/json',
+    headers: {'X-CSRFToken': csrfToken},
+    data: JSON.stringify({
+      ano_mes: mesAtual,
+      limite_global: $('#limiteGlobal').val() || null,
+      limites: limites,
+    }),
+    success: function(resp) {
+      if (resp.sucesso) {
+        toastr.success(resp.mensagem);
+        carregarOrcamento();
+      } else {
+        toastr.error(resp.mensagem);
+      }
+    },
+    error: function() { toastr.error('Erro ao salvar orcamento.'); },
+  });
+});
+
+// Copiar do mes anterior
+$('#btnCopiarMes').on('click', function() {
+  const d = new Date(mesAtual + '-01');
+  d.setMonth(d.getMonth() - 1);
+  const mesOrigem = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+
+  $.ajax({
+    url: '{{ url_for("pessoal.pessoal_orcamento.copiar_orcamento") }}',
+    method: 'POST',
+    contentType: 'application/json',
+    headers: {'X-CSRFToken': csrfToken},
+    data: JSON.stringify({
+      mes_origem: mesOrigem,
+      mes_destino: mesAtual,
+    }),
+    success: function(resp) {
+      if (resp.sucesso) {
+        toastr.success(resp.mensagem);
+        carregarOrcamento();
+      } else {
+        toastr.error(resp.mensagem);
+      }
+    },
+    error: function() { toastr.error('Erro ao copiar orcamento.'); },
+  });
+});
+</script>
+{% endblock %}

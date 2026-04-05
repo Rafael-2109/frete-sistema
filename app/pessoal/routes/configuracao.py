@@ -25,7 +25,7 @@ def index():
         return 'Acesso restrito.', 403
 
     categorias = PessoalCategoria.query.order_by(
-        PessoalCategoria.grupo, PessoalCategoria.ordem_exibicao
+        PessoalCategoria.grupo, PessoalCategoria.nome
     ).all()
     regras = PessoalRegraCategorizacao.query.order_by(
         PessoalRegraCategorizacao.tipo_regra,
@@ -67,7 +67,6 @@ def salvar_categoria():
     nome = dados.get('nome', '').strip()
     grupo = dados.get('grupo', '').strip()
     icone = dados.get('icone', '').strip()
-    ordem = dados.get('ordem_exibicao', 0)
 
     if not nome or not grupo:
         return jsonify({'sucesso': False, 'mensagem': 'Nome e grupo obrigatorios.'}), 400
@@ -80,9 +79,8 @@ def salvar_categoria():
             cat.nome = nome
             cat.grupo = grupo
             cat.icone = icone
-            cat.ordem_exibicao = ordem
         else:
-            cat = PessoalCategoria(nome=nome, grupo=grupo, icone=icone, ordem_exibicao=ordem)
+            cat = PessoalCategoria(nome=nome, grupo=grupo, icone=icone)
             db.session.add(cat)
 
         db.session.commit()

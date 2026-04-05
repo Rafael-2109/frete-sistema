@@ -56,7 +56,6 @@
                   <th>Grupo</th>
                   <th>Nome</th>
                   <th>Icone</th>
-                  <th>Ordem</th>
                   <th>Ativa</th>
                   <th style="width:120px">Acoes</th>
                 </tr>
@@ -67,12 +66,10 @@
                     data-cat-id="{{ cat.id }}"
                     data-cat-nome="{{ cat.nome }}"
                     data-cat-grupo="{{ cat.grupo }}"
-                    data-cat-icone="{{ cat.icone or '' }}"
-                    data-cat-ordem="{{ cat.ordem_exibicao }}">
+                    data-cat-icone="{{ cat.icone or '' }}">
                   <td class="small">{{ cat.grupo }}</td>
                   <td><i class="fas {{ cat.icone or 'fa-tag' }} me-1"></i> {{ cat.nome }}</td>
                   <td class="small text-muted">{{ cat.icone or '-' }}</td>
-                  <td>{{ cat.ordem_exibicao }}</td>
                   <td>
                     {% if cat.ativa %}
                     <span class="badge bg-success">Sim</span>
@@ -499,9 +496,6 @@
           </div>
         </div>
         <div class="mb-3">
-          <label class="form-label">Ordem de Exibicao</label>
-          <input type="number" id="catOrdem" class="form-control" value="0" min="0">
-        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -547,7 +541,6 @@ $(function() {
     $('#catId').val('');
     $('#catNome').val('');
     $('#catGrupo').val('');
-    $('#catOrdem').val(0);
     selecionarIcone('fa-tag');
     $('#modalCategoriaTitulo').text('Nova Categoria');
   });
@@ -558,7 +551,6 @@ $(function() {
     $('#catId').val(tr.data('cat-id'));
     $('#catNome').val(tr.data('cat-nome'));
     $('#catGrupo').val(tr.data('cat-grupo'));
-    $('#catOrdem').val(tr.data('cat-ordem'));
     selecionarIcone(tr.data('cat-icone') || 'fa-tag');
     $('#modalCategoriaTitulo').text('Editar Categoria');
     new bootstrap.Modal('#modalCategoria').show();
@@ -578,7 +570,6 @@ $(function() {
       nome: nome,
       grupo: grupo,
       icone: $('#catIcone').val() || 'fa-tag',
-      ordem_exibicao: parseInt($('#catOrdem').val()) || 0,
     };
 
     $.ajax({

@@ -672,11 +672,18 @@
               <i class="fas fa-wallet"></i> Pessoal
             </a>
             <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_importacao.importar') }}">
-                  <i class="fas fa-file-upload text-primary"></i> Importar CSV
+              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_dashboard.index') }}">
+                  <i class="fas fa-chart-pie text-info"></i> Dashboard
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_transacoes.listar') }}">
                   <i class="fas fa-receipt text-success"></i> Transacoes
+                </a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_importacao.importar') }}">
+                  <i class="fas fa-file-upload text-primary"></i> Importar CSV
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_orcamento.index') }}">
+                  <i class="fas fa-calculator text-warning"></i> Orcamento
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_configuracao.index') }}">
                   <i class="fas fa-cog text-secondary"></i> Configuracao

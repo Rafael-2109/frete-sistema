@@ -1,0 +1,368 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard Pessoal{% endblock %}
+
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0"><i class="fas fa-chart-pie"></i> Dashboard Financeiro</h4>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnMesAnterior">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <input type="month" id="seletorMes" class="form-control form-control-sm" style="width:160px">
+      <button class="btn btn-outline-secondary btn-sm" id="btnMesProximo">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="text-muted small">Total Despesas</div>
+              <div class="fs-4 fw-bold" id="kpiDespesas">R$ 0</div>
+              <small id="kpiDespesasDelta" class="text-muted"></small>
+            </div>
+            <i class="fas fa-arrow-down text-danger" style="font-size:1.5rem;opacity:.5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="text-muted small">Orcamento</div>
+              <div class="fs-4 fw-bold" id="kpiOrcamento">-</div>
+              <small id="kpiSaldo" class="text-muted"></small>
+            </div>
+            <i class="fas fa-wallet text-primary" style="font-size:1.5rem;opacity:.5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="text-muted small">Total Receitas</div>
+              <div class="fs-4 fw-bold text-success" id="kpiReceitas">R$ 0</div>
+              <small id="kpiReceitasDelta" class="text-muted"></small>
+            </div>
+            <i class="fas fa-arrow-up text-success" style="font-size:1.5rem;opacity:.5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="text-muted small">% Orcamento Usado</div>
+              <div class="fs-4 fw-bold" id="kpiPercentual">-</div>
+              <div class="progress mt-2" style="height:6px">
+                <div class="progress-bar" id="kpiProgressBar" role="progressbar" style="width:0%"></div>
+              </div>
+            </div>
+            <i class="fas fa-tachometer-alt text-warning" style="font-size:1.5rem;opacity:.5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Graficos -->
+  <div class="row g-3 mb-4">
+    <!-- Gastos por Categoria (barras horizontais) -->
+    <div class="col-lg-7">
+      <div class="card h-100">
+        <div class="card-header"><i class="fas fa-chart-bar"></i> Gastos por Categoria</div>
+        <div class="card-body">
+          <canvas id="chartCategorias" height="300"></canvas>
+        </div>
+      </div>
+    </div>
+    <!-- Tendencia Mensal (linha) -->
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-header"><i class="fas fa-chart-line"></i> Tendencia Mensal</div>
+        <div class="card-body">
+          <canvas id="chartTendencia" height="300"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabela Resumo -->
+  <div class="card mb-4">
+    <div class="card-header"><i class="fas fa-table"></i> Detalhamento por Categoria</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Grupo</th>
+              <th class="text-end">Gasto</th>
+              <th class="text-end">Limite</th>
+              <th class="text-end">Saldo</th>
+              <th style="width:120px">% Usado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyResumo">
+            <tr><td colspan="6" class="text-center text-muted py-4">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrfToken = '{{ csrf_token() }}';
+const hoje = new Date();
+let mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+
+let chartCategorias = null;
+let chartTendencia = null;
+
+// Inicializar
+$('#seletorMes').val(mesAtual);
+carregarTudo();
+
+// Navegacao
+$('#seletorMes').on('change', function() {
+  mesAtual = $(this).val();
+  carregarTudo();
+});
+
+$('#btnMesAnterior').on('click', function() {
+  const d = new Date(mesAtual + '-01');
+  d.setMonth(d.getMonth() - 1);
+  mesAtual = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  $('#seletorMes').val(mesAtual);
+  carregarTudo();
+});
+
+$('#btnMesProximo').on('click', function() {
+  const d = new Date(mesAtual + '-01');
+  d.setMonth(d.getMonth() + 1);
+  mesAtual = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  $('#seletorMes').val(mesAtual);
+  carregarTudo();
+});
+
+function fmt(v) {
+  if (v === null || v === undefined) return '-';
+  return 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function fmtNum(v) {
+  if (v === null || v === undefined) return '-';
+  return v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function carregarTudo() {
+  carregarResumo();
+  carregarCategorias();
+  carregarTendencia();
+}
+
+function carregarResumo() {
+  $.get(`{{ url_for('pessoal.pessoal_dashboard.api_resumo') }}?mes=${mesAtual}`, function(r) {
+    if (!r.sucesso) return;
+
+    $('#kpiDespesas').text(fmt(r.total_despesas));
+    $('#kpiReceitas').text(fmt(r.total_receitas));
+
+    // Delta despesas
+    if (r.delta_despesas !== 0) {
+      const sinal = r.delta_despesas > 0 ? '+' : '';
+      const cls = r.delta_despesas > 0 ? 'text-danger' : 'text-success';
+      $('#kpiDespesasDelta').html(`<span class="${cls}">${sinal}${fmt(r.delta_despesas)}</span> vs anterior`);
+    } else {
+      $('#kpiDespesasDelta').text('');
+    }
+
+    // Delta receitas
+    if (r.delta_receitas !== 0) {
+      const sinal = r.delta_receitas > 0 ? '+' : '';
+      const cls = r.delta_receitas > 0 ? 'text-success' : 'text-danger';
+      $('#kpiReceitasDelta').html(`<span class="${cls}">${sinal}${fmt(r.delta_receitas)}</span> vs anterior`);
+    } else {
+      $('#kpiReceitasDelta').text('');
+    }
+
+    // Orcamento
+    if (r.limite_global !== null) {
+      $('#kpiOrcamento').text(fmt(r.limite_global));
+      $('#kpiSaldo').html(`Saldo: <span class="${r.saldo >= 0 ? 'text-success' : 'text-danger'}">${fmt(r.saldo)}</span>`);
+      $('#kpiPercentual').text(r.percentual_usado + '%');
+
+      const pct = Math.min(r.percentual_usado, 100);
+      const barCls = r.percentual_usado > 100 ? 'bg-danger' : r.percentual_usado > 80 ? 'bg-warning' : 'bg-success';
+      $('#kpiProgressBar').css('width', pct + '%').removeClass('bg-success bg-warning bg-danger').addClass(barCls);
+    } else {
+      $('#kpiOrcamento').text('-');
+      $('#kpiSaldo').text('Sem limite definido');
+      $('#kpiPercentual').text('-');
+      $('#kpiProgressBar').css('width', '0%');
+    }
+  });
+}
+
+function carregarCategorias() {
+  $.get(`{{ url_for('pessoal.pessoal_dashboard.api_categorias') }}?mes=${mesAtual}`, function(r) {
+    if (!r.sucesso) return;
+
+    const cats = r.categorias;
+
+    // Grafico de barras horizontal
+    if (chartCategorias) chartCategorias.destroy();
+
+    const ctx = document.getElementById('chartCategorias').getContext('2d');
+    chartCategorias = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: cats.map(c => c.categoria),
+        datasets: [{
+          label: 'Gasto',
+          data: cats.map(c => c.gasto),
+          backgroundColor: 'rgba(54, 162, 235, 0.7)',
+          borderColor: 'rgba(54, 162, 235, 1)',
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return 'R$ ' + ctx.raw.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              callback: function(v) { return 'R$ ' + (v/1000).toFixed(0) + 'k'; }
+            }
+          }
+        }
+      }
+    });
+
+    // Tabela resumo
+    const rows = cats.map(c => {
+      const saldo = c.limite !== null ? c.limite - c.gasto : null;
+      let badge = '';
+      if (c.percentual !== null) {
+        if (c.percentual > 100) badge = '<span class="badge bg-danger">Estourado</span>';
+        else if (c.percentual > 80) badge = '<span class="badge bg-warning text-dark">Alerta</span>';
+        else badge = '<span class="badge bg-success">OK</span>';
+      }
+
+      return `<tr>
+        <td><i class="fas ${c.icone} me-1"></i> ${c.categoria}</td>
+        <td class="text-muted small">${c.grupo}</td>
+        <td class="text-end">${fmtNum(c.gasto)}</td>
+        <td class="text-end">${c.limite !== null ? fmtNum(c.limite) : '<span class="text-muted">-</span>'}</td>
+        <td class="text-end ${saldo !== null && saldo < 0 ? 'text-danger' : ''}">${saldo !== null ? fmtNum(saldo) : '<span class="text-muted">-</span>'}</td>
+        <td>${c.percentual !== null ? c.percentual + '% ' + badge : '<span class="text-muted">-</span>'}</td>
+      </tr>`;
+    }).join('');
+
+    $('#tbodyResumo').html(rows || '<tr><td colspan="6" class="text-center text-muted py-4">Nenhum gasto no periodo.</td></tr>');
+  });
+}
+
+function carregarTendencia() {
+  $.get(`{{ url_for('pessoal.pessoal_dashboard.api_tendencia') }}?meses=6`, function(r) {
+    if (!r.sucesso) return;
+
+    if (chartTendencia) chartTendencia.destroy();
+
+    const dados = r.tendencia;
+    const ctx = document.getElementById('chartTendencia').getContext('2d');
+
+    const datasets = [{
+      label: 'Despesas',
+      data: dados.map(d => d.despesas),
+      borderColor: 'rgba(255, 99, 132, 1)',
+      backgroundColor: 'rgba(255, 99, 132, 0.1)',
+      fill: true,
+      tension: 0.3,
+    }, {
+      label: 'Receitas',
+      data: dados.map(d => d.receitas),
+      borderColor: 'rgba(75, 192, 192, 1)',
+      backgroundColor: 'rgba(75, 192, 192, 0.1)',
+      fill: true,
+      tension: 0.3,
+    }];
+
+    // Adicionar linha de orcamento se houver dados
+    if (dados.some(d => d.limite !== null)) {
+      datasets.push({
+        label: 'Orcamento',
+        data: dados.map(d => d.limite),
+        borderColor: 'rgba(255, 159, 64, 1)',
+        borderDash: [5, 5],
+        fill: false,
+        pointRadius: 0,
+        tension: 0,
+      });
+    }
+
+    chartTendencia = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: dados.map(d => d.mes_label),
+        datasets: datasets,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                if (ctx.raw === null) return '';
+                return ctx.dataset.label + ': R$ ' + ctx.raw.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            ticks: {
+              callback: function(v) { return 'R$ ' + (v/1000).toFixed(0) + 'k'; }
+            }
+          }
+        }
+      }
+    });
+  });
+}
+</script>
+{% endblock %}

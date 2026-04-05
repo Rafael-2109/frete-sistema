@@ -1,5 +1,5 @@
 """
-Models do modulo Pessoal — 7 tabelas para controle de financas pessoais.
+Models do modulo Pessoal — 8 tabelas para controle de financas pessoais.
 
 Convencao de timezone: agora_utc_naive() para todos os timestamps (Brasil naive).
 Convencao monetaria: Numeric(15,2) para valores em R$, Numeric(15,4) para USD.
@@ -88,13 +88,13 @@ class PessoalCategoria(db.Model):
     nome = db.Column(db.String(100), nullable=False)
     grupo = db.Column(db.String(100), nullable=False)
     icone = db.Column(db.String(50))
-    ordem_exibicao = db.Column(db.Integer, default=0)
     ativa = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     # Relacionamentos
     regras = db.relationship('PessoalRegraCategorizacao', backref='categoria', lazy='dynamic')
     transacoes = db.relationship('PessoalTransacao', backref='categoria', lazy='dynamic')
+    orcamentos = db.relationship('PessoalOrcamento', backref='categoria', lazy='dynamic')
 
     __table_args__ = (
         db.UniqueConstraint('grupo', 'nome', name='uq_pessoal_categorias_grupo_nome'),
@@ -109,7 +109,6 @@ class PessoalCategoria(db.Model):
             'nome': self.nome,
             'grupo': self.grupo,
             'icone': self.icone,
-            'ordem_exibicao': self.ordem_exibicao,
             'ativa': self.ativa,
         }
 
@@ -296,6 +295,7 @@ class PessoalTransacao(db.Model):
         Index('idx_pessoal_transacoes_categoria', 'categoria_id'),
         Index('idx_pessoal_transacoes_membro', 'membro_id'),
         Index('idx_pessoal_transacoes_status', 'status'),
+        Index('idx_pessoal_transacoes_excluir', 'excluir_relatorio'),
     )
 
     def __repr__(self):
@@ -335,4 +335,32 @@ class PessoalTransacao(db.Model):
             'eh_transferencia_propria': self.eh_transferencia_propria,
             'observacao': self.observacao,
             'status': self.status,
+        }
+
+
+# =============================================================================
+# 8. ORCAMENTOS
+# =============================================================================
+class PessoalOrcamento(db.Model):
+    __tablename__ = 'pessoal_orcamentos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ano_mes = db.Column(db.Date, nullable=False)  # Primeiro dia do mes (ex: 2026-04-01)
+    categoria_id = db.Column(db.Integer, db.ForeignKey('pessoal_categorias.id'), nullable=True)
+    valor_limite = db.Column(db.Numeric(15, 2), nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+
+    # Partial unique indexes definidos via migration (NULL handling no PostgreSQL)
+
+    def __repr__(self):
+        tipo = 'GLOBAL' if self.categoria_id is None else f'cat={self.categoria_id}'
+        return f'<PessoalOrcamento {self.ano_mes} {tipo} R${self.valor_limite}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ano_mes': self.ano_mes.isoformat() if self.ano_mes else None,
+            'categoria_id': self.categoria_id,
+            'valor_limite': float(self.valor_limite) if self.valor_limite else 0,
         }

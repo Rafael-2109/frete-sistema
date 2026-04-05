@@ -107,7 +107,7 @@ def listar():
     # Dados para filtros
     contas = PessoalConta.query.filter_by(ativa=True).order_by(PessoalConta.nome).all()
     categorias = PessoalCategoria.query.filter_by(ativa=True).order_by(
-        PessoalCategoria.grupo, PessoalCategoria.ordem_exibicao
+        PessoalCategoria.grupo, PessoalCategoria.nome
     ).all()
     membros = PessoalMembro.query.filter_by(ativo=True).order_by(PessoalMembro.nome).all()
 
