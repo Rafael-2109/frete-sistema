@@ -1028,7 +1028,7 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
     try:
         from ..models import AgentSession, AgentMemory
         from app import db
-        from sqlalchemy import text as sql_text
+        from sqlalchemy import text as sql_text, cast, String
 
         now = agora_utc_naive()
         since = now - timedelta(days=days)
@@ -1065,12 +1065,12 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
         # ── Taxa de ambiguidade (AskUserQuestion nos summaries) ──
         sessions_askuser = base_q.filter(
             AgentSession.summary.isnot(None),
-            AgentSession.summary['ferramentas_usadas'].astext.contains('AskUserQuestion'),
+            cast(AgentSession.summary['ferramentas_usadas'], String).contains('AskUserQuestion'),
         ).count()
 
         sessions_com_skill = base_q.filter(
             AgentSession.summary.isnot(None),
-            AgentSession.summary['ferramentas_usadas'].astext.contains('Skill'),
+            cast(AgentSession.summary['ferramentas_usadas'], String).contains('Skill'),
         ).count()
 
         sessions_com_summary = base_q.filter(
