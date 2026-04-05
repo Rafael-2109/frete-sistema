@@ -80,10 +80,17 @@ def register_gerencial_routes(bp):
                 'total_despesas': 0,
             }
 
+        try:
+            itens_rateio = service.obter_itens_nf_com_rateio(data_inicio, data_fim)
+        except Exception as e:
+            logger.error(f"Erro ao carregar itens NF com rateio CarVia: {e}")
+            itens_rateio = []
+
         return render_template(
             'carvia/gerencial.html',
             metricas=metricas,
             totais=totais,
+            itens_rateio=itens_rateio,
             data_inicio=data_inicio.isoformat(),
             data_fim=data_fim.isoformat(),
         )
@@ -326,6 +333,56 @@ def register_gerencial_routes(bp):
                     )
                     col_letter = chr(65 + idx)
                     ws2.column_dimensions[col_letter].width = min(max_len + 2, 20)
+
+            # --- Sheet 3: Itens NF × CTe com rateio ---
+            from app.carvia.services.financeiro.gerencial_service import GerencialService as _GS
+
+            # Usar a menor e maior data dos dados exportados (sem filtro de data)
+            datas_cte = [r['data_cte'] for r in all_rows if r.get('data_cte')]
+            if datas_cte:
+                _svc = _GS()
+                _itens = _svc.obter_itens_nf_com_rateio(
+                    min(datas_cte), max(datas_cte),
+                )
+                if _itens:
+                    itens_data = []
+                    for it in _itens:
+                        itens_data.append({
+                            'Numero NF': it['numero_nf'],
+                            'Serie': it.get('serie_nf'),
+                            'Data NF': _fmt(it.get('data_nf')),
+                            'Emitente': it.get('nome_emitente'),
+                            'Destinatario': it.get('nome_destinatario'),
+                            'UF Destino': it.get('uf_destinatario'),
+                            'Codigo Produto': it.get('codigo_produto'),
+                            'Descricao': it.get('descricao_item'),
+                            'Quantidade': it.get('quantidade'),
+                            'Valor Unitario': it.get('valor_unitario'),
+                            'Valor Total Item': it.get('valor_total_item'),
+                            'Peso Bruto NF (kg)': it.get('peso_bruto'),
+                            'Qtd Motos NF': it.get('qtd_motos_nf') or 0,
+                            'N CTe': it.get('cte_numero'),
+                            'Valor CTe Total': it.get('cte_valor'),
+                            'Valor CTe Rateado (NF)': it.get('rateio_nf'),
+                            'Valor CTe Rateado (Item)': it.get('rateio_item'),
+                            'Criterio Rateio': it.get('criterio_rateio'),
+                            'Status Operacao': it.get('status_operacao'),
+                        })
+                    df_itens = pd.DataFrame(itens_data)
+                    df_itens.to_excel(writer, index=False, sheet_name='Itens NF x CTe')
+                    ws3 = writer.sheets['Itens NF x CTe']
+                    for idx, col in enumerate(df_itens.columns):
+                        max_len = max(
+                            df_itens[col].fillna('').astype(str).map(len).max(),
+                            len(str(col))
+                        )
+                        col_letter = (
+                            chr(65 + idx) if idx < 26
+                            else chr(64 + idx // 26) + chr(65 + idx % 26)
+                        )
+                        ws3.column_dimensions[col_letter].width = min(max_len + 2, 50)
+                    ws3.freeze_panes = 'A2'
+                    ws3.auto_filter.ref = ws3.dimensions
 
         output.seek(0)
         timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M')

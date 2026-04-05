@@ -7,7 +7,11 @@
             <h2><i class="fas fa-chart-pie"></i> CarVia — Gerencial</h2>
             <p class="text-muted mb-0">Metricas por UF e periodo</p>
         </div>
-        <div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.exportar_relatorio_gerencial') }}"
+               class="btn btn-outline-success" title="Exportar Excel">
+                <i class="fas fa-file-excel"></i> Exportar
+            </a>
             <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Dashboard
             </a>
@@ -110,67 +114,195 @@
         </div>
     </div>
 
-    {# ── Tabela Detalhada por UF/Mes ── #}
-    <div class="card">
-        <div class="card-header card-header-theme py-2">
-            <h6 class="m-0 fw-bold small">
-                <i class="fas fa-table text-accent"></i> Detalhamento por UF e Mes
-            </h6>
+    {# ── Abas ── #}
+    <ul class="nav nav-tabs mb-0" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-uf-mes" data-bs-toggle="tab"
+                    data-bs-target="#pane-uf-mes" type="button" role="tab">
+                <i class="fas fa-table"></i> UF &times; M&ecirc;s
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-itens-cte" data-bs-toggle="tab"
+                    data-bs-target="#pane-itens-cte" type="button" role="tab">
+                <i class="fas fa-list-alt"></i> Itens NF &times; CTe
+                {% if itens_rateio %}
+                    <span class="badge bg-secondary ms-1">{{ itens_rateio|length }}</span>
+                {% endif %}
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        {# ── Tab 1: UF × Mês ── #}
+        <div class="tab-pane fade show active" id="pane-uf-mes" role="tabpanel">
+            <div class="card border-top-0 rounded-top-0">
+                <div class="card-header card-header-theme py-2">
+                    <h6 class="m-0 fw-bold small">
+                        <i class="fas fa-table text-accent"></i> Detalhamento por UF e Mes
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    {% if metricas %}
+                    <div class="table-responsive">
+                        <table class="table table-sm carvia-table mb-0">
+                            <thead>
+                                <tr class="table-thead-theme">
+                                    <th>UF</th>
+                                    <th>Mes</th>
+                                    <th class="text-end">Valor Total</th>
+                                    <th class="text-end">Motos</th>
+                                    <th class="text-end">Peso Efetivo (kg)</th>
+                                    <th class="text-end">R$/Unidade</th>
+                                    <th class="text-end">R$/Kg Cubado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for m in metricas %}
+                                <tr>
+                                    <td><span class="fw-bold">{{ m.uf_destino }}</span></td>
+                                    <td>{{ m.mes_label }}</td>
+                                    <td class="text-end valor-col">{{ m.valor_total|valor_br }}</td>
+                                    <td class="text-end">
+                                        {% if m.qtd_motos > 0 %}
+                                            {{ m.qtd_motos|numero_br(0) }}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">{{ m.peso_efetivo|numero_br(1) }}</td>
+                                    <td class="text-end valor-col">
+                                        {% if m.valor_por_unidade is not none %}
+                                            {{ m.valor_por_unidade|valor_br }}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end valor-col">
+                                        {% if m.valor_por_kg_cubado is not none %}
+                                            {{ m.valor_por_kg_cubado|valor_br }}
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-chart-bar fa-2x mb-2 d-block"></i>
+                        Nenhum dado encontrado para o periodo selecionado
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        <div class="card-body p-0">
-            {% if metricas %}
-            <div class="table-responsive">
-                <table class="table table-sm carvia-table mb-0">
-                    <thead>
-                        <tr class="table-thead-theme">
-                            <th>UF</th>
-                            <th>Mes</th>
-                            <th class="text-end">Valor Total</th>
-                            <th class="text-end">Motos</th>
-                            <th class="text-end">Peso Efetivo (kg)</th>
-                            <th class="text-end">R$/Unidade</th>
-                            <th class="text-end">R$/Kg Cubado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for m in metricas %}
-                        <tr>
-                            <td><span class="fw-bold">{{ m.uf_destino }}</span></td>
-                            <td>{{ m.mes_label }}</td>
-                            <td class="text-end valor-col">{{ m.valor_total|valor_br }}</td>
-                            <td class="text-end">
-                                {% if m.qtd_motos > 0 %}
-                                    {{ m.qtd_motos|numero_br(0) }}
-                                {% else %}
-                                    <span class="text-muted">N/A</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">{{ m.peso_efetivo|numero_br(1) }}</td>
-                            <td class="text-end valor-col">
-                                {% if m.valor_por_unidade is not none %}
-                                    {{ m.valor_por_unidade|valor_br }}
-                                {% else %}
-                                    <span class="text-muted">N/A</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end valor-col">
-                                {% if m.valor_por_kg_cubado is not none %}
-                                    {{ m.valor_por_kg_cubado|valor_br }}
-                                {% else %}
-                                    <span class="text-muted">N/A</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+
+        {# ── Tab 2: Itens NF × CTe ── #}
+        <div class="tab-pane fade" id="pane-itens-cte" role="tabpanel">
+            <div class="card border-top-0 rounded-top-0">
+                <div class="card-header card-header-theme py-2">
+                    <h6 class="m-0 fw-bold small">
+                        <i class="fas fa-list-alt text-accent"></i> Itens de NF com Rateio por CTe
+                        <span class="text-muted fw-normal ms-2">Cascata: Motos &rarr; Peso &rarr; Qtd NFs</span>
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    {% if itens_rateio %}
+                    <div class="table-responsive">
+                        <table class="table table-sm carvia-table table-hover mb-0">
+                            <thead>
+                                <tr class="table-thead-theme">
+                                    <th>NF</th>
+                                    <th>Produto</th>
+                                    <th>Codigo</th>
+                                    <th class="text-end">Qtd</th>
+                                    <th class="text-end">Valor Item</th>
+                                    <th class="text-end">Peso NF (kg)</th>
+                                    <th class="text-end">Motos NF</th>
+                                    <th>CTe</th>
+                                    <th class="text-end">Valor CTe</th>
+                                    <th class="text-end">Rateio NF</th>
+                                    <th class="text-end">Rateio Item</th>
+                                    <th>Criterio</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set ns = namespace(last_nf='', last_cte='') %}
+                                {% for it in itens_rateio %}
+                                {% set nf_changed = it.numero_nf != ns.last_nf %}
+                                {% set cte_changed = it.cte_numero != ns.last_cte %}
+                                <tr class="{{ 'border-top border-2' if nf_changed and not loop.first }}">
+                                    <td>
+                                        {% if nf_changed %}
+                                            <span class="fw-bold">{{ it.numero_nf }}</span>
+                                            {% set ns.last_nf = it.numero_nf %}
+                                        {% endif %}
+                                    </td>
+                                    <td title="{{ it.descricao_item }}">{{ it.descricao_item|truncate(40) if it.descricao_item else '-' }}</td>
+                                    <td><small class="text-muted">{{ it.codigo_produto or '-' }}</small></td>
+                                    <td class="text-end">{{ it.quantidade|numero_br(0) if it.quantidade else '-' }}</td>
+                                    <td class="text-end valor-col">{{ it.valor_total_item|valor_br if it.valor_total_item else '-' }}</td>
+                                    <td class="text-end">
+                                        {% if nf_changed %}
+                                            {{ it.peso_bruto|numero_br(1) if it.peso_bruto else '-' }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if nf_changed %}
+                                            {% if it.qtd_motos_nf > 0 %}
+                                                {{ it.qtd_motos_nf }}
+                                            {% else %}
+                                                <span class="text-muted">0</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if cte_changed %}
+                                            <small>{{ it.cte_numero or '-' }}</small>
+                                            {% set ns.last_cte = it.cte_numero %}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end valor-col">
+                                        {% if cte_changed %}
+                                            {{ it.cte_valor|valor_br if it.cte_valor else '-' }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end valor-col">
+                                        {% if nf_changed %}
+                                            {{ it.rateio_nf|valor_br if it.rateio_nf else '-' }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end valor-col fw-bold">{{ it.rateio_item|valor_br if it.rateio_item else '-' }}</td>
+                                    <td>
+                                        {% if nf_changed %}
+                                            {% set crit = it.criterio_rateio or '' %}
+                                            {% if 'Motos' in crit %}
+                                                <span class="badge bg-info">{{ crit }}</span>
+                                            {% elif 'Peso' in crit %}
+                                                <span class="badge bg-warning text-dark">{{ crit }}</span>
+                                            {% elif 'Direto' in crit %}
+                                                <span class="badge bg-success">{{ crit }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ crit or '-' }}</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-list-alt fa-2x mb-2 d-block"></i>
+                        Nenhum item de NF com CTe encontrado para o periodo selecionado
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-            {% else %}
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-chart-bar fa-2x mb-2 d-block"></i>
-                Nenhum dado encontrado para o periodo selecionado
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>

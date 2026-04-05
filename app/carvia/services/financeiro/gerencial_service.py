@@ -7,7 +7,8 @@ Usado pela tela gerencial (admin-only) e pelo card de faturamento no dashboard.
 """
 
 import logging
-from decimal import Decimal
+from collections import defaultdict
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import func
 
@@ -50,6 +51,20 @@ def _build_moto_count_subquery(alias='moto_count'):
         )
         .join(CarviaNfVeiculo, CarviaNfVeiculo.nf_id == CarviaOperacaoNf.nf_id)
         .group_by(CarviaOperacaoNf.operacao_id)
+        .subquery(alias)
+    )
+
+
+def _build_moto_count_per_nf_subquery(alias='moto_nf'):
+    """Subquery: contagem de veiculos (motos) por NF via CarviaNfVeiculo."""
+    from app.carvia.models import CarviaNfVeiculo
+
+    return (
+        db.session.query(
+            CarviaNfVeiculo.nf_id,
+            func.count(CarviaNfVeiculo.id).label('qtd_motos'),
+        )
+        .group_by(CarviaNfVeiculo.nf_id)
         .subquery(alias)
     )
 
@@ -197,6 +212,210 @@ class GerencialService:
         totais['total_despesas'] = Decimal(str(total_despesas))
 
         return totais
+
+    # ── Aba Itens NF × CTe ───────────────────────────────────────────
+
+    def obter_itens_nf_com_rateio(self, data_inicio, data_fim):
+        """
+        Retorna itens de NF com rateio do CTe distribuido ate nivel de item.
+
+        Algoritmo em 2 etapas:
+          1. NF-level: cascata [motos → peso → qtd_nfs] para distribuir cte_valor entre NFs
+          2. Item-level: distribui share da NF entre itens por proporcao de quantidade
+
+        Filtro: NFs ATIVAS vinculadas a CTes nao-cancelados no periodo.
+
+        Returns:
+            list[dict] com campos de item + NF + CTe + rateio_nf + rateio_item + criterio
+        """
+        from app.carvia.models import (
+            CarviaNf, CarviaNfItem, CarviaOperacao, CarviaOperacaoNf,
+        )
+
+        moto_nf = _build_moto_count_per_nf_subquery('moto_nf_itens')
+
+        rows = (
+            db.session.query(
+                CarviaNfItem.id.label('item_id'),
+                CarviaNfItem.codigo_produto,
+                CarviaNfItem.descricao.label('descricao_item'),
+                CarviaNfItem.quantidade,
+                CarviaNfItem.valor_unitario,
+                CarviaNfItem.valor_total_item,
+                CarviaNf.id.label('nf_id'),
+                CarviaNf.numero_nf,
+                CarviaNf.serie_nf,
+                CarviaNf.data_emissao.label('data_nf'),
+                CarviaNf.nome_emitente,
+                CarviaNf.cnpj_emitente,
+                CarviaNf.nome_destinatario,
+                CarviaNf.uf_destinatario,
+                CarviaNf.cidade_destinatario,
+                CarviaNf.peso_bruto,
+                CarviaOperacao.id.label('operacao_id'),
+                CarviaOperacao.cte_numero,
+                CarviaOperacao.cte_valor,
+                CarviaOperacao.cte_data_emissao.label('data_cte'),
+                CarviaOperacao.status.label('status_operacao'),
+                func.coalesce(moto_nf.c.qtd_motos, 0).label('qtd_motos_nf'),
+            )
+            .join(CarviaNf, CarviaNf.id == CarviaNfItem.nf_id)
+            .join(CarviaOperacaoNf, CarviaOperacaoNf.nf_id == CarviaNf.id)
+            .join(CarviaOperacao, CarviaOperacao.id == CarviaOperacaoNf.operacao_id)
+            .outerjoin(moto_nf, moto_nf.c.nf_id == CarviaNf.id)
+            .filter(
+                CarviaNf.status == 'ATIVA',
+                CarviaOperacao.status != 'CANCELADO',
+                CarviaOperacao.cte_data_emissao.isnot(None),
+                CarviaOperacao.cte_data_emissao >= data_inicio,
+                CarviaOperacao.cte_data_emissao <= data_fim,
+            )
+            .order_by(
+                CarviaNf.data_emissao.desc().nullslast(),
+                CarviaNf.numero_nf,
+                CarviaNfItem.id,
+            )
+            .all()
+        )
+
+        return self._aplicar_rateio_itens(rows)
+
+    def _aplicar_rateio_itens(self, rows):
+        """Aplica rateio cascateado [motos → peso → qtd_nfs] ate nivel de item.
+
+        Etapa 1: distribui cte_valor entre NFs do mesmo CTe.
+        Etapa 2: distribui share da NF entre itens por proporcao de quantidade.
+        """
+        # Agrupar por operacao (CTe)
+        by_op = defaultdict(list)
+        for r in rows:
+            by_op[r.operacao_id].append({
+                'item_id': r.item_id,
+                'codigo_produto': r.codigo_produto,
+                'descricao_item': r.descricao_item,
+                'quantidade': float(r.quantidade) if r.quantidade else 0,
+                'valor_unitario': float(r.valor_unitario) if r.valor_unitario else None,
+                'valor_total_item': float(r.valor_total_item) if r.valor_total_item else None,
+                'nf_id': r.nf_id,
+                'numero_nf': r.numero_nf,
+                'serie_nf': r.serie_nf,
+                'data_nf': r.data_nf,
+                'nome_emitente': r.nome_emitente,
+                'cnpj_emitente': r.cnpj_emitente,
+                'nome_destinatario': r.nome_destinatario,
+                'uf_destinatario': r.uf_destinatario,
+                'cidade_destinatario': r.cidade_destinatario,
+                'peso_bruto': float(r.peso_bruto) if r.peso_bruto else 0,
+                'operacao_id': r.operacao_id,
+                'cte_numero': r.cte_numero,
+                'cte_valor': float(r.cte_valor) if r.cte_valor else 0,
+                'data_cte': r.data_cte,
+                'status_operacao': r.status_operacao,
+                'qtd_motos_nf': int(r.qtd_motos_nf or 0),
+            })
+
+        resultado = []
+
+        for op_id, items in by_op.items():
+            cte_valor = Decimal(str(items[0]['cte_valor']))
+
+            # --- Etapa 1: NF-level rateio ---
+            # Agrupar itens por NF
+            nfs = {}
+            for item in items:
+                nf_id = item['nf_id']
+                if nf_id not in nfs:
+                    nfs[nf_id] = {
+                        'qtd_motos': item['qtd_motos_nf'],
+                        'peso_bruto': Decimal(str(item['peso_bruto'])),
+                        'items': [],
+                    }
+                nfs[nf_id]['items'].append(item)
+
+            nf_list = list(nfs.values())
+            total_motos = sum(n['qtd_motos'] for n in nf_list)
+            total_peso = sum(n['peso_bruto'] for n in nf_list)
+
+            # Determinar criterio e share por NF
+            if len(nf_list) == 1:
+                criterio = 'Direto (1:1)'
+                nf_list[0]['nf_share'] = cte_valor
+            elif total_motos > 0:
+                criterio = 'Motos'
+                for n in nf_list:
+                    prop = Decimal(str(n['qtd_motos'])) / Decimal(str(total_motos))
+                    n['nf_share'] = (cte_valor * prop).quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP,
+                    )
+            elif total_peso > 0:
+                criterio = 'Peso'
+                for n in nf_list:
+                    prop = n['peso_bruto'] / total_peso
+                    n['nf_share'] = (cte_valor * prop).quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP,
+                    )
+            else:
+                criterio = 'Qtd NFs'
+                valor_por_nf = cte_valor / len(nf_list)
+                for n in nf_list:
+                    n['nf_share'] = valor_por_nf.quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP,
+                    )
+
+            # Ajuste de centavos no nivel NF
+            if len(nf_list) > 1:
+                soma_nf = sum(n['nf_share'] for n in nf_list)
+                diff_nf = cte_valor - soma_nf
+                if diff_nf != 0:
+                    nf_list[0]['nf_share'] += diff_nf
+
+            # --- Etapa 2: Item-level rateio dentro de cada NF ---
+            for n in nf_list:
+                nf_share = n['nf_share']
+                nf_items = n['items']
+                total_qty = sum(
+                    Decimal(str(i['quantidade'])) for i in nf_items
+                )
+
+                if total_qty > 0:
+                    for item in nf_items:
+                        item_qty = Decimal(str(item['quantidade']))
+                        prop = item_qty / total_qty
+                        item['rateio_nf'] = float(nf_share)
+                        item['rateio_item'] = float(
+                            (nf_share * prop).quantize(
+                                Decimal('0.01'), rounding=ROUND_HALF_UP,
+                            )
+                        )
+                        item['criterio_rateio'] = criterio
+
+                    # Ajuste de centavos no nivel item
+                    soma_it = sum(
+                        Decimal(str(i['rateio_item'])) for i in nf_items
+                    )
+                    diff_it = nf_share - soma_it
+                    if diff_it != 0:
+                        nf_items[0]['rateio_item'] = float(
+                            Decimal(str(nf_items[0]['rateio_item'])) + diff_it
+                        )
+                else:
+                    # Sem quantidade — divisao igual entre itens
+                    share = float(nf_share / len(nf_items)) if nf_items else 0
+                    for item in nf_items:
+                        item['rateio_nf'] = float(nf_share)
+                        item['rateio_item'] = share
+                        item['criterio_rateio'] = criterio
+
+                resultado.extend(nf_items)
+
+        # Ordenar: data NF desc, numero NF asc, item_id asc
+        resultado.sort(key=lambda r: (
+            -(r['data_nf'].toordinal() if r.get('data_nf') else 0),
+            r.get('numero_nf') or '',
+            r.get('item_id') or 0,
+        ))
+
+        return resultado
 
     # ── Card Dashboard ──────────────────────────────────────────────
 
