@@ -50,7 +50,7 @@ Se ambiguo → perguntar: "Voce quer no SSW (CarVia) ou no sistema interno (Naco
 |---------------------------|----------|---------|
 | "como fazer X no SSW" / passo a passo | POP correspondente | ROUTING_SSW.md → secao "Mapa Intencao→POP" |
 | "o que e opcao NNN" | Doc de opcao | ROUTING_SSW.md → secao "Mapa Intencao→Opcao" |
-| "fluxo completo de X" | Fluxo end-to-end | FLUXOS_PROCESSO.md secao FNN |
+| "fluxo completo de X" | Fluxo end-to-end | `fluxos/INDEX.md` → identificar FNN → ler `fluxos/FNN.md` |
 | "CarVia faz X?" | Status de adocao | CARVIA_STATUS.md |
 | "visao geral do modulo X" | Visao geral | visao-geral/NN-modulo.md |
 | "regras legais / sequencia" | POP G01/G02 | pops/POP-G01-sequencia-legal-obrigatoria.md |
@@ -63,7 +63,7 @@ Se ambiguo → perguntar: "Voce quer no SSW (CarVia) ou no sistema interno (Naco
    |
    ├── Se menciona NUMERO de opcao → resolver_opcao_ssw.py --numero NNN
    ├── Se menciona PROCESSO/ACAO → ROUTING_SSW.md → mapa intencao→POP
-   ├── Se menciona FLUXO → FLUXOS_PROCESSO.md
+   ├── Se menciona FLUXO → fluxos/INDEX.md → identificar FNN → ler fluxos/FNN.md
    └── Se busca generica → consultar_documentacao_ssw.py --busca "termo"
    |
 2. LOCALIZAR DOCUMENTO
@@ -170,5 +170,6 @@ NAO pule o passo 1 (scripts) e va direto para Grep manual. Os scripts reduzem de
 | Indice SSW | `.claude/references/ssw/INDEX.md` | Ponto de entrada geral |
 | Operacao CarVia | `.claude/references/ssw/CARVIA_OPERACAO.md` | Perfil empresa, equipe, gaps |
 | Catalogo POPs | `.claude/references/ssw/CATALOGO_POPS.md` | Definicao dos 45 POPs |
-| Fluxos Processo | `.claude/references/ssw/FLUXOS_PROCESSO.md` | 20 fluxos end-to-end |
+| Fluxos Processo (INDEX) | `.claude/references/ssw/fluxos/INDEX.md` | Roteamento → 20 fluxos individuais |
+| Fluxo Individual | `.claude/references/ssw/fluxos/FNN.md` | Fluxo especifico (F01-F20) |
 | URL Map | `.claude/references/ssw/url-map.json` | Opcao→URL de ajuda (programatico) |

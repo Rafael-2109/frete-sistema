@@ -1012,6 +1012,10 @@ Nunca invente informações."""
             # FONTE: claude_agent_sdk/_internal/query.py:116
             "env": {
                 "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "240000",  # 240s (4 min) em ms
+                # HOME gravável — Render usa HOME=/opt/render (read-only).
+                # CLI tenta salvar .claude.json em $HOME → ENOENT.
+                # /tmp é sempre gravável em qualquer ambiente.
+                "HOME": "/tmp",
             },
         }
 
