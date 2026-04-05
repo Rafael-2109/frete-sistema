@@ -64,12 +64,23 @@ PROTECTED_PATHS = {
     "/memories/preferences.xml",
 }
 
-# Diretórios candidatos à consolidação
+# Diretórios candidatos à consolidação (pessoal)
 CONSOLIDATION_DIRS = [
     "/memories/learned",
     "/memories/corrections",
     "/memories/context",
 ]
+
+# Diretórios candidatos à consolidação (empresa, user_id=0)
+CONSOLIDATION_DIRS_EMPRESA = [
+    "/memories/empresa/protocolos",
+    "/memories/empresa/armadilhas",
+    "/memories/empresa/heuristicas",
+]
+
+# Thresholds empresa — mais altos pois empresa cresce de múltiplos usuários
+EMPRESA_CONSOLIDATION_THRESHOLD_FILES = 30
+EMPRESA_CONSOLIDATION_THRESHOLD_CHARS = 12000
 
 
 def maybe_move_to_cold(user_id: int) -> int:
@@ -299,12 +310,27 @@ def maybe_consolidate(user_id: int) -> Optional[Dict[str, Any]]:
         if not USE_MEMORY_CONSOLIDATION:
             return None
 
-        return _consolidate_if_needed(
+        result = _consolidate_if_needed(
             user_id=user_id,
             threshold_files=MEMORY_CONSOLIDATION_THRESHOLD_FILES,
             threshold_chars=MEMORY_CONSOLIDATION_THRESHOLD_CHARS,
             min_group=MEMORY_CONSOLIDATION_MIN_GROUP,
         )
+
+        # Consolidar empresa (user_id=0) também — aproveitando o trigger
+        if user_id != 0:
+            try:
+                _consolidate_if_needed(
+                    user_id=0,
+                    threshold_files=EMPRESA_CONSOLIDATION_THRESHOLD_FILES,
+                    threshold_chars=EMPRESA_CONSOLIDATION_THRESHOLD_CHARS,
+                    min_group=MEMORY_CONSOLIDATION_MIN_GROUP,
+                    consolidation_dirs=CONSOLIDATION_DIRS_EMPRESA,
+                )
+            except Exception as emp_err:
+                logger.debug(f"[MEMORY_CONSOLIDATOR] Empresa consolidation falhou (ignorado): {emp_err}")
+
+        return result
 
     except Exception as e:
         logger.warning(f"[MEMORY_CONSOLIDATOR] Erro (ignorado): {e}")
@@ -316,6 +342,7 @@ def _consolidate_if_needed(
     threshold_files: int = 15,
     threshold_chars: int = 6000,
     min_group: int = 3,
+    consolidation_dirs: Optional[list] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Core da consolidação. Verifica thresholds e executa.
@@ -325,12 +352,15 @@ def _consolidate_if_needed(
         threshold_files: Máximo de arquivos antes de consolidar
         threshold_chars: Máximo de chars totais antes de consolidar
         min_group: Mínimo de arquivos em um diretório para consolidar
+        consolidation_dirs: Diretórios candidatos (default: CONSOLIDATION_DIRS)
 
     Returns:
         Dict com métricas ou None
     """
     from ..models import AgentMemory
     from app import db
+
+    dirs = consolidation_dirs or CONSOLIDATION_DIRS
 
     try:
         # 1. Carregar todas as memórias do usuário (exceto diretórios)
@@ -381,8 +411,8 @@ def _consolidate_if_needed(
             else:
                 continue
 
-            # Só consolidar diretórios candidatos
-            if parent_dir in CONSOLIDATION_DIRS:
+            # Só consolidar diretórios candidatos (exact ou prefix match)
+            if any(parent_dir == d or parent_dir.startswith(d + '/') for d in dirs):
                 groups[parent_dir].append(mem)
 
         # 4. Consolidar cada grupo que excede min_group

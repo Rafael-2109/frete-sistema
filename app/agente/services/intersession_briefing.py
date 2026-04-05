@@ -262,15 +262,18 @@ def _check_memory_alerts(user_id: int) -> Optional[str]:
 
         alerts = []
 
-        # Conflitos pendentes
+        # Conflitos pendentes (pessoais + empresa)
         try:
-            conflicts = AgentMemory.query.filter_by(
-                user_id=user_id,
-                has_potential_conflict=True,
-                is_directory=False,
-            ).count()
-            if conflicts > 0:
-                alerts.append(f'conflitos={conflicts}')
+            conflict_memories = AgentMemory.query.filter(
+                AgentMemory.user_id.in_([user_id, 0]),
+                AgentMemory.has_potential_conflict == True,  # noqa: E712
+                AgentMemory.is_directory == False,  # noqa: E712
+            ).with_entities(AgentMemory.path).limit(5).all()
+            if conflict_memories:
+                paths = '; '.join(m.path for m in conflict_memories)
+                alerts.append(
+                    f'conflitos={len(conflict_memories)} paths="{paths}"'
+                )
         except Exception:
             pass
 

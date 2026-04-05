@@ -2715,6 +2715,194 @@ try:
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @enhanced_tool(
+        "query_knowledge_graph",
+        "Consulta o Knowledge Graph de memórias para descobrir relações entre entidades. "
+        "Use para responder perguntas como 'o que sabemos sobre RODONAVES?', "
+        "'quais transportadoras atendem AM?', ou 'que relações existem com este cliente?'. "
+        "Retorna entidades relacionadas, tipos de relação e memórias associadas.",
+        {
+            "entity_name": Annotated[str, "Nome da entidade a buscar (ex: RODONAVES, AM, Atacadao). Case-insensitive, busca por ILIKE"],
+            "entity_type": Annotated[Optional[str], "Filtro opcional: transportadora, uf, cliente, produto, pedido, fornecedor, conceito. Se omitido, busca todos os tipos"],
+            "max_hops": Annotated[Optional[int], "Profundidade da busca: 1 (relacoes diretas) ou 2 (relacoes de relacoes). Default: 1"],
+        },
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+    )
+    async def query_knowledge_graph(args: dict[str, Any]) -> dict[str, Any]:
+        """
+        Consulta o Knowledge Graph por entidade.
+
+        Pipeline:
+        1. Busca entity_id por nome (ILIKE) em agent_memory_entities
+        2. Hop 1: relações diretas via agent_memory_entity_relations
+        3. Hop 2 (opcional): segue entidades do hop 1
+        4. Para cada relação: retorna entidades, tipo, peso e memórias linkadas
+        """
+        entity_name = args.get("entity_name", "").strip()
+        entity_type = args.get("entity_type")
+        max_hops = min(max(args.get("max_hops", 1) or 1, 1), 2)
+
+        if not entity_name:
+            return {"content": [{"type": "text", "text": "entity_name é obrigatório"}], "is_error": True}
+
+        try:
+            user_id = _resolve_user_id(args)
+
+            def _query():
+                from app import db
+                from sqlalchemy import text as sql_text
+                from ..services.knowledge_graph_service import _normalize_name
+
+                normalized = _normalize_name(entity_name)
+
+                # 1. Buscar entidades matching
+                entity_sql = """
+                    SELECT id, entity_type, entity_name, mention_count
+                    FROM agent_memory_entities
+                    WHERE user_id = ANY(:user_ids)
+                    AND LOWER(entity_name) LIKE LOWER(:pattern)
+                """
+                params: dict = {
+                    "user_ids": [user_id, 0],
+                    "pattern": f"%{normalized}%",
+                }
+                if entity_type:
+                    entity_sql += " AND entity_type = :etype"
+                    params["etype"] = entity_type.lower()
+                entity_sql += " ORDER BY mention_count DESC LIMIT 10"
+
+                entities = db.session.execute(sql_text(entity_sql), params).fetchall()
+
+                if not entities:
+                    return f"Nenhuma entidade encontrada para '{entity_name}'.", {
+                        "entity_name": entity_name,
+                        "entities_found": 0,
+                        "relations": [],
+                        "memories": [],
+                    }
+
+                entity_ids = [e[0] for e in entities]
+                entity_map = {e[0]: {"type": e[1], "name": e[2], "mentions": e[3]} for e in entities}
+
+                # 2. Hop 1: relações diretas (source OU target)
+                rel_sql = """
+                    SELECT r.source_entity_id, r.target_entity_id, r.relation_type,
+                           r.weight, e_src.entity_name, e_src.entity_type,
+                           e_tgt.entity_name, e_tgt.entity_type
+                    FROM agent_memory_entity_relations r
+                    JOIN agent_memory_entities e_src ON r.source_entity_id = e_src.id
+                    JOIN agent_memory_entities e_tgt ON r.target_entity_id = e_tgt.id
+                    WHERE r.source_entity_id = ANY(:eids) OR r.target_entity_id = ANY(:eids)
+                    ORDER BY r.weight DESC
+                    LIMIT 30
+                """
+                rel_rows = db.session.execute(sql_text(rel_sql), {"eids": entity_ids}).fetchall()
+
+                relations = []
+                hop1_entity_ids = set(entity_ids)
+                for r in rel_rows:
+                    relations.append({
+                        "source": r[4], "source_type": r[5],
+                        "target": r[6], "target_type": r[7],
+                        "relation": r[3], "weight": round(r[3] or 0, 2) if r[3] else 0,
+                        "relation_type": r[2],
+                        "hop": 1,
+                    })
+                    hop1_entity_ids.add(r[0])
+                    hop1_entity_ids.add(r[1])
+
+                # 3. Hop 2 (opcional)
+                if max_hops >= 2 and hop1_entity_ids - set(entity_ids):
+                    hop2_ids = list(hop1_entity_ids - set(entity_ids))[:15]
+                    rel2_rows = db.session.execute(sql_text("""
+                        SELECT r.source_entity_id, r.target_entity_id, r.relation_type,
+                               r.weight, e_src.entity_name, e_src.entity_type,
+                               e_tgt.entity_name, e_tgt.entity_type
+                        FROM agent_memory_entity_relations r
+                        JOIN agent_memory_entities e_src ON r.source_entity_id = e_src.id
+                        JOIN agent_memory_entities e_tgt ON r.target_entity_id = e_tgt.id
+                        WHERE (r.source_entity_id = ANY(:eids) OR r.target_entity_id = ANY(:eids))
+                        AND r.source_entity_id != ALL(:orig) AND r.target_entity_id != ALL(:orig)
+                        ORDER BY r.weight DESC
+                        LIMIT 15
+                    """), {"eids": hop2_ids, "orig": entity_ids}).fetchall()
+
+                    for r in rel2_rows:
+                        relations.append({
+                            "source": r[4], "source_type": r[5],
+                            "target": r[6], "target_type": r[7],
+                            "relation": r[3], "weight": round(r[3] or 0, 2) if r[3] else 0,
+                            "relation_type": r[2],
+                            "hop": 2,
+                        })
+
+                # 4. Memórias associadas às entidades encontradas
+                all_eids = list(hop1_entity_ids)
+                mem_sql = """
+                    SELECT DISTINCT m.path, LEFT(m.content, 100) as preview
+                    FROM agent_memories m
+                    JOIN agent_memory_entity_links l ON l.memory_id = m.id
+                    WHERE l.entity_id = ANY(:eids)
+                    AND m.is_cold = false
+                    LIMIT 10
+                """
+                mem_rows = db.session.execute(sql_text(mem_sql), {"eids": all_eids}).fetchall()
+
+                memories = [{"path": m[0], "preview": m[1]} for m in mem_rows]
+
+                # Format text output
+                lines = [f"Entidades encontradas para '{entity_name}':"]
+                for e in entities:
+                    lines.append(f"  [{e[1]}] {e[2]} (menções: {e[3]})")
+
+                if relations:
+                    lines.append(f"\nRelações ({len(relations)}):")
+                    for rel in relations[:20]:
+                        hop_label = f" [hop {rel['hop']}]" if rel['hop'] > 1 else ""
+                        lines.append(
+                            f"  {rel['source']} --{rel['relation_type']}--> "
+                            f"{rel['target']} (peso: {rel['weight']}){hop_label}"
+                        )
+
+                if memories:
+                    lines.append(f"\nMemórias associadas ({len(memories)}):")
+                    for mem in memories:
+                        lines.append(f"  {mem['path']}: {mem['preview']}")
+
+                text = "\n".join(lines)
+                structured = {
+                    "entity_name": entity_name,
+                    "entities_found": len(entities),
+                    "entities": [entity_map[eid] for eid in entity_ids],
+                    "relations": relations,
+                    "memories": memories,
+                }
+                return text, structured
+
+            result = _execute_with_context(_query)
+            if isinstance(result, tuple):
+                text, structured = result
+            else:
+                text = str(result)
+                structured = {"entity_name": entity_name, "entities_found": 0, "relations": [], "memories": []}
+
+            return {
+                "content": [{"type": "text", "text": text}],
+                "structuredContent": structured,
+            }
+
+        except PermissionError as e:
+            return {"content": [{"type": "text", "text": str(e)}], "is_error": True}
+        except Exception as e:
+            error_msg = f"Erro ao consultar knowledge graph: {str(e)}"
+            logger.error(f"[MEMORY_MCP] {error_msg}")
+            return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
+
+    @enhanced_tool(
         "register_improvement",
         "Registra sugestao de melhoria para o Claude Code (dev). "
         "Use quando descobrir: bug em skill existente (skill_bug), "
@@ -2846,7 +3034,7 @@ try:
     # Criar MCP server in-process
     memory_server = create_enhanced_mcp_server(
         name="memory-tools",
-        version="2.1.0",
+        version="2.2.0",
         tools=[
             view_memories,
             save_memory,
@@ -2859,11 +3047,12 @@ try:
             restore_memory_version,
             resolve_pendencia,
             log_system_pitfall,
+            query_knowledge_graph,
             register_improvement,
         ],
     )
 
-    logger.info("[MEMORY_MCP] Enhanced MCP 'memory' v2.1.0 registrado (12 tools, structuredContent)")
+    logger.info("[MEMORY_MCP] Enhanced MCP 'memory' v2.2.0 registrado (13 tools, structuredContent)")
 
 except ImportError as e:
     # claude_agent_sdk não disponível (ex: rodando fora do agente)

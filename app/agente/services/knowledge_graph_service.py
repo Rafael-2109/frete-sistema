@@ -53,8 +53,8 @@ _RE_VALOR = re.compile(r'R\$\s*([\d.,]+)')
 # Hop 2 traversal limits
 _HOP2_MAX_RELATED_ENTITIES = 15
 _HOP2_MAX_MEMORIES = 5
-_HOP2_SIMILARITY_FACTOR = 0.3
-_HOP2_SIMILARITY_CAP = 0.5
+_HOP2_SIMILARITY_FACTOR = 0.5
+_HOP2_SIMILARITY_CAP = 0.7
 
 # Vocabulário controlado de entity_types (auditoria 2026-03-23)
 _VALID_ENTITY_TYPES = frozenset({
