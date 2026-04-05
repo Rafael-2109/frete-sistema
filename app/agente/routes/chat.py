@@ -1355,9 +1355,11 @@ def api_user_answer():
             if tool_input and isinstance(tool_input, dict):
                 questions = tool_input.get('questions', [])
                 for q in questions:
-                    header = (q.get('header') or '').lower()
-                    if header in ('roteamento', 'routing'):
-                        question_text = q.get('question', '')
+                    question_text = q.get('question', '')
+                    # Detectar routing questions pelo conteúdo da pergunta
+                    # (header não é campo válido no schema do AskUserQuestion)
+                    q_lower = question_text.lower()
+                    if 'detectei' in q_lower or 'roteamento' in q_lower:
                         answer_text = answers.get(question_text, '')
                         if answer_text:
                             _record_routing_resolution(

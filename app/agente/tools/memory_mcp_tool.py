@@ -1129,8 +1129,9 @@ def _track_correction_feedback(user_id: int, correction_path: str, correction_co
         cutoff = now - timedelta(minutes=30)
 
         # Buscar memórias injetadas recentemente (mesmo turno) que NÃO são a correção atual
+        # Inclui user_id=0 (empresa) — memórias compartilhadas são injetadas em todos os contextos
         recent = AgentMemory.query.filter(
-            AgentMemory.user_id == user_id,
+            AgentMemory.user_id.in_([user_id, 0]),
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.last_accessed_at >= cutoff,
             AgentMemory.usage_count > 0,
@@ -1680,6 +1681,7 @@ try:
             try:
                 from ..services.memory_consolidator import maybe_consolidate, maybe_move_to_cold, maybe_gc_cold_memories
                 _consolidate_user_id = actual_user_id
+                
                 def _consolidate_cold_gc():
                     if _consolidate_user_id != 0:
                         maybe_consolidate(_consolidate_user_id)
