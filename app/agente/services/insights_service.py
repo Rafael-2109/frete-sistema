@@ -657,13 +657,31 @@ def _calc_users(sessions: List) -> Dict[str, Any]:
     }
 
 
+_FAREWELL_PATTERNS = [
+    'obrigad', 'brigad', 'valeu', 'encerr', 'finaliz', 'tchau',
+    'era isso', 'era só isso', 'era so isso', 'ok obrigado', 'perfeito',
+    'resolvido', 'consegui', 'deu certo',
+]
+
+
+def _is_deliberate_end(messages: list) -> bool:
+    """Check if the last user message signals a deliberate session ending."""
+    user_msgs = [m for m in messages if m.get('role') == 'user']
+    if not user_msgs:
+        return False
+    last_content = (user_msgs[-1].get('content') or '').lower().strip()
+    if not last_content or len(last_content) > 200:
+        return False
+    return any(p in last_content for p in _FAREWELL_PATTERNS)
+
+
 def _calc_sessions(sessions: List) -> Dict[str, Any]:
     """
     Monta lista unificada de sessoes com status computado.
 
     Status:
-        resolved  - >= 4 msgs E usou tools
-        abandoned - <= 3 msgs
+        resolved  - >= 4 msgs E usou tools, OU <= 3 msgs com tools/encerramento deliberado
+        abandoned - <= 3 msgs sem tools e sem sinal de encerramento
         no_tools  - >= 5 msgs sem tools
         normal    - demais
     """
@@ -693,7 +711,11 @@ def _calc_sessions(sessions: List) -> Dict[str, Any]:
         if msg_count >= 4 and has_tools:
             status = 'resolved'
         elif msg_count <= 3 and msg_count > 0:
-            status = 'abandoned'
+            # Sessao curta: verificar se foi encerramento deliberado ou eficiente
+            if has_tools or _is_deliberate_end(messages):
+                status = 'resolved'
+            else:
+                status = 'abandoned'
         elif msg_count >= 5 and not has_tools:
             status = 'no_tools'
         else:

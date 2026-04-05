@@ -3338,6 +3338,13 @@ def api_insights_routing():
 
         data = get_routing_metrics(days=days, user_id=user_id)
 
+        # Detect service-level error (internal catch returns {'error': '...'})
+        if data.get('error'):
+            return jsonify({
+                'success': False,
+                'error': data['error'],
+            }), 500
+
         return jsonify({
             'success': True,
             'data': data,

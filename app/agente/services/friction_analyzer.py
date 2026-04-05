@@ -40,6 +40,13 @@ ABANDONED_THRESHOLD = 3
 # Tamanho mínimo do prefix para agrupamento de similaridade (otimização)
 PREFIX_SIZE = 10
 
+# Padrões de encerramento deliberado (português)
+_FAREWELL_PATTERNS = [
+    'obrigad', 'brigad', 'valeu', 'encerr', 'finaliz', 'tchau',
+    'era isso', 'era só isso', 'era so isso', 'ok obrigado', 'perfeito',
+    'resolvido', 'consegui', 'deu certo',
+]
+
 
 def analyze_friction(
     days: int = 30,
@@ -254,11 +261,25 @@ def _find_repeated_queries(
     return clusters
 
 
+def _is_deliberate_end(user_messages: list) -> bool:
+    """Check if the last user message signals a deliberate session ending."""
+    if not user_messages:
+        return False
+    last_content = (user_messages[-1].get('content') or '').lower().strip()
+    if not last_content or len(last_content) > 200:
+        return False
+    return any(p in last_content for p in _FAREWELL_PATTERNS)
+
+
 def _find_abandoned_sessions(
     session_data: List[Dict],
 ) -> List[Dict[str, Any]]:
     """
     Encontra sessões abandonadas (poucas mensagens).
+
+    Exclui sessões que:
+    - Tiveram uso de tools (agente respondeu de forma substantiva)
+    - Foram encerradas deliberadamente (farewell/obrigado/encerre)
 
     Args:
         session_data: Lista de informações de sessão
@@ -270,6 +291,12 @@ def _find_abandoned_sessions(
 
     for s in session_data:
         if s['message_count'] <= ABANDONED_THRESHOLD and s['message_count'] > 0:
+            # Excluir sessões com tool usage (resolução eficiente)
+            if s.get('tools_used'):
+                continue
+            # Excluir encerramentos deliberados
+            if _is_deliberate_end(s.get('user_messages', [])):
+                continue
             # Sessão com poucas mensagens e sem continuação
             abandoned.append({
                 'session_id': s['session_id'],

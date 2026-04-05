@@ -1398,13 +1398,42 @@ async function loadRoutingData() {
   const days = document.getElementById('periodSelect')?.value || 30;
   try {
     const res = await fetch(`/agente/api/insights/routing?days=${days}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
     const json = await res.json();
-    if (!json.success || !json.data) return;
+    if (!json.success) throw new Error(json.error || 'Erro ao carregar routing');
+
+    const data = json.data;
+
+    // Detect backend error wrapped in success response (defense-in-depth)
+    if (data.error) {
+      _showRoutingError(data.error);
+      return;
+    }
+
+    // Clear any previous error banner
+    const tab = document.getElementById('tab-routing');
+    const prevBanner = tab?.querySelector('.routing-error-banner');
+    if (prevBanner) prevBanner.remove();
+
     window._routingLoaded = true;
-    renderRoutingTab(json.data);
+    renderRoutingTab(data);
   } catch (e) {
-    console.error('Routing load error:', e);
+    console.error('[INSIGHTS] Routing load error:', e);
+    _showRoutingError(e.message);
   }
+}
+
+function _showRoutingError(msg) {
+  const tab = document.getElementById('tab-routing');
+  if (!tab) return;
+  const existing = tab.querySelector('.routing-error-banner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.className = 'routing-error-banner';
+  banner.style.cssText = 'text-align:center;padding:2rem;color:var(--semantic-danger);';
+  banner.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${escHtml(msg || 'Erro desconhecido')}`;
+  tab.prepend(banner);
 }
 
 function renderRoutingTab(d) {
@@ -1419,7 +1448,7 @@ function renderRoutingTab(d) {
   const hs = document.getElementById('routingHealthScore');
   if (hs) {
     const score = d.health_score || 0;
-    hs.style.color = score >= 70 ? 'var(--success)' : score >= 40 ? 'var(--warning)' : 'var(--danger)';
+    hs.style.color = score >= 70 ? 'var(--semantic-success)' : score >= 40 ? 'var(--semantic-warning)' : 'var(--semantic-danger)';
   }
 
   // Instrumentação
@@ -1432,26 +1461,36 @@ function renderRoutingTab(d) {
       usage_count_ativo: 'usage_count',
     };
     instDiv.innerHTML = Object.entries(d.instrumentacao).map(([k, v]) => {
-      const icon = v ? '<i class="fas fa-check-circle" style="color:var(--success);"></i>' :
-                       '<i class="fas fa-times-circle" style="color:var(--danger);"></i>';
+      const icon = v ? '<i class="fas fa-check-circle" style="color:var(--semantic-success);"></i>' :
+                       '<i class="fas fa-times-circle" style="color:var(--semantic-danger);"></i>';
       return `${icon} ${labels[k] || k}: <strong>${v ? 'Ativo' : 'Morto'}</strong><br>`;
     }).join('');
   }
 
   // Skills table
   const skillsBody = document.getElementById('routingSkillsBody');
-  if (skillsBody && d.skill_distribution) {
-    skillsBody.innerHTML = d.skill_distribution.map(s =>
-      `<tr><td>${s.tool}</td><td>${s.count}</td></tr>`
-    ).join('');
+  if (skillsBody) {
+    const skills = d.skill_distribution || [];
+    if (!skills.length) {
+      skillsBody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--text-muted);padding:1rem;">Nenhum</td></tr>';
+    } else {
+      skillsBody.innerHTML = skills.map(s =>
+        `<tr><td>${escHtml(s.tool)}</td><td>${s.count}</td></tr>`
+      ).join('');
+    }
   }
 
   // Topics table
   const topicsBody = document.getElementById('routingTopicsBody');
-  if (topicsBody && d.topics) {
-    topicsBody.innerHTML = d.topics.map(t =>
-      `<tr><td>${t.topic}</td><td>${t.count}</td></tr>`
-    ).join('');
+  if (topicsBody) {
+    const topics = d.topics || [];
+    if (!topics.length) {
+      topicsBody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--text-muted);padding:1rem;">Nenhum</td></tr>';
+    } else {
+      topicsBody.innerHTML = topics.map(t =>
+        `<tr><td>${escHtml(t.topic)}</td><td>${t.count}</td></tr>`
+      ).join('');
+    }
   }
 
   // Struggling table
@@ -1459,8 +1498,8 @@ function renderRoutingTab(d) {
   if (strBody) {
     if (d.struggling?.length) {
       strBody.innerHTML = d.struggling.map(s =>
-        `<tr><td>${s.data}</td><td>${s.user_id}</td><td>${s.message_count}</td><td>${s.n_tools}</td>` +
-        `<td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.primeira_msg || ''}</td></tr>`
+        `<tr><td>${escHtml(s.data)}</td><td>${s.user_id}</td><td>${s.message_count}</td><td>${s.n_tools}</td>` +
+        `<td style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(s.primeira_msg || '')}</td></tr>`
       ).join('');
     } else {
       strBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Nenhuma sessao struggling</td></tr>';
@@ -1469,10 +1508,15 @@ function renderRoutingTab(d) {
 
   // Corrections table
   const corrBody = document.getElementById('routingCorrectionsBody');
-  if (corrBody && d.corrections) {
-    corrBody.innerHTML = d.corrections.map(c =>
-      `<tr><td>${(c.created_at || '').slice(0, 10)}</td><td>${c.path?.split('/').pop() || c.path}</td></tr>`
-    ).join('') || '<tr><td colspan="2" style="text-align:center; color:var(--text-muted);">Nenhuma correcao</td></tr>';
+  if (corrBody) {
+    const corrs = d.corrections || [];
+    if (!corrs.length) {
+      corrBody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--text-muted);padding:1rem;">Nenhuma correcao</td></tr>';
+    } else {
+      corrBody.innerHTML = corrs.map(c =>
+        `<tr><td>${(c.created_at || '').slice(0, 10)}</td><td>${escHtml(c.path?.split('/').pop() || c.path)}</td></tr>`
+      ).join('');
+    }
   }
 
   // Top corrected memories
@@ -1481,7 +1525,7 @@ function renderRoutingTab(d) {
   if (tcCard && tcBody && d.top_corrected?.length) {
     tcCard.style.display = 'block';
     tcBody.innerHTML = d.top_corrected.map(m =>
-      `<tr><td>${m.path?.split('/').pop() || m.path}</td><td>${m.correction_count}</td><td>${m.usage_count}</td><td>${m.importance_score}</td></tr>`
+      `<tr><td>${escHtml(m.path?.split('/').pop() || m.path)}</td><td>${m.correction_count}</td><td>${m.usage_count}</td><td>${m.importance_score}</td></tr>`
     ).join('');
   }
 }
