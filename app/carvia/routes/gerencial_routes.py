@@ -354,6 +354,7 @@ def register_gerencial_routes(bp):
                             'Emitente': it.get('nome_emitente'),
                             'Destinatario': it.get('nome_destinatario'),
                             'UF Destino': it.get('uf_destinatario'),
+                            'Cidade Destino': it.get('cidade_destinatario'),
                             'Codigo Produto': it.get('codigo_produto'),
                             'Descricao': it.get('descricao_item'),
                             'Modelo Moto': it.get('modelo_moto_nome'),

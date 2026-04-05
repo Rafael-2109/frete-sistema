@@ -224,6 +224,8 @@
                                     <th class="text-end">Valor Item</th>
                                     <th class="text-end">Peso NF (kg)</th>
                                     <th class="text-end">Motos NF</th>
+                                    <th>UF</th>
+                                    <th>Cidade</th>
                                     <th>CTe</th>
                                     <th class="text-end">Valor CTe</th>
                                     <th class="text-end">R$/Unid|Kg</th>
@@ -274,6 +276,16 @@
                                             {% else %}
                                                 <span class="text-muted">0</span>
                                             {% endif %}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if nf_changed %}
+                                            {{ it.uf_destinatario or '-' }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if nf_changed %}
+                                            <small>{{ it.cidade_destinatario or '-' }}</small>
                                         {% endif %}
                                     </td>
                                     <td>
