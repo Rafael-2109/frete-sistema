@@ -218,12 +218,15 @@
                                     <th>NF</th>
                                     <th>Produto</th>
                                     <th>Codigo</th>
+                                    <th>Modelo Moto</th>
+                                    <th class="text-end">Peso Cubado</th>
                                     <th class="text-end">Qtd</th>
                                     <th class="text-end">Valor Item</th>
                                     <th class="text-end">Peso NF (kg)</th>
                                     <th class="text-end">Motos NF</th>
                                     <th>CTe</th>
                                     <th class="text-end">Valor CTe</th>
+                                    <th class="text-end">R$/Unid|Kg</th>
                                     <th class="text-end">Rateio NF</th>
                                     <th class="text-end">Rateio Item</th>
                                     <th>Criterio</th>
@@ -243,6 +246,20 @@
                                     </td>
                                     <td title="{{ it.descricao_item }}">{{ it.descricao_item|truncate(40) if it.descricao_item else '-' }}</td>
                                     <td><small class="text-muted">{{ it.codigo_produto or '-' }}</small></td>
+                                    <td>
+                                        {% if it.modelo_moto_nome %}
+                                            <span class="badge bg-primary bg-opacity-75">{{ it.modelo_moto_nome }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if it.peso_cubado_modelo %}
+                                            {{ it.peso_cubado_modelo|numero_br(1) }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td class="text-end">{{ it.quantidade|numero_br(0) if it.quantidade else '-' }}</td>
                                     <td class="text-end valor-col">{{ it.valor_total_item|valor_br if it.valor_total_item else '-' }}</td>
                                     <td class="text-end">
@@ -268,6 +285,14 @@
                                     <td class="text-end valor-col">
                                         {% if cte_changed %}
                                             {{ it.cte_valor|valor_br if it.cte_valor else '-' }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end valor-col">
+                                        {% if cte_changed and it.valor_por_unidade_kg %}
+                                            {{ it.valor_por_unidade_kg|valor_br }}
+                                            <small class="text-muted d-block">{{ it.unidade_label }}</small>
+                                        {% elif cte_changed %}
+                                            <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td class="text-end valor-col">

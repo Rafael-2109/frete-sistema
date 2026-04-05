@@ -230,6 +230,7 @@ class GerencialService:
         """
         from app.carvia.models import (
             CarviaNf, CarviaNfItem, CarviaOperacao, CarviaOperacaoNf,
+            CarviaModeloMoto,
         )
 
         moto_nf = _build_moto_count_per_nf_subquery('moto_nf_itens')
@@ -242,6 +243,8 @@ class GerencialService:
                 CarviaNfItem.quantidade,
                 CarviaNfItem.valor_unitario,
                 CarviaNfItem.valor_total_item,
+                CarviaModeloMoto.nome.label('modelo_moto_nome'),
+                CarviaModeloMoto.cubagem_minima.label('peso_cubado_modelo'),
                 CarviaNf.id.label('nf_id'),
                 CarviaNf.numero_nf,
                 CarviaNf.serie_nf,
@@ -262,6 +265,7 @@ class GerencialService:
             .join(CarviaNf, CarviaNf.id == CarviaNfItem.nf_id)
             .join(CarviaOperacaoNf, CarviaOperacaoNf.nf_id == CarviaNf.id)
             .join(CarviaOperacao, CarviaOperacao.id == CarviaOperacaoNf.operacao_id)
+            .outerjoin(CarviaModeloMoto, CarviaModeloMoto.id == CarviaNfItem.modelo_moto_id)
             .outerjoin(moto_nf, moto_nf.c.nf_id == CarviaNf.id)
             .filter(
                 CarviaNf.status == 'ATIVA',
@@ -296,6 +300,8 @@ class GerencialService:
                 'quantidade': float(r.quantidade) if r.quantidade else 0,
                 'valor_unitario': float(r.valor_unitario) if r.valor_unitario else None,
                 'valor_total_item': float(r.valor_total_item) if r.valor_total_item else None,
+                'modelo_moto_nome': r.modelo_moto_nome,
+                'peso_cubado_modelo': float(r.peso_cubado_modelo) if r.peso_cubado_modelo else None,
                 'nf_id': r.nf_id,
                 'numero_nf': r.numero_nf,
                 'serie_nf': r.serie_nf,
@@ -369,6 +375,25 @@ class GerencialService:
                 if diff_nf != 0:
                     nf_list[0]['nf_share'] += diff_nf
 
+            # Calcular valor por unidade|kg do CTe
+            if criterio in ('Motos', 'Direto (1:1)') and total_motos > 0:
+                valor_por_unidade_kg = float(
+                    (cte_valor / Decimal(str(total_motos))).quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP,
+                    )
+                )
+                unidade_label = 'R$/Unid'
+            elif total_peso > 0:
+                valor_por_unidade_kg = float(
+                    (cte_valor / total_peso).quantize(
+                        Decimal('0.01'), rounding=ROUND_HALF_UP,
+                    )
+                )
+                unidade_label = 'R$/Kg'
+            else:
+                valor_por_unidade_kg = None
+                unidade_label = None
+
             # --- Etapa 2: Item-level rateio dentro de cada NF ---
             for n in nf_list:
                 nf_share = n['nf_share']
@@ -388,6 +413,8 @@ class GerencialService:
                             )
                         )
                         item['criterio_rateio'] = criterio
+                        item['valor_por_unidade_kg'] = valor_por_unidade_kg
+                        item['unidade_label'] = unidade_label
 
                     # Ajuste de centavos no nivel item
                     soma_it = sum(
@@ -405,6 +432,8 @@ class GerencialService:
                         item['rateio_nf'] = float(nf_share)
                         item['rateio_item'] = share
                         item['criterio_rateio'] = criterio
+                        item['valor_por_unidade_kg'] = valor_por_unidade_kg
+                        item['unidade_label'] = unidade_label
 
                 resultado.extend(nf_items)
 
