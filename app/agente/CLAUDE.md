@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~25.3K | **Arquivos**: 49 | **Atualizado**: 04/04/2026
+**LOC**: ~25.3K | **Arquivos**: 63 | **Atualizado**: 04/04/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -9,12 +9,27 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 ## Estrutura
 
 ```
-app/agente/                          # Root — 5 arquivos
-├── __init__.py                      # Blueprint registration
+app/agente/                          # Root ��� 4 arquivos
+├── __init__.py                      # Blueprint import de routes/ + init_app()
 ├── CLAUDE.md                        # Este arquivo (guia dev)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
-├── routes.py                        # Flask routes + SSE streaming
+├── routes/                          # Flask routes modularizadas — 15 arquivos
+│   ├── __init__.py                  # agente_bp + imports sub-modulos + re-exports Teams
+│   ├── _constants.py                # Constantes (timeouts, thresholds, upload)
+│   ├── _helpers.py                  # Helpers compartilhados (Teams + cross-module)
+│   ├── chat.py                      # Core SSE: api_chat, streaming, interrupt, user_answer
+│   ├── sessions.py                  # CRUD sessoes: list, messages, delete, rename, summaries
+│   ├── admin_learning.py            # Admin: session messages, generate/save correction
+│   ├── files.py                     # Upload/download/list/delete + helpers arquivo
+│   ├── health.py                    # api_health com cache
+│   ├── feedback.py                  # api_feedback 4 tipos
+│   ├── insights.py                  # pagina_insights + APIs dados
+│   ├── intelligence_report.py       # D7 cron bridge, csrf.exempt
+│   ├── improvement_dialogue.py      # D8 cron bridge + admin, csrf.exempt
+│   ├── memories.py                  # CRUD memorias + users + review
+│   ├── briefing.py                  # api_get_briefing
+│   └── _deprecated.py              # Scaffolding async migration (quarentena)
 ├── config/                          # Configuracao e controle de acesso — 6 arquivos
 │   ├── __init__.py
 │   ├── agent_loader.py              # Carregamento dinamico do agente
@@ -186,7 +201,7 @@ NUNCA remover o `yield None` no `finally` do generator — frontend trava espera
 **REGRA**: Ao adicionar NOVO error handler em `_stream_response()`, o `finally` block e a rede de seguranca definitiva — NAO precisa chamar `.set()` no novo handler (mas e boa pratica como defense-in-depth).
 
 ### R4: AskUserQuestion — blocking cross-arquivo
-Fluxo cruza 3 arquivos: `pending_questions.py` → `permissions.py` → `routes.py`
+Fluxo cruza 3 arquivos: `pending_questions.py` → `permissions.py` → `routes/chat.py`
 - Web: event_queue SSE → frontend responde → POST `/api/user-answer` → Event.set()
 - Teams: TeamsTask.status='awaiting_user_input' → Adaptive Card → POST resposta → Event.set()
 - Timeout web: 55s. Timeout Teams: 120s (`TEAMS_ASK_USER_TIMEOUT`)
@@ -214,13 +229,13 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 
 | Timeout | Valor | Fonte | Funcao |
 |---------|-------|-------|--------|
-| Heartbeat SSE | 10s | `routes.py:68` | Keep-alive para proxy |
+| Heartbeat SSE | 10s | `routes/_constants.py` | Keep-alive para proxy |
 | AskUser web | 55s | `pending_questions.py:30` | Espera resposta do usuario |
 | AskUser Teams | 120s | `feature_flags.py` | Idem, via Adaptive Card |
-| **Web inatividade** | 240s | `routes.py:78` | Renovavel a cada evento real (heartbeats NAO renovam) |
+| **Web inatividade** | 240s | `routes/_constants.py` | Renovavel a cada evento real (heartbeats NAO renovam) |
 | **Teams inatividade** | 240s | `services.py:848` | Renovavel a cada chunk recebido |
 | SDK stream_close | 240s | `client.py:547` | Timeout CLI hooks/MCP |
-| Web teto absoluto | 540s | `routes.py:77` | Teto absoluto SSE (Render 600s limit) |
+| Web teto absoluto | 540s | `routes/_constants.py` | Teto absoluto SSE (Render 600s limit) |
 | Teams teto absoluto | 600s | `services.py:849` | Teto absoluto Teams |
 | Render hard limit | 600s | infra | Request timeout do servidor |
 
@@ -306,14 +321,14 @@ as capacidades extras — resultado: falha em investigacao cross-user.
 Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 1. **`sdk/client.py:_parse_sdk_message()`** — emitir `StreamEvent(type='xxx', ...)`
-2. **`routes.py:_process_stream_event()`** — `elif event.type == 'xxx':` → `_sse_event('xxx', ...)`
+2. **`routes/chat.py:_process_stream_event()`** — `elif event.type == 'xxx':` → `_sse_event('xxx', ...)`
 3. **`static/agente/js/chat.js`** — `case 'xxx':` no switch de SSE
 
 **Se uma camada faltar, o evento e silenciosamente descartado.** Nao ha validacao automatica.
 
 ### Mapa de eventos (atualizado 2026-04-01)
 
-| Evento | client.py | routes.py | chat.js | Origem |
+| Evento | client.py | routes/chat.py | chat.js | Origem |
 |--------|-----------|-----------|---------|--------|
 | `init` | StreamEvent | _sse_event | case | Streaming paths (v2/v3) |
 | `text` | StreamEvent | _sse_event | case | AssistantMessage.TextBlock |
@@ -366,7 +381,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 - `pattern_analyzer.py:extrair_conhecimento_sessao()` — via Sonnet em daemon thread (background)
 - Contexto: TODAS as mensagens da sessao (trunca per-msg a 3K chars, safety cap 40K chars)
 - Categorias: term_definitions, role_identifications, business_rules, corrections
-- Trigger: routes.py a cada exchange (min 3 msgs, flag `USE_POST_SESSION_EXTRACTION`)
+- Trigger: routes/_helpers.py a cada exchange (min 3 msgs, flag `USE_POST_SESSION_EXTRACTION`)
 - Custo: ~$0.003 por execucao (Sonnet, volume baixo ~4 sessoes/dia)
 
 ### Role Awareness
@@ -398,7 +413,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 - **Task messages** (`TaskStartedMessage`, `TaskProgressMessage`, `TaskNotificationMessage`): SSE events para observabilidade de subagentes.
 - **`agent_id`/`agent_type` em hooks**: `PostToolUseHookInput` logados no `[AUDIT] PostToolUse`.
 - **`effort` field nativo**: `ClaudeAgentOptions.effort` — substituiu `max_thinking_tokens`.
-- **`RateLimitEvent`** (0.1.50): Pipeline 3-layer: client.py → routes.py → chat.js (toast).
+- **`RateLimitEvent`** (0.1.50): Pipeline 3-layer: client.py → routes/chat.py → chat.js (toast).
 - **`HookMatcher.timeout`** (0.1.50): `UserPromptSubmit` usa 120s.
 - **`AgentDefinition.skills`** (0.1.49): Skills nativas via `_SDK_HAS_NATIVE_FIELDS`.
 

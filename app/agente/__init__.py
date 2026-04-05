@@ -8,18 +8,8 @@ Data: 30/11/2025
 Modelo: claude-opus-4-6
 """
 
-from flask import Blueprint
-
-# Blueprint do agente
-agente_bp = Blueprint(
-    'agente',
-    __name__,
-    url_prefix='/agente',
-    template_folder='templates'
-)
-
-# Importa rotas após criar blueprint para evitar circular import
-from . import routes  # noqa: F401, E402
+# Blueprint importado do pacote routes/ (padrao financeiro)
+from .routes import agente_bp
 
 
 def init_app(app):
