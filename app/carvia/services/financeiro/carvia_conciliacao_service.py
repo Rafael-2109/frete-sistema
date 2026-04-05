@@ -4,11 +4,12 @@ Servico de Conciliacao Bancaria CarVia
 =======================================
 
 Logica de negocio para conciliar linhas do extrato bancario (OFX)
-com documentos financeiros (faturas cliente, faturas transportadora, despesas).
+com documentos financeiros (faturas cliente, faturas transportadora,
+despesas, custos de entrega e receitas).
 
 Regras:
-- CREDITO (valor > 0) → somente faturas cliente
-- DEBITO (valor < 0)  → faturas transportadora + despesas
+- CREDITO (valor > 0) → faturas cliente + receitas
+- DEBITO (valor < 0)  → faturas transportadora + despesas + custos entrega
 - Suporte 1:N e N:1 (via junction carvia_conciliacoes)
 - total_conciliado e conciliado atualizados em ambos lados
 """
@@ -502,11 +503,28 @@ class CarviaConciliacaoService:
             linha.status_conciliacao = 'PARCIAL'
 
     @staticmethod
+    def _tem_movimentacao_fc(tipo_doc, doc_id):
+        """Verifica se existe movimentacao no Fluxo de Caixa para este documento.
+
+        Usado como guard na desconciliacao: se existe movimentacao FC,
+        o pagamento via Fluxo de Caixa e autoritativo e NAO deve ser
+        revertido pela desconciliacao bancaria.
+        """
+        from app.carvia.models import CarviaContaMovimentacao
+        return db.session.query(
+            CarviaContaMovimentacao.query.filter(
+                CarviaContaMovimentacao.tipo_doc == tipo_doc,
+                CarviaContaMovimentacao.doc_id == doc_id,
+            ).exists()
+        ).scalar()
+
+    @staticmethod
     def _atualizar_totais_documento(tipo_documento, documento_id, usuario=None):
         """Recalcula total_conciliado, conciliado flag e status de pagamento.
 
         Quando 100% conciliado: marca status como PAGA/PAGO/RECEBIDO + pago_em/pago_por.
         Quando desconciliado (nao mais 100%): reverte status para PENDENTE + limpa pago_em/pago_por.
+        Guard: se existe CarviaContaMovimentacao (pago via Fluxo de Caixa), NAO reverte status.
         """
         from app.carvia.models import (
             CarviaConciliacao,
@@ -540,10 +558,16 @@ class CarviaConciliacaoService:
                     doc.pago_por = usuario
                     logger.info("Fatura cliente %s quitada via conciliacao por %s", doc.numero_fatura, usuario)
                 elif not agora_conciliado and doc.status == 'PAGA':
-                    doc.status = 'PENDENTE'
-                    doc.pago_em = None
-                    doc.pago_por = None
-                    logger.info("Fatura cliente %s revertida para PENDENTE (desconciliacao)", doc.numero_fatura)
+                    if not CarviaConciliacaoService._tem_movimentacao_fc('fatura_cliente', documento_id):
+                        doc.status = 'PENDENTE'
+                        doc.pago_em = None
+                        doc.pago_por = None
+                        logger.info("Fatura cliente %s revertida para PENDENTE (desconciliacao)", doc.numero_fatura)
+                    else:
+                        logger.info(
+                            "Fatura cliente %s desconciliada mas status mantido PAGA "
+                            "(pagamento via Fluxo de Caixa ativo)", doc.numero_fatura,
+                        )
 
         elif tipo_documento == 'fatura_transportadora':
             doc = db.session.get(CarviaFaturaTransportadora, documento_id)
@@ -557,10 +581,16 @@ class CarviaConciliacaoService:
                     doc.pago_por = usuario
                     logger.info("Fatura transportadora %s quitada via conciliacao por %s", doc.numero_fatura, usuario)
                 elif not agora_conciliado and doc.status_pagamento == 'PAGO':
-                    doc.status_pagamento = 'PENDENTE'
-                    doc.pago_em = None
-                    doc.pago_por = None
-                    logger.info("Fatura transportadora %s revertida para PENDENTE (desconciliacao)", doc.numero_fatura)
+                    if not CarviaConciliacaoService._tem_movimentacao_fc('fatura_transportadora', documento_id):
+                        doc.status_pagamento = 'PENDENTE'
+                        doc.pago_em = None
+                        doc.pago_por = None
+                        logger.info("Fatura transportadora %s revertida para PENDENTE (desconciliacao)", doc.numero_fatura)
+                    else:
+                        logger.info(
+                            "Fatura transportadora %s desconciliada mas status mantido PAGO "
+                            "(pagamento via Fluxo de Caixa ativo)", doc.numero_fatura,
+                        )
 
         elif tipo_documento == 'despesa':
             doc = db.session.get(CarviaDespesa, documento_id)
@@ -574,10 +604,16 @@ class CarviaConciliacaoService:
                     doc.pago_por = usuario
                     logger.info("Despesa %s quitada via conciliacao por %s", doc.id, usuario)
                 elif not agora_conciliado and doc.status == 'PAGO':
-                    doc.status = 'PENDENTE'
-                    doc.pago_em = None
-                    doc.pago_por = None
-                    logger.info("Despesa %s revertida para PENDENTE (desconciliacao)", doc.id)
+                    if not CarviaConciliacaoService._tem_movimentacao_fc('despesa', documento_id):
+                        doc.status = 'PENDENTE'
+                        doc.pago_em = None
+                        doc.pago_por = None
+                        logger.info("Despesa %s revertida para PENDENTE (desconciliacao)", doc.id)
+                    else:
+                        logger.info(
+                            "Despesa %s desconciliada mas status mantido PAGO "
+                            "(pagamento via Fluxo de Caixa ativo)", doc.id,
+                        )
 
                 # Propagar para comissao vinculada (se existir)
                 from app.carvia.models.comissao import CarviaComissaoFechamento
@@ -597,14 +633,15 @@ class CarviaConciliacaoService:
                             fechamento.numero_fechamento, documento_id, usuario,
                         )
                     elif not agora_conciliado and fechamento.status == 'PAGO':
-                        fechamento.status = 'PENDENTE'
-                        fechamento.pago_em = None
-                        fechamento.pago_por = None
-                        fechamento.data_pagamento = None
-                        logger.info(
-                            "Comissao %s revertida para PENDENTE (desconciliacao despesa #%d)",
-                            fechamento.numero_fechamento, documento_id,
-                        )
+                        if not CarviaConciliacaoService._tem_movimentacao_fc('despesa', documento_id):
+                            fechamento.status = 'PENDENTE'
+                            fechamento.pago_em = None
+                            fechamento.pago_por = None
+                            fechamento.data_pagamento = None
+                            logger.info(
+                                "Comissao %s revertida para PENDENTE (desconciliacao despesa #%d)",
+                                fechamento.numero_fechamento, documento_id,
+                            )
 
         elif tipo_documento == 'custo_entrega':
             doc = db.session.get(CarviaCustoEntrega, documento_id)
@@ -618,10 +655,16 @@ class CarviaConciliacaoService:
                     doc.pago_por = usuario
                     logger.info("Custo entrega %s quitado via conciliacao por %s", doc.numero_custo, usuario)
                 elif not agora_conciliado and doc.status == 'PAGO':
-                    doc.status = 'PENDENTE'
-                    doc.pago_em = None
-                    doc.pago_por = None
-                    logger.info("Custo entrega %s revertido para PENDENTE (desconciliacao)", doc.numero_custo)
+                    if not CarviaConciliacaoService._tem_movimentacao_fc('custo_entrega', documento_id):
+                        doc.status = 'PENDENTE'
+                        doc.pago_em = None
+                        doc.pago_por = None
+                        logger.info("Custo entrega %s revertido para PENDENTE (desconciliacao)", doc.numero_custo)
+                    else:
+                        logger.info(
+                            "Custo entrega %s desconciliado mas status mantido PAGO "
+                            "(pagamento via Fluxo de Caixa ativo)", doc.numero_custo,
+                        )
 
         elif tipo_documento == 'receita':
             doc = db.session.get(CarviaReceita, documento_id)
@@ -635,10 +678,16 @@ class CarviaConciliacaoService:
                     doc.recebido_por = usuario
                     logger.info("Receita %s marcada como RECEBIDO via conciliacao por %s", doc.id, usuario)
                 elif not agora_conciliado and doc.status == 'RECEBIDO':
-                    doc.status = 'PENDENTE'
-                    doc.recebido_em = None
-                    doc.recebido_por = None
-                    logger.info("Receita %s revertida para PENDENTE (desconciliacao)", doc.id)
+                    if not CarviaConciliacaoService._tem_movimentacao_fc('receita', documento_id):
+                        doc.status = 'PENDENTE'
+                        doc.recebido_em = None
+                        doc.recebido_por = None
+                        logger.info("Receita %s revertida para PENDENTE (desconciliacao)", doc.id)
+                    else:
+                        logger.info(
+                            "Receita %s desconciliada mas status mantido RECEBIDO "
+                            "(recebimento via Fluxo de Caixa ativo)", doc.id,
+                        )
 
     @staticmethod
     def obter_resumo():

@@ -779,7 +779,7 @@ def register_conciliacao_routes(bp):
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
-        tipos_validos = ('fatura_cliente', 'fatura_transportadora', 'despesa', 'custo_entrega')
+        tipos_validos = ('fatura_cliente', 'fatura_transportadora', 'despesa', 'custo_entrega', 'receita')
         if tipo not in tipos_validos:
             return jsonify({'erro': f'Tipo invalido: {tipo}'}), 400
 
@@ -917,6 +917,27 @@ def register_conciliacao_routes(bp):
                         {'label': 'Fornecedor', 'valor': doc.fornecedor_nome or '-'},
                         {'label': 'CNPJ Fornecedor', 'valor': doc.fornecedor_cnpj or '-'},
                         {'label': 'Data Custo', 'valor': _fmt_data(doc.data_custo)},
+                        {'label': 'Vencimento', 'valor': _fmt_data(doc.data_vencimento)},
+                        {'label': 'Valor', 'valor': _fmt_valor(doc.valor)},
+                        {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},
+                        {'label': 'Saldo', 'valor': _calc_saldo(doc.valor, doc.total_conciliado)},
+                        {'label': 'Status', 'valor': doc.status or '-'},
+                    ],
+                })
+
+            elif tipo == 'receita':
+                from app.carvia.models import CarviaReceita
+                doc = db.session.get(CarviaReceita, doc_id)
+                if not doc:
+                    return jsonify({'erro': 'Receita nao encontrada'}), 404
+                return jsonify({
+                    'titulo': 'Receita',
+                    'numero': f'REC-{doc.id:03d}',
+                    'url': f'/carvia/receitas/{doc.id}',
+                    'campos': [
+                        {'label': 'Tipo', 'valor': doc.tipo_receita or '-'},
+                        {'label': 'Descricao', 'valor': doc.descricao or '-'},
+                        {'label': 'Data Receita', 'valor': _fmt_data(doc.data_receita)},
                         {'label': 'Vencimento', 'valor': _fmt_data(doc.data_vencimento)},
                         {'label': 'Valor', 'valor': _fmt_valor(doc.valor)},
                         {'label': 'Conciliado', 'valor': _fmt_valor(doc.total_conciliado)},

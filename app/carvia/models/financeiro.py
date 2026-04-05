@@ -76,7 +76,7 @@ class CarviaContaMovimentacao(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     tipo_doc = db.Column(db.String(30), nullable=False)
-    # 'fatura_cliente' | 'fatura_transportadora' | 'despesa' | 'saldo_inicial' | 'ajuste'
+    # 'fatura_cliente' | 'fatura_transportadora' | 'despesa' | 'custo_entrega' | 'receita' | 'saldo_inicial' | 'ajuste'
     doc_id = db.Column(db.Integer, nullable=False)
     # FK conceitual (0 para saldo_inicial/ajuste)
     tipo_movimento = db.Column(db.String(10), nullable=False)
@@ -166,7 +166,7 @@ class CarviaConciliacao(db.Model):
         index=True
     )
     tipo_documento = db.Column(db.String(30), nullable=False)
-    # fatura_cliente | fatura_transportadora | despesa
+    # fatura_cliente | fatura_transportadora | despesa | custo_entrega | receita
     documento_id = db.Column(db.Integer, nullable=False)
     valor_alocado = db.Column(db.Numeric(15, 2), nullable=False)
     conciliado_por = db.Column(db.String(100), nullable=False)
@@ -189,6 +189,7 @@ class CarviaConciliacao(db.Model):
             'fatura_transportadora': 'FTRANSP',
             'despesa': 'DESP',
             'custo_entrega': 'CE',
+            'receita': 'REC',
         }
         prefixo = _PREFIXOS.get(self.tipo_documento, 'DOC')
         fallback = f'{prefixo}-{self.documento_id}'
@@ -207,6 +208,8 @@ class CarviaConciliacao(db.Model):
             from app.carvia.models import CarviaCustoEntrega
             doc = db.session.get(CarviaCustoEntrega, self.documento_id)
             return doc.numero_custo if doc else fallback
+        elif self.tipo_documento == 'receita':
+            return f'REC-{self.documento_id:03d}'
         return fallback
 
     @property
@@ -217,6 +220,7 @@ class CarviaConciliacao(db.Model):
             'fatura_transportadora': '/carvia/faturas-transportadora/{}',
             'despesa': '/carvia/despesas/{}',
             'custo_entrega': '/carvia/custos-entrega/{}',
+            'receita': '/carvia/receitas/{}',
         }
         template = _URLS.get(self.tipo_documento)
         if template:
