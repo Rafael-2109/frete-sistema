@@ -1040,7 +1040,27 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
 
         total_sessions = base_q.count()
         if total_sessions == 0:
-            return {'total_sessions': 0, 'period_days': days, 'error': 'Sem sessões no período'}
+            return {
+                'period_days': days,
+                'total_sessions': 0,
+                'sessions_com_summary': 0,
+                'health_score': 0,
+                'ambiguidade': {
+                    'sessions_askuser': 0, 'sessions_com_skill': 0,
+                    'taxa_askuser_pct': 0, 'taxa_skill_pct': 0,
+                },
+                'struggling': [],
+                'skill_distribution': [],
+                'corrections': [],
+                'top_corrected': [],
+                'topics': [],
+                'instrumentacao': {
+                    'correction_count_ativo': False,
+                    'resolves_to_ativo': False,
+                    'effective_count_ativo': False,
+                    'usage_count_ativo': False,
+                },
+            }
 
         # ── Taxa de ambiguidade (AskUserQuestion nos summaries) ──
         sessions_askuser = base_q.filter(
@@ -1058,7 +1078,7 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
         ).count()
 
         # ── Sessões struggling (muitas msgs, poucos tools) ──
-        struggling_rows = db.session.execute(sql_text("""
+        struggling_sql = """
             SELECT
                 s.id, s.user_id, s.message_count, s.created_at::date as data,
                 LEFT(s.data->'messages'->0->>'content', 120) as primeira_msg,
@@ -1068,9 +1088,13 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
             AND s.summary IS NOT NULL
             AND jsonb_array_length(COALESCE(s.summary->'ferramentas_usadas', '[]'::jsonb)) <= 2
             AND s.created_at >= :since
-            ORDER BY s.message_count DESC
-            LIMIT 10
-        """), {'since': since}).fetchall()
+        """
+        struggling_params = {'since': since}
+        if user_id:
+            struggling_sql += " AND s.user_id = :user_id"
+            struggling_params['user_id'] = user_id
+        struggling_sql += " ORDER BY s.message_count DESC LIMIT 10"
+        struggling_rows = db.session.execute(sql_text(struggling_sql), struggling_params).fetchall()
 
         struggling = [
             {
@@ -1081,7 +1105,7 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
         ]
 
         # ── Distribuição de skills (top 15) ──
-        skill_rows = db.session.execute(sql_text("""
+        skill_sql = """
             SELECT tool_name, COUNT(*) as vezes
             FROM (
                 SELECT jsonb_array_elements_text(summary->'ferramentas_usadas') as tool_name
@@ -1089,11 +1113,18 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
                 WHERE summary IS NOT NULL
                 AND summary->'ferramentas_usadas' IS NOT NULL
                 AND created_at >= :since
+        """
+        skill_params = {'since': since}
+        if user_id:
+            skill_sql += " AND user_id = :user_id"
+            skill_params['user_id'] = user_id
+        skill_sql += """
             ) sub
             GROUP BY tool_name
             ORDER BY vezes DESC
             LIMIT 15
-        """), {'since': since}).fetchall()
+        """
+        skill_rows = db.session.execute(sql_text(skill_sql), skill_params).fetchall()
 
         skill_distribution = [{'tool': r[0], 'count': r[1]} for r in skill_rows]
 
@@ -1127,7 +1158,7 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
         ]
 
         # ── Tópicos mais demandados ──
-        topic_rows = db.session.execute(sql_text("""
+        topic_sql = """
             SELECT topic, COUNT(*) as freq
             FROM (
                 SELECT jsonb_array_elements_text(summary->'topicos_abordados') as topic
@@ -1135,11 +1166,18 @@ def get_routing_metrics(days: int = 30, user_id: Optional[int] = None) -> Dict[s
                 WHERE summary IS NOT NULL
                 AND summary->'topicos_abordados' IS NOT NULL
                 AND created_at >= :since
+        """
+        topic_params = {'since': since}
+        if user_id:
+            topic_sql += " AND user_id = :user_id"
+            topic_params['user_id'] = user_id
+        topic_sql += """
             ) sub
             GROUP BY topic
             ORDER BY freq DESC
             LIMIT 15
-        """), {'since': since}).fetchall()
+        """
+        topic_rows = db.session.execute(sql_text(topic_sql), topic_params).fetchall()
 
         topics = [{'topic': r[0], 'count': r[1]} for r in topic_rows]
 
