@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 168,
+  "total_tabelas": 170,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -825,6 +825,15 @@
       ]
     },
     {
+      "name": "evento_supply_chain",
+      "description": "Tabela evento_supply_chain",
+      "key_fields": [
+        "tipo_evento",
+        "entidade",
+        "entidade_id"
+      ]
+    },
+    {
       "name": "eventos_entrega",
       "description": "Eventos de entrega (tentativa, sucesso, falha).",
       "key_fields": [
@@ -1287,6 +1296,15 @@
         "nome",
         "nome_completo",
         "papel"
+      ]
+    },
+    {
+      "name": "pessoal_orcamentos",
+      "description": "Tabela pessoal_orcamentos",
+      "key_fields": [
+        "ano_mes",
+        "categoria_id",
+        "valor_limite"
       ]
     },
     {

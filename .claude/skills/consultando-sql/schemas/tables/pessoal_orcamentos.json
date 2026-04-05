@@ -1,0 +1,42 @@
+{
+  "name": "pessoal_orcamentos",
+  "description": "Tabela pessoal_orcamentos",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "ano_mes",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "categoria_id",
+      "type": "integer",
+      "description": "FK → pessoal_categorias.id"
+    },
+    {
+      "name": "valor_limite",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "categoria_id",
+      "references": "pessoal_categorias.id"
+    }
+  ]
+}

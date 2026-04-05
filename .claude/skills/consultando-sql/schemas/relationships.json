@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 246,
+  "total_relationships": 249,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -102,6 +102,12 @@
       "from_table": "carvia_comissao_fechamento_ctes",
       "from_column": "operacao_id",
       "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_comissao_fechamentos",
+      "from_column": "despesa_id",
+      "to_table": "carvia_despesas",
       "to_column": "id"
     },
     {
@@ -312,6 +318,12 @@
       "from_table": "carvia_nf_itens",
       "from_column": "nf_id",
       "to_table": "carvia_nfs",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_nf_itens",
+      "from_column": "modelo_moto_id",
+      "to_table": "carvia_modelos_moto",
       "to_column": "id"
     },
     {
@@ -1248,6 +1260,12 @@
       "from_table": "pessoal_importacoes",
       "from_column": "conta_id",
       "to_table": "pessoal_contas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_orcamentos",
+      "from_column": "categoria_id",
+      "to_table": "pessoal_categorias",
       "to_column": "id"
     },
     {

@@ -53,6 +53,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_audit_acao",
+      "columns": [
+        "acao"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_audit_executado_em",
       "columns": [
         "executado_em"
@@ -71,13 +78,6 @@
       "name": "ix_carvia_audit_executado_por",
       "columns": [
         "executado_por"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_audit_acao",
-      "columns": [
-        "acao"
       ],
       "unique": false
     }

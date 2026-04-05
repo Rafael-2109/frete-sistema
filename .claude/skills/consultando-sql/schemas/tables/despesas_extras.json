@@ -172,16 +172,16 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_status",
+      "name": "ix_despesas_extras_nfd_id",
       "columns": [
-        "status"
+        "nfd_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_nfd_id",
+      "name": "ix_despesas_extras_status",
       "columns": [
-        "nfd_id"
+        "status"
       ],
       "unique": false
     },

@@ -32,6 +32,18 @@
       "type": "float",
       "description": "Multiplicador para cálculo de pedágio",
       "default": 1.0
+    },
+    {
+      "name": "comprimento_bau",
+      "type": "float"
+    },
+    {
+      "name": "largura_bau",
+      "type": "float"
+    },
+    {
+      "name": "altura_bau",
+      "type": "float"
     }
   ]
 }

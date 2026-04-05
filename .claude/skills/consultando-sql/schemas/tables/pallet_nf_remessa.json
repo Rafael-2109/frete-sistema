@@ -168,13 +168,6 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pallet_nf_remessa_numero_nf",
       "columns": [
         "numero_nf"
@@ -208,6 +201,13 @@
       "name": "ix_pallet_nf_remessa_odoo_account_move_id",
       "columns": [
         "odoo_account_move_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_remessa_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

@@ -135,16 +135,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_tipo_custo",
+      "name": "ix_carvia_custos_entrega_status",
       "columns": [
-        "tipo_custo"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_status",
+      "name": "ix_carvia_custos_entrega_tipo_custo",
       "columns": [
-        "status"
+        "tipo_custo"
       ],
       "unique": false
     },

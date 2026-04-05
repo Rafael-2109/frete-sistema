@@ -186,37 +186,9 @@
   ],
   "indices": [
     {
-      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
+      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
       "columns": [
-        "ofx_fitid"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
-      "columns": [
-        "numero_agendamento"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
-      "columns": [
-        "odoo_statement_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_beneficiario_cnpj",
-      "columns": [
-        "beneficiario_cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_pagador_cnpj",
-      "columns": [
-        "pagador_cnpj_cpf"
+        "ofx_checknum"
       ],
       "unique": false
     },
@@ -224,13 +196,6 @@
       "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
         "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
-      "columns": [
-        "ofx_checknum"
       ],
       "unique": false
     },
@@ -245,6 +210,13 @@
       "name": "idx_comp_data_vencimento",
       "columns": [
         "data_vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_beneficiario_cnpj",
+      "columns": [
+        "beneficiario_cnpj_cpf"
       ],
       "unique": false
     },
@@ -268,6 +240,34 @@
         "odoo_statement_line_id"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
+      "columns": [
+        "ofx_fitid"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
+      "columns": [
+        "odoo_statement_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_pagador_cnpj",
+      "columns": [
+        "pagador_cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
+      "columns": [
+        "numero_agendamento"
+      ],
+      "unique": true
     }
   ]
 }

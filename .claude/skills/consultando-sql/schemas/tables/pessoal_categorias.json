@@ -22,11 +22,6 @@
       "type": "varchar(50)"
     },
     {
-      "name": "ordem_exibicao",
-      "type": "integer",
-      "default": 0
-    },
-    {
       "name": "ativa",
       "type": "boolean",
       "default": true
