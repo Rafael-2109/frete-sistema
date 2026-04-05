@@ -42,6 +42,36 @@ class DanfePDFParser:
         'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
     })
 
+    # Campos obrigatorios para escalonar LLM (se faltam → Haiku → Sonnet)
+    CAMPOS_OBRIGATORIOS = {'chave_acesso_nf', 'numero_nf', 'cnpj_emitente', 'valor_total'}
+
+    # Campos desejaveis: LLM tenta preencher se regex falhou
+    CAMPOS_DESEJAVEIS = {
+        'nome_emitente', 'cnpj_destinatario', 'nome_destinatario',
+        'uf_emitente', 'cidade_emitente', 'uf_destinatario', 'cidade_destinatario',
+        'data_emissao_str', 'serie_nf',
+    }
+
+    # Descricoes dos campos para prompt LLM
+    _CAMPOS_DESC = {
+        'chave_acesso_nf': 'Chave de acesso da NF-e (44 digitos puros, sem espacos)',
+        'numero_nf': 'Numero da NF (apenas digitos, sem zeros a esquerda)',
+        'serie_nf': 'Serie da NF (1-3 digitos)',
+        'cnpj_emitente': 'CNPJ do emitente (14 digitos puros, sem pontuacao)',
+        'nome_emitente': 'Razao social do emitente',
+        'uf_emitente': 'UF do emitente (2 letras maiusculas)',
+        'cidade_emitente': 'Cidade do emitente',
+        'cnpj_destinatario': 'CNPJ (14 digitos) ou CPF (11 digitos) do destinatario, sem pontuacao',
+        'nome_destinatario': 'Nome ou razao social do destinatario',
+        'uf_destinatario': 'UF do destinatario (2 letras maiusculas)',
+        'cidade_destinatario': 'Cidade do destinatario',
+        'data_emissao_str': 'Data de emissao no formato DD/MM/YYYY',
+        'valor_total': 'Valor total da NF como numero decimal (ex: 1234.56, sem R$)',
+        'peso_bruto': 'Peso bruto em kg como numero decimal',
+        'peso_liquido': 'Peso liquido em kg como numero decimal',
+        'quantidade_volumes': 'Quantidade de volumes (inteiro)',
+    }
+
     def __init__(self, pdf_path: str = None, pdf_bytes: bytes = None):
         """
         Args:
@@ -763,10 +793,13 @@ class DanfePDFParser:
 
             if nome_idx is not None and nome_idx + 1 < len(linhas):
                 prox_linha = linhas[nome_idx + 1]
-                # Extrair texto antes do padrao CNPJ
-                cnpj_match = re.search(r'\d{2}\.?\d{3}\.?\d{3}/\d{4}', prox_linha)
-                if cnpj_match:
-                    nome = prox_linha[:cnpj_match.start()].strip()
+                # Extrair texto antes do padrao CNPJ (XX.XXX.XXX/XXXX)
+                doc_match = re.search(r'\d{2}\.?\d{3}\.?\d{3}/\d{4}', prox_linha)
+                # Fallback: CPF (XXX.XXX.XXX-XX) — destinatario pessoa fisica
+                if not doc_match:
+                    doc_match = re.search(r'\d{3}\.?\d{3}\.?\d{3}-?\d{2}', prox_linha)
+                if doc_match:
+                    nome = prox_linha[:doc_match.start()].strip()
                     if len(nome) >= 3:
                         return nome
                 else:
@@ -1044,7 +1077,7 @@ class DanfePDFParser:
         # (1-5 chars alfa) em ate 2 tokens para evitar falsos positivos sem CFOP.
         # CFOP pode vir formatado com ponto (ex: 6.403 em vez de 6403) — \d\.?\d{3}
         # O/CST pode usar barra (ex: 1/10) em vez de espaco/concatenado — [/\s]+
-        ncm_pattern = re.compile(r'\d{8}\s+\d{1,3}(?:[/\s]+\d{2})?(?:\s+\d\.?\d{3}|\s+[A-Za-z]{1,5}\s)')
+        ncm_pattern = re.compile(r'\d{8}\s+\d{1,4}(?:[/\s]+\d{2})?(?:\s+\d\.?\d{3}|\s+[A-Za-z]{1,5}\s)')
 
         # --- Dois niveis de filtro para linhas sem NCM ---
 
@@ -1225,7 +1258,7 @@ class DanfePDFParser:
         # NCM (8 dig) + O/CST skip (1-3 dig, split por espaco ou barra) + CFOP (4 dig, com ponto opcional)
         # Ex: "20057000 3 00 6101" ou "87116000 460 5405" ou "87116000 1/10 6403" — todos funcionam
         match = re.search(
-            r'(\d{8})\s+\d{1,3}(?:[/\s]+\d{2})?\s+(\d\.?\d{3})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+            r'(\d{8})\s+\d{1,4}(?:[/\s]+\d{2})?\s+(\d\.?\d{3})\s+(\w{1,5})\s+([\d.,]+)\s+([\d.,]+)',
             ncm_line,
         )
         if match:
@@ -1261,7 +1294,7 @@ class DanfePDFParser:
             # Fallback SEM CFOP: NCM (8 dig) + CST (1-3 dig) + UNIDADE (alfa) + QTD + V.UNIT
             # Ex: "87116000 110 UN 5,0000 2.786,37 13.931,85"
             match_no_cfop = re.search(
-                r'(\d{8})\s+\d{1,3}(?:[/\s]+\d{2})?\s+([A-Za-z]{1,5})\s+([\d.,]+)\s+([\d.,]+)',
+                r'(\d{8})\s+\d{1,4}(?:[/\s]+\d{2})?\s+([A-Za-z]{1,5})\s+([\d.,]+)\s+([\d.,]+)',
                 ncm_line,
             )
             if not match_no_cfop:
@@ -1504,30 +1537,138 @@ class DanfePDFParser:
 
         return []
 
+    # --- Pipeline LLM fallback para campos header ---
+
+    def _campos_faltantes(self, resultado: Dict) -> List[str]:
+        """Retorna campos obrigatorios + desejaveis ainda faltantes no resultado"""
+        faltantes = []
+        for campo in self.CAMPOS_OBRIGATORIOS | self.CAMPOS_DESEJAVEIS:
+            valor = resultado.get(campo)
+            if valor is None or (isinstance(valor, str) and not valor.strip()):
+                faltantes.append(campo)
+        return faltantes
+
+    def _extract_danfe_by_llm(self, model: str, campos_faltantes: List[str]) -> Optional[Dict]:
+        """Extrai campos faltantes via LLM — prompt especifico DANFE.
+
+        Args:
+            model: Model ID (Haiku ou Sonnet)
+            campos_faltantes: Lista de nomes de campos a extrair
+
+        Returns:
+            Dict com campos extraidos ou None se falhar
+        """
+        client = self._get_anthropic_client()
+        if not client:
+            return None
+
+        texto_truncado = self.texto_completo[:8000]
+
+        campos_pedidos = {c: self._CAMPOS_DESC.get(c, c) for c in campos_faltantes}
+
+        prompt = (
+            "Extraia os seguintes campos deste DANFE "
+            "(Documento Auxiliar de NF-e brasileira).\n"
+            "Retorne APENAS um JSON valido com os campos solicitados.\n"
+            "Use null para campos nao encontrados.\n\n"
+            "Campos:\n"
+        )
+        for campo, desc in campos_pedidos.items():
+            prompt += f"- {campo}: {desc}\n"
+        prompt += (
+            "\nFormatos obrigatorios:\n"
+            "- CNPJ: 14 digitos puros (sem pontuacao)\n"
+            "- CPF: 11 digitos puros (sem pontuacao)\n"
+            "- Chave de acesso: 44 digitos puros (sem espacos)\n"
+            "- Datas: DD/MM/YYYY\n"
+            "- Valores monetarios: numero decimal (1234.56, sem R$)\n"
+            "- UF: 2 letras maiusculas\n\n"
+            f"Texto do DANFE:\n---\n{texto_truncado}\n---"
+        )
+
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            texto_resposta = response.content[0].text.strip()
+            resultado = self._extrair_json(texto_resposta)
+
+            if resultado:
+                resultado_normalizado = {}
+                for campo in campos_faltantes:
+                    valor = resultado.get(campo)
+                    if valor is not None:
+                        resultado_normalizado[campo] = valor
+
+                # Ajustar confianca com base no modelo
+                bonus = 0.10 if model == self.HAIKU_MODEL else 0.08
+                campos_encontrados = [
+                    c for c in campos_faltantes
+                    if resultado_normalizado.get(c) is not None
+                ]
+                self.confianca += bonus * len(campos_encontrados)
+
+                logger.info(
+                    "DANFE LLM (%s): %d/%d campos extraidos: %s",
+                    model, len(campos_encontrados), len(campos_faltantes),
+                    campos_encontrados,
+                )
+                return resultado_normalizado
+
+        except Exception as e:
+            logger.error("Erro na extracao DANFE LLM (%s): %s", model, e)
+
+        return None
+
+    def _merge_results(self, base: Dict, novo: Dict) -> Dict:
+        """Preenche campos faltantes do base com valores do novo.
+
+        Nao sobrescreve valores ja preenchidos por regex.
+        """
+        merged = dict(base)
+        for campo, valor in novo.items():
+            if campo in ('confianca', 'metodo_extracao', 'tipo_fonte'):
+                continue
+            if valor is not None:
+                valor_atual = merged.get(campo)
+                if valor_atual is None or (isinstance(valor_atual, str) and not valor_atual.strip()):
+                    merged[campo] = valor
+        return merged
+
+    def _extrair_json(self, texto: str) -> Optional[Dict]:
+        """Extrai JSON de texto que pode conter markdown fences"""
+        texto = re.sub(r'^```(?:json)?\s*', '', texto, flags=re.MULTILINE)
+        texto = re.sub(r'```\s*$', '', texto, flags=re.MULTILINE)
+        texto = texto.strip()
+
+        try:
+            return json.loads(texto)
+        except json.JSONDecodeError:
+            match = re.search(r'\{[^{}]*\}', texto, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(0))
+                except json.JSONDecodeError:
+                    pass
+        return None
+
     def get_todas_informacoes(self) -> Dict:
-        """Extrai todas as informacoes disponiveis"""
+        """Extrai todas as informacoes disponiveis.
+
+        Pipeline: Regex → Haiku (campos faltantes) → Sonnet (fallback).
+        Itens e veiculos sao sempre via regex/LLM dedicado (sem mudanca).
+        """
         self.confianca = 0.0
 
+        # --- Camada 1: Regex ---
         uf_emit, cidade_emit = self.get_uf_cidade_emitente()
         uf_dest, cidade_dest = self.get_uf_cidade_destinatario()
 
         chave = self.get_chave_acesso()
         numero = self.get_numero_nf()
-
-        # Cross-validacao: chave de acesso (44 digitos) e fonte definitiva
-        # para numero_nf — posicoes 25-33 contem o numero real da NF
-        if chave and len(chave) == 44 and numero:
-            try:
-                numero_da_chave = str(int(chave[25:34]))  # 9 digitos, strip zeros
-                if numero != numero_da_chave:
-                    logger.warning(
-                        "DANFE: numero_nf '%s' diverge da chave "
-                        "(real=%s) — corrigindo",
-                        numero, numero_da_chave,
-                    )
-                    numero = numero_da_chave
-            except (ValueError, IndexError):
-                pass  # chave mal-formada, manter numero do regex
 
         resultado = {
             'chave_acesso_nf': chave,
@@ -1547,14 +1688,61 @@ class DanfePDFParser:
             'peso_bruto': self.get_peso_bruto(),
             'peso_liquido': self.get_peso_liquido(),
             'quantidade_volumes': self.get_quantidade_volumes(),
-            'itens': self.get_itens_produto(),
-            'veiculos': self.get_veiculos_info(),
             'tipo_fonte': 'PDF_DANFE',
-            'confianca': round(self.confianca, 2),
+            'metodo_extracao': 'REGEX',
         }
 
+        # --- Camada 2: Haiku para campos faltantes ---
+        campos_faltantes = self._campos_faltantes(resultado)
+        if campos_faltantes:
+            logger.info(
+                "DANFE: %d campos faltantes apos regex: %s — tentando Haiku",
+                len(campos_faltantes), campos_faltantes,
+            )
+            resultado_llm = self._extract_danfe_by_llm(
+                self.HAIKU_MODEL, campos_faltantes,
+            )
+            if resultado_llm:
+                resultado = self._merge_results(resultado, resultado_llm)
+                resultado['metodo_extracao'] = 'HAIKU'
+
+        # --- Camada 3: Sonnet para campos ainda faltantes ---
+        campos_faltantes = self._campos_faltantes(resultado)
+        if campos_faltantes:
+            logger.info(
+                "DANFE: %d campos faltantes apos Haiku: %s — tentando Sonnet",
+                len(campos_faltantes), campos_faltantes,
+            )
+            resultado_sonnet = self._extract_danfe_by_llm(
+                self.SONNET_MODEL, campos_faltantes,
+            )
+            if resultado_sonnet:
+                resultado = self._merge_results(resultado, resultado_sonnet)
+                resultado['metodo_extracao'] = 'SONNET'
+
+        # --- Cross-validacao chave x numero ---
+        chave = resultado.get('chave_acesso_nf')
+        numero = resultado.get('numero_nf')
+        if chave and len(chave) == 44 and numero:
+            try:
+                numero_da_chave = str(int(chave[25:34]))  # 9 digitos, strip zeros
+                if numero != numero_da_chave:
+                    logger.warning(
+                        "DANFE: numero_nf '%s' diverge da chave "
+                        "(real=%s) — corrigindo",
+                        numero, numero_da_chave,
+                    )
+                    resultado['numero_nf'] = numero_da_chave
+            except (ValueError, IndexError):
+                pass  # chave mal-formada, manter numero existente
+
+        # --- Itens e veiculos (sempre via mecanismo proprio) ---
+        resultado['itens'] = self.get_itens_produto()
+        resultado['veiculos'] = self.get_veiculos_info()
+        resultado['confianca'] = round(self.confianca, 2)
+
         # Tentar parsear data
-        if resultado['data_emissao_str']:
+        if resultado.get('data_emissao_str'):
             resultado['data_emissao'] = self._parse_date_br(resultado['data_emissao_str'])
 
         return resultado

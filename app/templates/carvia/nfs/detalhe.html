@@ -907,12 +907,16 @@ document.getElementById('btnReprocessarPdf')?.addEventListener('click', function
 
     fetch(`/carvia/nfs/{{ nf.id }}/reprocessar-pdf`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+        },
     })
     .then(r => r.json())
     .then(data => {
         if (data.sucesso) {
-            let msg = `Re-parseamento concluido:\n`;
+            let msg = `Re-parseamento concluido (${data.metodo_extracao || 'REGEX'}):\n`;
+            if (data.campos_header_atualizados > 0) msg += `${data.campos_header_atualizados} campo(s) header atualizado(s)\n`;
             msg += `${data.itens_parseados} item(ns) encontrado(s) no PDF\n`;
             if (data.itens_inseridos > 0) msg += `${data.itens_inseridos} item(ns) inserido(s)\n`;
             if (data.desc_atualizadas > 0) msg += `${data.desc_atualizadas} descricao(oes) atualizada(s)\n`;
@@ -942,7 +946,10 @@ document.getElementById('btnReprocessarMotos')?.addEventListener('click', functi
 
     fetch(`/carvia/nfs/{{ nf.id }}/reprocessar-motos`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+        },
     })
     .then(r => r.json())
     .then(data => {

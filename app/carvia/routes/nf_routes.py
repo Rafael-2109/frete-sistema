@@ -500,7 +500,37 @@ def register_nf_routes(bp):
             if not parser.is_valid():
                 return jsonify({'erro': 'PDF invalido pelo parser.'}), 400
 
-            itens_parseados = parser.get_itens_produto()
+            # Parse completo (header + itens + veiculos, com fallback LLM)
+            dados = parser.get_todas_informacoes()
+
+            # --- Atualizar campos header vazios/None ---
+            campos_header_map = {
+                'chave_acesso_nf': 'chave_acesso_nf',
+                'numero_nf': 'numero_nf',
+                'cnpj_emitente': 'cnpj_emitente',
+                'nome_emitente': 'nome_emitente',
+                'uf_emitente': 'uf_emitente',
+                'cidade_emitente': 'cidade_emitente',
+                'cnpj_destinatario': 'cnpj_destinatario',
+                'nome_destinatario': 'nome_destinatario',
+                'uf_destinatario': 'uf_destinatario',
+                'cidade_destinatario': 'cidade_destinatario',
+                'valor_total': 'valor_total',
+                'data_emissao': 'data_emissao',
+            }
+
+            campos_atualizados = 0
+            for campo_parser, campo_model in campos_header_map.items():
+                valor_novo = dados.get(campo_parser)
+                if valor_novo is not None:
+                    valor_atual = getattr(nf, campo_model, None)
+                    if not valor_atual:  # None ou string vazia
+                        setattr(nf, campo_model, valor_novo)
+                        campos_atualizados += 1
+            db.session.flush()
+
+            # --- Processar itens ---
+            itens_parseados = dados.get('itens', [])
             itens_existentes = CarviaNfItem.query.filter_by(nf_id=nf.id).all()
 
             itens_inseridos = 0
@@ -544,10 +574,12 @@ def register_nf_routes(bp):
 
             logger.info(
                 "Reprocessamento PDF NF %d por %s: %d parseados, "
-                "%d inseridos, %d desc atualizadas, %d motos",
+                "%d inseridos, %d desc atualizadas, %d motos, "
+                "%d campos header, metodo=%s",
                 nf.id, current_user.email, len(itens_parseados),
                 itens_inseridos, desc_atualizadas,
                 moto_resultado.get('detectados', 0),
+                campos_atualizados, dados.get('metodo_extracao', '?'),
             )
 
             return jsonify({
@@ -555,8 +587,10 @@ def register_nf_routes(bp):
                 'itens_parseados': len(itens_parseados),
                 'itens_inseridos': itens_inseridos,
                 'desc_atualizadas': desc_atualizadas,
+                'campos_header_atualizados': campos_atualizados,
                 'motos_detectadas': moto_resultado.get('detectados', 0),
                 'motos_limpas': moto_resultado.get('limpos', 0),
+                'metodo_extracao': dados.get('metodo_extracao', 'REGEX'),
             })
         except Exception as e:
             db.session.rollback()
