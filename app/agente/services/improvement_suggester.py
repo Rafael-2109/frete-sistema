@@ -237,27 +237,9 @@ def _format_batch(sessions_data: List[Dict[str, Any]]) -> str:
 
 
 def _parse_json_array(result_text: str) -> list:
-    """Parse seguro de JSON array do Sonnet."""
-    # Tentativa 1: parse direto
-    try:
-        parsed = json.loads(result_text)
-        if isinstance(parsed, list):
-            return parsed
-    except json.JSONDecodeError:
-        pass
-
-    # Tentativa 2: extrair JSON array com regex
-    try:
-        json_match = re.search(r'\[.*\]', result_text, re.DOTALL)
-        if json_match:
-            parsed = json.loads(json_match.group())
-            if isinstance(parsed, list):
-                return parsed
-    except (json.JSONDecodeError, AttributeError):
-        pass
-
-    logger.warning(f"[IMPROVEMENT] Resposta invalida do Sonnet: {result_text[:200]}")
-    return []
+    """Parse seguro de JSON array do Sonnet. Wrapper para parse_llm_json_response."""
+    from ._utils import parse_llm_json_response
+    return parse_llm_json_response(result_text, list, "IMPROVEMENT") or []
 
 
 def _validate_suggestions(suggestions: list) -> List[Dict[str, Any]]:

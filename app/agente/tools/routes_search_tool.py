@@ -154,9 +154,55 @@ try:
             from app.embeddings.route_template_search import search_routes as do_search
             return do_search(query=query, tipo=tipo, limit=limit)
 
+        def _search_ilike():
+            """Fallback textual (ILIKE) quando embeddings indisponiveis."""
+            from sqlalchemy import text as sql_text
+            from app import db
+
+            pattern = f'%{query}%'
+            tipo_filter = "AND tipo = :tipo" if tipo else ""
+
+            sql = sql_text(f"""
+                SELECT id, url_path, function_name, blueprint_name,
+                       menu_path, docstring, tipo, template_path,
+                       http_methods, permission_decorator, source_file,
+                       ajax_endpoints
+                FROM route_template_embeddings
+                WHERE (
+                    url_path ILIKE :pattern
+                    OR function_name ILIKE :pattern
+                    OR blueprint_name ILIKE :pattern
+                    OR menu_path ILIKE :pattern
+                    OR docstring ILIKE :pattern
+                )
+                {tipo_filter}
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """)
+
+            params = {"pattern": pattern, "limit": limit}
+            if tipo:
+                params["tipo"] = tipo
+
+            rows = db.session.execute(sql, params).fetchall()
+            return [dict(row._mapping) for row in rows]
+
         try:
             results = _execute_with_context(_search)
+
+            # Fallback ILIKE se embeddings retornaram vazio
+            fallback_used = False
+            if not results:
+                try:
+                    results = _execute_with_context(_search_ilike)
+                    fallback_used = bool(results)
+                except Exception as ilike_err:
+                    logger.warning(f"[ROUTES_SEARCH] Fallback ILIKE falhou: {ilike_err}")
+
             text = _format_results(results, query)
+            if fallback_used:
+                text = "Busca semantica indisponivel, usando busca textual:\n\n" + text
+
             return {
                 "content": [{"type": "text", "text": text}],
             }

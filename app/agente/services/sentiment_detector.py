@@ -19,9 +19,13 @@ Uso:
 
 import logging
 import re
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Cache in-memory de scores por sessao (cross-turn tracking)
+# Perde no restart — aceitavel para deteccao real-time de frustracao
+_session_scores: Dict[str, list] = {}  # session_id -> ultimos 3 scores
 
 # Marcadores explícitos de frustração (português brasileiro)
 FRUSTRATION_MARKERS = [
@@ -69,7 +73,8 @@ def detect_frustration(
     message: str,
     previous_messages: Optional[List[Dict[str, Any]]] = None,
     had_error: bool = False,
-) -> bool:
+    recent_scores: Optional[List[int]] = None,
+) -> Tuple[bool, int]:
     """
     Detecta sinais de frustração na mensagem do usuário.
 
@@ -80,12 +85,13 @@ def detect_frustration(
         message: Mensagem atual do usuário
         previous_messages: Histórico recente (últimas 3-5 mensagens, opcional)
         had_error: Se houve erro na resposta anterior
+        recent_scores: Scores dos últimos 2-3 turns (cross-turn tracking)
 
     Returns:
-        True se frustração detectada, False caso contrário
+        Tupla (is_frustrated, score) — is_frustrated se score >= 3
     """
     if not message or len(message.strip()) == 0:
-        return False
+        return (False, 0)
 
     msg = message.strip()
     score = 0
@@ -135,6 +141,15 @@ def detect_frustration(
         score += 1
 
     # =================================================================
+    # Sinal 6: Trend cross-turn (moderado)
+    # Se últimos 2+ turns tiveram score >= 1, frustração crescente
+    # =================================================================
+    if recent_scores and len(recent_scores) >= 2:
+        if all(s >= 1 for s in recent_scores[-2:]):
+            score += 2
+            logger.debug(f"[SENTIMENT] Trend cross-turn: scores recentes={recent_scores[-2:]}")
+
+    # =================================================================
     # Threshold: score >= 3 = frustração detectada
     # =================================================================
     is_frustrated = score >= 3
@@ -145,21 +160,24 @@ def detect_frustration(
             f"'{msg[:50]}{'...' if len(msg) > 50 else ''}'"
         )
 
-    return is_frustrated
+    return (is_frustrated, score)
 
 
 def enrich_message_if_frustrated(
     message: str,
     response_state: dict,
+    session_id: Optional[str] = None,
 ) -> str:
     """
     Verifica frustração e enriquece a mensagem se necessário.
 
     Função principal chamada por routes.py antes de enviar ao SDK.
+    Mantém scores cross-turn em cache in-memory por session_id.
 
     Args:
         message: Mensagem original do usuário
         response_state: Estado da resposta (contém error_message se houve erro)
+        session_id: ID da sessão para tracking cross-turn (opcional)
 
     Returns:
         Mensagem original (se sem frustração) ou mensagem + instrução de tom
@@ -167,7 +185,22 @@ def enrich_message_if_frustrated(
     try:
         had_error = bool(response_state.get('error_message'))
 
-        if detect_frustration(message=message, had_error=had_error):
+        # Carregar scores anteriores da sessão
+        recent_scores = _session_scores.get(session_id, []) if session_id else []
+
+        is_frustrated, current_score = detect_frustration(
+            message=message,
+            had_error=had_error,
+            recent_scores=recent_scores,
+        )
+
+        # Salvar score no cache (manter últimos 3)
+        if session_id:
+            scores = _session_scores.setdefault(session_id, [])
+            scores.append(current_score)
+            _session_scores[session_id] = scores[-3:]
+
+        if is_frustrated:
             return message + FRUSTRATION_INSTRUCTION
 
     except Exception as e:

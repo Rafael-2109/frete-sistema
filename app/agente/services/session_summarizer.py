@@ -215,45 +215,10 @@ def summarize_session(
         return None
 
 
-def _parse_json_response(
-    result_text: str,
-    session_id: str = "",
-) -> Optional[Dict[str, Any]]:
-    """
-    Parse seguro da resposta JSON do LLM.
-
-    Tenta parse direto, depois fallback com regex para extrair JSON do texto.
-
-    Args:
-        result_text: Texto de resposta do Sonnet
-        session_id: ID da sessão (para logging)
-
-    Returns:
-        Dict parsed ou None se inválido
-    """
-    # Tentativa 1: parse direto
-    try:
-        result = json.loads(result_text)
-        if isinstance(result, dict):
-            return result
-    except json.JSONDecodeError:
-        pass
-
-    # Tentativa 2: extrair JSON com regex (LLM pode adicionar texto extra)
-    try:
-        json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-        if json_match:
-            result = json.loads(json_match.group())
-            if isinstance(result, dict):
-                return result
-    except (json.JSONDecodeError, AttributeError):
-        pass
-
-    logger.warning(
-        f"[SUMMARIZER] Resposta inválida para {session_id[:8]}...: "
-        f"{result_text[:200]}"
-    )
-    return None
+def _parse_json_response(result_text: str, session_id: str = "") -> Optional[Dict[str, Any]]:
+    """Parse seguro da resposta JSON do LLM. Wrapper para parse_llm_json_response."""
+    from ._utils import parse_llm_json_response
+    return parse_llm_json_response(result_text, dict, f"SUMMARIZER {session_id[:8]}")
 
 
 def summarize_and_save(

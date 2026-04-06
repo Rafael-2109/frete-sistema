@@ -333,6 +333,7 @@ async def _async_stream_sdk_client(
             enriched_prompt = enrich_message_if_frustrated(
                 message=message,
                 response_state=response_state,
+                session_id=our_session_id,
             )
     except Exception as sentiment_err:
         logger.warning(f"[AGENTE] Erro na detecção de sentimento (ignorado): {sentiment_err}")

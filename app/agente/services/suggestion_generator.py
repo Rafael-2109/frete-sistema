@@ -148,39 +148,10 @@ def generate_suggestions(
 
 
 def _parse_suggestions(result_text: str) -> List[str]:
-    """
-    Parse seguro da resposta JSON do LLM.
-
-    Tenta parse direto, depois fallback com regex para extrair JSON array.
-
-    Args:
-        result_text: Texto de resposta do Sonnet
-
-    Returns:
-        Lista de strings (2-3 sugestões) ou []
-    """
-    # Tentativa 1: parse direto
-    try:
-        parsed = json.loads(result_text)
-        if isinstance(parsed, list):
-            return _validate_suggestions(parsed)
-    except json.JSONDecodeError:
-        pass
-
-    # Tentativa 2: extrair JSON array com regex
-    try:
-        json_match = re.search(r'\[.*\]', result_text, re.DOTALL)
-        if json_match:
-            parsed = json.loads(json_match.group())
-            if isinstance(parsed, list):
-                return _validate_suggestions(parsed)
-    except (json.JSONDecodeError, AttributeError):
-        pass
-
-    logger.warning(
-        f"[SUGGESTIONS] Resposta inválida: {result_text[:200]}"
-    )
-    return []
+    """Parse seguro da resposta JSON do LLM. Wrapper para parse_llm_json_response."""
+    from ._utils import parse_llm_json_response
+    parsed = parse_llm_json_response(result_text, list, "SUGGESTIONS")
+    return _validate_suggestions(parsed) if parsed else []
 
 
 def _validate_suggestions(suggestions: list) -> List[str]:
