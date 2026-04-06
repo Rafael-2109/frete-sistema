@@ -7,6 +7,7 @@
 
 ## Atualizacoes
 
+- [2026-04-06-1](atualizacao-2026-04-06-1.md) — Segunda auditoria. 5 projetos obsoletos removidos, 2 MCP files consolidados em 1, 1 frontmatter corrigido (23->18 arquivos, MEMORY.md 58 linhas).
 - [2026-03-28-1](atualizacao-2026-03-28-1.md) — Primeira auditoria. 7 memorias removidas (obsoletas/cobertas por CLAUDE.md), 12 frontmatter adicionados, MEMORY.md reorganizado (30->23 arquivos).
 
 <!-- Template para novas entradas:
