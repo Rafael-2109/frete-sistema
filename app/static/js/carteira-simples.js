@@ -1285,8 +1285,8 @@
                 <td>${item.sub_rota || ''}</td>
 
                 <!-- Estoque projetado (PRÉ-CALCULADO) -->
-                <td class="text-end est-data-edit${classeCorEstoque(item.menor_estoque_d7)}" id="est-data-${index}" data-estoque-original="${item.estoque_atual || 0}">
-                    ${item.menor_estoque_d7 !== undefined ? Math.round(item.menor_estoque_d7) : '-'}
+                <td class="text-end est-data-edit${item.expedicao ? classeCorEstoque(item.menor_estoque_d7) : ''}" id="est-data-${index}" data-estoque-original="${item.estoque_atual || 0}">
+                    ${item.expedicao && item.menor_estoque_d7 !== undefined ? Math.round(item.menor_estoque_d7) : '-'}
                 </td>
                 <td class="text-end menor-est-7d${classeCorEstoque(item.menor_estoque_d7)}" id="menor-7d-${index}" data-menor-original="${item.menor_estoque_d7 || 0}">
                     ${item.menor_estoque_d7 !== undefined ? Math.round(item.menor_estoque_d7) : '-'}
@@ -3168,19 +3168,7 @@
 
         if (!dataExpedicao || !projecoes || projecoes.length === 0) {
             estDataEl.textContent = '-';
-            // ✅ FALLBACK: Aplicar hierarquia de cores usando menor_estoque_d7 do backend
             estDataEl.classList.remove('est-negativo', 'est-baixo');
-            const fallback = item.menor_estoque_d7;
-            if (fallback !== undefined && fallback !== null) {
-                const fallbackRounded = Math.round(fallback);
-                if (fallbackRounded !== 0) {
-                    if (fallbackRounded < 0) {
-                        estDataEl.classList.add('est-negativo');
-                    } else if (fallbackRounded < 100) {
-                        estDataEl.classList.add('est-baixo');
-                    }
-                }
-            }
             return;
         }
 
@@ -3500,8 +3488,7 @@
 
             if (resultado.success) {
                 mostrarToast('Sucesso', `Pedido ${numPedido} enviado para standby (${tipoStandby})`, 'success');
-                // Recarregar dados para remover o pedido da lista
-                await carregarDados();
+                removerPedidoDaTabela(numPedido);
             } else {
                 mostrarMensagem('Erro', resultado.message || 'Erro ao enviar para standby', 'danger');
             }
@@ -3512,6 +3499,25 @@
             modalLoading.hide();
             mostrarMensagem('Erro', `Erro ao enviar para standby: ${erro.message}`, 'danger');
         }
+    }
+
+    /**
+     * Remove todas as linhas de um pedido da tabela (DOM + state) sem recarregar dados
+     * @param {string} numPedido - Número do pedido a remover
+     */
+    function removerPedidoDaTabela(numPedido) {
+        // 1. Remover do DOM (todas as <tr> do pedido — pedido + separações)
+        const tbody = document.getElementById('tbody-carteira');
+        const rows = tbody.querySelectorAll(`tr[data-num-pedido="${numPedido}"]`);
+        rows.forEach(row => row.remove());
+
+        // 2. Remover do state.dados
+        state.dados = state.dados.filter(item => item.num_pedido !== numPedido);
+        state.totalItens = Math.max(0, state.totalItens - rows.length);
+
+        // 3. Reconstruir índices e atualizar painel
+        construirIndices();
+        atualizarPainelFlutuante();
     }
 
     /**

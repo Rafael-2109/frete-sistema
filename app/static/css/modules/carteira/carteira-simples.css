@@ -776,7 +776,7 @@
 
 .table-carteira-simples tbody td.est-baixo {
     background-color: var(--bs-warning) !important;
-    color: var(--bs-body-color) !important;
+    color: hsl(0 0% 0%) !important;
     font-weight: bold !important;
 }
 /* ==========================================================================
@@ -825,8 +825,8 @@ tr.plinha-saldo td.plinha-cell {
 
 /* Saldo negativo - danger leve */
 .plinha-cell.plinha-negativo {
-    background-color: rgba(var(--bs-danger-rgb), 0.15);
-    color: var(--bs-danger);
+    background-color: var(--bs-danger);
+    color: var(--bs-body-color);
     font-weight: 600;
 }
 
