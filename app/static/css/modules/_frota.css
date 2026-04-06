@@ -1,0 +1,38 @@
+/**
+ * _frota.css — Estilos do modulo Frota Propria (controle de despesas de veiculos)
+ *
+ * Token mapping (via _design-tokens.css):
+ *   --semantic-success  → ativo
+ *   --semantic-danger   → inativo, IPVA, multa
+ *   --bg-light          → card backgrounds
+ *   --text-muted        → labels secundarios
+ *
+ * Migrated templates:
+ *   - fretes/frota/index.html (2026-04-06)
+ *   - fretes/frota/detalhe_veiculo.html (2026-04-06)
+ */
+
+@layer modules {
+
+    /* ═══════════════════════════════════════════════
+       FROTA — Layout
+       ═══════════════════════════════════════════════ */
+
+    .frota-filtros .form-control-sm,
+    .frota-filtros .form-select-sm {
+        min-width: 120px;
+    }
+
+    /* ═══════════════════════════════════════════════
+       FROTA — Resumo por categoria (sidebar)
+       ═══════════════════════════════════════════════ */
+
+    .frota-resumo-cat td {
+        padding: 0.35rem 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .frota-resumo-cat tfoot td {
+        border-top: 2px solid var(--border);
+    }
+}

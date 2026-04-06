@@ -1,0 +1,647 @@
+{% extends "base.html" %}
+
+{% block title %}{{ veiculo.placa }} — Despesas{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    {# ── Header ── #}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-truck me-2"></i>{{ veiculo.placa }}
+                <small class="text-muted">{{ veiculo.marca }} {{ veiculo.modelo }}</small>
+            </h1>
+            <small class="text-muted">{{ veiculo.veiculo_tipo.nome if veiculo.veiculo_tipo else '' }} &mdash; Ano {{ veiculo.ano_modelo }}</small>
+        </div>
+        <div>
+            <a href="{{ url_for('frota.index') }}" class="btn btn-secondary btn-sm me-2">
+                <i class="fas fa-arrow-left me-1"></i>Voltar
+            </a>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNovaDespesa">
+                <i class="fas fa-plus me-1"></i>Nova Despesa
+            </button>
+        </div>
+    </div>
+
+    {# ── Dados do Veiculo ── #}
+    <div class="card mb-4">
+        <div class="card-header card-header-theme d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Dados do Veiculo</h6>
+            <button type="button" class="btn btn-sm btn-outline-primary btn-editar-veiculo"
+                    data-bs-toggle="modal" data-bs-target="#modalEditarVeiculo"
+                    data-id="{{ veiculo.id }}"
+                    data-placa="{{ veiculo.placa }}"
+                    data-marca="{{ veiculo.marca }}"
+                    data-modelo="{{ veiculo.modelo }}"
+                    data-renavam="{{ veiculo.renavam }}"
+                    data-proprietario="{{ veiculo.proprietario }}"
+                    data-ano-fab="{{ veiculo.ano_fabricacao }}"
+                    data-ano-mod="{{ veiculo.ano_modelo }}"
+                    data-cor="{{ veiculo.cor or '' }}"
+                    data-chassi="{{ veiculo.chassi or '' }}"
+                    data-tipo-id="{{ veiculo.veiculo_tipo_id }}"
+                    data-transp-id="{{ veiculo.transportadora_id or '' }}"
+                    data-km="{{ veiculo.km_atual }}"
+                    data-deprec="{{ veiculo.depreciacao_mensal }}"
+                    data-obs="{{ veiculo.observacoes or '' }}">
+                <i class="fas fa-edit me-1"></i>Editar
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-2"><strong>Placa:</strong> {{ veiculo.placa }}</div>
+                <div class="col-md-2"><strong>Renavam:</strong> {{ veiculo.renavam }}</div>
+                <div class="col-md-2"><strong>Chassi:</strong> {{ veiculo.chassi or '—' }}</div>
+                <div class="col-md-3"><strong>Proprietario:</strong> {{ veiculo.proprietario }}</div>
+                <div class="col-md-3"><strong>Cor:</strong> {{ veiculo.cor or '—' }}</div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-2"><strong>Marca:</strong> {{ veiculo.marca }}</div>
+                <div class="col-md-2"><strong>Modelo:</strong> {{ veiculo.modelo }}</div>
+                <div class="col-md-2"><strong>Ano:</strong> {{ veiculo.ano_fabricacao }}/{{ veiculo.ano_modelo }}</div>
+                <div class="col-md-2"><strong>KM Atual:</strong> {{ "{:,.0f}".format(veiculo.km_atual).replace(",", ".") }}</div>
+                <div class="col-md-2"><strong>Deprec. Mensal:</strong> {{ veiculo.depreciacao_mensal|valor_br }}</div>
+                <div class="col-md-2">
+                    <strong>Motorista:</strong>
+                    {% if veiculo.transportadora %}
+                        {{ veiculo.transportadora.razao_social }}
+                    {% else %}
+                        <span class="text-muted">Nao atribuido</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% if veiculo.observacoes %}
+            <div class="row mt-2">
+                <div class="col-12"><strong>Obs:</strong> {{ veiculo.observacoes }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Filtros ── #}
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label small mb-0">De</label>
+                    <input type="date" class="form-control form-control-sm" name="data_inicio"
+                           value="{{ filtro_data_inicio }}">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-0">Ate</label>
+                    <input type="date" class="form-control form-control-sm" name="data_fim"
+                           value="{{ filtro_data_fim }}">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-0">Categoria</label>
+                    <select class="form-select form-select-sm" name="categoria">
+                        <option value="">Todas</option>
+                        {% for code, label in categorias %}
+                        <option value="{{ code }}" {{ 'selected' if filtro_categoria == code }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small mb-0">Tipo Doc</label>
+                    <select class="form-select form-select-sm" name="tipo_documento">
+                        <option value="">Todos</option>
+                        {% for code, label in tipos_documento %}
+                        <option value="{{ code }}" {{ 'selected' if filtro_tipo_doc == code }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter me-1"></i>Filtrar
+                    </button>
+                    <a href="{{ url_for('frota.detalhe_veiculo', id=veiculo.id) }}" class="btn btn-secondary btn-sm">
+                        Limpar
+                    </a>
+                    <a href="{{ url_for('frota.exportar_despesas', id=veiculo.id,
+                               data_inicio=filtro_data_inicio, data_fim=filtro_data_fim,
+                               categoria=filtro_categoria, tipo_documento=filtro_tipo_doc) }}"
+                       class="btn btn-success btn-sm" title="Exportar para Excel">
+                        <i class="fas fa-file-excel me-1"></i>Excel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        {# ── Tabela de Despesas ── #}
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header card-header-theme">
+                    <h6 class="mb-0">
+                        <i class="fas fa-receipt me-2"></i>Despesas
+                        <span class="badge bg-secondary ms-2">{{ despesas|length }}</span>
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    {% if despesas %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-thead-theme">
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Categoria</th>
+                                    <th>Fornecedor</th>
+                                    <th>KM</th>
+                                    <th>Tipo Doc</th>
+                                    <th>N. Documento</th>
+                                    <th class="text-end">Valor</th>
+                                    <th>Descricao</th>
+                                    <th class="text-center">Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for d in despesas %}
+                                <tr>
+                                    <td class="text-nowrap">{{ d.data_despesa.strftime('%d/%m/%Y') }}</td>
+                                    <td>
+                                        {% set cat_colors = {
+                                            'COMBUSTIVEL': 'warning',
+                                            'MANUTENCAO': 'info',
+                                            'PNEUS': 'secondary',
+                                            'SEGURO': 'primary',
+                                            'IPVA': 'danger',
+                                            'LICENCIAMENTO': 'danger',
+                                            'MULTA': 'danger',
+                                            'PEDAGIO': 'secondary',
+                                            'LAVAGEM': 'info',
+                                            'OUTROS': 'secondary',
+                                        } %}
+                                        <span class="badge bg-{{ cat_colors.get(d.categoria, 'secondary') }}
+                                            {%- if d.categoria in ['COMBUSTIVEL', 'PEDAGIO'] %} text-dark{% endif %}">
+                                            {{ d.categoria }}
+                                        </span>
+                                    </td>
+                                    <td><small>{{ d.fornecedor or '' }}</small></td>
+                                    <td class="text-nowrap">{{ "{:,.0f}".format(d.km_no_momento).replace(",", ".") }}</td>
+                                    <td>
+                                        {% if d.tipo_documento == 'NF' %}
+                                            <span class="badge bg-success">NF</span>
+                                        {% elif d.tipo_documento == 'RECIBO_CUPOM' %}
+                                            <span class="badge bg-warning text-dark">Recibo</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Sem Doc</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ d.numero_documento or '—' }}</td>
+                                    <td class="text-end fw-bold">{{ d.valor|valor_br }}</td>
+                                    <td>
+                                        <small>{{ d.descricao or '' }}</small>
+                                    </td>
+                                    <td class="text-center text-nowrap">
+                                        <div class="btn-group btn-group-sm">
+                                            {% if d.arquivo_path %}
+                                            <a href="{{ url_for('frota.visualizar_arquivo', id=d.id) }}"
+                                               class="btn btn-outline-success" title="Ver anexo" target="_blank">
+                                                <i class="fas fa-paperclip"></i>
+                                            </a>
+                                            {% endif %}
+                                            <button type="button" class="btn btn-outline-primary btn-editar-despesa"
+                                                    data-bs-toggle="modal" data-bs-target="#modalEditarDespesa"
+                                                    data-id="{{ d.id }}"
+                                                    data-data="{{ d.data_despesa.strftime('%Y-%m-%d') }}"
+                                                    data-km="{{ d.km_no_momento }}"
+                                                    data-categoria="{{ d.categoria }}"
+                                                    data-tipo-doc="{{ d.tipo_documento }}"
+                                                    data-num-doc="{{ d.numero_documento or '' }}"
+                                                    data-valor="{{ d.valor }}"
+                                                    data-fornecedor="{{ d.fornecedor or '' }}"
+                                                    data-descricao="{{ d.descricao or '' }}"
+                                                    data-obs="{{ d.observacoes or '' }}"
+                                                    data-tem-arquivo="{{ 'sim' if d.arquivo_path else '' }}"
+                                                    title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger"
+                                                    onclick="confirmarExclusao({{ d.id }}, '{{ d.categoria }}')"
+                                                    title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="fw-bold">
+                                    <td colspan="6" class="text-end">Total:</td>
+                                    <td class="text-end">{{ total_geral|valor_br }}</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-receipt fa-2x mb-2"></i>
+                        <p>Nenhuma despesa registrada{{ ' para os filtros selecionados' if filtro_data_inicio or filtro_categoria or filtro_tipo_doc else '' }}.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# ── Resumo por Categoria ── #}
+        <div class="col-lg-3">
+            <div class="card">
+                <div class="card-header card-header-theme">
+                    <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Por Categoria</h6>
+                </div>
+                <div class="card-body p-0">
+                    {% if totais_categoria %}
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            {% for cat, val in totais_categoria|dictsort %}
+                            <tr>
+                                <td><small>{{ cat }}</small></td>
+                                <td class="text-end fw-bold"><small>{{ val|valor_br }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="fw-bold">
+                                <td>Total</td>
+                                <td class="text-end">{{ total_geral|valor_br }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    {% else %}
+                    <div class="text-center py-3 text-muted">
+                        <small>Sem dados</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════
+   MODAL: Nova Despesa
+   ══════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="modalNovaDespesa" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('frota.nova_despesa') }}" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="frota_veiculo_id" value="{{ veiculo.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus-circle me-2"></i>Nova Despesa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Data *</label>
+                            <input type="date" class="form-control" name="data_despesa" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">KM no Momento *</label>
+                            <input type="number" class="form-control" name="km_no_momento" required min="0"
+                                   value="{{ veiculo.km_atual }}">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Categoria *</label>
+                            <select class="form-select" name="categoria" id="nova_categoria" required>
+                                <option value="">Selecione...</option>
+                                {% for code, label in categorias %}
+                                <option value="{{ code }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Valor (R$) *</label>
+                            <input type="text" class="form-control" name="valor" required placeholder="0,00">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo Documento *</label>
+                            <select class="form-select" name="tipo_documento" required>
+                                {% for code, label in tipos_documento %}
+                                <option value="{{ code }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">N. Documento</label>
+                            <input type="text" class="form-control" name="numero_documento" maxlength="60">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Fornecedor</label>
+                            <input type="text" class="form-control" name="fornecedor" maxlength="150"
+                                   placeholder="Ex: Posto Shell, Oficina Joao, etc.">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Descricao <span id="nova_desc_obrig" class="text-danger d-none">*</span></label>
+                            <input type="text" class="form-control" name="descricao" id="nova_descricao" maxlength="255">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Arquivo (NF, recibo, cupom)</label>
+                            <input type="file" class="form-control" name="arquivo"
+                                   accept=".pdf,.jpg,.jpeg,.png">
+                            <small class="text-muted">PDF, JPG ou PNG</small>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observacoes</label>
+                            <textarea class="form-control" name="observacoes" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-1"></i>Salvar Despesa
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════
+   MODAL: Editar Despesa
+   ══════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="modalEditarDespesa" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formEditarDespesa" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Editar Despesa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Data *</label>
+                            <input type="date" class="form-control" id="edit_d_data" name="data_despesa" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">KM no Momento *</label>
+                            <input type="number" class="form-control" id="edit_d_km" name="km_no_momento" required min="0">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Categoria *</label>
+                            <select class="form-select" id="edit_d_categoria" name="categoria" required>
+                                {% for code, label in categorias %}
+                                <option value="{{ code }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Valor (R$) *</label>
+                            <input type="text" class="form-control" id="edit_d_valor" name="valor" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo Documento *</label>
+                            <select class="form-select" id="edit_d_tipo_doc" name="tipo_documento" required>
+                                {% for code, label in tipos_documento %}
+                                <option value="{{ code }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">N. Documento</label>
+                            <input type="text" class="form-control" id="edit_d_num_doc" name="numero_documento" maxlength="60">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Fornecedor</label>
+                            <input type="text" class="form-control" id="edit_d_fornecedor" name="fornecedor" maxlength="150">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Descricao <span id="edit_desc_obrig" class="text-danger d-none">*</span></label>
+                            <input type="text" class="form-control" id="edit_d_descricao" name="descricao" maxlength="255">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Arquivo (substituir anexo)</label>
+                            <input type="file" class="form-control" name="arquivo"
+                                   accept=".pdf,.jpg,.jpeg,.png">
+                            <small class="text-muted" id="edit_d_arquivo_info"></small>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observacoes</label>
+                            <textarea class="form-control" id="edit_d_obs" name="observacoes" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar Alteracoes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════
+   MODAL: Editar Veiculo (reutilizado do index)
+   ══════════════════════════════════════════════════════════════ #}
+<div class="modal fade" id="modalEditarVeiculo" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formEditarVeiculo" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Editar Veiculo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Placa *</label>
+                            <input type="text" class="form-control" id="edit_placa" name="placa" required
+                                   maxlength="10" style="text-transform: uppercase;">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Renavam *</label>
+                            <input type="text" class="form-control" id="edit_renavam" name="renavam" required maxlength="15">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Chassi</label>
+                            <input type="text" class="form-control" id="edit_chassi" name="chassi"
+                                   maxlength="25" style="text-transform: uppercase;">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Marca *</label>
+                            <input type="text" class="form-control" id="edit_marca" name="marca" required maxlength="50">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Modelo *</label>
+                            <input type="text" class="form-control" id="edit_modelo" name="modelo" required maxlength="80">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Cor</label>
+                            <input type="text" class="form-control" id="edit_cor" name="cor" maxlength="30">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Proprietario *</label>
+                            <input type="text" class="form-control" id="edit_proprietario" name="proprietario" required maxlength="120">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Ano Fab *</label>
+                            <input type="number" class="form-control" id="edit_ano_fab" name="ano_fabricacao"
+                                   required min="1990" max="2030">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Ano Mod *</label>
+                            <input type="number" class="form-control" id="edit_ano_mod" name="ano_modelo"
+                                   required min="1990" max="2030">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo de Veiculo *</label>
+                            <select class="form-select" id="edit_tipo_id" name="veiculo_tipo_id" required>
+                                {% for t in tipos_veiculo %}
+                                <option value="{{ t.id }}">{{ t.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Motorista</label>
+                            <select class="form-select" id="edit_transp_id" name="transportadora_id">
+                                <option value="">Nenhum</option>
+                                {% for m in motoristas %}
+                                <option value="{{ m.id }}">{{ m.razao_social }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">KM Atual</label>
+                            <input type="number" class="form-control" id="edit_km" name="km_atual" min="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Deprec. Mensal (R$)</label>
+                            <input type="text" class="form-control" id="edit_deprec" name="depreciacao_mensal">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Observacoes</label>
+                            <textarea class="form-control" id="edit_obs" name="observacoes" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar Alteracoes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Form oculto para exclusao de despesa #}
+<form id="formExcluirDespesa" method="POST" style="display: none;">
+    <input type="hidden" id="excluir_despesa_id" name="despesa_id">
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Preencher modal Editar Despesa ──
+document.getElementById('modalEditarDespesa').addEventListener('show.bs.modal', function(event) {
+    const btn = event.relatedTarget;
+    const id = btn.getAttribute('data-id');
+
+    this.querySelector('#formEditarDespesa').action = `/fretes/frota/despesas/${id}/editar`;
+
+    document.getElementById('edit_d_data').value = btn.getAttribute('data-data');
+    document.getElementById('edit_d_km').value = btn.getAttribute('data-km');
+    document.getElementById('edit_d_categoria').value = btn.getAttribute('data-categoria');
+    document.getElementById('edit_d_tipo_doc').value = btn.getAttribute('data-tipo-doc');
+    document.getElementById('edit_d_num_doc').value = btn.getAttribute('data-num-doc');
+    document.getElementById('edit_d_valor').value = btn.getAttribute('data-valor');
+    document.getElementById('edit_d_fornecedor').value = btn.getAttribute('data-fornecedor');
+    document.getElementById('edit_d_descricao').value = btn.getAttribute('data-descricao');
+    document.getElementById('edit_d_obs').value = btn.getAttribute('data-obs');
+
+    // Info de arquivo existente
+    const temArquivo = btn.getAttribute('data-tem-arquivo');
+    const infoEl = document.getElementById('edit_d_arquivo_info');
+    infoEl.textContent = temArquivo ? 'Ja possui arquivo anexado. Enviar novo arquivo substitui o anterior.' : 'PDF, JPG ou PNG';
+
+    // Toggle descricao obrigatoria para OUTROS
+    toggleDescObrig('edit_d_categoria', 'edit_desc_obrig', 'edit_d_descricao');
+});
+
+// ── Preencher modal Editar Veiculo ──
+document.getElementById('modalEditarVeiculo').addEventListener('show.bs.modal', function(event) {
+    const btn = event.relatedTarget;
+    const id = btn.getAttribute('data-id');
+
+    this.querySelector('#formEditarVeiculo').action = `/fretes/frota/veiculos/${id}/editar`;
+
+    document.getElementById('edit_placa').value = btn.getAttribute('data-placa');
+    document.getElementById('edit_marca').value = btn.getAttribute('data-marca');
+    document.getElementById('edit_modelo').value = btn.getAttribute('data-modelo');
+    document.getElementById('edit_renavam').value = btn.getAttribute('data-renavam');
+    document.getElementById('edit_proprietario').value = btn.getAttribute('data-proprietario');
+    document.getElementById('edit_ano_fab').value = btn.getAttribute('data-ano-fab');
+    document.getElementById('edit_ano_mod').value = btn.getAttribute('data-ano-mod');
+    document.getElementById('edit_cor').value = btn.getAttribute('data-cor');
+    document.getElementById('edit_chassi').value = btn.getAttribute('data-chassi');
+    document.getElementById('edit_tipo_id').value = btn.getAttribute('data-tipo-id');
+    document.getElementById('edit_transp_id').value = btn.getAttribute('data-transp-id');
+    document.getElementById('edit_km').value = btn.getAttribute('data-km');
+    document.getElementById('edit_deprec').value = btn.getAttribute('data-deprec');
+    document.getElementById('edit_obs').value = btn.getAttribute('data-obs');
+});
+
+// ── Confirmar exclusao de despesa ──
+function confirmarExclusao(despesaId, categoria) {
+    Swal.fire({
+        title: 'Confirmar Exclusao',
+        text: `Deseja excluir a despesa de ${categoria}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sim, excluir!',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const form = document.getElementById('formExcluirDespesa');
+            form.action = `/fretes/frota/despesas/${despesaId}/excluir`;
+            form.submit();
+        }
+    });
+}
+
+// ── Descricao obrigatoria quando categoria = OUTROS ──
+function toggleDescObrig(selectId, labelId, inputId) {
+    const sel = document.getElementById(selectId);
+    const label = document.getElementById(labelId);
+    const input = document.getElementById(inputId);
+    if (sel.value === 'OUTROS') {
+        label.classList.remove('d-none');
+        input.required = true;
+    } else {
+        label.classList.add('d-none');
+        input.required = false;
+    }
+}
+
+// Bind para nova despesa
+document.getElementById('nova_categoria').addEventListener('change', function() {
+    toggleDescObrig('nova_categoria', 'nova_desc_obrig', 'nova_descricao');
+});
+
+// Bind para editar despesa
+document.getElementById('edit_d_categoria').addEventListener('change', function() {
+    toggleDescObrig('edit_d_categoria', 'edit_desc_obrig', 'edit_d_descricao');
+});
+</script>
+{% endblock %}
