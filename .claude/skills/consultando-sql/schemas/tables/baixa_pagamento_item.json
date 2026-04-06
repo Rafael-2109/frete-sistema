@@ -243,16 +243,16 @@
       "unique": false
     },
     {
-      "name": "ix_baixa_pagamento_item_status",
+      "name": "ix_baixa_pagamento_item_statement_line_id",
       "columns": [
-        "status"
+        "statement_line_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_baixa_pagamento_item_statement_line_id",
+      "name": "ix_baixa_pagamento_item_status",
       "columns": [
-        "statement_line_id"
+        "status"
       ],
       "unique": false
     },

@@ -122,13 +122,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_pendente_tagplus_numero_nf",
-      "columns": [
-        "numero_nf"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_pendente_tagplus_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
@@ -154,6 +147,13 @@
       "name": "ix_nf_pendente_tagplus_origem",
       "columns": [
         "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_pendente_tagplus_numero_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     },
