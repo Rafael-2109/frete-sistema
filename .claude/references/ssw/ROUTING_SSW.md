@@ -37,7 +37,7 @@ PERGUNTA DO USUARIO
     |       → Doc de opcao (ver Mapa Intencao→Opcao)
     |
     ├── "Fluxo completo de X" / "processo end-to-end"
-    |       → FLUXOS_PROCESSO.md secao FNN (ver Mapa Intencao→Fluxo)
+    |       → fluxos/INDEX.md e fluxos/FNN.md (ver Mapa Intencao→Fluxo)
     |
     ├── "Configurar X" / "parametrizar"
     |       → Doc de opcao de cadastro + POP de implantacao
@@ -223,7 +223,7 @@ PERGUNTA DO USUARIO
 
 ## Mapa Intencao → Fluxo (20 Fluxos)
 
-| Intencao do usuario | Fluxo | Secao em FLUXOS_PROCESSO.md |
+| Intencao do usuario | Fluxo | Arquivo em fluxos/ |
 |---------------------|-------|----------------------------|
 | coleta de mercadoria | F01 | OPERACIONAL — F01 Coleta |
 | emitir CTe / expedicao | F02 | OPERACIONAL — F02 Expedicao |
@@ -571,6 +571,6 @@ Caminhos de arquivo corrigidos em relacao a versao anterior:
 | CARVIA_OPERACAO.md | Perfil da empresa, equipe, clientes, gaps, fluxo atual |
 | CARVIA_STATUS.md | Status de adocao de cada POP pela CarVia |
 | CATALOGO_POPS.md | Definicao dos 45 POPs (categorias, prioridades, ondas) |
-| FLUXOS_PROCESSO.md | 20 fluxos end-to-end com diagramas e dependencias |
+| fluxos/INDEX.md | 20 fluxos end-to-end — arquivos individuais em fluxos/F01.md...F20.md |
 | MAPA_MENU.md | Mapeamento completo dos 26 modulos do menu SSW |
 | url-map.json | Mapeamento programatico opcao→URLs de ajuda |

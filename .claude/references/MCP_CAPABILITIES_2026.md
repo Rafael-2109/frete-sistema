@@ -8,7 +8,7 @@
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.1.53 | CLI 2.1.88. Annotated params (0.1.52), agent_id permissions (0.1.52), disallowedTools/maxTurns (0.1.51), session_id nativo (0.1.52), SIGKILL nativo (0.1.51), is_error MCP (0.1.51) |
+| `claude-agent-sdk` | 0.1.55 | CLI 2.1.91. Annotated params (0.1.52), agent_id permissions (0.1.52), disallowedTools/maxTurns (0.1.51), session_id nativo (0.1.52), SIGKILL nativo (0.1.51), is_error MCP (0.1.51), fix maxResultSizeChars MCP large results (0.1.55) |
 | `mcp` | 1.26.0 | MCP Python SDK (spec 2025-11-25). **Pin recomendado: `>=1.25,<2`** |
 
 ---
@@ -67,7 +67,7 @@ Criado em 2026-02-17 para preencher gap entre SDK wrapper e MCP spec.
 
 **Total**: 35 tools registradas, todas com `openWorldHint` configurado.
 
-### SDK 0.1.49–0.1.53 — Features por AgentDefinition
+### SDK 0.1.49–0.1.55 — Features por AgentDefinition
 
 | Campo | Status | Nota |
 |---|---|---|

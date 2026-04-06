@@ -9,7 +9,7 @@
 | Componente | Versao | Notas |
 |-----------|--------|-------|
 | `anthropic` SDK | **0.84.0** | Atualizado de 0.79.0. count_tokens, batches, cache_control disponiveis |
-| `claude-agent-sdk` | **0.1.53** | CLI 2.1.88. Annotated params, agent_id permissions, disallowedTools/maxTurns, session_id nativo, SIGKILL nativo, is_error MCP (0.1.51-0.1.53) |
+| `claude-agent-sdk` | **0.1.55** | CLI 2.1.91. Annotated params, agent_id permissions, disallowedTools/maxTurns, session_id nativo, SIGKILL nativo, is_error MCP (0.1.51-0.1.53), fix maxResultSizeChars MCP large results (0.1.55) |
 | `mcp` | 1.26.0+ | 7 servers, 35 tools |
 | pgvector | **0.8.1** (confirmado prod) | iterative_scan SUPORTADO, halfvec disponivel |
 

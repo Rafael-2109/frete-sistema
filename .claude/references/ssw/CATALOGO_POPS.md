@@ -1,7 +1,7 @@
 # Catalogo de POPs — CarVia Logistica
 
 > **Criado em**: 2026-02-15
-> **Fonte**: CARVIA_OPERACAO.md + FLUXOS_PROCESSO.md + 228 docs SSW
+> **Fonte**: CARVIA_OPERACAO.md + fluxos/INDEX.md + 228 docs SSW
 > **Objetivo**: Definir TODOS os POPs necessarios para padronizar a operacao CarVia no SSW
 > **Uso pelo agente**: Ensinar pessoas, verificar processos via Playwright, auditar conformidade
 

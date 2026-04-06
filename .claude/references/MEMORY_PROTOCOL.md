@@ -30,7 +30,7 @@ Cada memoria tem `category` que determina seu decay temporal na injecao:
 | `contextual` | ~3d | Alertas, estado do sistema, sessoes recentes | Rapido |
 | `cold` | N/A | Memorias depreciadas | Sem injecao automatica |
 
-Implementacao: `_calculate_category_decay()` em `client.py:449`.
+Implementacao: `_calculate_category_decay()` em `memory_injection.py:157`.
 Memorias cold so aparecem via busca explicita (`search_cold_memories`).
 
 ---

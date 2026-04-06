@@ -22,7 +22,7 @@ O SSW e um sistema integrado para transportadoras que cobre: operacional, comerc
 | [CARVIA_OPERACAO.md](CARVIA_OPERACAO.md) | Operacao CarVia: perfil, equipe, clientes, fluxo operacional, gaps, mapa processo→SSW |
 | [CARVIA_STATUS.md](CARVIA_STATUS.md) | Status de adocao de cada POP pela CarVia (ATIVO/PARCIAL/NAO IMPLANTADO) |
 | [CATALOGO_POPS.md](CATALOGO_POPS.md) | 45 POPs definidos em 7 categorias, priorizados em 5 ondas de escrita |
-| [FLUXOS_PROCESSO.md](FLUXOS_PROCESSO.md) | 20 fluxos end-to-end (F01-F20): Coleta → Entrega → Faturamento → Fiscal → Contabil + Frota + Logistica + Embarcador |
+| [fluxos/INDEX.md](fluxos/INDEX.md) | 20 fluxos end-to-end (F01-F20) — arquivos individuais em fluxos/F01.md...F20.md |
 | [MAPA_MENU.md](MAPA_MENU.md) | Mapeamento completo dos 26 modulos do menu SSW |
 | [ROUTING_SSW.md](ROUTING_SSW.md) | Decision tree: intencao do usuario → documento correto (POPs, opcoes, fluxos) |
 | [VERIFICACOES_PENDENTES.md](VERIFICACOES_PENDENTES.md) | Checklist de 42 marcadores [CONFIRMAR] para verificacao via Playwright no SSW |

@@ -67,7 +67,7 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 | frete-sistema | Web Service | Free | frete-sistema.onrender.com (DEPRECATED) |
 | sistema-fretes-worker-atacadao | Background Worker | Standard 2GB 1CPU | — |
 | sistema-fretes-redis | Key Value | Starter 256MB | — |
-| sistema-fretes-db | Postgres | Basic 1GB | — |
+| sistema-fretes-db | Postgres | Basic 4GB | — |
 
 ---
 

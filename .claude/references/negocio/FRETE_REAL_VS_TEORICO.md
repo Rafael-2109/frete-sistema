@@ -70,7 +70,7 @@ ARMAZENAGEM        - Armazenagem em destino
 - `transportadora_id` - Override de transportadora (quando diferente do frete original)
 - `setor_responsavel` - Quem paga: LOGISTICA, COMERCIAL, QUALIDADE
 - `motivo_despesa` - Razao da despesa
-- `status` - PENDENTE, APROVADO, LANCADO
+- `status` - PENDENTE, VINCULADO_CTE, LANCADO_ODOO, LANCADO, CANCELADO
 
 ### Custo REAL total de um frete
 ```sql

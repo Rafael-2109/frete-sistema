@@ -34,10 +34,10 @@ class MeuService:
 
     def _executar_com_auditoria(self, funcao, entidade_id, etapa, descricao, modelo, acao):
         """Wrapper que executa funcao e registra resultado"""
-        inicio = datetime.utcnow()
+        inicio = datetime.now()
         try:
             resultado = funcao()
-            tempo = (datetime.utcnow() - inicio).total_seconds() * 1000
+            tempo = (datetime.now() - inicio).total_seconds() * 1000
             self._registrar_auditoria(
                 entidade_id, etapa, 'SUCESSO',
                 descricao=descricao, modelo=modelo, acao=acao,
@@ -45,7 +45,7 @@ class MeuService:
             )
             return True, resultado, None
         except Exception as e:
-            tempo = (datetime.utcnow() - inicio).total_seconds() * 1000
+            tempo = (datetime.now() - inicio).total_seconds() * 1000
             self._registrar_auditoria(
                 entidade_id, etapa, 'ERRO',
                 descricao=descricao, modelo=modelo, acao=acao,
