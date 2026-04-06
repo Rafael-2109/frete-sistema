@@ -1676,13 +1676,32 @@ function renderSuggestionChips(suggestions, msgElement) {
     const container = document.createElement('div');
     container.className = 'suggestion-chips';
 
-    suggestions.forEach(text => {
+    suggestions.forEach((text, idx) => {
         const chip = document.createElement('button');
         chip.className = 'suggestion-chip';
         chip.textContent = text;
         chip.title = text;
 
         chip.addEventListener('click', () => {
+            // Track suggestion click (best-effort, nao bloqueia)
+            try {
+                fetch('/agente/api/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        type: 'suggestion_click',
+                        data: {
+                            suggestion_text: text,
+                            suggestion_index: idx,
+                        }
+                    })
+                }).catch(() => {}); // best-effort
+            } catch (e) { /* ignore */ }
+
             // Remove todos os chips
             document.querySelectorAll('.suggestion-chips').forEach(el => el.remove());
 

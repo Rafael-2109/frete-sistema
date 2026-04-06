@@ -53,10 +53,10 @@ def api_feedback():
                 'error': 'session_id é obrigatório'
             }), 400
 
-        if feedback_type not in ['positive', 'negative', 'correction', 'preference']:
+        if feedback_type not in ['positive', 'negative', 'correction', 'preference', 'suggestion_click']:
             return jsonify({
                 'success': False,
-                'error': 'type deve ser: positive, negative, correction ou preference'
+                'error': 'type deve ser: positive, negative, correction, preference ou suggestion_click'
             }), 400
 
         user_id = current_user.id
@@ -155,6 +155,30 @@ def api_feedback():
                     AgentMemory.create_file(user_id, path, content)
                 db.session.commit()
                 result['memory_path'] = path
+
+        elif feedback_type == 'suggestion_click':
+            suggestion_text = feedback_data.get('suggestion_text', '')
+            suggestion_index = feedback_data.get('suggestion_index', 0)
+            if suggestion_text:
+                from app.agente.models import AgentSession
+                from sqlalchemy.orm.attributes import flag_modified
+
+                session_record = AgentSession.query.filter_by(
+                    session_id=session_id, user_id=user_id
+                ).first()
+                if session_record:
+                    if not session_record.data:
+                        session_record.data = {}
+                    feedbacks = session_record.data.get('feedbacks', [])
+                    feedbacks.append({
+                        'type': 'suggestion_click',
+                        'suggestion_text': suggestion_text[:500],
+                        'suggestion_index': suggestion_index,
+                        'timestamp': agora_utc_naive().isoformat(),
+                    })
+                    session_record.data['feedbacks'] = feedbacks
+                    flag_modified(session_record, 'data')
+                    db.session.commit()
 
         logger.info(
             f"[AGENTE] Feedback recebido | user={user_id} "
