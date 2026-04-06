@@ -507,20 +507,48 @@
     flex-wrap: wrap;
     gap: 0.35rem;
     padding: 0;
+    align-items: center;
 }
 
-.carvia-quick-nav .btn {
+.carvia-quick-nav > .btn {
     font-size: 0.78rem;
     padding: 0.15rem 0.6rem;
     border-radius: var(--radius-pill, 50rem);
 }
 
-.carvia-quick-nav-sep {
-    width: 1px;
-    background: var(--border);
-    margin: 0.15rem 0.15rem;
-    align-self: stretch;
-    opacity: 0.5;
+/* Dropdown groups inside quick nav */
+.carvia-quick-nav .btn-group .btn {
+    font-size: 0.78rem;
+    padding: 0.15rem 0.6rem;
+}
+
+.carvia-quick-nav .btn-group .btn:first-child {
+    border-radius: var(--radius-pill, 50rem) 0 0 var(--radius-pill, 50rem);
+}
+
+.carvia-quick-nav .btn-group .dropdown-toggle-split {
+    border-radius: 0 var(--radius-pill, 50rem) var(--radius-pill, 50rem) 0;
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+}
+
+.carvia-quick-nav .btn-group .dropdown-menu {
+    font-size: 0.82rem;
+    min-width: 10rem;
+}
+
+.carvia-quick-nav .btn-group .dropdown-item {
+    padding: 0.3rem 0.8rem;
+    font-size: 0.82rem;
+}
+
+.carvia-quick-nav .btn-group .dropdown-item.active {
+    background-color: var(--bs-primary);
+    color: #fff;
+}
+
+.carvia-quick-nav .btn-group .dropdown-item:hover:not(.active) {
+    background-color: var(--bg-hover, rgba(0,0,0,0.05));
 }
 
 /* ═══════════════════════════════════════════════════════════════

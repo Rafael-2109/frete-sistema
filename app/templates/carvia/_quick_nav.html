@@ -2,138 +2,150 @@
    Uso: {% set carvia_active = 'operacoes' %} {% include 'carvia/_quick_nav.html' %}
    Valores validos para carvia_active: dashboard, importar, nfs, operacoes, subcontratos,
    ctes_complementares, custos_entrega, fretes, faturas_cliente, faturas_transportadora,
-   despesas, receitas, comissoes, fluxo_caixa, conciliacao, extrato_bancario, configuracoes, gerencial
+   despesas, receitas, comissoes, fluxo_caixa, conciliacao, extrato_bancario,
+   clientes, origens_globais, cotacoes_v2, pedidos_carvia, configuracoes, gerencial, simulador
 #}
+
+{# — Grupos para deteccao de secao ativa — #}
+{% set grp_comprados = ['subcontratos', 'custos_entrega', 'faturas_transportadora', 'despesas'] %}
+{% set grp_vendidos = ['operacoes', 'ctes_complementares', 'faturas_cliente', 'receitas'] %}
+{% set grp_financeiro = ['fretes', 'fluxo_caixa', 'conciliacao', 'extrato_bancario'] %}
+{% set grp_comercial = ['nfs', 'clientes', 'origens_globais', 'cotacoes_v2', 'pedidos_carvia', 'comissoes'] %}
+{% set grp_cadastros = ['configuracoes'] %}
+
 <nav class="carvia-quick-nav mb-3" aria-label="Navegacao rapida CarVia">
-    {# --- Visao Geral --- #}
+
+    {# ── 1. Dashboard ── #}
     <a href="{{ url_for('carvia.dashboard') }}"
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'dashboard' else 'btn-outline-secondary' }}">
         <i class="fas fa-tachometer-alt"></i> Dashboard
     </a>
+
+    {# ── 2. Importar ── #}
     <a href="{{ url_for('carvia.importar') }}"
        class="btn btn-sm {{ 'btn-primary' if carvia_active == 'importar' else 'btn-outline-secondary' }}">
         <i class="fas fa-upload"></i> Importar
     </a>
 
-    {# --- Documentos --- #}
-    <span class="carvia-quick-nav-sep"></span>
-    <a href="{{ url_for('carvia.listar_nfs') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'nfs' else 'btn-outline-secondary' }}">
-        NFs
-    </a>
-    <a href="{{ url_for('carvia.listar_operacoes') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'operacoes' else 'btn-outline-secondary' }}">
-        CTe CarVia
-    </a>
-    <a href="{{ url_for('carvia.listar_subcontratos') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'subcontratos' else 'btn-outline-secondary' }}">
-        Subcontratos
-    </a>
-    <a href="{{ url_for('carvia.listar_ctes_complementares') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'ctes_complementares' else 'btn-outline-secondary' }}">
-        CTe Comp.
-    </a>
-    <a href="{{ url_for('carvia.listar_custos_entrega') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'custos_entrega' else 'btn-outline-secondary' }}">
-        Custos Entrega
-    </a>
+    {# ── 3. Servicos Comprados ── #}
+    {% set _comprados_active = carvia_active in grp_comprados %}
+    <div class="btn-group">
+        <a href="{{ url_for('carvia.listar_subcontratos') }}"
+           class="btn btn-sm {{ 'btn-primary' if _comprados_active else 'btn-outline-secondary' }}">
+            <i class="fas fa-file-import"></i> Serv. Comprados
+        </a>
+        <button type="button"
+                class="btn btn-sm {{ 'btn-primary' if _comprados_active else 'btn-outline-secondary' }} dropdown-toggle dropdown-toggle-split"
+                data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="visually-hidden">Abrir</span>
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'subcontratos' }}"
+                   href="{{ url_for('carvia.listar_subcontratos') }}">Subcontrato</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'custos_entrega' }}"
+                   href="{{ url_for('carvia.listar_custos_entrega') }}">Custos Entrega</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'faturas_transportadora' }}"
+                   href="{{ url_for('carvia.listar_faturas_transportadora') }}">Fatura Subcontrato</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'despesas' }}"
+                   href="{{ url_for('carvia.listar_despesas') }}">Despesas Empresa</a></li>
+        </ul>
+    </div>
 
-    {# --- Fretes --- #}
-    <span class="carvia-quick-nav-sep"></span>
-    <a href="{{ url_for('carvia.listar_fretes_carvia') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'fretes' else 'btn-outline-secondary' }}">
-        Fretes
-    </a>
+    {# ── 4. Servicos Vendidos ── #}
+    {% set _vendidos_active = carvia_active in grp_vendidos %}
+    <div class="btn-group">
+        <a href="{{ url_for('carvia.listar_operacoes') }}"
+           class="btn btn-sm {{ 'btn-primary' if _vendidos_active else 'btn-outline-secondary' }}">
+            <i class="fas fa-file-export"></i> Serv. Vendidos
+        </a>
+        <button type="button"
+                class="btn btn-sm {{ 'btn-primary' if _vendidos_active else 'btn-outline-secondary' }} dropdown-toggle dropdown-toggle-split"
+                data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="visually-hidden">Abrir</span>
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'operacoes' }}"
+                   href="{{ url_for('carvia.listar_operacoes') }}">CTe CarVia</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'ctes_complementares' }}"
+                   href="{{ url_for('carvia.listar_ctes_complementares') }}">CTe Comp.</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'faturas_cliente' }}"
+                   href="{{ url_for('carvia.listar_faturas_cliente') }}">Fatura CarVia</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'receitas' }}"
+                   href="{{ url_for('carvia.listar_receitas') }}">Receitas Empresa</a></li>
+        </ul>
+    </div>
 
-    {# --- Faturamento --- #}
-    <span class="carvia-quick-nav-sep"></span>
-    <a href="{{ url_for('carvia.listar_faturas_cliente') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'faturas_cliente' else 'btn-outline-secondary' }}">
-        Fatura CarVia
-    </a>
-    <a href="{{ url_for('carvia.listar_faturas_transportadora') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'faturas_transportadora' else 'btn-outline-secondary' }}">
-        Fatura Subcontrato
-    </a>
-    <a href="{{ url_for('carvia.listar_despesas') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'despesas' else 'btn-outline-secondary' }}">
-        Despesas
-    </a>
-    <a href="{{ url_for('carvia.listar_receitas') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'receitas' else 'btn-outline-secondary' }}">
-        Receitas
-    </a>
+    {# ── 5. Financeiro ── #}
+    {% set _financeiro_active = carvia_active in grp_financeiro %}
+    <div class="btn-group">
+        <a href="{{ url_for('carvia.listar_fretes_carvia') }}"
+           class="btn btn-sm {{ 'btn-primary' if _financeiro_active else 'btn-outline-secondary' }}">
+            <i class="fas fa-dollar-sign"></i> Financeiro
+        </a>
+        <button type="button"
+                class="btn btn-sm {{ 'btn-primary' if _financeiro_active else 'btn-outline-secondary' }} dropdown-toggle dropdown-toggle-split"
+                data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="visually-hidden">Abrir</span>
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'fretes' }}"
+                   href="{{ url_for('carvia.listar_fretes_carvia') }}">Fretes</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'fluxo_caixa' }}"
+                   href="{{ url_for('carvia.fluxo_caixa') }}">Fluxo de Caixa</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'conciliacao' }}"
+                   href="{{ url_for('carvia.conciliacao') }}">Conciliacao</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'extrato_bancario' }}"
+                   href="{{ url_for('carvia.extrato_bancario') }}">Extrato Bancario</a></li>
+        </ul>
+    </div>
 
-    {# --- Comercial --- #}
-    <span class="carvia-quick-nav-sep"></span>
-    <a href="{{ url_for('carvia.listar_clientes') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'clientes' else 'btn-outline-secondary' }}">
-        Clientes
-    </a>
-    <a href="{{ url_for('carvia.origens_globais') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'origens_globais' else 'btn-outline-secondary' }}">
-        Origens
-    </a>
-    <a href="{{ url_for('carvia.listar_cotacoes_v2') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'cotacoes_v2' else 'btn-outline-secondary' }}">
-        Cotacao Comercial
-    </a>
-    <a href="{{ url_for('carvia.listar_pedidos_carvia') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'pedidos_carvia' else 'btn-outline-secondary' }}">
-        Pedidos
-    </a>
+    {# ── 6. Comercial ── #}
+    {% set _comercial_active = carvia_active in grp_comercial %}
+    <div class="btn-group">
+        <a href="{{ url_for('carvia.listar_nfs') }}"
+           class="btn btn-sm {{ 'btn-primary' if _comercial_active else 'btn-outline-secondary' }}">
+            <i class="fas fa-briefcase"></i> Comercial
+        </a>
+        <button type="button"
+                class="btn btn-sm {{ 'btn-primary' if _comercial_active else 'btn-outline-secondary' }} dropdown-toggle dropdown-toggle-split"
+                data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="visually-hidden">Abrir</span>
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'nfs' }}"
+                   href="{{ url_for('carvia.listar_nfs') }}">NFs</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'clientes' }}"
+                   href="{{ url_for('carvia.listar_clientes') }}">Clientes</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'origens_globais' }}"
+                   href="{{ url_for('carvia.origens_globais') }}">Origens</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'cotacoes_v2' }}"
+                   href="{{ url_for('carvia.listar_cotacoes_v2') }}">Cotacao Comercial</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'pedidos_carvia' }}"
+                   href="{{ url_for('carvia.listar_pedidos_carvia') }}">Pedidos</a></li>
+            {% if current_user.is_authenticated and current_user.sistema_carvia and (current_user.perfil == 'administrador' or current_user.acesso_comissao_carvia) %}
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'comissoes' }}"
+                   href="{{ url_for('carvia.listar_comissoes') }}">Comissoes</a></li>
+            {% endif %}
+        </ul>
+    </div>
 
-    {# --- Financeiro --- #}
-    <span class="carvia-quick-nav-sep"></span>
-    {% if current_user.is_authenticated and current_user.sistema_carvia and (current_user.perfil == 'administrador' or current_user.acesso_comissao_carvia) %}
-    <a href="{{ url_for('carvia.listar_comissoes') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'comissoes' else 'btn-outline-secondary' }}">
-        Comissoes
-    </a>
-    {% endif %}
-    <a href="{{ url_for('carvia.fluxo_caixa') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'fluxo_caixa' else 'btn-outline-secondary' }}">
-        Fluxo Caixa
-    </a>
-    <a href="{{ url_for('carvia.conciliacao') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'conciliacao' else 'btn-outline-secondary' }}">
-        Conciliacao
-    </a>
-    <a href="{{ url_for('carvia.extrato_bancario') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'extrato_bancario' else 'btn-outline-secondary' }}">
-        Extrato Bancario
-    </a>
-
-    {# --- Admin --- #}
-    {% if current_user.is_authenticated and current_user.perfil == 'administrador' %}
-    <span class="carvia-quick-nav-sep"></span>
-    <a href="{{ url_for('carvia.gerencial') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'gerencial' else 'btn-outline-secondary' }}">
-        <i class="fas fa-chart-pie"></i> Gerencial
-    </a>
-    {% endif %}
-
-    {# --- Ferramentas --- #}
-    <span class="carvia-quick-nav-sep"></span>
-    <a href="{{ url_for('carvia.simulador_carga') }}"
-       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'simulador' else 'btn-outline-secondary' }}">
-        <i class="fas fa-cube"></i> Simulador 3D
-    </a>
-
-    {# --- Config --- #}
-    <span class="carvia-quick-nav-sep"></span>
+    {# ── 7. Cadastros ── #}
+    {% set _cadastros_active = carvia_active in grp_cadastros %}
     <div class="btn-group">
         <a href="{{ url_for('carvia.listar_modelos_moto') }}"
-           class="btn btn-sm {{ 'btn-primary' if carvia_active == 'configuracoes' else 'btn-outline-secondary' }}">
-            <i class="fas fa-cog"></i> Config
+           class="btn btn-sm {{ 'btn-primary' if _cadastros_active else 'btn-outline-secondary' }}">
+            <i class="fas fa-cog"></i> Cadastros
         </a>
-        <button type="button" class="btn btn-sm {{ 'btn-primary' if carvia_active == 'configuracoes' else 'btn-outline-secondary' }} dropdown-toggle dropdown-toggle-split"
-                data-bs-toggle="dropdown">
+        <button type="button"
+                class="btn btn-sm {{ 'btn-primary' if _cadastros_active else 'btn-outline-secondary' }} dropdown-toggle dropdown-toggle-split"
+                data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="visually-hidden">Abrir</span>
         </button>
         <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('carvia.listar_modelos_moto') }}">Modelos Moto</a></li>
             <li><a class="dropdown-item" href="{{ url_for('carvia.listar_categorias_moto') }}">Categorias Moto</a></li>
-            <li><a class="dropdown-item" href="{{ url_for('carvia.listar_empresas_cubagem') }}">Empresas Cubagem</a></li>
+            <li><a class="dropdown-item text-muted" href="{{ url_for('carvia.listar_empresas_cubagem') }}">Empresas Cubagem <small>(deprecated)</small></a></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="{{ url_for('carvia.listar_grupos_cliente') }}">Grupos de Cliente</a></li>
             <li><a class="dropdown-item" href="{{ url_for('carvia.listar_tabelas_carvia') }}">Tabelas Frete CarVia</a></li>
@@ -142,4 +154,19 @@
             <li><a class="dropdown-item" href="{{ url_for('carvia.listar_parametros') }}">Parametros Globais</a></li>
         </ul>
     </div>
+
+    {# ── Gerencial (admin-only) ── #}
+    {% if current_user.is_authenticated and current_user.perfil == 'administrador' %}
+    <a href="{{ url_for('carvia.gerencial') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'gerencial' else 'btn-outline-secondary' }}">
+        <i class="fas fa-chart-pie"></i> Gerencial
+    </a>
+    {% endif %}
+
+    {# ── Simulador 3D ── #}
+    <a href="{{ url_for('carvia.simulador_carga') }}"
+       class="btn btn-sm {{ 'btn-primary' if carvia_active == 'simulador' else 'btn-outline-secondary' }}">
+        <i class="fas fa-cube"></i> Simulador 3D
+    </a>
+
 </nav>
