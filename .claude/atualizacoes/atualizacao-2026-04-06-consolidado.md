@@ -8,53 +8,79 @@
 
 | # | Dominio | Status | Resumo |
 |---|---------|--------|--------|
-| 1 | CLAUDE.md Audit | PARCIAL | 9/9 auditados. 2 CLAUDE.md corrigidos (carteira files 65->47, teams LOC+data). Relatorio pre-existen |
-| 2 | References Audit | PARCIAL | 30 arquivos revisados, 7 divergencias encontradas (2 reabertas + 5 novas). Correcoes nao aplicadas p |
-| 3 | Memorias Cleanup | OK | 24 memorias auditadas. 5 projetos obsoletos removidos, 2 MCP files consolidados em 1, 1 frontmatter  |
-| 4 | Sentry Triage | OK | 2 issues abertas (ambas performance/db_query, nenhum erro). Nenhuma correcao necessaria. Reducao de  |
-| 5 | Test Runner | OK | 288/288 testes OK (100%), 16.63s. Nenhuma falha. D4 sem arquivos modificados. |
-| 6 | Memory Eval | OK | Health score 81/100. 128 memorias ativas, 14 cold, 2 stale >60d. 360 sessoes, 21 usuarios. 7 recomen |
-| 7 | Agent Intelligence Report | PARCIAL | 194 sessoes analisadas (30d). Health score 42/100 (declining). 2 recomendacoes criticas: resolution  |
+| 1 | CLAUDE.md Audit | PARCIAL | 9/9 auditados, 2 corrigidos (carteira files 65->47, teams LOC+data). Relatorio/historico nao atualizados (permissao). |
+| 2 | References Audit | PARCIAL | 30 arquivos revisados, 7 divergencias encontradas (5 novas + 2 reabertas). Correcoes nao aplicadas (permissao). |
+| 3 | Memorias Cleanup | OK | 24 memorias auditadas, 5 removidas, 2 consolidadas, 1 corrigida. MEMORY.md em 58 linhas. |
+| 4 | Sentry Triage | OK | 2 issues (performance/db_query), 0 erros app. Reducao 42->2 issues vs anterior. |
+| 5 | Test Runner | OK | 288/288 testes OK (100%), 16.63s. Zero falhas. |
+| 6 | Memory Eval | OK | Health score 81/100. 128 memorias, 360 sessoes, 21 usuarios. 7 recomendacoes. |
+| 7 | Agent Intelligence Report | PARCIAL | Health score 45/100 (DECLINING). Resolution rate caiu 89.6%->36.7%. DB persistence pulada. |
 
 ## Metricas
 
-### CLAUDE.md
-- Arquivos auditados: 9, modificados: 2
+### CLAUDE.md (D1)
+- Arquivos auditados: 9/9, modificados: 2
+- Divergencias corrigidas: carteira (files 65->47), teams (LOC+data atualizados)
+- Pendente: ~/.claude/CLAUDE.md stats espelho
 
-### References
-- Arquivos revisados: 30, corrigidos: 0
-- Caminhos quebrados: 1
+### References (D2)
+- Arquivos revisados: 30, corrigidos: 0 (permissao negada)
+- Divergencias encontradas: 7
+  - claude-agent-sdk: 0.1.53 -> 0.1.55 (real)
+  - MCP tools count: 35 -> 36 (real)
+  - Memory MCP tools: 11 -> 12 (register_improvement adicionada)
+  - Postgres plan: inconsistencia BEST_PRACTICES vs INFRAESTRUTURA
+  - odoo/PADROES_AVANCADOS.md: usa datetime.utcnow() em exemplo
+  - ssw/INDEX.md: referencia FLUXOS_PROCESSO.md inexistente
+  - CLI version: 2.1.88 -> 2.1.91
 
-### Memorias
-- Auditadas: 24, removidas: 6, consolidadas: 2
-- MEMORY.md linhas: 58
+### Memorias (D3)
+- Auditadas: 24 (MEMORY.md + 23 topic files)
+- Removidas: 5 (memory_audit_quality, capdo_v3_memoria, teams_postsession_fix, plugins_habilitados, sdk_client_migration_qa)
+- Consolidadas: 2 -> 1 (mcp_capabilities + mcp_plugins -> mcp_infrastructure)
+- Atualizadas: 1 (framework_aristotelico type project->reference)
+- Estado final: 18 topic files, MEMORY.md 58 linhas
 
-### Sentry
+### Sentry (D4)
 - Issues avaliadas: 2, corrigidas: 0, ignoradas: 2
+- Ambas classificadas BAIXO (performance/db_query, nao erro)
 
-### Tests
+### Tests (D5)
 - Total: 288, passed: 288, failed: 0, taxa: 100%
+- Tempo: 16.63s
+- Testes mais lentos: test_confirmar_sugestao (5.05s), test_rejeitar_sugestao (4.24s)
 
-### Memory Eval (Producao)
+### Memory Eval (D6 - Producao)
 - Health score: 81/100
 - Total memorias: 128, cold: 14, stale 60d: 2
+- Sessoes: 360, usuarios unicos: 21
 - Recomendacoes: 7
 
-### Agent Intelligence Report
-- Health score: 42/100
-- Sessoes analisadas: 194, friction score: 67
-- Recomendacoes: 10, backlog: 10 itens
+### Agent Intelligence Report (D7)
+- Health score: 45/100
+- Sessoes analisadas: 194, friction score: alto (21.6% no_tools)
+- Recomendacoes: 8 (2 critical, 4 warning, 2 info)
 - Trend: declining
+
+**Issues CRITICAL (D7):**
+1. Resolution rate colapsou de 89.6% para 36.7% em 3 semanas
+2. 21.6% das sessoes (42) usaram zero tools
+
+**Issues WARNING (D7):**
+1. Skill gaps: separacao (21x), frete (20x), nota_fiscal (16x)
+2. Memory tools trending DOWN hard
+3. Render monitoring zerado em 7d
+4. Sessoes NF-PO custando USD 13-17 cada (user 69)
 
 ## Erros e Falhas
 
-### D1 — CLAUDE.md Audit
-- Permissao negada para atualizar relatorio atualizacao-2026-04-06-1.md
-- Permissao negada para editar historico.md
-- Permissao negada para editar ~/.claude/CLAUDE.md stats espelho
+### D1 (PARCIAL)
+- Relatorio/historico nao atualizados (permissao negada ao subagente)
+- ~/.claude/CLAUDE.md stats espelho desatualizado
 
-### D2 — References Audit
-- Permissao de escrita negada - divergencias identificadas mas nao corrigidas
+### D2 (PARCIAL)
+- 7 divergencias identificadas mas nao corrigidas (permissao negada ao subagente)
 
-### D7 — Agent Intelligence Report
-- CRON_API_KEY nao definida no ambiente local. Persistencia no banco de producao pulada.
+### D7 (PARCIAL)
+- Persistencia no banco pulada (CRON_API_KEY nao definida localmente)
+- historico.md nao atualizado (permissao negada)
