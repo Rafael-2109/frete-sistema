@@ -128,12 +128,18 @@
                             <option value="DIRETA">DIRETA</option>
                         </select>
                     </div>
-                    <div class="col-md-5">
+                    <div id="col-transportadora" class="col-md-5">
                         <label class="form-label">Transportadora <span class="text-danger">*</span></label>
                         <input type="text" id="busca-transportadora" class="form-control"
                                placeholder="Buscar transportadora..." autocomplete="off">
                         <input type="hidden" name="transportadora_id" id="transportadora_id">
                         <div id="transportadora-results" class="carvia-autocomplete-results" style="display:none"></div>
+                    </div>
+                    <div id="col-modalidade" class="col-md-2" style="display:none">
+                        <label class="form-label">Modalidade</label>
+                        <select class="form-select" id="modalidade_select" name="nome_tabela">
+                            <option value="">Selecionar...</option>
+                        </select>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">
@@ -180,8 +186,12 @@
                         <div class="col-md-8">
                             <p class="text-muted mt-4">
                                 Para carga DIRETA, informe o valor do frete manualmente.
-                                Opcionalmente, selecione uma transportadora para carregar parametros de referencia.
+                                Selecione uma transportadora para ver o valor de referencia da tabela.
                             </p>
+                            <div id="referencia-cotacao" class="alert alert-light border d-flex align-items-center py-2" style="display:none !important">
+                                <i class="fas fa-info-circle text-info me-2"></i>
+                                <span>Referencia tabela <strong id="ref-tabela-nome"></strong>: <strong id="ref-tabela-valor"></strong></span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -451,6 +461,10 @@
             secaoManual.style.display = '';
             secaoParametros.style.display = 'none';
             alertaFallback.style.display = 'none';
+            // Se transportadora ja selecionada, buscar referencia
+            if (transportadoraId.value) {
+                buscarCotacaoReferencia();
+            }
         } else if (tipo === 'FRACIONADA') {
             cardParametros.style.display = '';
             secaoManual.style.display = 'none';
@@ -484,8 +498,12 @@
     // --- Valor venda change ---
     document.getElementById('valor_venda').addEventListener('input', atualizarResumoMargem);
 
-    // --- Transportadora autocomplete ---
+    // --- Transportadora autocomplete (usa api_transportadoras_modalidade) ---
     var debounceTimer = null;
+    var modalidadeSelect = document.getElementById('modalidade_select');
+    var colModalidade = document.getElementById('col-modalidade');
+    var colTransportadora = document.getElementById('col-transportadora');
+
     transportadoraInput.addEventListener('input', function() {
         clearTimeout(debounceTimer);
         var query = this.value.trim();
@@ -494,24 +512,29 @@
             return;
         }
         debounceTimer = setTimeout(function() {
-            fetch('/carvia/api/opcoes-transportadora?busca=' + encodeURIComponent(query) + '&uf_destino=' + UF_DESTINO)
+            fetch('/carvia/api/transportadoras-modalidade?busca=' + encodeURIComponent(query) + '&uf_destino=' + UF_DESTINO)
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     transportadoraResults.innerHTML = '';
-                    (data.opcoes || []).forEach(function(t) {
+                    (data.transportadoras || []).forEach(function(t) {
                         var div = document.createElement('div');
                         div.className = 'carvia-autocomplete-item p-2';
                         div.style.cursor = 'pointer';
-                        div.textContent = t.razao_social + (t.cnpj ? ' (' + t.cnpj + ')' : '');
+                        var label = t.razao_social + (t.cnpj ? ' (' + t.cnpj + ')' : '');
+                        if (t.modalidades && t.modalidades.length > 0) {
+                            label += ' — ' + t.modalidades.join(', ');
+                        }
+                        div.textContent = label;
                         div.addEventListener('click', function() {
                             transportadoraInput.value = t.razao_social;
                             transportadoraId.value = t.id;
                             transportadoraResults.style.display = 'none';
+                            popularModalidades(t.modalidades || []);
                             onTransportadoraSelecionada();
                         });
                         transportadoraResults.appendChild(div);
                     });
-                    transportadoraResults.style.display = data.opcoes && data.opcoes.length ? '' : 'none';
+                    transportadoraResults.style.display = data.transportadoras && data.transportadoras.length ? '' : 'none';
                 });
         }, 300);
     });
@@ -523,9 +546,43 @@
         }
     });
 
+    // --- Modalidade ---
+    function popularModalidades(modalidades) {
+        modalidadeSelect.innerHTML = '';
+        if (modalidades.length <= 1) {
+            // Unica ou nenhuma modalidade — esconder select
+            colModalidade.style.display = 'none';
+            colTransportadora.className = 'col-md-5';
+            if (modalidades.length === 1) {
+                var opt = document.createElement('option');
+                opt.value = modalidades[0];
+                opt.textContent = modalidades[0];
+                modalidadeSelect.appendChild(opt);
+            }
+        } else {
+            // Multiplas modalidades — mostrar select
+            colModalidade.style.display = '';
+            colTransportadora.className = 'col-md-4';
+            modalidades.forEach(function(m) {
+                var opt = document.createElement('option');
+                opt.value = m;
+                opt.textContent = m;
+                modalidadeSelect.appendChild(opt);
+            });
+        }
+    }
+
+    modalidadeSelect.addEventListener('change', function() {
+        if (transportadoraId.value) {
+            onTransportadoraSelecionada();
+        }
+    });
+
     function onTransportadoraSelecionada() {
         if (tipoCarga.value === 'FRACIONADA') {
             buscarCotacao();
+        } else if (tipoCarga.value === 'DIRETA') {
+            buscarCotacaoReferencia();
         }
     }
 
@@ -555,7 +612,8 @@
                 valor_mercadoria: totais.valor,
                 uf_destino: UF_DESTINO,
                 cidade_destino: CIDADE_DESTINO,
-                transportadora_id: parseInt(transportadoraId.value)
+                transportadora_id: parseInt(transportadoraId.value),
+                nome_tabela: modalidadeSelect.value || ''
             })
         })
         .then(function(r) { return r.json(); })
@@ -577,6 +635,39 @@
             secaoParametros.style.display = 'none';
             alertaFallback.style.display = '';
             document.getElementById('alerta-fallback-msg').textContent = 'Erro de comunicacao: ' + err;
+        });
+    }
+
+    // --- Buscar cotacao referencia (DIRETA) ---
+    function buscarCotacaoReferencia() {
+        var totais = getTotais();
+        if (totais.peso <= 0 || !transportadoraId.value) return;
+
+        var refDiv = document.getElementById('referencia-cotacao');
+        fetch('/carvia/api/fretes/cotar-backfill', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify({
+                peso: totais.peso,
+                valor_mercadoria: totais.valor,
+                uf_destino: UF_DESTINO,
+                cidade_destino: CIDADE_DESTINO,
+                transportadora_id: parseInt(transportadoraId.value),
+                nome_tabela: modalidadeSelect.value || ''
+            })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.sucesso) {
+                document.getElementById('ref-tabela-nome').textContent = data.tabela_nome || '';
+                document.getElementById('ref-tabela-valor').textContent = formatBRL(data.valor_cotado);
+                refDiv.style.cssText = '';
+            } else {
+                refDiv.style.cssText = 'display:none !important';
+            }
+        })
+        .catch(function() {
+            refDiv.style.cssText = 'display:none !important';
         });
     }
 

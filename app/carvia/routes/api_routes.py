@@ -265,7 +265,6 @@ def register_api_routes(bp):
                     db.func.count(TabelaFrete.id).label('qtd_tabelas'),
                 ).filter(
                     TabelaFrete.uf_destino == uf_destino,
-                    TabelaFrete.ativo == True,  # noqa: E712
                 ).group_by(TabelaFrete.transportadora_id).all()
 
                 tabelas_info = {t.transportadora_id: t.qtd_tabelas for t in tabelas}
@@ -601,10 +600,9 @@ def register_api_routes(bp):
             from app.transportadoras.models import Transportadora
             from app.tabelas.models import TabelaFrete
 
-            # Buscar tabelas ativas para o UF destino
+            # Buscar tabelas para o UF destino
             tabelas_query = db.session.query(TabelaFrete).filter(
                 TabelaFrete.uf_destino == uf_destino,
-                TabelaFrete.ativo == True,  # noqa: E712
             )
 
             # Coletar transportadora_ids e modalidades
@@ -1248,6 +1246,7 @@ def register_api_routes(bp):
         valor_mercadoria = float(data.get('valor_mercadoria', 0) or 0)
         uf_destino = (data.get('uf_destino') or '').strip().upper()
         cidade_destino = (data.get('cidade_destino') or '').strip() or None
+        nome_tabela = (data.get('nome_tabela') or '').strip() or None
 
         if not transportadora_id or peso <= 0 or not uf_destino:
             return jsonify({
@@ -1297,6 +1296,12 @@ def register_api_routes(bp):
                     'sucesso': False,
                     'erro': f'Sem tabela para {transportadora.razao_social} → {uf_destino}',
                 })
+
+            # Filtrar por modalidade (nome_tabela) se informada
+            if nome_tabela and tabelas:
+                filtradas = [t for t in tabelas if t.nome_tabela == nome_tabela]
+                if filtradas:
+                    tabelas = filtradas
 
             # Calcular com cada tabela, pegar a melhor
             tabelas_unicas = {t.id: t for t in tabelas}
