@@ -256,13 +256,6 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_entrega_monitorada_id",
-      "columns": [
-        "entrega_monitorada_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
@@ -270,16 +263,16 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_numero_nfd",
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
       "columns": [
-        "numero_nfd"
+        "entrega_monitorada_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_status",
+      "name": "ix_nf_devolucao_numero_nfd",
       "columns": [
-        "status"
+        "numero_nfd"
       ],
       "unique": false
     },
@@ -292,9 +285,24 @@
       "unique": false
     },
     {
+      "name": "ix_nf_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_origem_registro",
       "columns": [
         "origem_registro"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_cnpj_status",
+      "columns": [
+        "cnpj_emitente",
+        "status"
       ],
       "unique": false
     },
@@ -366,14 +374,6 @@
       "name": "ix_nf_devolucao_odoo_nf_venda_id",
       "columns": [
         "odoo_nf_venda_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_cnpj_status",
-      "columns": [
-        "cnpj_emitente",
-        "status"
       ],
       "unique": false
     },

@@ -1,0 +1,100 @@
+{
+  "name": "frota_despesas",
+  "description": "Tabela frota_despesas",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "frota_veiculo_id",
+      "type": "integer",
+      "description": "FK → frota_veiculos.id",
+      "nullable": false
+    },
+    {
+      "name": "data_despesa",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "km_no_momento",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "categoria",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "SEM_DOCUMENTO"
+    },
+    {
+      "name": "numero_documento",
+      "type": "varchar(60)"
+    },
+    {
+      "name": "valor",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "fornecedor",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "arquivo_path",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "odoo_vendor_bill_id",
+      "type": "integer"
+    },
+    {
+      "name": "lancado_odoo_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "lancado_odoo_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "frota_veiculo_id",
+      "references": "frota_veiculos.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_frota_despesas_frota_veiculo_id",
+      "columns": [
+        "frota_veiculo_id"
+      ],
+      "unique": false
+    }
+  ]
+}

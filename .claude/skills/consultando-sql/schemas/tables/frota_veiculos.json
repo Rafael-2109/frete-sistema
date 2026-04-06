@@ -1,0 +1,116 @@
+{
+  "name": "frota_veiculos",
+  "description": "Tabela frota_veiculos",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "placa",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "marca",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "modelo",
+      "type": "varchar(80)",
+      "nullable": false
+    },
+    {
+      "name": "renavam",
+      "type": "varchar(15)",
+      "nullable": false
+    },
+    {
+      "name": "proprietario",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "ano_fabricacao",
+      "type": "smallint",
+      "nullable": false
+    },
+    {
+      "name": "ano_modelo",
+      "type": "smallint",
+      "nullable": false
+    },
+    {
+      "name": "cor",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(25)"
+    },
+    {
+      "name": "veiculo_tipo_id",
+      "type": "integer",
+      "description": "FK → veiculos.id",
+      "nullable": false
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id"
+    },
+    {
+      "name": "km_atual",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "depreciacao_mensal",
+      "type": "numeric(15,2)",
+      "default": 0
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "veiculo_tipo_id",
+      "references": "veiculos.id"
+    },
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_frota_veiculos_transportadora_id",
+      "columns": [
+        "transportadora_id"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -4,7 +4,7 @@
   "source": {
     "primary": {
       "system": "Local",
-      "description": "9 caminhos de criacao: separacao_utils, separacao_api, carteira_simples_api, programacao_em_lote, ajuste_sincronizacao_service, sincronizar_items_service, recuperar_separacoes_perdidas"
+      "description": "9 caminhos de criacao: separacao_utils, separacao_api, carteira_simples/separacao_api, programacao_em_lote, ajuste_sincronizacao_service, sincronizar_items_service, recuperar_separacoes_perdidas"
     },
     "alternatives": []
   },

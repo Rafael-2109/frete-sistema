@@ -200,16 +200,16 @@
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
+      "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
-        "odoo_statement_line_id"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_tipo",
+      "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
       "columns": [
-        "tipo"
+        "odoo_statement_line_id"
       ],
       "unique": false
     },

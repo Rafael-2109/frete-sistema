@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 170,
+  "total_tabelas": 172,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -903,6 +903,24 @@
         "embarque_id",
         "cnpj_cliente",
         "nome_cliente"
+      ]
+    },
+    {
+      "name": "frota_despesas",
+      "description": "Tabela frota_despesas",
+      "key_fields": [
+        "frota_veiculo_id",
+        "data_despesa",
+        "km_no_momento"
+      ]
+    },
+    {
+      "name": "frota_veiculos",
+      "description": "Tabela frota_veiculos",
+      "key_fields": [
+        "placa",
+        "marca",
+        "modelo"
       ]
     },
     {

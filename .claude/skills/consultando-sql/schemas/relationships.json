@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 249,
+  "total_relationships": 252,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -856,6 +856,24 @@
     },
     {
       "from_table": "fretes_lancados",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "frota_despesas",
+      "from_column": "frota_veiculo_id",
+      "to_table": "frota_veiculos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "frota_veiculos",
+      "from_column": "veiculo_tipo_id",
+      "to_table": "veiculos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "frota_veiculos",
       "from_column": "transportadora_id",
       "to_table": "transportadoras",
       "to_column": "id"
