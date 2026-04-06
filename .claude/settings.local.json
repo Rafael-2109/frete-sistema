@@ -191,7 +191,8 @@
       "Bash(set -a)",
       "Bash(set +a)",
       "Bash(PYTHONPATH=src python -m pytest tests/ -v --timeout=60 --tb=short)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Skill(frontend-design)"
     ],
     "deny": [],
     "defaultMode": "auto"
