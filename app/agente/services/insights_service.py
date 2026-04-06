@@ -122,7 +122,7 @@ def get_insights_data(
             logger.warning(f"[INSIGHTS] Erro ao calcular saude de memorias: {e}")
             current['memory_health'] = {
                 'total': 0, 'by_scope': {}, 'cold_tier': 0,
-                'ineffective': 0, 'with_enrichments': 0,
+                'ineffective': 0, 'with_enrichments': 0, 'conflicting': 0,
             }
 
         # ── Recomendacoes ──

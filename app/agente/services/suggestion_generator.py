@@ -14,10 +14,8 @@ Uso:
     Nunca bloqueia o stream SSE principal (done já foi emitido).
 """
 
-import json
 import logging
 import os
-import re
 from typing import List, Optional
 
 import anthropic
