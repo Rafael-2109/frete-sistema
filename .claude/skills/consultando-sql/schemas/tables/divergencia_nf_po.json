@@ -120,9 +120,16 @@
   ],
   "indices": [
     {
-      "name": "ix_divergencia_nf_po_validacao_id",
+      "name": "ix_divergencia_nf_po_tipo_divergencia",
       "columns": [
-        "validacao_id"
+        "tipo_divergencia"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -141,16 +148,9 @@
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_tipo_divergencia",
+      "name": "ix_divergencia_nf_po_validacao_id",
       "columns": [
-        "tipo_divergencia"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_divergencia_nf_po_status",
-      "columns": [
-        "status"
+        "validacao_id"
       ],
       "unique": false
     }
