@@ -78,7 +78,7 @@ def obter_projecao_linha(cod_produto):
         projecoes = ServicoEstoqueSimples.calcular_multiplos_produtos(
             codigos_unicos,
             dias=DIAS_PROJECAO,
-            entrada_em_d_plus_1=True
+            entrada_em_d_plus_1=False  # Modal analitico: producao entra em D0 (fato real)
         )
 
         # 6. Montar datas D0-D14
