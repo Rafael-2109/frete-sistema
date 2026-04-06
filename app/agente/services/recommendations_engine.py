@@ -210,6 +210,64 @@ def generate_recommendations(metrics: Dict[str, Any]) -> List[Dict[str, Any]]:
                 'action': None,
             })
 
+        # ── Regras 8-10: Saude de memorias ──
+        memory_health = metrics.get('memory_health', {})
+        total_mem = memory_health.get('total', 0)
+
+        # Regra 8: Conflitos de memoria pendentes
+        conflicting = memory_health.get('conflicting', 0)
+        if conflicting > 0:
+            recommendations.append({
+                'severity': 'warning',
+                'icon': 'fa-exclamation-triangle',
+                'title': 'Memorias com conflito',
+                'description': (
+                    f'Existem {conflicting} memoria(s) com conflito pendente. '
+                    'Revisar no painel de memorias para resolver contradicoes.'
+                ),
+                'metric_value': conflicting,
+                'threshold': 0,
+                'action': {
+                    'type': 'switch_tab',
+                    'target': 'memories',
+                    'label': 'Ver memorias',
+                },
+            })
+
+        # Regra 9: Memorias frias em excesso (>30%)
+        cold = memory_health.get('cold_tier', 0)
+        cold_ratio = cold / max(total_mem + cold, 1)
+        if cold_ratio > 0.3:
+            recommendations.append({
+                'severity': 'info',
+                'icon': 'fa-snowflake',
+                'title': 'Memorias no tier frio',
+                'description': (
+                    f'{cold_ratio:.0%} das memorias estao no tier frio. '
+                    'Considerar limpeza de memorias que nao sao mais relevantes.'
+                ),
+                'metric_value': round(cold_ratio * 100, 1),
+                'threshold': 30.0,
+                'action': None,
+            })
+
+        # Regra 10: Memorias inefetivas em excesso (>20%)
+        ineffective = memory_health.get('ineffective', 0)
+        ineffective_ratio = ineffective / max(total_mem, 1)
+        if ineffective_ratio > 0.2:
+            recommendations.append({
+                'severity': 'warning',
+                'icon': 'fa-ban',
+                'title': 'Memorias inefetivas',
+                'description': (
+                    f'{ineffective_ratio:.0%} das memorias foram injetadas 20+ vezes sem efeito. '
+                    'Consolidacao ou remocao recomendada.'
+                ),
+                'metric_value': round(ineffective_ratio * 100, 1),
+                'threshold': 20.0,
+                'action': None,
+            })
+
     except Exception as e:
         logger.error(f"[RECOMMENDATIONS] Erro ao gerar recomendacoes: {e}")
         return []

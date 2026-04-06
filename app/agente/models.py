@@ -635,7 +635,27 @@ class AgentMemory(db.Model):
 
     @classmethod
     def clear_all_for_user(cls, user_id: int) -> int:
-        """Limpa todas as memórias de um usuário."""
+        """Limpa todas as memórias de um usuário, incluindo tabelas dependentes.
+
+        Bulk delete (.delete()) não dispara cascade ORM nem triggers SQL.
+        Limpar dependentes ANTES para evitar orphans em:
+        - agent_memory_embeddings (FK lógica, sem constraint SQL)
+        - agent_memory_entity_links (FK SQL com ON DELETE CASCADE, mas bulk ignora)
+        """
+        from sqlalchemy import text
+
+        # Limpar tabelas dependentes primeiro
+        db.session.execute(
+            text("DELETE FROM agent_memory_embeddings WHERE memory_id IN "
+                 "(SELECT id FROM agent_memories WHERE user_id = :uid)"),
+            {"uid": user_id}
+        )
+        db.session.execute(
+            text("DELETE FROM agent_memory_entity_links WHERE memory_id IN "
+                 "(SELECT id FROM agent_memories WHERE user_id = :uid)"),
+            {"uid": user_id}
+        )
+
         count = cls.query.filter_by(user_id=user_id).delete(synchronize_session=False)
         return count
 

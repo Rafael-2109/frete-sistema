@@ -155,6 +155,7 @@ def _compute_all(sessions: List, days: int) -> Dict[str, Any]:
     resolution_rate = _calc_resolution_rate(sessions)
     model_dist = _calc_model_distribution(sessions)
     topics = _calc_topics(sessions)
+    suggestion_feedback = _calc_suggestion_feedback(sessions)
 
     cost_per_res = 0.0
     resolved_count = _count_resolved(sessions)
@@ -176,6 +177,7 @@ def _compute_all(sessions: List, days: int) -> Dict[str, Any]:
         'cost_per_resolution': cost_per_res,
         'model_distribution': model_dist,
         'topics': topics,
+        'suggestion_feedback': suggestion_feedback,
     }
 
 
@@ -270,6 +272,48 @@ def _calc_topics(sessions: List) -> List[Dict[str, Any]]:
         for topic, count in topic_counter.most_common(15)
     ]
     return result
+
+
+def _calc_suggestion_feedback(sessions: List) -> Dict[str, Any]:
+    """
+    Calcula metricas de cliques em sugestoes.
+
+    Itera feedbacks do tipo 'suggestion_click' no JSONB data.feedbacks
+    de cada sessao para gerar taxa de clique e top sugestoes.
+
+    Returns:
+        Dict com total_clicks, sessions_with_suggestions, click_rate, top_clicked
+    """
+    total_clicks = 0
+    sessions_with_clicks = 0
+    clicked_texts: Dict[str, int] = {}
+
+    # Heuristica: sessoes com >= 4 mensagens provavelmente receberam sugestoes
+    sessions_with_suggestions = sum(1 for s in sessions if s.message_count >= 4)
+
+    for s in sessions:
+        feedbacks = (s.data or {}).get('feedbacks', [])
+        clicks = [f for f in feedbacks if f.get('type') == 'suggestion_click']
+        if clicks:
+            total_clicks += len(clicks)
+            sessions_with_clicks += 1
+            for c in clicks:
+                txt = c.get('suggestion_text', '')[:100]
+                if txt:
+                    clicked_texts[txt] = clicked_texts.get(txt, 0) + 1
+
+    click_rate = round(
+        total_clicks / max(sessions_with_suggestions, 1) * 100, 1
+    )
+    top_suggestions = sorted(clicked_texts.items(), key=lambda x: -x[1])[:5]
+
+    return {
+        'total_clicks': total_clicks,
+        'sessions_with_suggestions': sessions_with_suggestions,
+        'sessions_with_clicks': sessions_with_clicks,
+        'click_rate': click_rate,
+        'top_clicked': [{'text': t, 'count': c} for t, c in top_suggestions],
+    }
 
 
 def _calc_adoption_rate(sessions: List) -> float:
@@ -432,6 +476,13 @@ def _empty_insights(days: int) -> Dict[str, Any]:
         'cost_per_resolution': 0.0,
         'model_distribution': {},
         'topics': [],
+        'suggestion_feedback': {
+            'total_clicks': 0,
+            'sessions_with_suggestions': 0,
+            'sessions_with_clicks': 0,
+            'click_rate': 0.0,
+            'top_clicked': [],
+        },
         'adoption_rate': 0.0,
         'health_score': 0.0,
         'friction': {
@@ -447,7 +498,7 @@ def _empty_insights(days: int) -> Dict[str, Any]:
         'deltas': _null_deltas(),
         'memory_health': {
             'total': 0, 'by_scope': {}, 'cold_tier': 0,
-            'ineffective': 0, 'with_enrichments': 0,
+            'ineffective': 0, 'with_enrichments': 0, 'conflicting': 0,
         },
     }
 
@@ -509,6 +560,13 @@ def _calc_memory_health() -> Dict[str, Any]:
         "AND is_cold = false AND is_directory = false"
     )).scalar() or 0
 
+    # Conflitos pendentes
+    conflicting_count = AgentMemory.query.filter(
+        AgentMemory.has_potential_conflict == True,  # noqa: E712
+        AgentMemory.is_cold.is_(False),
+        AgentMemory.is_directory.is_(False),
+    ).count()
+
     return {
         'total': total_active,
         'by_scope': {
@@ -518,6 +576,7 @@ def _calc_memory_health() -> Dict[str, Any]:
         'cold_tier': cold_count,
         'ineffective': ineffective_count,
         'with_enrichments': enrichment_count,
+        'conflicting': conflicting_count,
     }
 
 

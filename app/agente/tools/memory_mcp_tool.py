@@ -827,20 +827,20 @@ def _detect_pitfall_hint(path: str, content: str) -> Optional[str]:
 
 def _regenerate_pitfalls_xml(user_id: int, pitfalls: list) -> None:
     """
-    Regenera /memories/system/pitfalls.xml a partir da lista JSON.
+    Regenera /memories/empresa/armadilhas/system-pitfalls.xml a partir da lista JSON.
 
     O XML é o formato injetado no contexto do agente (tier 1 como structural memory).
     O JSON é a fonte de verdade (editável via tool).
 
     Args:
-        user_id: ID do usuário
+        user_id: ID do usuário (0 para empresa)
         pitfalls: Lista de dicts com area, description, hit_count, etc
     """
     try:
         from app.agente.models import AgentMemory
         from app.utils.timezone import agora_utc_naive
 
-        path = '/memories/system/pitfalls.xml'
+        path = '/memories/empresa/armadilhas/system-pitfalls.xml'
         now = agora_utc_naive().strftime('%d/%m/%Y %H:%M')
 
         # Agrupar por área
@@ -867,6 +867,7 @@ def _regenerate_pitfalls_xml(user_id: int, pitfalls: list) -> None:
         else:
             mem = AgentMemory.create_file(user_id, path, content)
             mem.category = 'structural'
+            mem.escopo = 'empresa'
     except Exception as e:
         logger.debug(f"[MEMORY_MCP] Erro ao regenerar pitfalls XML (ignorado): {e}")
 
@@ -2628,7 +2629,9 @@ try:
             }
 
         try:
-            user_id = _resolve_user_id(args)
+            caller_user_id = _resolve_user_id(args)
+            # Pitfalls sao conhecimento organizacional — salvar como empresa (user_id=0)
+            empresa_user_id = 0
 
             def _log_pitfall():
                 import json
@@ -2636,11 +2639,12 @@ try:
                 from app import db
                 from app.utils.timezone import agora_utc_naive
 
-                path = '/memories/system/pitfalls.json'
+                new_path = '/memories/empresa/armadilhas/system-pitfalls.json'
+                old_path = '/memories/system/pitfalls.json'
                 now = agora_utc_naive()
 
-                # Carregar lista existente
-                existing = AgentMemory.get_by_path(user_id, path)
+                # Carregar lista existente (novo path empresa)
+                existing = AgentMemory.get_by_path(empresa_user_id, new_path)
                 if existing and existing.content:
                     try:
                         pitfalls = json.loads(existing.content)
@@ -2650,6 +2654,21 @@ try:
                         pitfalls = []
                 else:
                     pitfalls = []
+
+                # Backward-compat: migrar conteudo do path antigo (qualquer user)
+                if not pitfalls:
+                    old_existing = AgentMemory.get_by_path(caller_user_id, old_path)
+                    if old_existing and old_existing.content:
+                        try:
+                            old_pitfalls = json.loads(old_existing.content)
+                            if isinstance(old_pitfalls, list):
+                                pitfalls = old_pitfalls
+                                logger.info(
+                                    f"[MEMORY_MCP] Migrado {len(pitfalls)} pitfalls "
+                                    f"de {old_path} (user={caller_user_id}) para {new_path} (empresa)"
+                                )
+                        except (json.JSONDecodeError, TypeError):
+                            pass
 
                 # Dedup por descrição (atualiza timestamp se já existe)
                 found = False
@@ -2679,13 +2698,15 @@ try:
                 if existing:
                     existing.content = content
                 else:
-                    mem = AgentMemory.create_file(user_id, path, content)
+                    mem = AgentMemory.create_file(empresa_user_id, new_path, content)
                     mem.category = 'structural'  # Lento decay, sempre relevante
+                    mem.escopo = 'empresa'
+                    mem.created_by = caller_user_id  # Auditoria: quem originou
 
                 db.session.commit()
 
-                # Regenerar XML de pitfalls para injeção no contexto
-                _regenerate_pitfalls_xml(user_id, pitfalls)
+                # Regenerar XML de pitfalls para injeção no contexto (empresa)
+                _regenerate_pitfalls_xml(empresa_user_id, pitfalls)
 
                 return len(pitfalls), found
 
