@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-04-06-1](atualizacao-2026-04-06-1.md) — 9 auditados, 7 modificados (contagens LOC/arquivos). Modulos: raiz, agente, carteira, carvia, odoo, teams.
+
 - [2026-03-28-1](atualizacao-2026-03-28-1.md) — Primeira auditoria. 7/9 CLAUDE.md atualizados (LOC + contagens).
 
 <!-- Template para novas entradas:

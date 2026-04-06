@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~7.5K | **Arquivos**: 13 | **Atualizado**: 31/03/2026
+**LOC**: ~8.0K | **Arquivos**: 13 | **Atualizado**: 06/04/2026
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -10,19 +10,18 @@ Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX
 
 ```
 app/agente/services/
-  ├── pattern_analyzer.py        # 1,781 LOC — Patterns prescritivos + perfil + extracao (P1-3)
+  ├── pattern_analyzer.py        # 1,796 LOC — Patterns prescritivos + perfil + extracao (P1-3)
+  ├── insights_service.py        # 1,358 LOC — Dashboard admin: metricas + health_score (P2)
   ├── knowledge_graph_service.py # 1,082 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)
-  ├── insights_service.py        # 1,278 LOC — Dashboard admin: metricas + health_score (P2)
-  ├── memory_consolidator.py     #   570 LOC — Consolidacao + tier frio (P0)
-  ├── friction_analyzer.py       #   463 LOC — Deteccao de friccao heuristica (P2-4)
+  ├── memory_consolidator.py     #   697 LOC — Consolidacao + tier frio (P0)
+  ├── improvement_suggester.py   #   620 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
+  ├── intersession_briefing.py   #   569 LOC — Briefing entre sessoes, zero LLM (P0)
+  ├── friction_analyzer.py       #   490 LOC — Deteccao de friccao heuristica (P2-4)
   ├── session_summarizer.py      #   445 LOC — Resumos M1 estruturados via Sonnet (P0-2)
-  ├── intersession_briefing.py   #   505 LOC — Briefing entre sessoes, zero LLM (P0)
-  ├── improvement_suggester.py   #   400 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
   ├── tool_skill_mapper.py       #   316 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
   ├── recommendations_engine.py  #   221 LOC — Recomendacoes rule-based para dashboard
   ├── suggestion_generator.py    #   216 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
-  ├── sentiment_detector.py      #   177 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
-  └── improvement_suggester.py   #   400 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
+  └── sentiment_detector.py      #   177 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
 ```
 
 ## Regras Criticas
