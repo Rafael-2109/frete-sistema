@@ -1,8 +1,26 @@
 const cotacaoId = CARVIA_DATA.cotacaoId;
 const modelosMoto = CARVIA_DATA.modelosMoto;
+const _criacaoTardia = CARVIA_DATA.criacaoTardia || false;
+const _cotacaoStatus = CARVIA_DATA.cotacaoStatus || '';
 
 // Endereco de entrega da cotacao (override, pode ser null)
 const _entregaCotacao = CARVIA_DATA.entregaCotacao;
+
+/* ===== Criacao Tardia: desabilitar campos nao-editaveis ===== */
+if (_criacaoTardia) {
+    document.addEventListener('DOMContentLoaded', () => {
+        // Campos que nao podem ser alterados na criacao tardia
+        const camposBloquear = [
+            'selCliente', 'selTipoMaterial',
+            'inpPeso', 'inpValorMerc', 'inpVolumes',
+            'inpDimC', 'inpDimL', 'inpDimA',
+        ];
+        camposBloquear.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = true;
+        });
+    });
+}
 
 /* ===== API helper ===== */
 function apiCall(url, method, body) {
@@ -307,7 +325,19 @@ async function salvarTudo() {
         payload.motos = motos;
     }
 
-    apiCall(`/carvia/api/cotacoes/${cotacaoId}/salvar-completo`, 'PUT', payload).then(d => {
+    // Criacao tardia APROVADO: enviar apenas campos permitidos
+    let payloadFinal = payload;
+    if (_criacaoTardia && _cotacaoStatus === 'APROVADO') {
+        const permitidos = [
+            'endereco_origem_id', 'endereco_destino_id', 'tipo_carga',
+            'entrega_uf', 'entrega_cidade', 'entrega_logradouro',
+            'entrega_numero', 'entrega_bairro', 'entrega_cep', 'entrega_complemento',
+        ];
+        payloadFinal = {};
+        permitidos.forEach(k => { if (payload[k] !== undefined) payloadFinal[k] = payload[k]; });
+    }
+
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/salvar-completo`, 'PUT', payloadFinal).then(d => {
         if (d.sucesso) location.reload();
         else alert(d.erro || 'Erro ao salvar.');
     });

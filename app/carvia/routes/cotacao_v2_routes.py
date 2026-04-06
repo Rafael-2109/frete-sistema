@@ -550,11 +550,21 @@ def register_cotacao_v2_routes(bp):
             # 7. Serializar veiculos
             veiculos_db = nf.veiculos.all()
 
+            # 8. Info CTe CarVia (para criacao tardia)
+            operacoes_nf = nf.operacoes.all()
+            cte_valor_total = sum(float(op.cte_valor or 0) for op in operacoes_nf)
+            cte_info = {
+                'tem_cte': bool(operacoes_nf),
+                'cte_valor_total': round(cte_valor_total, 2),
+                'qtd_ctes': len(operacoes_nf),
+            }
+
             return jsonify({
                 'sucesso': True,
                 'nf_id': nf.id,
                 'aviso_cotacao_existente': aviso_cotacao_existente,
                 'cotacao_existente_info': cotacao_existente_info,
+                'cte_info': cte_info,
                 'nf': {
                     'numero_nf': nf.numero_nf,
                     'chave_acesso': nf.chave_acesso_nf,
@@ -774,9 +784,11 @@ def register_cotacao_v2_routes(bp):
 
         if request.method == 'GET':
             nf_id_param = request.args.get('nf_id', type=int)
+            criacao_tardia_param = bool(request.args.get('criacao_tardia', type=int, default=0))
             return render_template(
                 'carvia/cotacoes/criar.html',
                 nf_id_param=nf_id_param,
+                criacao_tardia=criacao_tardia_param,
                 **_ctx_criar(),
             )
 
@@ -858,8 +870,16 @@ def register_cotacao_v2_routes(bp):
                     **_ctx_criar(),
                 )
 
+            # Criacao tardia: pricing do CTe existente
+            is_criacao_tardia = request.form.get('criacao_tardia') == '1'
+
             # tipo_carga + veiculo (DIRETA only)
-            tipo_carga = request.form.get('tipo_carga', 'FRACIONADA')
+            # Criacao tardia: tipo_carga nasce vazio (forcar preenchimento)
+            tipo_carga_raw = request.form.get('tipo_carga', '')
+            if not is_criacao_tardia:
+                tipo_carga = tipo_carga_raw or 'FRACIONADA'
+            else:
+                tipo_carga = tipo_carga_raw if tipo_carga_raw in ('DIRETA', 'FRACIONADA') else None
             if tipo_carga in ('DIRETA', 'FRACIONADA'):
                 cotacao.tipo_carga = tipo_carga
             veiculo_id_form = request.form.get('veiculo_id', type=int)
@@ -887,11 +907,36 @@ def register_cotacao_v2_routes(bp):
 
             db.session.flush()
 
-            # Auto-cotar apos criacao
-            try:
-                CotacaoV2Service.calcular_preco(cotacao.id)
-            except Exception as e_price:
-                logger.warning("Auto-cotacao falhou para %s: %s", cotacao.id, e_price)
+            if is_criacao_tardia and nf_id_param:
+                # Criacao tardia: pricing do CTe existente (backend determina valor)
+                from decimal import Decimal as _Decimal
+                from app.carvia.models import CarviaNf as _CarviaNf
+                nf_tardia = db.session.get(_CarviaNf, nf_id_param) if nf_id_param else None
+                if nf_tardia:
+                    ops_nf = nf_tardia.operacoes.all()
+                    cte_valor = sum(_Decimal(str(op.cte_valor or 0)) for op in ops_nf)
+                    if cte_valor > 0:
+                        cotacao.criacao_tardia = True
+                        cotacao.valor_tabela = cte_valor
+                        cotacao.valor_descontado = cte_valor
+                        cotacao.valor_final_aprovado = cte_valor
+                        cotacao.percentual_desconto = _Decimal('0')
+                        cotacao.dentro_tabela = True
+                        logger.info(
+                            "Cotacao %s criada como tardia (CTe valor=%s, NF=%s)",
+                            cotacao.id, cte_valor, nf_id_param,
+                        )
+                    else:
+                        logger.warning(
+                            "Criacao tardia sem CTe valor para NF %s, prosseguindo sem pricing",
+                            nf_id_param,
+                        )
+            else:
+                # Auto-cotar apos criacao (fluxo normal)
+                try:
+                    CotacaoV2Service.calcular_preco(cotacao.id)
+                except Exception as e_price:
+                    logger.warning("Auto-cotacao falhou para %s: %s", cotacao.id, e_price)
 
             # Criar 1 pedido por NF — suporta array de NFs (multi-NF)
             nf_dados_raw = request.form.get('nf_dados_json', '').strip()
@@ -1116,8 +1161,10 @@ def register_cotacao_v2_routes(bp):
         pedidos = cotacao.pedidos.all()
 
         # Mapeamento numero_nf -> [CarviaNfVeiculo] para accordion de veiculos
+        # + detectar se alguma NF ja possui CTe (para ocultar emissao CTe SSW)
         from app.carvia.models import CarviaNf
         veiculos_por_nf = {}
+        tem_cte_existente = bool(cotacao.criacao_tardia)
         for ped in pedidos:
             for item in ped.itens.all():
                 if item.numero_nf and item.numero_nf not in veiculos_por_nf:
@@ -1126,6 +1173,9 @@ def register_cotacao_v2_routes(bp):
                     ).order_by(CarviaNf.id.desc()).first()
                     if nf_obj:
                         veiculos_por_nf[item.numero_nf] = nf_obj.veiculos.all()
+                        # Verificar se NF ja tem CTe vinculado
+                        if not tem_cte_existente and nf_obj.operacoes.count() > 0:
+                            tem_cte_existente = True
 
         # Serializar motos para JS (evita tojson em SQLAlchemy objects)
         motos_list_json = json_lib.dumps([{
@@ -1177,6 +1227,7 @@ def register_cotacao_v2_routes(bp):
             modelos_moto_json=modelos_moto_json,
             limite_desconto=limite_desconto,
             veiculos_direta=veiculos_direta,
+            tem_cte_existente=tem_cte_existente,
         )
 
     # ==================== API: ATUALIZAR COTACAO ====================
@@ -1197,6 +1248,12 @@ def register_cotacao_v2_routes(bp):
         data = request.get_json()
         if not data:
             return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        # Guard: cotacao APROVADO — bloquear edicao (exceto criacao tardia parcial)
+        if cotacao.status == 'APROVADO' and not cotacao.criacao_tardia:
+            return jsonify({'erro': 'Cotacao aprovada nao pode ser editada. Reabra primeiro.'}), 400
+        if cotacao.status == 'CANCELADO':
+            return jsonify({'erro': 'Cotacao cancelada nao pode ser editada.'}), 400
 
         try:
             # Campos de referencia
@@ -1348,6 +1405,22 @@ def register_cotacao_v2_routes(bp):
         data = request.get_json()
         if not data:
             return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        # Guard: cotacao APROVADO — bloquear edicao (exceto criacao tardia)
+        if cotacao.status == 'APROVADO':
+            if not cotacao.criacao_tardia:
+                return jsonify({'erro': 'Cotacao aprovada nao pode ser editada. Reabra primeiro.'}), 400
+            # Criacao tardia APROVADO: filtrar apenas campos permitidos
+            campos_permitidos = {
+                'endereco_origem_id', 'endereco_destino_id', 'tipo_carga',
+                'entrega_uf', 'entrega_cidade', 'entrega_logradouro',
+                'entrega_numero', 'entrega_bairro', 'entrega_cep', 'entrega_complemento',
+            }
+            data = {k: v for k, v in data.items() if k in campos_permitidos}
+
+        # Guard: cotacao CANCELADO — bloquear edicao
+        if cotacao.status == 'CANCELADO':
+            return jsonify({'erro': 'Cotacao cancelada nao pode ser editada.'}), 400
 
         try:
             # --- Atualizar campos header ---

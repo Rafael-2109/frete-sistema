@@ -382,6 +382,19 @@ def register_nf_routes(bp):
             float(peso_cubado or 0),
         )
 
+        # Fretes CarVia vinculados a esta NF (por numero_nf + CNPJ emitente/destino)
+        from app.carvia.models import CarviaFrete
+        fretes_nf = []
+        if nf.numero_nf:
+            fretes_nf = CarviaFrete.query.filter(
+                CarviaFrete.numeros_nfs.ilike(f'%{nf.numero_nf}%'),
+                CarviaFrete.cnpj_emitente == nf.cnpj_emitente,
+                CarviaFrete.cnpj_destino == nf.cnpj_destinatario,
+                CarviaFrete.status != 'CANCELADO',
+            ).all()
+        tem_frete = bool(fretes_nf)
+        tem_cte = bool(operacoes)
+
         # Ultimos fretes para mesmo destino (referencia de precos)
         ultimos_fretes = {'moto': [], 'geral': []}
         nf_eh_moto = bool(resultado_cubagem and resultado_cubagem.get('itens'))
@@ -404,6 +417,9 @@ def register_nf_routes(bp):
             peso_para_cotacao=peso_para_cotacao,
             ultimos_fretes=ultimos_fretes,
             nf_eh_moto=nf_eh_moto,
+            fretes_nf=fretes_nf,
+            tem_frete=tem_frete,
+            tem_cte=tem_cte,
         )
 
     # ==================== CRIAR CTE VIA NF ====================

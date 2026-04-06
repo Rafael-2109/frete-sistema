@@ -12,6 +12,17 @@
     {% set carvia_active = 'cotacoes_v2' %}
     {% include 'carvia/_quick_nav.html' %}
 
+    {% if criacao_tardia %}
+    <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+        <i class="fas fa-info-circle me-2 fs-5"></i>
+        <div>
+            <strong>Criacao Tardia</strong> — Cotacao a partir de NF que ja possui CTe CarVia.
+            O valor vendido (pricing) sera preenchido automaticamente com base no CTe existente.
+            Apenas <strong>enderecos</strong> e <strong>tipo de carga</strong> podem ser ajustados.
+        </div>
+    </div>
+    {% endif %}
+
     {% if nf_id_param %}
     {# Card de status para NF existente (carregada do banco) #}
     <div class="card mb-3 border-info" id="cardNfExistente">
@@ -163,6 +174,9 @@
         <div class="card-body">
             <form method="POST" id="formCotacao" enctype="multipart/form-data">
                 <input type="hidden" name="nf_dados_json" id="nfDadosJson" value="">
+                {% if criacao_tardia %}
+                <input type="hidden" name="criacao_tardia" value="1">
+                {% endif %}
                 {# Cliente #}
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -185,6 +199,9 @@
                         <label class="form-label">Tipo Carga <span class="text-danger">*</span></label>
                         <select name="tipo_carga" id="selTipoCargaCriar" class="form-select" required
                                 onchange="toggleVeiculoCriar()">
+                            {% if criacao_tardia %}
+                            <option value="">Selecione...</option>
+                            {% endif %}
                             <option value="FRACIONADA">Fracionada</option>
                             <option value="DIRETA">Direta</option>
                         </select>
@@ -435,6 +452,7 @@
 const CARVIA_DATA = {
     modelosMoto: {{ modelos_moto_json|safe }},
     nfIdParam: {{ nf_id_param | tojson }},
+    criacaoTardia: {{ criacao_tardia|default(false)|tojson }},
 };
 </script>
 <script>{% include 'carvia/js/cotacoes/criar.js' %}</script>

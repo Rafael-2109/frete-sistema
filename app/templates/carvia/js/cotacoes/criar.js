@@ -341,6 +341,7 @@ function wizConcluir() {
 
         bootstrap.Modal.getInstance(document.getElementById('modalWizardNF')).hide();
         aplicarDadosNF(_setupData);
+        aplicarRestricoesTardia();
     })
     .catch(err => {
         document.getElementById('btnWizAvancar').disabled = false;
@@ -730,6 +731,7 @@ document.getElementById('formCotacao').addEventListener('submit', async function
         } else {
             // Cliente e enderecos ja existem — preencher form direto
             aplicarDadosNF(d);
+            aplicarRestricoesTardia();
         }
     })
     .catch(err => {
@@ -739,6 +741,38 @@ document.getElementById('formCotacao').addEventListener('submit', async function
         }
     });
 })();
+
+/* ===== Criacao Tardia: lock campos apos setup ===== */
+function aplicarRestricoesTardia() {
+    if (!CARVIA_DATA.criacaoTardia || !_setupData) return;
+
+    const cteInfo = _setupData.cte_info;
+    if (!cteInfo || !cteInfo.tem_cte) return;
+
+    // Info CTe no card de feedback
+    const fb = document.getElementById('nfExistenteFeedback');
+    if (fb) {
+        const valorFmt = cteInfo.cte_valor_total.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+        fb.innerHTML += '<div class="alert alert-info py-1 small mb-0 mt-2">' +
+            '<i class="fas fa-file-invoice-dollar me-1"></i>' +
+            '<strong>Valor CTe:</strong> ' + valorFmt + ' (' + cteInfo.qtd_ctes + ' CTe' +
+            (cteInfo.qtd_ctes > 1 ? 's' : '') + ') — sera usado como valor vendido.' +
+            '</div>';
+    }
+
+    // Desabilitar campos que nao podem ser alterados na criacao tardia
+    const camposReadonly = [
+        'selCliente', 'selTipoMaterial',
+    ];
+    camposReadonly.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.disabled = true; }
+    });
+
+    // Esconder secao de upload de NF adicional (nao faz sentido na tardia)
+    const cardUpload = document.getElementById('cardUploadNF');
+    if (cardUpload) cardUpload.style.display = 'none';
+}
 
 /* ===== Condicoes Comerciais: toggle campos ===== */
 function togglePrazoDias() {

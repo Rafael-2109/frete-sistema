@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 
+{% set pode_editar_endereco = cotacao.status not in ('APROVADO', 'CANCELADO') or cotacao.criacao_tardia %}
+{% set pode_editar_geral = cotacao.status not in ('APROVADO', 'CANCELADO') %}
+{% set pode_salvar = pode_editar_geral or cotacao.criacao_tardia %}
+
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -21,11 +25,16 @@
             {% if cotacao.cotacao_manual %}
             <span class="badge bg-info">Manual</span>
             {% endif %}
+            {% if cotacao.criacao_tardia %}
+            <span class="badge bg-info">Tardia</span>
+            {% endif %}
         </h2>
         <div class="d-flex gap-2">
+            {% if pode_salvar %}
             <button type="button" class="btn btn-primary btn-sm" onclick="salvarTudo()">
                 <i class="fas fa-save"></i> Salvar
             </button>
+            {% endif %}
             <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="btn btn-secondary btn-sm">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
@@ -93,7 +102,7 @@
                         <div class="col-md-6">
                             <label class="form-label">
                                 Endereco Destino <span class="text-danger">*</span>
-                                {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
+                                {% if pode_editar_endereco %}
                                 <button type="button" class="btn btn-link btn-sm p-0 ms-2 small" id="btnToggleDestinoManual" onclick="toggleModoDestinoManual()">
                                     Inserir manualmente
                                 </button>
@@ -108,7 +117,7 @@
                             </div>
 
                             {# Modo manual (oculto por padrao) #}
-                            {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
+                            {% if pode_editar_endereco %}
                             <div id="blocoDestinoManual" class="d-none">
                                 <div class="row g-2 mt-0">
                                     <div class="col-md-4">
@@ -157,7 +166,7 @@
                         </div>
                     </div>
                     {# Endereco de entrega editavel inline (Ajuste 8) #}
-                    {% if cotacao.status not in ('APROVADO', 'CANCELADO') %}
+                    {% if pode_editar_endereco %}
                     <div id="enderecoEntregaInline" class="mb-3 d-none">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <small class="text-muted fw-bold">Endereco de Entrega (editavel)</small>
@@ -565,6 +574,7 @@
                     {% endif %}
 
                     {% if cotacao.status == 'APROVADO' %}
+                    {% if not tem_cte_existente %}
                     <hr>
                     <p class="fw-bold mb-2 small">Emissao CTe SSW</p>
                     <button class="btn btn-warning btn-sm w-100 mb-1" onclick="iniciarEmissaoCte(false)">
@@ -573,6 +583,7 @@
                     <button class="btn btn-success btn-sm w-100 mb-1" onclick="iniciarEmissaoCte(true)">
                         <i class="fas fa-bolt"></i> Emitir CTe + Fatura
                     </button>
+                    {% endif %}
                     <hr>
                     <button class="btn btn-outline-warning btn-sm w-100" onclick="reabrirCotacao()">
                         <i class="fas fa-undo"></i> Reabrir Cotacao
@@ -663,6 +674,8 @@
 <script>
 const CARVIA_DATA = {
     cotacaoId: {{ cotacao.id }},
+    criacaoTardia: {{ cotacao.criacao_tardia|tojson }},
+    cotacaoStatus: {{ cotacao.status|tojson }},
     modelosMoto: {{ modelos_moto_json|safe }},
     entregaCotacao: {
         uf: {{ cotacao.entrega_uf|tojson }},
@@ -683,7 +696,7 @@ const CARVIA_DATA = {
 <script>{% include 'carvia/js/cotacoes/detalhe.js' %}</script>
 
 {# ── Modal Emitir CTe da Cotacao ── #}
-{% if cotacao.status == 'APROVADO' %}
+{% if cotacao.status == 'APROVADO' and not tem_cte_existente %}
 <div class="modal fade" id="modalEmitirCteCotacao" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">

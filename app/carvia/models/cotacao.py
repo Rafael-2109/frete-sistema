@@ -105,6 +105,9 @@ class CarviaCotacao(db.Model):
     percentual_remetente = db.Column(db.Numeric(5, 2), nullable=True)
     percentual_destinatario = db.Column(db.Numeric(5, 2), nullable=True)
 
+    # Criacao tardia: cotacao criada a partir de NF que ja possui CTe CarVia
+    criacao_tardia = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+
     # Alerta: saida portaria sem NF
     alerta_saida_sem_nf = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
     alerta_saida_sem_nf_em = db.Column(db.DateTime, nullable=True)
