@@ -9,8 +9,7 @@ Extraído de client.py em 2026-04-04.
 """
 
 import logging
-import time
-from typing import Dict, Optional
+from typing import Optional
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger('sistema_fretes')
@@ -20,142 +19,6 @@ logger = logging.getLogger('sistema_fretes')
 # HELPER: Auto-injeção de memórias do usuário
 # =====================================================================
 
-_op_context_cache: Dict[int, tuple] = {}  # user_id -> (context_str, timestamp)
-_OP_CONTEXT_TTL = 180  # 3 minutos — dados urgentes mudam na escala de horas
-
-
-def _build_operational_context(user_id: int) -> Optional[str]: # type: ignore
-    """
-    DEPRECATED (P9): Desconectada do pipeline de injeção desde 2026-03.
-    Mantida para possível reativação futura como skill.
-
-    Memory v2 — Tier 0: Contexto operacional do dia.
-
-    Queries leves para injetar estado atual do sistema:
-    - Dia da semana
-    - Pedidos vencendo D+2
-    - Separações pendentes
-    - Conflitos de memória pendentes
-
-    Cache com TTL de 3 min — durante uma conversa típica (5-15 min),
-    pedidos urgentes e separações pendentes são estáveis.
-
-    Retorna XML compacto (~300 chars) ou None.
-    """
-    # Cache hit — evita 2 queries SQL por mensagem (~100ms de latência)
-    cached = _op_context_cache.get(user_id)
-    if cached and (time.time() - cached[1]) < _OP_CONTEXT_TTL:
-        logger.debug(f"[MEMORY_INJECT] Contexto operacional: cache hit (user_id={user_id})")
-        return cached[0]
-
-    try:
-        from app import db
-        from sqlalchemy import text as sql_text
-        from datetime import timedelta
-
-        now = agora_utc_naive()
-        dia_semana = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'][now.weekday()]
-
-        parts = [f'<operational_context date="{now.strftime("%d/%m/%Y")}" dia="{dia_semana}">']
-
-        # Pedidos vencendo D+2 (inclui atrasados — sao os MAIS urgentes)
-        try:
-            d2 = now + timedelta(days=2)
-            r_count = db.session.execute(sql_text("""
-                SELECT count(*)
-                FROM carteira_principal
-                WHERE qtd_saldo_produto_pedido > 0
-                  AND data_entrega_pedido <= :d2
-            """), {"d2": d2.date()})
-            count_urgentes = r_count.scalar() or 0
-
-            if count_urgentes > 0:
-                # Top 3 por valor pendente
-                r_top = db.session.execute(sql_text("""
-                    SELECT raz_social_red, num_pedido,
-                           SUM(qtd_saldo_produto_pedido * preco_produto_pedido) as valor_pendente
-                    FROM carteira_principal
-                    WHERE qtd_saldo_produto_pedido > 0
-                      AND data_entrega_pedido <= :d2
-                    GROUP BY raz_social_red, num_pedido
-                    ORDER BY valor_pendente DESC
-                    LIMIT 3
-                """), {"d2": d2.date()})
-                top_rows = r_top.fetchall()
-
-                top_str = ""
-                if top_rows:
-                    items = []
-                    for row in top_rows:
-                        nome = (row[0] or "?")[:20]
-                        pedido = row[1] or "?"
-                        valor = row[2] or 0
-                        if valor >= 1000:
-                            items.append(f"{nome} R${valor / 1000:.0f}K {pedido}")
-                        else:
-                            items.append(f"{nome} R${valor:.0f} {pedido}")
-                    top_str = f' top="{", ".join(items)}"'
-
-                parts.append(f'<pedidos_urgentes_d2 count="{count_urgentes}"{top_str}/>')
-        except Exception:
-            pass
-
-        # Separações pendentes com data mais antiga
-        try:
-            r = db.session.execute(sql_text("""
-                SELECT count(*), MIN(criado_em)::date as oldest
-                FROM separacao
-                WHERE sincronizado_nf = FALSE
-                  AND qtd_saldo > 0
-            """))
-            row = r.fetchone()
-            count_sep = row[0] or 0 if row else 0
-            oldest = row[1] if row else None
-            if count_sep > 0:
-                oldest_attr = f' oldest="{oldest}"' if oldest else ''
-                parts.append(f'<separacoes_pendentes count="{count_sep}"{oldest_attr}/>')
-        except Exception:
-            pass
-
-        # Memórias com conflito pendente — mostrar título (primeiros 40 chars)
-        try:
-            from ..models import AgentMemory
-            conflict_memories = AgentMemory.query.filter_by(
-                user_id=user_id,
-                has_potential_conflict=True,
-                is_directory=False,
-            ).with_entities(
-                AgentMemory.path, AgentMemory.content
-            ).limit(5).all()
-            if conflict_memories:
-                titles = []
-                for m in conflict_memories:
-                    if m.content:
-                        title = m.content.strip()[:40].replace('"', "'")
-                        titles.append(title)
-                    else:
-                        titles.append(m.path.split('/')[-1])
-                parts.append(
-                    f'<memorias_com_conflito count="{len(conflict_memories)}" '
-                    f'items="{"; ".join(titles)}"/>'
-                )
-        except Exception:
-            pass
-
-        parts.append('</operational_context>')
-
-        # Só retorna se tiver conteúdo útil (mais que date/dia)
-        if len(parts) > 2:  # header + footer = sem conteúdo
-            result = '\n'.join(parts)
-            _op_context_cache[user_id] = (result, time.time())
-            return result
-
-        _op_context_cache[user_id] = (None, time.time())
-        return None
-
-    except Exception as e:
-        logger.debug(f"[MEMORY_INJECT] Contexto operacional falhou (ignorado): {e}")
-        return None
 
 
 def _normalize_pendencia(text: str) -> str:
@@ -553,8 +416,6 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             from ..config.feature_flags import MEMORY_INJECTION_MIN_SIMILARITY
 
             # ── Tier 0: Rolling window de sessões (Memory v2) ──
-            # Nota: _build_operational_context() removido (P9 — desconectado, só ruído).
-            # Mantida como função para uso futuro como skill, mas não injetada no contexto.
             tier0_parts = []
             tier0_chars = 0
 
