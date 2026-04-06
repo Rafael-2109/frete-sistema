@@ -8,7 +8,7 @@ from datetime import datetime
 
 from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 from app import db
 from app.carvia.models import (
@@ -238,6 +238,99 @@ def register_nf_routes(bp):
             peso_cubado_por_nf=peso_cubado_por_nf,
         )
 
+    # ==================== HELPER: ÚLTIMOS FRETES ====================
+
+    def _buscar_ultimos_fretes_destino(cnpj_destinatario, cidade_destinatario, nf_id_atual, limite=5):
+        """Busca ultimos fretes (operacoes) para mesmo destinatario + cidade.
+
+        Retorna {'moto': [...], 'geral': [...]} com ate `limite` registros cada.
+        Moto = operacao tem itens com modelo_moto_id IS NOT NULL.
+        Geral = sem itens moto.
+        Contagem de motos via SUM(carvia_nf_itens.quantidade) — carvia_nf_veiculos nao populado.
+        Peso cubado via peso_medio do modelo (todos os modelos possuem peso_medio).
+        """
+        sql = text("""
+            WITH ops_destino AS (
+                SELECT DISTINCT co.id as op_id, co.cte_valor, co.peso_bruto,
+                       co.peso_utilizado, co.criado_em
+                FROM carvia_operacoes co
+                JOIN carvia_operacao_nfs con ON con.operacao_id = co.id
+                JOIN carvia_nfs cn ON cn.id = con.nf_id
+                WHERE cn.cnpj_destinatario = :cnpj_dest
+                  AND UPPER(cn.cidade_destinatario) = UPPER(:cidade_dest)
+                  AND cn.status = 'ATIVA'
+                  AND co.cte_valor IS NOT NULL AND co.cte_valor > 0
+                  AND co.status != 'CANCELADO'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM carvia_operacao_nfs con_excl
+                      WHERE con_excl.operacao_id = co.id AND con_excl.nf_id = :nf_id_atual
+                  )
+            )
+            SELECT od.op_id, od.cte_valor, od.peso_bruto, od.peso_utilizado, od.criado_em,
+                   (SELECT string_agg(DISTINCT cn2.numero_nf, ', ')
+                    FROM carvia_operacao_nfs con2
+                    JOIN carvia_nfs cn2 ON cn2.id = con2.nf_id
+                    WHERE con2.operacao_id = od.op_id AND cn2.status = 'ATIVA') as numeros_nfs,
+                   (SELECT COALESCE(SUM(cni.quantidade), 0)
+                    FROM carvia_operacao_nfs con3
+                    JOIN carvia_nf_itens cni ON cni.nf_id = con3.nf_id
+                    WHERE con3.operacao_id = od.op_id AND cni.modelo_moto_id IS NOT NULL) as qtd_motos,
+                   (SELECT COALESCE(SUM(cni.quantidade * mm.peso_medio), 0)
+                    FROM carvia_operacao_nfs con4
+                    JOIN carvia_nf_itens cni ON cni.nf_id = con4.nf_id
+                    JOIN carvia_modelos_moto mm ON mm.id = cni.modelo_moto_id
+                    WHERE con4.operacao_id = od.op_id AND cni.modelo_moto_id IS NOT NULL) as peso_cubado_motos
+            FROM ops_destino od
+            ORDER BY od.criado_em DESC
+        """)
+
+        try:
+            rows = db.session.execute(sql, {
+                'cnpj_dest': cnpj_destinatario,
+                'cidade_dest': cidade_destinatario,
+                'nf_id_atual': nf_id_atual,
+            }).fetchall()
+        except Exception:
+            logger.exception('Erro ao buscar ultimos fretes destino')
+            return {'moto': [], 'geral': []}
+
+        moto_fretes = []
+        geral_fretes = []
+
+        for row in rows:
+            qtd_motos = float(row.qtd_motos or 0)
+
+            if qtd_motos > 0:
+                if len(moto_fretes) < limite:
+                    peso_cubado_medio = float(row.peso_cubado_motos or 0) / qtd_motos
+                    frete_por_moto = float(row.cte_valor or 0) / qtd_motos
+                    moto_fretes.append({
+                        'operacao_id': row.op_id,
+                        'numeros_nfs': row.numeros_nfs or '',
+                        'qtd_motos': int(qtd_motos),
+                        'peso_cubado_medio': round(peso_cubado_medio, 1),
+                        'frete_por_moto': round(frete_por_moto, 2),
+                        'frete_total': float(row.cte_valor or 0),
+                    })
+            else:
+                if len(geral_fretes) < limite:
+                    peso_total = float(row.peso_utilizado or row.peso_bruto or 0)
+                    rs_por_kg = float(row.cte_valor or 0) / peso_total if peso_total > 0 else 0
+                    geral_fretes.append({
+                        'operacao_id': row.op_id,
+                        'numeros_nfs': row.numeros_nfs or '',
+                        'peso_total': round(peso_total, 1),
+                        'rs_por_kg': round(rs_por_kg, 2),
+                        'frete_total': float(row.cte_valor or 0),
+                    })
+
+            if len(moto_fretes) >= limite and len(geral_fretes) >= limite:
+                break
+
+        return {'moto': moto_fretes, 'geral': geral_fretes}
+
+    # ==================== DETALHE NF ====================
+
     @bp.route('/nfs/<int:nf_id>')
     @login_required
     def detalhe_nf(nf_id):
@@ -289,6 +382,14 @@ def register_nf_routes(bp):
             float(peso_cubado or 0),
         )
 
+        # Ultimos fretes para mesmo destino (referencia de precos)
+        ultimos_fretes = {'moto': [], 'geral': []}
+        nf_eh_moto = bool(resultado_cubagem and resultado_cubagem.get('itens'))
+        if nf.cnpj_destinatario and nf.cidade_destinatario:
+            ultimos_fretes = _buscar_ultimos_fretes_destino(
+                nf.cnpj_destinatario, nf.cidade_destinatario, nf.id,
+            )
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
@@ -301,6 +402,8 @@ def register_nf_routes(bp):
             peso_cubado=peso_cubado,
             cubagem_por_item=cubagem_por_item,
             peso_para_cotacao=peso_para_cotacao,
+            ultimos_fretes=ultimos_fretes,
+            nf_eh_moto=nf_eh_moto,
         )
 
     # ==================== CRIAR CTE VIA NF ====================
@@ -567,6 +670,27 @@ def register_nf_routes(bp):
                             break
                 db.session.flush()
 
+            # Persistir veiculos (chassi/modelo/cor) extraidos do DANFE
+            from app.carvia.models import CarviaNfVeiculo
+            veiculos_parseados = dados.get('veiculos', [])
+            veic_inseridos = 0
+            for v_data in veiculos_parseados:
+                chassi = (v_data.get('chassi') or '').strip()
+                if not chassi:
+                    continue
+                existente = CarviaNfVeiculo.query.filter_by(chassi=chassi).first()
+                if existente:
+                    continue
+                db.session.add(CarviaNfVeiculo(
+                    nf_id=nf.id,
+                    chassi=chassi,
+                    modelo=v_data.get('modelo'),
+                    cor=v_data.get('cor'),
+                    numero_motor=v_data.get('numero_motor'),
+                    ano=v_data.get('ano_modelo'),
+                ))
+                veic_inseridos += 1
+
             # Rodar deteccao de motos
             moto_svc = MotoRecognitionService()
             moto_resultado = moto_svc.reprocessar_itens_nf(nf.id)
@@ -575,10 +699,11 @@ def register_nf_routes(bp):
             logger.info(
                 "Reprocessamento PDF NF %d por %s: %d parseados, "
                 "%d inseridos, %d desc atualizadas, %d motos, "
-                "%d campos header, metodo=%s",
+                "%d veiculos, %d campos header, metodo=%s",
                 nf.id, current_user.email, len(itens_parseados),
                 itens_inseridos, desc_atualizadas,
                 moto_resultado.get('detectados', 0),
+                veic_inseridos,
                 campos_atualizados, dados.get('metodo_extracao', '?'),
             )
 
@@ -587,6 +712,7 @@ def register_nf_routes(bp):
                 'itens_parseados': len(itens_parseados),
                 'itens_inseridos': itens_inseridos,
                 'desc_atualizadas': desc_atualizadas,
+                'veiculos_inseridos': veic_inseridos,
                 'campos_header_atualizados': campos_atualizados,
                 'motos_detectadas': moto_resultado.get('detectados', 0),
                 'motos_limpas': moto_resultado.get('limpos', 0),

@@ -26,7 +26,8 @@ from typing import Dict, List, Optional, Tuple
 from app import db
 from sqlalchemy.exc import IntegrityError
 from app.carvia.models import (
-    CarviaNf, CarviaNfItem, CarviaOperacao, CarviaOperacaoNf, CarviaSubcontrato,
+    CarviaNf, CarviaNfItem, CarviaNfVeiculo,
+    CarviaOperacao, CarviaOperacaoNf, CarviaSubcontrato,
     CarviaFaturaCliente, CarviaFaturaClienteItem, CarviaFaturaTransportadora,
     CarviaCteComplementar
 )
@@ -492,6 +493,35 @@ class ImportacaoService:
                                     valor_total_item=item_data.get('valor_total_item'),
                                 )
                                 db.session.add(item)
+
+                        # Gravar veiculos (chassi/modelo/cor) extraidos do DANFE/XML
+                        veiculos_pendentes = getattr(nf, '_veiculos_pendentes', [])
+                        veic_inseridos = 0
+                        for v_data in veiculos_pendentes:
+                            chassi = (v_data.get('chassi') or '').strip()
+                            if not chassi:
+                                continue
+                            # Dedup: chassi UNIQUE
+                            existente = CarviaNfVeiculo.query.filter_by(
+                                chassi=chassi
+                            ).first()
+                            if existente:
+                                continue
+                            db.session.add(CarviaNfVeiculo(
+                                nf_id=nf.id,
+                                chassi=chassi,
+                                modelo=v_data.get('modelo'),
+                                cor=v_data.get('cor'),
+                                numero_motor=v_data.get('numero_motor'),
+                                ano=v_data.get('ano_modelo'),
+                            ))
+                            veic_inseridos += 1
+                        if veic_inseridos:
+                            db.session.flush()
+                            logger.info(
+                                "NF %s: %d veiculo(s) persistido(s)",
+                                nf.numero_nf, veic_inseridos,
+                            )
 
                         # Detectar e persistir modelos de moto nos itens
                         try:
@@ -1420,8 +1450,9 @@ class ImportacaoService:
             criado_por=criado_por,
         )
 
-        # Itens de produto (armazenar para gravar apos flush da NF)
+        # Itens de produto e veiculos (armazenar para gravar apos flush da NF)
         nf._itens_pendentes = data.get('itens', [])
+        nf._veiculos_pendentes = data.get('veiculos', [])
         return nf
 
     def _criar_operacao_de_cte(self, cte_data: Dict, nf_map: Dict,

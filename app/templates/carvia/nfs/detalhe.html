@@ -201,6 +201,99 @@
         </div>
     </div>
 
+    <!-- Ultimos Fretes (mesmo destino) -->
+    {% if ultimos_fretes.moto or ultimos_fretes.geral %}
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-history"></i>
+                Ultimos Fretes &mdash; {{ nf.cidade_destinatario }}/{{ nf.uf_destinatario }}
+            </h5>
+            <div class="d-flex align-items-center gap-2">
+                {% if ultimos_fretes.moto and ultimos_fretes.geral %}
+                <div class="btn-group btn-group-sm" role="group" id="toggleCategoriaFrete">
+                    <button type="button" class="btn btn-outline-primary {{ 'active' if nf_eh_moto else '' }}"
+                            data-categoria="moto">
+                        <i class="fas fa-motorcycle"></i> Moto ({{ ultimos_fretes.moto|length }})
+                    </button>
+                    <button type="button" class="btn btn-outline-primary {{ 'active' if not nf_eh_moto else '' }}"
+                            data-categoria="geral">
+                        <i class="fas fa-box"></i> Geral ({{ ultimos_fretes.geral|length }})
+                    </button>
+                </div>
+                {% elif ultimos_fretes.moto %}
+                <span class="badge bg-info"><i class="fas fa-motorcycle"></i> Moto</span>
+                {% else %}
+                <span class="badge bg-secondary"><i class="fas fa-box"></i> Geral</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {# Tabela MOTO #}
+            {% if ultimos_fretes.moto %}
+            <div class="table-responsive" id="tabelaFreteMoto"
+                 {% if not nf_eh_moto and ultimos_fretes.geral %}style="display:none"{% endif %}>
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>NF</th>
+                            <th class="text-end">Qtd Motos</th>
+                            <th class="text-end">Peso Med. Cubado</th>
+                            <th class="text-end">Frete/Moto</th>
+                            <th class="text-end">Frete Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in ultimos_fretes.moto %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=f.operacao_id) }}"
+                                   class="text-decoration-none">{{ f.numeros_nfs }}</a>
+                            </td>
+                            <td class="text-end">{{ f.qtd_motos }}</td>
+                            <td class="text-end">{{ f.peso_cubado_medio|numero_br(1) }} kg</td>
+                            <td class="text-end">{{ f.frete_por_moto|valor_br }}</td>
+                            <td class="text-end fw-semibold">{{ f.frete_total|valor_br }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            {# Tabela GERAL #}
+            {% if ultimos_fretes.geral %}
+            <div class="table-responsive" id="tabelaFreteGeral"
+                 {% if nf_eh_moto and ultimos_fretes.moto %}style="display:none"{% endif %}>
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>NF</th>
+                            <th class="text-end">Peso Total</th>
+                            <th class="text-end">R$/KG</th>
+                            <th class="text-end">Frete Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in ultimos_fretes.geral %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=f.operacao_id) }}"
+                                   class="text-decoration-none">{{ f.numeros_nfs }}</a>
+                            </td>
+                            <td class="text-end">{{ f.peso_total|numero_br(1) }} kg</td>
+                            <td class="text-end">{{ f.rs_por_kg|numero_br(2) }}</td>
+                            <td class="text-end fw-semibold">{{ f.frete_total|valor_br }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Documentos Relacionados -->
     <div class="row g-4 mt-0">
         <!-- Subcontratos -->
@@ -980,4 +1073,31 @@ document.getElementById('btnAddMedida')?.addEventListener('click', function() {
 });
 </script>
 {% endif %}
+
+{# Toggle Moto/Geral nas tabelas de ultimos fretes #}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleGroup = document.getElementById('toggleCategoriaFrete');
+    if (!toggleGroup) return;
+
+    const tblMoto = document.getElementById('tabelaFreteMoto');
+    const tblGeral = document.getElementById('tabelaFreteGeral');
+
+    toggleGroup.querySelectorAll('button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            toggleGroup.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+
+            const cat = btn.dataset.categoria;
+            if (cat === 'moto') {
+                if (tblMoto) tblMoto.style.display = '';
+                if (tblGeral) tblGeral.style.display = 'none';
+            } else {
+                if (tblMoto) tblMoto.style.display = 'none';
+                if (tblGeral) tblGeral.style.display = '';
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
