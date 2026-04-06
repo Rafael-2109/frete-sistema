@@ -3135,22 +3135,7 @@
             console.warn(`[EST] menor-7d-${rowIndex} não encontrado no DOM (tipo=${item.tipo})`);
         }
 
-        // 8. Atualizar EST DATA — garantir cores mesmo quando est-data não foi atualizado via atualizarEstoqueNaData
-        const estDataEl = document.getElementById(`est-data-${rowIndex}`);
-        if (estDataEl && !estDataEl.classList.contains('est-negativo') && !estDataEl.classList.contains('est-baixo')) {
-            // Se atualizarEstoqueNaData não aplicou cores (early return por data vazia), usar menor_estoque_d7
-            if (estDataEl.textContent.trim() === '-') {
-                estDataEl.classList.remove('est-negativo', 'est-baixo');
-                const estDataRounded = Math.round(resultado.menor_estoque_d7);
-                if (estDataRounded !== 0) {
-                    if (estDataRounded < 0) {
-                        estDataEl.classList.add('est-negativo');
-                    } else if (estDataRounded < 100) {
-                        estDataEl.classList.add('est-baixo');
-                    }
-                }
-            }
-        }
+        // 8. EST DATA sem data = "-" sem cor (cor vem apenas de atualizarEstoqueNaData quando há data)
     }
 
     /**
