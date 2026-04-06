@@ -185,12 +185,15 @@
 </div>
 
 {% include 'carvia/_modal_importar_ofx.html' %}
+{% include 'carvia/_modal_criar_custo_fiscal.html' %}
 
 {# Jinja context — URLs e dados para o JS #}
 <script>
 const CARVIA_URLS = {
     extratoBancario: '{{ url_for("carvia.extrato_bancario") }}',
     apiConciliar: '{{ url_for("carvia.api_conciliar") }}',
+    apiCtesParaCusto: '{{ url_for("carvia.api_ctes_para_custo") }}',
+    apiCriarCustoFiscal: '{{ url_for("carvia.api_criar_custo_fiscal") }}',
 };
 const CARVIA_DATA = {
     linhas: {{ linhas_json|default('[]')|safe }},

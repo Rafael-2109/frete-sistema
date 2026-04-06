@@ -78,6 +78,7 @@ def register_conciliacao_routes(bp):
             'valor': float(linha.valor),
             'tipo': linha.tipo,
             'descricao': linha.descricao or '',
+            'memo': linha.memo or '',
             'razao_social': linha.razao_social or '',
             'status': linha.status_conciliacao,
             'saldo_a_conciliar': linha.saldo_a_conciliar,
@@ -988,4 +989,205 @@ def register_conciliacao_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao editar extrato: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # Custo Fiscal — Criar CE a partir de linha fiscal (GNRE/SEFAZ)
+    # ===================================================================
+
+    _TIPOS_CUSTO_VALIDOS = [
+        'DIARIA', 'REENTREGA', 'ARMAZENAGEM', 'DEVOLUCAO', 'AVARIA',
+        'PEDAGIO_EXTRA', 'TAXA_DESCARGA', 'OUTROS',
+    ]
+
+    @bp.route('/api/conciliacao/ctes-para-custo')  # type: ignore
+    @login_required
+    def api_ctes_para_custo():  # type: ignore
+        """Lista CTes com info rica para seleção no modal de custo fiscal.
+
+        Filtra apenas CTes com uf_origem != SP (GNRE aplica-se a CTes de fora de SP).
+        Enriquece com dados do destinatário via NF vinculada.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaOperacao
+
+        busca = request.args.get('busca', '').strip()
+
+        query = db.session.query(CarviaOperacao).filter(
+            CarviaOperacao.status != 'CANCELADO',
+            db.or_(
+                CarviaOperacao.uf_origem != 'SP',
+                CarviaOperacao.uf_origem.is_(None),
+            ),
+        )
+
+        if busca:
+            bl = f'%{busca}%'
+            query = query.filter(db.or_(
+                CarviaOperacao.cte_numero.ilike(bl),
+                CarviaOperacao.nome_cliente.ilike(bl),
+                CarviaOperacao.cidade_destino.ilike(bl),
+                CarviaOperacao.cidade_origem.ilike(bl),
+            ))
+
+        operacoes = query.order_by(
+            CarviaOperacao.cte_data_emissao.desc().nullslast()
+        ).limit(100).all()
+
+        resultado = []
+        for op in operacoes:
+            # Primeiro NF para dados do destinatário
+            primeiro_nf = op.nfs.first()
+
+            resultado.append({
+                'id': op.id,
+                'cte_numero': op.cte_numero or f'OP-{op.id}',
+                'nome_cliente': op.nome_cliente or '',
+                'cnpj_cliente': op.cnpj_cliente or '',
+                'uf_origem': op.uf_origem or '',
+                'cidade_origem': op.cidade_origem or '',
+                'uf_destino': op.uf_destino or '',
+                'cidade_destino': op.cidade_destino or '',
+                'valor_mercadoria': float(op.valor_mercadoria) if op.valor_mercadoria else None,
+                'peso_utilizado': float(op.peso_utilizado) if op.peso_utilizado else None,
+                'cte_valor': float(op.cte_valor) if op.cte_valor else None,
+                'cte_data_emissao': (
+                    op.cte_data_emissao.strftime('%d/%m/%Y')
+                    if op.cte_data_emissao else ''
+                ),
+                'status': op.status,
+                'destinatario_nome': (
+                    primeiro_nf.nome_destinatario if primeiro_nf else ''
+                ),
+                'destinatario_uf': (
+                    primeiro_nf.uf_destinatario if primeiro_nf else ''
+                ),
+                'destinatario_cidade': (
+                    primeiro_nf.cidade_destinatario if primeiro_nf else ''
+                ),
+                'nf_data_emissao': (
+                    primeiro_nf.data_emissao.strftime('%d/%m/%Y')
+                    if primeiro_nf and primeiro_nf.data_emissao else ''
+                ),
+            })
+
+        return jsonify({'sucesso': True, 'ctes': resultado})
+
+    @bp.route('/api/conciliacao/criar-custo-fiscal', methods=['POST'])  # type: ignore
+    @login_required
+    def api_criar_custo_fiscal():  # type: ignore
+        """Cria CarviaCustoEntrega a partir de linha fiscal e auto-concilia.
+
+        Fluxo atômico: cria CE → vincula frete → concilia com linha extrato.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import (
+            CarviaExtratoLinha,
+            CarviaOperacao,
+            CarviaCustoEntrega,
+            CarviaFrete,
+        )
+        from app.carvia.services.financeiro.carvia_conciliacao_service import (
+            CarviaConciliacaoService,
+        )
+
+        data = request.get_json(silent=True) or {}
+        extrato_linha_id = data.get('extrato_linha_id')
+        operacao_id = data.get('operacao_id')
+        tipo_custo = data.get('tipo_custo', 'OUTROS')
+        descricao = data.get('descricao', '')
+
+        # Validações de entrada
+        if not extrato_linha_id or not operacao_id:
+            return jsonify({
+                'erro': 'extrato_linha_id e operacao_id sao obrigatorios',
+            }), 400
+
+        if tipo_custo not in _TIPOS_CUSTO_VALIDOS:
+            return jsonify({'erro': f'Tipo de custo invalido: {tipo_custo}'}), 400
+
+        try:
+            # Carregar e validar linha do extrato
+            linha = db.session.get(CarviaExtratoLinha, int(extrato_linha_id))
+            if not linha:
+                return jsonify({'erro': 'Linha de extrato nao encontrada'}), 404
+
+            if linha.tipo != 'DEBITO':
+                return jsonify({
+                    'erro': 'Custo fiscal so pode ser criado para linhas DEBITO',
+                }), 400
+
+            saldo = linha.saldo_a_conciliar
+            if saldo <= 0:
+                return jsonify({
+                    'erro': 'Linha ja esta totalmente conciliada',
+                }), 400
+
+            # Carregar e validar operação (CTe)
+            operacao = db.session.get(CarviaOperacao, int(operacao_id))
+            if not operacao:
+                return jsonify({'erro': 'Operacao (CTe) nao encontrada'}), 404
+
+            if operacao.status == 'CANCELADO':
+                return jsonify({'erro': 'Operacao esta cancelada'}), 400
+
+            # Criar CarviaCustoEntrega
+            numero_custo = CarviaCustoEntrega.gerar_numero_custo()
+
+            custo = CarviaCustoEntrega(
+                numero_custo=numero_custo,
+                operacao_id=int(operacao_id),
+                tipo_custo=tipo_custo,
+                descricao=descricao or None,
+                valor=saldo,
+                data_custo=linha.data,
+                status='PENDENTE',
+                criado_por=current_user.email,
+            )
+            db.session.add(custo)
+            db.session.flush()
+
+            # Auto-link frete (mesmo padrão de custo_entrega_routes.py)
+            frete = CarviaFrete.query.filter_by(
+                operacao_id=custo.operacao_id
+            ).first()
+            if frete:
+                custo.frete_id = frete.id
+
+            # Auto-conciliar com a linha do extrato
+            resultado_conc = CarviaConciliacaoService.conciliar(
+                extrato_linha_id=int(extrato_linha_id),
+                documentos=[{
+                    'tipo_documento': 'custo_entrega',
+                    'documento_id': custo.id,
+                    'valor_alocado': float(saldo),
+                }],
+                usuario=current_user.email,
+            )
+
+            db.session.commit()
+
+            logger.info(
+                f"Custo fiscal {numero_custo} criado e conciliado "
+                f"com linha {extrato_linha_id} por {current_user.email}"
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'custo_id': custo.id,
+                'numero_custo': custo.numero_custo,
+                'valor': float(saldo),
+                'status_linha': resultado_conc.get('status_linha', ''),
+            })
+
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao criar custo fiscal: {e}", exc_info=True)
             return jsonify({'erro': str(e)}), 500

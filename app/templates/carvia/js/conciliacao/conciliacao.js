@@ -6,6 +6,8 @@
     let todosDocs = [];
     let tipoMatchAtual = '';
 
+    const REGEX_FISCAL = /secretaria|sefaz|gnre/i;
+
     const fmtBRL = v => parseFloat(v).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
     const fmtNum = v => parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:2});
     const formatCNPJ = c => {
@@ -65,6 +67,23 @@
             div.dataset.tipo = l.tipo;
             div.dataset.saldo = l.saldo_a_conciliar;
 
+            // Detecção fiscal: GNRE/SEFAZ/Secretaria em linhas DEBITO não-conciliadas
+            const ehFiscal = l.tipo === 'DEBITO'
+                && l.status !== 'CONCILIADO'
+                && REGEX_FISCAL.test((l.descricao || '') + ' ' + (l.memo || ''));
+
+            const btnFiscalHTML = ehFiscal
+                ? `<button class="btn btn-outline-warning btn-criar-custo-fiscal ms-2"
+                       style="font-size:0.7rem; padding:1px 6px;"
+                       data-linha-id="${l.id}"
+                       data-valor="${l.saldo_a_conciliar}"
+                       data-data="${l.data}"
+                       data-descricao="${(l.descricao || '').replace(/"/g, '&quot;')}"
+                       title="Criar Custo Fiscal (GNRE/SEFAZ)">
+                       <i class="fas fa-landmark"></i> Custo Fiscal
+                   </button>`
+                : '';
+
             div.innerHTML = `
                 <div class="carvia-conciliacao-row-primary d-flex justify-content-between align-items-center">
                     <div>
@@ -72,6 +91,7 @@
                                data-id="${l.id}" ${selected ? 'checked' : ''}>
                         <span>${l.data}</span>
                         <span class="badge ${badgeClass} ms-1" style="font-size:0.65rem">${l.status}</span>
+                        ${btnFiscalHTML}
                     </div>
                     <span class="carvia-conciliacao-valor ${l.tipo === 'CREDITO' ? 'text-success' : 'text-danger'}">
                         ${l.tipo === 'CREDITO' ? '+' : ''}${fmtNum(l.valor)}
@@ -93,9 +113,25 @@
         container.querySelectorAll('[data-id]').forEach(div => {
             div.addEventListener('click', function(e) {
                 if (e.target.classList.contains('form-check-input')) return;
+                if (e.target.closest('.btn-criar-custo-fiscal')) return;
                 const cb = this.querySelector('.extrato-check');
                 cb.checked = !cb.checked;
                 toggleLinha(parseInt(this.dataset.id));
+            });
+        });
+
+        // Listeners para botão Custo Fiscal (GNRE/SEFAZ)
+        container.querySelectorAll('.btn-criar-custo-fiscal').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (typeof window.abrirModalCriarCustoFiscal === 'function') {
+                    window.abrirModalCriarCustoFiscal({
+                        linhaId: parseInt(this.dataset.linhaId),
+                        valor: parseFloat(this.dataset.valor),
+                        data: this.dataset.data,
+                        descricao: this.dataset.descricao,
+                    });
+                }
             });
         });
     }

@@ -1,0 +1,332 @@
+{# Modal de criacao de Custo Fiscal (GNRE/SEFAZ/Secretaria) — usado na Conciliacao #}
+<div class="modal fade" id="modalCriarCustoFiscal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-landmark text-warning"></i> Criar Custo Fiscal (GNRE/SEFAZ)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                {# Info da linha do extrato #}
+                <div id="custoFiscalLinhaInfo" class="alert alert-light mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Linha Extrato:</strong>
+                            <span id="custoFiscalLinhaData" class="ms-2">-</span>
+                            <span class="text-muted mx-1">|</span>
+                            <span id="custoFiscalLinhaDesc" class="text-muted">-</span>
+                        </div>
+                        <span id="custoFiscalLinhaValor" class="fw-bold text-danger">-</span>
+                    </div>
+                </div>
+
+                {# Campos do Custo Entrega #}
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Tipo de Custo</label>
+                        <select id="custoFiscalTipoCusto" class="form-select form-select-sm">
+                            <option value="OUTROS" selected>OUTROS</option>
+                            <option value="DIARIA">DIARIA</option>
+                            <option value="REENTREGA">REENTREGA</option>
+                            <option value="ARMAZENAGEM">ARMAZENAGEM</option>
+                            <option value="DEVOLUCAO">DEVOLUCAO</option>
+                            <option value="AVARIA">AVARIA</option>
+                            <option value="PEDAGIO_EXTRA">PEDAGIO_EXTRA</option>
+                            <option value="TAXA_DESCARGA">TAXA_DESCARGA</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label small fw-semibold">Descricao</label>
+                        <input type="text" id="custoFiscalDescricao" class="form-control form-control-sm"
+                               placeholder="Ex: GNRE SP ref CTe-017">
+                    </div>
+                </div>
+
+                <hr class="my-2">
+
+                {# Busca de CTe #}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="fas fa-search"></i> Selecionar CTe</h6>
+                    <div style="width:300px">
+                        <input type="text" id="custoFiscalBusca" class="form-control form-control-sm"
+                               placeholder="Buscar por CTe, cliente, cidade...">
+                    </div>
+                </div>
+
+                {# Loading #}
+                <div id="custoFiscalCteLoading" class="text-center py-3 d-none">
+                    <div class="spinner-border spinner-border-sm"></div>
+                    <span class="ms-2">Carregando CTes...</span>
+                </div>
+
+                {# Tabela de CTes #}
+                <div id="custoFiscalCteContainer" class="table-responsive" style="max-height:350px; overflow-y:auto;">
+                    <table class="table table-sm table-hover carvia-table mb-0">
+                        <thead class="sticky-top">
+                            <tr>
+                                <th>CTe</th>
+                                <th>Emitente</th>
+                                <th>Origem</th>
+                                <th>Destino</th>
+                                <th>Destinatario</th>
+                                <th class="text-end">Valor Merc.</th>
+                                <th class="text-end">Peso</th>
+                                <th class="text-end">Valor CTe</th>
+                                <th>Data NF</th>
+                                <th>Data CTe</th>
+                                <th style="width:80px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="custoFiscalCteBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="custoFiscalCteVazio" class="text-muted text-center py-3 d-none">
+                    Nenhum CTe encontrado.
+                </div>
+
+                {# CTe selecionado — resumo #}
+                <div id="custoFiscalCteSelecionado" class="alert alert-success mt-3 d-none">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-check-circle me-1"></i>
+                            <strong>CTe selecionado:</strong>
+                            <span id="custoFiscalCteResumo">-</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimparCteFiscal">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success btn-sm" id="btnConfirmarCustoFiscal" disabled>
+                    <i class="fas fa-check"></i> Criar Custo e Conciliar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const fmtBRL = v => parseFloat(v).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    const fmtNum = v => parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:2});
+    const fmtPeso = v => v ? parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:1}) + ' kg' : '-';
+
+    let linhaParams = null;
+    let cteSelecionado = null;
+    let debounceTimer = null;
+
+    // === Abrir modal (chamado pelo JS principal) ===
+    window.abrirModalCriarCustoFiscal = function(params) {
+        linhaParams = params;
+        cteSelecionado = null;
+
+        // Preencher info da linha
+        document.getElementById('custoFiscalLinhaData').textContent = params.data || '-';
+        document.getElementById('custoFiscalLinhaDesc').textContent = params.descricao || '-';
+        document.getElementById('custoFiscalLinhaValor').textContent = fmtBRL(params.valor);
+
+        // Pre-preencher campos
+        document.getElementById('custoFiscalDescricao').value = params.descricao || '';
+        document.getElementById('custoFiscalTipoCusto').value = 'OUTROS';
+
+        // Reset estado
+        document.getElementById('custoFiscalCteSelecionado').classList.add('d-none');
+        document.getElementById('btnConfirmarCustoFiscal').disabled = true;
+        document.getElementById('custoFiscalBusca').value = '';
+
+        // Abrir modal e carregar CTes
+        const modal = new bootstrap.Modal(document.getElementById('modalCriarCustoFiscal'));
+        modal.show();
+        carregarCtes('');
+    };
+
+    // === Busca com debounce ===
+    document.getElementById('custoFiscalBusca').addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => carregarCtes(this.value.trim()), 300);
+    });
+
+    // === Carregar CTes via API ===
+    function carregarCtes(busca) {
+        const loading = document.getElementById('custoFiscalCteLoading');
+        const container = document.getElementById('custoFiscalCteContainer');
+        const vazio = document.getElementById('custoFiscalCteVazio');
+        const tbody = document.getElementById('custoFiscalCteBody');
+
+        loading.classList.remove('d-none');
+        container.classList.add('d-none');
+        vazio.classList.add('d-none');
+
+        let url = CARVIA_URLS.apiCtesParaCusto;
+        if (busca) url += '?busca=' + encodeURIComponent(busca);
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                loading.classList.add('d-none');
+
+                if (!data.sucesso || !data.ctes || data.ctes.length === 0) {
+                    vazio.classList.remove('d-none');
+                    tbody.innerHTML = '';
+                    return;
+                }
+
+                container.classList.remove('d-none');
+                renderizarCtes(data.ctes);
+            })
+            .catch(err => {
+                loading.classList.add('d-none');
+                vazio.textContent = 'Erro ao carregar CTes.';
+                vazio.classList.remove('d-none');
+                console.error('Erro carregarCtes:', err);
+            });
+    }
+
+    // === Renderizar tabela de CTes ===
+    function renderizarCtes(ctes) {
+        const tbody = document.getElementById('custoFiscalCteBody');
+        tbody.innerHTML = '';
+
+        ctes.forEach(c => {
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            if (cteSelecionado && cteSelecionado.id === c.id) {
+                tr.classList.add('table-success');
+            }
+
+            const origem = [c.cidade_origem, c.uf_origem].filter(Boolean).join('/');
+            const destino = [c.cidade_destino, c.uf_destino].filter(Boolean).join('/');
+            const destNome = c.destinatario_nome || '-';
+            const destLocal = [c.destinatario_cidade, c.destinatario_uf].filter(Boolean).join('/');
+
+            tr.innerHTML = `
+                <td><strong>${c.cte_numero}</strong></td>
+                <td class="small">${c.nome_cliente || '-'}</td>
+                <td class="small">${origem || '-'}</td>
+                <td class="small">${destino || '-'}</td>
+                <td class="small" title="${destLocal}">${destNome}${destLocal ? ' <span class=text-muted>(' + destLocal + ')</span>' : ''}</td>
+                <td class="text-end small">${c.valor_mercadoria != null ? fmtNum(c.valor_mercadoria) : '-'}</td>
+                <td class="text-end small">${fmtPeso(c.peso_utilizado)}</td>
+                <td class="text-end small fw-semibold">${c.cte_valor != null ? fmtNum(c.cte_valor) : '-'}</td>
+                <td class="small">${c.nf_data_emissao || '-'}</td>
+                <td class="small">${c.cte_data_emissao || '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary btn-selecionar-cte" style="font-size:0.7rem; padding:1px 8px;">
+                        Selecionar
+                    </button>
+                </td>
+            `;
+
+            // Listener no botão Selecionar
+            tr.querySelector('.btn-selecionar-cte').addEventListener('click', function(e) {
+                e.stopPropagation();
+                selecionarCte(c);
+            });
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    // === Selecionar CTe ===
+    function selecionarCte(cte) {
+        cteSelecionado = cte;
+
+        // Atualizar resumo
+        const origem = [cte.cidade_origem, cte.uf_origem].filter(Boolean).join('/');
+        const destino = [cte.cidade_destino, cte.uf_destino].filter(Boolean).join('/');
+        const resumo = [
+            cte.cte_numero,
+            cte.nome_cliente,
+            origem && destino ? origem + ' \u2192 ' + destino : '',
+            cte.cte_valor != null ? fmtBRL(cte.cte_valor) : '',
+        ].filter(Boolean).join(' \u2022 ');
+
+        document.getElementById('custoFiscalCteResumo').textContent = resumo;
+        document.getElementById('custoFiscalCteSelecionado').classList.remove('d-none');
+        document.getElementById('btnConfirmarCustoFiscal').disabled = false;
+
+        // Highlight na tabela
+        document.querySelectorAll('#custoFiscalCteBody tr').forEach(tr => {
+            tr.classList.remove('table-success');
+        });
+        // Recarregar para atualizar highlight
+        const tbody = document.getElementById('custoFiscalCteBody');
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach((tr, i) => {
+            const cteNum = tr.querySelector('td strong');
+            if (cteNum && cteNum.textContent === cte.cte_numero) {
+                tr.classList.add('table-success');
+            }
+        });
+    }
+
+    // === Limpar seleção ===
+    document.getElementById('btnLimparCteFiscal').addEventListener('click', function() {
+        cteSelecionado = null;
+        document.getElementById('custoFiscalCteSelecionado').classList.add('d-none');
+        document.getElementById('btnConfirmarCustoFiscal').disabled = true;
+        document.querySelectorAll('#custoFiscalCteBody tr').forEach(tr => {
+            tr.classList.remove('table-success');
+        });
+    });
+
+    // === Confirmar — criar CE + conciliar ===
+    document.getElementById('btnConfirmarCustoFiscal').addEventListener('click', function() {
+        if (!linhaParams || !cteSelecionado) return;
+
+        const btn = this;
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Criando...';
+
+        const payload = {
+            extrato_linha_id: linhaParams.linhaId,
+            operacao_id: cteSelecionado.id,
+            tipo_custo: document.getElementById('custoFiscalTipoCusto').value,
+            descricao: document.getElementById('custoFiscalDescricao').value.trim(),
+        };
+
+        fetch(CARVIA_URLS.apiCriarCustoFiscal, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                // Mostrar sucesso no card
+                const selCard = document.getElementById('custoFiscalCteSelecionado');
+                selCard.className = 'alert alert-success mt-3';
+                selCard.innerHTML = `
+                    <i class="fas fa-check-circle text-success me-1"></i>
+                    <strong>${data.numero_custo}</strong> criado e conciliado com sucesso!
+                    <span class="text-muted ms-2">${fmtBRL(data.valor)}</span>
+                `;
+
+                // Reload após 1.5s
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                alert('Erro: ' + (data.erro || 'Erro desconhecido'));
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+            alert('Erro de conexao: ' + err.message);
+            console.error('Erro confirmarCustoFiscal:', err);
+        });
+    });
+})();
+</script>
