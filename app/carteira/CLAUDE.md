@@ -15,6 +15,7 @@ analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
 ```
 app/carteira/
   ├── routes/                    # 26 APIs + agrupados.py
+  │   ├── carteira_simples/      # 4 arquivos (dados, separacoes, helpers)
   │   └── programacao_em_lote/   # 4 arquivos (Atacadao/Sendas)
   ├── services/                  # 4 services (agrupamento, mapa, importacao, atualizacao)
   ├── utils/                     # 3 helpers (separacao, workspace, formatters)
@@ -56,8 +57,13 @@ Verificar `routes/__init__.py` ANTES de criar novo blueprint.
 NUNCA adicionar queries individuais por pedido no loop de enriquecimento.
 Novo dado necessario: adicionar ao batch loading (`_carregar_*_batch`).
 
-### R6: carteira_simples_api.py e monolito (2.3K LOC)
-NUNCA adicionar mais endpoints neste arquivo. Novas APIs: criar arquivo separado em `routes/`.
+### R6: carteira_simples/ e pacote modularizado
+Split do monolito (2.1K LOC) em `routes/carteira_simples/`:
+- `__init__.py` — Blueprint + imports
+- `helpers.py` — validacao JSON, conversao entradas, sync embarque, saidas nao visiveis
+- `dados_api.py` — rotas de consulta (dados, autocomplete, rastrear, totais)
+- `separacao_api.py` — rotas CRUD (gerar, atualizar qtd, lote, verificar, adicionar itens)
+Novas APIs: criar no arquivo do dominio correto (`dados_api.py` ou `separacao_api.py`).
 
 ### R7: 2 variantes de ruptura — escolher a correta
 

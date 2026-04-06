@@ -35,7 +35,7 @@ from .standby_api import standby_bp
 from .importante_api import importante_bp
 
 # API de Carteira Simplificada
-from .carteira_simples_api import carteira_simples_bp
+from .carteira_simples import carteira_simples_bp
 
 # API de Relatórios
 from .relatorios_api import *
