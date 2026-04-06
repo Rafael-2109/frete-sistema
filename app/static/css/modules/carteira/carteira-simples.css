@@ -823,8 +823,8 @@ tr.plinha-saldo td.plinha-cell {
     background-color: var(--bs-secondary-bg);
 }
 
-/* Saldo negativo - danger leve */
-.plinha-cell.plinha-negativo {
+/* Saldo negativo - fundo vermelho solido (especificidade > tr.plinha-saldo td.plinha-cell) */
+tr.plinha-saldo td.plinha-cell.plinha-negativo {
     background-color: var(--bs-danger);
     color: var(--bs-body-color);
     font-weight: 600;
