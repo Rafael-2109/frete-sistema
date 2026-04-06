@@ -175,8 +175,57 @@ def register_exportacao_routes(bp):
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_nfs'))
 
+        # Cross-links: custos e ctes comp por NF (via operacoes)
+        nf_ids_all = [nf.id for nf in items]
+        # Mapa nf_id -> [operacao_ids]
+        from collections import defaultdict
+        nf_op_map = defaultdict(set)
+        if nf_ids_all:
+            junctions = db.session.query(
+                CarviaOperacaoNf.nf_id, CarviaOperacaoNf.operacao_id
+            ).filter(CarviaOperacaoNf.nf_id.in_(nf_ids_all)).all()
+            for j_nf_id, j_op_id in junctions:
+                nf_op_map[j_nf_id].add(j_op_id)
+
+        all_op_ids = set()
+        for ops in nf_op_map.values():
+            all_op_ids.update(ops)
+
+        custos_por_op = defaultdict(int)
+        custos_valor_por_op = defaultdict(float)
+        comps_por_op = defaultdict(int)
+        comps_valor_por_op = defaultdict(float)
+        if all_op_ids:
+            custos_rows = db.session.query(
+                CarviaCustoEntrega.operacao_id,
+                func.count(CarviaCustoEntrega.id),
+                func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
+            ).filter(
+                CarviaCustoEntrega.operacao_id.in_(all_op_ids)
+            ).group_by(CarviaCustoEntrega.operacao_id).all()
+            for op_id, cnt, val in custos_rows:
+                custos_por_op[op_id] = cnt
+                custos_valor_por_op[op_id] = float(val)
+
+            comps_rows = db.session.query(
+                CarviaCteComplementar.operacao_id,
+                func.count(CarviaCteComplementar.id),
+                func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0),
+            ).filter(
+                CarviaCteComplementar.operacao_id.in_(all_op_ids)
+            ).group_by(CarviaCteComplementar.operacao_id).all()
+            for op_id, cnt, val in comps_rows:
+                comps_por_op[op_id] = cnt
+                comps_valor_por_op[op_id] = float(val)
+
         data = []
         for nf in items:
+            ops = nf_op_map.get(nf.id, set())
+            qtd_custos = sum(custos_por_op.get(o, 0) for o in ops)
+            total_custos = sum(custos_valor_por_op.get(o, 0) for o in ops)
+            qtd_comps = sum(comps_por_op.get(o, 0) for o in ops)
+            total_comps = sum(comps_valor_por_op.get(o, 0) for o in ops)
+
             data.append({
                 'Numero NF': nf.numero_nf,
                 'Serie': nf.serie_nf or '',
@@ -193,6 +242,10 @@ def register_exportacao_routes(bp):
                 'Qtd Volumes': nf.quantidade_volumes or 0,
                 'Tipo Fonte': nf.tipo_fonte or '',
                 'Status': nf.status or '',
+                'Qtd Custos Entrega': qtd_custos,
+                'Valor Custos Entrega': total_custos,
+                'Qtd CTes Complementares': qtd_comps,
+                'Valor CTes Complementares': total_comps,
                 'Criado Em': _fmt_datetime(nf.criado_em),
                 'Criado Por': nf.criado_por or '',
             })
@@ -396,11 +449,48 @@ def register_exportacao_routes(bp):
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_subcontratos'))
 
+        # Enriquecer com operacao (rota, cliente) e custos/ctes comp
+        sub_op_ids = list({s.operacao_id for s in items if s.operacao_id})
+        sub_op_map = {}
+        if sub_op_ids:
+            ops = db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.id.in_(sub_op_ids)
+            ).all()
+            sub_op_map = {o.id: o for o in ops}
+
+        from collections import defaultdict
+        custos_por_op = defaultdict(int)
+        custos_valor_por_op = defaultdict(float)
+        comps_por_op = defaultdict(int)
+        if sub_op_ids:
+            for op_id, cnt, val in db.session.query(
+                CarviaCustoEntrega.operacao_id,
+                func.count(CarviaCustoEntrega.id),
+                func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
+            ).filter(
+                CarviaCustoEntrega.operacao_id.in_(sub_op_ids)
+            ).group_by(CarviaCustoEntrega.operacao_id).all():
+                custos_por_op[op_id] = cnt
+                custos_valor_por_op[op_id] = float(val)
+
+            for op_id, cnt in db.session.query(
+                CarviaCteComplementar.operacao_id,
+                func.count(CarviaCteComplementar.id),
+            ).filter(
+                CarviaCteComplementar.operacao_id.in_(sub_op_ids)
+            ).group_by(CarviaCteComplementar.operacao_id).all():
+                comps_por_op[op_id] = cnt
+
         data = []
         for sub in items:
+            op = sub_op_map.get(sub.operacao_id)
             data.append({
                 'ID': sub.id,
                 'Operacao ID': sub.operacao_id,
+                'CTe CarVia': (op.cte_numero or '') if op else '',
+                'Emitente': (op.nome_cliente or '') if op else '',
+                'Origem': f'{op.cidade_origem or ""}/{op.uf_origem or ""}' if op else '',
+                'Destino': f'{op.cidade_destino or ""}/{op.uf_destino or ""}' if op else '',
                 'Transportadora': sub.transportadora.razao_social if sub.transportadora else '',
                 'CTe Numero': sub.cte_numero or '',
                 'Valor CTe': float(sub.cte_valor or 0),
@@ -408,6 +498,9 @@ def register_exportacao_routes(bp):
                 'Valor Acertado': float(sub.valor_acertado or 0) if sub.valor_acertado else '',
                 'Valor Final': float(sub.valor_final or 0) if sub.valor_final else 0,
                 'Status': sub.status or '',
+                'Qtd Custos Entrega': custos_por_op.get(sub.operacao_id, 0),
+                'Valor Custos Entrega': custos_valor_por_op.get(sub.operacao_id, 0),
+                'Qtd CTes Comp': comps_por_op.get(sub.operacao_id, 0),
                 'Criado Em': _fmt_datetime(sub.criado_em),
                 'Criado Por': sub.criado_por or '',
             })
@@ -499,6 +592,22 @@ def register_exportacao_routes(bp):
             ).filter(CarviaOperacao.id.in_(op_ids)).all()
             op_map = {o_id: cte for o_id, cte in ops}
 
+        # Custos vinculados por cte_complementar_id
+        from collections import defaultdict
+        custos_por_comp = defaultdict(int)
+        custos_valor_por_comp = defaultdict(float)
+        comp_item_ids = [c.id for c in items]
+        if comp_item_ids:
+            for comp_id, cnt, val in db.session.query(
+                CarviaCustoEntrega.cte_complementar_id,
+                func.count(CarviaCustoEntrega.id),
+                func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
+            ).filter(
+                CarviaCustoEntrega.cte_complementar_id.in_(comp_item_ids)
+            ).group_by(CarviaCustoEntrega.cte_complementar_id).all():
+                custos_por_comp[comp_id] = cnt
+                custos_valor_por_comp[comp_id] = float(val)
+
         data = []
         for c in items:
             data.append({
@@ -511,6 +620,8 @@ def register_exportacao_routes(bp):
                 'Data Emissao': _fmt_date(c.cte_data_emissao),
                 'Status': c.status or '',
                 'Fatura': fat_map.get(c.fatura_cliente_id, ''),
+                'Qtd Custos Entrega': custos_por_comp.get(c.id, 0),
+                'Valor Custos Entrega': custos_valor_por_comp.get(c.id, 0),
                 'Criado Em': _fmt_datetime(c.criado_em),
                 'Criado Por': c.criado_por or '',
             })
@@ -584,12 +695,52 @@ def register_exportacao_routes(bp):
             ).filter(CarviaCteComplementar.id.in_(comp_ids)).all()
             comp_map = {c_id: num for c_id, num in comps}
 
+        # Buscar operacoes para emitente/destinatario/rota
+        op_ids = list({c.operacao_id for c in items})
+        op_map = {}
+        if op_ids:
+            ops = db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.id.in_(op_ids)
+            ).all()
+            op_map = {o.id: o for o in ops}
+
+        # Buscar faturas cliente via operacoes
+        fat_cli_map = {}
+        fat_cli_ids = [o.fatura_cliente_id for o in op_map.values() if o.fatura_cliente_id]
+        if fat_cli_ids:
+            fats = db.session.query(
+                CarviaFaturaCliente.id, CarviaFaturaCliente.numero_fatura
+            ).filter(CarviaFaturaCliente.id.in_(fat_cli_ids)).all()
+            fat_cli_map = {f_id: num for f_id, num in fats}
+
+        # Buscar subcontratos por operacao
+        sub_map = {}  # op_id -> transportadora(s)
+        if op_ids:
+            subs = db.session.query(
+                CarviaSubcontrato.operacao_id,
+                CarviaSubcontrato.cte_numero,
+            ).filter(
+                CarviaSubcontrato.operacao_id.in_(op_ids)
+            ).all()
+            from collections import defaultdict
+            sub_map = defaultdict(list)
+            for s_op_id, s_cte in subs:
+                sub_map[s_op_id].append(s_cte or '')
+
         data = []
         for c in items:
+            op = op_map.get(c.operacao_id)
             data.append({
                 'Numero Custo': c.numero_custo or '',
                 'Operacao ID': c.operacao_id,
+                'CTe CarVia': (op.cte_numero or '') if op else '',
+                'Emitente': (op.nome_cliente or '') if op else '',
+                'CNPJ Emitente': (op.cnpj_cliente or '') if op else '',
+                'Origem': f'{op.cidade_origem or ""}/{op.uf_origem or ""}' if op else '',
+                'Destino': f'{op.cidade_destino or ""}/{op.uf_destino or ""}' if op else '',
                 'CTe Comp': comp_map.get(c.cte_complementar_id, ''),
+                'Subcontratos': ', '.join(sub_map.get(c.operacao_id, [])),
+                'Fatura CarVia': fat_cli_map.get(op.fatura_cliente_id, '') if op and op.fatura_cliente_id else '',
                 'Tipo Custo': c.tipo_custo or '',
                 'Descricao': c.descricao or '',
                 'Valor': float(c.valor or 0),
@@ -678,6 +829,46 @@ def register_exportacao_routes(bp):
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_faturas_cliente'))
 
+        # Custos de entrega via operacoes vinculadas a fatura
+        from collections import defaultdict
+        fat_ids_all = [f.id for f in items]
+        fat_custos = defaultdict(int)
+        fat_custos_valor = defaultdict(float)
+        if fat_ids_all:
+            # operacoes por fatura
+            fat_op_rows = db.session.query(
+                CarviaOperacao.fatura_cliente_id,
+                CarviaOperacao.id,
+            ).filter(
+                CarviaOperacao.fatura_cliente_id.in_(fat_ids_all)
+            ).all()
+
+            fat_op_map = defaultdict(set)
+            all_fc_op_ids = set()
+            for fc_id, o_id in fat_op_rows:
+                fat_op_map[fc_id].add(o_id)
+                all_fc_op_ids.add(o_id)
+
+            if all_fc_op_ids:
+                custos_rows = db.session.query(
+                    CarviaCustoEntrega.operacao_id,
+                    func.count(CarviaCustoEntrega.id),
+                    func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
+                ).filter(
+                    CarviaCustoEntrega.operacao_id.in_(all_fc_op_ids)
+                ).group_by(CarviaCustoEntrega.operacao_id).all()
+
+                op_custo_cnt = {}
+                op_custo_val = {}
+                for o_id, cnt, val in custos_rows:
+                    op_custo_cnt[o_id] = cnt
+                    op_custo_val[o_id] = float(val)
+
+                for fc_id, op_set in fat_op_map.items():
+                    for o_id in op_set:
+                        fat_custos[fc_id] += op_custo_cnt.get(o_id, 0)
+                        fat_custos_valor[fc_id] += op_custo_val.get(o_id, 0)
+
         data = []
         for f in items:
             data.append({
@@ -689,6 +880,8 @@ def register_exportacao_routes(bp):
                 'Valor Total': float(f.valor_total or 0),
                 'Tipo Frete': f.tipo_frete or '',
                 'Status': f.status or '',
+                'Qtd Custos Entrega': fat_custos.get(f.id, 0),
+                'Valor Custos Entrega': fat_custos_valor.get(f.id, 0),
                 'Pago Em': _fmt_datetime(f.pago_em),
                 'Pago Por': f.pago_por or '',
                 'Conciliado': _fmt_bool(f.conciliado),
@@ -787,6 +980,60 @@ def register_exportacao_routes(bp):
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_faturas_transportadora'))
 
+        # Custos e CTes comp via subcontratos -> operacoes
+        from collections import defaultdict
+        ft_ids_all = [f.id for f in items]
+        ft_custos = defaultdict(int)
+        ft_custos_valor = defaultdict(float)
+        ft_comps = defaultdict(int)
+        ft_comps_valor = defaultdict(float)
+        if ft_ids_all:
+            sub_rows = db.session.query(
+                CarviaSubcontrato.fatura_transportadora_id,
+                CarviaSubcontrato.operacao_id,
+            ).filter(
+                CarviaSubcontrato.fatura_transportadora_id.in_(ft_ids_all),
+                CarviaSubcontrato.operacao_id.isnot(None),
+            ).all()
+
+            ft_op_map = defaultdict(set)
+            all_ft_op_ids = set()
+            for ft_id, o_id in sub_rows:
+                ft_op_map[ft_id].add(o_id)
+                all_ft_op_ids.add(o_id)
+
+            if all_ft_op_ids:
+                op_custo_cnt = {}
+                op_custo_val = {}
+                for o_id, cnt, val in db.session.query(
+                    CarviaCustoEntrega.operacao_id,
+                    func.count(CarviaCustoEntrega.id),
+                    func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
+                ).filter(
+                    CarviaCustoEntrega.operacao_id.in_(all_ft_op_ids)
+                ).group_by(CarviaCustoEntrega.operacao_id).all():
+                    op_custo_cnt[o_id] = cnt
+                    op_custo_val[o_id] = float(val)
+
+                op_comp_cnt = {}
+                op_comp_val = {}
+                for o_id, cnt, val in db.session.query(
+                    CarviaCteComplementar.operacao_id,
+                    func.count(CarviaCteComplementar.id),
+                    func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0),
+                ).filter(
+                    CarviaCteComplementar.operacao_id.in_(all_ft_op_ids)
+                ).group_by(CarviaCteComplementar.operacao_id).all():
+                    op_comp_cnt[o_id] = cnt
+                    op_comp_val[o_id] = float(val)
+
+                for ft_id, op_set in ft_op_map.items():
+                    for o_id in op_set:
+                        ft_custos[ft_id] += op_custo_cnt.get(o_id, 0)
+                        ft_custos_valor[ft_id] += op_custo_val.get(o_id, 0)
+                        ft_comps[ft_id] += op_comp_cnt.get(o_id, 0)
+                        ft_comps_valor[ft_id] += op_comp_val.get(o_id, 0)
+
         data = []
         for f in items:
             data.append({
@@ -799,6 +1046,10 @@ def register_exportacao_routes(bp):
                 'Conferido Por': f.conferido_por or '',
                 'Conferido Em': _fmt_datetime(f.conferido_em),
                 'Status Pagamento': f.status_pagamento or '',
+                'Qtd Custos Entrega': ft_custos.get(f.id, 0),
+                'Valor Custos Entrega': ft_custos_valor.get(f.id, 0),
+                'Qtd CTes Comp': ft_comps.get(f.id, 0),
+                'Valor CTes Comp': ft_comps_valor.get(f.id, 0),
                 'Pago Em': _fmt_datetime(f.pago_em),
                 'Pago Por': f.pago_por or '',
                 'Conciliado': _fmt_bool(f.conciliado),

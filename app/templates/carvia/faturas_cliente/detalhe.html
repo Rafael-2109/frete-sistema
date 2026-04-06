@@ -436,6 +436,50 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Custos de Entrega -->
+    {% if custos_entrega %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-money-bill-wave"></i> Custos de Entrega ({{ custos_entrega|length }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Numero</th>
+                            <th>Operacao</th>
+                            <th>Tipo</th>
+                            <th>Descricao</th>
+                            <th class="text-end">Valor</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for custo in custos_entrega %}
+                        <tr>
+                            <td><strong>{{ custo.numero_custo }}</strong></td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=custo.operacao_id) }}">#{{ custo.operacao_id }}</a>
+                            </td>
+                            <td><span class="badge bg-secondary">{{ custo.tipo_custo }}</span></td>
+                            <td>{{ custo.descricao or '-' }}</td>
+                            <td class="valor-col">{{ custo.valor|valor_br }}</td>
+                            <td><span class="badge carvia-badge-{{ custo.status|lower }}">{{ custo.status }}</span></td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}"
+                                   class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 {# Modal de data de pagamento (modo Form POST) #}

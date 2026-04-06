@@ -55,7 +55,10 @@ def register_custo_entrega_routes(bp):
         sort = request.args.get('sort', 'criado_em')
         direction = request.args.get('direction', 'desc')
 
-        query = db.session.query(CarviaCustoEntrega)
+        query = db.session.query(CarviaCustoEntrega).outerjoin(
+            CarviaOperacao,
+            CarviaCustoEntrega.operacao_id == CarviaOperacao.id,
+        )
 
         if operacao_filtro:
             query = query.filter(CarviaCustoEntrega.operacao_id == int(operacao_filtro))
@@ -71,6 +74,9 @@ def register_custo_entrega_routes(bp):
                     CarviaCustoEntrega.descricao.ilike(busca_like),
                     CarviaCustoEntrega.fornecedor_nome.ilike(busca_like),
                     CarviaCustoEntrega.observacoes.ilike(busca_like),
+                    CarviaOperacao.nome_cliente.ilike(busca_like),
+                    CarviaOperacao.cnpj_cliente.ilike(busca_like),
+                    CarviaOperacao.cidade_destino.ilike(busca_like),
                 )
             )
 
@@ -243,10 +249,64 @@ def register_custo_entrega_routes(bp):
             CarviaCustoEntregaAnexo.ativo.is_(True),
         ).order_by(CarviaCustoEntregaAnexo.criado_em.desc()).all()
 
+        # Cross-links: operacao, subcontratos, faturas, ctes complementares
+        operacao = db.session.get(CarviaOperacao, custo.operacao_id)
+
+        from app.carvia.models import (
+            CarviaSubcontrato, CarviaFaturaCliente,
+            CarviaFaturaTransportadora, CarviaOperacaoNf, CarviaNf,
+        )
+
+        subcontratos = []
+        fatura_cliente = None
+        faturas_transportadora = []
+        nfs = []
+        ctes_complementares = []
+
+        if operacao:
+            subcontratos = CarviaSubcontrato.query.filter(
+                CarviaSubcontrato.operacao_id == operacao.id
+            ).order_by(CarviaSubcontrato.criado_em.desc()).all()
+
+            if operacao.fatura_cliente_id:
+                fatura_cliente = db.session.get(
+                    CarviaFaturaCliente, operacao.fatura_cliente_id
+                )
+
+            # Faturas transportadora via subcontratos
+            fat_transp_ids = {
+                s.fatura_transportadora_id for s in subcontratos
+                if s.fatura_transportadora_id
+            }
+            if fat_transp_ids:
+                faturas_transportadora = CarviaFaturaTransportadora.query.filter(
+                    CarviaFaturaTransportadora.id.in_(fat_transp_ids)
+                ).all()
+
+            # NFs via junction
+            nf_ids = db.session.query(CarviaOperacaoNf.nf_id).filter(
+                CarviaOperacaoNf.operacao_id == operacao.id
+            ).all()
+            nf_id_list = [r[0] for r in nf_ids]
+            if nf_id_list:
+                nfs = CarviaNf.query.filter(CarviaNf.id.in_(nf_id_list)).all()
+
+            # Outros CTes complementares da mesma operacao
+            ctes_complementares = CarviaCteComplementar.query.filter(
+                CarviaCteComplementar.operacao_id == operacao.id,
+                CarviaCteComplementar.id != (custo.cte_complementar_id or 0),
+            ).order_by(CarviaCteComplementar.criado_em.desc()).all()
+
         return render_template(
             'carvia/custos_entrega/detalhe.html',
             custo=custo,
             anexos=anexos,
+            operacao=operacao,
+            subcontratos=subcontratos,
+            fatura_cliente=fatura_cliente,
+            faturas_transportadora=faturas_transportadora,
+            nfs=nfs,
+            ctes_complementares=ctes_complementares,
         )
 
     @bp.route('/custos-entrega/<int:custo_id>/editar', methods=['GET', 'POST']) # type: ignore

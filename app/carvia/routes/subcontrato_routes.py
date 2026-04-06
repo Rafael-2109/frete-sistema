@@ -290,6 +290,18 @@ def register_subcontrato_routes(bp):
             if operacao.fatura_cliente_id:
                 fatura_cliente = db.session.get(CarviaFaturaCliente, operacao.fatura_cliente_id)
 
+        # Custos de entrega e CTes complementares via operacao
+        from app.carvia.models import CarviaCustoEntrega, CarviaCteComplementar
+        custos_entrega = []
+        ctes_complementares = []
+        if operacao:
+            custos_entrega = CarviaCustoEntrega.query.filter(
+                CarviaCustoEntrega.operacao_id == operacao.id
+            ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+            ctes_complementares = CarviaCteComplementar.query.filter(
+                CarviaCteComplementar.operacao_id == operacao.id
+            ).order_by(CarviaCteComplementar.criado_em.desc()).all()
+
         # Operacoes disponiveis para re-vinculacao (modal "Alterar CTe CarVia")
         operacoes_disponiveis = []
         if sub.status not in ('FATURADO', 'CANCELADO', 'CONFERIDO'):
@@ -305,6 +317,8 @@ def register_subcontrato_routes(bp):
             nfs=nfs,
             fatura_cliente=fatura_cliente,
             operacoes_disponiveis=operacoes_disponiveis,
+            custos_entrega=custos_entrega,
+            ctes_complementares=ctes_complementares,
         )
 
     @bp.route('/subcontratos/<int:sub_id>/vincular-operacao', methods=['POST']) # type: ignore

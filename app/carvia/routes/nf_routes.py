@@ -403,6 +403,18 @@ def register_nf_routes(bp):
                 nf.cnpj_destinatario, nf.cidade_destinatario, nf.id,
             )
 
+        # Custos de entrega e CTes complementares via operacoes
+        from app.carvia.models import CarviaCustoEntrega, CarviaCteComplementar
+        custos_entrega = []
+        ctes_complementares = []
+        if op_ids:
+            custos_entrega = CarviaCustoEntrega.query.filter(
+                CarviaCustoEntrega.operacao_id.in_(op_ids)
+            ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+            ctes_complementares = CarviaCteComplementar.query.filter(
+                CarviaCteComplementar.operacao_id.in_(op_ids)
+            ).order_by(CarviaCteComplementar.criado_em.desc()).all()
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
@@ -420,6 +432,8 @@ def register_nf_routes(bp):
             fretes_nf=fretes_nf,
             tem_frete=tem_frete,
             tem_cte=tem_cte,
+            custos_entrega=custos_entrega,
+            ctes_complementares=ctes_complementares,
         )
 
     # ==================== CRIAR CTE VIA NF ====================

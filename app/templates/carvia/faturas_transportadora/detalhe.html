@@ -831,6 +831,87 @@
             </div>
         </div>
     </div>
+
+    <!-- Custos de Entrega + CTes Complementares -->
+    {% if custos_entrega or ctes_complementares %}
+    <div class="row g-4 mt-0">
+        {% if custos_entrega %}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-money-bill-wave"></i> Custos de Entrega ({{ custos_entrega|length }})</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 carvia-table">
+                            <thead>
+                                <tr>
+                                    <th>Numero</th>
+                                    <th>Tipo</th>
+                                    <th class="text-end">Valor</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for custo in custos_entrega %}
+                                <tr>
+                                    <td><strong>{{ custo.numero_custo }}</strong></td>
+                                    <td><span class="badge bg-secondary">{{ custo.tipo_custo }}</span></td>
+                                    <td class="valor-col">{{ custo.valor|valor_br }}</td>
+                                    <td><span class="badge carvia-badge-{{ custo.status|lower }}">{{ custo.status }}</span></td>
+                                    <td>
+                                        <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}"
+                                           class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if ctes_complementares %}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice"></i> CTes Complementares ({{ ctes_complementares|length }})</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 carvia-table">
+                            <thead>
+                                <tr>
+                                    <th>Numero</th>
+                                    <th class="text-end">Valor</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cc in ctes_complementares %}
+                                <tr>
+                                    <td><strong>{{ cc.numero_comp }}</strong></td>
+                                    <td class="valor-col">{{ cc.cte_valor|valor_br }}</td>
+                                    <td><span class="badge carvia-badge-{{ cc.status|lower }}">{{ cc.status }}</span></td>
+                                    <td>
+                                        <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=cc.id) }}"
+                                           class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 
 {{ modal_admin_excluir(

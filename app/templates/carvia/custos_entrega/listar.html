@@ -75,6 +75,8 @@
                         <tr>
                             <th>#</th>
                             {{ th_sort('numero_custo', 'Numero', sort, direction) }}
+                            <th>Emitente</th>
+                            <th>Destino</th>
                             {{ th_sort('tipo_custo', 'Tipo', sort, direction) }}
                             <th>Descricao</th>
                             {{ th_sort('valor', 'Valor', sort, direction, 'text-end') }}
@@ -89,6 +91,17 @@
                         <tr>
                             <td><strong>{{ c.id }}</strong></td>
                             <td><strong>{{ c.numero_custo }}</strong></td>
+                            <td>
+                                {% if c.operacao %}
+                                <strong>{{ c.operacao.nome_cliente or '-' }}</strong>
+                                <div class="cnpj-col small text-muted">{{ c.operacao.cnpj_cliente or '' }}</div>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% if c.operacao %}
+                                {{ c.operacao.cidade_destino or '-' }}/{{ c.operacao.uf_destino or '-' }}
+                                {% else %}-{% endif %}
+                            </td>
                             <td><span class="badge bg-secondary">{{ c.tipo_custo }}</span></td>
                             <td>{{ c.descricao or '-' }}</td>
                             <td class="valor-col">{{ c.valor|valor_br }}</td>

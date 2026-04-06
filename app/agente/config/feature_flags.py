@@ -43,9 +43,9 @@ USE_PROMPT_CACHING = os.getenv("AGENT_PROMPT_CACHING", "true").lower() == "true"
 # Self-correction — reescrito para Sonnet 4.6 (prompt específico para tabelas numéricas)
 # Histórico: Haiku gerava falsos positivos com escopo amplo. Prompt agora valida APENAS
 # inconsistências aritméticas em respostas com tabelas numéricas (threshold 500 chars).
-# ATIVO por default: Sonnet 4.6 com scope restrito reduz falsos positivos.
-# Para desativar: AGENT_SELF_CORRECTION=false
-USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "true").lower() == "true"
+# DESATIVADO: gerava observacoes que confundiam usuarios sem beneficio claro.
+# Para reativar: AGENT_SELF_CORRECTION=true
+USE_SELF_CORRECTION = os.getenv("AGENT_SELF_CORRECTION", "false").lower() == "true"
 
 # Prompt Cache Optimization — extrai variáveis dinâmicas do system prompt
 # ({data_atual}, {usuario_nome}, {user_id}) para injeção via UserPromptSubmit hook.

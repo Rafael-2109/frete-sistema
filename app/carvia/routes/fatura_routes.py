@@ -460,6 +460,14 @@ def register_fatura_routes(bp):
             if frete_com_cond:
                 condicoes_comerciais = frete_com_cond
 
+        # Custos de entrega via operacoes
+        from app.carvia.models import CarviaCustoEntrega
+        custos_entrega = []
+        if op_ids:
+            custos_entrega = CarviaCustoEntrega.query.filter(
+                CarviaCustoEntrega.operacao_id.in_(op_ids)
+            ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+
         # Entidades pagador para modal alterar-pagador
         entidades_pagador = []
         if operacoes:
@@ -506,6 +514,7 @@ def register_fatura_routes(bp):
             ctes_complementares=ctes_complementares,
             condicoes_comerciais=condicoes_comerciais,
             entidades_pagador=entidades_pagador,
+            custos_entrega=custos_entrega,
         )
 
     @bp.route('/faturas-cliente/<int:fatura_id>/editar-valor', methods=['POST']) # type: ignore
@@ -1322,6 +1331,18 @@ def register_fatura_routes(bp):
                 CarviaOperacao.id.in_(op_ids)
             ).order_by(CarviaOperacao.cte_data_emissao.desc().nullslast()).all()
 
+        # Custos de entrega e CTes complementares via operacoes
+        custos_entrega_ft = []
+        ctes_complementares_ft = []
+        if op_ids:
+            from app.carvia.models import CarviaCustoEntrega
+            custos_entrega_ft = CarviaCustoEntrega.query.filter(
+                CarviaCustoEntrega.operacao_id.in_(op_ids)
+            ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+            ctes_complementares_ft = CarviaCteComplementar.query.filter(
+                CarviaCteComplementar.operacao_id.in_(op_ids)
+            ).order_by(CarviaCteComplementar.criado_em.desc()).all()
+
         return render_template(
             'carvia/faturas_transportadora/detalhe.html',
             fatura=fatura,
@@ -1333,6 +1354,8 @@ def register_fatura_routes(bp):
             nfs=nfs,
             faturas_cliente=faturas_cliente,
             operacoes=operacoes,
+            custos_entrega=custos_entrega_ft,
+            ctes_complementares=ctes_complementares_ft,
         )
 
     @bp.route('/faturas-transportadora/<int:fatura_id>/editar-vencimento', methods=['POST']) # type: ignore
