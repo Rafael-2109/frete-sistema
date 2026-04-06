@@ -153,7 +153,12 @@ def _tool_display_name(tool_name: str) -> str:
 
 
 def _select_model_for_message(mensagem: str) -> str:
-    """Seleciona modelo com base na complexidade da mensagem."""
+    """Seleciona modelo com base na complexidade da mensagem.
+
+    Lógica invertida (v2): default = Opus, Sonnet apenas para mensagens
+    comprovadamente simples. Evita que operações complexas curtas
+    (ex: "concilie transferências") caiam no Sonnet por engano.
+    """
     from app.agente.config.feature_flags import (
         TEAMS_SMART_MODEL_ROUTING, TEAMS_DEFAULT_MODEL, TEAMS_FAST_MODEL,
     )
@@ -163,23 +168,29 @@ def _select_model_for_message(mensagem: str) -> str:
     msg_lower = mensagem.lower().strip()
     msg_words = len(msg_lower.split())
 
-    # Padrões que REQUEREM Opus (análise complexa)
-    opus_patterns = [
-        'analisa', 'analise', 'encontre', 'case a rota', 'case com',
-        'crie separação', 'cria separação', 'criar separação',
-        'pedidos na mesma rota', 'quanto custa', 'cotação',
-        'programação', 'produção vs', 'disponibilidade',
-        'rastreie', 'rastrear', 'auditoria',
+    # Padrões SIMPLES que podem usar Sonnet (rápido, barato)
+    sonnet_patterns = [
+        # Saudações
+        'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite',
+        'hey', 'hello', 'hi',
+        # Status checks
+        'está funcionando', 'esta funcionando', 'voltou a funcionar',
+        'tudo bem', 'como vai',
+        # Agradecimentos
+        'obrigad', 'valeu', 'thanks',
     ]
-    for pattern in opus_patterns:
+    for pattern in sonnet_patterns:
         if pattern in msg_lower:
-            return TEAMS_DEFAULT_MODEL
+            # Saudação com pedido junto (ex: "bom dia, analise a carteira") → Opus
+            if msg_words > 8:
+                return TEAMS_DEFAULT_MODEL
+            return TEAMS_FAST_MODEL
 
-    # Mensagens curtas sem complexidade → modelo rápido
-    if msg_words <= 12:
+    # Mensagens muito curtas (≤ 2 palavras) sem conteúdo operacional → Sonnet
+    if msg_words <= 2:
         return TEAMS_FAST_MODEL
 
-    # Default: modelo principal para mensagens longas/incertas
+    # Default: Opus para tudo que não é comprovadamente simples
     return TEAMS_DEFAULT_MODEL
 
 

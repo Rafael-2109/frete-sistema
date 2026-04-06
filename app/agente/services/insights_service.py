@@ -157,8 +157,9 @@ def _compute_all(sessions: List, days: int) -> Dict[str, Any]:
     topics = _calc_topics(sessions)
     suggestion_feedback = _calc_suggestion_feedback(sessions)
 
+    meaningful = [s for s in sessions if _is_meaningful_session(s)]
     cost_per_res = 0.0
-    resolved_count = _count_resolved(sessions)
+    resolved_count = _count_resolved(meaningful)
     total_cost = float(overview['total_cost_usd'])
     if resolved_count > 0:
         cost_per_res = round(total_cost / resolved_count, 4)
@@ -185,19 +186,35 @@ def _compute_all(sessions: List, days: int) -> Dict[str, Any]:
 # METRICAS NOVAS
 # =============================================================================
 
+def _is_meaningful_session(session) -> bool:
+    """Verifica se sessao e significativa para metricas (filtra ruido).
+
+    Exclui:
+    - Sessoes com custo $0 (agent nao respondeu / sessao quebrada)
+    - Sessoes com < 2 mensagens (teste de conectividade, probe)
+    """
+    cost = float(session.total_cost_usd or 0)
+    msg_count = session.message_count or 0
+    return cost > 0 and msg_count >= 2
+
+
 def _calc_resolution_rate(sessions: List) -> float:
     """
-    Calcula taxa de resolucao: % de sessoes onde agente usou tools
-    E teve >= 4 mensagens (ida-e-volta real).
+    Calcula taxa de resolucao: % de sessoes significativas onde agente
+    usou tools E teve >= 4 mensagens (ida-e-volta real).
+
+    Filtra sessoes com custo $0 (quebradas) e < 2 msgs (probes) do
+    denominador para evitar distorcao por ruido.
 
     Returns:
         Percentual 0-100
     """
-    if not sessions:
+    meaningful = [s for s in sessions if _is_meaningful_session(s)]
+    if not meaningful:
         return 0.0
 
-    resolved = _count_resolved(sessions)
-    return (resolved / len(sessions)) * 100
+    resolved = _count_resolved(meaningful)
+    return (resolved / len(meaningful)) * 100
 
 
 def _count_resolved(sessions: List) -> int:
