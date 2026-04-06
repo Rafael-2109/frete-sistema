@@ -212,5 +212,11 @@ class CarviaCustoEntregaAnexo(db.Model):
     criado_por = db.Column(db.String(100), nullable=False)
     ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
+    # Metadados de email (nullable — populados apenas para .msg/.eml)
+    email_remetente = db.Column(db.String(255), nullable=True)
+    email_assunto = db.Column(db.String(500), nullable=True)
+    email_data_envio = db.Column(db.DateTime, nullable=True)
+    email_conteudo_preview = db.Column(db.String(500), nullable=True)
+
     def __repr__(self):
         return f'<CarviaCustoEntregaAnexo {self.nome_original} ativo={self.ativo}>'

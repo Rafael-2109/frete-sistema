@@ -25,7 +25,7 @@ TIPOS_CUSTO = [
     'PEDAGIO_EXTRA', 'TAXA_DESCARGA', 'OUTROS',
 ]
 STATUS_CUSTO = ['PENDENTE', 'PAGO', 'CANCELADO']
-ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'msg'}
+ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'msg', 'eml'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
@@ -479,6 +479,24 @@ def register_custo_entrega_routes(bp):
 
             descricao = request.form.get('descricao', '').strip()
 
+            # Se for email (.msg/.eml), extrair metadados
+            email_metadata = {}
+            ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+            if ext in ('msg', 'eml'):
+                try:
+                    from app.utils.email_handler import EmailHandler
+                    email_handler = EmailHandler()
+                    file.seek(0)
+                    if ext == 'msg':
+                        email_metadata = email_handler.processar_email_msg(file) or {}
+                    else:
+                        email_metadata = email_handler.processar_email_eml(file) or {}
+                except Exception as e_email:
+                    logger.warning(
+                        f"Nao foi possivel extrair metadados do email: {e_email}"
+                    )
+
+            preview = email_metadata.get('conteudo_preview', '')
             anexo = CarviaCustoEntregaAnexo(
                 custo_entrega_id=custo_id,
                 nome_original=file.filename,
@@ -488,6 +506,10 @@ def register_custo_entrega_routes(bp):
                 content_type=file.content_type,
                 descricao=descricao or None,
                 criado_por=current_user.email,
+                email_remetente=email_metadata.get('remetente') or None,
+                email_assunto=email_metadata.get('assunto') or None,
+                email_data_envio=email_metadata.get('data_envio'),
+                email_conteudo_preview=preview[:500] if preview else None,
             )
             db.session.add(anexo)
             db.session.commit()

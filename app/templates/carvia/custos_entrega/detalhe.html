@@ -181,7 +181,26 @@
                     <tbody>
                         {% for anexo in anexos %}
                         <tr>
-                            <td><strong>{{ anexo.nome_original }}</strong></td>
+                            <td>
+                                <strong>{{ anexo.nome_original }}</strong>
+                                {% if anexo.email_assunto %}
+                                <div class="small text-muted mt-1">
+                                    <i class="fas fa-envelope"></i>
+                                    <strong>{{ anexo.email_assunto }}</strong>
+                                </div>
+                                {% if anexo.email_remetente %}
+                                <div class="small text-muted">De: {{ anexo.email_remetente }}</div>
+                                {% endif %}
+                                {% if anexo.email_data_envio %}
+                                <div class="small text-muted">Enviado: {{ anexo.email_data_envio.strftime('%d/%m/%Y %H:%M') }}</div>
+                                {% endif %}
+                                {% if anexo.email_conteudo_preview %}
+                                <div class="small text-muted fst-italic mt-1" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    {{ anexo.email_conteudo_preview[:150] }}
+                                </div>
+                                {% endif %}
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if anexo.tamanho_bytes %}
                                     {% if anexo.tamanho_bytes >= 1048576 %}
@@ -224,7 +243,7 @@
                     <div class="col-md-6">
                         <label for="arquivo" class="form-label">Adicionar Anexo</label>
                         <input type="file" class="form-control form-control-sm" id="arquivo" name="arquivo" required>
-                        <small class="text-muted">Extensoes permitidas: pdf, jpg, jpeg, png, doc, docx, xls, xlsx, msg (max 10MB)</small>
+                        <small class="text-muted">Extensoes permitidas: pdf, jpg, jpeg, png, doc, docx, xls, xlsx, msg, eml (max 10MB)</small>
                     </div>
                     <div class="col-md-4">
                         <label for="descricao_anexo" class="form-label">Descricao</label>
