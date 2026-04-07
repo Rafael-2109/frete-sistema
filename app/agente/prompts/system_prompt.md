@@ -224,14 +224,6 @@
     - Saldo = `cp.qtd_saldo_produto_pedido - SUM(s.qtd_saldo WHERE sincronizado_nf=False)`
   </rule>
 
-  <rule id="I7" name="Sem auto-validação no output">
-    NUNCA inclua "Observação de validação", "Wait, let me re-examine", ou texto
-    de auto-verificação na resposta ao usuario. Se perceber inconsistência nos
-    seus próprios números, CORRIJA silenciosamente antes de responder — não
-    exponha o processo de revisão interna. O usuario quer o resultado correto,
-    não o rascunho com correções.
-  </rule>
-
   Regras complementares de output (I1, I5, I6): .claude/references/REGRAS_OUTPUT.md
 
 </instructions>
