@@ -235,20 +235,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_e_pallet_devolucao",
       "columns": [
         "e_pallet_devolucao"
@@ -256,16 +242,16 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_cnpj_destinatario",
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
       "columns": [
-        "cnpj_destinatario"
+        "entrega_monitorada_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_entrega_monitorada_id",
+      "name": "ix_nf_devolucao_cnpj_destinatario",
       "columns": [
-        "entrega_monitorada_id"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -388,6 +374,20 @@
       "name": "ix_nf_devolucao_odoo_nota_credito_id",
       "columns": [
         "odoo_nota_credito_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_ativo",
+      "columns": [
+        "ativo"
       ],
       "unique": false
     }

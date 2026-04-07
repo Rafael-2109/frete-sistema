@@ -192,7 +192,9 @@
       "Bash(set +a)",
       "Bash(PYTHONPATH=src python -m pytest tests/ -v --timeout=60 --tb=short)",
       "Bash(bash:*)",
-      "Skill(frontend-design)"
+      "Skill(frontend-design)",
+      "Bash(sudo crontab:*)",
+      "Bash(crontab -l)"
     ],
     "deny": [],
     "defaultMode": "auto"

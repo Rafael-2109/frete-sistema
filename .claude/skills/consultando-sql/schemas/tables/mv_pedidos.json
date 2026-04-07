@@ -1,0 +1,233 @@
+{
+  "name": "mv_pedidos",
+  "description": "Modelo Pedido que agora é uma VIEW agregando dados de Separacao",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "separacao_lote_id",
+      "type": "varchar(50)",
+      "description": "Vem de Separacao.separacao_lote_id"
+    },
+    {
+      "name": "num_pedido",
+      "type": "varchar(30)",
+      "description": "Vem de Separacao.num_pedido"
+    },
+    {
+      "name": "data_pedido",
+      "type": "date",
+      "description": "Vem de Separacao.data_pedido"
+    },
+    {
+      "name": "cnpj_cpf",
+      "type": "varchar(20)",
+      "description": "Vem de Separacao.cnpj_cpf"
+    },
+    {
+      "name": "raz_social_red",
+      "type": "varchar(255)",
+      "description": "Vem de Separacao.raz_social_red"
+    },
+    {
+      "name": "nome_cidade",
+      "type": "varchar(120)",
+      "description": "Vem de Separacao.nome_cidade"
+    },
+    {
+      "name": "cod_uf",
+      "type": "varchar(2)",
+      "description": "Vem de Separacao.cod_uf"
+    },
+    {
+      "name": "cidade_normalizada",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "uf_normalizada",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "codigo_ibge",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "valor_saldo_total",
+      "type": "float",
+      "description": "soma de Separacao.valor_saldo"
+    },
+    {
+      "name": "pallet_total",
+      "type": "float",
+      "description": "soma de Separacao.pallet"
+    },
+    {
+      "name": "peso_total",
+      "type": "float",
+      "description": "soma de Separacao.peso"
+    },
+    {
+      "name": "rota",
+      "type": "varchar(50)",
+      "description": "Vem de Separacao.rota"
+    },
+    {
+      "name": "sub_rota",
+      "type": "varchar(50)",
+      "description": "Vem de Separacao.sub_rota"
+    },
+    {
+      "name": "observ_ped_1",
+      "type": "text",
+      "description": "Vem de Separacao.observ_ped_1"
+    },
+    {
+      "name": "roteirizacao",
+      "type": "varchar(100)",
+      "description": "Vem de Separacao.roteirizacao"
+    },
+    {
+      "name": "expedicao",
+      "type": "date",
+      "description": "Vem de Separacao.expedicao"
+    },
+    {
+      "name": "agendamento",
+      "type": "date",
+      "description": "Vem de Separacao.agendamento"
+    },
+    {
+      "name": "protocolo",
+      "type": "varchar(50)",
+      "description": "Vem de Separacao.protocolo"
+    },
+    {
+      "name": "agendamento_confirmado",
+      "type": "boolean",
+      "description": "Vem de Separacao.agendamento_confirmado",
+      "default": false
+    },
+    {
+      "name": "equipe_vendas",
+      "type": "varchar(100)",
+      "description": "Vem de CarteiraPrincipal.equipe_vendas"
+    },
+    {
+      "name": "tags_pedido",
+      "type": "text",
+      "description": "JSON: [{\"name\": \"VIP\", \"color\": 5}]"
+    },
+    {
+      "name": "transportadora",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "valor_frete",
+      "type": "float"
+    },
+    {
+      "name": "valor_por_kg",
+      "type": "float"
+    },
+    {
+      "name": "nome_tabela",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "modalidade",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "melhor_opcao",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "valor_melhor_opcao",
+      "type": "float"
+    },
+    {
+      "name": "lead_time",
+      "type": "integer"
+    },
+    {
+      "name": "data_embarque",
+      "type": "date"
+    },
+    {
+      "name": "nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(50)",
+      "default": "ABERTO"
+    },
+    {
+      "name": "nf_cd",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "pedido_cliente",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "separacao_impressa",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "separacao_impressa_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "separacao_impressa_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cotacao_id",
+      "type": "integer",
+      "description": "FK → cotacoes.id"
+    },
+    {
+      "name": "usuario_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "cotacao_id",
+      "references": "cotacoes.id"
+    },
+    {
+      "column": "usuario_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_mv_pedidos_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_mv_pedidos_num_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    }
+  ]
+}

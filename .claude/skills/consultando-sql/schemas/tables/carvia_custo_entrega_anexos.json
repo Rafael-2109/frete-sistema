@@ -57,6 +57,22 @@
       "description": "True = registro ativo",
       "nullable": false,
       "default": true
+    },
+    {
+      "name": "email_remetente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "email_assunto",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "email_data_envio",
+      "type": "timestamp"
+    },
+    {
+      "name": "email_conteudo_preview",
+      "type": "varchar(500)"
     }
   ],
   "foreign_keys": [

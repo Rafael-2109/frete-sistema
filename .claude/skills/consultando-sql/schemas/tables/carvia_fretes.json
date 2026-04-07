@@ -258,6 +258,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_fretes_cnpj_destino",
+      "columns": [
+        "cnpj_destino"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_fretes_status",
       "columns": [
         "status"
@@ -300,13 +307,6 @@
         "cnpj_destino"
       ],
       "unique": true
-    },
-    {
-      "name": "ix_carvia_fretes_cnpj_destino",
-      "columns": [
-        "cnpj_destino"
-      ],
-      "unique": false
     }
   ]
 }

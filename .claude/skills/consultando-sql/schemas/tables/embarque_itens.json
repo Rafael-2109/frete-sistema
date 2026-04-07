@@ -235,9 +235,9 @@
       "unique": false
     },
     {
-      "name": "ix_embarque_itens_separacao_lote_id",
+      "name": "idx_ei_uf_destino",
       "columns": [
-        "separacao_lote_id"
+        "uf_destino"
       ],
       "unique": false
     },
@@ -256,16 +256,16 @@
       "unique": false
     },
     {
-      "name": "idx_ei_cnpj_cliente",
+      "name": "ix_embarque_itens_separacao_lote_id",
       "columns": [
-        "cnpj_cliente"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_ei_uf_destino",
+      "name": "idx_ei_cnpj_cliente",
       "columns": [
-        "uf_destino"
+        "cnpj_cliente"
       ],
       "unique": false
     }
