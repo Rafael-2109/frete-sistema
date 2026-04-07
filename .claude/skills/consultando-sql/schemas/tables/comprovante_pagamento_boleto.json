@@ -186,30 +186,16 @@
   ],
   "indices": [
     {
-      "name": "idx_comp_ofx_fitid",
+      "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
-        "ofx_fitid"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "idx_comp_beneficiario_cnpj",
-      "columns": [
-        "beneficiario_cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_ofx_checknum",
+      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
       "columns": [
         "ofx_checknum"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_comp_odoo_statement_line",
-      "columns": [
-        "odoo_statement_line_id"
       ],
       "unique": false
     },
@@ -221,30 +207,44 @@
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
+      "name": "idx_comp_data_vencimento",
+      "columns": [
+        "data_vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_ofx_fitid",
       "columns": [
         "ofx_fitid"
       ],
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
+      "name": "idx_comp_ofx_checknum",
+      "columns": [
+        "ofx_checknum"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_beneficiario_cnpj",
+      "columns": [
+        "beneficiario_cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_comp_odoo_statement_line",
       "columns": [
         "odoo_statement_line_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_tipo",
+      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
       "columns": [
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
-      "columns": [
-        "ofx_checknum"
+        "ofx_fitid"
       ],
       "unique": false
     },
@@ -263,9 +263,9 @@
       "unique": true
     },
     {
-      "name": "idx_comp_data_vencimento",
+      "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
       "columns": [
-        "data_vencimento"
+        "odoo_statement_line_id"
       ],
       "unique": false
     }

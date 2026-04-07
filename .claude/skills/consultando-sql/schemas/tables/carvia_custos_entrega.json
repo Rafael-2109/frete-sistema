@@ -121,23 +121,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_custos_entrega_frete_id",
+      "name": "ix_carvia_custos_entrega_status",
       "columns": [
-        "frete_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_cte_complementar_id",
+      "name": "ix_carvia_custos_entrega_tipo_custo",
       "columns": [
-        "cte_complementar_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_operacao_id",
-      "columns": [
-        "operacao_id"
+        "tipo_custo"
       ],
       "unique": false
     },
@@ -149,16 +142,23 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_status",
+      "name": "ix_carvia_custos_entrega_cte_complementar_id",
       "columns": [
-        "status"
+        "cte_complementar_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_tipo_custo",
+      "name": "ix_carvia_custos_entrega_frete_id",
       "columns": [
-        "tipo_custo"
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_operacao_id",
+      "columns": [
+        "operacao_id"
       ],
       "unique": false
     }
