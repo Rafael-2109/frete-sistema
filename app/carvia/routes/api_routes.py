@@ -129,10 +129,13 @@ def register_api_routes(bp):
     @bp.route('/api/cotar-standalone', methods=['POST'])
     @login_required
     def api_cotar_standalone():
-        """Cota todas opcoes de frete standalone (NF ou CTe).
+        """Cota frete standalone (NF ou CTe).
 
-        Aceita parametro opcional 'categorias_moto' para cotacao por
-        categoria de moto (preco por unidade). Exemplo:
+        Roteamento:
+        - SEM categorias_moto → Cotacao de SUBCONTRATO (TabelaFrete / CotacaoService)
+        - COM categorias_moto → Cotacao COMERCIAL (CarviaTabelaFrete / CarviaTabelaService)
+
+        Exemplo categorias_moto:
           {"categorias_moto": [{"categoria_id": 1, "quantidade": 3}]}
         """
         if not getattr(current_user, 'sistema_carvia', False):
@@ -1284,8 +1287,10 @@ def register_api_routes(bp):
                         )
                         tabelas.extend(query.all())
 
-            # Fallback: busca direta por transportadora + UF
-            if not tabelas:
+            # Fallback UF: apenas quando cidade NAO foi informada.
+            # Se cidade foi informada mas nao tem vinculos, bloquear
+            # (mesma politica de CotacaoService.cotar_todas_opcoes).
+            if not tabelas and not cidade_destino:
                 tabelas = TabelaFrete.query.filter(
                     TabelaFrete.transportadora_id.in_(grupo_ids),
                     TabelaFrete.uf_destino == uf_destino,

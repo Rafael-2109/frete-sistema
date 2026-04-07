@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 
 
 class CotacaoService:
-    """Servico de cotacao de frete para subcontratos CarVia"""
+    """Cotacao de SUBCONTRATO (preco de compra) — usa TabelaFrete (tabelas Nacom).
+
+    NAO confundir com CotacaoV2Service + CarviaTabelaService (Cotacao Comercial / preco de venda).
+    """
 
     def _resolver_cidade(self, cidade_nome: str, uf: str):
         """
@@ -300,7 +303,10 @@ class CotacaoService:
         linhas = []
         # detalhes pode vir aninhado (resultado inteiro) ou ja ser o dict interno
         d = detalhes.get('detalhes', detalhes) if isinstance(detalhes, dict) else {}
-        peso_calculo = d.get('peso_para_calculo', peso)
+        # Converter para float: peso_para_calculo vem como Decimal da CalculadoraFrete,
+        # e tabela_dados contem floats — Decimal * float causa TypeError em Python 3.
+        peso_calculo = float(d.get('peso_para_calculo', peso))
+        valor_mercadoria = float(valor_mercadoria)
 
         # --- Frete por peso ---
         valor_kg = tabela_dados.get('valor_kg', 0) or 0
@@ -408,7 +414,7 @@ class CotacaoService:
 
         # --- Peso Minimo (se aplicado) ---
         frete_minimo_peso = tabela_dados.get('frete_minimo_peso', 0) or 0
-        peso_real = d.get('peso_real', peso)
+        peso_real = float(d.get('peso_real', peso))
         if frete_minimo_peso and peso_calculo > peso_real:
             linhas.append({
                 'componente': 'Peso Minimo',

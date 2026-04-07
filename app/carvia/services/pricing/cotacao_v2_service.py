@@ -1,12 +1,11 @@
 """
-CotacaoV2Service — Cotacao comercial proativa CarVia
-=====================================================
+CotacaoV2Service — Cotacao COMERCIAL (preco de VENDA) CarVia
+=============================================================
 
-Fluxo: Cliente → Origem/Destino → Material (Carga Geral | Moto) → Pricing → Desconto → Aprovacao
+Usa exclusivamente CarviaTabelaFrete via CarviaTabelaService.cotar_carvia().
+NAO confundir com CotacaoService (Cotacao de Subcontrato / preco de compra).
 
-Pricing:
-- "Dentro da tabela": CarviaTabelaService.cotar_carvia() — preco de venda CarVia
-- "Fora da tabela": CotacaoService.cotar_todas_opcoes() — cotacao via tabelas Nacom
+Fluxo: Cliente -> Origem/Destino -> Material (Carga Geral | Moto) -> Pricing -> Desconto -> Aprovacao
 
 Desconto:
 - <= limite global (CarviaConfig): Jessica aprova direto
@@ -342,41 +341,6 @@ class CotacaoV2Service:
             logger.warning("Erro ao cotar dentro tabela: %s", e)
 
         return None
-
-    @staticmethod
-    def _cotar_fora_tabela(peso: float, valor: float,
-                          uf_entrega: Optional[str] = None,
-                          cidade_entrega: Optional[str] = None,
-                          destino=None) -> List[Dict]:
-        """Cota via tabelas Nacom (fora da tabela CarVia). Retorna lista de opcoes.
-
-        uf_entrega/cidade_entrega: endereco efetivo (cotacao override > destino).
-        """
-        # Compat: se nao recebeu override, usar destino
-        _uf = uf_entrega or (destino.fisico_uf if destino else None)
-        _cidade = cidade_entrega or (destino.fisico_cidade if destino else None)
-
-        try:
-            from app.carvia.services.pricing.cotacao_service import CotacaoService
-            svc = CotacaoService()
-
-            if not _cidade or not _uf:
-                return []
-
-            # cotar_todas_opcoes retorna List[Dict]
-            opcoes = svc.cotar_todas_opcoes(
-                cidade_destino=_cidade,
-                uf_destino=_uf,
-                peso=peso,
-                valor_mercadoria=valor,
-            )
-
-            if opcoes:
-                return opcoes
-        except Exception as e:
-            logger.warning("Erro ao cotar fora tabela: %s", e)
-
-        return []
 
     # ==================== COTACAO MANUAL ====================
 
