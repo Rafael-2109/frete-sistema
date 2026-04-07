@@ -108,6 +108,9 @@
     </div>
     {% endif %}
 
+    {# Banner de status da emissao CTe SSW (carregado via JS on-load) #}
+    <div id="bannerEmissao" class="d-none mb-4"></div>
+
     <div class="row g-4">
         <!-- Dados da NF -->
         <div class="col-md-6">
@@ -1247,5 +1250,125 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+</script>
+
+<script>
+// ── Observabilidade: banner de status emissao CTe SSW (on-load) ──
+(function() {
+    const banner = document.getElementById('bannerEmissao');
+    if (!banner) return;
+
+    const ETAPAS_LABEL = {
+        'LOGIN': 'Conectando ao SSW',
+        'PREENCHIMENTO': 'Preenchendo formulario CTe',
+        'SEFAZ': 'Enviando ao SEFAZ',
+        'CONSULTA_101': 'Consultando resultado',
+        'IMPORTACAO_CTE': 'Importando XML do CTe',
+        'FATURA_437': 'Gerando fatura SSW',
+        'IMPORTACAO_FAT': 'Importando fatura',
+    };
+
+    let bannerPollInterval = null;
+
+    function formatarData(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return d.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'numeric',
+                                           hour:'2-digit', minute:'2-digit'});
+    }
+
+    function renderBanner(em) {
+        if (!em) { banner.classList.add('d-none'); return; }
+        banner.classList.remove('d-none');
+
+        if (em.status === 'PENDENTE' || em.status === 'EM_PROCESSAMENTO') {
+            const etapaTexto = em.etapa ? ETAPAS_LABEL[em.etapa] || em.etapa : 'Aguardando worker';
+            banner.innerHTML = `
+                <div class="alert bg-info d-flex align-items-start gap-3 mb-0">
+                    <div class="spinner-border spinner-border-sm mt-1" role="status"></div>
+                    <div>
+                        <strong>Emissao CTe em andamento</strong>
+                        <span class="badge bg-warning text-dark ms-2">${em.status}</span>
+                        <div class="small mt-1">
+                            Etapa: <strong id="bannerEtapa">${etapaTexto}</strong>
+                            <span class="text-muted ms-2">Iniciado em ${formatarData(em.criado_em)}</span>
+                        </div>
+                    </div>
+                </div>`;
+            iniciarBannerPolling(em.id);
+
+        } else if (em.status === 'ERRO') {
+            const etapaTexto = em.etapa ? ETAPAS_LABEL[em.etapa] || em.etapa : 'desconhecida';
+            banner.innerHTML = `
+                <div class="alert alert-danger d-flex align-items-start gap-3 mb-0">
+                    <i class="fas fa-exclamation-triangle fa-lg mt-1"></i>
+                    <div class="flex-grow-1">
+                        <strong>Emissao CTe falhou</strong>
+                        <span class="text-muted ms-2">${formatarData(em.atualizado_em)}</span>
+                        <div class="small mt-1">
+                            <strong>Etapa:</strong> ${etapaTexto}<br>
+                            <strong>Erro:</strong> ${em.erro || 'Sem detalhes'}
+                        </div>
+                    </div>
+                </div>`;
+
+        } else if (em.status === 'SUCESSO') {
+            let extra = '';
+            if (em.operacao_id) {
+                extra += ` <a href="/carvia/operacoes/${em.operacao_id}" class="btn btn-sm btn-outline-success ms-2">Ver Operacao</a>`;
+            }
+            if (em.fatura_numero) {
+                extra += ` <span class="badge bg-secondary ms-1">Fatura: ${em.fatura_numero}</span>`;
+            }
+            banner.innerHTML = `
+                <div class="alert alert-success d-flex align-items-center gap-3 mb-0">
+                    <i class="fas fa-check-circle fa-lg"></i>
+                    <div>
+                        <strong>CTe ${em.ctrc || ''} emitido com sucesso</strong>
+                        <span class="text-muted ms-2">${formatarData(em.atualizado_em)}</span>
+                        ${extra}
+                    </div>
+                </div>`;
+
+        } else if (em.status === 'CANCELADO') {
+            banner.innerHTML = `
+                <div class="alert alert-secondary d-flex align-items-center gap-3 mb-0">
+                    <i class="fas fa-ban"></i>
+                    <div>
+                        <strong>Emissao CTe cancelada</strong>
+                        <span class="text-muted ms-2">${formatarData(em.atualizado_em)}</span>
+                        ${em.erro ? '<div class="small mt-1">' + em.erro + '</div>' : ''}
+                    </div>
+                </div>`;
+        }
+    }
+
+    function iniciarBannerPolling(emissaoId) {
+        if (bannerPollInterval) clearInterval(bannerPollInterval);
+        bannerPollInterval = setInterval(() => {
+            fetch(`/carvia/api/emissao-cte/${emissaoId}/status`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'SUCESSO' || data.status === 'ERRO' || data.status === 'CANCELADO') {
+                        clearInterval(bannerPollInterval);
+                        renderBanner(data);
+                    } else {
+                        // Atualizar etapa inline
+                        const el = document.getElementById('bannerEtapa');
+                        if (el && data.etapa) {
+                            el.textContent = ETAPAS_LABEL[data.etapa] || data.etapa;
+                        }
+                    }
+                })
+                .catch(() => {});
+        }, 5000);
+    }
+
+    // On-load: buscar status mais recente
+    fetch(`/carvia/api/nfs/{{ nf.id }}/emissao-status`)
+        .then(r => r.json())
+        .then(data => renderBanner(data.emissao))
+        .catch(() => {});
+})();
 </script>
 {% endblock %}

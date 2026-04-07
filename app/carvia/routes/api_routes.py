@@ -1165,6 +1165,38 @@ def register_api_routes(bp):
             'atualizado_em': emissao.atualizado_em.isoformat() if emissao.atualizado_em else None,
         })
 
+    @bp.route('/api/nfs/<int:nf_id>/emissao-status', methods=['GET'])
+    @login_required
+    def api_nf_emissao_status(nf_id):
+        """Retorna a emissao mais recente de uma NF (para observabilidade on-load).
+
+        Returns 200:
+            {emissao: {id, status, etapa, erro, ctrc, operacao_id, fatura_numero,
+                       criado_em, atualizado_em} | null}
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaEmissaoCte
+        emissao = CarviaEmissaoCte.query.filter_by(nf_id=nf_id).order_by(
+            CarviaEmissaoCte.id.desc()
+        ).first()
+
+        if not emissao:
+            return jsonify({'emissao': None})
+
+        return jsonify({'emissao': {
+            'id': emissao.id,
+            'status': emissao.status,
+            'etapa': emissao.etapa,
+            'erro': emissao.erro_ssw,
+            'ctrc': emissao.ctrc_numero,
+            'operacao_id': emissao.operacao_id,
+            'fatura_numero': emissao.fatura_numero,
+            'criado_em': emissao.criado_em.isoformat() if emissao.criado_em else None,
+            'atualizado_em': emissao.atualizado_em.isoformat() if emissao.atualizado_em else None,
+        }})
+
     @bp.route('/api/emitir-cte-ssw/lote', methods=['POST'])
     @login_required
     def api_emitir_cte_ssw_lote():

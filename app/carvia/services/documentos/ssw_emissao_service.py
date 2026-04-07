@@ -153,7 +153,7 @@ class SswEmissaoService:
         job = enqueue_job(
             emitir_cte_ssw_job,
             emissao.id,
-            queue_name='ssw_carvia',
+            queue_name='high',
             timeout='10m',
         )
         emissao.job_id = job.id
