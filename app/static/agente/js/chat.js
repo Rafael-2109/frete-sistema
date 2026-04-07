@@ -112,7 +112,10 @@ function stopGeneration() {
     if (sessionId) {
         fetch('/agente/api/interrupt', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
             body: JSON.stringify({ session_id: sessionId })
         }).then(resp => {
             if (resp.ok) {
@@ -799,7 +802,7 @@ async function sendMessage(event) {
     const files = getAttachedFilesForMessage();
 
     try {
-        const response = await fetch('/agente/api/chat', {
+        const response = await _fetchWithCsrfRetry('/agente/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1532,11 +1535,11 @@ function sendFeedback(rating, context, extraData) {
         Object.assign(payload.data, extraData);
     }
 
-    fetch('/agente/api/feedback', {
+    _fetchWithCsrfRetry('/agente/api/feedback', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
         },
         body: JSON.stringify(payload)
     })
@@ -1685,7 +1688,7 @@ function renderSuggestionChips(suggestions, msgElement) {
         chip.addEventListener('click', () => {
             // Track suggestion click (best-effort, nao bloqueia)
             try {
-                fetch('/agente/api/feedback', {
+                _fetchWithCsrfRetry('/agente/api/feedback', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1989,7 +1992,7 @@ function submitAskUserAnswers(container, askSessionId, answers) {
     // Enviar ao backend via POST
     const csrfToken = document.querySelector('meta[name="csrf-token"]');
 
-    fetch('/agente/api/user-answer', {
+    _fetchWithCsrfRetry('/agente/api/user-answer', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -2962,6 +2965,53 @@ fetch('/agente/api/health')
 const _csrfHeader = () => ({
     'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
 });
+
+// CSRF Auto-Refresh — renova token antes da expiração (WTF_CSRF_TIME_LIMIT = 2h)
+async function _refreshCsrfToken() {
+    try {
+        const resp = await fetch('/agente/api/csrf-token', { credentials: 'same-origin' });
+        if (resp.ok) {
+            const data = await resp.json();
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta && data.csrf_token) {
+                meta.content = data.csrf_token;
+                console.log('[CSRF] Token renovado com sucesso');
+            }
+        }
+    } catch (e) {
+        console.warn('[CSRF] Falha ao renovar token:', e);
+    }
+}
+
+// Renova a cada 90 minutos (antes do limite de 2h)
+setInterval(_refreshCsrfToken, 90 * 60 * 1000);
+
+/**
+ * Wrapper fetch com retry automático em erro CSRF.
+ * Detecta csrf_error na resposta, renova o token e retenta 1x.
+ */
+async function _fetchWithCsrfRetry(url, options = {}) {
+    let resp = await fetch(url, options);
+
+    if (resp.status === 400) {
+        try {
+            const cloned = resp.clone();
+            const body = await cloned.json();
+            if (body.csrf_error) {
+                console.log('[CSRF] Erro detectado, renovando token e retentando...');
+                await _refreshCsrfToken();
+                // Atualiza o header CSRF nas options
+                const headers = new Headers(options.headers || {});
+                headers.set('X-CSRFToken', document.querySelector('meta[name="csrf-token"]')?.content || '');
+                resp = await fetch(url, { ...options, headers });
+            }
+        } catch {
+            // Se não conseguiu parsear como JSON, retorna a resposta original
+        }
+    }
+
+    return resp;
+}
 
 // Sessao A: Carrega briefing inter-sessao ao iniciar nova sessao
 loadAndShowBriefing();

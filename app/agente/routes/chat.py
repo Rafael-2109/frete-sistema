@@ -1224,6 +1224,18 @@ def _image_to_base64(file_path: str) -> Optional[dict]:
 
 
 # =============================================================================
+# API - CSRF TOKEN REFRESH
+# =============================================================================
+
+@agente_bp.route('/api/csrf-token', methods=['GET'])
+@login_required
+def api_csrf_token():
+    """Retorna token CSRF renovado para sessões longas de chat."""
+    from flask_wtf.csrf import generate_csrf
+    return jsonify({'csrf_token': generate_csrf()}), 200
+
+
+# =============================================================================
 # API - INTERRUPT
 # =============================================================================
 

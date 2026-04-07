@@ -300,8 +300,6 @@ def create_app(config_name=None):
         os.makedirs(app.config["UPLOAD_FOLDER"])
 
     # 🔧 Configurar session - CORRIGIDO para evitar logout automático
-    from datetime import timedelta
-
     # Configurações de sessão para produção estável
     app.config["SESSION_TYPE"] = "filesystem"
     app.config["SESSION_PERMANENT"] = True  # ✅ CORRIGIDO: Habilita sessões permanentes
@@ -309,11 +307,8 @@ def create_app(config_name=None):
     app.config["SESSION_FILE_DIR"] = "./flask_session"
     app.config["SESSION_KEY_PREFIX"] = "frete_sistema:"
 
-    # ✅ NOVO: Define tempo de vida da sessão (4 horas)
-    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=4)
-
-    # ✅ CONFIGURAÇÕES DE SESSÃO APRIMORADAS
-    # Remove configurações duplicadas - agora vem do config.py
+    # Session lifetime vem do config.py (PERMANENT_SESSION_LIFETIME = 28800 = 8h)
+    # NÃO sobrescrever aqui — o override de 4h causava conflito com CSRF (2h)
 
     # 🚀 Inicializa extensões
     db.init_app(app)

@@ -644,9 +644,24 @@ class ImportacaoConfigService:
                 tabela = q.first()
 
                 if not tabela:
-                    raise ValueError(
-                        f"Tabela '{nome_tabela}' {uf_origem}->{uf_destino} "
-                        f"{tipo_carga} {modalidade} nao encontrada"
+                    # Auto-criar tabela com pricing vazio para permitir
+                    # importacao apenas pela aba de Precos Moto
+                    tabela = CarviaTabelaFrete(
+                        uf_origem=uf_origem,
+                        uf_destino=uf_destino,
+                        nome_tabela=nome_tabela,
+                        tipo_carga=tipo_carga,
+                        modalidade=modalidade,
+                        grupo_cliente_id=grupo_id,
+                        ativo=True,
+                        criado_em=agora,
+                        criado_por=criado_por,
+                    )
+                    db.session.add(tabela)
+                    db.session.flush()  # gerar ID para FK do preco
+                    logger.info(
+                        "Auto-criada tabela '%s' %s->%s %s %s",
+                        nome_tabela, uf_origem, uf_destino, tipo_carga, modalidade,
                     )
 
                 # Resolver categoria_moto_id
