@@ -189,7 +189,7 @@ def run_post_session_processing(
     try:
         from app.agente.config.feature_flags import (
             USE_POST_SESSION_PERSONAL_EXTRACTION,
-            POST_SESSION_EXTRACTION_MIN_MESSAGES as PERSONAL_MIN_MSGS,
+            POST_SESSION_PERSONAL_EXTRACTION_MIN_MESSAGES as PERSONAL_MIN_MSGS,
         )
 
         if USE_POST_SESSION_PERSONAL_EXTRACTION and user_message and assistant_message:

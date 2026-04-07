@@ -131,8 +131,10 @@ POST_SESSION_EXTRACTION_MIN_MESSAGES = int(os.getenv("AGENT_POST_SESSION_EXTRACT
 # Salva como memorias PESSOAIS (user_id do usuario, NAO user_id=0).
 # Resolve: R0 auto-save depende do modelo, que frequentemente nao chama save_memory.
 # Custo: ~$0.003 por execucao (Sonnet). Volume baixo (~4 sessoes/dia).
-# Trigger: mesmo que empresa (min msgs, daemon thread).
+# Threshold maior que empresa (10 vs 3): insights pessoais precisam de mais contexto
+# e rodar a cada turno desperdicaria tokens em sessoes curtas.
 USE_POST_SESSION_PERSONAL_EXTRACTION = os.getenv("AGENT_POST_SESSION_PERSONAL_EXTRACTION", "true").lower() == "true"
+POST_SESSION_PERSONAL_EXTRACTION_MIN_MESSAGES = int(os.getenv("AGENT_POST_SESSION_PERSONAL_MIN_MESSAGES", "10"))
 
 # ====================================================================
 # Dashboard e Analytics (P2)
