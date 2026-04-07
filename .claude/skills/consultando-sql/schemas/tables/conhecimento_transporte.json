@@ -290,16 +290,16 @@
       "unique": true
     },
     {
-      "name": "ix_conhecimento_transporte_tomador_e_empresa",
+      "name": "ix_conhecimento_transporte_ativo",
       "columns": [
-        "tomador_e_empresa"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_ativo",
+      "name": "ix_conhecimento_transporte_tomador_e_empresa",
       "columns": [
-        "ativo"
+        "tomador_e_empresa"
       ],
       "unique": false
     },
@@ -318,13 +318,6 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_tipo_cte",
-      "columns": [
-        "tipo_cte"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_conhecimento_transporte_chave_acesso",
       "columns": [
         "chave_acesso"
@@ -332,9 +325,9 @@
       "unique": true
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_chave",
+      "name": "ix_conhecimento_transporte_tipo_cte",
       "columns": [
-        "cte_complementa_chave"
+        "tipo_cte"
       ],
       "unique": false
     },
@@ -361,9 +354,9 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "name": "ix_conhecimento_transporte_cte_complementa_chave",
       "columns": [
-        "cte_complementa_id"
+        "cte_complementa_chave"
       ],
       "unique": false
     },
@@ -378,6 +371,13 @@
       "name": "idx_cte_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "columns": [
+        "cte_complementa_id"
       ],
       "unique": false
     },

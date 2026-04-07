@@ -53,8 +53,7 @@
     },
     {
       "name": "nf_cd",
-      "type": "boolean",
-      "default": false
+      "type": "boolean"
     },
     {
       "name": "cotacao_id",

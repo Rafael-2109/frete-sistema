@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 172,
+  "total_tabelas": 173,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1047,6 +1047,15 @@
         "cod_produto",
         "nome_produto",
         "data_movimentacao"
+      ]
+    },
+    {
+      "name": "mv_pedidos",
+      "description": "Materialized View mv_pedidos — snapshot pre-computado da VIEW pedidos.",
+      "key_fields": [
+        "separacao_lote_id",
+        "num_pedido",
+        "cnpj_cpf"
       ]
     },
     {

@@ -362,23 +362,17 @@
   ],
   "indices": [
     {
-      "name": "ix_carteira_principal_odoo_write_date",
+      "name": "idx_carteira_produto_saldo",
       "columns": [
-        "odoo_write_date"
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_num_pedido",
+      "name": "ix_carteira_principal_importante",
       "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_data_pedido",
-      "columns": [
-        "data_pedido"
+        "importante"
       ],
       "unique": false
     },
@@ -391,46 +385,24 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_importante",
+      "name": "ix_carteira_principal_num_pedido",
       "columns": [
-        "importante"
+        "num_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_vendedor",
+      "name": "ix_carteira_principal_odoo_write_date",
       "columns": [
-        "vendedor"
+        "odoo_write_date"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_ativo",
+      "name": "idx_carteira_ativo_saldo",
       "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_status_pedido",
-      "columns": [
-        "status_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_produto_saldo",
-      "columns": [
-        "cod_produto",
-        "qtd_saldo_produto_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_status_data",
-      "columns": [
-        "status_pedido",
-        "data_pedido"
+        "num_pedido",
+        "cod_produto"
       ],
       "unique": false
     },
@@ -445,6 +417,42 @@
       "name": "ix_carteira_principal_cnpj_cpf",
       "columns": [
         "cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_vendedor",
+      "columns": [
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_data_pedido",
+      "columns": [
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_status_pedido",
+      "columns": [
+        "status_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_status_data",
+      "columns": [
+        "status_pedido",
+        "data_pedido"
       ],
       "unique": false
     }

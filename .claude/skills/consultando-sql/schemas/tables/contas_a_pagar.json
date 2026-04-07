@@ -165,9 +165,16 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_pagar_metodo_baixa",
+      "name": "ix_contas_a_pagar_vencimento",
       "columns": [
-        "metodo_baixa"
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_parcela",
+      "columns": [
+        "parcela"
       ],
       "unique": false
     },
@@ -179,9 +186,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_status_sistema",
+      "name": "ix_contas_a_pagar_metodo_baixa",
       "columns": [
-        "status_sistema"
+        "metodo_baixa"
       ],
       "unique": false
     },
@@ -207,6 +214,13 @@
       "unique": false
     },
     {
+      "name": "ix_contas_a_pagar_empresa",
+      "columns": [
+        "empresa"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_conta_pagar_cnpj",
       "columns": [
         "cnpj"
@@ -214,9 +228,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_empresa",
+      "name": "ix_contas_a_pagar_status_sistema",
       "columns": [
-        "empresa"
+        "status_sistema"
       ],
       "unique": false
     },
@@ -235,13 +249,6 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_odoo_line",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
         "titulo_nf"
@@ -249,16 +256,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_vencimento",
+      "name": "idx_conta_pagar_odoo_line",
       "columns": [
-        "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_parcela",
-      "columns": [
-        "parcela"
+        "odoo_line_id"
       ],
       "unique": false
     }
