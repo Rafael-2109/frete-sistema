@@ -37,7 +37,10 @@ def _get_session_dir() -> str:
         /home/user/projetos/frete_sistema → -home-user-projetos-frete-sistema
         /home/user/.claude/plans → -home-user--claude-plans
 
-    Confirmado empiricamente em 2 projetos locais (2026-02-10).
+    IMPORTANTE: O CLI subprocess recebe HOME=/tmp (client.py env override para
+    evitar ENOENT em HOME read-only do Render). Os JSONLs ficam em /tmp/.claude/...
+    O backup/restore DEVE usar o mesmo HOME que o CLI — caso contrario os paths
+    divergem e o transcript nunca eh encontrado.
 
     Returns:
         Path absoluto do diretorio de sessoes
@@ -45,8 +48,10 @@ def _get_session_dir() -> str:
     cwd = os.getcwd()
     # SDK encoding: tudo que nao e alfanumerico → '-'
     encoded_cwd = re.sub(r'[^a-zA-Z0-9]', '-', cwd)
-    home = Path.home()
-    return str(home / '.claude' / 'projects' / encoded_cwd)
+    # Usar /tmp como HOME — mesmo valor passado ao CLI subprocess em client.py:1018
+    # (HOME=/tmp para evitar ENOENT em Render onde HOME=/opt/render eh read-only)
+    cli_home = Path('/tmp')
+    return str(cli_home / '.claude' / 'projects' / encoded_cwd)
 
 
 def _get_session_path(sdk_session_id: str) -> str:
