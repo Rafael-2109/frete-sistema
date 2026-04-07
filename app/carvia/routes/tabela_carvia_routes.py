@@ -934,3 +934,4 @@ def register_tabela_carvia_routes(bp):
             db.session.rollback()
             logger.error("Erro ao desativar cidade #%s: %s", cid, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
+

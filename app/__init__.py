@@ -1303,4 +1303,123 @@ def create_app(config_name=None):
     # Registrar modelo EventoSupplyChain para Flask-Migrate detectar a tabela
     from app.supply_chain.models import EventoSupplyChain  # noqa: F401
 
+    # ===== ONE-TIME SEED: Precos Moto CarVia (remover apos deploy) =====
+    _seed_carvia_precos_moto(app)
+
     return app
+
+
+def _seed_carvia_precos_moto(app):
+    """Seed one-time: cria tabelas frete + precos moto. Idempotente."""
+    try:
+        with app.app_context():
+            from app.carvia.models import (
+                CarviaCategoriaMoto, CarviaPrecoCategoriaMoto, CarviaTabelaFrete,
+            )
+            from app.utils.timezone import agora_utc_naive
+
+            # Guard: se ja tem precos, nao rodar
+            if CarviaPrecoCategoriaMoto.query.count() >= 90:
+                return
+
+            PRECOS = [
+                ('CAPITAL', 'PR', 'Leve', 200), ('CAPITAL', 'DF', 'Leve', 250),
+                ('CAPITAL', 'GO', 'Leve', 250), ('CAPITAL', 'MT', 'Leve', 250),
+                ('CAPITAL', 'MS', 'Leve', 250), ('CAPITAL', 'RS', 'Leve', 250),
+                ('CAPITAL', 'SC', 'Leve', 250), ('CAPITAL', 'AL', 'Leve', 300),
+                ('CAPITAL', 'SE', 'Leve', 300), ('CAPITAL', 'BA', 'Leve', 300),
+                ('CAPITAL', 'PE', 'Leve', 300), ('CAPITAL', 'CE', 'Leve', 300),
+                ('CAPITAL', 'MA', 'Leve', 300), ('CAPITAL', 'PI', 'Leve', 300),
+                ('CAPITAL', 'PB', 'Leve', 350), ('CAPITAL', 'TO', 'Leve', 350),
+                ('CAPITAL', 'RN', 'Leve', 400), ('CAPITAL', 'RO', 'Leve', 400),
+                ('CAPITAL', 'AP', 'Leve', 400), ('CAPITAL', 'PA', 'Leve', 400),
+                ('CAPITAL', 'AC', 'Leve', 400),
+                ('INTERIOR', 'PR', 'Leve', 250), ('INTERIOR', 'DF', 'Leve', 320),
+                ('INTERIOR', 'GO', 'Leve', 320), ('INTERIOR', 'MT', 'Leve', 350),
+                ('INTERIOR', 'MS', 'Leve', 350), ('INTERIOR', 'RS', 'Leve', 300),
+                ('INTERIOR', 'SC', 'Leve', 300), ('INTERIOR', 'AL', 'Leve', 400),
+                ('INTERIOR', 'SE', 'Leve', 400), ('INTERIOR', 'BA', 'Leve', 500),
+                ('INTERIOR', 'PE', 'Leve', 400), ('INTERIOR', 'CE', 'Leve', 400),
+                ('INTERIOR', 'MA', 'Leve', 500), ('INTERIOR', 'PI', 'Leve', 500),
+                ('INTERIOR', 'PB', 'Leve', 500), ('INTERIOR', 'TO', 'Leve', 500),
+                ('INTERIOR', 'RN', 'Leve', 500), ('INTERIOR', 'RO', 'Leve', 500),
+                ('INTERIOR', 'AP', 'Leve', 1200), ('INTERIOR', 'PA', 'Leve', 1200),
+                ('INTERIOR', 'AC', 'Leve', 500),
+                ('CAPITAL', 'PR', 'Pesado', 250), ('CAPITAL', 'DF', 'Pesado', 350),
+                ('CAPITAL', 'GO', 'Pesado', 350), ('CAPITAL', 'MT', 'Pesado', 350),
+                ('CAPITAL', 'MS', 'Pesado', 350), ('CAPITAL', 'RS', 'Pesado', 300),
+                ('CAPITAL', 'SC', 'Pesado', 300), ('CAPITAL', 'AL', 'Pesado', 400),
+                ('CAPITAL', 'SE', 'Pesado', 400), ('CAPITAL', 'BA', 'Pesado', 400),
+                ('CAPITAL', 'PE', 'Pesado', 400), ('CAPITAL', 'CE', 'Pesado', 400),
+                ('CAPITAL', 'MA', 'Pesado', 400), ('CAPITAL', 'PI', 'Pesado', 400),
+                ('CAPITAL', 'PB', 'Pesado', 450), ('CAPITAL', 'TO', 'Pesado', 450),
+                ('CAPITAL', 'RN', 'Pesado', 500), ('CAPITAL', 'RO', 'Pesado', 500),
+                ('CAPITAL', 'AP', 'Pesado', 500), ('CAPITAL', 'PA', 'Pesado', 500),
+                ('CAPITAL', 'AC', 'Pesado', 500),
+                ('INTERIOR', 'PR', 'Pesado', 350), ('INTERIOR', 'DF', 'Pesado', 400),
+                ('INTERIOR', 'GO', 'Pesado', 400), ('INTERIOR', 'MT', 'Pesado', 500),
+                ('INTERIOR', 'MS', 'Pesado', 500), ('INTERIOR', 'RS', 'Pesado', 350),
+                ('INTERIOR', 'SC', 'Pesado', 350), ('INTERIOR', 'AL', 'Pesado', 500),
+                ('INTERIOR', 'SE', 'Pesado', 500), ('INTERIOR', 'BA', 'Pesado', 700),
+                ('INTERIOR', 'PE', 'Pesado', 500), ('INTERIOR', 'CE', 'Pesado', 500),
+                ('INTERIOR', 'MA', 'Pesado', 600), ('INTERIOR', 'PI', 'Pesado', 600),
+                ('INTERIOR', 'PB', 'Pesado', 600), ('INTERIOR', 'TO', 'Pesado', 600),
+                ('INTERIOR', 'RN', 'Pesado', 600), ('INTERIOR', 'RO', 'Pesado', 600),
+                ('INTERIOR', 'AP', 'Pesado', 1400), ('INTERIOR', 'PA', 'Pesado', 1400),
+                ('INTERIOR', 'AC', 'Pesado', 600),
+                ('REGIONAL', 'MT', 'Leve', 300), ('REGIONAL', 'MS', 'Leve', 300),
+                ('REGIONAL', 'BA', 'Leve', 400),
+                ('REGIONAL', 'MT', 'Pesado', 400), ('REGIONAL', 'MS', 'Pesado', 400),
+                ('REGIONAL', 'BA', 'Pesado', 500),
+            ]
+
+            agora = agora_utc_naive()
+            cats = {c.nome: c.id for c in CarviaCategoriaMoto.query.filter_by(ativo=True).all()}
+            if 'Leve' not in cats or 'Pesado' not in cats:
+                app.logger.warning("Seed precos moto: categorias Leve/Pesado nao encontradas")
+                return
+
+            tabelas_cache = {}
+            for t in CarviaTabelaFrete.query.filter_by(
+                uf_origem='SP', tipo_carga='FRACIONADA',
+                modalidade='FRETE PESO', grupo_cliente_id=None,
+            ).all():
+                tabelas_cache[(t.nome_tabela, t.uf_destino)] = t
+
+            tabelas_criadas = 0
+            for nome, uf_dest, _, _ in PRECOS:
+                key = (nome, uf_dest)
+                if key not in tabelas_cache:
+                    t = CarviaTabelaFrete(
+                        uf_origem='SP', uf_destino=uf_dest, nome_tabela=nome,
+                        tipo_carga='FRACIONADA', modalidade='FRETE PESO',
+                        ativo=True, criado_em=agora, criado_por='seed:precos_moto',
+                    )
+                    db.session.add(t)
+                    db.session.flush()
+                    tabelas_cache[key] = t
+                    tabelas_criadas += 1
+
+            precos_criados = 0
+            for nome, uf_dest, cat_nome, valor in PRECOS:
+                tabela = tabelas_cache[(nome, uf_dest)]
+                cat_id = cats[cat_nome]
+                existente = CarviaPrecoCategoriaMoto.query.filter_by(
+                    tabela_frete_id=tabela.id, categoria_moto_id=cat_id,
+                ).first()
+                if not existente:
+                    db.session.add(CarviaPrecoCategoriaMoto(
+                        tabela_frete_id=tabela.id, categoria_moto_id=cat_id,
+                        valor_unitario=valor, ativo=True,
+                        criado_em=agora, criado_por='seed:precos_moto',
+                    ))
+                    precos_criados += 1
+
+            db.session.commit()
+            app.logger.info(
+                "Seed precos moto: %d tabelas criadas, %d precos criados",
+                tabelas_criadas, precos_criados,
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Seed precos moto falhou: %s", e)
