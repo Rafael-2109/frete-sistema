@@ -259,6 +259,10 @@ def register_tabela_carvia_routes(bp):
         from app.carvia.models import CarviaTabelaFrete, CarviaGrupoCliente
 
         grupo_filtro = request.args.get('grupo_cliente_id', '')
+        uf_destino_filtro = request.args.get('uf_destino', '').strip().upper()
+        uf_origem_filtro = request.args.get('uf_origem', '').strip().upper()
+        tipo_carga_filtro = request.args.get('tipo_carga', '').strip()
+        busca_filtro = request.args.get('busca', '').strip()
 
         query = db.session.query(
             CarviaTabelaFrete.nome_tabela,
@@ -276,15 +280,29 @@ def register_tabela_carvia_routes(bp):
             else:
                 query = query.filter(CarviaTabelaFrete.grupo_cliente_id.is_(None))
 
+        if uf_destino_filtro:
+            query = query.filter(CarviaTabelaFrete.uf_destino == uf_destino_filtro)
+
+        if uf_origem_filtro:
+            query = query.filter(CarviaTabelaFrete.uf_origem == uf_origem_filtro)
+
+        if tipo_carga_filtro:
+            query = query.filter(CarviaTabelaFrete.tipo_carga == tipo_carga_filtro)
+
+        if busca_filtro:
+            query = query.filter(
+                CarviaTabelaFrete.nome_tabela.ilike(f'%{busca_filtro}%')
+            )
+
         combos = query.group_by(
             CarviaTabelaFrete.nome_tabela,
             CarviaTabelaFrete.uf_origem,
             CarviaTabelaFrete.uf_destino,
             CarviaTabelaFrete.tipo_carga,
         ).order_by(
+            CarviaTabelaFrete.uf_destino,
             CarviaTabelaFrete.nome_tabela,
             CarviaTabelaFrete.uf_origem,
-            CarviaTabelaFrete.uf_destino,
         ).all()
 
         grupos = CarviaGrupoCliente.query.filter_by(ativo=True).order_by(
@@ -297,6 +315,10 @@ def register_tabela_carvia_routes(bp):
             grupos=grupos,
             ufs=UFS_BRASIL,
             grupo_filtro=grupo_filtro,
+            uf_destino_filtro=uf_destino_filtro,
+            uf_origem_filtro=uf_origem_filtro,
+            tipo_carga_filtro=tipo_carga_filtro,
+            busca_filtro=busca_filtro,
         )
 
     @bp.route('/api/tabelas-frete-carvia', methods=['POST']) # type: ignore
@@ -798,7 +820,11 @@ def register_tabela_carvia_routes(bp):
 
         from app.carvia.models import CarviaCidadeAtendida
 
-        uf_filtro = request.args.get('uf', '')
+        uf_filtro = request.args.get('uf', '').strip().upper()
+        uf_origem_filtro = request.args.get('uf_origem', '').strip().upper()
+        tabela_filtro = request.args.get('tabela', '').strip()
+        busca_filtro = request.args.get('busca', '').strip()
+        ativo_filtro = request.args.get('ativo', '')
 
         query = CarviaCidadeAtendida.query.order_by(
             CarviaCidadeAtendida.uf_destino.asc(),
@@ -808,6 +834,24 @@ def register_tabela_carvia_routes(bp):
         if uf_filtro:
             query = query.filter(CarviaCidadeAtendida.uf_destino == uf_filtro)
 
+        if uf_origem_filtro:
+            query = query.filter(CarviaCidadeAtendida.uf_origem == uf_origem_filtro)
+
+        if tabela_filtro:
+            query = query.filter(
+                CarviaCidadeAtendida.nome_tabela.ilike(f'%{tabela_filtro}%')
+            )
+
+        if busca_filtro:
+            query = query.filter(
+                CarviaCidadeAtendida.nome_cidade.ilike(f'%{busca_filtro}%')
+            )
+
+        if ativo_filtro == '1':
+            query = query.filter(CarviaCidadeAtendida.ativo == True)  # noqa: E712
+        elif ativo_filtro == '0':
+            query = query.filter(CarviaCidadeAtendida.ativo == False)  # noqa: E712
+
         cidades = query.all()
 
         return render_template(
@@ -815,6 +859,10 @@ def register_tabela_carvia_routes(bp):
             cidades=cidades,
             ufs=UFS_BRASIL,
             uf_filtro=uf_filtro,
+            uf_origem_filtro=uf_origem_filtro,
+            tabela_filtro=tabela_filtro,
+            busca_filtro=busca_filtro,
+            ativo_filtro=ativo_filtro,
         )
 
     @bp.route('/api/cidades-atendidas-carvia', methods=['POST']) # type: ignore

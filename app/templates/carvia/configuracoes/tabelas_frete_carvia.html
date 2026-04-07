@@ -26,12 +26,43 @@
     {% set carvia_active = 'configuracoes' %}
     {% include 'carvia/_quick_nav.html' %}
 
-    {# Filtro #}
+    {# Filtros #}
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Busca</label>
+                    <input type="text" name="busca" class="form-control form-control-sm"
+                           placeholder="Nome da tabela..." value="{{ busca_filtro }}">
+                </div>
                 <div class="col-auto">
-                    <label class="form-label form-label-sm mb-0">Grupo de Cliente</label>
+                    <label class="form-label small">UF Destino</label>
+                    <select name="uf_destino" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        {% for uf in ufs %}
+                        <option value="{{ uf }}" {{ 'selected' if uf_destino_filtro == uf }}>{{ uf }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small">UF Origem</label>
+                    <select name="uf_origem" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        {% for uf in ufs %}
+                        <option value="{{ uf }}" {{ 'selected' if uf_origem_filtro == uf }}>{{ uf }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small">Tipo Carga</label>
+                    <select name="tipo_carga" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="DIRETA" {{ 'selected' if tipo_carga_filtro == 'DIRETA' }}>Direta</option>
+                        <option value="FRACIONADA" {{ 'selected' if tipo_carga_filtro == 'FRACIONADA' }}>Fracionada</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small">Grupo de Cliente</label>
                     <select name="grupo_cliente_id" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         <option value="standard" {{ 'selected' if grupo_filtro == 'standard' }}>Standard (sem grupo)</option>
@@ -40,13 +71,21 @@
                         {% endfor %}
                     </select>
                 </div>
-                {% if grupo_filtro %}
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                {% if grupo_filtro or uf_destino_filtro or uf_origem_filtro or tipo_carga_filtro or busca_filtro %}
                 <div class="col-auto">
                     <a href="{{ url_for('carvia.listar_tabelas_carvia') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-times"></i> Limpar
                     </a>
                 </div>
                 {% endif %}
+                <div class="col-auto ms-auto">
+                    <span class="badge bg-info">{{ combos|length }} tabelas</span>
+                </div>
             </form>
         </div>
     </div>

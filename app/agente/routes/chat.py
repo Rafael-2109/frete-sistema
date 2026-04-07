@@ -1063,7 +1063,7 @@ def _save_messages_to_db(
                 # Permite restaurar o JSONL caso o worker Render recicle.
                 # Só faz backup se SDK session ID era UUID válido.
                 if not _sdk_id_valid:
-                    sdk_session_id = None
+                    sdk_session_id = None  # type: ignore
                 try:
                     from app.agente.sdk.session_persistence import backup_session_transcript
                     transcript_content = backup_session_transcript(sdk_session_id)

@@ -26,12 +26,17 @@
     {% set carvia_active = 'configuracoes' %}
     {% include 'carvia/_quick_nav.html' %}
 
-    {# Filtro UF #}
+    {# Filtros #}
     <div class="card mb-3">
         <div class="card-body py-2">
             <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small">Busca Cidade</label>
+                    <input type="text" name="busca" class="form-control form-control-sm"
+                           placeholder="Nome da cidade..." value="{{ busca_filtro }}">
+                </div>
                 <div class="col-auto">
-                    <label class="form-label form-label-sm mb-0">UF</label>
+                    <label class="form-label small">UF Destino</label>
                     <select name="uf" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todas</option>
                         {% for uf in ufs %}
@@ -39,7 +44,34 @@
                         {% endfor %}
                     </select>
                 </div>
-                {% if uf_filtro %}
+                <div class="col-auto">
+                    <label class="form-label small">UF Origem</label>
+                    <select name="uf_origem" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        {% for uf in ufs %}
+                        <option value="{{ uf }}" {{ 'selected' if uf_origem_filtro == uf }}>{{ uf }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Tabela</label>
+                    <input type="text" name="tabela" class="form-control form-control-sm"
+                           placeholder="Nome da tabela..." value="{{ tabela_filtro }}">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label small">Ativo</label>
+                    <select name="ativo" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos</option>
+                        <option value="1" {{ 'selected' if ativo_filtro == '1' }}>Sim</option>
+                        <option value="0" {{ 'selected' if ativo_filtro == '0' }}>Nao</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                {% if uf_filtro or uf_origem_filtro or tabela_filtro or busca_filtro or ativo_filtro %}
                 <div class="col-auto">
                     <a href="{{ url_for('carvia.listar_cidades_carvia') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-times"></i> Limpar
