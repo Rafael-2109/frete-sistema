@@ -210,6 +210,7 @@ def executar_sincronizacao():
             return
 
     from app import create_app, db
+    from sqlalchemy import text  # usado no REFRESH mv_pedidos
     app = create_app()
 
     with app.app_context():
@@ -1686,6 +1687,22 @@ def executar_sincronizacao():
             except Exception:
                 pass
         logger.info(f"   [TIMER] Step 24 (MV Comercial): {time.time() - _t_step:.1f}s")
+
+        # ── 2️⃣4️⃣.5️⃣ REFRESH MV PEDIDOS (a cada ciclo) ──
+        _t_step = time.time()
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            db.session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_pedidos"))
+            db.session.commit()
+            logger.info("   mv_pedidos refreshed OK")
+        except Exception as e:
+            logger.warning(f"⚠️ Refresh mv_pedidos falhou (nao-critico): {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        logger.info(f"   [TIMER] Step 24.5 (MV Pedidos): {time.time() - _t_step:.1f}s")
 
         # ── 2️⃣5️⃣ IMPROVEMENT DIALOGUE BATCH (2x/dia, 25º módulo) ──
         _t_step = time.time()

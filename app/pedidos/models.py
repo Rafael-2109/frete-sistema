@@ -15,8 +15,8 @@ class Pedido(db.Model):
     """
     Modelo Pedido que agora é uma VIEW agregando dados de Separacao
     """
-    __tablename__ = 'pedidos'
-    __table_args__ = {'info': {'is_view': True}}  # Marca como VIEW para SQLAlchemy
+    __tablename__ = 'mv_pedidos'
+    __table_args__ = {'info': {'is_view': True}}  # MV — era VIEW 'pedidos', agora materializada
     
     # Campos mapeados da VIEW
     id = db.Column(db.Integer, primary_key=True)
