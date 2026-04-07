@@ -135,6 +135,7 @@ class PooledClient:
         last_used: Timestamp do último query()
         connected: Se o client está conectado (após connect(), antes de disconnect())
         lock: asyncio.Lock para serializar operações no mesmo client
+        sdk_session_id: UUID do SDK (nome do JSONL) — setado apos init message
     """
     client: Any  # ClaudeSDKClient — tipado como Any para evitar import circular
     session_id: str
@@ -143,6 +144,7 @@ class PooledClient:
     last_used: float = field(default_factory=time.time)
     connected: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    sdk_session_id: Optional[str] = None
 
 
 # =============================================================================
@@ -389,6 +391,9 @@ async def disconnect_client(session_id: str) -> bool:
                     f"session={session_id[:8]}... "
                     f"duration={time.time() - pooled.created_at:.0f}s"
                 )
+                # Cleanup JSONL potencialmente corrompido por SIGKILL.
+                # SIGKILL mata mid-write → JSONL truncado → resume crash.
+                _cleanup_stale_jsonl(pooled.sdk_session_id)
             else:
                 logger.error(
                     f"[SDK_POOL] FALHA ao matar subprocess: "
@@ -396,6 +401,32 @@ async def disconnect_client(session_id: str) -> bool:
                 )
 
     return True
+
+
+def _cleanup_stale_jsonl(sdk_session_id: Optional[str]) -> None:
+    """Remove JSONL potencialmente corrompido apos force kill.
+
+    SIGKILL pode matar o CLI mid-write, deixando JSONL truncado.
+    Se o arquivo existir quando o proximo resume tentar, _is_jsonl_valid()
+    (com fix F1) detectaria a corrupcao — mas e melhor limpar proativamente.
+
+    Args:
+        sdk_session_id: UUID do SDK (nome do JSONL). None = noop.
+    """
+    if not sdk_session_id:
+        return
+    try:
+        from .session_persistence import _get_session_path
+        import os as _os
+        path = _get_session_path(sdk_session_id)
+        if _os.path.exists(path):
+            _os.remove(path)
+            logger.info(
+                f"[SDK_POOL] Stale JSONL removido apos force kill: "
+                f"{sdk_session_id[:8]}..."
+            )
+    except Exception as e:
+        logger.debug(f"[SDK_POOL] JSONL cleanup ignorado: {e}")
 
 
 def get_pooled_client(session_id: str) -> Optional[PooledClient]:

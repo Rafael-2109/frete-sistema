@@ -1074,10 +1074,13 @@ def _save_messages_to_db(
                             f"({len(transcript_content) / 1024:.1f} KB)"
                         )
                 except Exception as backup_err:
-                    # Best-effort: falha no backup não deve impedir o save
-                    logger.warning(
-                        f"[AGENTE] Erro no backup do transcript (ignorado): "
-                        f"{backup_err}"
+                    # Falha no backup é GRAVE: sem transcript no DB, o próximo
+                    # resume após reciclagem do worker falhará com ProcessError exit=1.
+                    # Loga como ERROR (não warning) para visibilidade no Sentry.
+                    logger.error(
+                        f"[AGENTE] Erro no backup do transcript — próximo resume "
+                        f"pode falhar se worker reciclar: {backup_err}",
+                        exc_info=True,
                     )
 
             elif session_expired:

@@ -185,9 +185,12 @@ def _is_jsonl_valid(path: str) -> bool:
     Criterios:
     - Arquivo nao vazio (> 0 bytes)
     - Primeira linha e JSON parseavel
+    - Ultima linha nao-vazia e JSON parseavel (detecta truncamento por SIGKILL)
 
-    Um JSONL corrompido (crash/escrita parcial) geralmente
-    tem 0 bytes ou primeira linha truncada.
+    Um JSONL corrompido por crash/escrita parcial geralmente tem:
+    - 0 bytes, ou
+    - Primeira linha truncada, ou
+    - Ultima linha truncada (SIGKILL durante escrita — caso mais comum)
 
     Args:
         path: Caminho do arquivo JSONL
@@ -206,6 +209,21 @@ def _is_jsonl_valid(path: str) -> bool:
                 return False
             # Tenta parsear a primeira linha como JSON
             json.loads(first_line)
+
+            # Validar ultima linha nao-vazia (detecta truncamento por SIGKILL).
+            # SIGKILL durante escrita produz arquivo com primeira linha valida
+            # mas ultima linha truncada — CLI carrega todas as linhas no --resume
+            # e crasha com exit code 1 ao encontrar a linha parcial.
+            last_line = first_line  # Se so tem 1 linha, ja validou acima
+            for line in f:
+                stripped = line.strip()
+                if stripped:
+                    last_line = stripped
+
+            # Se last_line != first_line, precisamos validar a ultima
+            if last_line != first_line:
+                json.loads(last_line)
+
             return True
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return False

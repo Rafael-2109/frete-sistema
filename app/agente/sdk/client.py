@@ -1103,17 +1103,20 @@ Nunca invente informações."""
             options_dict["output_format"] = output_format
             logger.info(f"[AGENT_CLIENT] Structured output ativo: {output_format.get('type', 'unknown')}")
 
-        # Stderr Callback (SDK Debug Output)
-        # Registra callback sincrono que captura linhas de debug do CLI subprocess.
+        # Stderr Callback (SEMPRE ativo)
+        # Registra callback sincrono que captura linhas do CLI subprocess stderr.
         # Linhas vao para a stderr_queue (thread-safe SimpleQueue), drenada no
-        # loop de streaming como StreamEvent(type='stderr').
-        # Requer flag USE_STDERR_CALLBACK=true + debug_mode=true no request.
+        # loop de streaming. Em debug_mode, enviadas como StreamEvent(type='stderr').
+        # Em modo normal, apenas logadas para diagnostico de ProcessError.
+        # NOTA: Antes condicional (debug_mode + USE_STDERR_CALLBACK). Agora sempre
+        # ativo para capturar causa raiz de exit=1 (SDK hardcoda "Check stderr..."
+        # no ProcessError e nunca propaga o stderr real).
         if stderr_queue is not None:
             def _stderr_callback(line: str):
                 stderr_queue.put_nowait(line)
             options_dict["stderr"] = _stderr_callback
             options_dict["extra_args"] = {"debug-to-stderr": None}
-            logger.info("[AGENT_CLIENT] Stderr callback ativo com debug-to-stderr")
+            logger.debug("[AGENT_CLIENT] Stderr callback ativo com debug-to-stderr")
 
         # =================================================================
         # FEATURE FLAGS: Quick Wins (ativados via env vars)
@@ -1318,14 +1321,15 @@ Nunca invente informações."""
         # ─── Estado de parsing ───
         state = _StreamParseState()
 
-        # ─── Stderr callback queue (debug_mode + USE_STDERR_CALLBACK) ───
+        # ─── Stderr callback queue (SEMPRE ativo) ───
         # SimpleQueue é thread-safe: callback (sync, CLI thread) → put_nowait()
         # Loop de streaming (async) → get_nowait() entre mensagens SDK
-        stderr_q: Optional[queue.SimpleQueue] = None
-        if debug_mode:
-            from ..config.feature_flags import USE_STDERR_CALLBACK
-            if USE_STDERR_CALLBACK:
-                stderr_q = queue.SimpleQueue()
+        # NOTA: Antes era condicional (debug_mode + USE_STDERR_CALLBACK).
+        # Agora sempre ativo para capturar causa raiz de ProcessError exit=1,
+        # cujo stderr era perdido (hardcoded "Check stderr output for details" na SDK).
+        # Em modo normal, linhas de stderr são apenas logadas (não enviadas ao frontend).
+        # Em debug_mode, também são enviadas como StreamEvent('stderr').
+        stderr_q: queue.SimpleQueue = queue.SimpleQueue()
 
         # ─── Estado compartilhado: resume fallback ───
         # Dict mutável: se resume falhar, stream seta failed=True.
@@ -1400,6 +1404,19 @@ Nunca invente informações."""
                 )
             except ProcessError as pe:
                 exit_code = getattr(pe, 'exit_code', None)
+                # Drenar stderr para diagnostico do resume failure
+                _resume_stderr = []
+                while True:
+                    try:
+                        _resume_stderr.append(stderr_q.get_nowait())
+                    except queue.Empty:
+                        break
+                if _resume_stderr:
+                    logger.warning(
+                        f"[AGENT_SDK_PERSISTENT] Resume stderr "
+                        f"({len(_resume_stderr)} lines):\n"
+                        f"{chr(10).join(_resume_stderr)[:1000]}"
+                    )
                 if resume_id and exit_code == 1:
                     logger.warning(
                         f"[AGENT_SDK_PERSISTENT] Resume falhou (exit={exit_code}), "
@@ -1439,17 +1456,21 @@ Nunca invente informações."""
                 else:
                     raise  # Re-raise se não é falha de resume
 
+            # ─── Propagar sdk_session_id para o PooledClient (F5: cleanup JSONL) ───
+            if resume_id and not pooled.sdk_session_id:
+                pooled.sdk_session_id = resume_id
+
             # ─── Ajustar model/permission se client já existia ───
             current_model = model or self.settings.model
             if existing and existing.connected:
-                # Client reutilizado — stderr callback não pode ser reaplicado.
-                # O ClaudeSDKClient foi criado com as options originais (sem stderr).
-                # Notificar admin via StreamEvent para que saiba da limitação.
-                if stderr_q is not None:
+                # Client reutilizado — stderr callback nao pode ser reaplicado.
+                # O ClaudeSDKClient foi criado com as options originais (primeira conexao).
+                # Stderr lines da sessao anterior podem ir para queue anterior (memory leak leve).
+                if debug_mode:
                     yield StreamEvent(
                         type='stderr',
-                        content='[INFO] Stderr debug: client reutilizado do pool. '
-                                'Para capturar stderr completo, inicie nova sessão com debug ativo.'
+                        content='[INFO] Client reutilizado do pool. '
+                                'Stderr capturado pela conexao original.'
                     )
                 # Client reutilizado — aplicar mudanças de configuração
                 try:
@@ -1496,23 +1517,26 @@ Nunca invente informações."""
                 # Receber resposta (termina após ResultMessage)
                 async for message in pooled.client.receive_response():
                     # Drenar stderr lines acumuladas (thread-safe SimpleQueue)
-                    if stderr_q is not None:
-                        while True:
-                            try:
-                                line = stderr_q.get_nowait()
+                    while True:
+                        try:
+                            line = stderr_q.get_nowait()
+                            if debug_mode:
                                 yield StreamEvent(type='stderr', content=line)
-                            except queue.Empty:
-                                break
+                        except queue.Empty:
+                            break
                     for event in await self._parse_sdk_message(message, state):
                         yield event
+                    # Propagar sdk_session_id para o PooledClient (F5: cleanup JSONL)
+                    if state.result_session_id and not pooled.sdk_session_id:
+                        pooled.sdk_session_id = state.result_session_id
 
             # ─── Drain final de stderr (últimas linhas após receive_response) ───
-            if stderr_q is not None:
-                while True:
-                    try:
-                        line = stderr_q.get_nowait()
+            while True:
+                try:
+                    line = stderr_q.get_nowait()
+                    if debug_mode:
                         yield StreamEvent(type='stderr', content=line)
-                    except queue.Empty:
+                except queue.Empty:
                         break
 
             # ─── Fallback done (sem ResultMessage) ───
@@ -1541,11 +1565,35 @@ Nunca invente informações."""
         except ProcessError as e:
             elapsed_total = time.time() - state.stream_start_time
             exit_code = getattr(e, 'exit_code', None)
-            stderr = getattr(e, 'stderr', '') or ''
-            logger.error(
-                f"[AGENT_SDK_PERSISTENT] ProcessError {elapsed_total:.1f}s | "
-                f"exit={exit_code} | stderr={stderr[:500]} | msg={e}"
-            )
+
+            # Drenar stderr_q para capturar causa raiz REAL do crash.
+            # A SDK hardcoda "Check stderr output for details" no ProcessError.stderr
+            # mas o stderr real foi capturado pelo callback → stderr_q.
+            # Sem este drain, as ultimas linhas (que explicam o crash) sao perdidas.
+            real_stderr_lines = []
+            while True:
+                try:
+                    line = stderr_q.get_nowait()
+                    real_stderr_lines.append(line)
+                except queue.Empty:
+                    break
+
+            if real_stderr_lines:
+                real_stderr = '\n'.join(real_stderr_lines)
+                logger.error(
+                    f"[AGENT_SDK_PERSISTENT] ProcessError {elapsed_total:.1f}s | "
+                    f"exit={exit_code} | REAL stderr ({len(real_stderr_lines)} lines):\n"
+                    f"{real_stderr[:2000]}"
+                )
+                if debug_mode:
+                    for line in real_stderr_lines:
+                        yield StreamEvent(type='stderr', content=line)
+            else:
+                stderr = getattr(e, 'stderr', '') or ''
+                logger.error(
+                    f"[AGENT_SDK_PERSISTENT] ProcessError {elapsed_total:.1f}s | "
+                    f"exit={exit_code} | stderr={stderr[:500]} | msg={e}"
+                )
             yield StreamEvent(
                 type='error',
                 content=f"Erro de processo (código {exit_code}). Tente novamente." if exit_code else str(e),
