@@ -1875,18 +1875,34 @@ def _save_personal_insight(
             pass  # Se dedup falhar, continuar salvando
 
         if tipo == 'preferencia':
-            # Enriquecer preferences.xml (append, nao sobrescrever)
+            # Enriquecer preferences.xml (append ou merge se perto do limite)
             existing = AgentMemory.get_by_path(user_id, path)
             if existing and existing.content:
-                # Verificar tamanho ANTES de mutar ORM
                 new_content = (
                     f"{existing.content}\n"
                     f"<!-- Extraido automaticamente -->\n"
                     f"{content}"
                 )
                 if len(new_content) > 3000:
-                    return False
-                existing.content = new_content
+                    # Merge inteligente via Sonnet em vez de descartar
+                    merged = _merge_memories_via_sonnet(existing.content, content)
+                    if merged:
+                        existing.content = merged
+                        logger.info(
+                            f"[PERSONAL_EXTRACTION] preferences.xml consolidado via merge "
+                            f"({len(existing.content)}→{len(merged)} chars)"
+                        )
+                    else:
+                        # Sonnet falhou — truncar preferencias mais antigas, manter novas
+                        existing.content = (
+                            f"<preferences>\n"
+                            f"<!-- Consolidado automaticamente (limite 3000 chars) -->\n"
+                            f"{existing.content[-2000:]}\n"
+                            f"{content}\n"
+                            f"</preferences>"
+                        )
+                else:
+                    existing.content = new_content
             else:
                 mem = AgentMemory.create_file(user_id, path, f"<preferences>\n{content}\n</preferences>")
                 mem.category = 'permanent'
