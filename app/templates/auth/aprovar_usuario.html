@@ -102,6 +102,11 @@
                                     {{ form.sistema_carvia.label(class="form-check-label", for="sistemaCarvia") }}
                                     <small class="text-muted d-block">Acesso ao sistema CarVia (gestão de frete subcontratado)</small>
                                 </div>
+                                <div class="form-check mt-2 ms-4">
+                                    {{ form.acesso_comissao_carvia(class="form-check-input", id="acessoComissaoCarvia") }}
+                                    {{ form.acesso_comissao_carvia.label(class="form-check-label", for="acessoComissaoCarvia") }}
+                                    <small class="text-muted d-block">Permissão adicional para acessar comissões dentro do CarVia</small>
+                                </div>
                             </div>
                         </div>
                     </div>
