@@ -54,6 +54,23 @@ def run_post_session_processing(
         assistant_message: Resposta do assistente (pode ser None)
     """
     # =================================================================
+    # S3: Monitoramento zero-saves — detecta sessoes longas sem save_memory
+    # =================================================================
+    try:
+        msg_count = session.message_count or 0
+        if msg_count >= 10:
+            session_data_text = json.dumps(session.data or {})
+            has_save = 'save_memory' in session_data_text or 'update_memory' in session_data_text
+            if not has_save:
+                logger.warning(
+                    f"[MEMORY_ALERT] Sessao {session_id[:8]}... com "
+                    f"{msg_count} msgs e 0 save_memory/update_memory calls — "
+                    f"extracao pessoal pos-sessao sera rede de seguranca"
+                )
+    except Exception as alert_err:
+        logger.debug(f"[MEMORY_ALERT] Verificacao falhou (ignorado): {alert_err}")
+
+    # =================================================================
     # P0-2: Sumarizacao Estruturada
     # =================================================================
     try:
@@ -165,6 +182,58 @@ def run_post_session_processing(
                 )
     except Exception as extraction_error:
         logger.warning(f"[POST_SESSION] Erro na extracao pos-sessao (ignorado): {extraction_error}")
+
+    # =================================================================
+    # S1: Extracao pos-sessao de insights PESSOAIS (complementar empresa)
+    # =================================================================
+    try:
+        from app.agente.config.feature_flags import (
+            USE_POST_SESSION_PERSONAL_EXTRACTION,
+            POST_SESSION_EXTRACTION_MIN_MESSAGES as PERSONAL_MIN_MSGS,
+        )
+
+        if USE_POST_SESSION_PERSONAL_EXTRACTION and user_message and assistant_message:
+            personal_msg_count = session.message_count or 0
+            if personal_msg_count >= PERSONAL_MIN_MSGS:
+                from threading import Thread
+                from app.agente.services.pattern_analyzer import extrair_insights_pessoais_sessao
+
+                # Reutilizar mensagens ja copiadas ou copiar novas
+                personal_messages = list(session.get_messages())
+
+                def _run_personal_extraction_background():
+                    nonlocal personal_messages
+                    try:
+                        with app.app_context():
+                            extrair_insights_pessoais_sessao(
+                                app=app,
+                                user_id=user_id,
+                                session_messages=personal_messages,
+                            )
+                    except Exception as bg_err:
+                        logger.warning(
+                            f"[PERSONAL_EXTRACTION] Background error: {bg_err}"
+                        )
+                    finally:
+                        personal_messages = None
+                        try:
+                            with app.app_context():
+                                db.session.remove()
+                        except Exception:
+                            pass
+
+                personal_thread = Thread(
+                    target=_run_personal_extraction_background,
+                    daemon=False,
+                    name=f"personal-extraction-{user_id}",
+                )
+                personal_thread.start()
+                logger.info(
+                    f"[POST_SESSION] Trigger extracao pessoal em background "
+                    f"para usuario {user_id} (message_count={personal_msg_count})"
+                )
+    except Exception as personal_err:
+        logger.warning(f"[POST_SESSION] Erro na extracao pessoal (ignorado): {personal_err}")
 
     # =================================================================
     # Fase 4: Embedding de turn para busca semantica (best-effort)

@@ -13,7 +13,7 @@ create → enrich → consolidate → cold → delete
 1. **create**: Agente salva memoria via `save_memory` (auto ou explicito)
 2. **enrich**: Extracao pos-sessao (`pattern_analyzer.py`) adiciona conhecimento tacito
 3. **consolidate**: `memory_consolidator.py` mescla memorias redundantes periodicamente
-4. **cold**: Memorias com `usage_count >= 20` e `effective_count == 0` migram para tier frio (`is_cold=True`)
+4. **cold**: Memorias com `usage_count >= 20` e `effective_count/usage_count < 10%` migram para tier frio (`is_cold=True`)
 5. **delete**: Memorias cold sem acesso por 90+ dias podem ser removidas
 
 ---
@@ -90,6 +90,16 @@ NAO salvar: resultados pontuais, status temporarios, informacao disponivel no si
 ### Explicito (com confirmacao)
 - Pedido direto: "lembre que...", "salve isso"
 - Operacao destrutiva: `clear_memories`, `delete_memory`
+
+### Extracao pos-sessao automatica (2 pipelines)
+
+| Pipeline | Destino | O que extrai | Trigger |
+|----------|---------|--------------|---------|
+| Empresa (`extrair_conhecimento_sessao`) | user_id=0 | Protocolos, armadilhas, heuristicas (Taxonomia 5 niveis) | Min 3 msgs, daemon thread |
+| Pessoal (`extrair_insights_pessoais_sessao`) | user_id do usuario | Correcoes, preferencias, expertise, contexto | Min 3 msgs, daemon thread |
+
+O pipeline pessoal eh rede de seguranca para o R0 auto-save, que depende do modelo
+espontaneamente chamar `save_memory` — comportamento inconsistente em sessoes focadas em skills.
 
 ---
 

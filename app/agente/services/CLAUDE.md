@@ -62,7 +62,26 @@ Output DEVE ser PRESCRITIVO ("Quando cliente X pedir Y, faca Z") — NAO descrit
 Descritivo = padrao inutil que nao muda comportamento do agente. ERRAR AQUI corrompe aprendizado.
 — FONTE: `pattern_analyzer.py:4,40,88`
 
-### pattern_analyzer: extracao pos-sessao (Taxonomia 5 niveis)
+### pattern_analyzer: extracao pos-sessao PESSOAL (S1 — 2026-04-07)
+`extrair_insights_pessoais_sessao()` salva memorias PESSOAIS (user_id do usuario).
+Complementar a extracao empresa — extrai correcoes, preferencias, expertise, contexto.
+4 tipos: `correcao` (→ /corrections/), `preferencia` (→ preferences.xml append),
+`expertise` (→ /learned/expertise_*.xml), `contexto` (→ /context/work_context.xml).
+Dedup via `_check_memory_duplicate()` de `memory_mcp_tool.py`.
+Roda em daemon thread, mesmo trigger que empresa (min 3 msgs).
+Flag: `USE_POST_SESSION_PERSONAL_EXTRACTION` (= `AGENT_POST_SESSION_PERSONAL_EXTRACTION` env).
+Custo: ~$0.003 por execucao (Sonnet).
+Motivacao: R0 auto-save depende do modelo chamar save_memory — Marcus teve 0 calls em 9 sessoes.
+— FONTE: `pattern_analyzer.py:extrair_insights_pessoais_sessao()`
+
+### pattern_analyzer: thresholds adaptativos para profile (S2 — 2026-04-07)
+`should_generate_profile()` agora tem 2 criterios adaptativos ANTES do threshold fixo:
+1. Sessao longa (>= `PROFILE_LONG_SESSION_THRESHOLD`, default 20 msgs) → trigger
+2. Sessao cara (>= `PROFILE_COST_THRESHOLD`, default $5.00) → trigger
+Resolve: usuarios low-frequency com sessoes densas ficavam com user.xml stale por semanas.
+— FONTE: `pattern_analyzer.py:should_generate_profile()`
+
+### pattern_analyzer: extracao pos-sessao EMPRESA (Taxonomia 5 niveis)
 `extrair_conhecimento_sessao()` salva memorias empresa (user_id=0) com 3 tipos operacionais.
 Taxonomia de 5 niveis: 1-2 (lookup/composicao) = NAO memorizar, 3-5 (diagnostico/armadilha/heuristica) = memorizar.
 4 criterios formais: bifurca? perdeu tempo? implicito? transferivel? (min 2 verdadeiros).

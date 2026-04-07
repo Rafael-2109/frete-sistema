@@ -108,6 +108,13 @@ PATTERN_LEARNING_THRESHOLD = int(os.getenv("AGENT_PATTERN_LEARNING_THRESHOLD", "
 USE_BEHAVIORAL_PROFILE = os.getenv("AGENT_BEHAVIORAL_PROFILE", "true").lower() == "true"
 BEHAVIORAL_PROFILE_THRESHOLD = int(os.getenv("AGENT_BEHAVIORAL_PROFILE_THRESHOLD", "5"))
 
+# Thresholds adaptativos para profile — disparam atualizacao mesmo com poucas sessoes
+# Sessao longa (>= N msgs) desde ultimo update de user.xml → trigger imediato
+# Sessao cara (>= $X) desde ultimo update → trigger imediato
+# Resolve: usuarios low-frequency com sessoes densas ficavam com profile stale
+PROFILE_LONG_SESSION_THRESHOLD = int(os.getenv("AGENT_PROFILE_LONG_SESSION_THRESHOLD", "20"))
+PROFILE_COST_THRESHOLD = float(os.getenv("AGENT_PROFILE_COST_THRESHOLD", "5.0"))
+
 # Extracao pos-sessao de conhecimento organizacional (PRD v2.1)
 # Analisa TODAS as mensagens via Sonnet para extrair: definicoes de termos,
 # cargos, regras de negocio, correcoes factuais. Salva como memorias empresa (user_id=0).
@@ -118,6 +125,14 @@ USE_POST_SESSION_EXTRACTION = os.getenv("AGENT_POST_SESSION_EXTRACTION", "true")
 
 # Minimo de mensagens para iniciar extracao (evita rodar em sessoes triviais)
 POST_SESSION_EXTRACTION_MIN_MESSAGES = int(os.getenv("AGENT_POST_SESSION_EXTRACTION_MIN_MESSAGES", "3"))
+
+# Extracao pos-sessao de insights PESSOAIS (complementar a empresa)
+# Analisa mensagens via Sonnet para extrair: correcoes, preferencias, expertise do usuario.
+# Salva como memorias PESSOAIS (user_id do usuario, NAO user_id=0).
+# Resolve: R0 auto-save depende do modelo, que frequentemente nao chama save_memory.
+# Custo: ~$0.003 por execucao (Sonnet). Volume baixo (~4 sessoes/dia).
+# Trigger: mesmo que empresa (min msgs, daemon thread).
+USE_POST_SESSION_PERSONAL_EXTRACTION = os.getenv("AGENT_POST_SESSION_PERSONAL_EXTRACTION", "true").lower() == "true"
 
 # ====================================================================
 # Dashboard e Analytics (P2)

@@ -650,8 +650,43 @@ def should_generate_profile(user_id: int, threshold: int = 5) -> bool:
             )
             return True
 
-        # Se existe: contar sessões desde a última atualização
+        # Se existe: verificar critérios adaptativos ANTES do threshold fixo
         if user_xml.updated_at:
+            # Critério adaptativo 1: sessão longa desde último update
+            try:
+                from ..config.feature_flags import PROFILE_LONG_SESSION_THRESHOLD
+                long_session = AgentSession.query.filter(
+                    AgentSession.user_id == user_id,
+                    AgentSession.updated_at > user_xml.updated_at,
+                    AgentSession.message_count >= PROFILE_LONG_SESSION_THRESHOLD,
+                ).first()
+                if long_session:
+                    logger.info(
+                        f"[PROFILE] Usuário {user_id}: sessão longa "
+                        f"({long_session.message_count} msgs) desde último update → trigger"
+                    )
+                    return True
+            except Exception:
+                pass  # Flag pode não existir, cair nos critérios existentes
+
+            # Critério adaptativo 2: sessão cara desde último update
+            try:
+                from ..config.feature_flags import PROFILE_COST_THRESHOLD
+                expensive_session = AgentSession.query.filter(
+                    AgentSession.user_id == user_id,
+                    AgentSession.updated_at > user_xml.updated_at,
+                    AgentSession.total_cost_usd >= PROFILE_COST_THRESHOLD,
+                ).first()
+                if expensive_session:
+                    logger.info(
+                        f"[PROFILE] Usuário {user_id}: sessão cara "
+                        f"(${expensive_session.total_cost_usd:.2f}) desde último update → trigger"
+                    )
+                    return True
+            except Exception:
+                pass  # Flag pode não existir, cair nos critérios existentes
+
+            # Critério original: N sessões desde último update
             sessions_since = AgentSession.query.filter(
                 AgentSession.user_id == user_id,
                 AgentSession.updated_at > user_xml.updated_at,
@@ -1719,6 +1754,286 @@ def extrair_conhecimento_sessao(
 
     except Exception as e:
         logger.warning(f"[KNOWLEDGE_EXTRACTION] Erro para usuario {user_id}: {e}")
+        return False
+
+
+# =====================================================================
+# EXTRACAO POS-SESSAO DE INSIGHTS PESSOAIS (S1)
+# =====================================================================
+# Complementar a extracao empresa: extrai correcoes, preferencias, expertise
+# do USUARIO e salva como memorias pessoais (user_id do usuario, NAO 0).
+# Resolve: R0 auto-save depende do modelo, que frequentemente nao chama save_memory.
+
+_PERSONAL_EXTRACTION_PROMPT = """\
+Voce eh um analisador de COMPORTAMENTO DE USUARIO para um sistema de logistica (Nacom Goya).
+Analise a conversa e extraia insights PESSOAIS sobre o usuario (NAO sobre a empresa).
+
+EXTRAIA APENAS:
+
+1. CORRECOES: Momentos onde o usuario corrigiu o agente.
+   "na verdade eh X", "nao, faca Y", "ta errado, o correto eh..."
+   Prescricao: como o agente deve agir diferente no futuro COM ESTE USUARIO.
+
+2. PREFERENCIAS: Formato, estilo, abordagem que o usuario demonstrou preferir.
+   Pediu tabela em vez de texto, pediu Excel, recusou HTML, pediu resumo curto.
+   Prescricao: qual formato/estilo usar por padrao com este usuario.
+
+3. EXPERTISE: Dominios onde o usuario demonstrou conhecimento profundo.
+   Vocabulario tecnico, decisoes autonomas, correcoes factuais, operacoes complexas.
+   Prescricao: qual nivel de detalhe usar com este usuario neste dominio.
+
+4. CONTEXTO: Trabalho em andamento relevante para sessoes futuras.
+   Tarefas iniciadas mas nao concluidas, periodos sendo analisados, proximos passos.
+   Prescricao: o que retomar ou perguntar na proxima sessao.
+
+NAO EXTRAIA:
+- Conhecimento organizacional (protocolos, armadilhas, heuristicas) — outro pipeline cobre
+- Fatos pontuais (NF 12345, R$ valor) — morrem no primeiro uso
+- Perfil basico (nome, cargo, email) — ja esta no user.xml
+- Meta-AI (bugs do agente, melhorias do sistema) — outro pipeline cobre
+
+FILTRO: Se a conversa nao tiver correcoes, preferencias, expertise ou contexto relevante,
+retorne array vazio. Prefira POUCOS insights de ALTA qualidade.
+
+Retorne JSON VALIDO:
+{
+  "insights": [
+    {
+      "tipo": "correcao|preferencia|expertise|contexto",
+      "descricao": "O que foi observado (2-3 frases)",
+      "prescricao": "Quando [situacao], o agente deve [acao] porque [razao]"
+    }
+  ]
+}
+
+RESPONDA APENAS JSON VALIDO, sem markdown.\
+"""
+
+
+def _build_personal_extraction_path(tipo: str, descricao: str) -> str:
+    """Constroi path para memoria pessoal baseado no tipo de insight."""
+    if tipo == 'correcao':
+        slug = _slugify(descricao[:60])
+        return f"/memories/corrections/{slug}.xml" if slug else ""
+    elif tipo == 'preferencia':
+        return "/memories/preferences.xml"
+    elif tipo == 'expertise':
+        # Path dinamico (slug-based), computado dentro de _save_personal_insight
+        return ""
+    elif tipo == 'contexto':
+        return "/memories/context/work_context.xml"
+    return ""
+
+
+def _save_personal_insight(
+    user_id: int,
+    tipo: str,
+    descricao: str,
+    prescricao: str,
+) -> bool:
+    """
+    Salva insight pessoal como memoria do usuario.
+
+    Logica por tipo:
+    - correcao: cria arquivo individual em /memories/corrections/
+    - preferencia: enriquece /memories/preferences.xml (append)
+    - expertise: enriquece /memories/user.xml apenas adicionando nota (nao sobrescreve profile)
+    - contexto: sobrescreve /memories/context/work_context.xml
+
+    Returns:
+        True se salvou, False se dedup/erro
+    """
+    try:
+        from ..models import AgentMemory
+        from app import db
+
+        content = (
+            f'[{_xml_escape(tipo)}] {_xml_escape(descricao)}\n'
+            f'DO: {_xml_escape(prescricao)}'
+        )
+
+        # Expertise tem path dinamico — computar antes do dedup
+        if tipo == 'expertise':
+            slug = _slugify(descricao[:60])
+            path = f"/memories/learned/expertise_{slug}.xml" if slug else ""
+        else:
+            path = _build_personal_extraction_path(tipo, descricao)
+
+        if not path:
+            return False
+
+        # Dedup: verificar duplicata antes de salvar
+        try:
+            from ..tools.memory_mcp_tool import _check_memory_duplicate
+            dup_path = _check_memory_duplicate(user_id, content, current_path=path)
+            if dup_path:
+                logger.debug(
+                    f"[PERSONAL_EXTRACTION] Dedup: '{path}' similar a '{dup_path}', skipping"
+                )
+                return False
+        except Exception:
+            pass  # Se dedup falhar, continuar salvando
+
+        if tipo == 'preferencia':
+            # Enriquecer preferences.xml (append, nao sobrescrever)
+            existing = AgentMemory.get_by_path(user_id, path)
+            if existing and existing.content:
+                # Verificar tamanho ANTES de mutar ORM
+                new_content = (
+                    f"{existing.content}\n"
+                    f"<!-- Extraido automaticamente -->\n"
+                    f"{content}"
+                )
+                if len(new_content) > 3000:
+                    return False
+                existing.content = new_content
+            else:
+                mem = AgentMemory.create_file(user_id, path, f"<preferences>\n{content}\n</preferences>")
+                mem.category = 'permanent'
+                mem.importance_score = 0.8
+
+        elif tipo == 'expertise':
+            # Nota complementar a user.xml (que eh gerenciado por generate_and_save_profile)
+            existing = AgentMemory.get_by_path(user_id, path)
+            if existing:
+                return False  # Ja existe — dedup por path
+            mem = AgentMemory.create_file(user_id, path, content)
+            mem.category = 'structural'
+            mem.importance_score = 0.6
+
+        elif tipo == 'contexto':
+            # Sobrescrever work_context.xml (contexto eh efemero)
+            existing = AgentMemory.get_by_path(user_id, path)
+            if existing:
+                existing.content = content
+            else:
+                mem = AgentMemory.create_file(user_id, path, content)
+                mem.category = 'contextual'
+                mem.importance_score = 0.5
+
+        elif tipo == 'correcao':
+            # Criar arquivo individual
+            existing = AgentMemory.get_by_path(user_id, path)
+            if existing:
+                return False  # Ja existe — dedup por path
+            mem = AgentMemory.create_file(user_id, path, content)
+            mem.category = 'structural'
+            mem.importance_score = 0.7
+
+        else:
+            return False
+
+        db.session.commit()
+
+        # Best-effort: gerar embedding
+        try:
+            from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+            if MEMORY_SEMANTIC_SEARCH:
+                from ..tools.memory_mcp_tool import _embed_memory_best_effort
+                _embed_memory_best_effort(user_id, path, content)
+        except Exception:
+            pass
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"[PERSONAL_EXTRACTION] Erro ao salvar {tipo}: {e}")
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def extrair_insights_pessoais_sessao(
+    app,
+    user_id: int,
+    session_messages: list[dict],
+) -> bool:
+    """
+    Extrai insights pessoais (correcoes, preferencias, expertise, contexto)
+    de uma sessao e salva como memorias PESSOAIS do usuario.
+
+    Complementar a extracao empresa (extrair_conhecimento_sessao).
+    Rede de seguranca para o R0 auto-save que depende do modelo.
+
+    Args:
+        app: Flask app
+        user_id: ID do usuario (destino das memorias)
+        session_messages: Lista de mensagens da sessao
+
+    Returns:
+        True se extraiu e salvou algo, False caso contrario
+    """
+    if not session_messages or len(session_messages) < 2:
+        return False
+
+    try:
+        client = _get_anthropic_client()
+        formatted = _format_messages_for_extraction(session_messages)
+
+        response = client.messages.create(
+            model=SONNET_MODEL,
+            max_tokens=1500,
+            system=[{
+                "type": "text",
+                "text": _PERSONAL_EXTRACTION_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=[{
+                "role": "user",
+                "content": f"<conversa>\n{formatted}\n</conversa>",
+            }],
+        )
+
+        result_text = response.content[0].text.strip()
+
+        # Parse JSON
+        parsed = _parse_json_response(result_text, user_id)
+        if not parsed:
+            return False
+
+        insights = parsed.get('insights', [])
+        if not insights:
+            logger.debug(
+                f"[PERSONAL_EXTRACTION] Nenhum insight pessoal para usuario {user_id} "
+                f"({response.usage.input_tokens}+{response.usage.output_tokens} tokens)"
+            )
+            return False
+
+        # Salvar cada insight
+        _TIPOS_VALIDOS = {'correcao', 'preferencia', 'expertise', 'contexto'}
+        saved = 0
+        filtered = 0
+
+        with app.app_context():
+            for item in insights:
+                tipo = item.get('tipo', '').strip()
+                descricao = item.get('descricao', '').strip()
+                prescricao = item.get('prescricao', '').strip()
+
+                if tipo not in _TIPOS_VALIDOS:
+                    filtered += 1
+                    continue
+                if not descricao or not prescricao or len(prescricao) < 10:
+                    filtered += 1
+                    continue
+
+                if _save_personal_insight(user_id, tipo, descricao, prescricao):
+                    saved += 1
+                else:
+                    filtered += 1
+
+        logger.info(
+            f"[PERSONAL_EXTRACTION] Usuario {user_id}: "
+            f"saved={saved} filtered={filtered} "
+            f"({response.usage.input_tokens}+{response.usage.output_tokens} tokens)"
+        )
+        return saved > 0
+
+    except Exception as e:
+        logger.warning(f"[PERSONAL_EXTRACTION] Erro para usuario {user_id}: {e}")
         return False
 
 
