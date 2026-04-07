@@ -1213,13 +1213,19 @@ def create_app(config_name=None):
                     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
                     # db já foi inicializado na linha 124, não precisa reinicializar
 
+                    # Excluir MVs/VIEWs do create_all (criadas via migration)
+                    _skip_tables = {'mv_pedidos', 'mv_comercial_equipes', 'mv_comercial_vendedores'}
+                    _tables_to_create = [t for t in db.metadata.sorted_tables if t.name not in _skip_tables]
+
                     # Tentar criar tabelas com encoding correto
                     with engine.connect() as conn:
-                        db.metadata.create_all(conn)
+                        db.metadata.create_all(conn, tables=_tables_to_create)
                         print("✅ Tabelas criadas com encoding UTF-8")
                 else:
-                    # Para bancos locais (SQLite)
-                    db.create_all()
+                    # Para bancos locais (SQLite) — excluir MVs
+                    _skip_tables = {'mv_pedidos', 'mv_comercial_equipes', 'mv_comercial_vendedores'}
+                    _tables_to_create = [t for t in db.metadata.sorted_tables if t.name not in _skip_tables]
+                    db.metadata.create_all(db.engine, tables=_tables_to_create)
 
             except UnicodeDecodeError as e:
                 print(f"⚠️ Erro UTF-8 na criação de tabelas: {e}")

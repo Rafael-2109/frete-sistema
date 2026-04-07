@@ -15,8 +15,8 @@ class Pedido(db.Model):
     """
     Modelo Pedido que agora é uma VIEW agregando dados de Separacao
     """
-    __tablename__ = 'mv_pedidos'
-    __table_args__ = {'info': {'is_view': True}}  # MV — era VIEW 'pedidos', agora materializada
+    __tablename__ = 'pedidos'
+    __table_args__ = {'info': {'is_view': True}}  # VIEW (sempre fresco — dados de separacao em tempo real)
     
     # Campos mapeados da VIEW
     id = db.Column(db.Integer, primary_key=True)
@@ -193,3 +193,36 @@ class Pedido(db.Model):
             'num_pedido': self.num_pedido
         })
         db.session.commit()
+
+
+class PedidoMV(db.Model):
+    """
+    Materialized View mv_pedidos — snapshot pre-computado da VIEW pedidos.
+    Usar APENAS para queries de contadores e agregacao (tolera staleness ~30min).
+    Para dados frescos (edicao, lista paginada), usar Pedido (VIEW).
+    Criada via migration (scripts/migrations/criar_mv_pedidos.sql), NAO por db.create_all().
+    """
+    __tablename__ = 'mv_pedidos'
+    __table_args__ = {
+        'info': {'is_view': True, 'skip_autogenerate': True},
+        'keep_existing': True,  # nao tentar recriar se ja existe
+    }
+
+    # Campos usados pelos contadores e filtros
+    id = db.Column(db.Integer, primary_key=True)
+    separacao_lote_id = db.Column(db.String(50))
+    num_pedido = db.Column(db.String(30))
+    cnpj_cpf = db.Column(db.String(20))
+    cod_uf = db.Column(db.String(2))
+    rota = db.Column(db.String(50))
+    sub_rota = db.Column(db.String(50))
+    expedicao = db.Column(db.Date)
+    agendamento = db.Column(db.Date)
+    data_embarque = db.Column(db.Date)
+    nf = db.Column(db.String(20))
+    status = db.Column(db.String(50))
+    nf_cd = db.Column(db.Boolean)
+    cotacao_id = db.Column(db.Integer)
+
+    def __repr__(self):
+        return f'<PedidoMV {self.separacao_lote_id}>'

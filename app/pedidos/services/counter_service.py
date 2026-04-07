@@ -15,7 +15,7 @@ from typing import Dict, Any, List, Tuple
 from sqlalchemy import func, distinct, case
 
 from app import db
-from app.pedidos.models import Pedido
+from app.pedidos.models import Pedido, PedidoMV
 from app.separacao.models import Separacao
 from app.carteira.models import CarteiraPrincipal
 from app.cadastros_agendamento.models import ContatoAgendamento
@@ -27,14 +27,41 @@ logger = logging.getLogger(__name__)
 # Raiz CNPJ (8 primeiros dígitos) de clientes excluídos do filtro Agend. Pendente
 CNPJS_EXCLUIR_AGENDAMENTO = ['93209765', '75315333', '00063960', '01157555', '06057223']
 
-CACHE_KEY = "pedidos:contadores:v3"
+CACHE_KEY = "pedidos:contadores:v4"
 CACHE_TTL = 45  # segundos
 
 FACETED_CACHE_PREFIX = "pedidos:contadores:filtros:"
 FACETED_CACHE_TTL = 30  # segundos
 
-ROTAS_CACHE_KEY = "pedidos:rotas_choices:v1"
+ROTAS_CACHE_KEY = "pedidos:rotas_choices:v2"
 ROTAS_CACHE_TTL = 300  # 5 minutos
+
+# Flag cacheada: mv_pedidos existe no banco?
+_mv_disponivel = None
+
+
+def _get_model():
+    """Retorna PedidoMV se mv_pedidos existe, senao Pedido (VIEW).
+    Resultado cacheado em memoria — verificado 1x por processo."""
+    global _mv_disponivel
+    if _mv_disponivel is None:
+        try:
+            from sqlalchemy import text
+            result = db.session.execute(
+                text("SELECT 1 FROM pg_matviews WHERE matviewname = 'mv_pedidos'")
+            )
+            _mv_disponivel = result.scalar() is not None
+            db.session.rollback()  # limpar transacao de verificacao
+        except Exception:
+            _mv_disponivel = False
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+    if _mv_disponivel:
+        return PedidoMV
+    logger.info("mv_pedidos nao disponivel — usando VIEW pedidos (fallback)")
+    return Pedido
 
 
 class PedidosCounterService:
@@ -60,6 +87,7 @@ class PedidosCounterService:
     @staticmethod
     def _calcular_tudo() -> Dict[str, Any]:
         """Calcula todos os contadores em queries otimizadas."""
+        M = _get_model()  # PedidoMV se mv_pedidos existe, senao Pedido (VIEW)
         hoje = agora_utc_naive().date()
 
         # 1. Dados auxiliares de agendamento (necessario ANTES dos contadores de status)
@@ -85,17 +113,17 @@ class PedidosCounterService:
         if combined_lotes:
             ag_result = db.session.query(
                 func.count(distinct(case(
-                    (Pedido.separacao_lote_id.in_(lotes_falta_item or []), Pedido.separacao_lote_id),
+                    (M.separacao_lote_id.in_(lotes_falta_item or []), M.separacao_lote_id),
                     else_=None
                 ))),
                 func.count(distinct(case(
-                    (Pedido.separacao_lote_id.in_(lotes_falta_pgto or []), Pedido.separacao_lote_id),
+                    (M.separacao_lote_id.in_(lotes_falta_pgto or []), M.separacao_lote_id),
                     else_=None
                 ))),
             ).filter(
-                Pedido.separacao_lote_id.in_(combined_lotes),
-                Pedido.nf_cd == False,
-                (Pedido.nf.is_(None)) | (Pedido.nf == "")
+                M.separacao_lote_id.in_(combined_lotes),
+                M.nf_cd == False,
+                (M.nf.is_(None)) | (M.nf == "")
             ).one()
             contadores_status['ag_item'] = ag_result[0] or 0
             contadores_status['ag_pagamento'] = ag_result[1] or 0
@@ -114,6 +142,7 @@ class PedidosCounterService:
         Calcula contadores D+0 a D+3 em UMA UNICA QUERY com CASE WHEN.
         Substitui 8 queries individuais.
         """
+        M = _get_model()
         datas = [hoje + timedelta(days=i) for i in range(4)]
 
         # Construir as expressoes CASE WHEN (3 por data: total, pend_embarque, abertos)
@@ -122,19 +151,19 @@ class PedidosCounterService:
             # Total da data
             cases.append(
                 func.count(case(
-                    (func.date(Pedido.expedicao) == d, 1)
+                    (M.expedicao == d, 1)
                 ))
             )
             # Pend embarque da data (sem data_embarque — inclui NF no CD)
             cases.append(
                 func.count(case(
-                    ((func.date(Pedido.expedicao) == d) & (Pedido.data_embarque.is_(None)), 1)
+                    ((M.expedicao == d) & (M.data_embarque.is_(None)), 1)
                 ))
             )
             # Abertos da data (inclui nf_cd=True)
             cases.append(
                 func.count(case(
-                    ((func.date(Pedido.expedicao) == d) & ((Pedido.status == 'ABERTO') | (Pedido.nf_cd == True)), 1)
+                    ((M.expedicao == d) & ((M.status == 'ABERTO') | (M.nf_cd == True)), 1)
                 ))
             )
 
@@ -156,81 +185,82 @@ class PedidosCounterService:
         Calcula contadores de status + agend_pendente em UMA UNICA QUERY com CASE WHEN.
         Substitui ~8 queries individuais (inclui agend_pendente que era query separada).
         """
+        M = _get_model()
         # Expressao agend_pendente (incorporada aqui para evitar scan extra da VIEW)
-        cnpj_raiz = func.left(func.regexp_replace(Pedido.cnpj_cpf, '[^0-9]', '', 'g'), 8)
+        cnpj_raiz = func.left(func.regexp_replace(M.cnpj_cpf, '[^0-9]', '', 'g'), 8)
         if cnpjs_agendamento:
             agend_expr = (
-                (Pedido.cnpj_cpf.in_(cnpjs_agendamento)) &
-                (Pedido.agendamento.is_(None)) &
-                (Pedido.nf_cd == False) &
-                ((Pedido.nf.is_(None)) | (Pedido.nf == "")) &
-                (Pedido.data_embarque.is_(None)) &
-                ((Pedido.cod_uf == 'SP') | (Pedido.rota == 'FOB')) &
+                (M.cnpj_cpf.in_(cnpjs_agendamento)) &
+                (M.agendamento.is_(None)) &
+                (M.nf_cd == False) &
+                ((M.nf.is_(None)) | (M.nf == "")) &
+                (M.data_embarque.is_(None)) &
+                ((M.cod_uf == 'SP') | (M.rota == 'FOB')) &
                 (~cnpj_raiz.in_(CNPJS_EXCLUIR_AGENDAMENTO))
             )
         else:
-            agend_expr = Pedido.separacao_lote_id == 'IMPOSSIVEL'
+            agend_expr = M.separacao_lote_id == 'IMPOSSIVEL'
 
         resultado = db.session.query(
             # 0: todos
             func.count(),
             # 1: abertos (inclui nf_cd=True)
             func.count(case(
-                ((Pedido.status == 'ABERTO') | (Pedido.nf_cd == True), 1)
+                ((M.status == 'ABERTO') | (M.nf_cd == True), 1)
             )),
             # 2: cotados
             func.count(case(
                 (
-                    (Pedido.cotacao_id.isnot(None)) &
-                    (Pedido.data_embarque.is_(None)) &
-                    ((Pedido.nf.is_(None)) | (Pedido.nf == "")) &
-                    (Pedido.nf_cd == False),
+                    (M.cotacao_id.isnot(None)) &
+                    (M.data_embarque.is_(None)) &
+                    ((M.nf.is_(None)) | (M.nf == "")) &
+                    (M.nf_cd == False),
                     1
                 )
             )),
             # 3: nf_cd
             func.count(case(
-                (Pedido.nf_cd == True, 1)
+                (M.nf_cd == True, 1)
             )),
             # 4: atrasados
             func.count(case(
                 (
                     (
-                        ((Pedido.cotacao_id.isnot(None)) & (Pedido.data_embarque.is_(None)) & ((Pedido.nf.is_(None)) | (Pedido.nf == ""))) |
-                        ((Pedido.cotacao_id.is_(None)) & ((Pedido.nf.is_(None)) | (Pedido.nf == "")))
+                        ((M.cotacao_id.isnot(None)) & (M.data_embarque.is_(None)) & ((M.nf.is_(None)) | (M.nf == ""))) |
+                        ((M.cotacao_id.is_(None)) & ((M.nf.is_(None)) | (M.nf == "")))
                     ) &
-                    (Pedido.nf_cd == False) &
-                    (Pedido.expedicao < hoje) &
-                    ((Pedido.nf.is_(None)) | (Pedido.nf == "")),
+                    (M.nf_cd == False) &
+                    (M.expedicao < hoje) &
+                    ((M.nf.is_(None)) | (M.nf == "")),
                     1
                 )
             )),
             # 5: atrasados_abertos
             func.count(case(
                 (
-                    (Pedido.status == 'ABERTO') & (Pedido.expedicao < hoje),
+                    (M.status == 'ABERTO') & (M.expedicao < hoje),
                     1
                 )
             )),
             # 6: sem_data
             func.count(case(
                 (
-                    (Pedido.expedicao.is_(None)) &
-                    (Pedido.nf_cd == False) &
-                    ((Pedido.nf.is_(None)) | (Pedido.nf == "")) &
-                    (Pedido.data_embarque.is_(None)),
+                    (M.expedicao.is_(None)) &
+                    (M.nf_cd == False) &
+                    ((M.nf.is_(None)) | (M.nf == "")) &
+                    (M.data_embarque.is_(None)),
                     1
                 )
             )),
             # 7: pend_embarque (sem data_embarque — inclui NF no CD)
             func.count(case(
-                (Pedido.data_embarque.is_(None), 1)
+                (M.data_embarque.is_(None), 1)
             )),
             # 8: faturados (tem NF preenchida, nao esta no CD)
             func.count(case(
                 (
-                    (Pedido.nf.isnot(None)) & (Pedido.nf != "") &
-                    (Pedido.nf_cd == False),
+                    (M.nf.isnot(None)) & (M.nf != "") &
+                    (M.nf_cd == False),
                     1
                 )
             )),
@@ -270,24 +300,6 @@ class PedidosCounterService:
         cnpjs_agendamento = list(contatos_por_cnpj.keys())
 
         return contatos_por_cnpj, cnpjs_agendamento
-
-    @staticmethod
-    def _contar_agend_pendente(cnpjs_agendamento: List[str]) -> int:
-        """Conta pedidos com agendamento pendente (SP + FOB, excluindo CNPJs específicos)."""
-        if not cnpjs_agendamento:
-            return 0
-
-        cnpj_raiz = func.left(func.regexp_replace(Pedido.cnpj_cpf, '[^0-9]', '', 'g'), 8)
-
-        return Pedido.query.filter(
-            Pedido.cnpj_cpf.in_(cnpjs_agendamento),
-            Pedido.agendamento.is_(None),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-            Pedido.data_embarque.is_(None),
-            (Pedido.cod_uf == 'SP') | (Pedido.rota == 'FOB'),
-            ~cnpj_raiz.in_(CNPJS_EXCLUIR_AGENDAMENTO)
-        ).count()
 
     @staticmethod
     def _obter_lotes_falta_item() -> List[str]:
@@ -379,11 +391,12 @@ class PedidosCounterService:
             return cached['rotas'], cached['sub_rotas']
 
         logger.debug("Rotas choices: CACHE MISS - calculando")
+        M = _get_model()  # rotas sao dados estaveis — MV aceitavel
         # 1 query em vez de 2 (era 2 scans da VIEW)
         result = db.session.query(
-            Pedido.rota, Pedido.sub_rota
+            M.rota, M.sub_rota
         ).filter(
-            db.or_(Pedido.rota.isnot(None), Pedido.sub_rota.isnot(None))
+            db.or_(M.rota.isnot(None), M.sub_rota.isnot(None))
         ).distinct().all()
 
         rotas_choices = sorted(set(r[0] for r in result if r[0]))
