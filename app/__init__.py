@@ -1235,53 +1235,6 @@ def create_app(config_name=None):
                 print(f"⚠️ Erro na criação de tabelas: {e}")
                 print("💡 Continuando sem criação automática de tabelas")
 
-            # ── Startup migration: ctrc_numero (create_all nao adiciona colunas) ──
-            try:
-                with db.engine.connect() as conn:
-                    # DDL idempotente
-                    conn.execute(db.text(
-                        "ALTER TABLE carvia_operacoes "
-                        "ADD COLUMN IF NOT EXISTS ctrc_numero VARCHAR(30)"
-                    ))
-                    conn.execute(db.text(
-                        "ALTER TABLE carvia_cte_complementares "
-                        "ADD COLUMN IF NOT EXISTS ctrc_numero VARCHAR(30)"
-                    ))
-                    conn.execute(db.text(
-                        "CREATE INDEX IF NOT EXISTS ix_carvia_operacoes_ctrc_numero "
-                        "ON carvia_operacoes(ctrc_numero)"
-                    ))
-                    conn.execute(db.text(
-                        "CREATE INDEX IF NOT EXISTS ix_carvia_cte_complementares_ctrc_numero "
-                        "ON carvia_cte_complementares(ctrc_numero)"
-                    ))
-                    # Backfill: extrair CTRC de chaves existentes
-                    result = conn.execute(db.text("""
-                        UPDATE carvia_operacoes
-                        SET ctrc_numero = 'CAR-' || CAST(CAST(SUBSTRING(cte_chave_acesso FROM 26 FOR 9) AS INTEGER) AS TEXT)
-                            || '-' || SUBSTRING(cte_chave_acesso FROM 44 FOR 1)
-                        WHERE cte_chave_acesso IS NOT NULL
-                          AND LENGTH(cte_chave_acesso) = 44
-                          AND ctrc_numero IS NULL
-                    """))
-                    backfill_ops = result.rowcount
-                    result = conn.execute(db.text("""
-                        UPDATE carvia_cte_complementares
-                        SET ctrc_numero = 'CAR-' || CAST(CAST(SUBSTRING(cte_chave_acesso FROM 26 FOR 9) AS INTEGER) AS TEXT)
-                            || '-' || SUBSTRING(cte_chave_acesso FROM 44 FOR 1)
-                        WHERE cte_chave_acesso IS NOT NULL
-                          AND LENGTH(cte_chave_acesso) = 44
-                          AND ctrc_numero IS NULL
-                    """))
-                    backfill_comps = result.rowcount
-                    conn.commit()
-                    if backfill_ops or backfill_comps:
-                        print(f"✅ CTRC backfill: {backfill_ops} ops + {backfill_comps} comps atualizados")
-                    else:
-                        print("✅ CTRC: colunas OK, backfill nao necessario")
-            except Exception as e:
-                print(f"⚠️ Startup migration CTRC (nao-bloqueante): {e}")
-
     # ✅ MIDDLEWARE PARA RECONEXÃO AUTOMÁTICA DO BANCO
     @app.before_request
     def ensure_db_connection(): # type: ignore
