@@ -19,6 +19,8 @@ from app.separacao.models import Separacao
 from app.estoque.services.estoque_simples import ServicoEstoqueSimples
 from app.carteira.utils.separacao_utils import (
     calcular_peso_pallet_produto,
+    calcular_peso_pallet_com_map,
+    carregar_pallet_map,
     buscar_rota_por_uf,
     buscar_sub_rota_por_uf_cidade,
 )
@@ -27,7 +29,6 @@ from app.utils.timezone import agora_utc_naive
 
 from . import carteira_simples_bp
 from .helpers import (
-    converter_entradas_para_frontend,
     atualizar_embarque_item_por_separacao,
 )
 
@@ -39,6 +40,8 @@ def _calcular_estoque_separacoes(separacoes_lista):
     Calcula estoque atual + programacao para produtos de uma lista de separacoes.
     Helper interno para evitar duplicacao entre gerar_separacao e adicionar_itens_separacao.
 
+    OPT-B2: Usa calcular_estoque_batch (2 queries) em vez de loop individual (2N queries).
+
     Args:
         separacoes_lista: lista de objetos Separacao
 
@@ -48,28 +51,16 @@ def _calcular_estoque_separacoes(separacoes_lista):
     hoje = date.today()
     data_fim = hoje + timedelta(days=28)
 
-    estoque_map = {}
-    produtos_unicos = list(set([sep.cod_produto for sep in separacoes_lista]))
+    produtos_unicos = list(set(sep.cod_produto for sep in separacoes_lista))
 
-    for cod_produto in produtos_unicos:
-        estoque_atual = ServicoEstoqueSimples.calcular_estoque_atual(cod_produto)
+    if not produtos_unicos:
+        return {}
 
-        # Buscar programacao com UNIFICACAO DE CODIGOS
-        # entrada_em_d_plus_1=False porque frontend ja aplica D+1
-        entradas_dict = ServicoEstoqueSimples.calcular_entradas_previstas(
-            cod_produto,
-            hoje,
-            data_fim,
-            entrada_em_d_plus_1=False
-        )
-
-        # Converter Dict[date, float] -> List[Dict[str, Any]] para frontend
-        programacao = converter_entradas_para_frontend(entradas_dict)
-
-        estoque_map[cod_produto] = {
-            'estoque_atual': estoque_atual,
-            'programacao': programacao
-        }
+    # Batch: 2 queries em vez de 2N
+    estoque_map = ServicoEstoqueSimples.calcular_estoque_batch(
+        codigos_produtos=produtos_unicos,
+        data_fim=data_fim
+    )
 
     return estoque_map
 
@@ -179,6 +170,23 @@ def gerar_separacao():
         separacoes_criadas = []
         itens_rejeitados = []
 
+        # OPT-B4: Pre-fetch batch de qtd ja separada (1 query em vez de N)
+        cod_list = [p.get('cod_produto') for p in produtos if p.get('cod_produto')]
+        sep_totals = db.session.query(
+            Separacao.cod_produto,
+            func.sum(Separacao.qtd_saldo).label('total')
+        ).filter(
+            and_(
+                Separacao.num_pedido == num_pedido,
+                Separacao.cod_produto.in_(cod_list),
+                Separacao.sincronizado_nf == False
+            )
+        ).group_by(Separacao.cod_produto).all()
+        sep_map = {r.cod_produto: float(r.total or 0) for r in sep_totals}
+
+        # OPT-B5: Pre-carregar palletizacao em batch (1 query em vez de N)
+        pallet_map = carregar_pallet_map(cod_list)
+
         for produto in produtos:
             cod_produto = produto.get('cod_produto')
             quantidade = float(produto.get('quantidade', 0))
@@ -194,12 +202,8 @@ def gerar_separacao():
                 })
                 continue
 
-            # Buscar item na carteira
-            item_carteira = CarteiraPrincipal.query.filter_by(
-                num_pedido=num_pedido,
-                cod_produto=cod_produto,
-                ativo=True
-            ).first()
+            # OPT-B3: Usar dict ja carregado em vez de query individual
+            item_carteira = produtos_carteira.get(cod_produto)
 
             if not item_carteira:
                 logger.warning(f"Item nao encontrado na carteira: {num_pedido}/{cod_produto}")
@@ -209,16 +213,8 @@ def gerar_separacao():
                 })
                 continue
 
-            # Verificar se quantidade esta disponivel
-            qtd_separada = db.session.query(
-                func.sum(Separacao.qtd_saldo)
-            ).filter(
-                and_(
-                    Separacao.num_pedido == num_pedido,
-                    Separacao.cod_produto == cod_produto,
-                    Separacao.sincronizado_nf == False
-                )
-            ).scalar() or 0
+            # OPT-B4: Usar mapa pre-calculado em vez de query individual
+            qtd_separada = sep_map.get(cod_produto, 0)
 
             qtd_disponivel = float(item_carteira.qtd_saldo_produto_pedido or 0) - float(qtd_separada)
 
@@ -243,8 +239,8 @@ def gerar_separacao():
             preco_unitario = float(item_carteira.preco_produto_pedido or 0)
             valor_separacao = quantidade * preco_unitario
 
-            # Calcular peso e pallet
-            peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, quantidade)
+            # OPT-B5: Usar mapa pre-carregado em vez de query individual
+            peso_calculado, pallet_calculado = calcular_peso_pallet_com_map(cod_produto, quantidade, pallet_map)
 
             # Buscar rota
             if hasattr(item_carteira, 'incoterm') and item_carteira.incoterm in ["RED", "FOB"]:
@@ -555,45 +551,50 @@ def atualizar_separacao_lote():
                 'error': 'Nenhum campo valido para atualizar. Use: expedicao, agendamento, protocolo ou agendamento_confirmado'
             }), 400
 
-        # Buscar TODAS as separacoes do lote
-        separacoes_lote = Separacao.query.filter_by(
+        # OPT-B9: Bulk UPDATE (1 query em vez de N updates individuais).
+        # SEGURO para expedicao/agendamento/protocolo/agendamento_confirmado:
+        # event listeners de Separacao sao no-op para esses campos
+        # (nao afetam status_calculado, peso, valor nem embarque).
+        # CUIDADO: Se futuro campo afetando status for adicionado, revisar este bulk.
+        qtd_atualizada = Separacao.query.filter_by(
             separacao_lote_id=separacao_lote_id
-        ).all()
+        ).update(campos_atualizaveis, synchronize_session='fetch')
 
-        if not separacoes_lote:
+        if qtd_atualizada == 0:
             return jsonify({
                 'success': False,
                 'error': 'Nenhuma separacao encontrada para este lote'
             }), 404
 
-        # Atualizar campos de TODAS as separacoes do lote
-        for sep in separacoes_lote:
-            for campo, valor in campos_atualizaveis.items():
-                setattr(sep, campo, valor)
-
         db.session.commit()
-        db.session.expire_all()  # INVALIDAR Identity Map (cache da sessao)
+
+        # Buscar separacoes para recalculo de estoque (se necessario)
+        separacoes_lote = Separacao.query.filter_by(
+            separacao_lote_id=separacao_lote_id
+        ).all()
 
         # RECALCULAR ESTOQUE PROJETADO (apenas se alterou expedicao)
         estoque_atualizado = {}
         if 'expedicao' in campos_atualizaveis:
             # Obter codigos de produtos afetados (unicos)
-            codigos_afetados = list(set([sep.cod_produto for sep in separacoes_lote]))
+            codigos_afetados = list(set(sep.cod_produto for sep in separacoes_lote))
 
-            # Calcular novo estoque projetado
-            for cod_produto in codigos_afetados:
-                try:
-                    projecao = ServicoEstoqueSimples.calcular_projecao(
-                        cod_produto, 28, entrada_em_d_plus_1=True
-                    )
-
+            # OPT-B8: Batch em vez de loop individual (2 queries em vez de 3N)
+            try:
+                hoje = date.today()
+                data_fim = hoje + timedelta(days=28)
+                batch_result = ServicoEstoqueSimples.calcular_estoque_batch(
+                    codigos_produtos=codigos_afetados,
+                    data_fim=data_fim
+                )
+                for cod_produto, info in batch_result.items():
                     estoque_atualizado[cod_produto] = {
-                        'estoque_atual': projecao.get('estoque_atual', 0),
-                        'menor_estoque_d7': projecao.get('menor_estoque_d7', 0),
-                        'projecoes': projecao.get('projecao', [])
+                        'estoque_atual': info.get('estoque_atual', 0),
+                        'menor_estoque_d7': 0,  # Frontend recalcula localmente
+                        'projecoes': []  # Frontend recalcula localmente
                     }
-                except Exception as e:
-                    logger.error(f"Erro ao recalcular estoque de {cod_produto}: {e}")
+            except Exception as e:
+                logger.error(f"Erro ao recalcular estoque batch: {e}")
 
         campos_atualizados = ', '.join(campos_atualizaveis.keys())
         logger.info(f"Lote {separacao_lote_id}: {len(separacoes_lote)} separacao(oes) atualizada(s) - Campos: {campos_atualizados}")
@@ -774,16 +775,19 @@ def adicionar_itens_separacao():
         itens_criados = []
         itens_atualizados = []
 
+        # OPT-B5: Pre-carregar palletizacao e carteira em batch
+        cod_list_add = [p['cod_produto'] for p in produtos if p.get('cod_produto')]
+        pallet_map_add = carregar_pallet_map(cod_list_add)
+        produtos_carteira_add = {}
+        for item in CarteiraPrincipal.query.filter_by(num_pedido=num_pedido, ativo=True).all():
+            produtos_carteira_add[item.cod_produto] = item
+
         for produto in produtos:
             cod_produto = produto['cod_produto']
             quantidade = float(produto['quantidade'])
 
-            # Buscar item da carteira
-            item_carteira = CarteiraPrincipal.query.filter_by(
-                num_pedido=num_pedido,
-                cod_produto=cod_produto,
-                ativo=True
-            ).first()
+            # OPT-B3: Usar dict pre-carregado em vez de query individual
+            item_carteira = produtos_carteira_add.get(cod_produto)
 
             if not item_carteira:
                 logger.warning(f"Item {cod_produto} do pedido {num_pedido} nao encontrado na carteira")
@@ -804,8 +808,8 @@ def adicionar_itens_separacao():
                 qtd_anterior = float(separacao_existente.qtd_saldo or 0)
                 qtd_nova = qtd_anterior + quantidade
 
-                # Recalcular peso e pallet com a nova quantidade total
-                peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, qtd_nova)
+                # OPT-B5: Usar mapa pre-carregado
+                peso_calculado, pallet_calculado = calcular_peso_pallet_com_map(cod_produto, qtd_nova, pallet_map_add)
 
                 # Recalcular valor com a nova quantidade total
                 preco_unitario = float(item_carteira.preco_produto_pedido or 0)
@@ -831,8 +835,8 @@ def adicionar_itens_separacao():
                 # PRODUTO NAO EXISTE -> CRIAR NOVO REGISTRO
                 logger.info(f"Produto {cod_produto} nao existe no lote {separacao_lote_id}, criando novo registro")
 
-                # Calcular peso e pallet
-                peso_calculado, pallet_calculado = calcular_peso_pallet_produto(cod_produto, quantidade)
+                # OPT-B5: Usar mapa pre-carregado
+                peso_calculado, pallet_calculado = calcular_peso_pallet_com_map(cod_produto, quantidade, pallet_map_add)
 
                 # Calcular valor
                 preco_unitario = float(item_carteira.preco_produto_pedido or 0)

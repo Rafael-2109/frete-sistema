@@ -130,6 +130,12 @@ class CarteiraPrincipal(db.Model):
         Index('idx_carteira_cliente_vendedor', 'cnpj_cpf', 'vendedor'),
         Index('idx_carteira_status_data', 'status_pedido', 'data_pedido'),
         Index('idx_carteira_produto_saldo', 'cod_produto', 'qtd_saldo_produto_pedido'),
+        # OPT-B7: Indice parcial para filtro base (ativo=true, saldo>0)
+        Index(
+            'idx_carteira_ativo_saldo',
+            'num_pedido', 'cod_produto',
+            postgresql_where=db.text('ativo = true AND qtd_saldo_produto_pedido > 0')
+        ),
     )
 
     def __repr__(self):

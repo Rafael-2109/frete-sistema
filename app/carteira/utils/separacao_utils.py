@@ -107,6 +107,52 @@ def calcular_peso_pallet_produto(cod_produto, quantidade):
         return quantidade * 1.0, quantidade / 100.0
 
 
+def carregar_pallet_map(codigos_produtos):
+    """
+    OPT-B5: Carrega dados de palletizacao em batch (1 query em vez de N).
+
+    Args:
+        codigos_produtos (list): Lista de codigos de produto
+
+    Returns:
+        dict: {cod_produto: CadastroPalletizacao} para lookup O(1)
+    """
+    if not codigos_produtos:
+        return {}
+    try:
+        palletizacoes = db.session.query(CadastroPalletizacao).filter(
+            CadastroPalletizacao.cod_produto.in_(codigos_produtos),
+            CadastroPalletizacao.ativo == True
+        ).all()
+        return {p.cod_produto: p for p in palletizacoes}
+    except Exception as e:
+        logger.error(f"Erro ao carregar pallet_map batch: {e}")
+        return {}
+
+
+def calcular_peso_pallet_com_map(cod_produto, quantidade, pallet_map):
+    """
+    Calcula peso e pallet usando mapa pre-carregado (sem query).
+
+    Args:
+        cod_produto (str): Codigo do produto
+        quantidade (float): Quantidade a calcular
+        pallet_map (dict): Mapa {cod_produto: CadastroPalletizacao}
+
+    Returns:
+        tuple: (peso_total, pallet_total)
+    """
+    palletizacao = pallet_map.get(cod_produto)
+    if palletizacao:
+        peso_bruto = float(palletizacao.peso_bruto or 0)
+        qtd_pallet = float(palletizacao.palletizacao or 1)
+        peso_total = quantidade * peso_bruto
+        pallet_total = quantidade / qtd_pallet if qtd_pallet > 0 else 0
+        return peso_total, pallet_total
+    else:
+        return quantidade * 1.0, quantidade / 100.0
+
+
 def buscar_rota_por_uf(cod_uf):
     """Busca rota principal baseada no cod_uf"""
     if not cod_uf:

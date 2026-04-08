@@ -79,10 +79,11 @@ def obter_dados():
         offset = int(request.args.get('offset', 0))
 
         # Query base com JOINs para Rota e Sub-rota
-        # SUBQUERY: Buscar pedidos em standby ativo para EXCLUIR
-        pedidos_em_standby = db.session.query(SaldoStandby.num_pedido).filter(
+        # OPT-B6: NOT EXISTS em vez de NOT IN (melhor plano de execucao, correto com NULLs)
+        standby_exists = db.session.query(SaldoStandby.id).filter(
+            SaldoStandby.num_pedido == CarteiraPrincipal.num_pedido,
             SaldoStandby.status_standby.in_(['ATIVO', 'BLOQ. COML.', 'SALDO'])
-        ).distinct().subquery()
+        ).correlate(CarteiraPrincipal).exists()
 
         query = db.session.query(CarteiraPrincipal).outerjoin(
             CadastroRota,
@@ -96,7 +97,7 @@ def obter_dados():
         ).filter(
             CarteiraPrincipal.ativo == True,
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
-            ~CarteiraPrincipal.num_pedido.in_(pedidos_em_standby)
+            ~standby_exists
         )
 
         # Aplicar filtros
@@ -216,7 +217,7 @@ def obter_dados():
                 CarteiraPrincipal.ativo == True,
                 CarteiraPrincipal.qtd_saldo_produto_pedido > 0,
                 CarteiraPrincipal.cod_produto.in_(list(todos_codigos_expandidos)),
-                ~CarteiraPrincipal.num_pedido.in_(pedidos_em_standby)
+                ~standby_exists
             ).group_by(
                 CarteiraPrincipal.cod_produto
             ).all()
@@ -360,10 +361,9 @@ def obter_dados():
 
         # BUSCAR TODAS as separacoes (SEM filtros de rota/sub-rota) dos produtos
         # INCLUINDO codigos unificados!
-        codigos_expandidos = set()
-        for cod in codigos_produtos:
-            codigos_relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod)
-            codigos_expandidos.update(codigos_relacionados)
+        # OPT-B1: Reusar todos_codigos_expandidos ja calculado na linha 206-208
+        # em vez de N queries individuais get_todos_codigos_relacionados()
+        codigos_expandidos = todos_codigos_expandidos
 
         logger.info(f"Codigos da pagina: {len(codigos_produtos)} -> Expandidos com unificacao: {len(codigos_expandidos)}")
 

@@ -2,7 +2,6 @@
 Funcoes auxiliares da Carteira Simplificada
 
 - validar_numero_json: sanitizacao de numeros para JSON (NaN/Infinity)
-- converter_entradas_para_frontend: Dict[date, float] → List[Dict] para JS
 - atualizar_embarque_item_por_separacao: sync EmbarqueItem ao editar separacao
 - calcular_saidas_nao_visiveis: saidas TODAS - FILTRADAS para projecao de estoque
 """
@@ -43,52 +42,6 @@ def validar_numero_json(valor, padrao, permitir_zero=True):
         return numero
     except (ValueError, TypeError, AttributeError):
         return padrao
-
-
-def converter_entradas_para_frontend(entradas_dict):
-    """
-    Converte Dict[date, float] para List[Dict[str, Any]] esperado pelo frontend.
-
-    Formato esperado pelo frontend:
-    [
-        {'data': '2025-01-07', 'qtd': 100.0},
-        {'data': '2025-01-08', 'qtd': 200.0}
-    ]
-
-    Args:
-        entradas_dict: Dict[date, float] retornado por ServicoEstoqueSimples
-
-    Returns:
-        List[Dict[str, Any]] no formato esperado pelo frontend
-    """
-    try:
-        if not entradas_dict:
-            return []
-
-        programacao = []
-        for data_entrada, qtd in entradas_dict.items():
-            # Validar data
-            if not isinstance(data_entrada, date):
-                logger.warning(f"Data invalida ignorada: {data_entrada}")
-                continue
-
-            # Validar quantidade
-            qtd_validada = validar_numero_json(qtd, 0, permitir_zero=True)
-
-            if qtd_validada > 0:  # So incluir se qtd > 0
-                programacao.append({
-                    'data': data_entrada.isoformat(),
-                    'qtd': qtd_validada
-                })
-
-        # Ordenar por data (garantir ordem cronologica)
-        programacao.sort(key=lambda x: x['data'])
-
-        return programacao
-
-    except Exception as e:
-        logger.error(f"Erro ao converter entradas para frontend: {e}")
-        return []
 
 
 def atualizar_embarque_item_por_separacao(separacao_lote_id):

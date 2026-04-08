@@ -367,8 +367,17 @@
 
             state.dados = resultado.dados;
             state.totalItens = resultado.total;
-            state.saidasNaoVisiveis = resultado.saidas_nao_visiveis || {};  // 🆕 Capturar saídas não visíveis
-            state.mapaUnificacao = resultado.mapa_unificacao || {};  // 🆕 Capturar mapa de códigos unificados
+            state.saidasNaoVisiveis = resultado.saidas_nao_visiveis || {};
+            state.mapaUnificacao = resultado.mapa_unificacao || {};
+
+            // OPT-F2: Inicializar campos editaveis no state (calcularTotaisSeparacao le daqui)
+            for (let i = 0; i < state.dados.length; i++) {
+                const item = state.dados[i];
+                if (item.tipo === 'pedido') {
+                    item.qtd_editavel = item.qtd_editavel || 0;
+                    item.expedicao_editavel = item.expedicao_editavel || '';
+                }
+            }
 
             console.log(`✅ Dados carregados: ${state.dados.length} linhas visíveis`);
             console.log(`✅ Saídas não visíveis: ${Object.keys(state.saidasNaoVisiveis).length} produtos`);
@@ -1057,8 +1066,8 @@
                     </span>
                 </td>
                 <td>${item.pedido_cliente || ''}</td>
-                <td>${item.data_pedido ? new Date(item.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
-                <td>${item.data_entrega_pedido ? new Date(item.data_entrega_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
+                <td>${item.data_pedido ? formatarData(item.data_pedido) : ''}</td>
+                <td>${item.data_entrega_pedido ? formatarData(item.data_entrega_pedido) : ''}</td>
                 <td title="Equipe: ${item.equipe_vendas || 'N/A'}">${item.cnpj_cpf}</td>
                 <td>
                     <div class="d-flex align-items-center gap-1">
@@ -1242,8 +1251,8 @@
                     </span>
                 </td>
                 <td>${item.pedido_cliente || ''}</td>
-                <td>${item.data_pedido ? new Date(item.data_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
-                <td>${item.data_entrega_pedido ? new Date(item.data_entrega_pedido + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</td>
+                <td>${item.data_pedido ? formatarData(item.data_pedido) : ''}</td>
+                <td>${item.data_entrega_pedido ? formatarData(item.data_entrega_pedido) : ''}</td>
                 <td title="Equipe: ${item.equipe_vendas || 'N/A'}">${item.cnpj_cpf}</td>
                 <td>
                     <div class="d-flex align-items-center gap-1">
@@ -1401,22 +1410,24 @@
      * Agrupa por num_pedido para exibir múltiplos pedidos separadamente
      */
     function calcularTotaisSeparacao() {
+        // OPT-F2: Ler do state.dados em vez de DOM (elimina ~10K getElementById por chamada).
+        // state.dados[].qtd_editavel e .expedicao_editavel sao mantidos atualizados
+        // por handleTableInput e handleTableChange.
         const totaisPorPedido = {};
 
-        state.dados.forEach((item, index) => {
+        for (let i = 0; i < state.dados.length; i++) {
+            const item = state.dados[i];
+
             // Processar APENAS linhas de pedido (tipo='pedido')
-            if (item.tipo !== 'pedido') return;
+            if (item.tipo !== 'pedido') continue;
 
-            const numPedido = item.num_pedido;
-            const qtdInput = document.getElementById(`qtd-edit-${index}`);
-            const dataExpedicaoInput = document.getElementById(`dt-exped-${index}`);
+            const qtdEditavel = parseFloat(item.qtd_editavel || 0);
+            const dataExpedicao = item.expedicao_editavel || '';
 
-            const qtdEditavel = qtdInput ? parseFloat(qtdInput.value || 0) : 0;
-            const dataExpedicao = dataExpedicaoInput ? dataExpedicaoInput.value : '';
-
-            // Critério: QTD > 0 E DATA preenchida
+            // Criterio: QTD > 0 E DATA preenchida
             if (qtdEditavel > 0 && dataExpedicao) {
-                // Inicializar totais do pedido se ainda não existe
+                const numPedido = item.num_pedido;
+
                 if (!totaisPorPedido[numPedido]) {
                     totaisPorPedido[numPedido] = {
                         numPedido: numPedido,
@@ -1428,22 +1439,16 @@
                     };
                 }
 
-                // Calcular valores do item
                 const preco = parseFloat(item.preco_produto_pedido) || 0;
                 const pesoBruto = parseFloat(item.peso_bruto) || 0;
                 const palletizacao = parseFloat(item.palletizacao) || 100;
 
-                const valorItem = qtdEditavel * preco;
-                const pesoItem = qtdEditavel * pesoBruto;
-                const palletItem = palletizacao > 0 ? qtdEditavel / palletizacao : 0;
-
-                // Acumular totais
                 totaisPorPedido[numPedido].qtdItens += 1;
-                totaisPorPedido[numPedido].valorTotal += valorItem;
-                totaisPorPedido[numPedido].pesoTotal += pesoItem;
-                totaisPorPedido[numPedido].palletTotal += palletItem;
+                totaisPorPedido[numPedido].valorTotal += qtdEditavel * preco;
+                totaisPorPedido[numPedido].pesoTotal += qtdEditavel * pesoBruto;
+                totaisPorPedido[numPedido].palletTotal += palletizacao > 0 ? qtdEditavel / palletizacao : 0;
             }
-        });
+        }
 
         return totaisPorPedido;
     }
@@ -2005,6 +2010,9 @@
         const item = state.dados[rowIndex];
         const inputQtd = document.getElementById(`qtd-edit-${rowIndex}`);
         inputQtd.value = item.qtd_saldo;
+
+        // OPT-F2: Sincronizar state (calcularTotaisSeparacao le daqui)
+        item.qtd_editavel = parseFloat(item.qtd_saldo || 0);
 
         // Recalcular valores da linha (valor total, pallets, peso)
         recalcularValoresLinha(rowIndex);
@@ -2892,15 +2900,66 @@
      * SEGURANÇA: Lê dados frescos do state.dados (não cache).
      */
     function recalcularTodasLinhasProduto(codProduto) {
-        // Buscar códigos unificados (inclui o próprio código)
+        // OPT-F1: Calcular projecao UMA VEZ por produto (fresca!), aplicar visual em cada linha.
+        // Antes: coletarTodasSaidas + calcularProjecaoCompleta POR LINHA (redundante).
+        // Agora: 1 calculo, N renders.
         const codigosUnificados = state.mapaUnificacao[codProduto] || [codProduto];
 
-        // Iterar apenas sobre índices relevantes (O(k) em vez de O(n))
+        // 1. Coletar saidas e calcular projecao UMA VEZ (dados frescos do state/DOM)
+        const saidas = coletarTodasSaidas(codProduto);
+
+        // Obter estoque_atual e programacao de qualquer linha do produto (identicos)
+        let estoqueAtual = 0;
+        let programacao = [];
+        for (const codigo of codigosUnificados) {
+            const indices = state.indices.porProduto.get(codigo) || [];
+            if (indices.length > 0) {
+                const firstItem = state.dados[indices[0]];
+                estoqueAtual = firstItem.estoque_atual || 0;
+                programacao = firstItem.programacao || [];
+                break;
+            }
+        }
+
+        const resultado = calcularProjecaoCompleta(estoqueAtual, saidas, programacao);
+        const projecoesFormatadas = resultado.projecao.map(p => ({
+            data: p.data,
+            dia_nome: formatarDataWeekday(p.data),
+            estoque: p.saldo_final || 0,
+            saida: p.saida || 0,
+            entrada: p.entrada || 0,
+            dia: p.dia
+        }));
+
+        // 2. Aplicar resultado visual em CADA linha (DOM-only, sem recalculo)
         codigosUnificados.forEach(codigo => {
             const indices = state.indices.porProduto.get(codigo) || [];
             indices.forEach(index => {
                 const item = state.dados[index];
-                renderizarEstoquePrecalculado(index, item);
+
+                // Persistir menor_estoque_d7 no state
+                item.menor_estoque_d7 = resultado.menor_estoque_d7;
+
+                // Renderizar projecoes D0-D28
+                renderizarProjecaoDias(index, projecoesFormatadas);
+
+                // Atualizar EST DATA
+                atualizarEstoqueNaData(index, item, projecoesFormatadas);
+
+                // Atualizar MENOR 7D
+                const menor7dEl = document.getElementById(`menor-7d-${index}`);
+                if (menor7dEl) {
+                    menor7dEl.textContent = Math.round(resultado.menor_estoque_d7);
+                    menor7dEl.classList.remove('est-negativo', 'est-baixo');
+                    const menor7dRounded = Math.round(resultado.menor_estoque_d7);
+                    if (menor7dRounded !== 0) {
+                        if (menor7dRounded < 0) {
+                            menor7dEl.classList.add('est-negativo');
+                        } else if (menor7dRounded < 100) {
+                            menor7dEl.classList.add('est-baixo');
+                        }
+                    }
+                }
             });
         });
     }
@@ -3100,7 +3159,7 @@
         // 3. Converter formato para exibição
         const projecoesFormatadas = resultado.projecao.map(p => ({
             data: p.data,
-            dia_nome: new Date(p.data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'short' }),
+            dia_nome: formatarDataWeekday(p.data),
             estoque: p.saldo_final || 0,
             saida: p.saida || 0,
             entrada: p.entrada || 0,
@@ -3200,32 +3259,48 @@
 
         const container = document.getElementById(`projecao-dias-${rowIndex}`);
 
-        // ✅ PROTEÇÃO: Se elemento não existe (linha não renderizada ou oculta), sair silenciosamente
+        // PROTECAO: Se elemento nao existe (linha nao renderizada ou oculta), sair
         if (!container) {
-            return; // Linha não está no DOM (virtual scrolling ou oculta)
+            return;
         }
 
-        // ✅ MOSTRAR TODOS OS 28 DIAS (sem offset - sem navegação)
         const diasVisiveis = projecoes.slice(0, 28);
+        const spans = container.children;
 
-        const html = diasVisiveis.map(dia => {
-            let classe = 'estoque-dia';
-            if (dia.estoque < 0) classe += ' negativo';
-            else if (dia.estoque < 100) classe += ' baixo';
+        // OPT-F3: Se spans ja existem, atualizar in-place (sem innerHTML)
+        if (spans.length === diasVisiveis.length) {
+            for (let i = 0; i < diasVisiveis.length; i++) {
+                const dia = diasVisiveis[i];
+                const span = spans[i];
+                const estoqueRounded = Math.round(dia.estoque);
 
-            // 🔧 4. REMOVER DATAS - Apenas mostrar número do estoque
-            // Tooltip mantém a data completa para referência
-            const dataFormatada = new Date(dia.data + 'T00:00:00').toLocaleDateString('pt-BR');
-            const diaIndice = dia.dia !== undefined ? `D${dia.dia}` : '';
+                // Atualizar texto
+                span.textContent = formatarNumero(dia.estoque, 0);
 
-            return `
-                <span class="${classe}" title="${diaIndice} - ${dataFormatada}">
-                    ${formatarNumero(dia.estoque, 0)}
-                </span>
-            `;
-        }).join('');
+                // Atualizar classes
+                span.className = 'estoque-dia';
+                if (dia.estoque < 0) span.className += ' negativo';
+                else if (dia.estoque < 100) span.className += ' baixo';
 
-        container.innerHTML = html;
+                // Atualizar tooltip
+                const diaIndice = dia.dia !== undefined ? `D${dia.dia}` : '';
+                span.title = `${diaIndice} - ${formatarData(dia.data)}`;
+            }
+        } else {
+            // Fallback: render inicial via innerHTML (primeira vez ou mudanca de quantidade de dias)
+            const html = diasVisiveis.map(dia => {
+                let classe = 'estoque-dia';
+                if (dia.estoque < 0) classe += ' negativo';
+                else if (dia.estoque < 100) classe += ' baixo';
+
+                const dataFormatada = formatarData(dia.data);
+                const diaIndice = dia.dia !== undefined ? `D${dia.dia}` : '';
+
+                return `<span class="${classe}" title="${diaIndice} - ${dataFormatada}">${formatarNumero(dia.estoque, 0)}</span>`;
+            }).join('');
+
+            container.innerHTML = html;
+        }
     }
 
     // 🆕 NAVEGAÇÃO GLOBAL DE ESTOQUE
@@ -3248,7 +3323,7 @@
 
                 const projecoesFormatadas = resultado.projecao.map(p => ({
                     data: p.data,
-                    dia_nome: new Date(p.data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'short' }),
+                    dia_nome: formatarDataWeekday(p.data),
                     estoque: p.saldo_final || 0,
                     saida: p.saida || 0,
                     entrada: p.entrada || 0,
@@ -3265,10 +3340,25 @@
     // ==============================================
     // UTILITÁRIOS
     // ==============================================
+
+    // OPT-F4: Cache de formatacao de datas (evita Intl API repetida no hot path)
+    const _dateCache = new Map();
+    const _dateWeekdayCache = new Map();
+
     function formatarData(dataStr) {
         if (!dataStr) return '';
-        const data = new Date(dataStr + 'T00:00:00');
-        return data.toLocaleDateString('pt-BR');
+        if (_dateCache.has(dataStr)) return _dateCache.get(dataStr);
+        const formatted = new Date(dataStr + 'T00:00:00').toLocaleDateString('pt-BR');
+        _dateCache.set(dataStr, formatted);
+        return formatted;
+    }
+
+    function formatarDataWeekday(dataStr) {
+        if (!dataStr) return '';
+        if (_dateWeekdayCache.has(dataStr)) return _dateWeekdayCache.get(dataStr);
+        const formatted = new Date(dataStr + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'short' });
+        _dateWeekdayCache.set(dataStr, formatted);
+        return formatted;
     }
 
     function formatarNumero(numero, decimais = 2) {
@@ -3337,8 +3427,7 @@
     }
 
     function inicializarTooltips() {
-        const tooltips = document.querySelectorAll('.truncate-tooltip');
-        tooltips.forEach(el => { el.title = el.title || el.textContent; });
+        // OPT-F5: Removido querySelectorAll('.truncate-tooltip') — title ja definido inline no HTML
 
         // Lazy init via event delegation (1 listener em vez de N instancias Bootstrap)
         const tbody = document.getElementById('tbody-carteira');
