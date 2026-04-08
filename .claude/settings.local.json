@@ -194,7 +194,8 @@
       "Bash(bash:*)",
       "Skill(frontend-design)",
       "Bash(sudo crontab:*)",
-      "Bash(crontab -l)"
+      "Bash(crontab -l)",
+      "Skill(gerindo-carvia)"
     ],
     "deny": [],
     "defaultMode": "auto"
