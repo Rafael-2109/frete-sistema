@@ -12,7 +12,7 @@ https://receitaws.com.br/api
 import requests
 import logging
 import time
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,10 @@ class APIReceita:
     BASE_URL = "https://receitaws.com.br/v1/cnpj"
     TIMEOUT = 10  # segundos
     RETRY_DELAY = 20  # segundos (espera se der 429)
+    CACHE_TTL = 3600  # 1 hora
+
+    # Cache in-memory: {cnpj_limpo: (timestamp, dados)}
+    _cache: Dict[str, Tuple[float, Optional[Dict]]] = {}
 
     @staticmethod
     def limpar_cnpj(cnpj: str) -> str:
@@ -78,6 +82,14 @@ class APIReceita:
             logger.error(f"CNPJ inválido: {cnpj}")
             return None
 
+        # Cache hit: retorna resultado anterior se dentro do TTL
+        cached = cls._cache.get(cnpj_limpo)
+        if cached:
+            ts, dados = cached
+            if time.time() - ts < cls.CACHE_TTL:
+                logger.info(f"📋 CNPJ {cnpj_limpo} retornado do cache")
+                return dados
+
         url = f"{cls.BASE_URL}/{cnpj_limpo}"
 
         try:
@@ -92,6 +104,7 @@ class APIReceita:
                 # Verifica se o status é OK
                 if data.get('status') == 'OK':
                     logger.info(f"✅ CNPJ {cnpj_limpo} encontrado: {data.get('nome', 'N/A')}")
+                    cls._cache[cnpj_limpo] = (time.time(), data)
                     return data
                 elif data.get('status') == 'ERROR':
                     logger.error(f"❌ Erro da API: {data.get('message', 'Erro desconhecido')}")
@@ -109,7 +122,7 @@ class APIReceita:
                     time.sleep(cls.RETRY_DELAY)
                     return cls.buscar_cnpj(cnpj, retry=False)  # Tenta apenas 1x
                 else:
-                    logger.error("❌ Limite excedido e retry desabilitado")
+                    logger.warning("⚠️ Limite excedido e retry desabilitado")
                     return None
 
             # CNPJ não encontrado

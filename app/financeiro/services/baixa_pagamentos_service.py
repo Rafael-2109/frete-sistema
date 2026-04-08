@@ -609,9 +609,17 @@ class BaixaPagamentosService:
                 [[line1_id, line2_id]]
             )
         except Exception as e:
+            erro_str = str(e)
             # Ignorar erro de serialização - operação foi executada
-            if "cannot marshal None" not in str(e):
-                raise
+            if "cannot marshal None" in erro_str:
+                return
+            # Já reconciliados: operação manual no Odoo ou race condition
+            if "já estão reconciliados" in erro_str or "already reconciled" in erro_str:
+                logger.warning(
+                    f"⚠️ Linhas {line1_id}/{line2_id} já reconciliadas no Odoo — ignorando"
+                )
+                return
+            raise
 
     # =========================================================================
     # SAFE WRITE HELPERS (draft → write → post)
