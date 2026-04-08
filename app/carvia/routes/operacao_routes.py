@@ -168,6 +168,17 @@ def register_operacao_routes(bp):
                     sub_info[op_id] = {'transp_nome': razao, 'sub_cte': cte_num, 'count': 0}
                 sub_info[op_id]['count'] += 1
 
+        # Batch: resolver clientes comerciais por CNPJ cliente
+        import re
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        cnpjs_cli = {op.cnpj_cliente for op, _ in paginacao.items if op.cnpj_cliente}
+        _resolved = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_cli)
+        clientes_por_cnpj = {
+            cnpj: _resolved[re.sub(r'\D', '', cnpj)]
+            for cnpj in cnpjs_cli
+            if re.sub(r'\D', '', cnpj) in _resolved
+        }
+
         return render_template(
             'carvia/listar_operacoes.html',
             operacoes=paginacao.items,
@@ -184,6 +195,7 @@ def register_operacao_routes(bp):
             sub_info=sub_info,
             nfs_por_op=nfs_por_op,
             dest_por_op=dest_por_op,
+            clientes_por_cnpj=clientes_por_cnpj,
         )
 
     @bp.route('/operacoes/<int:operacao_id>')
@@ -226,6 +238,12 @@ def register_operacao_routes(bp):
             CarviaCustoEntrega.operacao_id == operacao_id
         ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
 
+        # Resolver cliente comercial por CNPJ cliente
+        import re
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({operacao.cnpj_cliente})
+        cliente_comercial = _clientes.get(re.sub(r'\D', '', operacao.cnpj_cliente or ''))
+
         return render_template(
             'carvia/detalhe_operacao.html',
             operacao=operacao,
@@ -234,6 +252,7 @@ def register_operacao_routes(bp):
             faturas_transportadora=faturas_transportadora,
             ctes_complementares=ctes_complementares,
             custos_entrega=custos_entrega,
+            cliente_comercial=cliente_comercial,
         )
 
     # ==================== CRIAR OPERACAO MANUAL ====================

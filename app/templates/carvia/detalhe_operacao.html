@@ -101,6 +101,14 @@
                             <small class="text-muted d-block">Cliente</small>
                             <strong>{{ operacao.nome_cliente or '-' }}</strong>
                             <div class="cnpj-col small text-muted">{{ operacao.cnpj_cliente }}</div>
+                            {% if cliente_comercial %}
+                            <div class="mt-1">
+                                <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cliente_comercial.id) }}"
+                                   class="text-decoration-none">
+                                    <i class="fas fa-building"></i> {{ cliente_comercial.nome_comercial }}
+                                </a>
+                            </div>
+                            {% endif %}
                         </div>
                         <div class="col-6">
                             <small class="text-muted d-block">CTe CarVia</small>

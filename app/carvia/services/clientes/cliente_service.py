@@ -86,6 +86,47 @@ class CarviaClienteService:
         db.session.flush()
         return True, None
 
+    # ==================== RESOLUCAO CNPJ → CLIENTE ====================
+
+    @staticmethod
+    def resolver_clientes_por_cnpjs(cnpjs) -> Dict[str, Dict]:
+        """Resolve conjunto de CNPJs para CarviaCliente (batch, sem N+1).
+
+        Args:
+            cnpjs: iteravel de CNPJs (com ou sem formatacao)
+
+        Returns:
+            dict mapeando cnpj_limpo → {id, nome_comercial}
+        """
+        from app.carvia.models import CarviaCliente, CarviaClienteEndereco
+
+        cnpjs_limpos = {
+            CarviaClienteService._limpar_cnpj(c)
+            for c in cnpjs if c
+        }
+        cnpjs_limpos.discard('')
+
+        if not cnpjs_limpos:
+            return {}
+
+        rows = db.session.query(
+            CarviaClienteEndereco.cnpj,
+            CarviaCliente.id,
+            CarviaCliente.nome_comercial,
+        ).join(
+            CarviaCliente,
+            CarviaClienteEndereco.cliente_id == CarviaCliente.id,
+        ).filter(
+            CarviaClienteEndereco.cnpj.in_(cnpjs_limpos),
+            CarviaClienteEndereco.cliente_id.isnot(None),
+        ).all()
+
+        result: Dict[str, Dict] = {}
+        for cnpj, cliente_id, nome_comercial in rows:
+            if cnpj and cnpj not in result:
+                result[cnpj] = {'id': cliente_id, 'nome_comercial': nome_comercial}
+        return result
+
     # ==================== ENDERECOS ====================
 
     @staticmethod

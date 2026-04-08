@@ -218,6 +218,17 @@ def register_nf_routes(bp):
         moto_svc = MotoRecognitionService()
         peso_cubado_por_nf = moto_svc.calcular_peso_cubado_batch(nf_ids) if nf_ids else {}
 
+        # Batch: resolver clientes comerciais por CNPJ destinatario
+        import re
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        cnpjs_dest = {nf.cnpj_destinatario for nf, _ in paginacao.items if nf.cnpj_destinatario}
+        _resolved = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_dest)
+        clientes_por_cnpj = {
+            cnpj: _resolved[re.sub(r'\D', '', cnpj)]
+            for cnpj in cnpjs_dest
+            if re.sub(r'\D', '', cnpj) in _resolved
+        }
+
         return render_template(
             'carvia/nfs/listar.html',
             nfs=paginacao.items,
@@ -236,6 +247,7 @@ def register_nf_routes(bp):
             faturas_transp_por_nf=faturas_transp_por_nf,
             ctes_por_nf=ctes_por_nf,
             peso_cubado_por_nf=peso_cubado_por_nf,
+            clientes_por_cnpj=clientes_por_cnpj,
         )
 
     # ==================== HELPER: ÚLTIMOS FRETES ====================
@@ -415,6 +427,12 @@ def register_nf_routes(bp):
                 CarviaCteComplementar.operacao_id.in_(op_ids)
             ).order_by(CarviaCteComplementar.criado_em.desc()).all()
 
+        # Resolver cliente comercial por CNPJ destinatario
+        import re
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({nf.cnpj_destinatario})
+        cliente_destino = _clientes.get(re.sub(r'\D', '', nf.cnpj_destinatario or ''))
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
@@ -434,6 +452,7 @@ def register_nf_routes(bp):
             tem_cte=tem_cte,
             custos_entrega=custos_entrega,
             ctes_complementares=ctes_complementares,
+            cliente_destino=cliente_destino,
         )
 
     # ==================== CRIAR CTE VIA NF ====================

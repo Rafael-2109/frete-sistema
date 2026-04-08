@@ -123,6 +123,17 @@ def register_fatura_routes(bp):
 
         today = date.today()
 
+        # Batch: resolver clientes comerciais por CNPJ cliente
+        import re
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        cnpjs_cli = {f.cnpj_cliente for f, _ in paginacao.items if f.cnpj_cliente}
+        _resolved = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_cli)
+        clientes_por_cnpj = {
+            cnpj: _resolved[re.sub(r'\D', '', cnpj)]
+            for cnpj in cnpjs_cli
+            if re.sub(r'\D', '', cnpj) in _resolved
+        }
+
         return render_template(
             'carvia/faturas_cliente/listar.html',
             faturas=paginacao.items,
@@ -137,6 +148,7 @@ def register_fatura_routes(bp):
             direction=direction,
             today=today,
             ops_por_fatura=ops_por_fatura,
+            clientes_por_cnpj=clientes_por_cnpj,
         )
 
     @bp.route('/faturas-cliente/nova', methods=['GET', 'POST']) # type: ignore
@@ -503,6 +515,12 @@ def register_fatura_routes(bp):
                     'atual': True,
                 })
 
+        # Resolver cliente comercial por CNPJ cliente
+        import re
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({fatura.cnpj_cliente})
+        cliente_comercial = _clientes.get(re.sub(r'\D', '', fatura.cnpj_cliente or ''))
+
         return render_template(
             'carvia/faturas_cliente/detalhe.html',
             fatura=fatura,
@@ -515,6 +533,7 @@ def register_fatura_routes(bp):
             condicoes_comerciais=condicoes_comerciais,
             entidades_pagador=entidades_pagador,
             custos_entrega=custos_entrega,
+            cliente_comercial=cliente_comercial,
         )
 
     @bp.route('/faturas-cliente/<int:fatura_id>/editar-valor', methods=['POST']) # type: ignore
