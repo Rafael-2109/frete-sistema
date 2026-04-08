@@ -370,6 +370,29 @@ class CTeXMLParserCarvia(CTeXMLParser):
         dest = self._find_tag('dest')
         return self._get_tag_text_in('fone', dest) if dest else None
 
+    def get_cdv(self) -> Optional[str]:
+        """Extrai digito verificador de <ide>/<cDV>"""
+        ide = self._find_tag('ide')
+        return self._get_tag_text_in('cDV', ide) if ide else None
+
+    def get_ctrc_formatado(self) -> Optional[str]:
+        """Monta CTRC no formato CAR-{nCT}-{cDV} (ex: CAR-133-2).
+
+        O CTRC (Conhecimento de Transporte Rodoviario de Cargas) e o
+        identificador oficial do CTe no SSW/SEFAZ.
+
+        Fontes: <ide>/<nCT> + <ide>/<cDV>
+        """
+        nct = self.get_numero_cte()
+        cdv = self.get_cdv()
+        if nct is not None:
+            try:
+                nct = str(int(nct))  # Strip leading zeros para consistencia com backfill
+            except ValueError:
+                pass
+            return f"CAR-{nct}-{cdv}" if cdv else f"CAR-{nct}"
+        return None
+
     def get_serie(self) -> Optional[str]:
         """Extrai serie do CTe de <ide>/<serie>"""
         ide = self._find_tag('ide')
@@ -648,6 +671,7 @@ class CTeXMLParserCarvia(CTeXMLParser):
             # CTe
             'cte_numero': self.get_numero_cte(),
             'cte_chave_acesso': self.get_chave_acesso(),
+            'ctrc_numero': self.get_ctrc_formatado(),
             'cte_valor': self.get_valor_prestacao(),
             'cte_data_emissao': self.get_data_emissao(),
             'tipo_cte': self.get_tipo_cte(),

@@ -62,6 +62,7 @@ def register_cte_complementar_routes(bp):
                     CarviaCteComplementar.numero_comp.ilike(busca_like),
                     CarviaCteComplementar.cnpj_cliente.ilike(busca_like),
                     CarviaCteComplementar.nome_cliente.ilike(busca_like),
+                    CarviaCteComplementar.ctrc_numero.ilike(busca_like),
                     CarviaCteComplementar.observacoes.ilike(busca_like),
                 )
             )
@@ -82,10 +83,20 @@ def register_cte_complementar_routes(bp):
 
         paginacao = query.paginate(page=page, per_page=25, error_out=False)
 
+        # Batch: buscar CTe pai (cte_numero + ctrc_numero) para evitar N+1
+        op_ids = list({c.operacao_id for c in paginacao.items})
+        op_info_map = {}
+        if op_ids:
+            ops = db.session.query(
+                CarviaOperacao.id, CarviaOperacao.cte_numero, CarviaOperacao.ctrc_numero
+            ).filter(CarviaOperacao.id.in_(op_ids)).all()
+            op_info_map = {o_id: {'cte_numero': cte, 'ctrc_numero': ctrc} for o_id, cte, ctrc in ops}
+
         return render_template(
             'carvia/ctes_complementares/listar.html',
             ctes_complementares=paginacao.items,
             paginacao=paginacao,
+            op_info_map=op_info_map,
             operacao_filtro=operacao_filtro,
             status_filtro=status_filtro,
             busca=busca,

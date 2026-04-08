@@ -206,6 +206,9 @@
                                     {% if op.cte_numero %}
                                     <span class="text-muted">— CTe {{ op.cte_numero }}</span>
                                     {% endif %}
+                                    {% if op.ctrc_numero %}
+                                    <span class="text-info small ms-1">({{ op.ctrc_numero }})</span>
+                                    {% endif %}
                                 </div>
                                 <span class="badge carvia-badge-{{ op.status|lower }}">{{ op.status }}</span>
                             </div>

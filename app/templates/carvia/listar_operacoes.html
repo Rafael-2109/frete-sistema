@@ -127,7 +127,12 @@
                                 <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td>{{ op.cte_numero or '-' }}</td>
+                            <td>
+                                <strong>{{ op.cte_numero or '-' }}</strong>
+                                {% if op.ctrc_numero %}
+                                <small class="text-muted d-block">{{ op.ctrc_numero }}</small>
+                                {% endif %}
+                            </td>
                             <td>
                                 <span title="{{ op.cnpj_cliente }}" class="cnpj-col">
                                     {{ op.nome_cliente or op.cnpj_cliente }}

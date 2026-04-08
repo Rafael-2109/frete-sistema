@@ -75,6 +75,7 @@
                         <tr>
                             <th>#</th>
                             {{ th_sort('numero_custo', 'Numero', sort, direction) }}
+                            <th>CTe / CTRC</th>
                             <th>Emitente</th>
                             <th>Destino</th>
                             {{ th_sort('tipo_custo', 'Tipo', sort, direction) }}
@@ -91,6 +92,14 @@
                         <tr>
                             <td><strong>{{ c.id }}</strong></td>
                             <td><strong>{{ c.numero_custo }}</strong></td>
+                            <td>
+                                {% if c.operacao %}
+                                <strong>{{ c.operacao.cte_numero or '-' }}</strong>
+                                {% if c.operacao.ctrc_numero %}
+                                <small class="text-info d-block">{{ c.operacao.ctrc_numero }}</small>
+                                {% endif %}
+                                {% else %}-{% endif %}
+                            </td>
                             <td>
                                 {% if c.operacao %}
                                 <strong>{{ c.operacao.nome_cliente or '-' }}</strong>

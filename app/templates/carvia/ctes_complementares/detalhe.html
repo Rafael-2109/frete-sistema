@@ -71,6 +71,11 @@
                         <div class="col-6">
                             <small class="text-muted d-block">CTe Numero</small>
                             <strong>{{ cte_comp.cte_numero or '-' }}</strong>
+                            {% if cte_comp.ctrc_numero %}
+                            <div class="small text-info">CTRC: {{ cte_comp.ctrc_numero }}</div>
+                            {% elif cte_comp.operacao and cte_comp.operacao.ctrc_numero %}
+                            <div class="small text-info">CTRC Pai: {{ cte_comp.operacao.ctrc_numero }}</div>
+                            {% endif %}
                         </div>
                         <div class="col-6">
                             <small class="text-muted d-block">Valor</small>

@@ -90,7 +90,16 @@
                         <tr>
                             <td><strong>{{ comp.id }}</strong></td>
                             <td><strong>{{ comp.numero_comp }}</strong></td>
-                            <td>{{ comp.cte_numero or '-' }}</td>
+                            <td>
+                                {% set op_info = op_info_map.get(comp.operacao_id, {}) %}
+                                <strong>{{ op_info.get('cte_numero', '-') }}</strong>
+                                {% if comp.cte_numero %}
+                                <small class="text-muted d-block">nCT: {{ comp.cte_numero }}</small>
+                                {% endif %}
+                                {% if op_info.get('ctrc_numero') %}
+                                <small class="text-info d-block">{{ op_info.ctrc_numero }}</small>
+                                {% endif %}
+                            </td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=comp.operacao_id) }}"
                                    class="text-decoration-none">

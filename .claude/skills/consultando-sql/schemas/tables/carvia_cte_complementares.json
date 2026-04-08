@@ -37,6 +37,11 @@
       "type": "varchar(44)"
     },
     {
+      "name": "ctrc_numero",
+      "type": "varchar(30)",
+      "description": "CTRC SSW/SEFAZ: CAR-{nCT}-{cDV}"
+    },
+    {
       "name": "cte_valor",
       "type": "numeric(15,2)",
       "nullable": false

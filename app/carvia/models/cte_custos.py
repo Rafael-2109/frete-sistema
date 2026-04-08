@@ -42,6 +42,7 @@ class CarviaCteComplementar(db.Model):
     # CTe dados
     cte_numero = db.Column(db.String(20), index=True)
     cte_chave_acesso = db.Column(db.String(44), unique=True, nullable=True)
+    ctrc_numero = db.Column(db.String(30), index=True)  # CTRC SSW/SEFAZ: CAR-{nCT}-{cDV}
     cte_valor = db.Column(db.Numeric(15, 2), nullable=False)
     cte_xml_path = db.Column(db.String(500))
     cte_xml_nome_arquivo = db.Column(db.String(255))

@@ -70,14 +70,17 @@ def register_nf_routes(bp):
 
         if busca:
             busca_like = f'%{busca}%'
-            # Subquery: NF ids vinculadas a CTe com numero matching
+            # Subquery: NF ids vinculadas a CTe com numero ou CTRC matching
             cte_match_subq = db.session.query(
                 CarviaOperacaoNf.nf_id
             ).join(
                 CarviaOperacao,
                 CarviaOperacaoNf.operacao_id == CarviaOperacao.id
             ).filter(
-                CarviaOperacao.cte_numero.ilike(busca_like)
+                db.or_(
+                    CarviaOperacao.cte_numero.ilike(busca_like),
+                    CarviaOperacao.ctrc_numero.ilike(busca_like),
+                )
             ).subquery()
 
             query = query.filter(
@@ -200,6 +203,7 @@ def register_nf_routes(bp):
                 CarviaOperacaoNf.nf_id,
                 CarviaOperacao.id,
                 CarviaOperacao.cte_numero,
+                CarviaOperacao.ctrc_numero,
             ).join(
                 CarviaOperacao,
                 CarviaOperacaoNf.operacao_id == CarviaOperacao.id,
@@ -207,11 +211,11 @@ def register_nf_routes(bp):
                 CarviaOperacaoNf.nf_id.in_(nf_ids)
             ).all()
             seen_cte = set()
-            for nf_id, op_id, cte_num in rows_cte:
+            for nf_id, op_id, cte_num, ctrc_num in rows_cte:
                 key = (nf_id, op_id)
                 if key not in seen_cte:
                     seen_cte.add(key)
-                    ctes_por_nf[nf_id].append({'id': op_id, 'cte_numero': cte_num})
+                    ctes_por_nf[nf_id].append({'id': op_id, 'cte_numero': cte_num, 'ctrc_numero': ctrc_num})
 
         # Batch: peso cubado por NF (2 queries)
         from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService

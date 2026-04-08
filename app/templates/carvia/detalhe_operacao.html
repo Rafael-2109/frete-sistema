@@ -113,6 +113,9 @@
                         <div class="col-6">
                             <small class="text-muted d-block">CTe CarVia</small>
                             <strong>{{ operacao.cte_numero or 'Sem CTe' }}</strong>
+                            {% if operacao.ctrc_numero %}
+                            <div class="small text-info">CTRC: {{ operacao.ctrc_numero }}</div>
+                            {% endif %}
                             {% if operacao.cte_data_emissao %}
                             <div class="small text-muted">{{ operacao.cte_data_emissao.strftime('%d/%m/%Y') }}</div>
                             {% endif %}

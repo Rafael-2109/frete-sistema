@@ -76,6 +76,8 @@ def register_custo_entrega_routes(bp):
                     CarviaCustoEntrega.observacoes.ilike(busca_like),
                     CarviaOperacao.nome_cliente.ilike(busca_like),
                     CarviaOperacao.cnpj_cliente.ilike(busca_like),
+                    CarviaOperacao.cte_numero.ilike(busca_like),
+                    CarviaOperacao.ctrc_numero.ilike(busca_like),
                     CarviaOperacao.cidade_destino.ilike(busca_like),
                 )
             )

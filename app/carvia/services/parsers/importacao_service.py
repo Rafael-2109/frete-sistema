@@ -640,6 +640,7 @@ class ImportacaoService:
                     if op_auto:
                         # Enriquecer: adicionar XML/chave/PDF ao auto-gerado
                         op_auto.cte_chave_acesso = cte_data.get('cte_chave_acesso')
+                        op_auto.ctrc_numero = cte_data.get('ctrc_numero')
                         op_auto.cte_xml_nome_arquivo = cte_data.get('arquivo_nome_original')
                         op_auto.cte_xml_path = cte_data.get('cte_xml_path')
                         op_auto.cte_pdf_path = cte_data.get('cte_pdf_path')
@@ -772,6 +773,7 @@ class ImportacaoService:
                         cte_valor=float(cte_data.get('cte_valor') or 0),
                         cte_numero=str(cte_data.get('cte_numero') or '') or None,
                         cte_chave_acesso=cte_chave,
+                        ctrc_numero=cte_data.get('ctrc_numero'),
                         cte_data_emissao=self._parsear_data_cte(
                             cte_data.get('cte_data_emissao')
                         ),
@@ -1490,6 +1492,7 @@ class ImportacaoService:
         return CarviaOperacao(
             cte_numero=cte_data.get('cte_numero'),
             cte_chave_acesso=cte_data.get('cte_chave_acesso'),
+            ctrc_numero=cte_data.get('ctrc_numero'),
             cte_valor=cte_data.get('cte_valor'),
             cte_xml_nome_arquivo=cte_data.get('arquivo_nome_original'),
             cte_xml_path=cte_data.get('cte_xml_path'),

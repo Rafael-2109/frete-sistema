@@ -129,14 +129,17 @@ def register_exportacao_routes(bp):
 
         if busca:
             busca_like = f'%{busca}%'
-            # Subquery: NF ids vinculadas a CTe com numero matching
+            # Subquery: NF ids vinculadas a CTe com numero ou CTRC matching
             cte_match_subq = db.session.query(
                 CarviaOperacaoNf.nf_id
             ).join(
                 CarviaOperacao,
                 CarviaOperacaoNf.operacao_id == CarviaOperacao.id
             ).filter(
-                CarviaOperacao.cte_numero.ilike(busca_like)
+                db.or_(
+                    CarviaOperacao.cte_numero.ilike(busca_like),
+                    CarviaOperacao.ctrc_numero.ilike(busca_like),
+                )
             ).subquery()
 
             query = query.filter(
@@ -191,6 +194,16 @@ def register_exportacao_routes(bp):
         for ops in nf_op_map.values():
             all_op_ids.update(ops)
 
+        # Buscar CTe + CTRC das operacoes vinculadas
+        cte_por_op = {}
+        ctrc_por_op = {}
+        if all_op_ids:
+            op_rows = db.session.query(
+                CarviaOperacao.id, CarviaOperacao.cte_numero, CarviaOperacao.ctrc_numero
+            ).filter(CarviaOperacao.id.in_(all_op_ids)).all()
+            cte_por_op = {o_id: cte for o_id, cte, _ in op_rows}
+            ctrc_por_op = {o_id: ctrc for o_id, _, ctrc in op_rows}
+
         custos_por_op = defaultdict(int)
         custos_valor_por_op = defaultdict(float)
         comps_por_op = defaultdict(int)
@@ -240,6 +253,8 @@ def register_exportacao_routes(bp):
                 'Valor Total': float(nf.valor_total or 0),
                 'Peso Bruto': float(nf.peso_bruto or 0),
                 'Qtd Volumes': nf.quantidade_volumes or 0,
+                'CTe': ', '.join(filter(None, [cte_por_op.get(o) for o in ops])),
+                'CTRC': ', '.join(filter(None, [ctrc_por_op.get(o) for o in ops])),
                 'Tipo Fonte': nf.tipo_fonte or '',
                 'Status': nf.status or '',
                 'Qtd Custos Entrega': qtd_custos,
@@ -300,6 +315,7 @@ def register_exportacao_routes(bp):
                     CarviaOperacao.nome_cliente.ilike(busca_like),
                     CarviaOperacao.cnpj_cliente.ilike(busca_like),
                     CarviaOperacao.cte_numero.ilike(busca_like),
+                    CarviaOperacao.ctrc_numero.ilike(busca_like),
                     CarviaOperacao.cidade_destino.ilike(busca_like),
                 )
             )
@@ -339,6 +355,7 @@ def register_exportacao_routes(bp):
             data.append({
                 'ID': op.id,
                 'CTe Numero': op.cte_numero or '',
+                'CTRC': op.ctrc_numero or '',
                 'Cliente': op.nome_cliente or '',
                 'CNPJ Cliente': op.cnpj_cliente or '',
                 'Origem': f'{op.cidade_origem or ""}/{op.uf_origem or ""}',
@@ -551,6 +568,7 @@ def register_exportacao_routes(bp):
                     CarviaCteComplementar.numero_comp.ilike(busca_like),
                     CarviaCteComplementar.cnpj_cliente.ilike(busca_like),
                     CarviaCteComplementar.nome_cliente.ilike(busca_like),
+                    CarviaCteComplementar.ctrc_numero.ilike(busca_like),
                     CarviaCteComplementar.observacoes.ilike(busca_like),
                 )
             )
@@ -583,14 +601,16 @@ def register_exportacao_routes(bp):
             ).filter(CarviaFaturaCliente.id.in_(fat_ids)).all()
             fat_map = {f_id: num for f_id, num in faturas}
 
-        # Buscar CTe numero da operacao pai
+        # Buscar CTe numero + CTRC da operacao pai
         op_ids = list({c.operacao_id for c in items})
         op_map = {}
+        op_ctrc_map = {}
         if op_ids:
             ops = db.session.query(
-                CarviaOperacao.id, CarviaOperacao.cte_numero
+                CarviaOperacao.id, CarviaOperacao.cte_numero, CarviaOperacao.ctrc_numero
             ).filter(CarviaOperacao.id.in_(op_ids)).all()
-            op_map = {o_id: cte for o_id, cte in ops}
+            op_map = {o_id: cte for o_id, cte, _ in ops}
+            op_ctrc_map = {o_id: ctrc for o_id, _, ctrc in ops}
 
         # Custos vinculados por cte_complementar_id
         from collections import defaultdict
@@ -613,6 +633,8 @@ def register_exportacao_routes(bp):
             data.append({
                 'Numero Comp': c.numero_comp or '',
                 'CTe Numero': op_map.get(c.operacao_id, ''),
+                'CTRC CTe Pai': op_ctrc_map.get(c.operacao_id, ''),
+                'CTRC': c.ctrc_numero or '',
                 'Operacao ID': c.operacao_id,
                 'Cliente': c.nome_cliente or '',
                 'CNPJ Cliente': c.cnpj_cliente or '',
@@ -734,6 +756,7 @@ def register_exportacao_routes(bp):
                 'Numero Custo': c.numero_custo or '',
                 'Operacao ID': c.operacao_id,
                 'CTe CarVia': (op.cte_numero or '') if op else '',
+                'CTRC': (op.ctrc_numero or '') if op else '',
                 'Emitente': (op.nome_cliente or '') if op else '',
                 'CNPJ Emitente': (op.cnpj_cliente or '') if op else '',
                 'Origem': f'{op.cidade_origem or ""}/{op.uf_origem or ""}' if op else '',

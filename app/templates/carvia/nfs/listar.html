@@ -156,6 +156,9 @@
                                     {% for c in ctes %}
                                     <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=c.id) }}"
                                        class="badge bg-success text-decoration-none d-block mb-1">{{ c.cte_numero or ('CTe #' ~ c.id) }}</a>
+                                    {% if c.ctrc_numero %}
+                                    <small class="text-muted d-block mb-1">{{ c.ctrc_numero }}</small>
+                                    {% endif %}
                                     {% endfor %}
                                 {% else %}
                                 <span class="badge bg-secondary">-</span>

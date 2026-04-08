@@ -486,12 +486,30 @@ async def emitir_cte(args):
                 await campo_chave.fill(chave_nfe, force=True)
                 await asyncio.sleep(1)
 
-                # Clicar FORA do popup nfepnl para fechar + disparar onchange/isSSW
-                await popup.mouse.click(10, 500)
-                await asyncio.sleep(10)  # Esperar lookup NF-e (request ao servidor)
+                # Clicar "OK" para confirmar chave (fecha popup nfepnl + lookup)
+                # Tambem trata aviso "carta de correcao" se exibido
+                ok_link = popup.get_by_role("link", name="OK")
+                try:
+                    await ok_link.click(timeout=5000)
+                except Exception:
+                    # Fallback: clicar fora
+                    await popup.mouse.click(10, 500)
+                await asyncio.sleep(10)  # Esperar lookup NF-e
+
+                # Se aviso carta de correcao apareceu, clicar OK novamente
+                try:
+                    body_chk = await popup.evaluate(
+                        "() => (document.body?.innerText || '').substring(0,2000).toLowerCase()"
+                    )
+                    if 'carta' in body_chk and 'corre' in body_chk:
+                        await ok_link.click(timeout=3000)
+                        await asyncio.sleep(3)
+                        campos_ok["carta_correcao"] = True
+                except Exception:
+                    pass
 
                 campos_ok["chave_nfe"] = chave_nfe
-                campos_ok["chave_metodo"] = "native_popup_nfepnl"
+                campos_ok["chave_metodo"] = "native_ok"
             except Exception as e:
                 # Fallback: setar via evaluate e chamar isSSW
                 try:
@@ -510,83 +528,39 @@ async def emitir_cte(args):
 
             await capturar_screenshot_local(popup, "04_chave_preenchida")
 
-            # ── 5c. Abrir "Frete informado" e preencher frete peso ──
-            # Painel "parc" eh colapsavel — abrir e preencher com force
-            try:
-                await popup.evaluate("showhide('parc')")
-                await asyncio.sleep(1)
-                campo_frete = popup.locator('input[name="id_frt_inf_frete_peso"]')
-                await campo_frete.click(force=True)
-                await campo_frete.fill(frete_peso, force=True)
-                await asyncio.sleep(0.5)
-                campos_ok["frete_peso"] = frete_peso
-            except Exception as e:
-                # Fallback evaluate
-                await popup.evaluate(f"""() => {{
-                    const el = document.getElementById('id_frt_inf_frete_peso');
-                    if (el) {{ el.value = '{frete_peso}'; }}
-                }}""")
-                campos_ok["frete_peso"] = frete_peso
-                campos_ok["frete_metodo"] = "evaluate"
-
-            # Confirmar painel frete informado (► = fechafrtparc('C'))
-            try:
-                await popup.evaluate("fechafrtparc('C')")
-            except Exception:
-                # Clicar fora para fechar o painel
-                await popup.mouse.click(10, 500)
-            await asyncio.sleep(2)
-
-            await capturar_screenshot_local(popup, "05_frete_preenchido")
-
-            # ── 5d. Preencher dimensoes de moto (se fornecidas) ──
-            # Painel "Volume (m3)" — abrir com showhide('volume')
-            # Campos por linha: id_dim_{n}_altu, id_dim_{n}_larg,
-            #   id_dim_{n}_comp, id_dim_{n}_vezes
-            # Confirmar com acabadim('C')
+            # ── 5c. Dimensoes de moto (se fornecidas) ──
+            # Ordem da gravacao: Volume → peso → frete → simular
             medidas_list = getattr(args, 'medidas', None)
             if medidas_list:
                 if isinstance(medidas_list, str):
                     medidas_list = json.loads(medidas_list)
 
                 try:
-                    # Abrir painel Volume
-                    await popup.evaluate("showhide('volume')")
+                    # Abrir painel Volume (clicar link "Volume (m3):")
+                    await popup.get_by_role("link", name="Volume (m3):").click()
                     await asyncio.sleep(1)
 
                     for i, med in enumerate(medidas_list, start=1):
-                        # Formatar valores para BR (virgula decimal, 3 casas)
-                        alt_br = f"{float(med['alt_m']):.3f}".replace('.', ',')
-                        larg_br = f"{float(med['larg_m']):.3f}".replace('.', ',')
-                        comp_br = f"{float(med['comp_m']):.3f}".replace('.', ',')
+                        alt_br = f"{float(med['alt_m']):.2f}".replace('.', ',')
+                        larg_br = f"{float(med['larg_m']):.2f}".replace('.', ',')
+                        comp_br = f"{float(med['comp_m']):.2f}".replace('.', ',')
                         qtd_str = str(int(med['qtd']))
 
-                        # Preencher campos de dimensao
-                        campo_alt = popup.locator(f'input[name="id_dim_{i}_altu"]')
-                        campo_larg = popup.locator(f'input[name="id_dim_{i}_larg"]')
-                        campo_comp = popup.locator(f'input[name="id_dim_{i}_comp"]')
-                        campo_vezes = popup.locator(f'input[name="id_dim_{i}_vezes"]')
+                        await popup.locator(f'#id_dim_{i}_altu').click()
+                        await popup.locator(f'#id_dim_{i}_altu').fill(alt_br)
+                        await popup.locator(f'#id_dim_{i}_altu').press("Tab")
 
-                        await campo_alt.click(force=True)
-                        await campo_alt.fill(alt_br, force=True)
-                        await asyncio.sleep(0.3)
+                        await popup.locator(f'#id_dim_{i}_larg').fill(larg_br)
+                        await popup.locator(f'#id_dim_{i}_larg').press("Tab")
 
-                        await campo_larg.click(force=True)
-                        await campo_larg.fill(larg_br, force=True)
-                        await asyncio.sleep(0.3)
+                        await popup.locator(f'#id_dim_{i}_comp').fill(comp_br)
+                        await popup.locator(f'#id_dim_{i}_comp').press("Tab")
 
-                        await campo_comp.click(force=True)
-                        await campo_comp.fill(comp_br, force=True)
-                        await asyncio.sleep(0.3)
+                        await popup.locator(f'#id_dim_{i}_vezes').fill(qtd_str)
+                        await asyncio.sleep(0.5)
 
-                        await campo_vezes.click(force=True)
-                        await campo_vezes.fill(qtd_str, force=True)
-                        # Tab dispara onblur=linhadim() que calcula cubagem
-                        await campo_vezes.press("Tab")
-                        await asyncio.sleep(1)
-
-                    # Confirmar dimensoes (botao ► = acabadim('C'))
-                    await popup.evaluate("acabadim('C')")
+                    # Confirmar dimensoes: #id_dim_env (botao enviar/fechar)
+                    await popup.locator('#id_dim_env').click()
                     await asyncio.sleep(2)
 
                     campos_ok["medidas"] = medidas_list
@@ -595,6 +569,51 @@ async def emitir_cte(args):
                     campos_ok["medidas_erro"] = str(e)
 
                 await capturar_screenshot_local(popup, "05b_medidas_preenchidas")
+
+            # ── 5d. Preencher peso real se zero (50% do cubado) ──
+            # Gravacao: fill() nativo funciona no campo id_peso_real
+            try:
+                peso_cv = await popup.evaluate(
+                    "() => +(document.getElementById('id_peso_real')"
+                    "?.getAttribute('currencyvalue') || 0)"
+                )
+                if peso_cv == 0 and medidas_list:
+                    meds = (medidas_list if isinstance(medidas_list, list)
+                            else json.loads(medidas_list))
+                    cubado_total = sum(
+                        float(m['comp_m']) * float(m['larg_m']) * float(m['alt_m'])
+                        * 300 * int(m.get('qtd', 1))
+                        for m in meds
+                    )
+                    peso_50 = round(cubado_total * 0.5, 2)
+                    peso_br = f"{peso_50:.2f}".replace('.', ',')
+
+                    await popup.locator('#id_peso_real').click()
+                    await popup.locator('#id_peso_real').fill(peso_br)
+                    await asyncio.sleep(1)
+
+                    campos_ok["peso_real"] = peso_br
+                    campos_ok["peso_real_motivo"] = "50pct_cubado"
+                    campos_ok["peso_cubado_calc"] = round(cubado_total, 2)
+                elif peso_cv > 0:
+                    campos_ok["peso_real_motivo"] = "ja_preenchido"
+            except Exception as e:
+                campos_ok["peso_real_erro"] = str(e)
+
+            # ── 5e. Frete informado ──
+            # Gravacao: clicar link "Frete informado:" → fill → #lnk_frt_inf_env
+            try:
+                await popup.get_by_role("link", name="Frete informado:").click()
+                await asyncio.sleep(0.5)
+                await popup.locator('#id_frt_inf_frete_peso').fill(frete_peso)
+                await asyncio.sleep(0.3)
+                await popup.locator('#lnk_frt_inf_env').click()
+                await asyncio.sleep(2)
+                campos_ok["frete_peso"] = frete_peso
+            except Exception as e:
+                campos_ok["frete_erro"] = str(e)
+
+            await capturar_screenshot_local(popup, "05_campos_preenchidos")
 
             # ── Dry-run: parar aqui ──
             if args.dry_run:
@@ -643,13 +662,9 @@ async def emitir_cte(args):
             popup.on("dialog", on_dialog)
 
             try:
-                # ── 6a. Simular ──
-                try:
-                    await popup.evaluate("calculafrete(this)")
-                except Exception:
-                    pass
+                # ── 6a. Simular (clicar ► nativo) ──
+                await popup.get_by_role("link", name="►").first.click()
                 await asyncio.sleep(8)
-                await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
                 await capturar_screenshot_local(popup, "06_pos_simular")
 
                 # ── 6b. Tratar paineis Aviso em sequencia ──
@@ -673,92 +688,82 @@ async def emitir_cte(args):
                         }""")
                         avisos_tratados.append("EMAIL_DISPENSADO")
                         await asyncio.sleep(5)
-                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
                         await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_email")
                         continue
 
-                    # --- Aviso: Cliente bloqueado ---
-                    if 'bloqueado' in body_lower and 'transporte' in body_lower:
-                        avisos_tratados.append("CLIENTE_BLOQUEADO_DESBLOQUEANDO")
-                        await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_bloqueio")
-
-                        # Abrir ssw1105 para desbloquear
-                        html_1105 = await interceptar_ajax_response(
-                            popup, popup,
-                            "ajaxEnvia('', 1, 'ssw1105?act=ENV&f2=' + "
-                            "document.getElementById('IDX_CLI_PAG_CNPJ').value)",
-                            timeout_s=15
-                        )
-                        if html_1105:
-                            await injetar_html_no_dom(popup, html_1105)
-                            await asyncio.sleep(2)
-                            await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
-                            # Mudar Transportar de N para S
-                            await popup.evaluate("""() => {
-                                const el = document.querySelector('input[name="f2"]');
-                                if (el) { el.value = 'S'; }
-                            }""")
-                            # Confirmar (EN2)
-                            confirm_html = await interceptar_ajax_response(
-                                popup, popup, "ajaxEnvia('EN2', 0)", timeout_s=15
-                            )
-                            if confirm_html:
-                                await injetar_html_no_dom(popup, confirm_html)
-                                await asyncio.sleep(2)
-                            avisos_tratados.append("CLIENTE_DESBLOQUEADO")
-
-                        # Voltar ao formulario: fechar Aviso e re-simular
-                        # O popup agora mostra ssw1105 — precisamos voltar ao 004.
-                        # Fechar popup causa TargetClosedError, entao re-abrimos.
-                        try:
-                            await popup.close()
-                        except Exception:
-                            pass
-
-                        # Re-abrir 004 e re-preencher
-                        popup = await abrir_opcao_popup(context, main_frame, 4, timeout_s=30)
-                        await asyncio.sleep(2)
-                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
-                        await popup.evaluate("ajaxEnvia('NORMAL', 1)")
-                        await asyncio.sleep(5)
-                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
-
-                        # Re-preencher campos
-                        campo_p = popup.locator('input[name="f13"]')
-                        await campo_p.click()
-                        await campo_p.fill(placa)
-                        await campo_p.press("Tab")
+                    # --- Aviso: Peso real inválido ---
+                    if 'peso real' in body_lower and 'inválido' in body_lower:
+                        avisos_tratados.append("PESO_INVALIDO_OK")
+                        await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_peso")
+                        # Clicar "7. OK" para fechar aviso
+                        await popup.evaluate("""() => {
+                            const links = document.querySelectorAll('a');
+                            for (const el of links) {
+                                const t = el.textContent.trim();
+                                if (t.includes('OK') || t === '7. OK') {
+                                    el.click(); return true;
+                                }
+                            }
+                            return false;
+                        }""")
                         await asyncio.sleep(3)
 
-                        campo_c = popup.locator('input[name="chaveAcesso"]')
-                        await campo_c.wait_for(state="attached", timeout=8000)
-                        await campo_c.click(force=True)
-                        await campo_c.fill(chave_nfe, force=True)
+                        # Re-preencher peso via evaluate (currencyedit)
+                        peso_50 = campos_ok.get("peso_cubado_calc", 100) * 0.5
+                        peso_br = f"{peso_50:.3f}".replace('.', ',')
+                        await popup.evaluate(f"""() => {{
+                            const el = document.getElementById('id_peso_real');
+                            if (el) {{
+                                el.value = '{peso_br}';
+                                el.setAttribute('currencyvalue', '{peso_50}');
+                                el.dispatchEvent(new Event('change', {{bubbles: true}}));
+                                el.dispatchEvent(new Event('blur', {{bubbles: true}}));
+                            }}
+                        }}""")
                         await asyncio.sleep(1)
-                        await popup.mouse.click(10, 500)
-                        await asyncio.sleep(10)
 
-                        await popup.evaluate("showhide('parc')")
-                        await asyncio.sleep(1)
-                        campo_f = popup.locator('input[name="id_frt_inf_frete_peso"]')
-                        await campo_f.click(force=True)
-                        await campo_f.fill(frete_peso, force=True)
+                        # Re-simular (native click)
                         try:
-                            await popup.evaluate("fechafrtparc('C')")
-                        except Exception:
-                            pass
-                        await asyncio.sleep(2)
-
-                        # Re-registrar dialog handler no novo popup
-                        popup.on("dialog", on_dialog)
-
-                        # Re-simular
-                        try:
-                            await popup.evaluate("calculafrete(this)")
+                            await popup.get_by_role("link", name="►").first.click()
                         except Exception:
                             pass
                         await asyncio.sleep(8)
-                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
+                        continue
+
+                    # --- Aviso: Cliente bloqueado (desbloquear via popup real) ---
+                    if ('bloqueado' in body_lower or 'desbloquear' in body_lower) \
+                            and 'transporte' in body_lower:
+                        avisos_tratados.append("CLIENTE_BLOQUEADO")
+                        await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_bloqueio")
+
+                        # Clicar "Desbloquear cliente pagador" → abre popup real
+                        try:
+                            async with context.expect_page(timeout=15000) as desbloq_info:
+                                await popup.get_by_role(
+                                    "link", name="Desbloquear cliente pagador"
+                                ).click()
+                            desbloq_page = await desbloq_info.value
+                            await asyncio.sleep(2)
+
+                            # Mudar campo [id="2"] de "N" para "S" e confirmar
+                            await desbloq_page.locator('[id="2"]').fill("S")
+                            await desbloq_page.get_by_role("link", name="►").click()
+                            await asyncio.sleep(3)
+
+                            # Fechar popup de desbloqueio (pode fechar sozinho)
+                            try:
+                                await desbloq_page.close()
+                            except Exception:
+                                pass
+
+                            avisos_tratados.append("CLIENTE_DESBLOQUEADO")
+                        except Exception as e:
+                            avisos_tratados.append(f"DESBLOQUEIO_ERRO: {e}")
+
+                        # Re-simular na MESMA page2 (clicar ►)
+                        await asyncio.sleep(2)
+                        await popup.get_by_role("link", name="►").first.click()
+                        await asyncio.sleep(8)
                         continue
 
                     # --- Aviso: GNRE/Guia de Recolhimento ---
@@ -777,34 +782,52 @@ async def emitir_cte(args):
                             return false;
                         }""")
                         await asyncio.sleep(3)
-                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
                         continue
 
-                    # --- Resumo com opcao Gravar (concluindo) ---
-                    has_gravar = await popup.evaluate("""() => {
-                        const links = document.querySelectorAll('a');
-                        for (const el of links) {
-                            const o = el.getAttribute('onclick') || '';
-                            if (o.includes("concluindo('C')")) return true;
-                        }
-                        return false;
-                    }""")
-                    if has_gravar:
-                        avisos_tratados.append("RESUMO_GRAVAR")
-                        await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_resumo")
-                        break  # Sair do loop para gravar
+                    # --- Resumo com "1. Gravar" ---
+                    gravar_link = popup.get_by_role("link", name="1. Gravar")
+                    try:
+                        if await gravar_link.count() > 0:
+                            avisos_tratados.append("RESUMO_GRAVAR")
+                            await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_resumo")
+                            break  # Sair do loop para gravar
+                    except Exception:
+                        pass
 
-                    # Nenhum aviso reconhecido — pode ser formulario vazio ou erro
+                    # --- Fallback: painel com "Continuar" (GNRE, info, etc) ---
+                    continuar_link = popup.get_by_role("link", name="Continuar")
+                    try:
+                        if await continuar_link.count() > 0:
+                            avisos_tratados.append(f"CONTINUAR_GENERICO_{aviso_idx}")
+                            await capturar_screenshot_local(
+                                popup, f"07_aviso_{aviso_idx}_continuar"
+                            )
+                            await continuar_link.first.click()
+                            await asyncio.sleep(5)
+                            continue
+                    except Exception:
+                        pass
+
+                    # Nenhum aviso reconhecido — dump body para debug
+                    avisos_tratados.append(
+                        f"NAO_RECONHECIDO: {body[:500]}"
+                    )
+                    await capturar_screenshot_local(
+                        popup, f"07_aviso_{aviso_idx}_nao_reconhecido"
+                    )
                     break
 
-                # ── 7. GRAVAR pre-CTRC ──
+                # ── 7. GRAVAR pre-CTRC (click nativo "1. Gravar") ──
                 await capturar_screenshot_local(popup, "08_pre_gravar")
                 try:
-                    await popup.evaluate("concluindo('C')")
+                    await popup.get_by_role("link", name="1. Gravar").click()
                 except Exception:
-                    pass
+                    # Fallback evaluate
+                    try:
+                        await popup.evaluate("concluindo('C')")
+                    except Exception:
+                        pass
                 await asyncio.sleep(12)
-                await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
                 await capturar_screenshot_local(popup, "08_pos_gravar")
 
                 # ── 8. Extrair CTRC ──
@@ -843,43 +866,32 @@ async def emitir_cte(args):
                 except Exception:
                     pass
 
-            # ── 11. Enviar ao SEFAZ (link na propria tela 004) ──
-            # O link "Enviar meus CT-es ao SEFAZ" fica na barra inferior da 004
-            # junto com ► × Impressão Etiquetas
-            # onclick: ajaxEnvia('', 1, 'ssw0767?act=REM&chamador=ssw0024')
+            # ── 11. Enviar ao SEFAZ (click nativo no link) ──
             sefaz_result = None
             if args.enviar_sefaz:
                 try:
-                    sefaz_dialogs = []
+                    # Remover errorpanel que pode sobrepor o link
+                    await popup.evaluate(
+                        "() => document.getElementById('errorpanel')?.remove()"
+                    )
+                    await asyncio.sleep(1)
+                    await popup.get_by_role(
+                        "link", name="Enviar meus CT-es ao SEFAZ"
+                    ).click()
+                    await asyncio.sleep(15)
+                    await capturar_screenshot_local(popup, "09_sefaz")
 
-                    async def on_sefaz_dlg(dialog):
-                        sefaz_dialogs.append({"tipo": dialog.type, "msg": dialog.message})
-                        await dialog.accept()
-
-                    popup.on("dialog", on_sefaz_dlg)
-
+                    # Clicar OK no resultado SEFAZ
                     try:
-                        # Clicar direto via evaluate (mais confiavel que locator)
-                        await popup.evaluate(
-                            "ajaxEnvia('', 1, 'ssw0767?act=REM&chamador=ssw0024')"
-                        )
-                        await asyncio.sleep(15)  # SEFAZ pode demorar
-                        await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
-                        await capturar_screenshot_local(popup, "09_sefaz")
+                        await popup.get_by_role("link", name="OK").click(timeout=5000)
+                        await asyncio.sleep(2)
+                    except Exception:
+                        pass
 
-                        body_sefaz = await popup.evaluate(
-                            "() => document.body ? document.body.innerText.substring(0,5000) : ''"
-                        )
-
-                        sefaz_result = {
-                            "dialogs": sefaz_dialogs,
-                            "body": body_sefaz[:2000],
-                        }
-                    finally:
-                        try:
-                            popup.remove_listener("dialog", on_sefaz_dlg)
-                        except Exception:
-                            pass
+                    body_sefaz = await popup.evaluate(
+                        "() => document.body ? document.body.innerText.substring(0,5000) : ''"
+                    )
+                    sefaz_result = {"body": body_sefaz[:2000]}
 
                 except Exception as e:
                     sefaz_result = {"erro": str(e)}
