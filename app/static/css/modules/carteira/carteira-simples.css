@@ -844,4 +844,16 @@ tr.plinha-separator td {
     background-color: var(--bs-border-color);
 }
 
+/* ==========================================================================
+   VIRTUAL SCROLL — Spacer rows (ocupam espaco sem conteudo visual)
+   ========================================================================== */
+#vs-spacer-top td,
+#vs-spacer-bottom td {
+    padding: 0 !important;
+    border: none !important;
+    height: 0;
+    line-height: 0;
+    font-size: 0;
+}
+
 } /* End @layer modules */

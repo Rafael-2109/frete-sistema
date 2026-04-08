@@ -84,12 +84,16 @@
             porProduto: new Map(),  // cod_produto -> [índices no state.dados]
         },
 
-        // 🚀 VIRTUAL SCROLLING
+        // 🚀 VIRTUAL SCROLLING (True Virtual — DOM constante)
         virtualScroll: {
-            firstVisibleIndex: 0,
-            lastVisibleIndex: 150,  // Renderizar primeiras 150 linhas
-            rowHeight: 25,          // Altura estimada de cada linha
-            bufferSize: 50          // Buffer de linhas extras (25 antes + 25 depois)
+            visibleIndices: [],       // Indices em state.dados que passam todos os filtros de visibilidade
+            firstRenderedSlot: -1,    // Posicao em visibleIndices do primeiro slot renderizado
+            lastRenderedSlot: -1,     // Posicao em visibleIndices do ultimo slot renderizado
+            rowHeight: 22,            // Medido apos primeira renderizacao
+            bufferSize: 30,           // Linhas acima/abaixo da viewport
+            pendingRaf: false,        // Guard contra duplo requestAnimationFrame
+            containerEl: null,        // Referencia cacheada .table-responsive
+            estoqueChunkId: 0         // ID para cancelar chunks pendentes de renderizarEstoquesEmLote
         }
     };
 
@@ -637,6 +641,35 @@
     }
 
     // ==============================================
+    // 🚀 VIRTUAL SCROLLING — ÍNDICE DE VISIBILIDADE
+    // ==============================================
+
+    /**
+     * Reconstrói visibleIndices: array ordenado de índices em state.dados
+     * que passam TODOS os filtros de visibilidade (saldo>0, filtro tipo, não deletados).
+     *
+     * Chamado após: carregarDados, aplicarFiltroTipo, verificarVisibilidadeLinhas,
+     * renderizarNovasSeparacoes, ou qualquer mudança que afete visibilidade de linhas.
+     */
+    function rebuildVisibleIndices() {
+        const checkSep = document.getElementById('filtro-tipo-sep')?.checked ?? true;
+        const checkPdd = document.getElementById('filtro-tipo-pdd')?.checked ?? true;
+
+        const indices = [];
+        for (let i = 0; i < state.dados.length; i++) {
+            const item = state.dados[i];
+            if (!item || item._deleted) continue;
+            if (item.tipo === 'separacao' && !checkSep) continue;
+            if (item.tipo === 'pedido' && !checkPdd) continue;
+            if (item.tipo === 'pedido' && parseFloat(item.qtd_saldo) === 0) continue;
+            indices.push(i);
+        }
+
+        state.virtualScroll.visibleIndices = indices;
+        console.log(`📊 visibleIndices rebuilt: ${indices.length} de ${state.dados.length} linhas visíveis`);
+    }
+
+    // ==============================================
     // 🚀 DEBOUNCE AGRUPADO POR PRODUTO (OTIMIZAÇÃO)
     // ==============================================
 
@@ -740,32 +773,53 @@
     // ==============================================
     // RENDERIZAÇÃO DE ESTOQUES EM CHUNKS (performance)
     // ==============================================
-    function renderizarEstoquesEmLote(from, to) {
+
+    /**
+     * Renderiza estoques D0-D28 em chunks via rAF.
+     * @param {number[]} dataIndices - Array de indices em state.dados para renderizar
+     */
+    function renderizarEstoquesEmLoteIndices(dataIndices) {
+        // Cancelar chunks anteriores (Virtual Scroll: evita renders fantasma)
+        state.virtualScroll.estoqueChunkId++;
+        const myChunkId = state.virtualScroll.estoqueChunkId;
+
         const CHUNK = 25;
-        let i = from;
+        let i = 0;
         function chunk() {
-            const fim = Math.min(i + CHUNK, to);
+            // Cancelado se novo render iniciou
+            if (myChunkId !== state.virtualScroll.estoqueChunkId) return;
+
+            const fim = Math.min(i + CHUNK, dataIndices.length);
             for (; i < fim; i++) {
-                try { renderizarEstoquePrecalculado(i, state.dados[i]); }
-                catch (e) { console.error(`Erro estoque ${i}:`, e); }
+                const dataIndex = dataIndices[i];
+                const item = state.dados[dataIndex];
+                if (item && !item._deleted) {
+                    try { renderizarEstoquePrecalculado(dataIndex, item); }
+                    catch (e) { /* non-fatal */ }
+                }
             }
-            if (i < to) requestAnimationFrame(chunk);
+            if (i < dataIndices.length) requestAnimationFrame(chunk);
         }
         requestAnimationFrame(chunk);
     }
 
+    // Wrapper de compatibilidade (from/to range → indices array)
+    function renderizarEstoquesEmLote(from, to) {
+        const indices = [];
+        for (let i = from; i < to; i++) indices.push(i);
+        renderizarEstoquesEmLoteIndices(indices);
+    }
+
     // ==============================================
-    // RENDERIZAÇÃO DA TABELA (VIRTUAL SCROLLING)
+    // RENDERIZAÇÃO DA TABELA (TRUE VIRTUAL SCROLLING)
     // ==============================================
     function renderizarTabela() {
         const tbody = document.getElementById('tbody-carteira');
 
         if (!state.dados || state.dados.length === 0) {
-            // 🔧 CORREÇÃO: Mensagem de erro visual mais clara
             const temFiltrosAplicados = Object.keys(state.filtrosAplicados).length > 0;
 
             if (temFiltrosAplicados) {
-                // Se há filtros aplicados mas não há dados = filtro não encontrou nada
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="29" class="text-center py-4">
@@ -780,182 +834,224 @@
                 `;
                 console.warn('⚠️ Filtros aplicados mas nenhum dado encontrado:', state.filtrosAplicados);
             } else {
-                // Se não há filtros e não há dados = carteira vazia
                 tbody.innerHTML = '<tr><td colspan="29" class="text-center py-3">Nenhum registro encontrado na carteira</td></tr>';
             }
             return;
         }
 
-        console.log(`🚀 Virtual Scrolling: ${state.dados.length} linhas (renderizando apenas primeiras 150)`);
+        console.log(`🚀 True Virtual Scrolling: ${state.dados.length} linhas no state`);
 
         // Limpar tabela
         tbody.innerHTML = '';
 
-        // 🆕 ATUALIZAR CABEÇALHO DE ESTOQUE COM DATAS DINÂMICAS
+        // Atualizar cabeçalho de estoque com datas dinâmicas
         atualizarCabecalhoEstoque();
 
-        // 🚀 VIRTUAL SCROLLING: Renderizar APENAS primeiras 150 linhas
-        const start = 0;
-        const end = Math.min(150, state.dados.length);
+        // Inserir spacer rows para virtual scroll
+        tbody.innerHTML = `
+            <tr id="vs-spacer-top"><td colspan="30" style="padding:0;border:none;height:0;line-height:0;font-size:0;"></td></tr>
+            <tr id="vs-spacer-bottom"><td colspan="30" style="padding:0;border:none;height:0;line-height:0;font-size:0;"></td></tr>
+        `;
 
-        // Criar fragment
-        const fragment = document.createDocumentFragment();
-        const tempTable = document.createElement('table');
-        const tempTbody = document.createElement('tbody');
-        tempTable.appendChild(tempTbody);
+        // Construir indice de linhas visiveis (exclui saldo=0, filtro tipo, deletados)
+        rebuildVisibleIndices();
 
-        // Renderizar apenas linhas visíveis
-        const html = state.dados.slice(start, end).map((item, relativeIndex) => {
-            const absoluteIndex = start + relativeIndex;
-            if (item.tipo === 'pedido') {
-                return renderizarLinha(item, absoluteIndex);
-            } else if (item.tipo === 'separacao') {
-                return renderizarLinhaSeparacao(item, absoluteIndex);
-            }
-            return '';
-        }).join('');
+        // Configurar engine de virtual scroll
+        setupVirtualScrollEngine();
 
-        tempTbody.innerHTML = html;
-        while (tempTbody.firstChild) {
-            fragment.appendChild(tempTbody.firstChild);
-        }
+        // Renderizar janela inicial (slot 0 em diante)
+        state.virtualScroll.firstRenderedSlot = -1;
+        state.virtualScroll.lastRenderedSlot = -1;
+        updateVirtualWindow();
 
-        tbody.appendChild(fragment);
-
-        // Renderizar estoques em chunks (nao bloqueia main thread)
-        renderizarEstoquesEmLote(start, end);
-
-        // Aplicar classes visuais
-        aplicarClassesVisuais();
-        // 🆕 Inicializar tooltips e popovers para observações e tags
-        inicializarTooltips();
-
-        // 🆕 APLICAR VISIBILIDADE INICIAL (ocultar pedidos com saldo=0 após carregamento)
-        aplicarVisibilidadeInicial();
-
-        // 🚀 Configurar scroll listener para carregar mais linhas sob demanda
-        setupVirtualScrollListener();
-
-        console.log(`✅ Renderização inicial: ${end} de ${state.dados.length} linhas`);
+        console.log(`✅ Virtual Scroll ativo: ${state.virtualScroll.visibleIndices.length} linhas visíveis`);
     }
 
-    // 🚀 VIRTUAL SCROLLING: Listener de scroll
-    function setupVirtualScrollListener() {
-        const tableContainer = document.querySelector('.table-responsive');
-        if (!tableContainer) {
+    // ==============================================
+    // 🚀 TRUE VIRTUAL SCROLL ENGINE
+    // ==============================================
+
+    /**
+     * Configura o engine de virtual scroll.
+     * Mede altura de row, cacheia container, registra scroll listener.
+     */
+    function setupVirtualScrollEngine() {
+        const container = document.querySelector('.table-responsive');
+        if (!container) {
             console.warn('⚠️ .table-responsive não encontrado para virtual scroll');
             return;
         }
 
-        let scrollTimeout = null;
+        // Remover listener anterior (evita acumulo em carregarDados repetidos)
+        container.removeEventListener('scroll', onVirtualScroll);
 
-        tableContainer.addEventListener('scroll', function() {
-            // Debounce scroll
-            if (scrollTimeout) clearTimeout(scrollTimeout);
+        state.virtualScroll.containerEl = container;
 
-            scrollTimeout = setTimeout(() => {
-                const scrollTop = tableContainer.scrollTop;
-                const scrollHeight = tableContainer.scrollHeight;
-                const clientHeight = tableContainer.clientHeight;
+        // Listener com rAF throttle (maximo 1 render por frame)
+        container.addEventListener('scroll', onVirtualScroll, { passive: true });
+        console.log('✅ True Virtual Scroll Engine configurado');
+    }
 
-                // Se scrollou até 80% da página, carregar mais linhas
-                const scrollPercent = (scrollTop + clientHeight) / scrollHeight;
-
-                if (scrollPercent > 0.8) {
-                    carregarMaisLinhas();
-                }
-            }, 100);
+    function onVirtualScroll() {
+        if (state.virtualScroll.pendingRaf) return;
+        state.virtualScroll.pendingRaf = true;
+        requestAnimationFrame(() => {
+            state.virtualScroll.pendingRaf = false;
+            updateVirtualWindow();
         });
-
-        console.log('✅ Virtual scroll listener configurado');
     }
 
-    // 🚀 Carregar mais linhas sob demanda
-    function carregarMaisLinhas() {
+    /**
+     * Mede a altura real de uma row renderizada para calculo preciso de spacers.
+     * Fallback: 22px (altura tipica com inputs de 18px + padding).
+     */
+    function measureRowHeight() {
+        const firstRow = document.querySelector('#tbody-carteira tr[data-tipo]');
+        if (firstRow) {
+            const h = firstRow.getBoundingClientRect().height;
+            if (h > 0) {
+                state.virtualScroll.rowHeight = h;
+            }
+        }
+    }
+
+    /**
+     * Calcula qual janela de slots deve estar renderizada e chama renderVirtualWindow.
+     */
+    function updateVirtualWindow() {
+        const vs = state.virtualScroll;
+        const container = vs.containerEl;
+        if (!container || vs.visibleIndices.length === 0) return;
+
+        const scrollTop = container.scrollTop;
+        const viewportHeight = container.clientHeight;
+        const rowH = vs.rowHeight || 22;
+
+        // Quais slots em visibleIndices estao no viewport?
+        const firstVisibleSlot = Math.max(0, Math.floor(scrollTop / rowH) - vs.bufferSize);
+        const lastVisibleSlot = Math.min(
+            vs.visibleIndices.length - 1,
+            Math.ceil((scrollTop + viewportHeight) / rowH) + vs.bufferSize
+        );
+
+        // So re-render se a janela mudou
+        if (firstVisibleSlot === vs.firstRenderedSlot &&
+            lastVisibleSlot === vs.lastRenderedSlot) return;
+
+        renderVirtualWindow(firstVisibleSlot, lastVisibleSlot);
+    }
+
+    /**
+     * Renderiza a janela virtual: remove rows fora da janela, insere novas.
+     * CORACAO do engine — chamado no scroll e apos mudancas de visibilidade.
+     */
+    function renderVirtualWindow(firstSlot, lastSlot) {
+        const vs = state.virtualScroll;
         const tbody = document.getElementById('tbody-carteira');
-        const currentRendered = tbody.querySelectorAll('tr').length;
+        const spacerTop = document.getElementById('vs-spacer-top');
+        const spacerBot = document.getElementById('vs-spacer-bottom');
+        if (!tbody || !spacerTop || !spacerBot) return;
 
-        if (currentRendered >= state.dados.length) {
-            console.log('✅ Todas as linhas já foram renderizadas');
-            return;
+        const rowH = vs.rowHeight || 22;
+
+        // 1. Remover TODAS as rows de dados entre os spacers (full-replace garante ordem correta)
+        let child = spacerTop.nextSibling;
+        while (child && child !== spacerBot) {
+            const next = child.nextSibling;
+            child.remove();
+            child = next;
         }
 
-        const nextBatch = Math.min(currentRendered + 100, state.dados.length);
-        console.log(`🔄 Carregando mais linhas: ${currentRendered} → ${nextBatch}`);
+        // 2. Gerar HTML de TODAS as rows na janela e inserir em ordem
+        const htmlParts = [];
+        const newDataIndices = [];
+        for (let slot = firstSlot; slot <= lastSlot; slot++) {
+            const dataIndex = vs.visibleIndices[slot];
+            if (dataIndex === undefined) continue;
+            const item = state.dados[dataIndex];
+            if (!item || item._deleted) continue;
 
-        const fragment = document.createDocumentFragment();
-        const tempTable = document.createElement('table');
-        const tempTbody = document.createElement('tbody');
-        tempTable.appendChild(tempTbody);
+            const rawHtml = item.tipo === 'pedido'
+                ? renderizarLinha(item, dataIndex)
+                : renderizarLinhaSeparacao(item, dataIndex);
+            // Injetar data-vs-index para tracking
+            htmlParts.push(rawHtml.replace(/<tr /, `<tr data-vs-index="${dataIndex}" `));
+            newDataIndices.push(dataIndex);
+        }
 
-        // Renderizar próximo lote
-        const html = state.dados.slice(currentRendered, nextBatch).map((item, relativeIndex) => {
-            const absoluteIndex = currentRendered + relativeIndex;
-            if (item.tipo === 'pedido') {
-                return renderizarLinha(item, absoluteIndex);
-            } else if (item.tipo === 'separacao') {
-                return renderizarLinhaSeparacao(item, absoluteIndex);
+        if (htmlParts.length > 0) {
+            const tempTable = document.createElement('table');
+            const tempTbody = document.createElement('tbody');
+            tempTable.appendChild(tempTbody);
+            tempTbody.innerHTML = htmlParts.join('');
+
+            const fragment = document.createDocumentFragment();
+            while (tempTbody.firstChild) {
+                fragment.appendChild(tempTbody.firstChild);
             }
-            return '';
-        }).join('');
-
-        tempTbody.innerHTML = html;
-        while (tempTbody.firstChild) {
-            fragment.appendChild(tempTbody.firstChild);
+            spacerBot.before(fragment);
         }
 
-        tbody.appendChild(fragment);
+        // 3. Atualizar alturas dos spacers
+        spacerTop.firstElementChild.style.height = (firstSlot * rowH) + 'px';
+        spacerBot.firstElementChild.style.height = (Math.max(0, vs.visibleIndices.length - lastSlot - 1) * rowH) + 'px';
 
-        // Renderizar estoques em chunks (nao bloqueia main thread)
-        renderizarEstoquesEmLote(currentRendered, nextBatch);
+        // 4. Atualizar state
+        vs.firstRenderedSlot = firstSlot;
+        vs.lastRenderedSlot = lastSlot;
 
-        // ✅ CORREÇÃO: Aplicar visibilidade nas novas linhas carregadas
-        // Verificar e ocultar pedidos com saldo=0 no novo lote
-        let pedidosOcultadosNovos = 0;
-        for (let i = currentRendered; i < nextBatch; i++) {
-            const item = state.dados[i];
-            if (item.tipo === 'pedido') {
-                const saldoAtual = parseFloat(item.qtd_saldo) || 0;
-
-                if (saldoAtual === 0) {
-                    const row = document.getElementById(`row-${i}`);
-                    if (row) {
-                        row.style.display = 'none';
-                        pedidosOcultadosNovos++;
-                    }
-                }
-            }
+        // 5. Medir altura real apos primeiro render (ajusta precisao)
+        if (vs.rowHeight === 22) {
+            measureRowHeight();
         }
 
-        if (pedidosOcultadosNovos > 0) {
-            console.log(`👻 ${pedidosOcultadosNovos} novo(s) pedido(s) com saldo=0 ocultado(s) no virtual scrolling`);
+        // 6. Post-render: estoques, classes visuais, tooltips
+        if (newDataIndices.length > 0) {
+            renderizarEstoquesEmLoteIndices(newDataIndices);
+            aplicarClassesVisuais();
+            inicializarTooltips();
         }
-
-        console.log(`✅ ${nextBatch} de ${state.dados.length} linhas renderizadas`);
     }
 
-    // 🆕 FUNÇÃO PARA APLICAR CLASSES VISUAIS (bordas - cor já aplicada na renderização)
-    // 🚀 OTIMIZADO: Itera apenas range visível (não mais 2000+ items)
+    // 🆕 FUNÇÃO PARA APLICAR CLASSES VISUAIS (bordas entre pedidos/lotes)
+    // 🚀 VIRTUAL SCROLL: Itera apenas janela renderizada via visibleIndices
     function aplicarClassesVisuais() {
+        const vs = state.virtualScroll;
+        if (!vs.visibleIndices.length) return;
+
         let pedidoAnterior = null;
         let loteAnterior = null;
 
-        // 🚀 Limitar ao range renderizado + buffer de segurança
-        const endIndex = Math.min(state.virtualScroll.lastVisibleIndex + 50, state.dados.length);
+        // Iterar apenas os slots renderizados
+        const startSlot = Math.max(0, vs.firstRenderedSlot);
+        const endSlot = Math.min(vs.visibleIndices.length - 1, vs.lastRenderedSlot);
 
-        for (let index = 0; index < endIndex; index++) {
+        // Para contexto correto da primeira row, verificar item anterior no visibleIndices
+        if (startSlot > 0) {
+            const prevIndex = vs.visibleIndices[startSlot - 1];
+            const prevItem = state.dados[prevIndex];
+            if (prevItem) {
+                pedidoAnterior = prevItem.num_pedido;
+                loteAnterior = prevItem.separacao_lote_id || null;
+            }
+        }
+
+        for (let slot = startSlot; slot <= endSlot; slot++) {
+            const index = vs.visibleIndices[slot];
             const item = state.dados[index];
             if (!item || item._deleted) continue;
-            const row = document.getElementById(item.tipo === 'separacao' ? `row-sep-${index}` : `row-${index}`);
-            if (!row) continue; // Skip se não renderizado
 
-            // 🆕 SEPARADORES VISUAIS
-            // Linha GROSSA ao mudar de num_pedido
+            const row = document.getElementById(item.tipo === 'separacao' ? `row-sep-${index}` : `row-${index}`);
+            if (!row) continue;
+
+            // Limpar classes anteriores (rows recicladas podem ter classes velhas)
+            row.classList.remove('border-pedido-top', 'border-lote-top');
+
+            // Separadores visuais
             if (pedidoAnterior !== null && item.num_pedido !== pedidoAnterior) {
                 row.classList.add('border-pedido-top');
             }
 
-            // Linha MÉDIA ao mudar de separacao_lote_id (dentro do mesmo pedido)
             if (item.tipo === 'separacao' &&
                 item.num_pedido === pedidoAnterior &&
                 loteAnterior !== null &&
@@ -963,7 +1059,6 @@
                 row.classList.add('border-lote-top');
             }
 
-            // Atualizar rastreamento
             pedidoAnterior = item.num_pedido;
             loteAnterior = item.separacao_lote_id || null;
         }
@@ -1329,7 +1424,7 @@
                         min="0"
                         max="${item.qtd_saldo}"
                         step="0.01"
-                        value="0">
+                        value="${item.qtd_editavel || 0}">
                 </td>
 
                 <td class="text-center">
@@ -1347,21 +1442,21 @@
                     <input type="date" class="form-control form-control-sm dt-expedicao"
                         id="${dtExpedId}"
                         data-row-index="${index}"
-                        value="${item.expedicao || ''}">
+                        value="${item.expedicao_editavel || item.expedicao || ''}">
                 </td>
 
                 <td>
                     <input type="date" class="form-control form-control-sm dt-agendamento"
                         id="${dtAgendId}"
                         data-row-index="${index}"
-                        value="${item.agendamento || ''}">
+                        value="${item.agendamento_editavel || item.agendamento || ''}">
                 </td>
 
                 <!-- Botão totais do protocolo -->
                 <td class="text-center">
                     <button type="button" class="btn btn-info btn-sm-custom btn-totais-protocolo"
                         data-row-index="${index}"
-                        data-protocolo="${item.protocolo || ''}"
+                        data-protocolo="${item.protocolo_editavel || item.protocolo || ''}"
                         title="Ver totais do protocolo">
                         📊
                     </button>
@@ -1372,7 +1467,7 @@
                         data-row-index="${index}"
                         id="${protocoloId}"
                         maxlength="50"
-                        value="${item.protocolo || ''}">
+                        value="${item.protocolo_editavel || item.protocolo || ''}">
                 </td>
 
                 <!-- Botão confirmar agendamento -->
@@ -1672,8 +1767,11 @@
             if (isSeparacao && separacaoLoteId) {
                 await atualizarCampoSeparacaoLote(separacaoLoteId, 'expedicao', novoValor);
             }
-            // ✅ REMOVIDO: Não atualizar CarteiraPrincipal - edição é apenas local até clicar "OK"
-            // Quando clicar "OK", a data será copiada para a Separacao criada
+
+            // Virtual Scroll: sincronizar state para pedidos (change event pode nao ter input event em alguns browsers)
+            if (!isSeparacao) {
+                item.expedicao_editavel = novoValor;
+            }
 
             // 🚀 OTIMIZADO: Usar debounce agrupado (150ms)
             agendarRecalculoProduto(item.cod_produto);
@@ -1692,6 +1790,11 @@
 
             if (isSeparacao && separacaoLoteId) {
                 await atualizarCampoSeparacaoLote(separacaoLoteId, 'agendamento', novoValor);
+            }
+
+            // Virtual Scroll: sincronizar state para pedidos
+            if (!isSeparacao) {
+                item.agendamento_editavel = novoValor;
             }
         }
     }
@@ -1834,14 +1937,14 @@
     function verificarVisibilidadeLinhas(codProduto, numPedido) {
         console.log(`🔍 Verificando visibilidade: Pedido=${numPedido}, Produto=${codProduto}`);
 
-        // VERIFICAR E OCULTAR/REEXIBIR PEDIDOS COM SALDO=0
+        let saldoMudou = false;
+
+        // Recalcular saldo baseado nos dados atuais do state
         state.dados.forEach((item, index) => {
             if (item.tipo === 'pedido' &&
                 item.num_pedido === numPedido &&
                 item.cod_produto === codProduto) {
 
-                // ✅ CORREÇÃO: Recalcular saldo atual baseado nos dados atuais do state
-                // (necessário pois separações podem ter sido editadas)
                 const totalSeparado = state.dados
                     .filter(d => d.tipo === 'separacao' &&
                                 d.num_pedido === numPedido &&
@@ -1849,29 +1952,32 @@
                     .reduce((sum, sep) => sum + (parseFloat(sep.qtd_saldo) || 0), 0);
 
                 const saldoAtual = (item.qtd_original_pedido || 0) - totalSeparado;
+                const saldoAnterior = item.qtd_saldo;
 
-                // ✅ ATUALIZAR qtd_saldo no state para refletir mudança
+                // Atualizar qtd_saldo no state
                 item.qtd_saldo = saldoAtual;
 
+                if (saldoAtual !== saldoAnterior) {
+                    saldoMudou = true;
+                    console.log(`🔄 Saldo atualizado: ${numPedido}-${codProduto}: ${saldoAnterior} → ${saldoAtual}`);
+                }
+
+                // Atualizar DOM se row estiver renderizada
                 const row = document.getElementById(`row-${index}`);
                 if (row) {
-                    // Atualizar atributo data-qtd-saldo no DOM
                     row.setAttribute('data-qtd-saldo', saldoAtual);
-
-                    if (saldoAtual === 0) {
-                        // OCULTAR (display:none)
-                        row.style.display = 'none';
-                        console.log(`👻 Ocultada linha de Pedido: ${numPedido} - ${codProduto} (saldo=0)`);
-                    } else if (saldoAtual > 0) {
-                        // REEXIBIR (remover display:none)
-                        if (row.style.display === 'none') {
-                            row.style.display = '';
-                            console.log(`👁️ Reexibida linha de Pedido: ${numPedido} - ${codProduto} (saldo=${saldoAtual})`);
-                        }
-                    }
                 }
             }
         });
+
+        // Virtual Scroll: rebuild visibleIndices se saldo mudou (row pode entrar/sair)
+        if (saldoMudou) {
+            rebuildVisibleIndices();
+            // Forcar re-render da janela atual
+            state.virtualScroll.firstRenderedSlot = -1;
+            state.virtualScroll.lastRenderedSlot = -1;
+            updateVirtualWindow();
+        }
     }
 
     // ==============================================
@@ -2008,11 +2114,13 @@
 
     function adicionarQtdSaldo(rowIndex) {
         const item = state.dados[rowIndex];
-        const inputQtd = document.getElementById(`qtd-edit-${rowIndex}`);
-        inputQtd.value = item.qtd_saldo;
 
-        // OPT-F2: Sincronizar state (calcularTotaisSeparacao le daqui)
+        // Virtual Scroll: sincronizar state ANTES (row pode estar off-screen)
         item.qtd_editavel = parseFloat(item.qtd_saldo || 0);
+
+        // Atualizar DOM se row estiver renderizada
+        const inputQtd = document.getElementById(`qtd-edit-${rowIndex}`);
+        if (inputQtd) inputQtd.value = item.qtd_saldo;
 
         // Recalcular valores da linha (valor total, pallets, peso)
         recalcularValoresLinha(rowIndex);
@@ -2035,15 +2143,15 @@
         // 🔧 CORREÇÃO: Filtrar apenas tipo='pedido' e armazenar no state.dados
         state.dados.forEach((d, idx) => {
             if (d.tipo === 'pedido' && d.num_pedido === numPedido) {
-                // 🔧 CORREÇÃO: Armazenar no state.dados (funciona mesmo sem DOM renderizado)
+                // Armazenar no state.dados (funciona mesmo sem DOM renderizado)
                 d.qtd_editavel = d.qtd_saldo;
 
-                // Tentar atualizar DOM se existir (para UI)
+                // Atualizar DOM se existir (para UI)
                 const inputQtd = document.getElementById(`qtd-edit-${idx}`);
-                if (inputQtd) {
-                    inputQtd.value = d.qtd_saldo;
-                    recalcularValoresLinha(idx);
-                }
+                if (inputQtd) inputQtd.value = d.qtd_saldo;
+
+                // Virtual Scroll: SEMPRE recalcular (atualiza state.valor_total/pallets/peso)
+                recalcularValoresLinha(idx);
                 produtosAfetados.add(d.cod_produto);
             }
         });
@@ -2064,7 +2172,12 @@
         const item = state.dados[rowIndex];
         const inputId = item.tipo === 'separacao' ? `dt-exped-sep-${rowIndex}` : `dt-exped-${rowIndex}`;
         const inputData = document.getElementById(inputId);
-        const dataAtual = inputData.value ? new Date(inputData.value + 'T00:00:00') : new Date();
+
+        // Virtual Scroll: ler data do DOM se disponivel, senao do state
+        const currentVal = inputData
+            ? inputData.value
+            : (item.expedicao_editavel || item.expedicao || '');
+        const dataAtual = currentVal ? new Date(currentVal + 'T00:00:00') : new Date();
 
         // Adicionar 1 dia
         dataAtual.setDate(dataAtual.getDate() + 1);
@@ -2078,7 +2191,10 @@
         }
 
         const novaData = dataAtual.toISOString().split('T')[0];
-        inputData.value = novaData;
+
+        // Virtual Scroll: sincronizar state SEMPRE, DOM se disponivel
+        if (item.tipo === 'pedido') item.expedicao_editavel = novaData;
+        if (inputData) inputData.value = novaData;
 
         // Se for separação, atualizar TODOS os produtos do mesmo lote NO BACKEND
         if (item.tipo === 'separacao' && item.separacao_lote_id) {
@@ -2100,9 +2216,13 @@
         const produtosAfetados = new Set();
 
         // Calcular a nova data (D+1) baseada na data atual ou hoje
+        // Virtual Scroll: ler do DOM se disponivel, senao do state
         const inputIdBase = item.tipo === 'separacao' ? `dt-exped-sep-${rowIndex}` : `dt-exped-${rowIndex}`;
         const inputDataBase = document.getElementById(inputIdBase);
-        const dataAtual = inputDataBase && inputDataBase.value ? new Date(inputDataBase.value + 'T00:00:00') : new Date();
+        const currentDateVal = inputDataBase
+            ? inputDataBase.value
+            : (item.expedicao_editavel || item.expedicao || '');
+        const dataAtual = currentDateVal ? new Date(currentDateVal + 'T00:00:00') : new Date();
 
         // Adicionar 1 dia
         dataAtual.setDate(dataAtual.getDate() + 1);
@@ -2544,62 +2664,20 @@
         }
     }
 
-    // ✅ NOVA FUNÇÃO: Renderizar novas separações na tabela
+    // ✅ Renderizar novas separações (Virtual Scroll: rebuild indices + re-render)
     function renderizarNovasSeparacoes(separacoes) {
-        const tbody = document.getElementById('tbody-carteira');
-        if (!tbody) return;
+        if (!separacoes || separacoes.length === 0) return;
 
-        separacoes.forEach(sep => {
-            // Encontrar índice correto em state.dados
-            const indexNoState = state.dados.findIndex(d => d.tipo === 'separacao' && d.id === sep.id);
+        // Rebuild indices (novas separacoes ja foram pushed em state.dados pelo caller)
+        construirIndices();
+        rebuildVisibleIndices();
 
-            if (indexNoState === -1) {
-                console.warn(`⚠️ Separação ${sep.id} não encontrada em state.dados`);
-                return;
-            }
+        // Forcar re-render da janela atual (novas separacoes aparecem se estiverem na window)
+        state.virtualScroll.firstRenderedSlot = -1;
+        state.virtualScroll.lastRenderedSlot = -1;
+        updateVirtualWindow();
 
-            // Verificar se já existe no DOM
-            const linhaExistente = document.getElementById(`row-sep-${indexNoState}`);
-            if (linhaExistente) {
-                console.log(`✅ Separação ${sep.id} já renderizada no DOM`);
-                return; // Já existe
-            }
-
-            // Renderizar nova linha
-            const html = renderizarLinhaSeparacao(sep, indexNoState);
-
-            // 🔴 CORREÇÃO: Usar table/tbody para criar <tr> corretamente
-            const tempTable = document.createElement('table');
-            const tempTbody = document.createElement('tbody');
-            tempTable.appendChild(tempTbody);
-            tempTbody.innerHTML = html;
-            const novaLinha = tempTbody.firstElementChild;
-
-            if (novaLinha) {
-                // Inserir após a linha do pedido correspondente
-                const todasLinhasPedido = Array.from(document.querySelectorAll(`tr[data-num-pedido="${sep.num_pedido}"]`))
-                    .filter(row => row.id.startsWith('row-') && row.dataset.tipo === 'pedido');  // Apenas PEDIDOS
-
-                // Buscar última linha do produto específico
-                const linhasProduto = todasLinhasPedido.filter(row => row.dataset.codProduto === sep.cod_produto);
-                const pedidoRow = linhasProduto.length > 0 ? linhasProduto[linhasProduto.length - 1] : todasLinhasPedido[todasLinhasPedido.length - 1];
-
-                if (pedidoRow) {
-                    pedidoRow.after(novaLinha);
-                } else {
-                    tbody.appendChild(novaLinha);
-                }
-
-                // Renderizar estoque da nova linha
-                try {
-                    renderizarEstoquePrecalculado(indexNoState, sep);
-                } catch (erro) {
-                    console.error(`Erro ao renderizar estoque da nova separação ${indexNoState}:`, erro);
-                }
-
-                console.log(`✅ Separação ${sep.id} renderizada no DOM (index ${indexNoState})`);
-            }
-        });
+        console.log(`✅ ${separacoes.length} separação(ões) integrada(s) no virtual scroll`);
     }
 
     // ==============================================
@@ -2841,36 +2919,34 @@
     function recalcularValoresLinha(rowIndex) {
         const item = state.dados[rowIndex];
 
-        // 🔧 CORREÇÃO: Detectar tipo da linha (pedido ou separação)
-        const rowId = item.tipo === 'separacao' ? `row-sep-${rowIndex}` : `row-${rowIndex}`;
-        const row = document.getElementById(rowId);
-
-        if (!row) {
-            console.warn(`Row não encontrada: ${rowId}`);
-            return;
-        }
-
         // 🔧 CORREÇÃO: Usar qtd correta baseada no tipo
         let qtdEditavel;
         if (item.tipo === 'separacao') {
-            // Para separações, usar qtd_saldo do item (já atualizado pela API)
             qtdEditavel = parseFloat(item.qtd_saldo) || 0;
         } else {
-            // 🔧 CORREÇÃO: Para pedidos, SEMPRE usar qtd_saldo atualizado (não input)
             qtdEditavel = parseFloat(item.qtd_saldo) || 0;
         }
 
-        // Obter dados do row
-        const preco = parseFloat(row.dataset.preco) || 0;
-        const palletizacao = parseFloat(row.dataset.palletizacao) || 100;
-        const pesoBruto = parseFloat(row.dataset.pesoBruto) || 1;
+        // Virtual Scroll: ler dados do state (row pode estar off-screen)
+        const preco = parseFloat(item.preco_produto_pedido) || 0;
+        const palletizacao = parseFloat(item.palletizacao) || 100;
+        const pesoBruto = parseFloat(item.peso_bruto) || 1;
 
         // Recalcular
         const valorTotal = qtdEditavel * preco;
         const pallets = qtdEditavel / palletizacao;
         const peso = qtdEditavel * pesoBruto;
 
-        // Atualizar células
+        // Atualizar estado (SEMPRE — independente de row estar renderizada)
+        item.valor_total = valorTotal;
+        item.pallets = pallets;
+        item.peso = peso;
+
+        // Atualizar DOM se row estiver renderizada
+        const rowId = item.tipo === 'separacao' ? `row-sep-${rowIndex}` : `row-${rowIndex}`;
+        const row = document.getElementById(rowId);
+        if (!row) return; // Row off-screen — state atualizado, DOM sera hidratado ao scrollar
+
         const valorTotalEl = row.querySelector('.valor-total');
         const palletsEl = row.querySelector('.pallets');
         const pesoEl = row.querySelector('.peso');
@@ -2878,14 +2954,6 @@
         if (valorTotalEl) valorTotalEl.textContent = formatarMoeda(valorTotal);
         if (palletsEl) palletsEl.textContent = formatarNumero(pallets, 2);
         if (pesoEl) pesoEl.textContent = Math.round(peso);
-
-        // Atualizar também o estado
-        item.valor_total = valorTotal;
-        item.pallets = pallets;
-        item.peso = peso;
-
-        // Estoque é recalculado por recalcularTodasLinhasProduto() chamado no handleTableInput
-        // NÃO precisa chamar API legada aqui
     }
 
     // ==============================================
@@ -3000,13 +3068,18 @@
                     qtd = parseFloat(item.qtd_saldo) || 0;
                     data = item.expedicao;
                 } else {
-                    // ✅ PEDIDOS: Buscar inputs editáveis (LEITURA FRESCA DO DOM)
+                    // ✅ PEDIDOS: DOM first, state fallback (Virtual Scroll: row pode estar off-screen)
                     const qtdInput = document.getElementById(`qtd-edit-${index}`);
                     const dataInput = document.getElementById(`dt-exped-${index}`);
 
                     if (qtdInput && dataInput) {
+                        // Row renderizada — ler fresco do DOM
                         qtd = parseFloat(qtdInput.value || 0);
                         data = dataInput.value;
+                    } else {
+                        // Row off-screen — usar state (sincronizado por handleTableInput)
+                        qtd = parseFloat(item.qtd_editavel || 0);
+                        data = item.expedicao_editavel || '';
                     }
                 }
 
@@ -3580,17 +3653,22 @@
      * @param {string} numPedido - Número do pedido a remover
      */
     function removerPedidoDaTabela(numPedido) {
-        // 1. Remover do DOM (todas as <tr> do pedido — pedido + separações)
+        // 1. Contar e remover do state.dados
+        const removedCount = state.dados.filter(item => item.num_pedido === numPedido).length;
+        state.dados = state.dados.filter(item => item.num_pedido !== numPedido);
+        state.totalItens = Math.max(0, state.totalItens - removedCount);
+
+        // 2. Remover do DOM (apenas rows renderizadas na janela virtual)
         const tbody = document.getElementById('tbody-carteira');
         const rows = tbody.querySelectorAll(`tr[data-num-pedido="${numPedido}"]`);
         rows.forEach(row => row.remove());
 
-        // 2. Remover do state.dados
-        state.dados = state.dados.filter(item => item.num_pedido !== numPedido);
-        state.totalItens = Math.max(0, state.totalItens - rows.length);
-
-        // 3. Reconstruir índices e atualizar painel
+        // 3. Reconstruir indices e re-render virtual window
         construirIndices();
+        rebuildVisibleIndices();
+        state.virtualScroll.firstRenderedSlot = -1;
+        state.virtualScroll.lastRenderedSlot = -1;
+        updateVirtualWindow();
         atualizarPainelFlutuante();
     }
 
@@ -3885,11 +3963,30 @@
 
         console.log(`🔧 Filtro Tipo: Sep=${exibirSep}, Pdd=${exibirPdd}`);
 
-        // Se nenhum marcado, exibir NADA (Opção B confirmada)
+        // Se nenhum marcado, exibir NADA (limpar rows mas preservar spacers)
         if (!exibirSep && !exibirPdd) {
+            state.virtualScroll.visibleIndices = [];
+            state.virtualScroll.firstRenderedSlot = -1;
+            state.virtualScroll.lastRenderedSlot = -1;
+            // Limpar rows renderizadas (manter spacers intactos)
             const tbody = document.getElementById('tbody-carteira');
-            tbody.innerHTML = `
-                <tr>
+            const spacerTop = document.getElementById('vs-spacer-top');
+            const spacerBot = document.getElementById('vs-spacer-bottom');
+            if (spacerTop && spacerBot) {
+                // Remover apenas rows de dados entre os spacers
+                let child = spacerTop.nextSibling;
+                while (child && child !== spacerBot) {
+                    const next = child.nextSibling;
+                    if (child.nodeType === 1 && child.dataset && child.dataset.tipo) child.remove();
+                    else if (child.nodeType === 1 && child.dataset && child.dataset.vsIndex !== undefined) child.remove();
+                    else { const nx = child.nextSibling; child.remove(); child = nx; continue; }
+                    child = next;
+                }
+                // Zerar spacers e inserir mensagem entre eles
+                spacerTop.firstElementChild.style.height = '0';
+                spacerBot.firstElementChild.style.height = '0';
+                const msgRow = document.createElement('tr');
+                msgRow.innerHTML = `
                     <td colspan="29" class="text-center py-4">
                         <div class="alert alert-warning d-inline-block">
                             <i class="fas fa-exclamation-triangle"></i>
@@ -3897,54 +3994,33 @@
                             <small>Marque pelo menos "Sep." ou "Pdd." para exibir dados.</small>
                         </div>
                     </td>
-                </tr>
-            `;
+                `;
+                spacerBot.before(msgRow);
+            }
             return;
         }
 
-        // Filtrar linhas via JavaScript (display: none)
+        // Garantir que spacers existem (podem ter sido destruidos)
         const tbody = document.getElementById('tbody-carteira');
-        const linhas = tbody.querySelectorAll('tr');
-
-        let pedidosOcultadosPorSaldo = 0; // 🆕 Contador para debug
-
-        linhas.forEach(linha => {
-            const tipo = linha.dataset.tipo; // 'pedido' ou 'separacao'
-
-            if (!tipo) {
-                // Linha de totais ou outras - manter visível
-                return;
-            }
-
-            // Lógica de visibilidade
-            let deveExibir = false;
-
-            if (tipo === 'separacao' && exibirSep) {
-                deveExibir = true;
-            }
-
-            if (tipo === 'pedido' && exibirPdd) {
-                // ✅ CORREÇÃO: Verificar qtd_saldo ANTES de exibir
-                const qtdSaldo = parseFloat(linha.dataset.qtdSaldo || linha.getAttribute('data-qtd-saldo') || 0);
-
-                if (qtdSaldo > 0) {
-                    deveExibir = true;
-                } else {
-                    // Pedido com saldo=0 deve permanecer oculto
-                    deveExibir = false;
-                    pedidosOcultadosPorSaldo++;
-                }
-            }
-
-            // Aplicar visibilidade
-            linha.style.display = deveExibir ? '' : 'none';
-        });
-
-        console.log(`✅ Filtro de tipo aplicado: exibindo ${exibirSep ? 'Sep.' : ''} ${exibirPdd ? 'Pdd.' : ''}`);
-
-        if (pedidosOcultadosPorSaldo > 0) {
-            console.log(`   ℹ️ ${pedidosOcultadosPorSaldo} pedido(s) com saldo=0 mantidos ocultos`);
+        if (!document.getElementById('vs-spacer-top')) {
+            tbody.innerHTML = `
+                <tr id="vs-spacer-top"><td colspan="30" style="padding:0;border:none;height:0;line-height:0;font-size:0;"></td></tr>
+                <tr id="vs-spacer-bottom"><td colspan="30" style="padding:0;border:none;height:0;line-height:0;font-size:0;"></td></tr>
+            `;
         }
+
+        // Virtual Scroll: rebuild visibleIndices (state-based, nao DOM query)
+        rebuildVisibleIndices();
+
+        // Re-render window com novos indices visiveis
+        if (state.virtualScroll.containerEl) {
+            state.virtualScroll.containerEl.scrollTop = 0;
+        }
+        state.virtualScroll.firstRenderedSlot = -1;
+        state.virtualScroll.lastRenderedSlot = -1;
+        updateVirtualWindow();
+
+        console.log(`✅ Filtro de tipo aplicado: exibindo ${exibirSep ? 'Sep.' : ''} ${exibirPdd ? 'Pdd.' : ''} (${state.virtualScroll.visibleIndices.length} linhas visíveis)`);
     }
 
 })();
