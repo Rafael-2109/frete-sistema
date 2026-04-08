@@ -1,6 +1,9 @@
 """Routes de listagem de pedidos (Fase 1 — GET-only, sem WTForms)."""
+from math import ceil
+
 from flask import render_template, request
 from flask_login import login_required
+from sqlalchemy import func
 
 from app import db
 from app.pedidos.models import Pedido
@@ -75,10 +78,24 @@ def register_lista_routes(bp):
         # --- Ordenacao ---
         query = Svc.aplicar_ordenacao(query, sort_by, sort_order)
 
-        # --- Paginacao ---
+        # --- Paginacao (count otimizado — Fixes PYTHON-FLASK-CH) ---
         page = request.args.get('page', 1, type=int)
-        paginacao = query.paginate(page=page, per_page=50, error_out=False)
-        pedidos = paginacao.items
+        per_page = 50
+
+        # Count otimizado: SELECT count(pedidos.id) FROM pedidos WHERE ...
+        # Evita subquery com todas as colunas que paginate() gera
+        total = query.with_entities(func.count(Pedido.id)).scalar()
+        pedidos = query.limit(per_page).offset((page - 1) * per_page).all()
+
+        # Objeto paginacao compativel com template
+        total_pages = max(1, ceil(total / per_page))
+        paginacao = type('Pag', (), {
+            'page': page, 'per_page': per_page, 'total': total,
+            'pages': total_pages, 'items': pedidos,
+            'has_prev': page > 1, 'has_next': page < total_pages,
+            'prev_num': page - 1 if page > 1 else None,
+            'next_num': page + 1 if page < total_pages else None,
+        })()
 
         # --- Contatos de agendamento (apenas CNPJs da pagina atual) ---
         cnpjs_pagina = list({p.cnpj_cpf for p in pedidos if p.cnpj_cpf})
