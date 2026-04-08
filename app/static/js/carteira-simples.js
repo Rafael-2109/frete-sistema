@@ -640,6 +640,25 @@
         state.indices.porProduto.get(cod).push(index);
     }
 
+    /**
+     * Encontra a posição correta para inserir uma nova separação em state.dados.
+     * Insere após o último item (pedido ou separação) do mesmo num_pedido + cod_produto.
+     * Garante que separações ficam visualmente junto ao pedido pai no virtual scroll.
+     */
+    function encontrarPosicaoInsercaoSeparacao(numPedido, codProduto) {
+        let insertAt = -1;
+        for (let i = state.dados.length - 1; i >= 0; i--) {
+            const d = state.dados[i];
+            if (d._deleted) continue;
+            if (d.num_pedido === numPedido && d.cod_produto === codProduto) {
+                insertAt = i + 1;
+                break;
+            }
+        }
+        // Fallback: se não encontrou (não deveria acontecer), inserir no final
+        return insertAt === -1 ? state.dados.length : insertAt;
+    }
+
     // ==============================================
     // 🚀 VIRTUAL SCROLLING — ÍNDICE DE VISIBILIDADE
     // ==============================================
@@ -1947,6 +1966,7 @@
 
                 const totalSeparado = state.dados
                     .filter(d => d.tipo === 'separacao' &&
+                                !d._deleted &&
                                 d.num_pedido === numPedido &&
                                 d.cod_produto === codProduto)
                     .reduce((sum, sep) => sum + (parseFloat(sep.qtd_saldo) || 0), 0);
@@ -1970,14 +1990,13 @@
             }
         });
 
-        // Virtual Scroll: rebuild visibleIndices se saldo mudou (row pode entrar/sair)
-        if (saldoMudou) {
-            rebuildVisibleIndices();
-            // Forcar re-render da janela atual
-            state.virtualScroll.firstRenderedSlot = -1;
-            state.virtualScroll.lastRenderedSlot = -1;
-            updateVirtualWindow();
-        }
+        // Virtual Scroll: SEMPRE rebuild visibleIndices
+        // Esta função é chamada apenas em CRUD de separação — visibleIndices pode estar
+        // desatualizado (ex: pedido tinha saldo=0, agora tem saldo>0 após deletar sep)
+        rebuildVisibleIndices();
+        state.virtualScroll.firstRenderedSlot = -1;
+        state.virtualScroll.lastRenderedSlot = -1;
+        updateVirtualWindow();
     }
 
     // ==============================================
@@ -2608,12 +2627,13 @@
 
             // ✅ ATUALIZAÇÃO LOCAL SEM RELOAD
             if (resultado.separacoes && resultado.separacoes.length > 0) {
-                // Adicionar separações em state.dados
+                // Inserir separações na posição correta (após ultimo item do mesmo pedido+produto)
                 resultado.separacoes.forEach(sep => {
-                    state.dados.push(sep);
-                    // ✅ FIX: Atualizar índice para incluir nova separação
-                    atualizarIndiceProduto(state.dados.length - 1);
+                    const insertAt = encontrarPosicaoInsercaoSeparacao(sep.num_pedido, sep.cod_produto);
+                    state.dados.splice(insertAt, 0, sep);
                 });
+                // Rebuild indices (splice invalida posições)
+                construirIndices();
 
                 // Atualizar qtd_saldo dos pedidos correspondentes
                 resultado.separacoes.forEach(sep => {
@@ -2829,6 +2849,7 @@
             // ✅ ATUALIZAÇÃO LOCAL SEM RELOAD
             if (resultado.separacoes && resultado.separacoes.length > 0) {
                 // Atualizar/adicionar separações em state.dados
+                const novasSeparacoes = []; // Track separações realmente novas (splice)
                 resultado.separacoes.forEach(sepNova => {
                     // Verificar se já existe em state.dados
                     const indexExistente = state.dados.findIndex(
@@ -2849,12 +2870,14 @@
                             row.querySelector('.peso').textContent = Math.round(sepNova.peso);
                         }
                     } else {
-                        // Adicionar nova
-                        state.dados.push(sepNova);
-                        // ✅ FIX: Atualizar índice para incluir nova separação
-                        atualizarIndiceProduto(state.dados.length - 1);
+                        // Inserir na posição correta (após ultimo item do mesmo pedido+produto)
+                        const insertAt = encontrarPosicaoInsercaoSeparacao(sepNova.num_pedido, sepNova.cod_produto);
+                        state.dados.splice(insertAt, 0, sepNova);
+                        novasSeparacoes.push(sepNova);
                     }
                 });
+                // Rebuild indices (splice invalida posições)
+                construirIndices();
 
                 // Atualizar qtd_saldo dos pedidos correspondentes
                 resultado.separacoes.forEach(sep => {
@@ -2891,13 +2914,7 @@
                     verificarVisibilidadeLinhas(sep.cod_produto, sep.num_pedido);
                 });
 
-                // Renderizar novas separações se houver
-                const novasSeparacoes = resultado.separacoes.filter(sep => {
-                    return !state.dados.some((d, idx) => {
-                        return d.tipo === 'separacao' && d.id === sep.id && idx < state.dados.length - resultado.separacoes.length;
-                    });
-                });
-
+                // Renderizar novas separações se houver (tracked durante o loop acima)
                 if (novasSeparacoes.length > 0) {
                     renderizarNovasSeparacoes(novasSeparacoes);
                 }
@@ -3060,6 +3077,7 @@
 
             indices.forEach(index => {
                 const item = state.dados[index];
+                if (!item || item._deleted) return; // Pular itens deletados
                 let qtd = 0;
                 let data = null;
 
