@@ -9,7 +9,7 @@ O Inspector grava todas as acoes (cliques, preenchimentos, navegacao).
 Ao final, copie o codigo gerado do painel lateral.
 
 Uso:
-    PWDEBUG=1 python gravar_emissao_cte.py [--filial CAR]
+    PWDEBUG=1 python .claude/skills/operando-ssw/scripts/gravar_emissao_cte.py [--filial CAR]
 
 Nota: PWDEBUG=1 abre o Inspector automaticamente.
 """

@@ -42,7 +42,6 @@ Retorno: JSON {"sucesso": bool, "ctrc": "...", "status": "...", ...}
 """
 import argparse
 import asyncio
-import html as html_module
 import json
 import os
 import re
@@ -55,17 +54,13 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from ssw_common import (
     verificar_credenciais,
-    carregar_defaults,
     login_ssw,
     abrir_opcao_popup,
     interceptar_ajax_response,
     injetar_html_no_dom,
-    preencher_campo_js,
-    preencher_campo_no_html,
     capturar_campos,
     capturar_screenshot,
     gerar_saida,
-    verificar_mensagem_ssw,
 )
 
 
@@ -126,7 +121,7 @@ async def listar_selects(popup):
     }""")
 
 
-async def trocar_filial(page, filial_alvo="CAR", timeout_s=30):
+async def trocar_filial(page, filial_alvo="CAR"):
     """
     Troca a filial ativa no SSW.
 
@@ -439,7 +434,7 @@ async def emitir_cte(args):
 
             # ── 2. Trocar filial para CAR ──
             # Usar evaluate (nao fill nativo) pois fill na filial causa page reload
-            filial_result = await trocar_filial(page, filial)
+            await trocar_filial(page, filial)
 
             # ── 3. Abrir opcao 004 ──
             popup = await abrir_opcao_popup(context, main_frame, 4, timeout_s=30)
@@ -866,35 +861,83 @@ async def emitir_cte(args):
                 except Exception:
                     pass
 
-            # ── 11. Enviar ao SEFAZ (click nativo no link) ──
+            # ── 11. Enviar ao SEFAZ ──
+            # O envio NAO e automatico — precisa ser disparado explicitamente.
+            # Estrategia: chamar ajaxEnvia('', 1, 'ssw0767?act=REM&chamador=ssw0024')
+            # via evaluate (bypass do div#errorpanel que bloqueia clicks nativos).
+            # A action `REM` (Remeter) e que efetivamente envia os CT-es digitados.
+            # Depois abrimos opcao 007 para capturar status da fila como evidencia.
             sefaz_result = None
             if args.enviar_sefaz:
                 try:
-                    # Remover errorpanel que pode sobrepor o link
-                    await popup.evaluate(
-                        "() => document.getElementById('errorpanel')?.remove()"
-                    )
-                    await asyncio.sleep(1)
-                    await popup.get_by_role(
-                        "link", name="Enviar meus CT-es ao SEFAZ"
-                    ).click()
-                    await asyncio.sleep(15)
-                    await capturar_screenshot_local(popup, "09_sefaz")
-
-                    # Clicar OK no resultado SEFAZ
+                    # Tentar no popup atual primeiro (post-gravar), se ainda aberto
                     try:
-                        await popup.get_by_role("link", name="OK").click(timeout=5000)
-                        await asyncio.sleep(2)
+                        await popup.evaluate(
+                            "ajaxEnvia('', 1, 'ssw0767?act=REM&chamador=ssw0024')"
+                        )
+                        await asyncio.sleep(20)
+                        sefaz_result = {"metodo": "ajaxEnvia_REM_popup004"}
+                    except Exception as e_popup:
+                        # Popup pode ter fechado — abrir 007 e chamar REM la
+                        sefaz_result = {"popup004_erro": str(e_popup)}
+
+                    # Abrir 007 para ler status da fila e confirmar envio
+                    popup_007 = await abrir_opcao_popup(
+                        context, main_frame, 7, timeout_s=30
+                    )
+                    await asyncio.sleep(3)
+                    await popup_007.evaluate(CREATE_NEW_DOC_OVERRIDE)
+
+                    # Se nao conseguiu chamar REM no popup 004, chamar aqui
+                    if sefaz_result.get("popup004_erro"):
+                        try:
+                            await popup_007.evaluate(
+                                "ajaxEnvia('', 1, 'ssw0767?act=REM&chamador=ssw0024')"
+                            )
+                            await asyncio.sleep(20)
+                            sefaz_result["metodo"] = "ajaxEnvia_REM_popup007"
+                        except Exception as e_007:
+                            sefaz_result["popup007_erro"] = str(e_007)
+
+                    # Forcar refresh da fila
+                    try:
+                        await popup_007.evaluate("ajaxEnvia('ATU', 0)")
+                        await asyncio.sleep(5)
+                        await popup_007.evaluate(CREATE_NEW_DOC_OVERRIDE)
                     except Exception:
                         pass
 
-                    body_sefaz = await popup.evaluate(
-                        "() => document.body ? document.body.innerText.substring(0,5000) : ''"
-                    )
-                    sefaz_result = {"body": body_sefaz[:2000]}
+                    await capturar_screenshot_local(popup_007, "09_sefaz_007")
+
+                    # Capturar status da fila
+                    status = await popup_007.evaluate("""() => {
+                        const campo = document.getElementById('sefaz');
+                        const body = (document.body?.innerText || '').substring(0, 4000);
+                        const extrair = (label) => {
+                            const re = new RegExp(label + '[:\\\\s]*(\\\\d+)', 'i');
+                            const m = body.match(re);
+                            return m ? parseInt(m[1]) : null;
+                        };
+                        return {
+                            servico: campo ? campo.value : null,
+                            digitados: extrair('Digitados'),
+                            enviados: extrair('Enviados à SEFAZ'),
+                            autorizados: extrair('Autorizados'),
+                            denegados: extrair('Denegados'),
+                            rejeitados: extrair('Rejeitados'),
+                        };
+                    }""")
+                    sefaz_result["status_fila"] = status
+
+                    try:
+                        await popup_007.close()
+                    except Exception:
+                        pass
 
                 except Exception as e:
-                    sefaz_result = {"erro": str(e)}
+                    if sefaz_result is None:
+                        sefaz_result = {}
+                    sefaz_result["erro"] = str(e)
 
             # ── 12. Consultar 101 + baixar DACTE/XML ──
             consulta_101 = None
