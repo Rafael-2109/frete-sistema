@@ -171,38 +171,80 @@ def _map_model(model_str: Optional[str]) -> Optional[str]:
     return mapped
 
 
-def _parse_tools(tools_str: Optional[str]) -> Optional[list]:
+def _parse_tools(tools_value) -> Optional[list]:
     """
-    Parseia string CSV de tools para lista.
+    Parseia tools do frontmatter — aceita AMBOS formatos:
+
+    1. String CSV (formato padrao Claude Code CLI):
+       tools: Read, Bash, Glob, Grep
+
+    2. Lista YAML:
+       tools:
+         - Read
+         - Bash
 
     Args:
-        tools_str: String CSV (ex: "Read, Bash, Glob, Grep")
+        tools_value: String CSV OU lista YAML de tool names
 
     Returns:
         Lista de tools ou None se vazio
     """
-    if not tools_str:
+    if not tools_value:
         return None
 
-    tools = [t.strip() for t in tools_str.split(",") if t.strip()]
-    return tools if tools else None
+    # Formato lista YAML
+    if isinstance(tools_value, list):
+        tools = [str(t).strip() for t in tools_value if str(t).strip()]
+        return tools if tools else None
+
+    # Formato string CSV (padrao)
+    if isinstance(tools_value, str):
+        tools = [t.strip() for t in tools_value.split(",") if t.strip()]
+        return tools if tools else None
+
+    return None
 
 
-def _parse_skills(skills_str: Optional[str]) -> Optional[list]:
+def _parse_skills(skills_value) -> Optional[list]:
     """
-    Parseia string CSV de skills para lista.
+    Parseia skills do frontmatter — aceita AMBOS formatos:
+
+    1. String CSV (formato legado):
+       skills: gerindo-expedicao, cotando-frete
+
+    2. Lista YAML (formato oficial Claude Code CLI):
+       skills:
+         - gerindo-expedicao
+         - cotando-frete
+
+    Quando _parse_frontmatter cai em yaml.safe_load (formato lista),
+    o valor vem como list[str] em vez de str. Esta funcao aceita ambos
+    para manter compatibilidade bidirecional (Claude Code CLI + Agent SDK web).
 
     Args:
-        skills_str: String CSV (ex: "gerindo-expedicao, cotando-frete")
+        skills_value: String CSV OU lista YAML de skill names
 
     Returns:
         Lista de skill names ou None se vazio
     """
-    if not skills_str:
+    if not skills_value:
         return None
 
-    skills = [s.strip() for s in skills_str.split(",") if s.strip()]
-    return skills if skills else None
+    # Formato lista YAML (oficial Claude Code CLI)
+    if isinstance(skills_value, list):
+        skills = [str(s).strip() for s in skills_value if str(s).strip()]
+        return skills if skills else None
+
+    # Formato string CSV (legado)
+    if isinstance(skills_value, str):
+        skills = [s.strip() for s in skills_value.split(",") if s.strip()]
+        return skills if skills else None
+
+    # Tipo inesperado — logar e retornar None para nao quebrar
+    logger.warning(
+        f"[AGENT_LOADER] _parse_skills: tipo inesperado {type(skills_value).__name__} — ignorado"
+    )
+    return None
 
 
 def _build_prompt_with_skills(body: str, skills_str: Optional[str]) -> str:

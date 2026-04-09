@@ -140,3 +140,71 @@ Desconfiar quando:
 - Perda de contexto resume: https://github.com/anthropics/claude-code/issues/11712
 - Multi-Agent Failures (arXiv:2503.13657): https://arxiv.org/pdf/2503.13657
 - Error Amplification (arXiv:2512.08296): https://arxiv.org/abs/2512.08296
+
+---
+
+## Licoes da Revisao Abr/2026
+
+Revisao completa dos 12 subagents de dominio realizada em 2026-04-09. Principais achados:
+
+### Gaps Detectados e Corrigidos
+
+| Gap | Estado Antes | Estado Depois |
+|-----|--------------|---------------|
+| **G1**: Pre-mortem ausente em 12/12 | Nenhum | Aplicado em 6 agents de ACAO (analista-carteira, gestor-ssw, dev-odoo, especialista-odoo, auditor-financeiro, gestor-recebimento) |
+| **G2**: gestor-ssw sem protocolo de confiabilidade (ironico - maior risco) | Ausente | Adicionado |
+| **G3**: Output format ausente em 4 agents | 4/12 sem | 12/12 com formato dedicado |
+| **G4**: Boundary check formal ausente em 4 agents | 4/12 sem tabela | 12/12 com tabela formal |
+| **G5**: Copy-paste Odoo entre 2 agents (~135 linhas) | Duplicado | Extraido para `.claude/references/odoo/AGENT_BOILERPLATE.md` |
+| **G6** (REVISTO): `skills:` frontmatter como string CSV | Nao carregava (string) | Corrigido para lista YAML (carrega conteudo das skills) |
+| **G9**: Self-critique loop ausente | 0/12 | Aplicado em 3 agents de decisao critica (analista-carteira, auditor-financeiro, controlador-custo-frete) |
+| **G12**: gestor-carvia com protocolo simplificado | 3 bullets | 4 categorias canonicas |
+
+### Descobertas Criticas
+
+1. **`skills:` frontmatter E oficial e OBRIGATORIO ser LISTA YAML**: a documentacao oficial mostra formato `skills:\n  - name1\n  - name2`. Os 12 agents estavam usando `skills: name1, name2` (string CSV), o que fazia o YAML parser retornar uma string em vez de lista. Resultado: skills NAO eram carregadas no contexto do subagent pelo Claude Code CLI oficial. Corrigido em todos os 12.
+
+2. **`agent_loader.py` local tambem tinha essa limitacao**: aceitava apenas string CSV em `_parse_skills` e `_parse_tools`. Modificado para aceitar AMBOS formatos (backwards compat) em `agent_loader.py:174-206`.
+
+3. **`maxTurns` e campo oficial mas decidido NAO aplicar**: risco de cortar operacoes multi-turn em fluxos atomicos criticos (reconcile, POP-A10, dev Odoo). Reavaliar se agents comecarem a looping em producao.
+
+4. **`memory:` frontmatter NAO usado** — em vez disso, **MCP memory habilitado em todos os 12 agents**:
+   - Tentativa inicial com `memory: project` foi revertida (`agent_loader.py` nao extrai esse campo em producao)
+   - Focus dos agents e producao (agente web), nao Claude Code CLI dev
+   - Persistencia em producao usa o MCP memory server existente (`app/agente/tools/memory_mcp_tool.py`, 13 tools)
+   - **Solucao aplicada**: expandidos os 12 agents com 6 tools do MCP memory no allowlist (`mcp__memory__view_memories/list_memories/save_memory/update_memory/log_system_pitfall/query_knowledge_graph`)
+   - **Instrucoes de uso**: cada agent tem secao `SISTEMA DE MEMORIAS (MCP)` com paths especificos do dominio, referencia ao bloco canonico `.claude/references/AGENT_TEMPLATES.md#memory-usage`
+   - **Taxonomia aplicada**: subagents salvam APENAS niveis 3-5 (diagnostico, armadilha, heuristica) em paths padronizados `/memories/empresa/{tipo}/{dominio}/`
+   - **Tools NAO incluidas**: `delete_memory`, `clear_memories`, `restore_memory_version`, `view_memory_history`, `resolve_pendencia`, `register_improvement`, `search_cold_memories` (reservadas ao principal)
+
+### Decisoes Arquiteturais
+
+- **Templates externos** (`.claude/references/AGENT_TEMPLATES.md`) para blocos reusaveis (pre-mortem, self-critique, output format, boundary check, reliability protocol, constitutional hierarchy). Uma atualizacao propaga a todos os agents.
+- **Boilerplate Odoo** (`.claude/references/odoo/AGENT_BOILERPLATE.md`) para dedup entre especialista-odoo e dev-odoo (REGRA ZERO, SCRIPTS, CONEXAO, CHECKLIST EXTRATO).
+- **Pre-mortem DIFERENCIADO**: so em agents de acao. Read-only puros nao recebem (bloat sem ROI).
+- **Self-critique DIFERENCIADO**: so em agents de decisao critica. Queries simples nao precisam.
+- **Golden dataset offline** em `.claude/evals/subagents/` com 15 casos piloto em 3 agents (analista-carteira, auditor-financeiro, controlador-custo-frete). Runtime = Claude Code CLI, sem API direta.
+
+### Tecnicas Avancadas Aplicadas
+
+| Tecnica | Aplicacao |
+|---------|-----------|
+| Pre-mortem (Klein 1989) | 6 agents de acao, via referencia ao AGENT_TEMPLATES |
+| Self-critique (Reflexion, NeurIPS 2023) | 3 agents de decisao critica |
+| Constitutional AI hierarquia (L1-L4) | Documentada no template, usada pelo self-critique |
+| Source citation enforcement | Reforcado no protocolo de confiabilidade (ja parcial) |
+| MAST taxonomy mitigation (FM-3.2) | Via protocolo de findings + self-critique |
+
+### Tecnicas Rejeitadas (por ROI nao provado nesta revisao)
+
+- **ReAct/CoT XML explicito**: agents ja tem arvores de decisao implicitas. Adicionar tags XML seria bloat.
+- **`maxTurns`**: risco de cortar fluxos atomicos. Reavaliar se houver looping em producao.
+- **Memory system aplicado a todos**: so em 2 agents de alto beneficio (especialista-odoo, auditor-financeiro).
+- **Red-teaming sistematico**: proximo passo apos eval estavel. Fora do escopo desta revisao.
+
+### Referencias Criadas Nesta Revisao
+
+- `.claude/references/AGENT_TEMPLATES.md` — blocos reusaveis
+- `.claude/references/odoo/AGENT_BOILERPLATE.md` — boilerplate Odoo dedup
+- `.claude/references/AGENT_DESIGN_GUIDE.md` — manual prescritivo
+- `.claude/evals/subagents/` — framework de eval offline (3 agents piloto, 15 casos)

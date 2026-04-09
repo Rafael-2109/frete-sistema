@@ -147,6 +147,10 @@ Gotchas rapidos:
 ### Confiabilidade de Output (OBRIGATORIO)
 
 > Ref completa: `.claude/references/SUBAGENT_RELIABILITY.md`
+> **Manual para criar/editar subagents**: `.claude/references/AGENT_DESIGN_GUIDE.md`
+> **Blocos reusaveis** (pre-mortem, self-critique, output format): `.claude/references/AGENT_TEMPLATES.md`
+> **Boilerplate Odoo** (REGRA ZERO, scripts, conexao): `.claude/references/odoo/AGENT_BOILERPLATE.md`
+> **Avaliacao offline** (golden dataset): `.claude/evals/subagents/README.md`
 
 Subagentes retornam resumo compactado (10:1 a 50:1). **Nao existe validacao automatica.**
 

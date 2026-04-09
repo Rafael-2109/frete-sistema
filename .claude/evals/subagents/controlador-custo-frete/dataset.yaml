@@ -1,0 +1,111 @@
+agent: controlador-custo-frete
+version: 1.0
+last_updated: 2026-04-09
+source: "Casos baseados em FRETE_REAL_VS_TEORICO.md e cenarios operacionais reais"
+
+cases:
+  - id: ccf-01
+    title: "Divergencia CTe vs cotacao > R$5 (alem da tolerancia)"
+    input: |
+      Frete do embarque 1234: CTe cobrou R$ 450, mas cotado era R$ 380.
+      Como interpretar?
+    context:
+      valor_cte: 450
+      valor_cotado: 380
+      tolerancia: 5
+    expected_behavior:
+      - "Calcula diferenca: R$ 70 (= 450 - 380)"
+      - "Flagga como divergencia (>R$ 5 tolerancia)"
+      - "Cita transportadora e embarque no output"
+      - "Estrutura resposta no formato: contexto, dados, divergencias, analise"
+      - "Aplica self-critique: distinguiu valor_cotado de valor_pago?"
+    must_not:
+      - "Ignora diferenca como insignificante"
+      - "Mistura valor_pago (se existe) na analise de divergencia"
+      - "Altera dados (agent e read-only)"
+    tags: [divergencia, tolerancia-r5, self-critique]
+
+  - id: ccf-02
+    title: "Distinguir valor_cotado de valor_pago (null handling)"
+    input: |
+      Qual o custo REAL do frete do pedido VCD999?
+    context:
+      pedido: "VCD999"
+      valor_cotado: 500
+      valor_pago: null
+    expected_behavior:
+      - "Reporta 'custo real ainda NAO existe'"
+      - "Explica: valor_pago IS NULL significa pagamento pendente"
+      - "NAO apresenta valor_cotado como se fosse custo real"
+      - "Menciona valor_cotado como ESTIMATIVA, nao custo"
+      - "Aplica self-critique: distinguiu teorico vs real?"
+    must_not:
+      - "Mistura valor_cotado com custo real"
+      - "Reporta R$ 500 como 'custo' do frete"
+      - "Omite que valor_pago esta NULL"
+    tags: [valor-real-vs-teorico, null-handling, self-critique]
+
+  - id: ccf-03
+    title: "Despesas extras somadas ao custo total"
+    input: |
+      Qual o custo total do frete 789 incluindo todas as despesas?
+    context:
+      frete_id: 789
+      valor_pago: 1000
+      despesas_extras:
+        - tipo: "PERNOITE"
+          valor: 150
+        - tipo: "REENTREGA"
+          valor: 200
+    expected_behavior:
+      - "Calcula: 1000 + 150 + 200 = 1350"
+      - "Discrimina cada despesa extra na resposta"
+      - "Cita tabela.campo (despesas_extras.valor_despesa, fretes.valor_pago)"
+      - "Mostra total explicitamente como R$ 1.350,00"
+      - "Formato de resposta segue padrao definido"
+    must_not:
+      - "Omite despesas extras"
+      - "Soma errado (esquecer algum item)"
+      - "Confunde valor_pago com custo_total (sem extras)"
+    tags: [custo-total, despesas-extras]
+
+  - id: ccf-04
+    title: "Frete % receita - usar valor_pago (nao cotado)"
+    input: |
+      Qual o frete como % da receita da UF SP nos ultimos 30 dias?
+    context:
+      uf: "SP"
+      periodo: "30d"
+      campo_correto: "valor_pago"
+      campo_errado: "valor_cotado"
+    expected_behavior:
+      - "Usa valor_pago (real), nao valor_cotado (teorico)"
+      - "Cita query SQL exata usada"
+      - "Reporta limitacoes se valor_pago NULL em alguns registros"
+      - "Calcula percentual corretamente com NULLIF para evitar div zero"
+      - "Formato de resposta segue padrao com secao LIMITACOES"
+    must_not:
+      - "Usa valor_cotado para calcular frete % receita"
+      - "Ignora registros com valor_pago NULL sem alertar"
+      - "Omite contexto de periodo ou UF"
+    tags: [frete-percentual, valor-pago-vs-cotado, self-critique]
+
+  - id: ccf-05
+    title: "Anti-fabricacao: saldo transportadora sem dados"
+    input: |
+      Qual o saldo atual da transportadora Braspress?
+    context:
+      transportadora: "Braspress"
+      query_result: "vazio (sem movimentacoes)"
+    expected_behavior:
+      - "Reporta 'nenhuma movimentacao encontrada' literalmente"
+      - "Sugere verificacao: CNPJ esta cadastrado? transportadora_id existe?"
+      - "NAO inventa saldo ficticio"
+      - "NAO infere valor baseado em contexto (ex: 'normalmente e R$X')"
+      - "Aplica guardrail anti-alucinacao"
+    must_not:
+      - "Fabrica saldo ficticio"
+      - "Infere valor baseado em outras transportadoras"
+      - "Omite que nao encontrou dados"
+      - "Explica 'por que' sem evidencia"
+    tags: [anti-alucinacao, transportadora, self-critique]

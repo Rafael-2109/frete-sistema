@@ -1,0 +1,111 @@
+agent: auditor-financeiro
+version: 1.0
+last_updated: 2026-04-09
+source: "Casos baseados em armadilhas A1-A10 (local) e O1-O12 (Odoo) do agent"
+
+cases:
+  - id: af-01
+    title: "SEM_MATCH com CNPJ formatado (armadilha O5)"
+    input: |
+      Titulo de R$ 5.000 em 15/03 nao bateu com extrato do mesmo valor e data.
+      Por que? CNPJ do titulo: 33652456000178.
+    context:
+      valor: 5000
+      data: "15/03/2026"
+      cnpj_titulo_raiz: "33652456"
+      cnpj_extrato_format_esperado: "33.652.456"
+    expected_behavior:
+      - "Identifica armadilha O5 (CNPJ formatado no Odoo com pontos)"
+      - "Sugere buscar raiz 8 digitos com formato com pontos"
+      - "Reporta match candidato para aprovacao humana (nao decide sozinho)"
+      - "Cita armadilha O5 explicitamente no output"
+      - "Aplica self-critique: considerou formato de CNPJ?"
+    must_not:
+      - "Conclui SEM_MATCH sem tentar variacao de formato"
+      - "Ignora formatacao de CNPJ"
+      - "Executa reconcile sem confirmacao"
+    tags: [o5, sem-match, cnpj-format, pre-mortem]
+
+  - id: af-02
+    title: "amount_residual negativo sem abs (armadilha O3)"
+    input: |
+      Valor divergente: Local mostra R$ 10.000, Odoo mostra R$ -10.000.
+      Eh uma inconsistencia real?
+    context:
+      valor_local: 10000
+      amount_residual_odoo: -10000
+      tipo: "conta a pagar"
+    expected_behavior:
+      - "Identifica armadilha O3 (contas a pagar tem amount_residual NEGATIVO)"
+      - "Aplica abs() mentalmente ou menciona"
+      - "Conclui VALORES IGUAIS (10000 == abs(-10000)), nao divergente"
+      - "Cita O3 explicitamente"
+      - "NAO reporta como VALOR_RESIDUAL_DIVERGENTE"
+    must_not:
+      - "Reporta como VALOR_DIVERGENTE"
+      - "Esquece aplicar abs()"
+      - "Trata negativo como inconsistencia real"
+    tags: [o3, amount-residual, contas-pagar, self-critique]
+
+  - id: af-03
+    title: "Multi-company: titulo em CD, extrato em FB (O8)"
+    input: |
+      Titulo 12345 esta na empresa CD (34).
+      Vou pagar via extrato da empresa FB (1). Como faco?
+    context:
+      titulo_id: 12345
+      company_titulo: 34
+      company_extrato: 1
+    expected_behavior:
+      - "Identifica armadilha O8 (multi-company conflict)"
+      - "Decisao: pagamento SEMPRE na empresa do TITULO (CD=34)"
+      - "Menciona conta PENDENTES (26868) como ponte inter-company"
+      - "NAO sugere pagamento na empresa do extrato (FB=1)"
+      - "Executa pre-mortem cenario 3 (multi-company)"
+    must_not:
+      - "Sugere criar pagamento na empresa do extrato (FB=1)"
+      - "Ignora diferenca de company_id"
+      - "Esquece conta PENDENTES como ponte"
+    tags: [o8, multi-company, pendentes-26868, pre-mortem]
+
+  - id: af-04
+    title: "status_match vs status (armadilha A1)"
+    input: |
+      Me mostra todos os extratos pendentes de conciliacao.
+      Use a tabela ExtratoItem.
+    context:
+      tabela: "ExtratoItem"
+      filtro_correto: "status = 'pendente'"
+      filtro_errado: "status_match = ?"
+    expected_behavior:
+      - "Filtra por `status = 'pendente'`"
+      - "NAO filtra por `status_match` (campo diferente, independente)"
+      - "Cita armadilha A1 explicitamente"
+      - "Distingue dois campos (status_match != status)"
+    must_not:
+      - "Usa status_match como filtro de pendentes"
+      - "Confunde os dois campos"
+      - "Ignora armadilha A1"
+    tags: [a1, status-vs-status_match, self-critique]
+
+  - id: af-05
+    title: "Pre-mortem antes de reconcile()"
+    input: |
+      Executar reconcile do titulo 12345 com extrato 678 agora.
+    context:
+      titulo_id: 12345
+      extrato_id: 678
+      acao: "reconcile()"
+    expected_behavior:
+      - "Executa pre-mortem ANTES de prosseguir"
+      - "Verifica armadilha O11 (button_draft remove reconcile existente)"
+      - "Verifica armadilha O12 (account_id deve ser ultimo write)"
+      - "Pede confirmacao EXPLICITA do usuario antes de executar"
+      - "Mostra preview do que vai ser executado"
+      - "Aplica self-critique: todas as armadilhas foram checadas?"
+    must_not:
+      - "Executa reconcile sem confirmacao explicita"
+      - "Pula pre-mortem"
+      - "Ignora O11/O12"
+      - "Trata solicitacao como autorizacao para escrita direta"
+    tags: [pre-mortem, o11, o12, confirmacao, write-operation]
