@@ -652,29 +652,26 @@ async def emitir_cte(args):
                 campos_ok["peso_real_erro"] = str(e)
 
             # ── 5e. Frete informado (OVERRIDE manual sobre tabela) ──
-            # Fluxo correto documentado em SCRIPTS.md:
-            #   1. showhide('parc') ou click "Frete informado:" — abre painel
+            # Fluxo validado via Playwright codegen manual:
+            #   1. Click "Frete informado:" — abre painel parc
             #   2. fill em #id_frt_inf_frete_peso — valor em R$
-            #   3. fechafrtparc('C') — CONFIRMA e PERSISTE o override
+            #   3. Click em #lnk_frt_inf_env — CONFIRMA o valor informado
             #
-            # ATENCAO: Chamar #lnk_frt_inf_env NAO persiste o valor —
-            # apenas fecha visualmente o painel. O SSW entao recalcula
-            # pela tabela no calculafrete() posterior (bug anterior que
-            # gerava CTes com valor da tabela em vez do informado).
+            # Nota historica: SCRIPTS.md antigo sugeria fechafrtparc('C'),
+            # mas o codegen manual (que funciona e gera CTe com valor
+            # override) usa #lnk_frt_inf_env — essa e a fonte de verdade.
             try:
-                # Abrir painel 'parc' via click no link (equivalente a showhide('parc'))
                 await popup.get_by_role("link", name="Frete informado:").click()
                 await asyncio.sleep(0.5)
 
-                # Preencher valor
                 await popup.locator('#id_frt_inf_frete_peso').fill(frete_peso)
                 await asyncio.sleep(0.3)
 
-                # CONFIRMAR via fechafrtparc('C') — persiste como override manual
-                await popup.evaluate("fechafrtparc('C')")
+                # CONFIRMAR via #lnk_frt_inf_env (mesmo que o usuario clica)
+                await popup.locator('#lnk_frt_inf_env').click()
                 await asyncio.sleep(2)
                 campos_ok["frete_peso"] = frete_peso
-                campos_ok["frete_metodo"] = "fechafrtparc_C"
+                campos_ok["frete_metodo"] = "lnk_frt_inf_env"
             except Exception as e:
                 campos_ok["frete_erro"] = str(e)
 
