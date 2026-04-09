@@ -226,6 +226,15 @@ class CteCancelamentoOutlookJob:
             # Processar cada email
             for mensagem in mensagens:
                 message_id = mensagem.get('id')
+                # Guarda defensiva: se Graph retornar email sem 'id' (nao deveria,
+                # mas defensive), skip em vez de crashar no slice abaixo.
+                if not message_id:
+                    logger.warning(
+                        f"[CteCancelamentoJob] Email sem 'id' em "
+                        f"'{folder_name}', pulando"
+                    )
+                    stats['erros'] += 1
+                    continue
 
                 # DEDUP: checar se esse email ja foi processado (over-loop protection)
                 from app.fretes.services.cancelamento_cte_service import (
@@ -473,16 +482,20 @@ class CteCancelamentoOutlookJob:
     def _contabilizar(resultado_xml: Dict[str, Any], acumulado: Dict[str, int]):
         """
         Atualiza contadores do resultado do email com base no status da pendencia.
+
+        IMPORTANTE: a ordem importa. STATUS_ERRO esta dentro de STATUS_PENDENTES,
+        entao o check por STATUS_ERRO tem que vir ANTES do `in STATUS_PENDENTES`
+        — caso contrario erros seriam classificados como pendencias genericas.
         """
         from app.fretes.models import CtePendenciaCancelamento
 
         status = resultado_xml.get('status')
         if status == CtePendenciaCancelamento.STATUS_CANCELADO_OK:
             acumulado['cancelados_ok'] += 1
-        elif status in CtePendenciaCancelamento.STATUS_PENDENTES:
-            acumulado['pendencias'] += 1
         elif status == CtePendenciaCancelamento.STATUS_ERRO:
             acumulado['erros'] += 1
+        elif status in CtePendenciaCancelamento.STATUS_PENDENTES:
+            acumulado['pendencias'] += 1
 
     @staticmethod
     def _xml_to_str(xml_bytes: bytes) -> Optional[str]:

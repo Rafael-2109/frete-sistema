@@ -17,8 +17,10 @@ Fluxo (por chave):
    - Seta odoo_status_codigo='07' (Rejeitado/Cancelado no vocabulario local)
    - Se houver frete_id, marca frete.status='CANCELADO' E cria pendencia
      FRETE_CANCELADO_REVISAR (sem limpar numero/valor para preservar auditoria)
-   - Chama `CteService.arquivar_dfe(dfe_id)` para setar active=False no Odoo
-     (se falhar, cria pendencia ARQUIVAMENTO_ODOO_FALHOU mas mantem cancelamento local)
+   - Chama `CteService.marcar_cancelado_no_odoo(dfe_id)` que seta
+     l10n_br_situacao_dfe='CANCELADA' + l10n_br_status='07' (active mantido)
+     (se falhar, cria pendencia CANCELAMENTO_ODOO_FALHOU mas mantem
+     cancelamento local)
    - Cria pendencia CANCELADO_OK
 7. `db.session.commit()` no final. Chamador responsavel por rollback em erro fatal.
 
@@ -172,12 +174,11 @@ class CancelamentoCteService:
             )
             try:
                 cte = self.cte_service.importar_cte_por_chave(chave_acesso)
-                if cte is not None:
-                    db.session.commit()  # persistir importacao antes do update
             except Exception as e:
                 logger.error(
                     f"[CancelamentoCTe] Erro ao importar CTe {chave_acesso}: {e}"
                 )
+                db.session.rollback()
                 return self._registrar_pendencia_erro(
                     chave_acesso=chave_acesso,
                     mensagem=f"Erro ao buscar CTe no Odoo: {e}",
@@ -185,6 +186,29 @@ class CancelamentoCteService:
                     email_message_id=email_message_id,
                     email_subject=email_subject,
                 )
+
+            if cte is not None:
+                # Persistir importacao antes do update (envolvido em try/except
+                # para evitar PendingRollbackError na sessao se commit falhar)
+                try:
+                    db.session.commit()
+                    # Re-obter cte na nova transacao para evitar stale objects
+                    cte = ConhecimentoTransporte.query.filter_by(
+                        chave_acesso=chave_acesso
+                    ).first()
+                except Exception as e:
+                    logger.exception(
+                        f"[CancelamentoCTe] Erro ao commitar CTe importado "
+                        f"{chave_acesso}"
+                    )
+                    db.session.rollback()
+                    return self._registrar_pendencia_erro(
+                        chave_acesso=chave_acesso,
+                        mensagem=f"Erro ao commitar CTe importado do Odoo: {e}",
+                        xml_raw=xml_raw,
+                        email_message_id=email_message_id,
+                        email_subject=email_subject,
+                    )
 
         if cte is None:
             # Passo 3: Orphan — nao existe local nem no Odoo
@@ -268,32 +292,43 @@ class CancelamentoCteService:
             )
 
         # Passo 7: Se tem frete, marcar CANCELADO e criar pendencia para revisao
+        # SEMPRE gera pendencia FRETE_CANCELADO_REVISAR quando houver frete,
+        # mesmo se o update de status falhar — o CTe ja esta cancelado e o
+        # humano PRECISA revisar, nao podemos esconder o alerta.
         pendencia_frete_criada = False
+        frete_update_erro = None
         if frete is not None:
+            pendencia_frete_criada = True  # HUMANO PRECISA REVISAR — sempre
             try:
                 frete.status = 'CANCELADO'
-                pendencia_frete_criada = True
             except Exception as e:
+                frete_update_erro = str(e)
                 logger.error(
                     f"[CancelamentoCTe] Erro ao atualizar status do frete "
                     f"id={frete.id}: {e}"
                 )
 
-        # Passo 8: Arquivar no Odoo (active=False)
-        arquivamento_ok = True
-        arquivamento_erro = None
+        # Passo 8: Marcar como CANCELADO no Odoo
+        # (l10n_br_situacao_dfe='CANCELADA' + l10n_br_status='07' Rejeitado,
+        #  active mantido True)
+        cancelamento_odoo_ok = True
+        cancelamento_odoo_erro = None
         if cte.dfe_id:
             try:
-                arquivamento_ok = self.cte_service.arquivar_dfe(cte.dfe_id)
-                if not arquivamento_ok:
-                    arquivamento_erro = (
-                        f"arquivar_dfe retornou False para dfe_id={cte.dfe_id}"
+                cancelamento_odoo_ok = self.cte_service.marcar_cancelado_no_odoo(
+                    cte.dfe_id
+                )
+                if not cancelamento_odoo_ok:
+                    cancelamento_odoo_erro = (
+                        f"marcar_cancelado_no_odoo retornou False para "
+                        f"dfe_id={cte.dfe_id}"
                     )
             except Exception as e:
-                arquivamento_ok = False
-                arquivamento_erro = str(e)
+                cancelamento_odoo_ok = False
+                cancelamento_odoo_erro = str(e)
                 logger.error(
-                    f"[CancelamentoCTe] Erro ao arquivar DFe {cte.dfe_id}: {e}"
+                    f"[CancelamentoCTe] Erro ao marcar DFe {cte.dfe_id} "
+                    f"como CANCELADO no Odoo: {e}"
                 )
 
         # Passo 9: Commit + pendencia final
@@ -316,16 +351,18 @@ class CancelamentoCteService:
             )
 
         # Determinar status da pendencia final
-        if not arquivamento_ok:
+        if not cancelamento_odoo_ok:
             return self._criar_pendencia(
-                status=CtePendenciaCancelamento.STATUS_ARQUIVAMENTO_ODOO_FALHOU,
+                status=CtePendenciaCancelamento.STATUS_CANCELAMENTO_ODOO_FALHOU,
                 chave_acesso=chave_acesso,
                 cte_id=cte.id,
                 frete_id=frete.id if frete else None,
                 mensagem=(
-                    f"CTe cancelado localmente, mas falhou ao arquivar no Odoo "
-                    f"(dfe_id={cte.dfe_id}). Erro: {arquivamento_erro}. "
-                    f"Arquivamento manual necessario no Odoo."
+                    f"CTe cancelado localmente, mas falhou ao marcar como "
+                    f"CANCELADO no Odoo (dfe_id={cte.dfe_id}). "
+                    f"Erro: {cancelamento_odoo_erro}. Marcacao manual "
+                    f"necessaria no Odoo: setar l10n_br_situacao_dfe='CANCELADA' "
+                    f"+ l10n_br_status='07'."
                 ),
                 xml_raw=xml_raw,
                 email_message_id=email_message_id,
@@ -333,17 +370,28 @@ class CancelamentoCteService:
             )
 
         if pendencia_frete_criada:
+            msg_base = (
+                f"CTe cancelado e arquivado no Odoo. Frete id="
+                f"{frete.id if frete else 'N/A'}"
+            )
+            if frete_update_erro:
+                msg_base += (
+                    f" ⚠️ FALHOU ao atualizar status do frete para CANCELADO "
+                    f"(erro: {frete_update_erro}). STATUS DO FRETE PRECISA SER "
+                    f"ATUALIZADO MANUALMENTE."
+                )
+            else:
+                msg_base += " marcado como CANCELADO."
+            msg_base += (
+                " REVISAR: verificar pagamentos, conta corrente, aprovacoes "
+                "e documentos financeiros vinculados."
+            )
             return self._criar_pendencia(
                 status=CtePendenciaCancelamento.STATUS_FRETE_CANCELADO_REVISAR,
                 chave_acesso=chave_acesso,
                 cte_id=cte.id,
                 frete_id=frete.id if frete else None,
-                mensagem=(
-                    f"CTe cancelado e arquivado no Odoo. Frete id="
-                    f"{frete.id if frete else 'N/A'} marcado como CANCELADO. "
-                    f"REVISAR: verificar pagamentos, conta corrente, aprovacoes "
-                    f"e documentos financeiros vinculados."
-                ),
+                mensagem=msg_base,
                 xml_raw=xml_raw,
                 email_message_id=email_message_id,
                 email_subject=email_subject,

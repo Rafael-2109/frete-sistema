@@ -103,6 +103,31 @@
                 </div>
             </div>
         </div>
+
+        {# Alerta: CTes cancelados com frete vinculado exigindo revisao #}
+        {# Ve: .claude/plans/temporal-exploring-biscuit.md — step 18 scheduler #}
+        <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6 mb-3">
+            <a href="{{ url_for('fretes.listar_pendencias_cancelamento_cte') }}"
+               class="text-decoration-none">
+                <div class="card stat-card {% if cte_cancelado_frete_alerta > 0 %}stat-card-danger{% endif %}">
+                    <div class="card-body py-2 px-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0 fw-bold {% if cte_cancelado_frete_alerta > 0 %}text-danger{% endif %}">
+                                    {{ cte_cancelado_frete_alerta }}
+                                </h5>
+                                <span class="small text-muted">CTes Cancelados c/ Frete</span>
+                            </div>
+                            {% if cte_cancelado_frete_alerta > 0 %}
+                            <i class="fas fa-ban fa-lg text-danger"></i>
+                            {% else %}
+                            <i class="fas fa-ban fa-lg text-muted"></i>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
     </div>
 
     <!-- Ações rápidas -->

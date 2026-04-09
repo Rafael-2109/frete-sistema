@@ -1482,10 +1482,22 @@ def executar_sincronizacao():
                             f"{resultado_cte_canc.get('mensagem', '')}"
                         )
                         logger.info(
-                            f"   - Emails lidos: {resultado_cte_canc.get('emails_lidos', 0)}"
+                            f"   - Pastas processadas: {resultado_cte_canc.get('pastas_processadas', 0)}"
+                        )
+                        logger.info(
+                            f"   - Emails encontrados: {resultado_cte_canc.get('emails_encontrados', 0)}"
+                        )
+                        logger.info(
+                            f"   - Duplicados (dedup): {resultado_cte_canc.get('emails_duplicados', 0)}"
+                        )
+                        logger.info(
+                            f"   - Emails processados: {resultado_cte_canc.get('emails_processados', 0)}"
                         )
                         logger.info(
                             f"   - XMLs processados: {resultado_cte_canc.get('xmls_processados', 0)}"
+                        )
+                        logger.info(
+                            f"   - XMLs ignorados (cteProc): {resultado_cte_canc.get('xmls_ignorados', 0)}"
                         )
                         logger.info(
                             f"   - Cancelados OK: {resultado_cte_canc.get('cancelados_ok', 0)}"

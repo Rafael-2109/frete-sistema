@@ -77,7 +77,7 @@ CREATE INDEX IF NOT EXISTS ix_cte_pendencia_frete_id
 COMMENT ON TABLE cte_pendencia_cancelamento IS
     'Auditoria e pendencias do processamento automatico de cancelamento de CTe via Outlook XML';
 COMMENT ON COLUMN cte_pendencia_cancelamento.status IS
-    'CANCELADO_OK | PENDENTE_FATURA_CONFERIDA | ORPHAN | FRETE_CANCELADO_REVISAR | ERRO | ARQUIVAMENTO_ODOO_FALHOU';
+    'CANCELADO_OK | PENDENTE_FATURA_CONFERIDA | ORPHAN | FRETE_CANCELADO_REVISAR | ERRO | CANCELAMENTO_ODOO_FALHOU';
 
 COMMIT;
 

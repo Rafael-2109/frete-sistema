@@ -1103,12 +1103,13 @@ class CtePendenciaCancelamento(db.Model):
     aqui, sucesso ou falha. Permite auditoria, replay e revisao manual.
 
     Status possiveis:
-    - CANCELADO_OK                : cancelamento local + arquivamento Odoo ok
+    - CANCELADO_OK                : cancelamento local + marcacao no Odoo OK
     - PENDENTE_FATURA_CONFERIDA   : bloqueado por fatura ja conferida (revisao manual)
     - ORPHAN                      : CTe nao encontrado localmente nem no Odoo
     - FRETE_CANCELADO_REVISAR     : cancelou CTe mas frete precisa revisao humana
     - ERRO                        : erro tecnico durante processamento (ver mensagem)
-    - ARQUIVAMENTO_ODOO_FALHOU    : cancelou local mas falhou ao arquivar no Odoo
+    - CANCELAMENTO_ODOO_FALHOU    : cancelou local mas falhou ao marcar como
+                                    CANCELADO no Odoo (marcacao manual necessaria)
     """
     __tablename__ = 'cte_pendencia_cancelamento'
 
@@ -1168,7 +1169,7 @@ class CtePendenciaCancelamento(db.Model):
     STATUS_ORPHAN = 'ORPHAN'
     STATUS_FRETE_CANCELADO_REVISAR = 'FRETE_CANCELADO_REVISAR'
     STATUS_ERRO = 'ERRO'
-    STATUS_ARQUIVAMENTO_ODOO_FALHOU = 'ARQUIVAMENTO_ODOO_FALHOU'
+    STATUS_CANCELAMENTO_ODOO_FALHOU = 'CANCELAMENTO_ODOO_FALHOU'
 
     STATUS_RESOLVIDOS = (STATUS_CANCELADO_OK,)
     STATUS_PENDENTES = (
@@ -1176,7 +1177,7 @@ class CtePendenciaCancelamento(db.Model):
         STATUS_ORPHAN,
         STATUS_FRETE_CANCELADO_REVISAR,
         STATUS_ERRO,
-        STATUS_ARQUIVAMENTO_ODOO_FALHOU,
+        STATUS_CANCELAMENTO_ODOO_FALHOU,
     )
 
     def __repr__(self):

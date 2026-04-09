@@ -1072,19 +1072,26 @@ class CteService:
             )
             return None
 
-    def arquivar_dfe(self, dfe_id) -> bool:
+    def marcar_cancelado_no_odoo(self, dfe_id) -> bool:
         """
-        Seta `active=False` no modelo l10n_br_ciel_it_account.dfe no Odoo.
+        Marca DFe como CANCELADO no Odoo em AMBOS os campos de status:
 
-        ATENCAO — ISSO NAO E "CANCELAR FORMALMENTE":
-        - NAO altera o campo `l10n_br_status` (status SEFAZ)
-        - NAO mexe em purchase.order, account.move, account.payment vinculados
-        - NAO envia evento SEFAZ de cancelamento
-        - E APENAS um arquivamento: o registro some das buscas padrao do Odoo
+        - `l10n_br_situacao_dfe` = 'CANCELADA'  (situacao SEFAZ)
+        - `l10n_br_status` = '07'  (status interno Odoo = Rejeitado)
+        - `active` = MANTEM True  (NAO arquiva)
 
-        E suficiente para nosso caso de uso (sync local NAO traz mais esse DFe),
-        mas NAO substitui a responsabilidade do financeiro de executar o
-        cancelamento formal no Odoo se houver Invoice emitida.
+        Por que os 2 campos: o Odoo tem dois vocabularios de estado no DFe.
+        `l10n_br_situacao_dfe` e o status fiscal (autorizado/cancelado/
+        inutilizado) — alinhado com o mundo SEFAZ. `l10n_br_status` e o
+        workflow interno CIEL IT (01 Rascunho → 07 Rejeitado). Setando os
+        dois, o CTe fica claramente marcado em ambos os filtros do ERP.
+
+        Valores de l10n_br_situacao_dfe: 'AUTORIZADA' | 'CANCELADA' | 'INUTILIZADA'
+        Valores de l10n_br_status: '01' a '07' (07 = Rejeitado)
+
+        NAO mexe em purchase.order, account.move, account.payment vinculados —
+        isso continua sendo responsabilidade do financeiro (que recebe alerta
+        via CtePendenciaCancelamento.FRETE_CANCELADO_REVISAR).
 
         Args:
             dfe_id: ID do DFe no Odoo (int ou string)
@@ -1093,27 +1100,34 @@ class CteService:
             True se escreveu com sucesso, False caso contrario.
         """
         if dfe_id is None or dfe_id == '':
-            logger.warning("   ⚠️ arquivar_dfe: dfe_id vazio")
+            logger.warning("   ⚠️ marcar_cancelado_no_odoo: dfe_id vazio")
             return False
 
         try:
             dfe_id_int = int(dfe_id)
         except (ValueError, TypeError):
-            logger.error(f"   ❌ arquivar_dfe: dfe_id invalido: {dfe_id!r}")
+            logger.error(
+                f"   ❌ marcar_cancelado_no_odoo: dfe_id invalido: {dfe_id!r}"
+            )
             return False
 
         try:
             self.odoo.execute_kw(
                 'l10n_br_ciel_it_account.dfe',
                 'write',
-                [[dfe_id_int], {'active': False}],
+                [[dfe_id_int], {
+                    'l10n_br_situacao_dfe': 'CANCELADA',
+                    'l10n_br_status': '07',  # Rejeitado
+                }],
             )
             logger.info(
-                f"   🗄️ DFe {dfe_id_int} arquivado (active=False) no Odoo"
+                f"   🚫 DFe {dfe_id_int} marcado CANCELADO no Odoo "
+                f"(situacao_dfe=CANCELADA, status=07 Rejeitado, "
+                f"active mantido True)"
             )
             return True
         except Exception as e:
             logger.error(
-                f"   ❌ Erro ao arquivar DFe {dfe_id} no Odoo: {e}"
+                f"   ❌ Erro ao marcar DFe {dfe_id} como CANCELADO no Odoo: {e}"
             )
             return False

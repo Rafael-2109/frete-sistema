@@ -71,6 +71,24 @@ def index():
     """Dashboard principal do sistema de fretes"""
     # Estatisticas com cache (evita 5 COUNT queries a cada visita)
     def _fetch_dashboard_stats():
+        # CTes cancelados pendentes de revisao: contador para alertar quando
+        # um CTe cancelado tiver frete vinculado e precisar de revisao humana.
+        # Inclui status: FRETE_CANCELADO_REVISAR (tem frete obrigatoriamente)
+        # + PENDENTE_FATURA_CONFERIDA (bloqueado por fatura conferida, tem frete).
+        # Filtro resolvido_em IS NULL: ignora pendencias ja tratadas.
+        cte_cancelado_frete_alerta = (
+            db.session.query(func.count(CtePendenciaCancelamento.id))
+            .filter(
+                CtePendenciaCancelamento.status.in_([
+                    CtePendenciaCancelamento.STATUS_FRETE_CANCELADO_REVISAR,
+                    CtePendenciaCancelamento.STATUS_PENDENTE_FATURA_CONFERIDA,
+                ]),
+                CtePendenciaCancelamento.frete_id.isnot(None),
+                CtePendenciaCancelamento.resolvido_em.is_(None),
+            )
+            .scalar() or 0
+        )
+
         return {
             'total': Frete.query.count(),
             'pendentes': Frete.query.filter_by(status="PENDENTE").count(),
@@ -79,6 +97,7 @@ def index():
             'sem_nfs': Frete.query.filter(
                 or_(Frete.numeros_nfs.is_(None), Frete.numeros_nfs == "", Frete.numeros_nfs == "N/A")
             ).count(),
+            'cte_cancelado_frete_alerta': cte_cancelado_frete_alerta,
         }
 
     stats = _dashboard_cache.get_or_set('dashboard_stats', _fetch_dashboard_stats)
@@ -87,6 +106,7 @@ def index():
     aprovacoes_pendentes = stats['aprovacoes']
     faturas_conferir = stats['faturas']
     fretes_sem_nfs = stats['sem_nfs']
+    cte_cancelado_frete_alerta = stats.get('cte_cancelado_frete_alerta', 0)
 
     # Fretes recentes (sem cache — lista curta, muda frequentemente)
     fretes_recentes = Frete.query.order_by(desc(Frete.criado_em)).limit(10).all()
@@ -98,6 +118,7 @@ def index():
         aprovacoes_pendentes=aprovacoes_pendentes,
         faturas_conferir=faturas_conferir,
         fretes_sem_nfs=fretes_sem_nfs,
+        cte_cancelado_frete_alerta=cte_cancelado_frete_alerta,
         fretes_recentes=fretes_recentes,
     )
 

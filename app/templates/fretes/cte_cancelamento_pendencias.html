@@ -39,7 +39,7 @@
         {% elif status_code == 'ORPHAN' %}border-warning
         {% elif status_code == 'PENDENTE_FATURA_CONFERIDA' %}border-info
         {% elif status_code == 'FRETE_CANCELADO_REVISAR' %}border-primary
-        {% elif status_code == 'ARQUIVAMENTO_ODOO_FALHOU' %}border-danger
+        {% elif status_code == 'CANCELAMENTO_ODOO_FALHOU' %}border-danger
         {% else %}border-secondary{% endif %}">
         <div class="card-body py-2 px-3">
           <small class="text-muted d-block text-truncate" title="{{ status_code }}">
@@ -62,7 +62,7 @@
         <label class="form-label mb-1"><small>Status</small></label>
         <select name="status" class="form-select form-select-sm">
           <option value="">— Todos (pendentes) —</option>
-          {% for s in ['CANCELADO_OK', 'PENDENTE_FATURA_CONFERIDA', 'ORPHAN', 'FRETE_CANCELADO_REVISAR', 'ERRO', 'ARQUIVAMENTO_ODOO_FALHOU'] %}
+          {% for s in ['CANCELADO_OK', 'PENDENTE_FATURA_CONFERIDA', 'ORPHAN', 'FRETE_CANCELADO_REVISAR', 'ERRO', 'CANCELAMENTO_ODOO_FALHOU'] %}
           <option value="{{ s }}" {% if s == status_filtro %}selected{% endif %}>{{ s }}</option>
           {% endfor %}
         </select>
@@ -122,7 +122,7 @@
                 {% elif p.status == 'ORPHAN' %}bg-warning text-dark
                 {% elif p.status == 'PENDENTE_FATURA_CONFERIDA' %}bg-info text-dark
                 {% elif p.status == 'FRETE_CANCELADO_REVISAR' %}bg-primary
-                {% elif p.status == 'ARQUIVAMENTO_ODOO_FALHOU' %}bg-danger
+                {% elif p.status == 'CANCELAMENTO_ODOO_FALHOU' %}bg-danger
                 {% else %}bg-secondary{% endif %}"
                 title="{{ p.status }}">
                 {{ p.status }}
@@ -178,6 +178,7 @@
                     action="{{ url_for('fretes.resolver_pendencia_cancelamento_cte', pendencia_id=p.id) }}"
                     onsubmit="return confirm('Marcar como resolvido? O registro sera mantido para auditoria.');"
                     class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button type="submit" class="btn btn-outline-success btn-sm" title="Marcar como resolvido">
                   <i class="fas fa-check"></i>
                 </button>
@@ -207,7 +208,7 @@
       <li><span class="badge bg-info text-dark">PENDENTE_FATURA_CONFERIDA</span> — bloqueado: fatura ja conferida, revisao manual necessaria</li>
       <li><span class="badge bg-warning text-dark">ORPHAN</span> — CTe nao encontrado no sistema nem no Odoo</li>
       <li><span class="badge bg-primary">FRETE_CANCELADO_REVISAR</span> — CTe cancelado e frete afetado, revisar pagamentos/conta corrente</li>
-      <li><span class="badge bg-danger">ARQUIVAMENTO_ODOO_FALHOU</span> — cancelado local mas falhou ao arquivar no Odoo (acao manual)</li>
+      <li><span class="badge bg-danger">CANCELAMENTO_ODOO_FALHOU</span> — cancelado local mas falhou ao marcar como CANCELADO no Odoo (marcacao manual: l10n_br_situacao_dfe='CANCELADA' + l10n_br_status='07')</li>
       <li><span class="badge bg-danger">ERRO</span> — erro tecnico durante processamento (ver mensagem)</li>
     </ul>
   </div>
