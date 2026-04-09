@@ -859,13 +859,49 @@ async def emitir_cte(args):
                         await asyncio.sleep(3)
                         continue
 
-                    # --- Resumo com "1. Gravar" ---
-                    gravar_link = popup.get_by_role("link", name="1. Gravar")
+                    # --- Resumo com "Gravar" (match flexivel via regex) ---
+                    # SSW pode renderizar como "1. Gravar", "Gravar", "1.Gravar"
+                    # etc. Regex case-insensitive cobre todas variacoes.
                     try:
+                        gravar_link = popup.get_by_role(
+                            "link", name=re.compile(r"Gravar", re.IGNORECASE)
+                        )
                         if await gravar_link.count() > 0:
                             avisos_tratados.append("RESUMO_GRAVAR")
-                            await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_resumo")
+                            await capturar_screenshot_local(
+                                popup, f"07_aviso_{aviso_idx}_resumo"
+                            )
                             break  # Sair do loop para gravar
+                    except Exception:
+                        pass
+
+                    # --- Fallback: link com onclick=concluindo('C') ---
+                    # Caso o texto do link nao contenha "Gravar" mas o
+                    # comportamento seja o mesmo (SSW pode ter variacoes).
+                    try:
+                        achou_concluindo = await popup.evaluate("""() => {
+                            for (const l of document.querySelectorAll('a')) {
+                                const oc = l.getAttribute('onclick') || '';
+                                if (oc.includes("concluindo('C')") ||
+                                    oc.includes('concluindo("C")') ||
+                                    oc.includes('concluindo(\\'C\\')')) {
+                                    return {
+                                        found: true,
+                                        text: (l.textContent || '').trim().substring(0, 100),
+                                        onclick: oc.substring(0, 200)
+                                    };
+                                }
+                            }
+                            return {found: false};
+                        }""")
+                        if achou_concluindo.get('found'):
+                            avisos_tratados.append(
+                                f"RESUMO_CONCLUINDO:{achou_concluindo.get('text')}"
+                            )
+                            await capturar_screenshot_local(
+                                popup, f"07_aviso_{aviso_idx}_concluindo"
+                            )
+                            break
                     except Exception:
                         pass
 
@@ -883,25 +919,67 @@ async def emitir_cte(args):
                     except Exception:
                         pass
 
-                    # Nenhum aviso reconhecido — dump body para debug
+                    # Nenhum aviso reconhecido — dump body + HTML para debug
+                    # Aumentado de 500 → 3000 chars para capturar mais contexto.
+                    # Tambem salva HTML outerHTML truncado para proximos testes.
+                    try:
+                        html_atual = await popup.evaluate(
+                            "() => document.documentElement.outerHTML.substring(0, 8000)"
+                        )
+                    except Exception:
+                        html_atual = ''
                     avisos_tratados.append(
-                        f"NAO_RECONHECIDO: {body[:500]}"
+                        f"NAO_RECONHECIDO: body={body[:3000]}"
+                    )
+                    avisos_tratados.append(
+                        f"NAO_RECONHECIDO_HTML: {html_atual[:3000]}"
                     )
                     await capturar_screenshot_local(
                         popup, f"07_aviso_{aviso_idx}_nao_reconhecido"
                     )
                     break
 
-                # ── 7. GRAVAR pre-CTRC (click nativo "1. Gravar") ──
+                # ── 7. GRAVAR pre-CTRC (match flexivel + fallback JS) ──
                 await capturar_screenshot_local(popup, "08_pre_gravar")
+                gravar_clicked = False
+                # Tentativa 1: regex em get_by_role
                 try:
-                    await popup.get_by_role("link", name="1. Gravar").click()
+                    await popup.get_by_role(
+                        "link", name=re.compile(r"Gravar", re.IGNORECASE)
+                    ).first.click(timeout=5000)
+                    gravar_clicked = True
+                    avisos_tratados.append("GRAVAR_CLICK:regex")
                 except Exception:
-                    # Fallback evaluate
+                    pass
+
+                # Tentativa 2: click via JS no link com onclick=concluindo
+                if not gravar_clicked:
                     try:
-                        await popup.evaluate("concluindo('C')")
+                        metodo_js = await popup.evaluate("""() => {
+                            for (const l of document.querySelectorAll('a')) {
+                                const oc = l.getAttribute('onclick') || '';
+                                if (oc.includes("concluindo('C')") ||
+                                    oc.includes('concluindo("C")')) {
+                                    l.click();
+                                    return 'onclick_concluindo';
+                                }
+                            }
+                            return null;
+                        }""")
+                        if metodo_js:
+                            gravar_clicked = True
+                            avisos_tratados.append(f"GRAVAR_CLICK:{metodo_js}")
                     except Exception:
                         pass
+
+                # Tentativa 3: fallback final — chamar concluindo diretamente
+                if not gravar_clicked:
+                    try:
+                        await popup.evaluate("concluindo('C')")
+                        avisos_tratados.append("GRAVAR_CLICK:evaluate_concluindo")
+                    except Exception as e:
+                        avisos_tratados.append(f"GRAVAR_CLICK_ERRO: {e}")
+
                 await asyncio.sleep(12)
                 await capturar_screenshot_local(popup, "08_pos_gravar")
 
