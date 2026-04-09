@@ -86,6 +86,62 @@ async def capturar_screenshot_local(page, nome):
     return await capturar_screenshot(page, nome, diretorio=EVIDENCE_DIR)
 
 
+async def _clicar_simular(popup, timeout_ms=5000):
+    """Click no ► (#lnk_env → calculafrete) com fallback JS.
+
+    O SSW mantem um <div id="errorpanel"> como overlay invisivel (sem
+    pointer-events: none) que intercepta cliques do Playwright. O click
+    nativo timeouta em 30s tentando reagir ao elemento coberto.
+
+    Estrategia:
+      1) Tentar click nativo (rapido, 5s timeout)
+      2) Se falhar: click via JS (document.getElementById('lnk_env').click())
+         — isso bypassa a checagem de "element covered" do Playwright.
+
+    Mesmo padrao usado no emitir_cte_complementar_222.py para o mesmo
+    problema do errorpanel.
+
+    Returns:
+        str: 'native' | 'lnk_env' | 'onclick_calculafrete'
+
+    Raises:
+        RuntimeError: Se nenhum dos metodos encontrou/conseguiu clicar.
+    """
+    # 1) Tentativa nativa rapida
+    try:
+        await popup.get_by_role("link", name="►").first.click(
+            timeout=timeout_ms
+        )
+        return 'native'
+    except Exception:
+        pass
+
+    # 2) Fallback: click via JS direto no DOM (bypassa overlay errorpanel)
+    metodo = await popup.evaluate("""() => {
+        // Tenta pelo id explicito primeiro
+        const link = document.getElementById('lnk_env');
+        if (link) {
+            link.click();
+            return 'lnk_env';
+        }
+        // Fallback: buscar link com onclick contendo calculafrete
+        for (const l of document.querySelectorAll('a')) {
+            const oc = l.getAttribute('onclick') || '';
+            if (oc.includes('calculafrete')) {
+                l.click();
+                return 'onclick_calculafrete';
+            }
+        }
+        return null;
+    }""")
+
+    if not metodo:
+        raise RuntimeError(
+            "Nao encontrou o link ► (calculafrete/#lnk_env) no DOM"
+        )
+    return metodo
+
+
 async def listar_links(popup):
     """Lista todos os links com onclick no DOM atual."""
     return await popup.evaluate("""() => {
@@ -657,8 +713,11 @@ async def emitir_cte(args):
             popup.on("dialog", on_dialog)
 
             try:
-                # ── 6a. Simular (clicar ► nativo) ──
-                await popup.get_by_role("link", name="►").first.click()
+                # ── 6a. Simular (clicar ► via helper com fallback JS) ──
+                # Helper lida com <div id="errorpanel"> que intercepta
+                # pointer events no SSW — fallback via evaluate.
+                metodo_simular = await _clicar_simular(popup)
+                avisos_tratados.append(f"SIMULAR_CLICK:{metodo_simular}")
                 await asyncio.sleep(8)
                 await capturar_screenshot_local(popup, "06_pos_simular")
 
@@ -717,11 +776,13 @@ async def emitir_cte(args):
                         }}""")
                         await asyncio.sleep(1)
 
-                        # Re-simular (native click)
+                        # Re-simular apos ajuste de peso (com fallback JS)
                         try:
-                            await popup.get_by_role("link", name="►").first.click()
-                        except Exception:
-                            pass
+                            await _clicar_simular(popup)
+                        except Exception as e_resim:
+                            avisos_tratados.append(
+                                f"RESIMULAR_PESO_ERRO: {e_resim}"
+                            )
                         await asyncio.sleep(8)
                         continue
 
@@ -755,9 +816,14 @@ async def emitir_cte(args):
                         except Exception as e:
                             avisos_tratados.append(f"DESBLOQUEIO_ERRO: {e}")
 
-                        # Re-simular na MESMA page2 (clicar ►)
+                        # Re-simular na MESMA page2 apos desbloqueio (fallback JS)
                         await asyncio.sleep(2)
-                        await popup.get_by_role("link", name="►").first.click()
+                        try:
+                            await _clicar_simular(popup)
+                        except Exception as e_resim:
+                            avisos_tratados.append(
+                                f"RESIMULAR_DESBLOQ_ERRO: {e_resim}"
+                            )
                         await asyncio.sleep(8)
                         continue
 
