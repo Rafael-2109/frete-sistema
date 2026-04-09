@@ -165,16 +165,16 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_status",
+      "name": "ix_despesas_extras_chave_cte",
       "columns": [
-        "status"
+        "chave_cte"
       ],
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_chave_cte",
+      "name": "ix_despesas_extras_status",
       "columns": [
-        "chave_cte"
+        "status"
       ],
       "unique": false
     },

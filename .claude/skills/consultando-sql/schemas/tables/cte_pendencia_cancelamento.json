@@ -25,7 +25,7 @@
     {
       "name": "status",
       "type": "varchar(40)",
-      "description": "CANCELADO_OK | PENDENTE_FATURA_CONFERIDA | ORPHAN | FRETE_CANCELADO_REVISAR | ERRO | ARQUIVAMENTO_ODOO_FALHOU",
+      "description": "CANCELADO_OK | PENDENTE_FATURA_CONFERIDA | ORPHAN | FRETE_CANCELADO_REVISAR | ERRO | CANCELAMENTO_ODOO_FALHOU",
       "nullable": false
     },
     {
@@ -71,9 +71,9 @@
   ],
   "indices": [
     {
-      "name": "ix_cte_pendencia_cancelamento_chave_acesso",
+      "name": "ix_cte_pendencia_cancelamento_frete_id",
       "columns": [
-        "chave_acesso"
+        "frete_id"
       ],
       "unique": false
     },
@@ -99,9 +99,9 @@
       "unique": false
     },
     {
-      "name": "ix_cte_pendencia_cancelamento_frete_id",
+      "name": "ix_cte_pendencia_cancelamento_chave_acesso",
       "columns": [
-        "frete_id"
+        "chave_acesso"
       ],
       "unique": false
     }

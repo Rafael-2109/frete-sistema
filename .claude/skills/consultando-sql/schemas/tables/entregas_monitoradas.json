@@ -161,9 +161,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_nf_cd",
+      "name": "idx_em_data_embarque",
       "columns": [
-        "nf_cd"
+        "data_embarque"
       ],
       "unique": false
     },
@@ -182,30 +182,9 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "name": "idx_em_data_agenda",
       "columns": [
-        "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_status_finalizacao",
-      "columns": [
-        "status_finalizacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_transportadora",
-      "columns": [
-        "transportadora"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_reagendar",
-      "columns": [
-        "reagendar"
+        "data_agenda"
       ],
       "unique": false
     },
@@ -217,16 +196,37 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_agenda",
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
-        "data_agenda"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "idx_em_data_embarque",
+      "name": "idx_em_transportadora",
       "columns": [
-        "data_embarque"
+        "transportadora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_status_finalizacao",
+      "columns": [
+        "status_finalizacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_reagendar",
+      "columns": [
+        "reagendar"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_nf_cd",
+      "columns": [
+        "nf_cd"
       ],
       "unique": false
     }
