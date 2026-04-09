@@ -245,24 +245,29 @@
     {
       "name": "cancelado",
       "type": "boolean",
+      "description": "True = CTe cancelado (evento SEFAZ 110111 via automacao Outlook ou manual)",
       "nullable": false,
       "default": false
     },
     {
       "name": "data_cancelamento",
-      "type": "timestamp"
+      "type": "timestamp",
+      "description": "Timestamp do evento de cancelamento (dhEvento do infEvento)"
     },
     {
       "name": "protocolo_cancelamento",
-      "type": "varchar(50)"
+      "type": "varchar(50)",
+      "description": "Protocolo SEFAZ do cancelamento (nProt do retEventoCTe)"
     },
     {
       "name": "motivo_cancelamento",
-      "type": "text"
+      "type": "text",
+      "description": "Justificativa do cancelamento (xJust do infEvento)"
     },
     {
       "name": "cancelamento_origem",
-      "type": "varchar(30)"
+      "type": "varchar(30)",
+      "description": "Origem da marcacao: OUTLOOK_XML | MANUAL | ODOO_SYNC"
     }
   ],
   "foreign_keys": [

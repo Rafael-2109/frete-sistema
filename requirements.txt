@@ -123,6 +123,7 @@ xlsxwriter==3.2.9
 # EMAIL PROCESSING
 # ==========================================
 extract-msg==0.55.0  # Para ler arquivos .msg e .eml do Outlook
+msal==1.32.0  # Microsoft Authentication Library — OAuth2 client_credentials para Graph API (CTe Cancelamento step 18)
 
 # ==========================================
 # PORTAL INTEGRATION - BROWSER AUTOMATION

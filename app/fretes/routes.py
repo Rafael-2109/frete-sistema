@@ -38,6 +38,7 @@ from app.fretes.models import ( # type: ignore # noqa: E402
     ContaCorrenteTransportadora,
     AprovacaoFrete,
     ConhecimentoTransporte,
+    CtePendenciaCancelamento,
 )
 from app.fretes.email_models import EmailAnexado # type: ignore # noqa: E402
 from app.utils.email_handler import EmailHandler # type: ignore # noqa: E402
@@ -6409,3 +6410,94 @@ def api_relatorio_analise_fretes():
     except Exception as e:
         logger.exception(f"Erro ao gerar relatório de análise de fretes: {e}")
         return jsonify({"error": f"Erro ao gerar relatório: {str(e)}"}), 500
+
+
+# ==========================================================================
+# CTe Cancelamento Outlook — Pendencias (2026-04-09)
+# ==========================================================================
+# Rota de revisao manual das pendencias geradas pelo job
+# `CteCancelamentoOutlookJob` (step 18 do scheduler).
+# Ver: .claude/plans/temporal-exploring-biscuit.md
+
+
+@fretes_bp.route("/cte-cancelamento/pendencias")
+@login_required
+@require_financeiro()
+def listar_pendencias_cancelamento_cte():
+    """
+    Lista pendencias do processamento automatico de cancelamento de CTe.
+
+    Filtros via query string:
+        - status: filtra por status especifico (ex: PENDENTE_FATURA_CONFERIDA)
+        - apenas_pendentes: '1' para esconder resolvidos (default: '1')
+    """
+    status_filtro = (request.args.get("status") or "").strip().upper()
+    apenas_pendentes = request.args.get("apenas_pendentes", "1") == "1"
+
+    query = CtePendenciaCancelamento.query
+
+    if status_filtro:
+        query = query.filter(CtePendenciaCancelamento.status == status_filtro)
+    elif apenas_pendentes:
+        query = query.filter(
+            CtePendenciaCancelamento.status.in_(
+                CtePendenciaCancelamento.STATUS_PENDENTES
+            )
+        )
+
+    pendencias = (
+        query.order_by(CtePendenciaCancelamento.criado_em.desc())
+        .limit(500)
+        .all()
+    )
+
+    # Contadores por status (para dashboard rapido)
+    contadores_rows = (
+        db.session.query(
+            CtePendenciaCancelamento.status,
+            func.count(CtePendenciaCancelamento.id),
+        )
+        .group_by(CtePendenciaCancelamento.status)
+        .all()
+    )
+    contadores = {status: total for status, total in contadores_rows}
+
+    return render_template(
+        "fretes/cte_cancelamento_pendencias.html",
+        pendencias=pendencias,
+        contadores=contadores,
+        status_filtro=status_filtro,
+        apenas_pendentes=apenas_pendentes,
+        status_pendentes=CtePendenciaCancelamento.STATUS_PENDENTES,
+    )
+
+
+@fretes_bp.route("/cte-cancelamento/pendencias/<int:pendencia_id>/resolver", methods=["POST"])
+@login_required
+@require_financeiro()
+def resolver_pendencia_cancelamento_cte(pendencia_id):
+    """
+    Marca uma pendencia como resolvida (ainda mantem registro para auditoria).
+    Util quando o financeiro revisa manualmente e aplica as acoes necessarias.
+    """
+    pendencia = CtePendenciaCancelamento.query.get_or_404(pendencia_id)
+
+    if pendencia.resolvido_em is not None:
+        flash("Esta pendencia ja esta resolvida.", "info")
+        return redirect(url_for("fretes.listar_pendencias_cancelamento_cte"))
+
+    try:
+        pendencia.resolvido_em = agora_utc_naive()
+        pendencia.resolvido_por = getattr(current_user, "nome", None) or getattr(
+            current_user, "email", "Sistema"
+        )
+        db.session.commit()
+        flash(
+            f"Pendencia #{pendencia.id} ({pendencia.status}) marcada como resolvida.",
+            "success",
+        )
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao resolver pendencia: {e}", "error")
+
+    return redirect(url_for("fretes.listar_pendencias_cancelamento_cte"))

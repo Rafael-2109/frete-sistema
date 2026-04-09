@@ -109,6 +109,10 @@ validacao_recebimento_job = None  # ✅ Job de Validação de Recebimento (Fase 
 validacao_ibscbs_job = None  # ✅ Job de Validação IBS/CBS (CTes + NF-es)
 extratos_service = None  # ✅ Service de Sincronização de Extratos via Odoo
 picking_recebimento_sync_service = None  # ✅ Service de Pickings de Recebimento (Fase 4)
+cte_cancelamento_outlook_job = None  # ✅ Job de Cancelamento CTe via Outlook 365 (step 18 — 2026-04-09)
+
+# Flag para habilitar/desabilitar o step de cancelamento via Outlook (default: off)
+CTE_CANCELAMENTO_ENABLED = os.environ.get('CTE_CANCELAMENTO_ENABLED', 'false').lower() == 'true'
 
 
 def inicializar_services():
@@ -117,7 +121,7 @@ def inicializar_services():
     Isso evita problemas de SSL e contexto que ocorrem quando
     instanciados dentro do app.app_context()
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job
 
     try:
         # IMPORTANTE: Importar e instanciar FORA do contexto
@@ -139,6 +143,7 @@ def inicializar_services():
         from app.recebimento.jobs.validacao_ibscbs_job import ValidacaoIbsCbsJob  # ✅ Job de Validação IBS/CBS (CTes + NF-es)
         from app.financeiro.services.sincronizacao_extratos_service import SincronizacaoExtratosService  # ✅ Service de Extratos via Odoo
         from app.recebimento.services.picking_recebimento_sync_service import PickingRecebimentoSyncService  # ✅ Service de Pickings Recebimento (Fase 4)
+        from app.fretes.jobs.cte_cancelamento_outlook_job import CteCancelamentoOutlookJob  # ✅ Job CTe Cancelamento Outlook (step 18)
 
 
         logger.info("🔧 Inicializando services FORA do contexto...")
@@ -160,6 +165,7 @@ def inicializar_services():
         validacao_ibscbs_job = ValidacaoIbsCbsJob()  # ✅ Instanciar job de Validação IBS/CBS (CTes + NF-es)
         extratos_service = SincronizacaoExtratosService()  # ✅ Instanciar service de Extratos via Odoo
         picking_recebimento_sync_service = PickingRecebimentoSyncService()  # ✅ Instanciar service de Pickings Recebimento (Fase 4)
+        cte_cancelamento_outlook_job = CteCancelamentoOutlookJob()  # ✅ Instanciar job CTe Cancelamento Outlook (step 18)
         logger.info("✅ Services inicializados com sucesso")
 
         return True
@@ -174,7 +180,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultima_auditoria_financeira, _ultimo_improvement_dialogue
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultima_auditoria_financeira, _ultimo_improvement_dialogue
 
     _t_inicio = time.time()
     logger.info("=" * 60)
@@ -200,10 +206,11 @@ def executar_sincronizacao():
     logger.info(f"   - Validação IBS/CBS (CTe+NF-e): janela={JANELA_VALIDACAO_FISCAL}min")  # ✅ Validação IBS/CBS
     logger.info(f"   - Extratos via Odoo: janela={JANELA_EXTRATOS}min")  # ✅ Sincronização de Extratos via Odoo
     logger.info(f"   - Pickings Recebimento: janela={JANELA_PICKINGS}min")  # ✅ Pickings Recebimento (Fase 4)
+    logger.info(f"   - CTe Cancelamento Outlook: enabled={CTE_CANCELAMENTO_ENABLED}")  # ✅ Step 18
     logger.info("=" * 60)
 
     # Verificar se services estão inicializados
-    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service]):
+    if not all([faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job]):
         logger.warning("⚠️ Services não inicializados, tentando inicializar...")
         if not inicializar_services():
             logger.error("❌ Falha ao inicializar services")
@@ -1443,6 +1450,82 @@ def executar_sincronizacao():
 
         logger.info(f"   [TIMER] Step 17 (Pickings Recebimento): {time.time() - _t_step:.1f}s")
 
+        # Limpar sessão entre services
+        try:
+            db.session.remove()
+            db.engine.dispose()
+            logger.info("♻️ Reconexão antes de CTe Cancelamento Outlook")
+        except Exception:
+            pass
+
+        # 1️⃣8️⃣ CTE CANCELAMENTO OUTLOOK (2026-04-09) - feature-flag + retry
+        # Processa XMLs de cancelamento de CTe vindos de pasta do Outlook 365
+        # via Microsoft Graph API. Arquiva no Odoo (active=False) + cria
+        # pendencias para revisao manual. Ver: .claude/plans/temporal-exploring-biscuit.md
+        _t_step = time.time()
+        sucesso_cte_cancelamento = True  # skip = sucesso (nao e erro)
+        if CTE_CANCELAMENTO_ENABLED:
+            sucesso_cte_cancelamento = False
+            for tentativa in range(1, MAX_RETRIES + 1):
+                try:
+                    logger.info(
+                        f"📧 Processando CTes cancelados via Outlook "
+                        f"(tentativa {tentativa}/{MAX_RETRIES})..."
+                    )
+                    with app.app_context():
+                        resultado_cte_canc = cte_cancelamento_outlook_job.executar()
+
+                    if resultado_cte_canc.get('sucesso'):
+                        sucesso_cte_cancelamento = True
+                        logger.info(
+                            f"✅ CTe Cancelamento Outlook: "
+                            f"{resultado_cte_canc.get('mensagem', '')}"
+                        )
+                        logger.info(
+                            f"   - Emails lidos: {resultado_cte_canc.get('emails_lidos', 0)}"
+                        )
+                        logger.info(
+                            f"   - XMLs processados: {resultado_cte_canc.get('xmls_processados', 0)}"
+                        )
+                        logger.info(
+                            f"   - Cancelados OK: {resultado_cte_canc.get('cancelados_ok', 0)}"
+                        )
+                        logger.info(
+                            f"   - Pendencias: {resultado_cte_canc.get('pendencias', 0)}"
+                        )
+                        logger.info(
+                            f"   - Erros: {resultado_cte_canc.get('erros', 0)}"
+                        )
+                        db.session.commit()
+                        break
+                    else:
+                        logger.error(
+                            f"❌ CTe Cancelamento Outlook falhou: "
+                            f"{resultado_cte_canc.get('mensagem', 'erro desconhecido')}"
+                        )
+                        if tentativa < MAX_RETRIES:
+                            logger.info(f"🔄 Aguardando {RETRY_DELAY}s...")
+                            sleep(RETRY_DELAY)
+                        else:
+                            break
+
+                except Exception as e:
+                    logger.error(f"❌ Erro ao processar CTe Cancelamento Outlook: {e}")
+                    if tentativa < MAX_RETRIES:
+                        sleep(RETRY_DELAY)
+                    else:
+                        break
+        else:
+            logger.info(
+                "ℹ️ CTe Cancelamento Outlook DESABILITADO "
+                "(CTE_CANCELAMENTO_ENABLED=false)"
+            )
+
+        logger.info(
+            f"   [TIMER] Step 18 (CTe Cancelamento Outlook): "
+            f"{time.time() - _t_step:.1f}s"
+        )
+
         # ── 2️⃣0️⃣ EMBEDDINGS REINDEXAÇÃO (diário, 20º módulo) ──
         _t_step = time.time()
         sucesso_embeddings = False
@@ -1765,7 +1848,7 @@ def executar_sincronizacao():
         logger.info(f"   [TIMER] Duração TOTAL: {time.time() - _t_inicio:.1f}s ({(time.time() - _t_inicio)/60:.1f}min)")
         logger.info("=" * 60)
 
-        modulos_sync = [sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_extratos, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento, sucesso_validacao_ibscbs, sucesso_pickings_recebimento]
+        modulos_sync = [sucesso_faturamento, sucesso_carteira, sucesso_verificacao, sucesso_requisicoes, sucesso_pedidos, sucesso_alocacoes, sucesso_entradas, sucesso_ctes, sucesso_contas_receber, sucesso_baixas, sucesso_extratos, sucesso_contas_pagar, sucesso_nfds, sucesso_pallets, sucesso_reversoes, sucesso_monitoramento, sucesso_validacao_recebimento, sucesso_validacao_ibscbs, sucesso_pickings_recebimento, sucesso_cte_cancelamento]
 
         if embeddings_executou:
             modulos_sync.append(sucesso_embeddings)
@@ -1827,6 +1910,8 @@ def executar_sincronizacao():
                 logger.info("   ❌ Validação IBS/CBS (CTe+NF-e): FALHOU")
             if not sucesso_pickings_recebimento:
                 logger.info("   ❌ Pickings Recebimento (Fase 4): FALHOU")
+            if CTE_CANCELAMENTO_ENABLED and not sucesso_cte_cancelamento:
+                logger.info("   ❌ CTe Cancelamento Outlook (Step 18): FALHOU")
             if embeddings_executou and not sucesso_embeddings:
                 logger.info("   ❌ Embeddings Reindexação: FALHOU")
             if seguranca_executou and not sucesso_seguranca:
@@ -1860,6 +1945,7 @@ def executar_sincronizacao():
                 (15, 'Reversoes NF', sucesso_reversoes),
                 (16, 'Monitoramento', sucesso_monitoramento),
                 (17, 'Pickings Recebimento', sucesso_pickings_recebimento),
+                (18, 'CTe Cancelamento Outlook', sucesso_cte_cancelamento),
             ]
             for step_num, step_name, sucesso in _steps_info:
                 registrar_step(step_name, step_num, sucesso)

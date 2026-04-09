@@ -25,6 +25,7 @@
     {
       "name": "status",
       "type": "varchar(40)",
+      "description": "CANCELADO_OK | PENDENTE_FATURA_CONFERIDA | ORPHAN | FRETE_CANCELADO_REVISAR | ERRO | ARQUIVAMENTO_ODOO_FALHOU",
       "nullable": false
     },
     {

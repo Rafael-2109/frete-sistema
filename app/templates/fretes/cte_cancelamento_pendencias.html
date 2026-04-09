@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}Pendencias Cancelamento CTe - Sistema de Fretes{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+
+  {# ============================================================ #}
+  {# Cabecalho + contadores                                       #}
+  {# ============================================================ #}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="mb-0">
+        <i class="fas fa-envelope-open-text text-warning"></i>
+        Pendencias Cancelamento CTe (Outlook XML)
+      </h4>
+      <small class="text-muted">
+        Processamento automatico de XMLs de cancelamento de CTe.
+        Revisao manual de casos que exigiram atencao.
+      </small>
+    </div>
+    <div>
+      <a href="{{ url_for('fretes.listar_fretes') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> Voltar para Fretes
+      </a>
+    </div>
+  </div>
+
+  {# ============================================================ #}
+  {# Cards de contadores por status                              #}
+  {# ============================================================ #}
+  {% if contadores %}
+  <div class="row g-2 mb-3">
+    {% for status_code, total in contadores.items() %}
+    <div class="col-md-2 col-sm-4">
+      <div class="card
+        {% if status_code == 'CANCELADO_OK' %}border-success
+        {% elif status_code == 'ERRO' %}border-danger
+        {% elif status_code == 'ORPHAN' %}border-warning
+        {% elif status_code == 'PENDENTE_FATURA_CONFERIDA' %}border-info
+        {% elif status_code == 'FRETE_CANCELADO_REVISAR' %}border-primary
+        {% elif status_code == 'ARQUIVAMENTO_ODOO_FALHOU' %}border-danger
+        {% else %}border-secondary{% endif %}">
+        <div class="card-body py-2 px-3">
+          <small class="text-muted d-block text-truncate" title="{{ status_code }}">
+            {{ status_code }}
+          </small>
+          <h5 class="mb-0">{{ total }}</h5>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ============================================================ #}
+  {# Filtros                                                      #}
+  {# ============================================================ #}
+  <form method="get" class="mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label mb-1"><small>Status</small></label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">— Todos (pendentes) —</option>
+          {% for s in ['CANCELADO_OK', 'PENDENTE_FATURA_CONFERIDA', 'ORPHAN', 'FRETE_CANCELADO_REVISAR', 'ERRO', 'ARQUIVAMENTO_ODOO_FALHOU'] %}
+          <option value="{{ s }}" {% if s == status_filtro %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check">
+          <input type="checkbox" name="apenas_pendentes" value="1"
+                 class="form-check-input"
+                 id="chk_apenas_pendentes"
+                 {% if apenas_pendentes %}checked{% endif %}>
+          <label class="form-check-label" for="chk_apenas_pendentes">
+            Apenas nao resolvidos
+          </label>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary btn-sm w-100">
+          <i class="fas fa-filter"></i> Filtrar
+        </button>
+      </div>
+      <div class="col-md-3 text-end">
+        <span class="badge bg-secondary">
+          {{ pendencias|length }} registro(s)
+          {% if pendencias|length >= 500 %} (limit 500){% endif %}
+        </span>
+      </div>
+    </div>
+  </form>
+
+  {# ============================================================ #}
+  {# Tabela de pendencias                                         #}
+  {# ============================================================ #}
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Status</th>
+            <th>Chave CTe</th>
+            <th>Frete</th>
+            <th>Mensagem</th>
+            <th>Email</th>
+            <th>Criado em</th>
+            <th>Resolvido?</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pendencias %}
+          <tr>
+            <td class="text-muted">{{ p.id }}</td>
+            <td>
+              <span class="badge
+                {% if p.status == 'CANCELADO_OK' %}bg-success
+                {% elif p.status == 'ERRO' %}bg-danger
+                {% elif p.status == 'ORPHAN' %}bg-warning text-dark
+                {% elif p.status == 'PENDENTE_FATURA_CONFERIDA' %}bg-info text-dark
+                {% elif p.status == 'FRETE_CANCELADO_REVISAR' %}bg-primary
+                {% elif p.status == 'ARQUIVAMENTO_ODOO_FALHOU' %}bg-danger
+                {% else %}bg-secondary{% endif %}"
+                title="{{ p.status }}">
+                {{ p.status }}
+              </span>
+            </td>
+            <td>
+              <small class="font-monospace">
+                {{ p.chave_acesso[:4] }}...{{ p.chave_acesso[-8:] }}
+              </small>
+              {% if p.cte_id %}
+              <br><small class="text-muted">CTe #{{ p.cte_id }}</small>
+              {% endif %}
+            </td>
+            <td>
+              {% if p.frete_id %}
+              <a href="{{ url_for('fretes.visualizar_frete', frete_id=p.frete_id) }}"
+                 target="_blank" class="text-decoration-none">
+                <small>#{{ p.frete_id }}</small>
+              </a>
+              {% else %}
+              <small class="text-muted">—</small>
+              {% endif %}
+            </td>
+            <td style="max-width: 320px;">
+              <small title="{{ p.mensagem }}">
+                {{ (p.mensagem or '')[:120] }}{% if p.mensagem and p.mensagem|length > 120 %}...{% endif %}
+              </small>
+            </td>
+            <td style="max-width: 200px;">
+              <small title="{{ p.email_subject }}">
+                {{ (p.email_subject or '')[:60] }}{% if p.email_subject and p.email_subject|length > 60 %}...{% endif %}
+              </small>
+            </td>
+            <td>
+              <small>
+                {{ p.criado_em.strftime('%d/%m %H:%M') if p.criado_em else '—' }}
+              </small>
+            </td>
+            <td>
+              {% if p.resolvido_em %}
+              <small class="text-success">
+                <i class="fas fa-check-circle"></i>
+                {{ p.resolvido_em.strftime('%d/%m %H:%M') }}
+                <br>{{ p.resolvido_por }}
+              </small>
+              {% else %}
+              <small class="text-muted">—</small>
+              {% endif %}
+            </td>
+            <td>
+              {% if not p.resolvido_em %}
+              <form method="post"
+                    action="{{ url_for('fretes.resolver_pendencia_cancelamento_cte', pendencia_id=p.id) }}"
+                    onsubmit="return confirm('Marcar como resolvido? O registro sera mantido para auditoria.');"
+                    class="d-inline">
+                <button type="submit" class="btn btn-outline-success btn-sm" title="Marcar como resolvido">
+                  <i class="fas fa-check"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">
+              Nenhuma pendencia encontrada com os filtros atuais.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ============================================================ #}
+  {# Legenda                                                      #}
+  {# ============================================================ #}
+  <div class="mt-3">
+    <h6><small class="text-muted">Legenda dos status:</small></h6>
+    <ul class="list-unstyled small text-muted">
+      <li><span class="badge bg-success">CANCELADO_OK</span> — cancelado localmente e arquivado no Odoo</li>
+      <li><span class="badge bg-info text-dark">PENDENTE_FATURA_CONFERIDA</span> — bloqueado: fatura ja conferida, revisao manual necessaria</li>
+      <li><span class="badge bg-warning text-dark">ORPHAN</span> — CTe nao encontrado no sistema nem no Odoo</li>
+      <li><span class="badge bg-primary">FRETE_CANCELADO_REVISAR</span> — CTe cancelado e frete afetado, revisar pagamentos/conta corrente</li>
+      <li><span class="badge bg-danger">ARQUIVAMENTO_ODOO_FALHOU</span> — cancelado local mas falhou ao arquivar no Odoo (acao manual)</li>
+      <li><span class="badge bg-danger">ERRO</span> — erro tecnico durante processamento (ver mensagem)</li>
+    </ul>
+  </div>
+
+</div>
+{% endblock %}

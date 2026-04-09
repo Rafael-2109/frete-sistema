@@ -701,6 +701,18 @@ class ConhecimentoTransporte(db.Model):
     ativo = db.Column(db.Boolean, default=True, index=True)
 
     # ================================================
+    # CANCELAMENTO (2026-04-09 — automacao Outlook XML)
+    # ================================================
+    # Ver: .claude/plans/temporal-exploring-biscuit.md
+    # Marcacao defensiva: NAO altera Odoo PO/Invoice, apenas status local + alerta.
+    cancelado = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    data_cancelamento = db.Column(db.DateTime, nullable=True)
+    protocolo_cancelamento = db.Column(db.String(50), nullable=True)
+    motivo_cancelamento = db.Column(db.Text, nullable=True)
+    # Origem: 'OUTLOOK_XML' | 'MANUAL' | 'ODOO_SYNC'
+    cancelamento_origem = db.Column(db.String(30), nullable=True)
+
+    # ================================================
     # ÍNDICES
     # ================================================
     __table_args__ = (
@@ -743,7 +755,13 @@ class ConhecimentoTransporte(db.Model):
             'cte_pdf_path': self.cte_pdf_path,
             'cte_xml_path': self.cte_xml_path,
             'vinculado_manualmente': self.vinculado_manualmente,
-            'importado_em': self.importado_em.isoformat() if self.importado_em else None
+            'importado_em': self.importado_em.isoformat() if self.importado_em else None,
+            # Cancelamento (2026-04-09)
+            'cancelado': bool(self.cancelado),
+            'data_cancelamento': self.data_cancelamento.isoformat() if self.data_cancelamento else None,
+            'protocolo_cancelamento': self.protocolo_cancelamento,
+            'motivo_cancelamento': self.motivo_cancelamento,
+            'cancelamento_origem': self.cancelamento_origem,
         }
 
     @property
@@ -1065,3 +1083,123 @@ class LancamentoFreteOdooAuditoria(db.Model):
             'executado_em': self.executado_em.isoformat() if self.executado_em else None,
             'executado_por': self.executado_por
         }
+
+
+# =====================================================================
+# CtePendenciaCancelamento (2026-04-09)
+# =====================================================================
+# Tabela de auditoria e pendencias do processamento automatico de
+# cancelamento de CTe via XML do Outlook 365.
+#
+# Criada em: scripts/migrations/add_cte_cancelamento_fields.py
+# Ver: .claude/plans/temporal-exploring-biscuit.md
+
+
+class CtePendenciaCancelamento(db.Model):
+    """
+    Auditoria e pendencias do processamento automatico de cancelamento de CTe.
+
+    Cada email processado pelo job `CteCancelamentoOutlookJob` gera um registro
+    aqui, sucesso ou falha. Permite auditoria, replay e revisao manual.
+
+    Status possiveis:
+    - CANCELADO_OK                : cancelamento local + arquivamento Odoo ok
+    - PENDENTE_FATURA_CONFERIDA   : bloqueado por fatura ja conferida (revisao manual)
+    - ORPHAN                      : CTe nao encontrado localmente nem no Odoo
+    - FRETE_CANCELADO_REVISAR     : cancelou CTe mas frete precisa revisao humana
+    - ERRO                        : erro tecnico durante processamento (ver mensagem)
+    - ARQUIVAMENTO_ODOO_FALHOU    : cancelou local mas falhou ao arquivar no Odoo
+    """
+    __tablename__ = 'cte_pendencia_cancelamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Identificacao do CTe
+    chave_acesso = db.Column(db.String(44), nullable=False, index=True)
+    cte_id = db.Column(
+        db.Integer,
+        db.ForeignKey('conhecimento_transporte.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+    frete_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fretes.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+
+    # Status do processamento
+    status = db.Column(db.String(40), nullable=False, index=True)
+    mensagem = db.Column(db.Text, nullable=True)
+
+    # Payload original (para auditoria/replay)
+    xml_raw = db.Column(db.Text, nullable=True)
+    email_message_id = db.Column(db.String(255), nullable=True)
+    email_subject = db.Column(db.String(500), nullable=True)
+
+    # Timestamps
+    criado_em = db.Column(
+        db.DateTime,
+        default=agora_utc_naive,
+        nullable=False,
+        index=True,
+    )
+    resolvido_em = db.Column(db.DateTime, nullable=True)
+    resolvido_por = db.Column(db.String(100), nullable=True)
+
+    # Relacionamentos
+    cte = db.relationship(
+        'ConhecimentoTransporte',
+        foreign_keys=[cte_id],
+        backref=db.backref('pendencias_cancelamento', lazy='dynamic'),
+        lazy=True,
+    )
+    frete = db.relationship(
+        'Frete',
+        foreign_keys=[frete_id],
+        backref=db.backref('pendencias_cancelamento_cte', lazy='dynamic'),
+        lazy=True,
+    )
+
+    # Constantes de status (usar em vez de strings literais)
+    STATUS_CANCELADO_OK = 'CANCELADO_OK'
+    STATUS_PENDENTE_FATURA_CONFERIDA = 'PENDENTE_FATURA_CONFERIDA'
+    STATUS_ORPHAN = 'ORPHAN'
+    STATUS_FRETE_CANCELADO_REVISAR = 'FRETE_CANCELADO_REVISAR'
+    STATUS_ERRO = 'ERRO'
+    STATUS_ARQUIVAMENTO_ODOO_FALHOU = 'ARQUIVAMENTO_ODOO_FALHOU'
+
+    STATUS_RESOLVIDOS = (STATUS_CANCELADO_OK,)
+    STATUS_PENDENTES = (
+        STATUS_PENDENTE_FATURA_CONFERIDA,
+        STATUS_ORPHAN,
+        STATUS_FRETE_CANCELADO_REVISAR,
+        STATUS_ERRO,
+        STATUS_ARQUIVAMENTO_ODOO_FALHOU,
+    )
+
+    def __repr__(self):
+        return (
+            f'<CtePendenciaCancelamento id={self.id} '
+            f'chave={self.chave_acesso} status={self.status}>'
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'chave_acesso': self.chave_acesso,
+            'cte_id': self.cte_id,
+            'frete_id': self.frete_id,
+            'status': self.status,
+            'mensagem': self.mensagem,
+            'email_message_id': self.email_message_id,
+            'email_subject': self.email_subject,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'resolvido_em': self.resolvido_em.isoformat() if self.resolvido_em else None,
+            'resolvido_por': self.resolvido_por,
+        }
+
+    @property
+    def esta_pendente(self) -> bool:
+        return self.status in self.STATUS_PENDENTES

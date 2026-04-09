@@ -971,3 +971,149 @@ class CteService:
         except Exception as e:
             logger.error(f"   ⚠️  Erro ao extrair números de NFs: {e}")
             return None
+
+    # ==================================================================
+    # CANCELAMENTO (2026-04-09) — automacao Outlook XML
+    # ==================================================================
+    # Ver: .claude/plans/temporal-exploring-biscuit.md
+
+    def importar_cte_por_chave(
+        self,
+        chave_acesso: str,
+    ) -> Optional[ConhecimentoTransporte]:
+        """
+        Busca CTe no Odoo pela chave de acesso (SEM filtro de data e SEM filtro
+        active=True) e importa para ConhecimentoTransporte se encontrar.
+
+        Usado pelo fluxo de cancelamento automatico quando recebemos um XML
+        de evento SEFAZ 110111 mas o CTe ainda nao esta no sistema local.
+
+        CUIDADO: este metodo difere de `importar_ctes` em dois pontos:
+        1. Filtro por chave_acesso (nao por data/write_date)
+        2. Inclui CTes arquivados (active=False) — usa OR em active
+
+        Args:
+            chave_acesso: Chave de 44 digitos do CTe
+
+        Returns:
+            ConhecimentoTransporte persistido, ou None se:
+            - chave invalida
+            - CTe nao existe no Odoo
+            - erro na importacao
+
+        Nota: NAO faz commit. O chamador e responsavel por `db.session.commit()`.
+        """
+        if not chave_acesso or len(chave_acesso) != 44:
+            logger.warning(
+                f"   ⚠️ importar_cte_por_chave: chave invalida: {chave_acesso!r}"
+            )
+            return None
+
+        try:
+            # Filtro: is_cte=True AND chave=X (aceitando active=True OR active=False)
+            filtros = [
+                "&",
+                "|",
+                ("active", "=", True),
+                ("active", "=", False),
+                "&",
+                ("is_cte", "=", True),
+                ("protnfe_infnfe_chnfe", "=", chave_acesso),
+            ]
+
+            campos = [
+                'id', 'name', 'active', 'l10n_br_status', 'l10n_br_data_entrada',
+                'l10n_br_tipo_pedido',
+                'protnfe_infnfe_chnfe', 'nfe_infnfe_ide_nnf', 'nfe_infnfe_ide_serie',
+                'nfe_infnfe_ide_dhemi', 'nfe_infnfe_total_icmstot_vnf',
+                'nfe_infnfe_total_icms_vfrete', 'nfe_infnfe_total_icms_vicms',
+                'nfe_infnfe_emit_cnpj', 'nfe_infnfe_emit_xnome', 'nfe_infnfe_emit_ie',
+                'nfe_infnfe_dest_cnpj', 'nfe_infnfe_rem_cnpj', 'nfe_infnfe_exped_cnpj',
+                'cte_infcte_ide_cmunini', 'cte_infcte_ide_cmunfim',
+                'cte_infcte_ide_toma3_toma', 'nfe_infnfe_infadic_infcpl',
+                'l10n_br_pdf_dfe', 'l10n_br_pdf_dfe_fname',
+                'l10n_br_xml_dfe', 'l10n_br_xml_dfe_fname',
+                'partner_id', 'invoice_ids', 'purchase_fiscal_id', 'refs_ids',
+            ]
+
+            ctes = self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe',
+                'search_read',
+                [filtros],
+                {'fields': campos, 'limit': 1},
+            )
+
+            if not ctes:
+                logger.info(
+                    f"   ℹ️ CTe chave={chave_acesso} nao encontrado no Odoo"
+                )
+                return None
+
+            cte_data = ctes[0]
+
+            # Reaproveitar _processar_cte (cria ou atualiza ConhecimentoTransporte)
+            # Mapa de refs NULL = sem enriquecimento de NFs aqui (e lookup secundario)
+            self._processar_cte(cte_data, mapa_refs=None)
+
+            # Re-buscar o model persistido
+            cte_local = ConhecimentoTransporte.query.filter_by(
+                chave_acesso=chave_acesso
+            ).first()
+
+            if cte_local:
+                logger.info(
+                    f"   ✅ CTe chave={chave_acesso} importado: id={cte_local.id}"
+                )
+            return cte_local
+
+        except Exception as e:
+            logger.error(
+                f"   ❌ Erro ao importar CTe por chave {chave_acesso}: {e}"
+            )
+            return None
+
+    def arquivar_dfe(self, dfe_id) -> bool:
+        """
+        Seta `active=False` no modelo l10n_br_ciel_it_account.dfe no Odoo.
+
+        ATENCAO — ISSO NAO E "CANCELAR FORMALMENTE":
+        - NAO altera o campo `l10n_br_status` (status SEFAZ)
+        - NAO mexe em purchase.order, account.move, account.payment vinculados
+        - NAO envia evento SEFAZ de cancelamento
+        - E APENAS um arquivamento: o registro some das buscas padrao do Odoo
+
+        E suficiente para nosso caso de uso (sync local NAO traz mais esse DFe),
+        mas NAO substitui a responsabilidade do financeiro de executar o
+        cancelamento formal no Odoo se houver Invoice emitida.
+
+        Args:
+            dfe_id: ID do DFe no Odoo (int ou string)
+
+        Returns:
+            True se escreveu com sucesso, False caso contrario.
+        """
+        if dfe_id is None or dfe_id == '':
+            logger.warning("   ⚠️ arquivar_dfe: dfe_id vazio")
+            return False
+
+        try:
+            dfe_id_int = int(dfe_id)
+        except (ValueError, TypeError):
+            logger.error(f"   ❌ arquivar_dfe: dfe_id invalido: {dfe_id!r}")
+            return False
+
+        try:
+            self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe',
+                'write',
+                [[dfe_id_int], {'active': False}],
+            )
+            logger.info(
+                f"   🗄️ DFe {dfe_id_int} arquivado (active=False) no Odoo"
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"   ❌ Erro ao arquivar DFe {dfe_id} no Odoo: {e}"
+            )
+            return False
