@@ -126,9 +126,9 @@
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_cod_produto",
+      "name": "ix_saldo_standby_cnpj_cliente",
       "columns": [
-        "cod_produto"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -140,9 +140,9 @@
       "unique": false
     },
     {
-      "name": "ix_saldo_standby_cnpj_cliente",
+      "name": "ix_saldo_standby_cod_produto",
       "columns": [
-        "cnpj_cliente"
+        "cod_produto"
       ],
       "unique": false
     },

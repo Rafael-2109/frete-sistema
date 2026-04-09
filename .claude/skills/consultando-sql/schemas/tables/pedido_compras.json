@@ -190,6 +190,14 @@
   ],
   "indices": [
     {
+      "name": "idx_pedido_empresa",
+      "columns": [
+        "company_id",
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pedido_compras_num_pedido",
       "columns": [
         "num_pedido"
@@ -270,14 +278,6 @@
       "name": "ix_pedido_compras_dfe_id",
       "columns": [
         "dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pedido_empresa",
-      "columns": [
-        "company_id",
-        "num_pedido"
       ],
       "unique": false
     }

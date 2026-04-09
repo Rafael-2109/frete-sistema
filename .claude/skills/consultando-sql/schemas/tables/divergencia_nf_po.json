@@ -120,16 +120,9 @@
   ],
   "indices": [
     {
-      "name": "ix_divergencia_nf_po_odoo_dfe_id",
+      "name": "ix_divergencia_nf_po_tipo_divergencia",
       "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_divergencia_nf_po_validacao_id",
-      "columns": [
-        "validacao_id"
+        "tipo_divergencia"
       ],
       "unique": false
     },
@@ -141,9 +134,9 @@
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_tipo_divergencia",
+      "name": "ix_divergencia_nf_po_validacao_id",
       "columns": [
-        "tipo_divergencia"
+        "validacao_id"
       ],
       "unique": false
     },
@@ -151,6 +144,13 @@
       "name": "ix_divergencia_nf_po_cnpj_empresa_compradora",
       "columns": [
         "cnpj_empresa_compradora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
       ],
       "unique": false
     }

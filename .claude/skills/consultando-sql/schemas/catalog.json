@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 173,
+  "total_tabelas": 175,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -394,6 +394,15 @@
       ]
     },
     {
+      "name": "carvia_emissao_cte_complementar",
+      "description": "Tabela carvia_emissao_cte_complementar",
+      "key_fields": [
+        "custo_entrega_id",
+        "cte_complementar_id",
+        "operacao_id"
+      ]
+    },
+    {
       "name": "carvia_empresas_cubagem",
       "description": "Tabela carvia_empresas_cubagem",
       "key_fields": [
@@ -524,7 +533,7 @@
       "key_fields": [
         "cte_numero",
         "cte_chave_acesso",
-        "cte_valor"
+        "ctrc_numero"
       ]
     },
     {
@@ -732,6 +741,15 @@
         "usuario_id",
         "transportadora_id",
         "status"
+      ]
+    },
+    {
+      "name": "cte_pendencia_cancelamento",
+      "description": "Auditoria e pendencias do processamento automatico de cancelamento de CTe.",
+      "key_fields": [
+        "chave_acesso",
+        "cte_id",
+        "frete_id"
       ]
     },
     {

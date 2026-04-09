@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 252,
+  "total_relationships": 257,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -214,6 +214,24 @@
     },
     {
       "from_table": "carvia_emissao_cte",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_emissao_cte_complementar",
+      "from_column": "custo_entrega_id",
+      "to_table": "carvia_custos_entrega",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_emissao_cte_complementar",
+      "from_column": "cte_complementar_id",
+      "to_table": "carvia_cte_complementares",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_emissao_cte_complementar",
       "from_column": "operacao_id",
       "to_table": "carvia_operacoes",
       "to_column": "id"
@@ -606,6 +624,18 @@
       "from_table": "cotacoes",
       "from_column": "transportadora_id",
       "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cte_pendencia_cancelamento",
+      "from_column": "cte_id",
+      "to_table": "conhecimento_transporte",
+      "to_column": "id"
+    },
+    {
+      "from_table": "cte_pendencia_cancelamento",
+      "from_column": "frete_id",
+      "to_table": "fretes",
       "to_column": "id"
     },
     {
