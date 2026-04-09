@@ -125,10 +125,22 @@ class SswEmissaoService:
             if len(cnpj_limpo) != 14:
                 raise ValueError(f"CNPJ tomador invalido: {cnpj_tomador}")
 
-        # 4. Converter medidas de moto
+        # 4. Converter medidas de moto.
+        # Se o frontend nao passou medidas manualmente, extrair
+        # automaticamente dos itens da NF (modelo_moto_id ja detectado).
+        # Permite override manual: se medidas_motos tem valor, usa ele.
         medidas_json = None
         if medidas_motos:
             medidas_json = SswEmissaoService.montar_medidas(medidas_motos)
+        else:
+            medidas_auto = SswEmissaoService.extrair_medidas_da_nf(nf_id)
+            if medidas_auto:
+                medidas_json = SswEmissaoService.montar_medidas(medidas_auto)
+                logger.info(
+                    "NF %s: extraidas %d medidas de motos dos itens "
+                    "(auto, sem override manual)",
+                    nf_id, len(medidas_auto)
+                )
 
         # 5. Criar registro de emissao
         emissao = CarviaEmissaoCte(
@@ -241,6 +253,55 @@ class SswEmissaoService:
                 'alt_m': round(float(modelo.altura) / 100, 3),
                 'qtd': int(qtd),
             })
+
+        return medidas
+
+    @staticmethod
+    def extrair_medidas_da_nf(nf_id):
+        """Agrega modelos e quantidades a partir dos CarviaNfItem da NF.
+
+        Usa modelo_moto_id ja detectado durante a importacao (botao
+        "Reprocessar modelos de moto" no detalhe da NF). Soma as
+        quantidades de cada item por modelo_id.
+
+        Itens SEM modelo_moto_id (ex: acessorios, peças) sao ignorados.
+
+        Args:
+            nf_id: ID da CarviaNf
+
+        Returns:
+            Lista de dicts [{modelo_id: int, qtd: int}] no mesmo formato
+            esperado por montar_medidas(). Lista vazia se nao houver
+            itens com modelo de moto detectado.
+        """
+        from app.carvia.models import CarviaNfItem
+        from sqlalchemy import func
+
+        # Agregar qtd por modelo_moto_id, somente itens que tem modelo
+        rows = (
+            db.session.query(
+                CarviaNfItem.modelo_moto_id,
+                func.sum(CarviaNfItem.quantidade).label('qtd_total'),
+            )
+            .filter(
+                CarviaNfItem.nf_id == nf_id,
+                CarviaNfItem.modelo_moto_id.isnot(None),
+            )
+            .group_by(CarviaNfItem.modelo_moto_id)
+            .all()
+        )
+
+        medidas = []
+        for modelo_id, qtd_total in rows:
+            if qtd_total is None:
+                continue
+            try:
+                qtd_int = int(round(float(qtd_total)))
+            except (TypeError, ValueError):
+                continue
+            if qtd_int <= 0:
+                continue
+            medidas.append({'modelo_id': int(modelo_id), 'qtd': qtd_int})
 
         return medidas
 
