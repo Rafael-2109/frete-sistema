@@ -83,8 +83,11 @@ def register_lista_routes(bp):
         per_page = 50
 
         # Count otimizado: SELECT count(pedidos.id) FROM pedidos WHERE ...
-        # Evita subquery com todas as colunas que paginate() gera
-        total = query.with_entities(func.count(Pedido.id)).scalar()
+        # Evita subquery com todas as colunas que paginate() gera.
+        # IMPORTANTE: order_by(None) remove o ORDER BY da query — sem isso
+        # o Postgres levanta GroupingError porque count() agrega mas o ORDER BY
+        # referencia colunas nao agregadas (pedidos.rota, sub_rota, etc).
+        total = query.order_by(None).with_entities(func.count(Pedido.id)).scalar()
         pedidos = query.limit(per_page).offset((page - 1) * per_page).all()
 
         # Objeto paginacao compativel com template
