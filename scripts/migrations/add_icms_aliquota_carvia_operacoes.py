@@ -105,13 +105,19 @@ def run():
 
             sucesso = 0
             erro = 0
+            sem_icms = 0
             for op_id, xml_path in rows:
                 try:
                     from app.utils.file_storage import get_file_storage
                     storage = get_file_storage()
-                    xml_bytes = storage.get_file_content(xml_path)
+                    # download_file() retorna bytes do S3 ou disco local.
+                    # (get_file_content NAO existe em FileStorage — bug original)
+                    xml_bytes = storage.download_file(xml_path)
                     if not xml_bytes:
-                        logger.warning("  op=%d: XML vazio/nao encontrado em %s", op_id, xml_path)
+                        logger.warning(
+                            "  op=%d: XML vazio/nao encontrado em %s",
+                            op_id, xml_path
+                        )
                         erro += 1
                         continue
 
@@ -129,16 +135,26 @@ def run():
                             (float(aliquota), op_id)
                         )
                         sucesso += 1
+                        logger.info(
+                            "  op=%d: icms_aliquota=%s%%",
+                            op_id, aliquota
+                        )
                     else:
-                        logger.debug("  op=%d: XML sem aliquota ICMS", op_id)
+                        sem_icms += 1
+                        logger.warning(
+                            "  op=%d: XML parseado mas aliquota_icms=None "
+                            "(CST especial? isento?)",
+                            op_id
+                        )
                 except Exception as e:
                     logger.warning("  op=%d: erro no backfill: %s", op_id, e)
                     erro += 1
 
             conn.commit()
             logger.info(
-                "Backfill concluido: %d atualizados, %d erros, %d total",
-                sucesso, erro, len(rows)
+                "Backfill concluido: %d atualizados, %d sem ICMS no XML, "
+                "%d erros, %d total",
+                sucesso, sem_icms, erro, len(rows)
             )
 
         finally:
