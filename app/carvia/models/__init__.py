@@ -42,6 +42,7 @@ from app.carvia.models.financeiro import (  # noqa: F401
 # CTe Complementar + Custos Entrega
 from app.carvia.models.cte_custos import (  # noqa: F401
     CarviaCteComplementar, CarviaCustoEntrega, CarviaCustoEntregaAnexo,
+    CarviaEmissaoCteComplementar,
 )
 
 # Config + Modelos Moto
@@ -90,6 +91,7 @@ __all__ = [
     'CarviaExtratoLinha', 'CarviaConciliacao',
     # CTe/Custos
     'CarviaCteComplementar', 'CarviaCustoEntrega', 'CarviaCustoEntregaAnexo',
+    'CarviaEmissaoCteComplementar',
     # Config/Moto
     'CarviaCategoriaMoto', 'CarviaModeloMoto', 'CarviaEmpresaCubagem',
     'CarviaPrecoCategoriaMoto', 'CarviaConfig',

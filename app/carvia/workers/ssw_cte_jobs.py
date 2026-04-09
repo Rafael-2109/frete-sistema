@@ -97,6 +97,7 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
             logger.info("Emissao %s — CTe %s emitido", emissao_id, emissao.ctrc_numero)
 
             # ── Fase B: Baixar XML/DACTE via consultar_ctrc_101 e importar ──
+            ctrc_completo_ssw = None
             try:
                 resultado_consulta = _executar_consulta_101(
                     emissao.ctrc_numero, filial=emissao.filial_ssw or 'CAR'
@@ -105,8 +106,25 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
                     # Mesclar paths de XML/DACTE no resultado
                     resultado_cte['xml'] = resultado_consulta.get('xml')
                     resultado_cte['dacte'] = resultado_consulta.get('dacte')
+                    # Capturar CTRC completo do SSW (ex: CAR000113-9)
+                    dados_101 = resultado_consulta.get('dados', {})
+                    ctrc_completo_ssw = dados_101.get('ctrc_completo')
 
                 SswEmissaoService.importar_resultado_cte(emissao, resultado_cte)
+
+                # Corrigir ctrc_numero na operacao com o CTRC real do SSW
+                # (ImportacaoService usa nCT do XML, que difere do CTRC SSW)
+                if emissao.operacao_id and ctrc_completo_ssw:
+                    from app.carvia.models import CarviaOperacao
+                    operacao = db.session.get(CarviaOperacao, emissao.operacao_id)
+                    if operacao:
+                        ctrc_formatado = _formatar_ctrc_ssw(ctrc_completo_ssw)
+                        operacao.ctrc_numero = ctrc_formatado
+                        logger.info(
+                            "CTRC corrigido: op=%s, ctrc=%s (SSW: %s)",
+                            operacao.id, ctrc_formatado, ctrc_completo_ssw
+                        )
+
                 db.session.commit()
             except Exception as e:
                 logger.warning("Falha ao importar XML (nao-bloqueante): %s", e)
@@ -252,6 +270,19 @@ def _executar_script_fatura(args):
 
     from gerar_fatura_ssw_437 import gerar_fatura
     return asyncio.run(gerar_fatura(args))
+
+
+def _formatar_ctrc_ssw(ctrc_completo):
+    """Converte formato SSW para formato sistema.
+
+    Ex: 'CAR000113-9' → 'CAR-113-9'
+        'CAR000110-4' → 'CAR-110-4'
+    """
+    import re
+    m = re.match(r'^([A-Z]{2,4})0*(\d+)-(\d)$', ctrc_completo)
+    if m:
+        return f'{m.group(1)}-{m.group(2)}-{m.group(3)}'
+    return ctrc_completo
 
 
 def _sanitize_resultado(resultado):

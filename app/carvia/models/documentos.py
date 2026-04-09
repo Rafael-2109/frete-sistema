@@ -185,6 +185,7 @@ class CarviaOperacao(db.Model):
     cte_xml_nome_arquivo = db.Column(db.String(255))
     cte_pdf_path = db.Column(db.String(500))
     cte_data_emissao = db.Column(db.Date)
+    icms_aliquota = db.Column(db.Numeric(5, 2))  # Aliquota ICMS do CTe original (ex: 12.00)
 
     # Cliente (remetente da carga)
     cnpj_cliente = db.Column(db.String(20), nullable=False, index=True)

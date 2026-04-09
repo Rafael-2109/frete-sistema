@@ -147,7 +147,25 @@ def main():
             logger.error("❌ Falha ao aplicar migração hora_agendamento")
             sys.exit(1)
     
-    # 4. Verificação final
+    # 4. Migração: icms_aliquota + tabela emissao_cte_complementar
+    run_command(
+        "python scripts/migrations/add_icms_aliquota_carvia_operacoes.py",
+        "Migração icms_aliquota + tabela emissao_cte_complementar"
+    )
+
+    # 5. Fix CTRC: aplicar mapa nCT→CTRC do SSW
+    ctrc_map = os.path.join(
+        str(Path(__file__).parent), 'migrations', 'nct_ctrc_map.json'
+    )
+    if os.path.exists(ctrc_map):
+        run_command(
+            "python scripts/migrations/apply_ctrc_map_render.py",
+            "Fix CTRC: aplicar mapa SSW"
+        )
+    else:
+        logger.info("⚠️ nct_ctrc_map.json nao encontrado — skip fix CTRC")
+
+    # 6. Verificação final
     if check_hora_agendamento_field():
         logger.info("✅ Sistema configurado com sucesso!")
         logger.info("🎉 Deploy no Render concluído!")

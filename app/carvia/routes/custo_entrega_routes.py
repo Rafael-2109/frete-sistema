@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app import db
 from app.carvia.models import (
     CarviaCustoEntrega, CarviaCustoEntregaAnexo, CarviaOperacao,
-    CarviaCteComplementar,
+    CarviaCteComplementar, CarviaEmissaoCteComplementar,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,22 @@ TIPOS_CUSTO = [
 STATUS_CUSTO = ['PENDENTE', 'PAGO', 'CANCELADO']
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'msg', 'eml'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Mapeamento tipo_custo → motivo SSW opcao 222
+# D=descarga, E=estadia, R=reembolso, C=complementar geral
+TIPO_CUSTO_MOTIVO_SSW = {
+    'TAXA_DESCARGA': 'D',
+    'DIARIA': 'E',
+    'REENTREGA': 'R',
+    'DEVOLUCAO': 'R',
+    'ARMAZENAGEM': 'R',
+    'AVARIA': 'C',
+    'PEDAGIO_EXTRA': 'C',
+    'OUTROS': 'C',
+}
+
+# PIS/COFINS fixo 9.25% — divisor para grossing up
+PISCOFINS_DIVISOR = 0.9075
 
 
 def _allowed_file(filename):
@@ -299,6 +315,11 @@ def register_custo_entrega_routes(bp):
                 CarviaCteComplementar.id != (custo.cte_complementar_id or 0),
             ).order_by(CarviaCteComplementar.criado_em.desc()).all()
 
+        # Emissao CTe Comp em andamento (para mostrar progresso)
+        emissao_comp = CarviaEmissaoCteComplementar.query.filter(
+            CarviaEmissaoCteComplementar.custo_entrega_id == custo_id,
+        ).order_by(CarviaEmissaoCteComplementar.criado_em.desc()).first()
+
         return render_template(
             'carvia/custos_entrega/detalhe.html',
             custo=custo,
@@ -309,6 +330,7 @@ def register_custo_entrega_routes(bp):
             faturas_transportadora=faturas_transportadora,
             nfs=nfs,
             ctes_complementares=ctes_complementares,
+            emissao_comp=emissao_comp,
         )
 
     @bp.route('/custos-entrega/<int:custo_id>/editar', methods=['GET', 'POST']) # type: ignore
@@ -643,3 +665,173 @@ def register_custo_entrega_routes(bp):
         return redirect(url_for(
             'carvia.detalhe_custo_entrega', custo_id=anexo.custo_entrega_id
         ))
+
+    # ── CTe Complementar: trigger de emissao via SSW opcao 222 ──
+
+    @bp.route('/custos-entrega/<int:custo_id>/gerar-cte-complementar', methods=['POST'])  # type: ignore
+    @login_required
+    def gerar_cte_complementar(custo_id):  # type: ignore
+        """Calcula valor com impostos, cria CTe Complementar e enfileira emissao SSW."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            flash('Custo de entrega nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        # Guards
+        if custo.cte_complementar_id:
+            flash('Este custo ja possui CTe Complementar vinculado.', 'warning')
+            return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
+        if custo.status == 'CANCELADO':
+            flash('Custo cancelado nao pode gerar CTe Complementar.', 'warning')
+            return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
+        # Verificar emissao em andamento
+        emissao_ativa = CarviaEmissaoCteComplementar.query.filter(
+            CarviaEmissaoCteComplementar.custo_entrega_id == custo_id,
+            CarviaEmissaoCteComplementar.status.in_(['PENDENTE', 'EM_PROCESSAMENTO']),
+        ).first()
+        if emissao_ativa:
+            flash('Ja existe emissao em andamento para este custo.', 'warning')
+            return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
+        operacao = db.session.get(CarviaOperacao, custo.operacao_id)
+        if not operacao or not operacao.ctrc_numero:
+            flash(
+                'Operacao nao possui CTRC. Importe o CTe XML primeiro.',
+                'danger'
+            )
+            return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
+        # Resolver ICMS — do campo persistido ou re-parse do XML
+        icms = float(operacao.icms_aliquota or 0)
+        if icms == 0 and operacao.cte_xml_path:
+            try:
+                from app.utils.file_storage import get_file_storage
+                from app.carvia.services.parsers.cte_xml_parser_carvia import (
+                    CTeXMLParserCarvia,
+                )
+                storage = get_file_storage()
+                xml_bytes = storage.get_file_content(operacao.cte_xml_path)
+                if xml_bytes:
+                    xml_str = xml_bytes.decode('utf-8', errors='replace')
+                    parser = CTeXMLParserCarvia(xml_str)
+                    impostos = parser.get_impostos()
+                    icms = float(impostos.get('aliquota_icms') or 0)
+                    if icms > 0:
+                        operacao.icms_aliquota = icms  # Persistir para futuro
+            except Exception as e:
+                logger.warning("Falha ao resolver ICMS do XML op=%s: %s", operacao.id, e)
+
+        if icms == 0:
+            flash(
+                'ICMS nao encontrado para esta operacao. '
+                'Verifique se o XML do CTe foi importado.',
+                'danger'
+            )
+            return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
+        # Calcular valor CTe Complementar: valor / 0.9075 / (1 - icms/100)
+        valor_base = float(custo.valor)
+        icms_divisor = 1 - (icms / 100)
+        if icms_divisor <= 0:
+            flash('Aliquota ICMS invalida.', 'danger')
+            return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
+        valor_cte = round(valor_base / PISCOFINS_DIVISOR / icms_divisor, 2)
+        motivo_ssw = TIPO_CUSTO_MOTIVO_SSW.get(custo.tipo_custo, 'C')
+
+        try:
+            # Criar CTe Complementar (RASCUNHO)
+            cte_comp = CarviaCteComplementar(
+                numero_comp=CarviaCteComplementar.gerar_numero_comp(),
+                operacao_id=operacao.id,
+                cte_valor=valor_cte,
+                cnpj_cliente=operacao.cnpj_cliente,
+                nome_cliente=operacao.nome_cliente,
+                status='RASCUNHO',
+                observacoes=(
+                    f'Gerado automaticamente de {custo.numero_custo} '
+                    f'({custo.tipo_custo}). '
+                    f'Base={valor_base:.2f}, PIS/COFINS=9.25%, ICMS={icms}%'
+                ),
+                criado_por=current_user.email,
+            )
+            db.session.add(cte_comp)
+            db.session.flush()
+
+            # Vincular custo ao CTe Complementar
+            custo.cte_complementar_id = cte_comp.id
+
+            # Criar emissao (tracking)
+            emissao = CarviaEmissaoCteComplementar(
+                custo_entrega_id=custo.id,
+                cte_complementar_id=cte_comp.id,
+                operacao_id=operacao.id,
+                ctrc_pai=operacao.ctrc_numero,
+                motivo_ssw=motivo_ssw,
+                filial_ssw='CAR',
+                valor_calculado=valor_cte,
+                icms_aliquota_usada=icms,
+                status='PENDENTE',
+                criado_por=current_user.email,
+            )
+            db.session.add(emissao)
+            db.session.flush()
+
+            # Enfileirar job RQ
+            from app.portal.workers import enqueue_job
+            from app.carvia.workers.ssw_cte_complementar_jobs import (
+                emitir_cte_complementar_job,
+            )
+
+            job = enqueue_job(
+                emitir_cte_complementar_job,
+                emissao.id,
+                queue_name='high',
+                timeout='10m',
+            )
+            emissao.job_id = job.id
+            db.session.commit()
+
+            logger.info(
+                "CTe Complementar %s criado para custo %s (valor=%s, icms=%s%%, motivo=%s)",
+                cte_comp.numero_comp, custo.numero_custo,
+                valor_cte, icms, motivo_ssw
+            )
+            flash(
+                f'CTe Complementar {cte_comp.numero_comp} criado — '
+                f'valor {valor_cte:.2f} (base {valor_base:.2f} + PIS/COFINS 9.25% + ICMS {icms}%). '
+                f'Emissao SSW em andamento...',
+                'success'
+            )
+
+        except IntegrityError as e:
+            db.session.rollback()
+            logger.error("IntegrityError ao gerar CTe Complementar: %s", e)
+            flash('Erro de integridade ao criar CTe Complementar.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao gerar CTe Complementar custo=%s: %s", custo_id, e)
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
+    @bp.route('/api/custos-entrega/emissao-comp/<int:emissao_comp_id>/status')  # type: ignore
+    @login_required
+    def status_emissao_cte_complementar(emissao_comp_id):  # type: ignore
+        """API de polling: retorna status da emissao CTe Complementar."""
+        emissao = db.session.get(CarviaEmissaoCteComplementar, emissao_comp_id)
+        if not emissao:
+            return jsonify({'erro': 'Emissao nao encontrada'}), 404
+
+        return jsonify({
+            'status': emissao.status,
+            'etapa': emissao.etapa,
+            'erro': emissao.erro_ssw,
+            'cte_complementar_id': emissao.cte_complementar_id,
+        })

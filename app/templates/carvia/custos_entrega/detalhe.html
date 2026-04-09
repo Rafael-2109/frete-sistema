@@ -157,6 +157,45 @@
                         {% endif %}
                         {% endfor %}
                     </div>
+
+                    {# CTe Complementar — Gerar via SSW #}
+                    <hr>
+                    <h6>CTe Complementar:</h6>
+                    {% if custo.cte_complementar_id %}
+                        <span class="badge bg-success"><i class="fas fa-check"></i> Vinculado</span>
+                        <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=custo.cte_complementar_id) }}"
+                           class="btn btn-sm btn-outline-primary ms-2">
+                            <i class="fas fa-eye"></i> Ver CTe Comp
+                        </a>
+                    {% elif emissao_comp and emissao_comp.status in ('PENDENTE', 'EM_PROCESSAMENTO') %}
+                        <div id="emissao-status" class="d-flex align-items-center gap-2">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <span class="text-primary">Emissao em andamento...
+                                <small class="text-muted">({{ emissao_comp.etapa or 'aguardando' }})</small>
+                            </span>
+                        </div>
+                    {% elif emissao_comp and emissao_comp.status == 'ERRO' %}
+                        <div class="alert alert-danger py-2 mb-2">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Erro na emissao: {{ emissao_comp.erro_ssw or 'Erro desconhecido' }}
+                        </div>
+                        {% if operacao and operacao.ctrc_numero and custo.status != 'CANCELADO' %}
+                        <button type="button" class="btn btn-sm btn-warning"
+                                data-bs-toggle="modal" data-bs-target="#modalGerarCteComp">
+                            <i class="fas fa-redo"></i> Tentar Novamente
+                        </button>
+                        {% endif %}
+                    {% elif operacao and operacao.ctrc_numero and custo.status != 'CANCELADO' %}
+                        <button type="button" class="btn btn-sm btn-primary"
+                                data-bs-toggle="modal" data-bs-target="#modalGerarCteComp">
+                            <i class="fas fa-file-invoice"></i> Gerar CTe Complementar
+                        </button>
+                    {% elif not operacao or not operacao.ctrc_numero %}
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            CTRC nao disponivel — importe o CTe XML primeiro.
+                        </small>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -473,6 +512,73 @@
     {% include 'carvia/_modal_data_pagamento.html' %}
 {% endwith %}
 
+{# Modal de confirmacao para gerar CTe Complementar #}
+{% if operacao and operacao.ctrc_numero and not custo.cte_complementar_id and custo.status != 'CANCELADO' %}
+<div class="modal fade" id="modalGerarCteComp" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-invoice"></i> Gerar CTe Complementar</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Sera gerado um CTe Complementar no SSW (opcao 222) com os seguintes dados:</p>
+                <table class="table table-sm table-bordered mb-3">
+                    <tr>
+                        <th class="w-50">CTRC Referencia</th>
+                        <td><strong>{{ operacao.ctrc_numero }}</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Tipo Custo</th>
+                        <td><span class="badge bg-secondary">{{ custo.tipo_custo }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Valor Base (custo)</th>
+                        <td>{{ custo.valor|valor_br }}</td>
+                    </tr>
+                    <tr>
+                        <th>PIS/COFINS</th>
+                        <td>9,25% (fixo)</td>
+                    </tr>
+                    <tr>
+                        <th>ICMS</th>
+                        <td>{{ operacao.icms_aliquota|numero_br(2) if operacao.icms_aliquota else 'A resolver do XML' }}%</td>
+                    </tr>
+                    <tr class="table-success">
+                        <th>Valor CTe Complementar (estimado)</th>
+                        <td>
+                            {% if operacao.icms_aliquota %}
+                                {% set icms_div = 1 - (operacao.icms_aliquota|float / 100) %}
+                                {% if icms_div > 0 %}
+                                    <strong>{{ (custo.valor|float / 0.9075 / icms_div)|round(2)|valor_br }}</strong>
+                                {% else %}
+                                    <strong>Erro ICMS</strong>
+                                {% endif %}
+                            {% else %}
+                                <em>Sera calculado apos resolver ICMS</em>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                <div class="alert alert-info py-2 mb-0">
+                    <i class="fas fa-info-circle"></i>
+                    O CTe sera emitido automaticamente no SSW. O processo leva 1-2 minutos.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form method="POST" action="{{ url_for('carvia.gerar_cte_complementar', custo_id=custo.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Confirmar e Emitir
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {{ modal_admin_excluir(
     entidade_tipo='custo-entrega',
     entidade_id=custo.id,
@@ -530,5 +636,32 @@ function excluirAnexo(anexoId) {
         else { alert(data.erro || 'Erro'); }
     });
 }
+
+// Polling de emissao CTe Complementar
+{% if emissao_comp and emissao_comp.status in ('PENDENTE', 'EM_PROCESSAMENTO') %}
+(function() {
+    var pollUrl = '{{ url_for("carvia.status_emissao_cte_complementar", emissao_comp_id=emissao_comp.id) }}';
+    var intervalId = setInterval(function() {
+        fetch(pollUrl)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var el = document.getElementById('emissao-status');
+                if (!el) { clearInterval(intervalId); return; }
+
+                if (data.status === 'SUCESSO') {
+                    clearInterval(intervalId);
+                    location.reload();
+                } else if (data.status === 'ERRO') {
+                    clearInterval(intervalId);
+                    location.reload();
+                } else if (data.etapa) {
+                    var small = el.querySelector('small');
+                    if (small) { small.textContent = '(' + data.etapa + ')'; }
+                }
+            })
+            .catch(function() { /* silenciar erros de rede */ });
+    }, 3000); // Poll a cada 3 segundos
+})();
+{% endif %}
 </script>
 {% endblock %}

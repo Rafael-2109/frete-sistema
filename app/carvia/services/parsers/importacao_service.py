@@ -1511,6 +1511,7 @@ class ImportacaoService:
             tipo_entrada='IMPORTADO',
             status='RASCUNHO',
             criado_por=criado_por,
+            icms_aliquota=cte_data.get('impostos', {}).get('aliquota_icms'),
         )
 
     def _vincular_nfs(self, operacao: CarviaOperacao, nfs_ref: List[Dict],

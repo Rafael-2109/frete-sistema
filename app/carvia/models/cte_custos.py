@@ -221,3 +221,70 @@ class CarviaCustoEntregaAnexo(db.Model):
 
     def __repr__(self):
         return f'<CarviaCustoEntregaAnexo {self.nome_original} ativo={self.ativo}>'
+
+
+class CarviaEmissaoCteComplementar(db.Model):
+    """Tracking de emissao automatica de CTe Complementar no SSW (opcao 222).
+
+    Lifecycle: PENDENTE → EM_PROCESSAMENTO → SUCESSO | ERRO
+    1 emissao por custo de entrega (1:1).
+    """
+    __tablename__ = 'carvia_emissao_cte_complementar'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Vinculos
+    custo_entrega_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_custos_entrega.id'),
+        nullable=False,
+        index=True
+    )
+    cte_complementar_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_cte_complementares.id'),
+        nullable=False,
+        index=True
+    )
+    operacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_operacoes.id'),
+        nullable=False,
+        index=True
+    )
+
+    # Dados para SSW opcao 222
+    ctrc_pai = db.Column(db.String(30), nullable=False)  # CTRC do CTe original (ex: CAR-113-9)
+    motivo_ssw = db.Column(db.String(5), nullable=False)  # C/D/E/R
+    filial_ssw = db.Column(db.String(10), nullable=False, default='CAR')
+    valor_calculado = db.Column(db.Numeric(15, 2), nullable=False)
+    icms_aliquota_usada = db.Column(db.Numeric(5, 2))  # Snapshot do ICMS usado no calculo
+
+    # Status: PENDENTE | EM_PROCESSAMENTO | SUCESSO | ERRO
+    status = db.Column(db.String(20), nullable=False, default='PENDENTE', index=True)
+    etapa = db.Column(db.String(30))  # PREENCHIMENTO | SEFAZ | CONSULTA_101
+    job_id = db.Column(db.String(100))
+    erro_ssw = db.Column(db.Text)
+    resultado_json = db.Column(db.JSON)
+
+    # Auditoria
+    criado_por = db.Column(db.String(100), nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+
+    # Relacionamentos
+    custo_entrega = db.relationship(
+        'CarviaCustoEntrega',
+        backref=db.backref('emissao_cte_comp', uselist=False)
+    )
+    cte_complementar = db.relationship(
+        'CarviaCteComplementar',
+        backref=db.backref('emissao', uselist=False)
+    )
+    operacao = db.relationship('CarviaOperacao')
+
+    def __repr__(self):
+        return (
+            f'<CarviaEmissaoCteComplementar {self.id} '
+            f'custo={self.custo_entrega_id} ({self.status})>'
+        )
