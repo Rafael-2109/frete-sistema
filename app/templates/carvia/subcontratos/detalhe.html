@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+{% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2>
-                <i class="fas fa-handshake"></i> CTe Subcontrato #{{ sub.id }}
+                <i class="fas fa-handshake"></i> CTe Subcontrato {{ sub.cte_numero or '(Sem CTe)' }}
                 <span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span>
             </h2>
             <p class="text-muted mb-0">
@@ -133,8 +134,8 @@
                     <div class="row g-3">
                         <div class="col-6">
                             <small class="text-muted d-block">CTe CarVia</small>
-                            <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}">
-                                <strong>#{{ operacao.id }} — {{ operacao.cte_numero or 'Sem CTe' }}</strong>
+                            <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="text-decoration-none">
+                                {{ carvia_ref(operacao.cte_numero, operacao.ctrc_numero, fallback='Sem CTe') }}
                             </a>
                         </div>
                         <div class="col-6">
@@ -197,10 +198,7 @@
                                 {% for op in operacoes_disponiveis %}
                                 <tr>
                                     <td>
-                                        <strong>#{{ op.id }}</strong>
-                                        {% if op.cte_numero %}
-                                        <small class="text-muted">CTe {{ op.cte_numero }}</small>
-                                        {% endif %}
+                                        {{ carvia_ref(op.cte_numero, op.ctrc_numero) }}
                                     </td>
                                     <td>{{ op.nome_cliente or op.cnpj_cliente }}</td>
                                     <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
@@ -212,7 +210,7 @@
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <input type="hidden" name="operacao_id" value="{{ op.id }}">
                                             <button type="submit" class="btn btn-sm btn-success"
-                                                    onclick="return confirm('Vincular este subcontrato ao CTe CarVia #{{ op.id }}?')">
+                                                    onclick="return confirm('Vincular este subcontrato ao CTe CarVia {{ op.cte_numero or op.id }}?')">
                                                 <i class="fas fa-link"></i> Vincular
                                             </button>
                                         </form>
@@ -382,7 +380,7 @@
                         <table class="table table-sm table-hover mb-0 carvia-table">
                             <thead>
                                 <tr>
-                                    <th>Numero</th>
+                                    <th>CTe Complementar</th>
                                     <th class="text-end">Valor</th>
                                     <th>Status</th>
                                     <th></th>
@@ -391,7 +389,11 @@
                             <tbody>
                                 {% for cc in ctes_complementares %}
                                 <tr>
-                                    <td><strong>{{ cc.numero_comp }}</strong></td>
+                                    <td>
+                                        <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=cc.id) }}" class="text-decoration-none">
+                                            {{ carvia_ref(cc.cte_numero, cc.ctrc_numero) }}
+                                        </a>
+                                    </td>
                                     <td class="valor-col">{{ cc.cte_valor|valor_br }}</td>
                                     <td><span class="badge carvia-badge-{{ cc.status|lower }}">{{ cc.status }}</span></td>
                                     <td>
@@ -482,11 +484,11 @@
 {{ modal_admin_excluir(
     entidade_tipo='subcontrato',
     entidade_id=sub.id,
-    entidade_label='Subcontrato #' ~ sub.id,
+    entidade_label='Subcontrato ' ~ (sub.cte_numero or ('#' ~ sub.id)),
     impacto_cascade=[
         'FKs em itens de fatura transportadora serao desvinculados',
     ],
-    bloqueios=(['Vinculado a fatura transportadora #' ~ sub.fatura_transportadora_id ~ '. Exclua a fatura primeiro.'] if sub.fatura_transportadora_id else [])
+    bloqueios=(['Vinculado a fatura transportadora ' ~ (sub.fatura_transportadora.numero_fatura if sub.fatura_transportadora else '#' ~ sub.fatura_transportadora_id) ~ '. Exclua a fatura primeiro.'] if sub.fatura_transportadora_id else [])
 ) }}
 {% endblock %}
 

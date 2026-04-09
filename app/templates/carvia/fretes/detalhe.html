@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Frete CarVia #{{ frete.id }}{% endblock %}
+{% block title %}Frete CarVia {{ frete.ctrc_numero or ('#' ~ frete.id) }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -11,7 +11,7 @@
     <div class="row">
         <div class="col-12">
             <h1 class="h3 mb-2">
-                <i class="fas fa-file-invoice"></i> Frete CarVia #{{ frete.id }}
+                <i class="fas fa-file-invoice"></i> Frete CarVia {{ frete.ctrc_numero or '(sem CTRC)' }}
                 <span class="badge carvia-badge-{{ frete.status|lower }} ms-2">{{ frete.status }}</span>
             </h1>
             <p class="text-muted mb-4">

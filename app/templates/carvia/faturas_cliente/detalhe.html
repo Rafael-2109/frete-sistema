@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+{% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -363,7 +364,6 @@
                     <thead>
                         <tr>
                             <th>CTe CarVia</th>
-                            <th>CTe</th>
                             <th>Destino</th>
                             <th>Peso</th>
                             <th>Valor CTe</th>
@@ -374,11 +374,10 @@
                         {% for op in operacoes %}
                         <tr>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}">
-                                    <strong>#{{ op.id }}</strong>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}" class="text-decoration-none">
+                                    {{ carvia_ref(op.cte_numero, op.ctrc_numero) }}
                                 </a>
                             </td>
-                            <td>{{ op.cte_numero or '-' }}</td>
                             <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
                             <td>{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }} kg</td>
                             <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
@@ -401,9 +400,8 @@
                 <table class="table table-sm table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>Numero</th>
-                            <th>CTe</th>
-                            <th>Operacao</th>
+                            <th>CTe Complementar</th>
+                            <th>CTe do Frete</th>
                             <th>Valor</th>
                             <th>Status</th>
                             {% if fatura.status not in ('PAGA', 'CANCELADA') %}
@@ -415,14 +413,13 @@
                         {% for comp in ctes_complementares %}
                         <tr>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=comp.id) }}">
-                                    <strong>{{ comp.numero_comp }}</strong>
+                                <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=comp.id) }}" class="text-decoration-none">
+                                    {{ carvia_ref(comp.cte_numero, comp.ctrc_numero) }}
                                 </a>
                             </td>
-                            <td>{{ comp.cte_numero or '-' }}</td>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=comp.operacao_id) }}">
-                                    #{{ comp.operacao_id }}
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=comp.operacao_id) }}" class="text-decoration-none">
+                                    {{ carvia_ref(comp.operacao.cte_numero if comp.operacao else None, comp.operacao.ctrc_numero if comp.operacao else None, fallback='-') }}
                                 </a>
                             </td>
                             <td class="valor-col">{{ comp.cte_valor|valor_br }}</td>
@@ -430,7 +427,7 @@
                             {% if fatura.status not in ('PAGA', 'CANCELADA') %}
                             <td class="text-center">
                                 <button type="button" class="btn btn-outline-danger btn-xs"
-                                        onclick="desvincularComp({{ comp.id }}, '{{ comp.numero_comp }}')"
+                                        onclick="desvincularComp({{ comp.id }}, '{{ comp.cte_numero or ('#' ~ comp.id) }}')"
                                         title="Desvincular CTe Complementar">
                                     <i class="fas fa-unlink"></i>
                                 </button>
@@ -457,7 +454,7 @@
                     <thead>
                         <tr>
                             <th>Numero</th>
-                            <th>Operacao</th>
+                            <th>CTe do Frete</th>
                             <th>Tipo</th>
                             <th>Descricao</th>
                             <th class="text-end">Valor</th>
@@ -470,7 +467,9 @@
                         <tr>
                             <td><strong>{{ custo.numero_custo }}</strong></td>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=custo.operacao_id) }}">#{{ custo.operacao_id }}</a>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=custo.operacao_id) }}" class="text-decoration-none">
+                                    {{ carvia_ref(custo.operacao.cte_numero if custo.operacao else None, custo.operacao.ctrc_numero if custo.operacao else None, fallback='-') }}
+                                </a>
                             </td>
                             <td><span class="badge bg-secondary">{{ custo.tipo_custo }}</span></td>
                             <td>{{ custo.descricao or '-' }}</td>
@@ -720,15 +719,17 @@ function buscarOpsDisponiveis(busca) {
                 var item = document.createElement('button');
                 item.type = 'button';
                 item.className = 'list-group-item list-group-item-action py-2';
+                var label = op.cte_numero || 'Aguardando emissao';
+                var ctrc = op.ctrc_numero ? ' <small class="text-info">CTRC SSW ' + op.ctrc_numero + '</small>' : '';
                 item.innerHTML =
                     '<div class="d-flex justify-content-between">' +
-                        '<strong>' + (op.cte_numero || '#' + op.id) + '</strong>' +
+                        '<div><strong>' + label + '</strong>' + ctrc + '</div>' +
                         '<span>' + (op.cte_valor ? 'R$ ' + op.cte_valor.toFixed(2) : '-') + '</span>' +
                     '</div>' +
                     '<small class="text-muted">' + (op.nome_cliente || '-') + ' | ' + (op.destino || '-') +
                     ' | <span class="badge bg-secondary">' + op.status + '</span></small>';
                 item.addEventListener('click', function() {
-                    vincularOp(op.id, op.cte_numero || '#' + op.id);
+                    vincularOp(op.id, label);
                 });
                 opResultados.appendChild(item);
             });
@@ -823,16 +824,18 @@ function buscarCompsDisponiveis(busca) {
                 var item = document.createElement('button');
                 item.type = 'button';
                 item.className = 'list-group-item list-group-item-action py-2';
+                var label = comp.cte_numero || 'Aguardando emissao';
+                var ctrc = comp.ctrc_numero ? ' <small class="text-info">CTRC SSW ' + comp.ctrc_numero + '</small>' : '';
+                var paiLabel = comp.operacao_cte_numero || '-';
                 item.innerHTML =
                     '<div class="d-flex justify-content-between">' +
-                        '<strong>' + comp.numero_comp + '</strong>' +
+                        '<div><strong>' + label + '</strong>' + ctrc + '</div>' +
                         '<span>' + (comp.cte_valor ? 'R$ ' + comp.cte_valor.toFixed(2) : '-') + '</span>' +
                     '</div>' +
-                    '<small class="text-muted">CTe ' + (comp.cte_numero || '-') + ' | ' +
-                    (comp.nome_cliente || '-') + ' | Op #' + (comp.operacao_id || '-') +
+                    '<small class="text-muted">' + (comp.nome_cliente || '-') + ' | CTe do Frete: ' + paiLabel +
                     ' | <span class="badge bg-secondary">' + comp.status + '</span></small>';
                 item.addEventListener('click', function() {
-                    vincularComp(comp.id, comp.numero_comp);
+                    vincularComp(comp.id, label);
                 });
                 compResultados.appendChild(item);
             });

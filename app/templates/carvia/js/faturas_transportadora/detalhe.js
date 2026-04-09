@@ -55,7 +55,7 @@ function conferirSubcontrato(subId) {
         const op = data.operacao_info;
 
         document.getElementById('modalConferenciaLabel').innerHTML =
-            `<i class="fas fa-search-dollar"></i> Conferencia — ${sub.cte_numero || '#' + sub.id}`;
+            `<i class="fas fa-search-dollar"></i> Conferencia — ${sub.cte_numero || 'Aguardando emissao'}`;
 
         document.getElementById('conf-cte-valor').textContent = formatarValor(sub.cte_valor);
         document.getElementById('conf-valor-cotado').textContent = formatarValor(sub.valor_cotado);

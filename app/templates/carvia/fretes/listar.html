@@ -39,9 +39,9 @@
                 <form method="GET">
                 <div class="row g-2 align-items-end">
                     <div class="col-md-1">
-                        <label class="form-label small">Frete ID</label>
+                        <label class="form-label small">CTRC</label>
                         <input type="text" name="id" class="form-control form-control-sm"
-                               placeholder="ID..." value="{{ filtro_id }}">
+                               placeholder="CTRC..." value="{{ filtro_id }}">
                     </div>
                     <div class="col-md-1">
                         <label class="form-label small">Embarque</label>
@@ -119,7 +119,7 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
+                            <th>CTRC</th>
                             <th>Emitente</th>
                             <th>Destino</th>
                             <th>Embarque</th>
@@ -137,7 +137,9 @@
                         {% for frete in fretes %}
                         <tr>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}">#{{ frete.id }}</a>
+                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}" class="text-decoration-none">
+                                    <strong>{{ frete.ctrc_numero or 'Sem CTRC' }}</strong>
+                                </a>
                             </td>
                             <td>
                                 <span title="{{ frete.nome_emitente or '' }}">

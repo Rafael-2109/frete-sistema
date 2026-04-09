@@ -202,12 +202,9 @@
                            class="list-group-item list-group-item-action">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <strong>CTe CarVia #{{ op.id }}</strong>
-                                    {% if op.cte_numero %}
-                                    <span class="text-muted">— CTe {{ op.cte_numero }}</span>
-                                    {% endif %}
+                                    <strong>CTe CarVia {{ op.cte_numero or '(sem CTe)' }}</strong>
                                     {% if op.ctrc_numero %}
-                                    <span class="text-info small ms-1">({{ op.ctrc_numero }})</span>
+                                    <span class="text-info small ms-1">CTRC SSW {{ op.ctrc_numero }}</span>
                                     {% endif %}
                                 </div>
                                 <span class="badge carvia-badge-{{ op.status|lower }}">{{ op.status }}</span>
@@ -239,7 +236,7 @@
                 <table class="table table-sm table-hover mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>ID</th>
+                            <th>CTRC</th>
                             <th>Status</th>
                             <th>Transportadora</th>
                             <th>Tipo Carga</th>
@@ -252,8 +249,8 @@
                         {% for frete in fretes_nf %}
                         <tr>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_frete_carvia', frete_id=frete.id) }}">
-                                    #{{ frete.id }}
+                                <a href="{{ url_for('carvia.detalhe_frete_carvia', frete_id=frete.id) }}" class="text-decoration-none">
+                                    <strong>{{ frete.ctrc_numero or 'Sem CTRC' }}</strong>
                                 </a>
                             </td>
                             <td><span class="badge carvia-badge-{{ frete.status|lower }}">{{ frete.status }}</span></td>
@@ -512,7 +509,7 @@
                         <table class="table table-sm table-hover mb-0 carvia-table">
                             <thead>
                                 <tr>
-                                    <th>Numero</th>
+                                    <th>CTe Complementar</th>
                                     <th class="text-end">Valor</th>
                                     <th>Data Emissao</th>
                                     <th>Status</th>
@@ -522,7 +519,12 @@
                             <tbody>
                                 {% for cc in ctes_complementares %}
                                 <tr>
-                                    <td><strong>{{ cc.numero_comp }}</strong></td>
+                                    <td>
+                                        <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=cc.id) }}" class="text-decoration-none">
+                                            <strong>{{ cc.cte_numero or '(Aguardando)' }}</strong>
+                                            {% if cc.ctrc_numero %}<small class="text-info d-block">CTRC SSW {{ cc.ctrc_numero }}</small>{% endif %}
+                                        </a>
+                                    </td>
                                     <td class="valor-col">{{ cc.cte_valor|valor_br }}</td>
                                     <td>{{ cc.cte_data_emissao.strftime('%d/%m/%Y') if cc.cte_data_emissao else '-' }}</td>
                                     <td><span class="badge carvia-badge-{{ cc.status|lower }}">{{ cc.status }}</span></td>

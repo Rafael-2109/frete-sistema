@@ -350,7 +350,9 @@ def register_fatura_routes(bp):
                 CarviaOperacao.fatura_cliente_id.is_(None),
             ).order_by(CarviaOperacao.cte_data_emissao.desc().nullslast()).all()
 
-            ctes_comp_disponiveis = db.session.query(CarviaCteComplementar).filter(
+            ctes_comp_disponiveis = db.session.query(CarviaCteComplementar).options(
+                db.joinedload(CarviaCteComplementar.operacao)
+            ).filter(
                 CarviaCteComplementar.cnpj_cliente == cnpj_selecionado,
                 CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
                 CarviaCteComplementar.fatura_cliente_id.is_(None),
@@ -453,10 +455,11 @@ def register_fatura_routes(bp):
                 CarviaFaturaTransportadora.id.in_(fat_transp_ids)
             ).all()
 
-        # CTe Complementares vinculados a esta fatura
-        ctes_complementares = CarviaCteComplementar.query.filter_by(
-            fatura_cliente_id=fatura_id
-        ).all()
+        # CTe Complementares vinculados a esta fatura (joinedload para evitar N+1
+        # quando o template acessa comp.operacao.cte_numero/ctrc_numero)
+        ctes_complementares = CarviaCteComplementar.query.options(
+            db.joinedload(CarviaCteComplementar.operacao)
+        ).filter_by(fatura_cliente_id=fatura_id).all()
 
         # Condicoes comerciais via lookup fretes (sem colunas na fatura)
         condicoes_comerciais = None
@@ -472,11 +475,14 @@ def register_fatura_routes(bp):
             if frete_com_cond:
                 condicoes_comerciais = frete_com_cond
 
-        # Custos de entrega via operacoes
+        # Custos de entrega via operacoes (joinedload para evitar N+1 no template
+        # que acessa custo.operacao.cte_numero/ctrc_numero)
         from app.carvia.models import CarviaCustoEntrega
         custos_entrega = []
         if op_ids:
-            custos_entrega = CarviaCustoEntrega.query.filter(
+            custos_entrega = CarviaCustoEntrega.query.options(
+                db.joinedload(CarviaCustoEntrega.operacao)
+            ).filter(
                 CarviaCustoEntrega.operacao_id.in_(op_ids)
             ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
 
@@ -1298,7 +1304,9 @@ def register_fatura_routes(bp):
             flash('Fatura nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_faturas_transportadora'))
 
-        subcontratos = db.session.query(CarviaSubcontrato).filter(
+        subcontratos = db.session.query(CarviaSubcontrato).options(
+            db.joinedload(CarviaSubcontrato.operacao)
+        ).filter(
             CarviaSubcontrato.fatura_transportadora_id == fatura_id
         ).order_by(CarviaSubcontrato.cte_data_emissao.desc().nullslast()).all()
 
@@ -1623,6 +1631,7 @@ def register_fatura_routes(bp):
             'operacoes': [{
                 'id': op.id,
                 'cte_numero': op.cte_numero,
+                'ctrc_numero': op.ctrc_numero,
                 'nome_cliente': op.nome_cliente,
                 'cnpj_cliente': op.cnpj_cliente,
                 'cte_valor': float(op.cte_valor) if op.cte_valor else None,
@@ -1765,7 +1774,9 @@ def register_fatura_routes(bp):
                 CarviaCteComplementar.observacoes.ilike(busca_like),
             ))
 
-        comps = query.order_by(CarviaCteComplementar.cte_data_emissao.desc().nullslast()).limit(50).all()
+        comps = query.options(
+            db.joinedload(CarviaCteComplementar.operacao)
+        ).order_by(CarviaCteComplementar.cte_data_emissao.desc().nullslast()).limit(50).all()
 
         return jsonify({
             'sucesso': True,
@@ -1773,10 +1784,13 @@ def register_fatura_routes(bp):
                 'id': c.id,
                 'numero_comp': c.numero_comp,
                 'cte_numero': c.cte_numero,
+                'ctrc_numero': c.ctrc_numero,
                 'nome_cliente': c.nome_cliente,
                 'cnpj_cliente': c.cnpj_cliente,
                 'cte_valor': float(c.cte_valor) if c.cte_valor else None,
                 'status': c.status,
                 'operacao_id': c.operacao_id,
+                'operacao_cte_numero': c.operacao.cte_numero if c.operacao else None,
+                'operacao_ctrc_numero': c.operacao.ctrc_numero if c.operacao else None,
             } for c in comps],
         })

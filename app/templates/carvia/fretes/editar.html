@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Editar Frete CarVia #{{ frete.id }}{% endblock %}
+{% block title %}Editar Frete CarVia {{ frete.ctrc_numero or ('#' ~ frete.id) }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
             <h1 class="h3 mb-4">
-                <i class="fas fa-edit"></i> Editar Frete CarVia #{{ frete.id }}
+                <i class="fas fa-edit"></i> Editar Frete CarVia {{ frete.ctrc_numero or '(sem CTRC)' }}
             </h1>
         </div>
     </div>
@@ -17,7 +17,7 @@
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
             <li class="breadcrumb-item"><a href="{{ url_for('carvia.listar_fretes_carvia') }}">Fretes</a></li>
-            <li class="breadcrumb-item"><a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}">Frete #{{ frete.id }}</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}">Frete {{ frete.ctrc_numero or ('#' ~ frete.id) }}</a></li>
             <li class="breadcrumb-item active">Editar</li>
         </ol>
     </nav>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -152,8 +153,7 @@
                         <thead>
                             <tr>
                                 <th width="30"><input type="checkbox" id="check-all"></th>
-                                <th>Operacao</th>
-                                <th>CTe</th>
+                                <th>CTe CarVia</th>
                                 <th>Destino</th>
                                 <th>Valor CTe</th>
                                 <th>Emissão</th>
@@ -165,8 +165,7 @@
                                 <td>
                                     <input type="checkbox" name="operacao_ids" value="{{ op.id }}" class="op-check">
                                 </td>
-                                <td><strong>#{{ op.id }}</strong></td>
-                                <td>{{ op.cte_numero or '-' }}</td>
+                                <td>{{ carvia_ref(op.cte_numero, op.ctrc_numero) }}</td>
                                 <td>{{ op.cidade_destino }}/{{ op.uf_destino }}</td>
                                 <td class="valor-col">{{ op.cte_valor|valor_br if op.cte_valor else '-' }}</td>
                                 <td title="Importado em: {{ op.criado_em.strftime('%d/%m/%Y %H:%M') if op.criado_em else '-' }}">
@@ -200,9 +199,8 @@
                         <thead>
                             <tr>
                                 <th width="30"><input type="checkbox" id="check-all-comp"></th>
-                                <th>Numero</th>
-                                <th>CTe</th>
-                                <th>Operacao</th>
+                                <th>CTe Complementar</th>
+                                <th>CTe do Frete</th>
                                 <th>Valor</th>
                                 <th>Status</th>
                             </tr>
@@ -211,9 +209,8 @@
                             {% for comp in ctes_comp_disponiveis %}
                             <tr>
                                 <td><input type="checkbox" name="cte_comp_ids" value="{{ comp.id }}" class="comp-check"></td>
-                                <td><strong>{{ comp.numero_comp }}</strong></td>
-                                <td>{{ comp.cte_numero or '-' }}</td>
-                                <td>#{{ comp.operacao_id }}</td>
+                                <td>{{ carvia_ref(comp.cte_numero, comp.ctrc_numero) }}</td>
+                                <td>{{ carvia_ref(comp.operacao.cte_numero if comp.operacao else None, comp.operacao.ctrc_numero if comp.operacao else None, fallback='-') }}</td>
                                 <td class="valor-col">{{ comp.cte_valor|valor_br }}</td>
                                 <td><span class="badge carvia-badge-{{ comp.status|lower }}">{{ comp.status }}</span></td>
                             </tr>

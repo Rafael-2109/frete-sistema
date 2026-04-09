@@ -4,7 +4,10 @@
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2><i class="fas fa-cube"></i> Cubagem — CTe CarVia #{{ operacao.id }}</h2>
+            <h2><i class="fas fa-cube"></i> Cubagem — CTe CarVia {{ operacao.cte_numero or '(sem CTe)' }}</h2>
+            {% if operacao.ctrc_numero %}
+            <div class="text-muted small"><strong>CTRC SSW</strong> {{ operacao.ctrc_numero }}</div>
+            {% endif %}
             <p class="text-muted mb-0">
                 {{ operacao.nome_cliente }} |
                 {{ operacao.cidade_destino }}/{{ operacao.uf_destino }}

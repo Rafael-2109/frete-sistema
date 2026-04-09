@@ -25,3 +25,35 @@
     </a>
   </th>
 {% endmacro %}
+
+{#
+  carvia_ref — Renderiza referencia a CTe/CTRC de forma uniforme.
+
+  Substitui o padrao antigo de exibir "#id" ou "numero_comp" por uma
+  referencia semanticamente significativa para o usuario (CTe + CTRC SSW).
+
+  Params:
+    cte_numero  - string (ex: "CTe-013", "Sub-027", "2037") ou None
+    ctrc_numero - string (ex: "CAR-113-9") ou None
+    fallback    - texto exibido quando AMBOS sao None (default: 'Aguardando emissao')
+    compact     - se True, omite o prefixo "CTRC SSW " (uso em listagens densas)
+
+  Exemplos:
+    {{ carvia_ref(op.cte_numero, op.ctrc_numero) }}
+    {{ carvia_ref(sub.cte_numero, None, fallback='Sem CTe') }}
+    {{ carvia_ref(frete.cte_numero, frete.ctrc_numero, compact=True) }}
+#}
+{% macro carvia_ref(cte_numero, ctrc_numero, fallback='Aguardando emissao', compact=False) -%}
+  {%- if cte_numero or ctrc_numero -%}
+    {%- if cte_numero %}<strong>{{ cte_numero }}</strong>{% endif -%}
+    {%- if ctrc_numero -%}
+      {%- if compact %}
+      <small class="text-info d-block">{{ ctrc_numero }}</small>
+      {%- else %}
+      <small class="text-info d-block">CTRC SSW {{ ctrc_numero }}</small>
+      {%- endif -%}
+    {%- endif -%}
+  {%- else -%}
+    <em class="text-muted">{{ fallback }}</em>
+  {%- endif -%}
+{%- endmacro %}

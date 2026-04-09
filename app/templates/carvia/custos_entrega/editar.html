@@ -58,7 +58,7 @@
                                     {% for comp in ctes_complementares %}
                                     <option value="{{ comp.id }}"
                                             {{ 'selected' if custo.cte_complementar_id == comp.id }}>
-                                        {{ comp.numero_comp }} ({{ comp.cte_valor|valor_br }})
+                                        CTe Comp. {{ comp.cte_numero or '(Aguardando)' }}{% if comp.ctrc_numero %} — CTRC {{ comp.ctrc_numero }}{% endif %} ({{ comp.cte_valor|valor_br }})
                                     </option>
                                     {% endfor %}
                                 </select>

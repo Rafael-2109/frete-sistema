@@ -51,10 +51,13 @@ def register_frete_routes(bp):
         query = CarviaFrete.query
 
         if filtro_id:
+            # Busca por CTRC (ilike) ou, se for numero puro, tambem por id (backcompat)
+            conditions = [CarviaFrete.ctrc_numero.ilike(f'%{filtro_id}%')]
             try:
-                query = query.filter(CarviaFrete.id == int(filtro_id))
+                conditions.append(CarviaFrete.id == int(filtro_id))
             except ValueError:
                 pass
+            query = query.filter(db.or_(*conditions))
         if filtro_embarque:
             from app.embarques.models import Embarque
             query = query.join(Embarque).filter(Embarque.numero.ilike(f'%{filtro_embarque}%'))

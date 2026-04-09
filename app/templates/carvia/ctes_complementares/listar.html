@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "carvia/_macros.html" import th_sort %}
+{% from "carvia/_macros.html" import th_sort, carvia_ref %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -74,10 +74,8 @@
                 <table class="table table-hover mb-0 carvia-table">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            {{ th_sort('numero_comp', 'Numero COMP', sort, direction) }}
-                            <th>CTe</th>
-                            <th>Operacao</th>
+                            <th>CTe Complementar</th>
+                            <th>CTe do Frete</th>
                             <th>Cliente</th>
                             {{ th_sort('cte_valor', 'Valor', sort, direction, 'text-end') }}
                             {{ th_sort('status', 'Status', sort, direction) }}
@@ -88,22 +86,17 @@
                     <tbody>
                         {% for comp in ctes_complementares %}
                         <tr>
-                            <td><strong>{{ comp.id }}</strong></td>
-                            <td><strong>{{ comp.numero_comp }}</strong></td>
                             <td>
-                                {% set op_info = op_info_map.get(comp.operacao_id, {}) %}
-                                <strong>{{ op_info.get('cte_numero', '-') }}</strong>
-                                {% if comp.cte_numero %}
-                                <small class="text-muted d-block">nCT: {{ comp.cte_numero }}</small>
-                                {% endif %}
-                                {% if op_info.get('ctrc_numero') %}
-                                <small class="text-info d-block">{{ op_info.ctrc_numero }}</small>
-                                {% endif %}
+                                <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=comp.id) }}"
+                                   class="text-decoration-none">
+                                    {{ carvia_ref(comp.cte_numero, comp.ctrc_numero) }}
+                                </a>
                             </td>
                             <td>
+                                {% set op_info = op_info_map.get(comp.operacao_id, {}) %}
                                 <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=comp.operacao_id) }}"
                                    class="text-decoration-none">
-                                    #{{ comp.operacao_id }}
+                                    {{ carvia_ref(op_info.get('cte_numero'), op_info.get('ctrc_numero'), fallback='-') }}
                                 </a>
                             </td>
                             <td>{{ comp.nome_cliente or comp.cnpj_cliente or '-' }}</td>

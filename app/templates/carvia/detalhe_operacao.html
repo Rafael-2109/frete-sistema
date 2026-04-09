@@ -1,14 +1,19 @@
 {% extends "base.html" %}
 {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+{% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2>
-                <i class="fas fa-file-invoice"></i> CTe CarVia #{{ operacao.id }}
+                <i class="fas fa-file-invoice"></i>
+                CTe CarVia {{ operacao.cte_numero or '(sem CTe)' }}
                 <span class="badge carvia-badge-{{ operacao.status|lower }}">{{ operacao.status }}</span>
             </h2>
+            {% if operacao.ctrc_numero %}
+            <p class="text-muted mb-0 small"><strong>CTRC SSW</strong> {{ operacao.ctrc_numero }}</p>
+            {% endif %}
             <p class="text-muted mb-0">
                 {{ operacao.tipo_entrada }} | Criado em {{ operacao.criado_em|formatar_data_hora_brasil if operacao.criado_em else '-' }}
                 por {{ operacao.criado_por }}
@@ -437,12 +442,15 @@
             {% if ctes_complementares %}
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0 carvia-table">
-                    <thead><tr><th>Numero</th><th>CTe</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>CTe Complementar</th><th>Valor</th><th>Status</th><th></th></tr></thead>
                     <tbody>
                         {% for comp in ctes_complementares %}
                         <tr>
-                            <td><strong>{{ comp.numero_comp }}</strong></td>
-                            <td>{{ comp.cte_numero or '-' }}</td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=comp.id) }}" class="text-decoration-none">
+                                    {{ carvia_ref(comp.cte_numero, comp.ctrc_numero) }}
+                                </a>
+                            </td>
                             <td class="valor-col">{{ comp.cte_valor|valor_br }}</td>
                             <td><span class="badge carvia-badge-{{ comp.status|lower }}">{{ comp.status }}</span></td>
                             <td>

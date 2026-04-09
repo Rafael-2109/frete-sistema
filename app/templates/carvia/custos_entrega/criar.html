@@ -27,7 +27,7 @@
                                     {% for op in operacoes %}
                                     <option value="{{ op.id }}"
                                             {{ 'selected' if request.args.get('operacao_id')|int(0) == op.id }}>
-                                        #{{ op.id }} - {{ op.nome_cliente or op.cnpj_cliente }} ({{ op.cte_numero or 'Sem CTe' }})
+                                        {{ op.cte_numero or 'Sem CTe' }}{% if op.ctrc_numero %} — CTRC {{ op.ctrc_numero }}{% endif %} - {{ op.nome_cliente or op.cnpj_cliente }}
                                     </option>
                                     {% endfor %}
                                 </select>
@@ -39,7 +39,7 @@
                                     {% for comp in ctes_complementares %}
                                     <option value="{{ comp.id }}"
                                             {{ 'selected' if request.args.get('cte_comp_id')|int(0) == comp.id }}>
-                                        {{ comp.numero_comp }} - Op #{{ comp.operacao_id }} ({{ comp.cte_valor|valor_br }})
+                                        CTe Comp. {{ comp.cte_numero or '(Aguardando)' }}{% if comp.ctrc_numero %} — CTRC {{ comp.ctrc_numero }}{% endif %} ({{ comp.cte_valor|valor_br }})
                                     </option>
                                     {% endfor %}
                                 </select>

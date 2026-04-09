@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+{% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block title %}Fatura Subcontrato - {{ fatura.numero_fatura }}{% endblock %}
 
@@ -334,12 +335,15 @@
                         {% for sub in subcontratos %}
                         <tr id="sub-row-{{ sub.id }}">
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}" title="Ver CTe Subcontrato">
-                                    <strong>{{ sub.cte_numero or '#' ~ sub.id }}</strong>
+                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}" class="text-decoration-none" title="Ver CTe Subcontrato">
+                                    {{ carvia_ref(sub.cte_numero, None, fallback='Sem CTe') }}
                                 </a>
                                 {% if sub.operacao_id %}
-                                <small class="text-muted">
-                                    (<a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}">Op #{{ sub.operacao_id }}</a>)
+                                <small class="text-muted d-block">
+                                    Frete:
+                                    <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=sub.operacao_id) }}" class="text-decoration-none">
+                                        {{ sub.operacao.cte_numero if sub.operacao and sub.operacao.cte_numero else '-' }}{% if sub.operacao and sub.operacao.ctrc_numero %} <span class="text-info">CTRC {{ sub.operacao.ctrc_numero }}</span>{% endif %}
+                                    </a>
                                 </small>
                                 {% endif %}
                             </td>
@@ -532,10 +536,7 @@
                            class="list-group-item list-group-item-action py-2">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <strong>#{{ op.id }}</strong>
-                                    {% if op.cte_numero %}
-                                    <span class="text-muted">— CTe {{ op.cte_numero }}</span>
-                                    {% endif %}
+                                    {{ carvia_ref(op.cte_numero, op.ctrc_numero, fallback='Sem CTe') }}
                                 </div>
                                 <span class="badge carvia-badge-{{ op.status|lower }}">{{ op.status }}</span>
                             </div>
@@ -885,7 +886,7 @@
                         <table class="table table-sm table-hover mb-0 carvia-table">
                             <thead>
                                 <tr>
-                                    <th>Numero</th>
+                                    <th>CTe Complementar</th>
                                     <th class="text-end">Valor</th>
                                     <th>Status</th>
                                     <th></th>
@@ -894,7 +895,11 @@
                             <tbody>
                                 {% for cc in ctes_complementares %}
                                 <tr>
-                                    <td><strong>{{ cc.numero_comp }}</strong></td>
+                                    <td>
+                                        <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=cc.id) }}" class="text-decoration-none">
+                                            {{ carvia_ref(cc.cte_numero, cc.ctrc_numero) }}
+                                        </a>
+                                    </td>
                                     <td class="valor-col">{{ cc.cte_valor|valor_br }}</td>
                                     <td><span class="badge carvia-badge-{{ cc.status|lower }}">{{ cc.status }}</span></td>
                                     <td>

@@ -6,8 +6,8 @@
         <div>
             <h2><i class="fas fa-truck"></i> Adicionar Subcontrato</h2>
             <p class="text-muted mb-0">
-                Operacao #{{ operacao.id }}
-                {% if operacao.cte_numero %} ({{ operacao.cte_numero }}){% endif %} |
+                CTe CarVia {{ operacao.cte_numero or '(sem CTe)' }}
+                {% if operacao.ctrc_numero %}<span class="text-info">— CTRC SSW {{ operacao.ctrc_numero }}</span>{% endif %} |
                 {{ operacao.nome_cliente }} |
                 {{ operacao.cidade_destino }}/{{ operacao.uf_destino }} |
                 Peso: {{ operacao.peso_utilizado|numero_br(1) if operacao.peso_utilizado else '-' }} kg

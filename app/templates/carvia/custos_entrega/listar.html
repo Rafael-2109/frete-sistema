@@ -104,7 +104,7 @@
                             <td>
                                 {% if c.cte_complementar %}
                                 <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=c.cte_complementar.id) }}"
-                                   class="badge bg-success text-decoration-none">{{ c.cte_complementar.numero_comp }}</a>
+                                   class="badge bg-success text-decoration-none" title="CTe Complementar emitido">{{ c.cte_complementar.cte_numero or 'Aguardando' }}</a>
                                 {% else %}
                                 <span class="badge bg-warning text-dark" title="Sem CTe Complementar vinculado">Pendente</span>
                                 {% endif %}

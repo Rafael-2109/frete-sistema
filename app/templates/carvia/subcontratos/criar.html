@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -47,10 +48,7 @@
                         {% for op in operacoes_disponiveis %}
                         <tr>
                             <td>
-                                <strong>#{{ op.id }}</strong>
-                                {% if op.cte_numero %}
-                                <small class="text-muted">CTe {{ op.cte_numero }}</small>
-                                {% endif %}
+                                {{ carvia_ref(op.cte_numero, op.ctrc_numero) }}
                             </td>
                             <td>
                                 <span title="{{ op.cnpj_cliente }}" class="cnpj-col">
@@ -94,11 +92,9 @@
             <div class="row g-3">
                 <div class="col-md-3">
                     <small class="text-muted d-block">CTe CarVia</small>
-                    <strong>
-                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}">
-                            #{{ operacao.id }} {{ '— CTe ' + operacao.cte_numero if operacao.cte_numero else '' }}
-                        </a>
-                    </strong>
+                    <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="text-decoration-none">
+                        {{ carvia_ref(operacao.cte_numero, operacao.ctrc_numero, fallback='Sem CTe') }}
+                    </a>
                 </div>
                 <div class="col-md-3">
                     <small class="text-muted d-block">Cliente</small>
