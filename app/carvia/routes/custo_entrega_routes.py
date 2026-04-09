@@ -17,6 +17,7 @@ from app.carvia.models import (
     CarviaCustoEntrega, CarviaCustoEntregaAnexo, CarviaOperacao,
     CarviaCteComplementar, CarviaEmissaoCteComplementar,
 )
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -835,3 +836,96 @@ def register_custo_entrega_routes(bp):
             'erro': emissao.erro_ssw,
             'cte_complementar_id': emissao.cte_complementar_id,
         })
+
+    @bp.route(
+        '/api/custos-entrega/emissao-comp/<int:emissao_comp_id>/retry',
+        methods=['POST'],
+    )  # type: ignore
+    @login_required
+    def retry_emissao_cte_complementar(emissao_comp_id):  # type: ignore
+        """Re-enfileira emissao de CTe Complementar que ficou em ERRO.
+
+        Casos de uso: credenciais ausentes no env, timeout SSW, erro de rede,
+        worker down durante o processamento. Reseta status e job_id e chama
+        enqueue_job novamente reutilizando o mesmo cte_comp (RASCUNHO).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        emissao = db.session.get(
+            CarviaEmissaoCteComplementar, emissao_comp_id
+        )
+        if not emissao:
+            flash('Emissao nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        if emissao.status != 'ERRO':
+            flash(
+                f'Emissao nao esta em ERRO (status={emissao.status}). '
+                f'Nao pode re-tentar.',
+                'warning',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_custo_entrega',
+                custo_id=emissao.custo_entrega_id,
+            ))
+
+        # Guardar: cte_comp deve estar em RASCUNHO (senao ja emitiu)
+        cte_comp = db.session.get(
+            CarviaCteComplementar, emissao.cte_complementar_id
+        )
+        if cte_comp and cte_comp.status != 'RASCUNHO':
+            flash(
+                f'CTe Complementar ja esta em {cte_comp.status}, '
+                f'nao pode re-tentar.',
+                'warning',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_custo_entrega',
+                custo_id=emissao.custo_entrega_id,
+            ))
+
+        try:
+            # Reset da emissao
+            emissao.status = 'PENDENTE'
+            emissao.etapa = None
+            emissao.erro_ssw = None
+            emissao.atualizado_em = agora_utc_naive()
+            db.session.flush()
+
+            # Re-enfileirar job
+            from app.portal.workers import enqueue_job
+            from app.carvia.workers.ssw_cte_complementar_jobs import (
+                emitir_cte_complementar_job,
+            )
+
+            job = enqueue_job(
+                emitir_cte_complementar_job,
+                emissao.id,
+                queue_name='high',
+                timeout='10m',
+            )
+            emissao.job_id = job.id
+            db.session.commit()
+
+            logger.info(
+                "EmissaoCteComp %s re-enfileirada (job_id=%s) por %s",
+                emissao.id, job.id, current_user.email,
+            )
+            flash(
+                'Emissao re-enfileirada. Aguarde 1-2 minutos para o worker '
+                'processar.',
+                'success',
+            )
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Erro ao re-enfileirar emissao %s: %s", emissao_comp_id, e
+            )
+            flash(f'Erro ao re-enfileirar: {e}', 'danger')
+
+        return redirect(url_for(
+            'carvia.detalhe_custo_entrega',
+            custo_id=emissao.custo_entrega_id,
+        ))

@@ -159,33 +159,48 @@
                         {% endfor %}
                     </div>
 
-                    {# CTe Complementar — Gerar via SSW #}
+                    {# CTe Complementar — Gerar / re-tentar via SSW #}
+                    {# ORDEM: estado da emissao primeiro (PENDENTE/ERRO/SUCESSO), #}
+                    {# depois vinculacao, depois botao de criar. Evita travar em #}
+                    {# "Vinculado" quando a emissao entra em ERRO apos gravar cte_comp. #}
                     <hr>
                     <h6>CTe Complementar:</h6>
-                    {% if custo.cte_complementar_id %}
-                        <span class="badge bg-success"><i class="fas fa-check"></i> Vinculado</span>
-                        <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=custo.cte_complementar_id) }}"
-                           class="btn btn-sm btn-outline-primary ms-2">
-                            <i class="fas fa-eye"></i> Ver CTe Comp
-                        </a>
-                    {% elif emissao_comp and emissao_comp.status in ('PENDENTE', 'EM_PROCESSAMENTO') %}
+                    {% set cte_comp_obj = custo.cte_complementar if custo.cte_complementar_id else None %}
+                    {% set cte_comp_emitido = cte_comp_obj and cte_comp_obj.status != 'RASCUNHO' %}
+                    {% if emissao_comp and emissao_comp.status in ('PENDENTE', 'EM_PROCESSAMENTO') %}
                         <div id="emissao-status" class="d-flex align-items-center gap-2">
                             <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
                             <span class="text-primary">Emissao em andamento...
                                 <small class="text-muted">({{ emissao_comp.etapa or 'aguardando' }})</small>
                             </span>
                         </div>
-                    {% elif emissao_comp and emissao_comp.status == 'ERRO' %}
+                    {% elif emissao_comp and emissao_comp.status == 'ERRO' and not cte_comp_emitido %}
                         <div class="alert alert-danger py-2 mb-2">
                             <i class="fas fa-exclamation-triangle"></i>
-                            Erro na emissao: {{ emissao_comp.erro_ssw or 'Erro desconhecido' }}
+                            <strong>Erro na emissao:</strong>
+                            {{ emissao_comp.erro_ssw or 'Erro desconhecido' }}
                         </div>
-                        {% if operacao and operacao.ctrc_numero and custo.status != 'CANCELADO' %}
-                        <button type="button" class="btn btn-sm btn-warning"
-                                data-bs-toggle="modal" data-bs-target="#modalGerarCteComp">
-                            <i class="fas fa-redo"></i> Tentar Novamente
-                        </button>
-                        {% endif %}
+                        <form method="POST"
+                              action="{{ url_for('carvia.retry_emissao_cte_complementar', emissao_comp_id=emissao_comp.id) }}"
+                              class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-warning">
+                                <i class="fas fa-redo"></i> Re-enfileirar emissao
+                            </button>
+                        </form>
+                        <small class="text-muted d-block mt-1">
+                            Reutiliza o CTe Complementar
+                            {{ cte_comp_obj.numero_comp if cte_comp_obj else '' }}
+                            (RASCUNHO). Ajuste credenciais/worker antes de re-tentar.
+                        </small>
+                    {% elif cte_comp_obj %}
+                        <span class="badge bg-success"><i class="fas fa-check"></i>
+                            {{ cte_comp_obj.status }}
+                        </span>
+                        <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_obj.id) }}"
+                           class="btn btn-sm btn-outline-primary ms-2">
+                            <i class="fas fa-eye"></i> Ver CTe Comp
+                        </a>
                     {% elif operacao and operacao.ctrc_numero and custo.status != 'CANCELADO' %}
                         <button type="button" class="btn btn-sm btn-primary"
                                 data-bs-toggle="modal" data-bs-target="#modalGerarCteComp">
