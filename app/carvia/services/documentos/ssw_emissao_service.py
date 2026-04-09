@@ -354,59 +354,111 @@ class SswEmissaoService:
 
     @staticmethod
     def importar_resultado_cte(emissao, resultado_cte):
-        """Pos-emissao: importa XML do CTe no sistema.
+        """Pos-emissao: importa XML+DACTE no S3 e cria CarviaOperacao.
 
-        Se o XML foi baixado (path em resultado), processa via
-        ImportacaoService para criar/enriquecer CarviaOperacao.
+        Pipeline completo:
+          1. Le bytes do XML e do DACTE PDF (se disponivel)
+          2. processar_arquivos: parseia + salva ambos no S3
+             (carvia/ctes_xml/ e carvia/ctes_pdf/)
+          3. salvar_importacao: cria CarviaOperacao com cte_xml_path e
+             cte_pdf_path apontando para os arquivos S3
+          4. Vincula emissao.operacao_id buscando por cte_chave_acesso
 
         Args:
             emissao: CarviaEmissaoCte
-            resultado_cte: dict retornado por emitir_cte()
+            resultado_cte: dict retornado por emitir_cte() — chaves usadas:
+                'xml' e 'dacte' (paths locais /tmp), com fallback em
+                'consulta_101.xml' / 'consulta_101.dacte'
         """
+        # Resolver paths XML e DACTE (com fallback no consulta_101)
         xml_path = resultado_cte.get('xml')
-        if not xml_path:
-            # Tentar extrair do consulta_101
-            consulta = resultado_cte.get('consulta_101', {})
-            if isinstance(consulta, dict):
-                xml_path = consulta.get('xml')
-
-        if xml_path and os.path.exists(xml_path):
-            emissao.xml_path = xml_path
-            try:
-                from app.carvia.services.parsers.importacao_service import ImportacaoService
-                svc = ImportacaoService()
-
-                # Processar XML como importacao CarVia
-                with open(xml_path, 'rb') as f:
-                    from werkzeug.datastructures import FileStorage
-                    file_storage = FileStorage(
-                        stream=f,
-                        filename=os.path.basename(xml_path),
-                        content_type='text/xml',
-                    )
-                    resultado_import = svc.processar_arquivos([file_storage])
-
-                # Vincular operacao criada
-                if resultado_import and resultado_import.get('operacoes'):
-                    ops = resultado_import['operacoes']
-                    if ops:
-                        emissao.operacao_id = ops[0].id if hasattr(ops[0], 'id') else None
-                        logger.info(
-                            "CTe XML importado: emissao=%s, operacao=%s",
-                            emissao.id, emissao.operacao_id
-                        )
-            except Exception as e:
-                logger.error("Erro ao importar XML CTe: %s", e)
-                emissao.erro_ssw = (emissao.erro_ssw or '') + f"\nImport XML: {e}"
-
-        # Salvar path do DACTE se disponivel
         dacte_path = resultado_cte.get('dacte')
-        if not dacte_path:
-            consulta = resultado_cte.get('consulta_101', {})
-            if isinstance(consulta, dict):
-                dacte_path = consulta.get('dacte')
+        consulta = resultado_cte.get('consulta_101', {})
+        if not xml_path and isinstance(consulta, dict):
+            xml_path = consulta.get('xml')
+        if not dacte_path and isinstance(consulta, dict):
+            dacte_path = consulta.get('dacte')
+
+        # Salvar paths locais como evidencia (ainda em /tmp do worker)
+        if xml_path:
+            emissao.xml_path = xml_path
         if dacte_path:
             emissao.dacte_path = dacte_path
+
+        if not (xml_path and os.path.exists(xml_path)):
+            logger.warning(
+                "Emissao %s — XML local nao encontrado, pulando importacao",
+                emissao.id
+            )
+            db.session.flush()
+            return
+
+        try:
+            from app.carvia.services.parsers.importacao_service import (
+                ImportacaoService,
+            )
+            from app.carvia.models import CarviaOperacao
+            svc = ImportacaoService()
+
+            # 1. Construir lista de arquivos (XML + DACTE PDF se houver)
+            arquivos = []
+            with open(xml_path, 'rb') as f:
+                arquivos.append((os.path.basename(xml_path), f.read()))
+            if dacte_path and os.path.exists(dacte_path):
+                with open(dacte_path, 'rb') as f:
+                    arquivos.append((os.path.basename(dacte_path), f.read()))
+
+            criado_por = emissao.criado_por or 'worker_ssw'
+
+            # 2. Parsear + subir para S3 (carvia/ctes_xml + carvia/ctes_pdf)
+            resultado_proc = svc.processar_arquivos(
+                arquivos, criado_por=criado_por
+            )
+
+            # 3. Salvar no banco — cria CarviaOperacao com paths S3 vinculados
+            resultado_save = svc.salvar_importacao(
+                nfs_data=resultado_proc.get('nfs_parseadas', []),
+                ctes_data=resultado_proc.get('ctes_parseados', []),
+                matches=resultado_proc.get('matches', {}),
+                criado_por=criado_por,
+                faturas_data=None,
+            )
+
+            # 4. Vincular emissao.operacao_id buscando pela chave do CTe
+            chave_acesso = None
+            for cte_data in resultado_proc.get('ctes_parseados', []):
+                if cte_data.get('classificacao') == 'CTE_CARVIA':
+                    chave_acesso = cte_data.get('cte_chave_acesso')
+                    break
+
+            if chave_acesso:
+                op = CarviaOperacao.query.filter_by(
+                    cte_chave_acesso=chave_acesso
+                ).first()
+                if op:
+                    emissao.operacao_id = op.id
+                    logger.info(
+                        "CTe XML importado: emissao=%s, operacao=%s, "
+                        "ctrc=%s, xml=%s",
+                        emissao.id, op.id, op.ctrc_numero,
+                        op.cte_xml_path
+                    )
+                else:
+                    logger.warning(
+                        "Emissao %s: CTe parseado mas CarviaOperacao nao "
+                        "encontrada por chave %s — verifique salvar_importacao",
+                        emissao.id, chave_acesso[:20] + '...'
+                    )
+
+            # Logar avisos/erros nao-fatais do salvar_importacao
+            if resultado_save.get('erros'):
+                logger.warning(
+                    "Emissao %s: importacao concluida com avisos: %s",
+                    emissao.id, resultado_save.get('erros')
+                )
+        except Exception as e:
+            logger.error("Erro ao importar XML CTe: %s", e)
+            emissao.erro_ssw = (emissao.erro_ssw or '') + f"\nImport XML: {e}"
 
         db.session.flush()
 
@@ -422,28 +474,51 @@ class SswEmissaoService:
             resultado_fatura: dict retornado por gerar_fatura()
         """
         pdf_path = resultado_fatura.get('fatura_pdf')
-        if pdf_path and os.path.exists(pdf_path):
-            emissao.fatura_pdf_path = pdf_path
-            try:
-                from app.carvia.services.parsers.importacao_service import ImportacaoService
-                svc = ImportacaoService()
+        if not (pdf_path and os.path.exists(pdf_path)):
+            db.session.flush()
+            return
 
-                with open(pdf_path, 'rb') as f:
-                    from werkzeug.datastructures import FileStorage
-                    file_storage = FileStorage(
-                        stream=f,
-                        filename=os.path.basename(pdf_path),
-                        content_type='application/pdf',
-                    )
-                    resultado_import = svc.processar_arquivos([file_storage])
+        emissao.fatura_pdf_path = pdf_path
+        try:
+            from app.carvia.services.parsers.importacao_service import (
+                ImportacaoService,
+            )
+            svc = ImportacaoService()
 
-                logger.info(
-                    "Fatura PDF importada: emissao=%s, fatura=%s",
-                    emissao.id, emissao.fatura_numero
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+            arquivos = [(os.path.basename(pdf_path), pdf_bytes)]
+
+            criado_por = emissao.criado_por or 'worker_ssw'
+
+            # 1. Parsear + subir PDF para S3 (carvia/faturas_pdf)
+            resultado_proc = svc.processar_arquivos(
+                arquivos, criado_por=criado_por
+            )
+
+            # 2. Salvar no banco — cria CarviaFaturaCliente vinculada ao path S3
+            resultado_save = svc.salvar_importacao(
+                nfs_data=resultado_proc.get('nfs_parseadas', []),
+                ctes_data=resultado_proc.get('ctes_parseados', []),
+                matches=resultado_proc.get('matches', {}),
+                criado_por=criado_por,
+                faturas_data=resultado_proc.get('faturas_parseadas', []),
+            )
+
+            logger.info(
+                "Fatura PDF importada: emissao=%s, fatura=%s, "
+                "faturas_criadas=%s",
+                emissao.id, emissao.fatura_numero,
+                resultado_save.get('faturas_criadas')
+            )
+            if resultado_save.get('erros'):
+                logger.warning(
+                    "Emissao %s: importacao fatura com avisos: %s",
+                    emissao.id, resultado_save.get('erros')
                 )
-            except Exception as e:
-                logger.error("Erro ao importar PDF fatura: %s", e)
-                emissao.erro_ssw = (emissao.erro_ssw or '') + f"\nImport Fatura: {e}"
+        except Exception as e:
+            logger.error("Erro ao importar PDF fatura: %s", e)
+            emissao.erro_ssw = (emissao.erro_ssw or '') + f"\nImport Fatura: {e}"
 
         db.session.flush()
 
