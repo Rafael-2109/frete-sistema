@@ -66,6 +66,43 @@ class CancelamentoCteService:
         self.cte_service = cte_service
 
     # ------------------------------------------------------------------
+    # Dedup — suporte ao over-loop (scheduler 30 min + janela 3h)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def ja_processado(email_message_id: Optional[str]) -> bool:
+        """
+        Verifica se ja existe pendencia para esse email_message_id.
+
+        Usado pelo job antes de processar cada email, como dedup do over-loop:
+        - Scheduler principal roda a cada 30 min
+        - Job le emails das ultimas 3h
+        - Cada email cai em ate 6 execucoes consecutivas (30 min × 6 = 3h)
+        - Primeira execucao cria pendencia (qualquer status); as 5 seguintes
+          fazem skip silencioso graças a esta checagem.
+
+        Cobre todos os statuses (CANCELADO_OK, ORPHAN, PENDENTE_FATURA_CONFERIDA,
+        FRETE_CANCELADO_REVISAR, ERRO, ARQUIVAMENTO_ODOO_FALHOU) — uma vez
+        registrado, o email nao e reprocessado automaticamente. Revisao manual
+        pode deletar a pendencia para forcar reprocessamento.
+
+        Args:
+            email_message_id: id do email no Microsoft Graph
+
+        Returns:
+            True se ja existe pendencia com esse message_id.
+            False se nao existe ou message_id e None/vazio.
+        """
+        if not email_message_id:
+            return False
+        existe = (
+            db.session.query(CtePendenciaCancelamento.id)
+            .filter(CtePendenciaCancelamento.email_message_id == email_message_id)
+            .first()
+        )
+        return existe is not None
+
+    # ------------------------------------------------------------------
     # API principal
     # ------------------------------------------------------------------
 

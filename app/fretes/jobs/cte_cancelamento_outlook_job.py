@@ -3,30 +3,43 @@ CteCancelamentoOutlookJob — Processa XMLs de cancelamento de CTe do Outlook 36
 ==================================================================================
 
 Job executado periodicamente pelo scheduler principal
-(`app/scheduler/sincronizacao_incremental_definitiva.py`) como novo step
-apos o step 7 (Importacao de CTes do Odoo).
+(`app/scheduler/sincronizacao_incremental_definitiva.py`) como step 18.
+
+Estrategia: scheduler roda a cada 30 min + janela temporal de 3h =
+**over-loop natural de 6x** por email. Dedup por `email_message_id`
+garante que cada email so e processado uma unica vez (primeira execucao
+cria pendencia; as outras 5 fazem skip silencioso).
+
+Vantagens do over-loop:
+- Resiliencia: se uma execucao falha antes de criar pendencia, a proxima
+  (em 30 min) pega o mesmo email.
+- Nao depende de `isRead`: NAO marca emails como lidos (respeita o fluxo
+  humano da pessoa dona da caixa).
 
 Fluxo por execucao:
 1. GraphClient autentica via MSAL client_credentials
-2. Resolve folder_id da pasta configurada
-3. Lista emails nao lidos (ate MAX_EMAILS_POR_RUN)
-4. Para cada email:
-   a) Lista anexos
-   b) Filtra *.xml
-   c) Para cada XML:
+2. Para CADA pasta configurada (lista em GRAPH_FOLDER_NAME separada por ';'):
+   a) Resolve folder_id (suporta path hierarquico tipo 'Faturas/XML CTe\\'s')
+   b) Lista emails com `receivedDateTime >= now - JANELA_HORAS`
+3. Para cada email:
+   a) DEDUP: se CtePendenciaCancelamento ja existe com esse message_id → skip
+   b) Lista anexos
+   c) Filtra *.xml
+   d) Para cada XML:
       - Parser detecta tipo (procEventoCTe | cteProc | invalido)
       - Se procEventoCTe: chama CancelamentoCteService.cancelar_por_chave()
-      - Se cteProc: loga e ignora (nao e cancelamento)
+      - Se cteProc: ignora silenciosamente (CTe normal, volume alto ~50/dia)
       - Se invalido: cria pendencia ERRO
-   d) SO marca email como lido se TODOS os XMLs foram processados com
-      pendencia criada (sucesso ou erro capturado) — evita perda de dados
+4. Retorna estatisticas para o scheduler
 
 Configuracao (env vars):
 - CTE_CANCELAMENTO_ENABLED: feature flag geral (default: false)
-- GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET: credenciais Graph API
-- GRAPH_MAILBOX_UPN: UPN da caixa (ex: fiscal@empresa.com)
-- GRAPH_FOLDER_NAME: nome exato da pasta (ex: "CTe Cancelados")
-- CTE_CANCELAMENTO_MAX_EMAILS: limite por run (default: 100)
+- CTE_CANCELAMENTO_JANELA_HORAS: janela de leitura em horas (default: 3)
+- GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET: credenciais
+- GRAPH_MAILBOX_UPN: UPN da caixa
+- GRAPH_FOLDER_NAME: nome ou path de pasta, ou LISTA separada por ';'
+  Exemplo: "Faturas;Faturas/XML CTe's"
+- CTE_CANCELAMENTO_MAX_EMAILS: cap por pasta por run (default: 100)
 
 Data: 2026-04-09
 Referencia: .claude/plans/temporal-exploring-biscuit.md
@@ -34,12 +47,17 @@ Referencia: .claude/plans/temporal-exploring-biscuit.md
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # Defaults de configuracao
 DEFAULT_MAX_EMAILS = 100
+DEFAULT_JANELA_HORAS = 3
+# Pequena gordura (em minutos) para cobrir drift de timestamps entre
+# Graph API e nosso servidor + eventuais atrasos de entrega do Outlook.
+JANELA_GORDURA_MINUTOS = 10
 
 
 class CteCancelamentoOutlookJob:
@@ -103,8 +121,12 @@ class CteCancelamentoOutlookJob:
         Returns:
             Dict com estatisticas:
                 - sucesso: bool (False so em erro fatal — ex: auth falhou)
-                - emails_lidos: int
+                - pastas_processadas: int
+                - emails_encontrados: int (total na janela temporal, antes do dedup)
+                - emails_duplicados: int (ja processados anteriormente, skip)
+                - emails_processados: int
                 - xmls_processados: int
+                - xmls_ignorados: int (cteProc — CTes normais)
                 - cancelados_ok: int
                 - pendencias: int
                 - erros: int
@@ -112,9 +134,12 @@ class CteCancelamentoOutlookJob:
         """
         stats = {
             'sucesso': True,
-            'emails_lidos': 0,
+            'pastas_processadas': 0,
+            'emails_encontrados': 0,
+            'emails_duplicados': 0,
+            'emails_processados': 0,
             'xmls_processados': 0,
-            'xmls_ignorados': 0,  # cteProc (CTes originais, nao cancelamento)
+            'xmls_ignorados': 0,
             'cancelados_ok': 0,
             'pendencias': 0,
             'erros': 0,
@@ -123,12 +148,15 @@ class CteCancelamentoOutlookJob:
 
         # Validar config
         upn = os.environ.get('GRAPH_MAILBOX_UPN', '').strip()
-        folder_name = os.environ.get('GRAPH_FOLDER_NAME', '').strip()
+        folder_config = os.environ.get('GRAPH_FOLDER_NAME', '').strip()
         max_emails = int(
             os.environ.get('CTE_CANCELAMENTO_MAX_EMAILS', str(DEFAULT_MAX_EMAILS))
         )
+        janela_horas = int(
+            os.environ.get('CTE_CANCELAMENTO_JANELA_HORAS', str(DEFAULT_JANELA_HORAS))
+        )
 
-        if not upn or not folder_name:
+        if not upn or not folder_config:
             stats['sucesso'] = False
             stats['mensagem'] = (
                 "Config incompleta: GRAPH_MAILBOX_UPN ou GRAPH_FOLDER_NAME "
@@ -137,52 +165,120 @@ class CteCancelamentoOutlookJob:
             logger.warning(f"[CteCancelamentoJob] {stats['mensagem']}")
             return stats
 
-        # Autenticar e listar emails
+        # Parsear lista de pastas (separadas por ';')
+        # Exemplo: "Faturas;Faturas/XML CTe's" -> ['Faturas', 'Faturas/XML CTe\'s']
+        folder_names = self._parse_folder_list(folder_config)
+        if not folder_names:
+            stats['sucesso'] = False
+            stats['mensagem'] = f"GRAPH_FOLDER_NAME vazio apos parse: {folder_config!r}"
+            logger.warning(f"[CteCancelamentoJob] {stats['mensagem']}")
+            return stats
+
+        # Calcular janela temporal (com gordura para drift)
+        received_since = datetime.now(timezone.utc) - timedelta(
+            hours=janela_horas,
+            minutes=JANELA_GORDURA_MINUTOS,
+        )
+
+        logger.info(
+            f"[CteCancelamentoJob] Iniciando. Pastas={folder_names}, "
+            f"janela={janela_horas}h (+{JANELA_GORDURA_MINUTOS}min gordura), "
+            f"desde={received_since.isoformat()}"
+        )
+
+        # Processar cada pasta
         try:
             graph = self._get_graph()
-            folder_id = graph.obter_pasta_id(upn=upn, folder_name=folder_name)
-            logger.info(
-                f"[CteCancelamentoJob] Pasta '{folder_name}' resolvida: "
-                f"folder_id={folder_id}"
-            )
-
-            mensagens = graph.listar_emails_pasta(
-                upn=upn,
-                folder_id=folder_id,
-                unread_only=True,
-                top=max_emails,
-            )
         except Exception as e:
             stats['sucesso'] = False
-            stats['mensagem'] = f"Erro ao listar emails: {e}"
+            stats['mensagem'] = f"Erro na autenticacao Graph: {e}"
             logger.exception(f"[CteCancelamentoJob] {stats['mensagem']}")
             return stats
 
-        logger.info(
-            f"[CteCancelamentoJob] {len(mensagens)} email(s) nao lido(s) "
-            f"encontrado(s) em '{folder_name}'"
-        )
+        for folder_name in folder_names:
+            try:
+                folder_id = graph.obter_pasta_id(upn=upn, folder_name=folder_name)
+                logger.info(
+                    f"[CteCancelamentoJob] Pasta '{folder_name}' resolvida: "
+                    f"folder_id={folder_id[:20]}..."
+                )
 
-        # Processar cada email
-        for mensagem in mensagens:
-            resultado_email = self._processar_email(upn, mensagem)
-            stats['emails_lidos'] += 1
-            stats['xmls_processados'] += resultado_email['xmls_processados']
-            stats['xmls_ignorados'] += resultado_email['xmls_ignorados']
-            stats['cancelados_ok'] += resultado_email['cancelados_ok']
-            stats['pendencias'] += resultado_email['pendencias']
-            stats['erros'] += resultado_email['erros']
+                mensagens = graph.listar_emails_pasta(
+                    upn=upn,
+                    folder_id=folder_id,
+                    received_since=received_since,
+                    unread_only=False,  # IMPORTANTE: nao depende de isRead
+                    top=max_emails,
+                )
+                logger.info(
+                    f"[CteCancelamentoJob] {len(mensagens)} email(s) em "
+                    f"'{folder_name}' na janela temporal"
+                )
+                stats['pastas_processadas'] += 1
+                stats['emails_encontrados'] += len(mensagens)
+            except Exception as e:
+                logger.exception(
+                    f"[CteCancelamentoJob] Erro ao listar pasta '{folder_name}': {e}"
+                )
+                stats['erros'] += 1
+                continue
+
+            # Processar cada email
+            for mensagem in mensagens:
+                message_id = mensagem.get('id')
+
+                # DEDUP: checar se esse email ja foi processado (over-loop protection)
+                from app.fretes.services.cancelamento_cte_service import (
+                    CancelamentoCteService,
+                )
+                if CancelamentoCteService.ja_processado(message_id):
+                    stats['emails_duplicados'] += 1
+                    logger.debug(
+                        f"[CteCancelamentoJob] Email {message_id[:20]}... "
+                        f"ja processado anteriormente, skip (over-loop dedup)"
+                    )
+                    continue
+
+                resultado_email = self._processar_email(upn, mensagem)
+                stats['emails_processados'] += 1
+                stats['xmls_processados'] += resultado_email['xmls_processados']
+                stats['xmls_ignorados'] += resultado_email['xmls_ignorados']
+                stats['cancelados_ok'] += resultado_email['cancelados_ok']
+                stats['pendencias'] += resultado_email['pendencias']
+                stats['erros'] += resultado_email['erros']
 
         stats['mensagem'] = (
-            f"{stats['emails_lidos']} email(s) / "
-            f"{stats['xmls_processados']} XML(s) processado(s) / "
-            f"{stats['xmls_ignorados']} cteProc(s) ignorado(s) / "
+            f"{stats['pastas_processadas']} pasta(s) / "
+            f"{stats['emails_encontrados']} email(s) encontrado(s) / "
+            f"{stats['emails_duplicados']} dedup / "
+            f"{stats['emails_processados']} processado(s) / "
+            f"{stats['xmls_processados']} XML(s) / "
+            f"{stats['xmls_ignorados']} cteProc ignorado(s) / "
             f"{stats['cancelados_ok']} OK / "
             f"{stats['pendencias']} pendencia(s) / "
             f"{stats['erros']} erro(s)"
         )
         logger.info(f"[CteCancelamentoJob] Concluido: {stats['mensagem']}")
         return stats
+
+    @staticmethod
+    def _parse_folder_list(folder_config: str) -> List[str]:
+        """
+        Parseia GRAPH_FOLDER_NAME em lista de pastas.
+
+        Aceita:
+        - Nome simples: "CTe Cancelados" -> ["CTe Cancelados"]
+        - Path: "Faturas/XML CTe's" -> ["Faturas/XML CTe's"]
+        - Lista separada por ';': "Faturas;Faturas/XML CTe's"
+          -> ["Faturas", "Faturas/XML CTe's"]
+
+        Espacos em branco no inicio/fim sao removidos. Entradas vazias sao
+        descartadas.
+        """
+        if not folder_config:
+            return []
+        partes = [p.strip() for p in folder_config.split(';')]
+        return [p for p in partes if p]
 
     # ------------------------------------------------------------------
     # Processamento de email individual
@@ -210,6 +306,9 @@ class CteCancelamentoOutlookJob:
             'erros': 0,
         }
 
+        # NOTA: este job NAO marca emails como lidos. Respeita o fluxo humano
+        # da pessoa dona da caixa. O dedup via email_message_id (feito em
+        # executar()) garante que cada email e processado 1x mesmo com over-loop.
         message_id = mensagem.get('id')
         subject = mensagem.get('subject', '(sem assunto)')
         has_attachments = mensagem.get('hasAttachments', False)
@@ -247,8 +346,6 @@ class CteCancelamentoOutlookJob:
             )
             return resultado
 
-        todos_processados = True
-
         for anexo in xmls:
             att_id = anexo.get('id')
             att_name = anexo.get('name', '?')
@@ -265,7 +362,6 @@ class CteCancelamentoOutlookJob:
                     f"[CteCancelamentoJob] Erro ao baixar anexo {att_name}: {e}"
                 )
                 resultado['erros'] += 1
-                todos_processados = False
                 continue
 
             # Processar XML
@@ -286,22 +382,10 @@ class CteCancelamentoOutlookJob:
                     f"[CteCancelamentoJob] Erro ao processar XML {att_name}"
                 )
                 resultado['erros'] += 1
-                todos_processados = False
 
-        # Se todos os XMLs foram processados, marcar como lido
-        if todos_processados:
-            try:
-                self._get_graph().marcar_como_lido(
-                    upn=upn, message_id=message_id
-                )
-                logger.info(
-                    f"[CteCancelamentoJob] Email '{subject}' marcado como lido"
-                )
-            except Exception as e:
-                logger.warning(
-                    f"[CteCancelamentoJob] Falha ao marcar lido '{subject}': {e}"
-                )
-
+        # NAO marcar como lido — dedup por email_message_id + over-loop
+        # garantem que o email sera processado 1x e os ciclos seguintes
+        # farao skip silencioso ate a janela temporal expirar (3h).
         return resultado
 
     def _processar_xml(

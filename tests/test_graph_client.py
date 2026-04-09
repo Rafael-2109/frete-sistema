@@ -121,7 +121,7 @@ class TestListarEmails:
         assert call_kwargs['params']['$filter'] == 'isRead eq false'
         assert call_kwargs['params']['$top'] == '50'
 
-    def test_listar_emails_sem_unread_filter(self, graph_client):
+    def test_listar_emails_sem_filtros(self, graph_client):
         fake_response = MagicMock()
         fake_response.status_code = 200
         fake_response.ok = True
@@ -136,6 +136,100 @@ class TestListarEmails:
 
         call_kwargs = mock_req.call_args.kwargs
         assert '$filter' not in call_kwargs['params']
+
+    def test_listar_emails_com_received_since_datetime(self, graph_client):
+        """
+        Filtro por janela temporal usando datetime tz-aware (UTC).
+        """
+        from datetime import datetime, timezone
+
+        fake_response = MagicMock()
+        fake_response.status_code = 200
+        fake_response.ok = True
+        fake_response.json.return_value = {'value': []}
+
+        since = datetime(2026, 4, 9, 15, 30, 0, tzinfo=timezone.utc)
+
+        with patch('requests.request', return_value=fake_response) as mock_req:
+            graph_client.listar_emails_pasta(
+                upn='test@empresa.com',
+                folder_id='folder123',
+                received_since=since,
+            )
+
+        filtro = mock_req.call_args.kwargs['params']['$filter']
+        assert filtro == 'receivedDateTime ge 2026-04-09T15:30:00Z'
+
+    def test_listar_emails_com_received_since_naive_assume_utc(self, graph_client):
+        """
+        datetime naive deve ser tratado como UTC.
+        """
+        from datetime import datetime
+
+        fake_response = MagicMock()
+        fake_response.status_code = 200
+        fake_response.ok = True
+        fake_response.json.return_value = {'value': []}
+
+        since = datetime(2026, 4, 9, 15, 30, 0)  # naive
+
+        with patch('requests.request', return_value=fake_response) as mock_req:
+            graph_client.listar_emails_pasta(
+                upn='test@empresa.com',
+                folder_id='folder123',
+                received_since=since,
+            )
+
+        filtro = mock_req.call_args.kwargs['params']['$filter']
+        assert filtro == 'receivedDateTime ge 2026-04-09T15:30:00Z'
+
+    def test_listar_emails_received_since_com_tz_brt_converte_utc(self, graph_client):
+        """
+        datetime em BRT (UTC-3) deve ser convertido para UTC no filtro.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        fake_response = MagicMock()
+        fake_response.status_code = 200
+        fake_response.ok = True
+        fake_response.json.return_value = {'value': []}
+
+        brt = timezone(timedelta(hours=-3))
+        since = datetime(2026, 4, 9, 12, 30, 0, tzinfo=brt)  # = 15:30 UTC
+
+        with patch('requests.request', return_value=fake_response) as mock_req:
+            graph_client.listar_emails_pasta(
+                upn='test@empresa.com',
+                folder_id='folder123',
+                received_since=since,
+            )
+
+        filtro = mock_req.call_args.kwargs['params']['$filter']
+        assert filtro == 'receivedDateTime ge 2026-04-09T15:30:00Z'
+
+    def test_listar_emails_com_received_since_e_unread_combinados(self, graph_client):
+        """
+        Quando ambos os filtros sao passados, eles sao combinados via AND.
+        """
+        from datetime import datetime, timezone
+
+        fake_response = MagicMock()
+        fake_response.status_code = 200
+        fake_response.ok = True
+        fake_response.json.return_value = {'value': []}
+
+        since = datetime(2026, 4, 9, 15, 30, 0, tzinfo=timezone.utc)
+
+        with patch('requests.request', return_value=fake_response) as mock_req:
+            graph_client.listar_emails_pasta(
+                upn='test@empresa.com',
+                folder_id='folder123',
+                received_since=since,
+                unread_only=True,
+            )
+
+        filtro = mock_req.call_args.kwargs['params']['$filter']
+        assert filtro == 'receivedDateTime ge 2026-04-09T15:30:00Z and isRead eq false'
 
 
 # ======================================================================

@@ -46,7 +46,8 @@ import base64
 import logging
 import os
 import time
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import List, Optional, Union
 
 import requests
 
@@ -395,7 +396,8 @@ class GraphClient:
         self,
         upn: str,
         folder_id: str,
-        unread_only: bool = True,
+        received_since: Optional[Union[datetime, str]] = None,
+        unread_only: bool = False,
         top: int = 50,
     ) -> List[dict]:
         """
@@ -404,8 +406,13 @@ class GraphClient:
         Args:
             upn: user principal name
             folder_id: ID da pasta (obtido via obter_pasta_id)
-            unread_only: se True, apenas nao lidos (isRead eq false)
-            top: maximo de mensagens a retornar (ate 50 por query)
+            received_since: filtra por receivedDateTime >= este valor.
+                Aceita datetime (UTC preferencial) ou string ISO 8601.
+                Este e o filtro PRINCIPAL do uso atual (janela temporal).
+            unread_only: filtro adicional: apenas nao lidos (isRead eq false).
+                Combina com received_since via AND se ambos forem passados.
+                Default False — queremos TODOS os emails na janela, lidos ou nao.
+            top: maximo de mensagens a retornar (cap em 50 por query)
 
         Returns:
             Lista de dicts (message resource do Graph API)
@@ -416,13 +423,47 @@ class GraphClient:
             '$select': 'id,subject,from,receivedDateTime,hasAttachments,isRead',
             '$orderby': 'receivedDateTime desc',
         }
+
+        # Montar filtros OData combinados
+        filtros_odata = []
+        if received_since is not None:
+            iso_str = self._to_odata_datetime(received_since)
+            filtros_odata.append(f'receivedDateTime ge {iso_str}')
         if unread_only:
-            params['$filter'] = 'isRead eq false'
+            filtros_odata.append('isRead eq false')
+        if filtros_odata:
+            params['$filter'] = ' and '.join(filtros_odata)
 
         resp = self._request('GET', url, params=params)
         self._raise_for_status(resp, f"listar emails em pasta {folder_id}")
         data = resp.json()
         return data.get('value', [])
+
+    @staticmethod
+    def _to_odata_datetime(value: Union[datetime, str]) -> str:
+        """
+        Converte datetime ou string em literal OData para $filter.
+
+        Formato esperado por Graph API: '2026-04-09T10:00:00Z' (UTC).
+
+        Aceita:
+        - datetime naive → assume UTC
+        - datetime aware → converte para UTC
+        - string ISO 8601 → passa-through (assume que ja esta no formato)
+        """
+        if isinstance(value, str):
+            return value
+
+        if not isinstance(value, datetime):
+            raise TypeError(f"received_since deve ser datetime ou str, recebido: {type(value)}")
+
+        if value.tzinfo is None:
+            # Naive — assumir UTC
+            dt_utc = value
+        else:
+            dt_utc = value.astimezone(timezone.utc).replace(tzinfo=None)
+
+        return dt_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     def listar_anexos(self, upn: str, message_id: str) -> List[dict]:
         """
