@@ -13,6 +13,12 @@ Etapas:
   5. IMPORTACAO_CTE — Importar XML no sistema (CarviaOperacao)
   6. FATURA_437 — Gerar fatura SSW (tela 437, filial MTZ)
   7. IMPORTACAO_FAT — Importar PDF fatura (CarviaFaturaCliente)
+
+GOTCHA SSL Drop: Conexoes PostgreSQL ficam idle durante os 60-120s do
+Playwright e Render fecha por timeout SSL. pool_pre_ping nao ajuda
+porque a conexao ja estava checked-out. Solucao: commit+close ANTES de
+cada chamada Playwright + _commit_pos_playwright() apos, que reabre
+conexao via ensure_connection() e re-busca a emissao.
 """
 import argparse
 import asyncio
@@ -20,6 +26,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,110 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 SSW_SCRIPTS = os.path.join(
     PROJECT_ROOT, '.claude', 'skills', 'operando-ssw', 'scripts'
 )
+
+
+def _liberar_conexao_antes_playwright():
+    """Commit + close + dispose antes de operacao Playwright longa.
+
+    Libera a conexao do pool para evitar que ela fique idle durante
+    os 60-120s do Playwright e seja fechada pelo Postgres (SSL drop).
+    Apos o Playwright, usar _commit_pos_playwright() para reabrir.
+    """
+    from app import db
+    try:
+        db.session.commit()
+    except Exception as e:
+        logger.warning("Commit pre-playwright falhou: %s", e)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    try:
+        db.session.close()
+    except Exception:
+        pass
+    try:
+        db.engine.dispose()
+    except Exception:
+        pass
+
+
+def _commit_pos_playwright(emissao_id, max_retries=3, **updates):
+    """Commit seguro apos operacao Playwright longa.
+
+    Apos Playwright, a conexao SQL antiga pode estar morta (SSL drop).
+    Este helper:
+      1. Chama ensure_connection() para reabrir a conexao
+      2. Re-busca o objeto emissao via db.session.get (estava detached)
+      3. Aplica updates passados como kwargs
+      4. Commita com retry em SSL/connection errors
+
+    Args:
+        emissao_id: ID da CarviaEmissaoCte
+        max_retries: Tentativas em caso de SSL drop
+        **updates: campo=valor a atualizar na emissao
+
+    Returns:
+        CarviaEmissaoCte atualizada (ou None se falhar max_retries)
+
+    Raises:
+        Exception: apos esgotar max_retries
+    """
+    from app import db
+    from app.carvia.models import CarviaEmissaoCte
+    from app.utils.database_helpers import ensure_connection
+    from app.utils.timezone import agora_utc_naive
+
+    last_exc = None
+    for tentativa in range(max_retries):
+        try:
+            # Garantir conexao viva (reabre pool se necessario)
+            ensure_connection()
+
+            # Re-buscar emissao (pode estar detached pos-Playwright)
+            emissao = db.session.get(CarviaEmissaoCte, emissao_id)
+            if not emissao:
+                raise ValueError(
+                    f"Emissao {emissao_id} nao encontrada no commit pos-playwright"
+                )
+
+            # Aplicar updates
+            for campo, valor in updates.items():
+                setattr(emissao, campo, valor)
+            emissao.atualizado_em = agora_utc_naive()
+
+            db.session.commit()
+            return emissao
+
+        except Exception as e:
+            last_exc = e
+            logger.warning(
+                "Commit pos-playwright emissao=%s tentativa %d/%d falhou: %s",
+                emissao_id, tentativa + 1, max_retries, e
+            )
+            # Limpar sessao/pool
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.close()
+            except Exception:
+                pass
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
+
+            if tentativa < max_retries - 1:
+                # Backoff exponencial: 1s, 2s, 4s
+                time.sleep(2 ** tentativa)
+
+    logger.error(
+        "Commit pos-playwright emissao=%s falhou definitivamente: %s",
+        emissao_id, last_exc
+    )
+    raise last_exc
 
 
 def emitir_cte_ssw_job(emissao_id: int) -> dict:
@@ -72,51 +183,70 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
             emissao.etapa = 'PREENCHIMENTO'
             db.session.commit()
 
+            # Extrair args DO ORM antes do Playwright (pattern P1: Anti-Detach)
             args_cte = _montar_args_cte(emissao)
+
+            # P7: Commit + liberar conexao antes do Playwright longo
+            # (60-120s) — evita SSL drop por idle timeout do Postgres.
+            _liberar_conexao_antes_playwright()
+
             resultado_cte = _executar_script_cte(args_cte)
 
             # Detectar erros SSW
             erro = SswEmissaoService.detectar_erro_ssw(resultado_cte)
             if erro or not resultado_cte.get('sucesso'):
-                emissao.status = 'ERRO'
-                emissao.erro_ssw = erro or resultado_cte.get('erro', 'Falha na emissao')
-                emissao.resultado_json = _sanitize_resultado(resultado_cte)
-                emissao.atualizado_em = agora_utc_naive()
-                db.session.commit()
-                logger.error(
-                    "Emissao %s falhou: %s", emissao_id, emissao.erro_ssw
+                erro_msg = erro or resultado_cte.get('erro', 'Falha na emissao')
+                _commit_pos_playwright(
+                    emissao_id,
+                    status='ERRO',
+                    erro_ssw=erro_msg,
+                    resultado_json=_sanitize_resultado(resultado_cte),
                 )
-                return {'status': 'ERRO', 'erro': emissao.erro_ssw}
+                logger.error("Emissao %s falhou: %s", emissao_id, erro_msg)
+                return {'status': 'ERRO', 'erro': erro_msg}
 
-            emissao.ctrc_numero = resultado_cte.get('ctrc')
-            emissao.resultado_json = _sanitize_resultado(resultado_cte)
-            emissao.etapa = 'IMPORTACAO_CTE'
-            emissao.atualizado_em = agora_utc_naive()
-            db.session.commit()
+            # Commit pos-Playwright com reconnect + retry (evita SSL drop)
+            emissao = _commit_pos_playwright(
+                emissao_id,
+                ctrc_numero=resultado_cte.get('ctrc'),
+                resultado_json=_sanitize_resultado(resultado_cte),
+                etapa='IMPORTACAO_CTE',
+            )
 
             logger.info("Emissao %s — CTe %s emitido", emissao_id, emissao.ctrc_numero)
 
             # ── Fase B: Baixar XML/DACTE via consultar_ctrc_101 e importar ──
+            # Snapshot de campos necessarios (emissao pode detachar)
+            ctrc_numero_local = emissao.ctrc_numero
+            filial_local = emissao.filial_ssw or 'CAR'
+            operacao_id_local = emissao.operacao_id
             ctrc_completo_ssw = None
             try:
+                # Libera conexao antes do Playwright (opcao 101)
+                _liberar_conexao_antes_playwright()
+
                 resultado_consulta = _executar_consulta_101(
-                    emissao.ctrc_numero, filial=emissao.filial_ssw or 'CAR'
+                    ctrc_numero_local, filial=filial_local
                 )
                 if resultado_consulta.get('sucesso'):
-                    # Mesclar paths de XML/DACTE no resultado
                     resultado_cte['xml'] = resultado_consulta.get('xml')
                     resultado_cte['dacte'] = resultado_consulta.get('dacte')
-                    # Capturar CTRC completo do SSW (ex: CAR000113-9)
                     dados_101 = resultado_consulta.get('dados', {})
                     ctrc_completo_ssw = dados_101.get('ctrc_completo')
+
+                # Re-conecta e re-busca emissao antes de importar
+                from app.utils.database_helpers import ensure_connection
+                ensure_connection()
+                emissao = db.session.get(CarviaEmissaoCte, emissao_id)
 
                 SswEmissaoService.importar_resultado_cte(emissao, resultado_cte)
 
                 # Corrigir ctrc_numero na operacao com o CTRC real do SSW
-                # (ImportacaoService usa nCT do XML, que difere do CTRC SSW)
                 if emissao.operacao_id and ctrc_completo_ssw:
                     from app.carvia.models import CarviaOperacao
-                    operacao = db.session.get(CarviaOperacao, emissao.operacao_id)
+                    operacao = db.session.get(
+                        CarviaOperacao, emissao.operacao_id
+                    )
                     if operacao:
                         ctrc_formatado = _formatar_ctrc_ssw(ctrc_completo_ssw)
                         operacao.ctrc_numero = ctrc_formatado
@@ -128,44 +258,88 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
                 db.session.commit()
             except Exception as e:
                 logger.warning("Falha ao importar XML (nao-bloqueante): %s", e)
+                # Garantir sessao limpa mesmo se commit acima falhar
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
 
             # ── Fase C: Gerar fatura SSW (tela 437, filial MTZ) ──
-            if emissao.cnpj_tomador and emissao.ctrc_numero:
-                emissao.etapa = 'FATURA_437'
-                emissao.atualizado_em = agora_utc_naive()
-                db.session.commit()
+            # Re-buscar emissao garantidamente antes de checar dados
+            try:
+                from app.utils.database_helpers import ensure_connection
+                ensure_connection()
+                emissao = db.session.get(CarviaEmissaoCte, emissao_id)
+            except Exception:
+                emissao = None
 
-                args_fat = _montar_args_fatura(emissao)
+            if emissao and emissao.cnpj_tomador and emissao.ctrc_numero:
+                # Snapshot antes do Playwright
+                cnpj_tomador_local = emissao.cnpj_tomador
+                ctrc_numero_local = emissao.ctrc_numero
+                data_venc_local = emissao.data_vencimento
+
+                # Atualizar etapa com retry
+                _commit_pos_playwright(emissao_id, etapa='FATURA_437')
+
+                # Liberar conexao antes da fatura 437 (Playwright longo)
+                _liberar_conexao_antes_playwright()
+
+                args_fat = _montar_args_fatura_from_snapshot(
+                    cnpj_tomador_local, ctrc_numero_local, data_venc_local
+                )
                 resultado_fat = _executar_script_fatura(args_fat)
 
                 if resultado_fat.get('sucesso'):
-                    emissao.fatura_numero = resultado_fat.get('fatura_numero')
+                    fatura_numero = resultado_fat.get('fatura_numero')
 
-                    # ── Fase D: Importar PDF fatura ──
-                    emissao.etapa = 'IMPORTACAO_FAT'
-                    emissao.atualizado_em = agora_utc_naive()
-                    db.session.commit()
+                    # Atualizar etapa com retry + reconnect
+                    _commit_pos_playwright(
+                        emissao_id,
+                        etapa='IMPORTACAO_FAT',
+                        fatura_numero=fatura_numero,
+                    )
 
+                    # Re-buscar emissao para importar
                     try:
-                        SswEmissaoService.importar_resultado_fatura(emissao, resultado_fat)
+                        from app.utils.database_helpers import ensure_connection
+                        ensure_connection()
+                        emissao = db.session.get(CarviaEmissaoCte, emissao_id)
+                        SswEmissaoService.importar_resultado_fatura(
+                            emissao, resultado_fat
+                        )
                         db.session.commit()
                     except Exception as e:
-                        logger.warning("Falha ao importar fatura (nao-bloqueante): %s", e)
+                        logger.warning(
+                            "Falha ao importar fatura (nao-bloqueante): %s", e
+                        )
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
 
                     logger.info(
                         "Emissao %s — Fatura %s gerada",
-                        emissao_id, emissao.fatura_numero
+                        emissao_id, fatura_numero
                     )
                 else:
                     erro_fat = resultado_fat.get('erro', 'Falha ao gerar fatura')
                     logger.warning("Fatura 437 falhou (nao-bloqueante): %s", erro_fat)
-                    emissao.erro_ssw = (emissao.erro_ssw or '') + f"\nFatura: {erro_fat}"
+                    # Anexar erro ao erro_ssw sem quebrar fluxo
+                    try:
+                        _commit_pos_playwright(
+                            emissao_id,
+                            erro_ssw=f"Fatura 437: {erro_fat}",
+                        )
+                    except Exception:
+                        pass
 
             # ── Sucesso ──
-            emissao.status = 'SUCESSO'
-            emissao.etapa = None
-            emissao.atualizado_em = agora_utc_naive()
-            db.session.commit()
+            emissao = _commit_pos_playwright(
+                emissao_id,
+                status='SUCESSO',
+                etapa=None,
+            )
 
             logger.info(
                 "Emissao %s concluida: CTe=%s, Fatura=%s",
@@ -179,11 +353,19 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
             }
 
         except Exception as e:
-            emissao.status = 'ERRO'
-            emissao.erro_ssw = str(e)
-            emissao.atualizado_em = agora_utc_naive()
-            db.session.commit()
             logger.exception("Emissao %s — excecao: %s", emissao_id, e)
+            # Commit do ERRO com retry (SSL drop pode acontecer aqui tambem)
+            try:
+                _commit_pos_playwright(
+                    emissao_id,
+                    status='ERRO',
+                    erro_ssw=str(e),
+                )
+            except Exception as e_commit:
+                logger.error(
+                    "Falha ao gravar ERRO da emissao %s: %s",
+                    emissao_id, e_commit
+                )
             return {'status': 'ERRO', 'erro': str(e)}
 
 
@@ -220,15 +402,27 @@ def _montar_args_cte(emissao):
 
 
 def _montar_args_fatura(emissao):
-    """Monta argparse.Namespace para gerar_fatura()."""
-    # Data vencimento: converter para DDMMYY
+    """Monta argparse.Namespace para gerar_fatura() a partir do objeto ORM."""
+    return _montar_args_fatura_from_snapshot(
+        emissao.cnpj_tomador,
+        emissao.ctrc_numero,
+        emissao.data_vencimento,
+    )
+
+
+def _montar_args_fatura_from_snapshot(cnpj_tomador, ctrc_numero, data_vencimento):
+    """Monta argparse.Namespace para gerar_fatura() sem depender do ORM.
+
+    Usado no fluxo pos-Playwright quando a sessao foi liberada e o objeto
+    emissao pode estar detached.
+    """
     data_venc = None
-    if emissao.data_vencimento:
-        data_venc = emissao.data_vencimento.strftime('%d%m%y')
+    if data_vencimento:
+        data_venc = data_vencimento.strftime('%d%m%y')
 
     return argparse.Namespace(
-        cnpj_tomador=emissao.cnpj_tomador,
-        ctrc=emissao.ctrc_numero,
+        cnpj_tomador=cnpj_tomador,
+        ctrc=ctrc_numero,
         data_vencimento=data_venc,
         baixar_pdf=True,
         dry_run=False,
