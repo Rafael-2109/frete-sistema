@@ -17,8 +17,7 @@
     },
     {
       "name": "ctrc_numero",
-      "type": "varchar(30)",
-      "description": "CTRC SSW/SEFAZ: CAR-{nCT}-{cDV}"
+      "type": "varchar(30)"
     },
     {
       "name": "cte_valor",
@@ -39,6 +38,10 @@
     {
       "name": "cte_data_emissao",
       "type": "date"
+    },
+    {
+      "name": "icms_aliquota",
+      "type": "numeric(5,2)"
     },
     {
       "name": "cnpj_cliente",
@@ -171,16 +174,23 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_operacoes_cte_numero",
+      "name": "ix_carvia_operacoes_fatura_cliente_id",
       "columns": [
-        "cte_numero"
+        "fatura_cliente_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_fatura_cliente_id",
+      "name": "ix_carvia_operacoes_ctrc_numero",
       "columns": [
-        "fatura_cliente_id"
+        "ctrc_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_operacoes_cte_numero",
+      "columns": [
+        "cte_numero"
       ],
       "unique": false
     },

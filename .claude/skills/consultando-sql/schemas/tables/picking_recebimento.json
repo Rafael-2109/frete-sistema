@@ -89,20 +89,6 @@
   ],
   "indices": [
     {
-      "name": "idx_picking_rec_partner",
-      "columns": [
-        "odoo_partner_name"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_picking_rec_partner_cnpj",
-      "columns": [
-        "odoo_partner_cnpj"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_picking_rec_origin",
       "columns": [
         "origin"
@@ -124,6 +110,21 @@
       "unique": false
     },
     {
+      "name": "idx_picking_rec_company",
+      "columns": [
+        "company_id",
+        "state"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_picking_rec_partner",
+      "columns": [
+        "odoo_partner_name"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_picking_recebimento_odoo_picking_id",
       "columns": [
         "odoo_picking_id"
@@ -131,10 +132,9 @@
       "unique": true
     },
     {
-      "name": "idx_picking_rec_company",
+      "name": "idx_picking_rec_partner_cnpj",
       "columns": [
-        "company_id",
-        "state"
+        "odoo_partner_cnpj"
       ],
       "unique": false
     }
