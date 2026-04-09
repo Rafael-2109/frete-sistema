@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 
 # Setup path
@@ -112,6 +113,14 @@ async def emitir_cte_complementar(args):
 
             main_frame = page.frames[0]
 
+            # ── Fase 1b: Trocar filial para a correta (ex: CAR) ──
+            logger.info("Fase 1b: Trocar filial para %s", filial)
+            await main_frame.evaluate(f"""() => {{
+                var el = document.getElementById('2');
+                if (el) el.value = '{filial}';
+            }}""")
+            await asyncio.sleep(2)
+
             # ── Fase 2: Abrir opcao 222 ──
             logger.info("Fase 2: Abrir opcao 222")
             popup = await abrir_opcao_popup(context, main_frame, 222)
@@ -142,8 +151,8 @@ async def emitir_cte_complementar(args):
             await preencher_campo_no_html(popup, 'f1', filial, by='name')
             await asyncio.sleep(0.3)
 
-            # Preencher CTRC — numero com DV (ex: 113-9)
-            ctrc_com_dv = f"{ctrc_num}-{ctrc_dv}"
+            # Preencher CTRC — numero + DV colado sem hifen (ex: 1139)
+            ctrc_com_dv = f"{ctrc_num}{ctrc_dv}"
             await preencher_campo_no_html(popup, 'f2', ctrc_com_dv, by='name')
             await asyncio.sleep(0.3)
 
@@ -155,67 +164,189 @@ async def emitir_cte_complementar(args):
                 resultado['mensagem'] = 'Dry run: tela inicial preenchida, nao submetido'
                 return resultado
 
-            # Submeter tela inicial (OK/Prosseguir)
-            logger.info("Fase 3b: Submeter tela inicial")
+            # ── Fase 3b: Submeter tela inicial — ajaxEnvia('ENV', 1) ──
+            logger.info("Fase 3b: Submeter tela inicial via ajaxEnvia('ENV', 1)")
+
+            # Dismiss dialogs automaticamente
+            dialogs = []
+            ctrc_complementar_num = None
+
+            async def on_dialog(dialog):
+                nonlocal ctrc_complementar_num
+                msg = dialog.message
+                dialogs.append({"tipo": dialog.type, "msg": msg})
+                m = re.search(r'(\d{2,6})', msg)
+                if m and not ctrc_complementar_num:
+                    ctrc_complementar_num = m.group(1)
+                if dialog.type == "confirm":
+                    await dialog.accept()
+                else:
+                    await dialog.accept()
+
+            popup.on("dialog", on_dialog)
+
+            # SSW usa AJAX que substitui DOM — interceptar response
             html_tela2 = await interceptar_ajax_response(
-                popup, frame, "ajaxEnvia('OK', 0)", timeout_s=15
+                popup, popup, "ajaxEnvia('ENV', 1)", timeout_s=15
             )
 
             if html_tela2:
                 await injetar_html_no_dom(popup, html_tela2)
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
             else:
-                # Tentar detectar erro
-                msg = await verificar_mensagem_ssw(popup)
-                if msg:
-                    resultado['erro'] = f"SSW retornou: {msg}"
-                    return resultado
-                resultado['erro'] = "Sem resposta ao submeter tela inicial"
+                await asyncio.sleep(5)
+
+            await capturar_screenshot(popup, "222_pos_submit_inicial")
+
+            body = await popup.evaluate(
+                "() => document.body ? document.body.innerText.substring(0,5000) : ''"
+            )
+
+            # Checar se houve erro
+            body_lower = body.lower()
+            if 'erro' in body_lower or 'não encontrad' in body_lower or 'nao encontrad' in body_lower:
+                await capturar_screenshot(popup, "222_erro_tela2")
+                resultado['erro'] = f"SSW: {body[:500]}"
+                resultado['dialogs'] = dialogs
                 return resultado
+
+            # Descobrir campos da tela principal
+            logger.info("Fase 4: Descobrir e preencher campos da tela principal")
+            inputs_tela2 = await popup.evaluate("""() => {
+                const els = document.querySelectorAll('input, select, textarea');
+                return Array.from(els).map(el => ({
+                    tag: el.tagName, type: el.type || '', name: el.name || '',
+                    id: el.id || '', maxLength: el.maxLength || 0
+                }));
+            }""")
+
+            for inp in inputs_tela2:
+                logger.info("  Campo: name=%s id=%s type=%s", inp['name'], inp['id'], inp['type'])
 
             await capturar_screenshot(popup, "222_tela_principal")
 
-            # ── Fase 4: Tela Principal — preencher valor em "Outros" ──
-            logger.info("Fase 4: Preencher valor em 'Outros'")
-
-            # O valor vai no campo "outros" (parcela genérica)
+            # ── Fase 4b: Preencher valor ──
+            # Tentar campo "outros" primeiro, senao tentar "frete"
             valor_formatado = f"{args.valor_outros:.2f}".replace('.', ',')
-            await preencher_campo_no_html(popup, 'outros', valor_formatado, by='name')
-            await asyncio.sleep(0.5)
+            campo_valor = None
+            for nome_campo in ['outros', 'frete', 'vlr_outros', 'vlr_frete', 'valor']:
+                try:
+                    await preencher_campo_no_html(popup, nome_campo, valor_formatado, by='name')
+                    campo_valor = nome_campo
+                    logger.info("Valor %s preenchido no campo '%s'", valor_formatado, nome_campo)
+                    break
+                except ValueError:
+                    continue
 
+            if not campo_valor:
+                await capturar_screenshot(popup, "222_sem_campo_valor")
+                resultado['erro'] = f"Campo de valor nao encontrado. Campos disponiveis: {[i['name'] for i in inputs_tela2]}"
+                resultado['dialogs'] = dialogs
+                return resultado
+
+            await asyncio.sleep(0.5)
             await capturar_screenshot(popup, "222_valor_preenchido")
 
-            # ── Fase 5: Submeter ao SEFAZ ──
-            logger.info("Fase 5: Submeter CTe Complementar")
-            html_resultado = await interceptar_ajax_response(
-                popup, frame, "ajaxEnvia('GRV', 0)", timeout_s=30
+            # ── Fase 5: Gravar via ajaxEnvia ──
+            logger.info("Fase 5: Gravar CTe Complementar")
+
+            # Descobrir qual acao de gravar existe
+            grv_action = await popup.evaluate("""() => {
+                const links = document.querySelectorAll('a');
+                for (const l of links) {
+                    const oc = l.getAttribute('onclick') || '';
+                    if (oc.includes('ajaxEnvia') && oc.includes('GRV'))
+                        return oc.replace(';return false;', '');
+                    if (oc.includes('ajaxEnvia') && l.innerText.includes('Gravar'))
+                        return oc.replace(';return false;', '');
+                }
+                // Fallback: tentar ENV que e o padrao para submeter
+                return null;
+            }""")
+
+            logger.info("Acao gravar: %s", grv_action)
+
+            if grv_action:
+                html_grv = await interceptar_ajax_response(
+                    popup, popup, grv_action, timeout_s=30
+                )
+            else:
+                # Fallback: click no primeiro ► da tela
+                html_grv = await interceptar_ajax_response(
+                    popup, popup, "ajaxEnvia('GRV', 0)", timeout_s=30
+                )
+
+            if html_grv:
+                await injetar_html_no_dom(popup, html_grv)
+                await asyncio.sleep(3)
+            else:
+                await asyncio.sleep(5)
+
+            await capturar_screenshot(popup, "222_pos_gravar")
+
+            # Extrair CTRC do resultado
+            body_final = await popup.evaluate(
+                "() => document.body ? document.body.innerText.substring(0,5000) : ''"
             )
 
-            if html_resultado:
-                await injetar_html_no_dom(popup, html_resultado)
-                await asyncio.sleep(2)
+            # Tentar extrair numero do CTRC complementar gerado
+            if not ctrc_complementar_num:
+                m = re.search(r'CTRC\s*(?:anterior|complementar|gerado)\s*:?\s*0*(\d+)', body_final, re.IGNORECASE)
+                if m:
+                    ctrc_complementar_num = m.group(1)
+                if not ctrc_complementar_num:
+                    m = re.search(r'pre-?CTRC\s*:?\s*0*(\d+)', body_final, re.IGNORECASE)
+                    if m:
+                        ctrc_complementar_num = m.group(1)
 
             await capturar_screenshot(popup, "222_resultado_final")
 
-            # Verificar resultado
-            msg_ssw = await verificar_mensagem_ssw(popup)
-            if msg_ssw:
-                msg_lower = msg_ssw.lower()
-                if 'erro' in msg_lower or 'rejeit' in msg_lower:
-                    resultado['erro'] = msg_ssw
-                    return resultado
-                elif 'sucesso' in msg_lower or 'autorizado' in msg_lower:
-                    resultado['sucesso'] = True
-                    resultado['mensagem_ssw'] = msg_ssw
-                else:
-                    # Nao eh claro se deu certo — log e retornar com sucesso parcial
-                    resultado['sucesso'] = True
-                    resultado['mensagem_ssw'] = msg_ssw
-                    resultado['aviso'] = 'Verificar manualmente no SSW'
-            else:
-                # Sem mensagem — pode ter dado certo
+            resultado['ctrc_complementar'] = ctrc_complementar_num
+            resultado['dialogs'] = dialogs
+            resultado['body_final'] = body_final[:2000]
+
+            # ── Fase 6: Consultar 101 para baixar XML ──
+            if ctrc_complementar_num:
+                logger.info("Fase 6: Consultar CTRC %s via 101 para XML", ctrc_complementar_num)
+                try:
+                    from consultar_ctrc_101 import consultar_ctrc as _consultar
+                    args_101 = argparse.Namespace(
+                        ctrc=ctrc_complementar_num,
+                        nf=None,
+                        filial=filial,
+                        baixar_xml=True,
+                        baixar_dacte=True,
+                        output_dir='/tmp/ssw_operacoes/cte_complementar',
+                    )
+                    res_101 = await _consultar(args_101)
+                    if res_101.get('sucesso'):
+                        resultado['xml'] = res_101.get('xml')
+                        resultado['dacte'] = res_101.get('dacte')
+                        resultado['dados_101'] = {
+                            k: v for k, v in res_101.get('dados', {}).items()
+                            if k != 'body_raw'
+                        }
+                        logger.info("XML baixado: %s", resultado.get('xml'))
+                except Exception as e:
+                    logger.warning("Consulta 101 falhou: %s", e)
+
+            # Determinar sucesso
+            if ctrc_complementar_num:
                 resultado['sucesso'] = True
-                resultado['aviso'] = 'Sem mensagem de retorno — verificar no SSW'
+                resultado['mensagem'] = f"CTe Complementar {ctrc_complementar_num} gerado"
+            else:
+                # Sem CTRC mas pode ter dado certo — verificar body
+                msg_ssw = await verificar_mensagem_ssw(popup)
+                msg_str = str(msg_ssw) if msg_ssw else ''
+                if msg_str and ('sucesso' in msg_str.lower() or 'autorizado' in msg_str.lower()):
+                    resultado['sucesso'] = True
+                    resultado['mensagem_ssw'] = msg_str
+                    resultado['aviso'] = 'CTRC nao capturado — verificar no SSW'
+                elif msg_str and ('erro' in msg_str.lower() or 'rejeit' in msg_str.lower()):
+                    resultado['erro'] = msg_str
+                else:
+                    resultado['sucesso'] = True
+                    resultado['aviso'] = 'Verificar manualmente no SSW'
 
             return resultado
 
