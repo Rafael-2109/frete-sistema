@@ -5,11 +5,16 @@ Rotas de CTe Complementar CarVia — CRUD completo
 import logging
 from datetime import date, datetime
 
-from flask import render_template, request, flash, redirect, url_for
+from flask import (
+    render_template, request, flash, redirect, url_for, Response,
+)
 from flask_login import login_required, current_user
 
 from app import db
-from app.carvia.models import CarviaCteComplementar, CarviaOperacao, CarviaCustoEntrega
+from app.carvia.models import (
+    CarviaCteComplementar, CarviaOperacao, CarviaCustoEntrega,
+    CarviaEmissaoCteComplementar,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -342,3 +347,135 @@ def register_cte_complementar_routes(bp):
         return redirect(url_for(
             'carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id
         ))
+
+    # ── Downloads: XML e DACTE do CTe Complementar ─────────────────────────
+    # XML vem persistido em cte_comp.cte_xml_path (S3 ou local).
+    # DACTE nao tem campo proprio no model — vive em emissao.resultado_json
+    # ('dacte_s3_path') preenchido pelo worker apos emissao bem sucedida.
+
+    @bp.route('/ctes-complementares/<int:cte_comp_id>/download/xml')  # type: ignore
+    @login_required
+    def download_cte_comp_xml(cte_comp_id):  # type: ignore
+        """Download do XML do CTe Complementar (presigned S3 ou send_file local)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        cte_comp = db.session.get(CarviaCteComplementar, cte_comp_id)
+        if not cte_comp or not cte_comp.cte_xml_path:
+            flash('XML do CTe Complementar nao disponivel.', 'warning')
+            return redirect(
+                request.referrer
+                or url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id)
+            )
+
+        filename = (
+            cte_comp.cte_xml_nome_arquivo
+            or (f"{cte_comp.cte_chave_acesso}-cte.xml"
+                if cte_comp.cte_chave_acesso else 'cte-complementar.xml')
+        )
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+
+            # Tenta presigned URL (S3)
+            url = storage.get_download_url(cte_comp.cte_xml_path, filename)
+            if url:
+                return redirect(url)
+
+            # Fallback local: servir bytes diretamente
+            data = storage.download_file(cte_comp.cte_xml_path)
+            if data:
+                return Response(
+                    data,
+                    mimetype='application/xml',
+                    headers={
+                        'Content-Disposition':
+                        f'attachment; filename="{filename}"'
+                    },
+                )
+
+            flash('Nao foi possivel baixar o XML.', 'warning')
+        except Exception as e:
+            logger.error(
+                "Erro ao baixar XML do CTe Complementar %s: %s",
+                cte_comp_id, e
+            )
+            flash(f'Erro ao baixar XML: {e}', 'danger')
+
+        return redirect(
+            request.referrer
+            or url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id)
+        )
+
+    @bp.route('/ctes-complementares/<int:cte_comp_id>/download/dacte')  # type: ignore
+    @login_required
+    def download_cte_comp_dacte(cte_comp_id):  # type: ignore
+        """Download do DACTE PDF do CTe Complementar (via emissao.resultado_json)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        cte_comp = db.session.get(CarviaCteComplementar, cte_comp_id)
+        if not cte_comp:
+            flash('CTe Complementar nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_ctes_complementares'))
+
+        # Localizar caminho do DACTE no resultado_json da emissao vinculada
+        dacte_path = None
+        dacte_filename = None
+        emissao = db.session.query(CarviaEmissaoCteComplementar).filter(
+            CarviaEmissaoCteComplementar.cte_complementar_id == cte_comp_id,
+            CarviaEmissaoCteComplementar.status == 'SUCESSO',
+        ).order_by(
+            CarviaEmissaoCteComplementar.criado_em.desc()
+        ).first()
+
+        if emissao and isinstance(emissao.resultado_json, dict):
+            dacte_path = emissao.resultado_json.get('dacte_s3_path')
+            dacte_filename = emissao.resultado_json.get('dacte_nome_arquivo')
+
+        if not dacte_path:
+            flash('DACTE nao disponivel para este CTe Complementar.', 'warning')
+            return redirect(
+                request.referrer
+                or url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id)
+            )
+
+        filename = (
+            dacte_filename
+            or f"{cte_comp.ctrc_numero or cte_comp.numero_comp}-dacte.pdf"
+        )
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+
+            url = storage.get_download_url(dacte_path, filename)
+            if url:
+                return redirect(url)
+
+            data = storage.download_file(dacte_path)
+            if data:
+                return Response(
+                    data,
+                    mimetype='application/pdf',
+                    headers={
+                        'Content-Disposition':
+                        f'attachment; filename="{filename}"'
+                    },
+                )
+
+            flash('Nao foi possivel baixar o DACTE.', 'warning')
+        except Exception as e:
+            logger.error(
+                "Erro ao baixar DACTE do CTe Complementar %s: %s",
+                cte_comp_id, e
+            )
+            flash(f'Erro ao baixar DACTE: {e}', 'danger')
+
+        return redirect(
+            request.referrer
+            or url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id)
+        )

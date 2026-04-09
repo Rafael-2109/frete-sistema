@@ -202,6 +202,120 @@
         </div>
     </div>
 
+    {# ── Resumo da Emissao CTe Complementar (quando finalizada com sucesso) ── #}
+    {% if emissao_comp and emissao_comp.status == 'SUCESSO' and emissao_comp.resultado_json %}
+    {% set rj = emissao_comp.resultado_json %}
+    {% set icms_pai = rj.icms_pai or {} %}
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-file-invoice-dollar"></i>
+                Emissao CTe Complementar — SSW (opcao 222)
+                {% if rj.sefaz_enviado %}
+                <span class="badge bg-success ms-2">
+                    <i class="fas fa-check"></i> SEFAZ autorizado
+                </span>
+                {% endif %}
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">CTe Pai (base)</small>
+                    <strong>{{ icms_pai.ctrc_completo or emissao_comp.ctrc_pai or '-' }}</strong>
+                    {% if icms_pai.cte %}
+                    <div class="small text-muted">CT-e {{ icms_pai.cte }}</div>
+                    {% endif %}
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">ICMS extraido do pai</small>
+                    <strong>
+                        {% if icms_pai.aliquota_icms is not none %}
+                            {{ icms_pai.aliquota_icms|numero_br(2) }}%
+                        {% elif emissao_comp.icms_aliquota_usada %}
+                            {{ emissao_comp.icms_aliquota_usada|numero_br(2) }}%
+                        {% else %}-{% endif %}
+                    </strong>
+                    {% if icms_pai.valor_icms is not none and icms_pai.valor_frete is not none %}
+                    <div class="small text-muted">
+                        {{ icms_pai.valor_icms|valor_br }} sobre {{ icms_pai.valor_frete|valor_br }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Valor base (custo)</small>
+                    <strong>{{ custo.valor|valor_br }}</strong>
+                    <div class="small text-muted">PIS/COFINS 9,25% (fixo)</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Valor CTe Complementar</small>
+                    <strong class="text-success fs-5">
+                        {{ emissao_comp.valor_calculado|valor_br }}
+                    </strong>
+                    <div class="small text-muted">Apos grossing up</div>
+                </div>
+            </div>
+
+            {% if rj.ctrc_complementar %}
+            <hr>
+            <div class="row g-3 align-items-center">
+                <div class="col-md-4">
+                    <small class="text-muted d-block">CTRC emitido no SSW</small>
+                    <strong>{{ rj.ctrc_complementar }}</strong>
+                    {% if custo.cte_complementar and custo.cte_complementar.cte_chave_acesso %}
+                    <div class="small text-muted font-monospace" style="word-break: break-all;">
+                        {{ custo.cte_complementar.cte_chave_acesso }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    {% if custo.cte_complementar and custo.cte_complementar.cte_data_emissao %}
+                    <small class="text-muted d-block">Data emissao</small>
+                    <strong>{{ custo.cte_complementar.cte_data_emissao.strftime('%d/%m/%Y') }}</strong>
+                    {% endif %}
+                    {% if rj.unid_emit_usado %}
+                    <div class="small text-muted">
+                        Local prestacao: {{ rj.unid_emit_usado }}
+                        {%- if rj.unid_emit_readonly %} (forcado SSW){% endif -%}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 text-md-end">
+                    {% if custo.cte_complementar and custo.cte_complementar.cte_xml_path %}
+                    <a href="{{ url_for('carvia.download_cte_comp_xml', cte_comp_id=custo.cte_complementar.id) }}"
+                       class="btn btn-sm btn-outline-primary" target="_blank"
+                       title="Download XML do CTe Complementar">
+                        <i class="fas fa-file-code"></i> XML
+                    </a>
+                    {% endif %}
+                    {% if rj.dacte_s3_path and custo.cte_complementar %}
+                    <a href="{{ url_for('carvia.download_cte_comp_dacte', cte_comp_id=custo.cte_complementar.id) }}"
+                       class="btn btn-sm btn-outline-primary" target="_blank"
+                       title="Download DACTE PDF">
+                        <i class="fas fa-file-pdf"></i> DACTE
+                    </a>
+                    {% endif %}
+                    {% if custo.cte_complementar %}
+                    <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=custo.cte_complementar.id) }}"
+                       class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-eye"></i> Detalhe CTe Comp
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if rj.persistencia_erro or rj.xml_parse_erro or rj.dacte_persist_erro %}
+            <div class="alert alert-warning mt-3 mb-0 py-2 small">
+                <i class="fas fa-exclamation-triangle"></i>
+                Emissao concluida mas houve aviso na persistencia:
+                {{ rj.persistencia_erro or rj.xml_parse_erro or rj.dacte_persist_erro }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Documentos Relacionados -->
     {% if operacao %}
     <div class="row g-4 mt-0">

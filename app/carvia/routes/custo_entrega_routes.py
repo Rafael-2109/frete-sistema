@@ -716,7 +716,7 @@ def register_custo_entrega_routes(bp):
                     CTeXMLParserCarvia,
                 )
                 storage = get_file_storage()
-                xml_bytes = storage.get_file_content(operacao.cte_xml_path)
+                xml_bytes = storage.download_file(operacao.cte_xml_path)
                 if xml_bytes:
                     xml_str = xml_bytes.decode('utf-8', errors='replace')
                     parser = CTeXMLParserCarvia(xml_str)

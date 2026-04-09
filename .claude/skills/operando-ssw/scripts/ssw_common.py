@@ -396,7 +396,7 @@ async def capturar_campos(target):
 
 async def capturar_screenshot(page_or_frame, nome, diretorio=None):
     """
-    Captura screenshot como evidencia.
+    Captura screenshot como evidencia (nao bloqueante).
 
     Args:
         page_or_frame: Playwright Page
@@ -404,14 +404,29 @@ async def capturar_screenshot(page_or_frame, nome, diretorio=None):
         diretorio: Diretorio de destino (default: EVIDENCE_DIR)
 
     Returns:
-        str: Caminho do arquivo salvo
+        str: Caminho do arquivo salvo, ou None se falhar
+
+    Notas:
+        - timeout 8s (evita trava de 30s em "waiting for fonts")
+        - full_page=False (mais rapido, evita font loading issue)
+        - erros nao propagam — screenshot e evidencia, nao deve quebrar fluxo
     """
     diretorio = diretorio or EVIDENCE_DIR
     os.makedirs(diretorio, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = os.path.join(diretorio, f"{nome}_{timestamp}.png")
-    await page_or_frame.screenshot(path=path, full_page=True)
-    return path
+    try:
+        await page_or_frame.screenshot(path=path, full_page=False, timeout=8000)
+        return path
+    except Exception as e:
+        # Screenshot e evidencia — falha nao deve interromper operacao fiscal.
+        # Logar warning e continuar.
+        import logging
+        logging.getLogger(__name__).warning(
+            "Screenshot '%s' falhou (%s) — continuando sem evidencia visual",
+            nome, type(e).__name__
+        )
+        return None
 
 
 def gerar_saida(sucesso, **kwargs):

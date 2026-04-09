@@ -19,7 +19,19 @@
                 por {{ cte_comp.criado_por or '-' }}
             </p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            {% if cte_comp.cte_xml_path %}
+            <a href="{{ url_for('carvia.download_cte_comp_xml', cte_comp_id=cte_comp.id) }}"
+               class="btn btn-outline-primary" target="_blank"
+               title="Download XML autorizado SEFAZ">
+                <i class="fas fa-file-code"></i> XML
+            </a>
+            <a href="{{ url_for('carvia.download_cte_comp_dacte', cte_comp_id=cte_comp.id) }}"
+               class="btn btn-outline-primary" target="_blank"
+               title="Download DACTE PDF">
+                <i class="fas fa-file-pdf"></i> DACTE
+            </a>
+            {% endif %}
             {% if cte_comp.status not in ('CANCELADO', 'FATURADO') %}
             <a href="{{ url_for('carvia.editar_cte_complementar', cte_comp_id=cte_comp.id) }}" class="btn btn-outline-primary">
                 <i class="fas fa-edit"></i> Editar
@@ -92,6 +104,12 @@
                             <div class="cnpj-col small text-muted">{{ cte_comp.cnpj_cliente }}</div>
                             {% endif %}
                         </div>
+                        {% if cte_comp.cte_chave_acesso %}
+                        <div class="col-12">
+                            <small class="text-muted d-block">Chave de Acesso SEFAZ</small>
+                            <code class="small" style="word-break: break-all;">{{ cte_comp.cte_chave_acesso }}</code>
+                        </div>
+                        {% endif %}
                     </div>
                     {% if cte_comp.observacoes %}
                     <hr>
