@@ -127,20 +127,24 @@ async def emitir_cte_complementar(args):
             # Capturar screenshot da tela inicial
             await capturar_screenshot(popup, "222_tela_inicial")
 
+            # Campos reais da tela 222 (descobertos via DOM inspect):
+            #   motivo (name=motivo, maxLen=1): C/D/V/E/R
+            #   nro_desp (name=nro_desp): num lancamento despesa (so motivo R)
+            #   f1 (name=f1, maxLen=3): filial (ex: CAR)
+            #   f2 (name=f2, maxLen=7): CTRC com DV (ex: 113-9)
+            #   cod_bar (name=cod_bar, maxLen=44): chave acesso (alternativa)
+
             # Preencher Motivo do complemento
             await preencher_campo_no_html(popup, 'motivo', args.motivo, by='name')
             await asyncio.sleep(0.5)
 
-            # Preencher CTRC — filial (sigla)
-            await preencher_campo_no_html(popup, 'sigla', filial, by='name')
+            # Preencher CTRC — filial
+            await preencher_campo_no_html(popup, 'f1', filial, by='name')
             await asyncio.sleep(0.3)
 
-            # Preencher CTRC — numero
-            await preencher_campo_no_html(popup, 'ctrc', ctrc_num, by='name')
-            await asyncio.sleep(0.3)
-
-            # Preencher CTRC — digito verificador
-            await preencher_campo_no_html(popup, 'dv', ctrc_dv, by='name')
+            # Preencher CTRC — numero com DV (ex: 113-9)
+            ctrc_com_dv = f"{ctrc_num}-{ctrc_dv}"
+            await preencher_campo_no_html(popup, 'f2', ctrc_com_dv, by='name')
             await asyncio.sleep(0.3)
 
             await capturar_screenshot(popup, "222_preenchido_inicial")
