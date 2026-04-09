@@ -445,4 +445,117 @@
             btn.innerHTML = '<i class="fas fa-save"></i> Cadastrar';
         }
     });
+
+    // ─── CTe Complementar: vinculo de Custo Entrega ─────────────────────────
+    // Dropdown que selecionar o Custo Entrega para vincular ao CTe Comp.
+    // Dispara API que valida + persiste no Redis.
+    document.querySelectorAll('.carvia-cte-comp-custo-select').forEach(function(select) {
+        select.addEventListener('change', function() {
+            var indice = parseInt(select.dataset.indice);
+            var custoIdRaw = select.value;
+            var custoId = custoIdRaw === '' ? null : parseInt(custoIdRaw);
+
+            select.disabled = true;
+            fetch('/carvia/api/importacao/selecionar-custo-entrega-cte-comp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({
+                    importacao_chave: importacaoChave,
+                    indice: indice,
+                    custo_entrega_id: custoId,
+                }),
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                select.disabled = false;
+                if (data.sucesso) {
+                    select.classList.add('is-valid');
+                    setTimeout(function() { select.classList.remove('is-valid'); }, 1500);
+                } else {
+                    select.classList.add('is-invalid');
+                    alert('Erro ao vincular Custo Entrega: ' + (data.erro || 'desconhecido'));
+                    setTimeout(function() { select.classList.remove('is-invalid'); }, 2500);
+                }
+            }).catch(function(err) {
+                select.disabled = false;
+                select.classList.add('is-invalid');
+                alert('Erro de conexao: ' + err.message);
+            });
+        });
+    });
+
+    // ─── CTe Complementar: edicao do CTRC via input ─────────────────────────
+    // Reusa a API generica /api/importacao/editar-item (campo='ctrc_numero').
+    document.querySelectorAll('.carvia-cte-comp-ctrc').forEach(function(input) {
+        input.addEventListener('change', function() {
+            var indice = parseInt(input.dataset.indice);
+            var novoValor = input.value.trim() || null;
+
+            fetch('/carvia/api/importacao/editar-item', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({
+                    importacao_chave: importacaoChave,
+                    tipo: 'cte',
+                    indice: indice,
+                    campo: 'ctrc_numero',
+                    valor: novoValor,
+                }),
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data.sucesso) {
+                    input.classList.add('is-valid');
+                    setTimeout(function() { input.classList.remove('is-valid'); }, 1500);
+                } else {
+                    input.classList.add('is-invalid');
+                    setTimeout(function() { input.classList.remove('is-invalid'); }, 2500);
+                }
+            });
+        });
+    });
+
+    // ─── CTe Complementar: botao "Verificar SSW" ────────────────────────────
+    // Marca/desmarca o flag verificar_ctrc_ssw no preview. Quando o usuario
+    // confirmar a importacao, o salvar_importacao enfileira job RQ background
+    // que consulta SSW opcao 101 e atualiza ctrc_numero se divergir.
+    document.querySelectorAll('.carvia-verificar-ctrc-ssw-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var indice = parseInt(btn.dataset.indice);
+            var jaAtivo = btn.classList.contains('active');
+            var marcar = !jaAtivo;
+
+            btn.disabled = true;
+            fetch('/carvia/api/importacao/marcar-verificar-ctrc-ssw', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({
+                    importacao_chave: importacaoChave,
+                    indice: indice,
+                    verificar: marcar,
+                }),
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                btn.disabled = false;
+                if (data.sucesso) {
+                    if (marcar) {
+                        btn.classList.add('active', 'btn-info');
+                        btn.classList.remove('btn-outline-info');
+                    } else {
+                        btn.classList.remove('active', 'btn-info');
+                        btn.classList.add('btn-outline-info');
+                    }
+                } else {
+                    alert('Erro: ' + (data.erro || 'desconhecido'));
+                }
+            }).catch(function(err) {
+                btn.disabled = false;
+                alert('Erro de conexao: ' + err.message);
+            });
+        });
+    });
 })();

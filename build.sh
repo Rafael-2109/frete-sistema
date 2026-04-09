@@ -56,6 +56,14 @@ python scripts/deploy_render.py || echo "Script de verificação falhou, continu
 echo "Inicializando banco..."
 python init_db.py
 
+# 6. Backfill CarVia: preencher icms_aliquota de operacoes antigas via XML.
+# Idempotente — so atualiza operacoes com icms_aliquota IS NULL e
+# cte_xml_path populado. Recem-corrigido para suportar ICMSOutraUF
+# (CFOP 5932/6932, frete prestado por transportador de outra UF).
+echo "Backfill icms_aliquota CarVia (idempotente)..."
+python scripts/migrations/add_icms_aliquota_carvia_operacoes.py \
+    || echo "⚠️ Backfill icms_aliquota falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

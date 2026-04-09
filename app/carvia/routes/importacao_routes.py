@@ -219,6 +219,171 @@ def register_importacao_routes(bp):
 
         return {'sucesso': True}
 
+    @bp.route('/api/importacao/selecionar-custo-entrega-cte-comp', methods=['POST'])
+    @login_required
+    def api_selecionar_custo_entrega_cte_comp():
+        """Vincula um Custo Entrega a um CTe Complementar no preview.
+
+        Body JSON:
+            importacao_chave: UUID da importacao no Redis
+            indice: posicao do CTe na lista ctes_parseados
+            custo_entrega_id: ID do CarviaCustoEntrega (int) ou null para desvincular
+
+        Validacoes:
+            - Custo Entrega existe
+            - Pertence a operacao pai do CTe Comp (operacao_pai_id no preview)
+            - Esta no estado PENDENTE (nao PAGO)
+            - Ainda nao tem cte_complementar_id
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
+
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        indice = data.get('indice')
+        custo_id = data.get('custo_entrega_id')  # int ou None
+
+        if not chave or indice is None:
+            return {
+                'sucesso': False,
+                'erro': 'Campos obrigatorios: importacao_chave, indice.'
+            }, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {
+                'sucesso': False,
+                'erro': 'Importacao nao encontrada ou expirada.'
+            }, 404
+
+        ctes = resultado.get('ctes_parseados', [])
+        if indice < 0 or indice >= len(ctes):
+            return {
+                'sucesso': False,
+                'erro': f'Indice {indice} fora do range.'
+            }, 400
+
+        cte = ctes[indice]
+        if cte.get('classificacao') != 'CTE_COMPLEMENTAR':
+            return {
+                'sucesso': False,
+                'erro': 'CTe nao e Complementar.'
+            }, 400
+
+        # Validar custo_entrega_id (se nao-null)
+        if custo_id is not None:
+            try:
+                custo_id_int = int(custo_id)
+            except (ValueError, TypeError):
+                return {
+                    'sucesso': False,
+                    'erro': 'custo_entrega_id deve ser inteiro.'
+                }, 400
+
+            from app.carvia.models import CarviaCustoEntrega
+            custo = CarviaCustoEntrega.query.get(custo_id_int)
+            if not custo:
+                return {
+                    'sucesso': False,
+                    'erro': f'Custo Entrega {custo_id_int} nao encontrado.'
+                }, 404
+
+            operacao_pai_id = cte.get('operacao_pai_id')
+            if operacao_pai_id and custo.operacao_id != operacao_pai_id:
+                return {
+                    'sucesso': False,
+                    'erro': (
+                        f'Custo Entrega pertence a operacao {custo.operacao_id}, '
+                        f'mas CTe Comp e da operacao {operacao_pai_id}.'
+                    )
+                }, 400
+
+            if custo.status == 'PAGO':
+                return {
+                    'sucesso': False,
+                    'erro': 'Custo Entrega ja PAGO nao pode receber CTe Comp.'
+                }, 400
+
+            if custo.cte_complementar_id:
+                return {
+                    'sucesso': False,
+                    'erro': (
+                        f'Custo Entrega ja vinculado ao CTe Comp '
+                        f'{custo.cte_complementar_id}.'
+                    )
+                }, 400
+
+            cte['custo_entrega_id_selecionado'] = custo_id_int
+        else:
+            cte['custo_entrega_id_selecionado'] = None
+
+        resultado['ctes_parseados'] = ctes
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: CTeComp[{indice}] "
+            f"custo_entrega_id_selecionado = {custo_id}"
+        )
+        return {'sucesso': True, 'custo_entrega_id': custo_id}
+
+    @bp.route('/api/importacao/marcar-verificar-ctrc-ssw', methods=['POST'])
+    @login_required
+    def api_marcar_verificar_ctrc_ssw():
+        """Marca um CTe Complementar para verificacao de CTRC via SSW.
+
+        Apos a confirmacao da importacao, o salvar_importacao enfileira um
+        job RQ por CTe marcado que consulta SSW opcao 101 e atualiza o
+        ctrc_numero se divergir do XML.
+
+        Body JSON:
+            importacao_chave: UUID
+            indice: int
+            verificar: bool (true para marcar, false para desmarcar)
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
+
+        data = request.get_json()
+        if not data:
+            return {'sucesso': False, 'erro': 'Body JSON obrigatorio.'}, 400
+
+        chave = data.get('importacao_chave')
+        indice = data.get('indice')
+        verificar = bool(data.get('verificar', True))
+
+        if not chave or indice is None:
+            return {
+                'sucesso': False,
+                'erro': 'Campos obrigatorios: importacao_chave, indice.'
+            }, 400
+
+        resultado = _obter_importacao_temp(current_user.id, chave)
+        if not resultado:
+            return {
+                'sucesso': False,
+                'erro': 'Importacao nao encontrada ou expirada.'
+            }, 404
+
+        ctes = resultado.get('ctes_parseados', [])
+        if indice < 0 or indice >= len(ctes):
+            return {
+                'sucesso': False,
+                'erro': f'Indice {indice} fora do range.'
+            }, 400
+
+        ctes[indice]['verificar_ctrc_ssw'] = verificar
+        resultado['ctes_parseados'] = ctes
+        _salvar_importacao_temp(current_user.id, resultado, chave_uuid=chave)
+
+        logger.info(
+            f"[IMPORT-EDIT] {current_user.email}: CTeComp[{indice}] "
+            f"verificar_ctrc_ssw = {verificar}"
+        )
+        return {'sucesso': True, 'verificar': verificar}
+
     @bp.route('/api/importacao/reclassificar-fatura', methods=['POST'])
     @login_required
     def api_importacao_reclassificar_fatura():

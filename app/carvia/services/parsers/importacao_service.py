@@ -306,6 +306,78 @@ class ImportacaoService:
                     cte.get('cte_numero'),
                 )
 
+        # Pareamento DACTE PDF ↔ CTe Complementar XML pela chave de acesso
+        # Quando o usuário sobe XML + DACTE do mesmo CTe Comp no mesmo upload,
+        # o DACTE chega como entrada separada em ctes_parseados via _parsear_dacte_pdf.
+        # Este loop transfere o cte_pdf_path do item DACTE para o item XML
+        # complementar (mesma chave) e marca o DACTE para ser ignorado no salvar.
+        for cte in ctes_parseados:
+            if cte.get('classificacao') != 'CTE_COMPLEMENTAR':
+                continue
+            chave = cte.get('cte_chave_acesso')
+            if not chave:
+                continue
+            # Procurar par DACTE pela mesma chave
+            for outro in ctes_parseados:
+                if outro is cte:
+                    continue
+                if outro.get('cte_chave_acesso') != chave:
+                    continue
+                if outro.get('cte_pdf_path') and not cte.get('cte_pdf_path'):
+                    cte['cte_pdf_path'] = outro['cte_pdf_path']
+                    cte['dacte_pareado'] = True
+                    outro['_skip_save'] = True  # marca DACTE para pular no salvar
+                    logger.info(
+                        "DACTE pareado a CTe Comp %s pela chave %s",
+                        cte.get('cte_numero'), chave[:20] + '...'
+                    )
+                    break
+
+        # Calcular custos_entrega_candidatos para cada CTe Complementar
+        # Permite que o preview (importar_resultado.html) mostre dropdown
+        # com Custos Entrega disponíveis para vinculação manual.
+        for cte in ctes_parseados:
+            if cte.get('classificacao') != 'CTE_COMPLEMENTAR':
+                continue
+            info_comp = cte.get('info_complementar') or {}
+            chave_pai = info_comp.get('chave_cte_original')
+            if not chave_pai:
+                cte['custos_entrega_candidatos'] = []
+                continue
+            try:
+                op_pai = CarviaOperacao.query.filter_by(
+                    cte_chave_acesso=chave_pai
+                ).first()
+                if not op_pai:
+                    cte['custos_entrega_candidatos'] = []
+                    cte['operacao_pai_nao_encontrada'] = True
+                    continue
+                cte['operacao_pai_id'] = op_pai.id
+                cte['operacao_pai_ctrc_numero'] = op_pai.ctrc_numero
+                from app.carvia.services.cte_complementar_persistencia import (
+                    auto_match_custo_entrega,
+                )
+                candidatos = auto_match_custo_entrega(op_pai.id)
+                cte['custos_entrega_candidatos'] = [
+                    {
+                        'id': c.id,
+                        'numero_custo': c.numero_custo,
+                        'tipo_custo': c.tipo_custo,
+                        'valor': float(c.valor),
+                        'status': c.status,
+                    }
+                    for c in candidatos
+                ]
+                # Auto-match: se houver UM ÚNICO candidato, pré-seleciona
+                if len(candidatos) == 1:
+                    cte['custo_entrega_id_selecionado'] = candidatos[0].id
+            except Exception as e:
+                logger.warning(
+                    "Falha ao calcular custos_entrega_candidatos para CTe Comp "
+                    "%s: %s", cte.get('cte_numero'), e
+                )
+                cte['custos_entrega_candidatos'] = []
+
         # Pre-check: verificar transportadoras para CTes subcontrato e faturas
         transportadoras_nao_encontradas = {}
 
@@ -587,12 +659,19 @@ class ImportacaoService:
 
             # 2. Separar CTes por classificacao (filtro positivo: evitar
             #    CTes com classificacao None/invalida virarem operacao)
+            # Filtro positivo + exclusao de itens marcados com _skip_save.
+            # _skip_save e setado em processar_arquivos quando o item DACTE PDF
+            # foi pareado com um XML CTe Complementar (mesma chave de acesso) —
+            # o DACTE nao deve virar nenhum registro proprio.
             ctes_carvia = [c for c in ctes_data
-                           if c.get('classificacao') == 'CTE_CARVIA']
+                           if c.get('classificacao') == 'CTE_CARVIA'
+                           and not c.get('_skip_save')]
             ctes_subcontrato = [c for c in ctes_data
-                                if c.get('classificacao') == 'CTE_SUBCONTRATO']
+                                if c.get('classificacao') == 'CTE_SUBCONTRATO'
+                                and not c.get('_skip_save')]
             ctes_complementar = [c for c in ctes_data
-                                 if c.get('classificacao') == 'CTE_COMPLEMENTAR']
+                                 if c.get('classificacao') == 'CTE_COMPLEMENTAR'
+                                 and not c.get('_skip_save')]
 
             # 3. Criar Operacoes a partir dos CTes CarVia
             for cte_data in ctes_carvia:
@@ -727,7 +806,31 @@ class ImportacaoService:
                     )
 
             # 3.5 Criar CTe Complementar a partir de CTes tipo complementar
+            #
+            # Para fechar os 7 gaps com o worker SSW, este bloco usa o helper
+            # `cte_complementar_persistencia.persistir_cte_complementar_completo`
+            # que cuida de:
+            #   - Parser XML (chave, numero, data, valor)
+            #   - Detectar status EMITIDO via <protCTe>/cStat=100
+            #   - Upload XML para folder S3 correto (carvia/ctes_complementares_xml)
+            #   - Upload DACTE para folder S3 correto (carvia/ctes_complementares_dacte)
+            #   - Vincular CarviaCustoEntrega.cte_complementar_id
+            #   - Criar CarviaEmissaoCteComplementar com resultado_json
+            from app.carvia.services.cte_complementar_persistencia import (
+                persistir_cte_complementar_completo,
+            )
+            from app.utils.file_storage import get_file_storage
+            from app.carvia.models import (
+                CarviaCustoEntrega, CarviaFrete,
+            )
+
+            storage = get_file_storage()
             ctes_comp_criados = []
+            # Jobs de verificacao SSW sao enfileirados APOS o commit final
+            # para evitar race: se o commit falhar por qualquer razao, os
+            # cte_comp ids nao existirao e o job falharia silenciosamente.
+            cte_comps_para_verificar_ssw = []
+
             for cte_data in ctes_complementar:
                 try:
                     info_comp = cte_data.get('info_complementar') or {}
@@ -784,27 +887,98 @@ class ImportacaoService:
                         criado_por=criado_por,
                     )
 
-                    # Salvar XML path se disponivel
-                    if cte_data.get('cte_xml_path'):
-                        cte_comp.cte_xml_path = cte_data['cte_xml_path']
-
-                    with db.session.begin_nested():
-                        db.session.add(cte_comp)
-                        db.session.flush()
+                    db.session.add(cte_comp)
+                    db.session.flush()  # gerar cte_comp.id antes do helper
 
                     # Vincular ao CarviaFrete pela operacao
-                    from app.carvia.models import CarviaFrete
                     frete = CarviaFrete.query.filter_by(
                         operacao_id=operacao_original.id
                     ).first()
                     if frete:
                         cte_comp.frete_id = frete.id
 
+                    # Resolver Custo Entrega (selecionado pelo usuario no
+                    # preview ou auto-match na ausencia de selecao)
+                    custo_entrega = None
+                    custo_id_selecionado = cte_data.get(
+                        'custo_entrega_id_selecionado'
+                    )
+                    if custo_id_selecionado:
+                        custo_entrega = db.session.get(
+                            CarviaCustoEntrega, int(custo_id_selecionado)
+                        )
+                        if custo_entrega and custo_entrega.cte_complementar_id:
+                            logger.warning(
+                                "Custo Entrega %s ja vinculado a CTe Comp %s — "
+                                "ignorando selecao manual",
+                                custo_entrega.numero_custo,
+                                custo_entrega.cte_complementar_id,
+                            )
+                            custo_entrega = None
+
+                    # Baixar bytes do XML e DACTE do S3 (paths salvos no upload)
+                    xml_bytes = None
+                    xml_path = cte_data.get('cte_xml_path')
+                    if xml_path:
+                        try:
+                            xml_bytes = storage.download_file(xml_path)
+                        except Exception as e_dl:
+                            logger.warning(
+                                "Falha ao baixar XML CTe Comp %s do S3: %s",
+                                xml_path, e_dl
+                            )
+
+                    dacte_bytes = None
+                    dacte_path = cte_data.get('cte_pdf_path')
+                    if dacte_path:
+                        try:
+                            dacte_bytes = storage.download_file(dacte_path)
+                        except Exception as e_dl:
+                            logger.warning(
+                                "Falha ao baixar DACTE CTe Comp %s do S3: %s",
+                                dacte_path, e_dl
+                            )
+
+                    # Persistir tudo via helper (parser, S3 folder correto,
+                    # CarviaEmissaoCteComplementar, vínculo de Custo Entrega)
+                    resultado_persist = persistir_cte_complementar_completo(
+                        cte_comp=cte_comp,
+                        xml_bytes=xml_bytes,
+                        xml_nome=None,  # helper gera baseado na chave
+                        dacte_bytes=dacte_bytes,
+                        dacte_nome=None,
+                        custo_entrega=custo_entrega,
+                        motivo_ssw='C',  # Complementar geral (manual import)
+                        filial_ssw='CAR',
+                        icms_pai=None,  # helper extrai do CTe pai
+                        valor_calculado=None,  # helper usa cte_valor do XML
+                        criado_por=criado_por,
+                        origem='IMPORTACAO_MANUAL',
+                    )
+
+                    if resultado_persist.get('erros'):
+                        for err in resultado_persist['erros']:
+                            erros.append(
+                                f"CTe Comp {cte_data.get('cte_numero')}: {err}"
+                            )
+
                     ctes_comp_criados.append(cte_comp)
+
+                    # Marcar para verificar SSW apos o commit final (ver bloco
+                    # pos-commit abaixo). Enfileirar ANTES do commit causa race:
+                    # se commit falhar, job nao encontra o cte_comp.
+                    if cte_data.get('verificar_ctrc_ssw'):
+                        cte_comps_para_verificar_ssw.append(cte_comp.id)
+
                     logger.info(
-                        "CTe Complementar criado: %s → op=%s (CTe original: %s)",
+                        "CTe Complementar criado: %s → op=%s "
+                        "(CTe original: %s, custo_vinculado=%s, "
+                        "emissao_id=%s, status=%s)",
                         numero_comp, operacao_original.id,
                         operacao_original.cte_numero,
+                        custo_entrega.numero_custo if custo_entrega else 'NENHUM',
+                        resultado_persist.get('emissao_id'),
+                        cte_comp.status,
                     )
 
                 except IntegrityError as e:
@@ -1005,6 +1179,40 @@ class ImportacaoService:
             nfs_sem_cte_count = len(nfs_criadas) - len(nf_ids_vinculados)
 
             db.session.commit()
+
+            # Enfileirar jobs de verificacao SSW APOS commit bem-sucedido.
+            # Fazer antes do commit causa race: se o commit falhar, o cte_comp
+            # nao existe mas o job ja esta na fila (retorna SKIPPED silencioso).
+            if cte_comps_para_verificar_ssw:
+                try:
+                    from app.portal.workers import enqueue_job
+                    from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                        verificar_ctrc_cte_comp_job,
+                    )
+                    for _cte_comp_id in cte_comps_para_verificar_ssw:
+                        try:
+                            enqueue_job(
+                                verificar_ctrc_cte_comp_job,
+                                _cte_comp_id,
+                                queue_name='default',
+                                timeout='10m',
+                            )
+                            logger.info(
+                                "CTe Comp id=%s: job verificar_ctrc_ssw "
+                                "enfileirado (pos-commit)",
+                                _cte_comp_id,
+                            )
+                        except Exception as e_job:
+                            logger.warning(
+                                "Falha ao enfileirar job verificar_ctrc_ssw "
+                                "para CTe Comp id=%s: %s",
+                                _cte_comp_id, e_job,
+                            )
+                except ImportError as e_imp:
+                    logger.warning(
+                        "Falha ao importar worker verificar_ctrc_ssw_jobs: %s",
+                        e_imp,
+                    )
 
             return {
                 'sucesso': True,

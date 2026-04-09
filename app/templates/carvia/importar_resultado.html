@@ -375,6 +375,75 @@
                                 </div>
                             </td>
                         </tr>
+                        {# Linha extra para CTes Complementares: vinculo Custo Entrega + CTRC #}
+                        {% if cte.classificacao == 'CTE_COMPLEMENTAR' %}
+                        <tr class="carvia-cte-comp-row" data-tipo="cte" data-indice="{{ loop.index0 }}">
+                            <td colspan="8" class="p-2" style="background-color: var(--bs-warning-bg-subtle, #fff3cd);">
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-1 text-center">
+                                        <i class="fas fa-plus-circle text-warning fa-lg" title="CTe Complementar"></i>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label mb-0 small text-muted">CTRC (do XML):</label>
+                                        <input type="text"
+                                               class="form-control form-control-sm carvia-cte-comp-ctrc carvia-editable-cell"
+                                               value="{{ cte.ctrc_numero or '' }}"
+                                               data-tipo="cte"
+                                               data-indice="{{ loop.index0 }}"
+                                               data-campo="ctrc_numero"
+                                               placeholder="CAR-XXX-X">
+                                    </div>
+                                    <div class="col-md-1">
+                                        <label class="form-label mb-0 small text-muted">&nbsp;</label>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-info w-100 carvia-verificar-ctrc-ssw-btn{% if cte.verificar_ctrc_ssw %} active{% endif %}"
+                                                data-indice="{{ loop.index0 }}"
+                                                title="Marcar para verificar CTRC via SSW (job background pos-confirmacao)">
+                                            <i class="fas fa-search"></i> SSW
+                                        </button>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label mb-0 small text-muted">Custo Entrega vinculado:</label>
+                                        {% if cte.get('operacao_pai_nao_encontrada') %}
+                                            <div class="alert alert-danger py-1 px-2 mb-0 small">
+                                                CTe pai nao encontrado no banco — importe o CTe original primeiro.
+                                            </div>
+                                        {% elif cte.custos_entrega_candidatos %}
+                                            <select class="form-select form-select-sm carvia-cte-comp-custo-select"
+                                                    data-indice="{{ loop.index0 }}">
+                                                <option value="">— Sem vinculo —</option>
+                                                {% for c in cte.custos_entrega_candidatos %}
+                                                <option value="{{ c.id }}"
+                                                        {% if cte.custo_entrega_id_selecionado == c.id %}selected{% endif %}>
+                                                    {{ c.numero_custo }} — {{ c.tipo_custo }} — R$ {{ "%.2f"|format(c.valor) }} — {{ c.status }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        {% else %}
+                                            <div class="alert alert-warning py-1 px-2 mb-0 small">
+                                                Nenhum Custo Entrega PENDENTE encontrado para esta operacao.
+                                                Crie o custo primeiro ou vincule manualmente apos importar.
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="col-md-3 text-end">
+                                        <label class="form-label mb-0 small text-muted">DACTE PDF:</label>
+                                        <div>
+                                            {% if cte.dacte_pareado %}
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-file-pdf"></i> Pareado
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">
+                                                    Sem DACTE no upload
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>

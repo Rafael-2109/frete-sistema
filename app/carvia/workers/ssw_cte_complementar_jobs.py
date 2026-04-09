@@ -61,8 +61,15 @@ def emitir_cte_complementar_job(emissao_comp_id: int) -> dict:
 
         try:
             # ── Fase 0: Resolver CTRC real via SSW (fallback) ──
+            # Usa helper compartilhado (fonte unica de verdade). A funcao
+            # antiga _resolver_ctrc_ssw neste arquivo foi removida.
+            from app.carvia.services.cte_complementar_persistencia import (
+                resolver_ctrc_ssw,
+            )
             ctrc_pai = emissao.ctrc_pai
-            ctrc_resolvido = _resolver_ctrc_ssw(ctrc_pai, emissao.filial_ssw or 'CAR')
+            ctrc_resolvido = resolver_ctrc_ssw(
+                ctrc_pai, emissao.filial_ssw or 'CAR'
+            )
             if ctrc_resolvido and ctrc_resolvido != ctrc_pai:
                 logger.info(
                     "EmissaoCteComp %s — CTRC resolvido: %s → %s",
@@ -133,11 +140,14 @@ def emitir_cte_complementar_job(emissao_comp_id: int) -> dict:
                 )
                 # CteComplementar permanece RASCUNHO ate confirmar no SSW
 
-            # Snapshot do resultado (+ paths S3) e metadados na emissao
+            # Snapshot do resultado (+ paths S3) e metadados na emissao.
+            # Merge com precedencia explicita ao extras do helper: ha colisao
+            # de chaves entre o output do Playwright e do helper (sucesso,
+            # ctrc_complementar, valor_outros, icms_pai). O helper tem fonte
+            # mais precisa (XML real + path S3) entao ganha sempre.
             sanitized = _sanitize_resultado(resultado)
-            if extras_resultado:
-                sanitized.update(extras_resultado)
-            emissao.resultado_json = sanitized
+            merged = {**sanitized, **(extras_resultado or {})}
+            emissao.resultado_json = merged
             emissao.etapa = None
 
             # valor_outros do script = valor_calculado real (ICMS extraido ao vivo)
@@ -180,64 +190,6 @@ def emitir_cte_complementar_job(emissao_comp_id: int) -> dict:
             return {'status': 'ERRO', 'erro': str(e)}
 
 
-def _resolver_ctrc_ssw(ctrc_pai, filial='CAR'):
-    """Verifica se o CTRC armazenado corresponde ao correto no SSW.
-
-    O ctrc_pai pode ter sido construido errado (nCT em vez de CTRC).
-    Consulta opcao 101 pelo numero e verifica se o CT-e bate.
-
-    Args:
-        ctrc_pai: CTRC armazenado (ex: 'CAR-110-9')
-        filial: Filial SSW
-
-    Returns:
-        CTRC corrigido (ex: 'CAR-113-9') ou None se nao precisar corrigir
-    """
-    import re
-
-    # Extrair numero do CTRC atual
-    m = re.match(r'^[A-Z]+-(\d+)', ctrc_pai)
-    if not m:
-        return None
-
-    ctrc_num = m.group(1)
-
-    try:
-        if SSW_SCRIPTS not in sys.path:
-            sys.path.insert(0, SSW_SCRIPTS)
-
-        from consultar_ctrc_101 import consultar_ctrc
-        import argparse as ap
-
-        args_101 = ap.Namespace(
-            ctrc=ctrc_num,
-            nf=None,
-            filial=filial,
-            baixar_xml=False,
-            baixar_dacte=False,
-            output_dir='/tmp/ssw_operacoes/resolver_ctrc',
-        )
-        resultado = asyncio.run(consultar_ctrc(args_101))
-
-        if not resultado.get('sucesso'):
-            logger.warning("Nao conseguiu consultar CTRC %s no SSW", ctrc_num)
-            return None
-
-        dados = resultado.get('dados', {})
-        ctrc_completo = dados.get('ctrc_completo')  # Ex: CAR000113-9
-
-        if ctrc_completo:
-            # Formatar: CAR000113-9 → CAR-113-9
-            m2 = re.match(r'^([A-Z]{2,4})0*(\d+)-(\d)$', ctrc_completo)
-            if m2:
-                return f'{m2.group(1)}-{m2.group(2)}-{m2.group(3)}'
-
-        return None
-    except Exception as e:
-        logger.warning("Erro ao resolver CTRC via SSW: %s", e)
-        return None
-
-
 def _executar_script_222(args):
     """Executa emitir_cte_complementar() do script Playwright."""
     if SSW_SCRIPTS not in sys.path:
@@ -266,145 +218,101 @@ def _sanitize_resultado(resultado):
     return sanitized
 
 
-def _persistir_artefatos_complementar(cte_comp, resultado):
-    """Extrai XML do ZIP baixado, parseia metadados e sobe XML+DACTE no S3.
+def _extrair_xml_do_zip(xml_path_local):
+    """Extrai bytes do XML de dentro do ZIP baixado pela opcao 101 do SSW.
 
-    Preenche os campos do CarviaCteComplementar com os dados do XML real
-    (chave_acesso, numero, data emissao, valor, xml_path) e retorna os
-    caminhos S3 para persistir no resultado_json da emissao.
+    Returns:
+        Tupla (xml_bytes, xml_nome) ou (None, None) se falhar.
+    """
+    import zipfile
+
+    if not xml_path_local or not os.path.exists(xml_path_local):
+        return None, None
+
+    try:
+        with zipfile.ZipFile(xml_path_local) as z:
+            for nome in z.namelist():
+                if nome.lower().endswith('.xml'):
+                    return z.read(nome), os.path.basename(nome)
+    except zipfile.BadZipFile:
+        # Fallback: XML pode vir direto (sem ZIP) em casos extremos
+        try:
+            with open(xml_path_local, 'rb') as f:
+                return f.read(), os.path.basename(xml_path_local)
+        except Exception as e_read:
+            logger.warning("Falha ao ler XML local: %s", e_read)
+            return None, None
+
+    return None, None
+
+
+def _ler_arquivo_local(path):
+    """Le bytes de um arquivo local. Returns None se falhar."""
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, 'rb') as f:
+            return f.read()
+    except Exception as e:
+        logger.warning("Falha ao ler arquivo local %s: %s", path, e)
+        return None
+
+
+def _persistir_artefatos_complementar(cte_comp, resultado):
+    """Wrapper para o helper compartilhado de persistencia.
+
+    Extrai bytes do XML (do ZIP) e do DACTE local, depois delega TUDO
+    (parser, S3 upload, atualizacao de CarviaEmissaoCteComplementar,
+    vinculo de CarviaCustoEntrega) para o helper compartilhado.
 
     Args:
         cte_comp: CarviaCteComplementar ja com ctrc_numero preenchido
+                  (capturado pelo Playwright na opcao 222)
         resultado: dict retornado por emitir_cte_complementar() com chaves
-                   'xml' (path local do ZIP) e 'dacte' (path local PDF)
+                   'xml' (path local do ZIP), 'dacte' (path local PDF),
+                   'icms_pai' (dict extraido ao vivo pelo script da opcao 101),
+                   'valor_outros' (valor real apos grossing up)
 
     Returns:
-        dict com chaves xml_s3_path, dacte_s3_path, cte_chave_acesso,
-        cte_numero, cte_data_emissao (ISO), cte_valor_parsed, e possiveis
-        chaves *_erro quando algo falha.
+        dict (mesmo schema do `resultado_json` da emissao):
+        sucesso, status, xml_s3_path, dacte_s3_path, icms_pai, etc.
     """
-    import zipfile
-    from datetime import date, datetime
-    from io import BytesIO
-
-    from app.utils.file_storage import get_file_storage
-    from app.carvia.services.parsers.cte_xml_parser_carvia import (
-        CTeXMLParserCarvia,
+    from app.carvia.services.cte_complementar_persistencia import (
+        persistir_cte_complementar_completo,
     )
 
-    extras = {}
-    storage = get_file_storage()
+    # Extrair bytes do XML (do ZIP) e DACTE local
+    xml_bytes, xml_nome = _extrair_xml_do_zip(resultado.get('xml'))
+    dacte_bytes = _ler_arquivo_local(resultado.get('dacte'))
 
-    # 1) Extrair XML do ZIP (SSW sempre retorna XML em ZIP via opcao 101)
-    xml_path_local = resultado.get('xml')
-    xml_bytes = None
-    xml_nome = None
-    if xml_path_local and os.path.exists(xml_path_local):
-        try:
-            with zipfile.ZipFile(xml_path_local) as z:
-                for nome in z.namelist():
-                    if nome.lower().endswith('.xml'):
-                        xml_bytes = z.read(nome)
-                        xml_nome = os.path.basename(nome)
-                        break
-        except zipfile.BadZipFile:
-            # Fallback: XML pode vir direto (sem ZIP) em casos extremos
-            try:
-                with open(xml_path_local, 'rb') as f:
-                    xml_bytes = f.read()
-                xml_nome = os.path.basename(xml_path_local)
-            except Exception as e_read:
-                logger.warning("Falha ao ler XML local: %s", e_read)
+    # Custo entrega ja foi vinculado pela rota gerar_cte_complementar
+    # ANTES de enfileirar o job (cte_comp.custos_entrega tem 1 elemento)
+    custo_entrega = None
+    try:
+        custo_entrega = cte_comp.custos_entrega.first()
+    except Exception:
+        pass
 
-    # 2) Parsear XML para extrair metadados e atualizar cte_comp
-    if xml_bytes:
-        try:
-            xml_str = xml_bytes.decode('utf-8', errors='replace')
-            parser = CTeXMLParserCarvia(xml_str)
-            dados = parser.get_todas_informacoes_carvia()
-            chave = dados.get('cte_chave_acesso')
-            numero_cte = dados.get('cte_numero')
-            data_emi_str = dados.get('cte_data_emissao')
-            valor_prest = dados.get('cte_valor')
+    # ICMS pai vem do resultado do script (extraido ao vivo do SSW opcao 101)
+    icms_pai_dict = resultado.get('icms_pai')
+    valor_outros = resultado.get('valor_outros')
+    valor_calculado_final = (
+        float(valor_outros) if valor_outros is not None else None
+    )
 
-            if chave:
-                cte_comp.cte_chave_acesso = chave
-            if numero_cte:
-                cte_comp.cte_numero = numero_cte
-            if valor_prest is not None:
-                try:
-                    cte_comp.cte_valor = float(valor_prest)
-                except (TypeError, ValueError):
-                    pass
-            if data_emi_str:
-                try:
-                    # dhEmi em ISO: 2026-04-09T14:30:00-03:00
-                    if 'T' in data_emi_str:
-                        # fromisoformat aceita timezone em Python 3.11+
-                        cte_comp.cte_data_emissao = datetime.fromisoformat(
-                            data_emi_str
-                        ).date()
-                    else:
-                        cte_comp.cte_data_emissao = date.fromisoformat(
-                            data_emi_str[:10]
-                        )
-                except (ValueError, TypeError) as e_date:
-                    logger.warning(
-                        "Parse data emissao CTe comp falhou (%s): %s",
-                        data_emi_str, e_date
-                    )
-
-            extras.update({
-                'cte_chave_acesso': chave,
-                'cte_numero': numero_cte,
-                'cte_data_emissao': data_emi_str,
-                'cte_valor_parsed': (
-                    float(valor_prest) if valor_prest is not None else None
-                ),
-            })
-
-            # 3) Subir XML no S3
-            if not xml_nome:
-                xml_nome = (
-                    f"{chave}-cte.xml" if chave else "cte-complementar.xml"
-                )
-            xml_buffer = BytesIO(xml_bytes)
-            xml_buffer.name = xml_nome
-            xml_s3_path = storage.save_file(
-                xml_buffer,
-                folder='carvia/ctes_complementares_xml',
-                filename=xml_nome,
-            )
-            if xml_s3_path:
-                cte_comp.cte_xml_path = xml_s3_path
-                cte_comp.cte_xml_nome_arquivo = xml_nome
-                extras['xml_s3_path'] = xml_s3_path
-                extras['xml_nome_arquivo'] = xml_nome
-        except Exception as e:
-            logger.warning("Falha ao parsear/persistir XML complementar: %s", e)
-            extras['xml_parse_erro'] = str(e)
-
-    # 4) Subir DACTE PDF no S3 (caminho armazenado em resultado_json da emissao)
-    dacte_path_local = resultado.get('dacte')
-    if dacte_path_local and os.path.exists(dacte_path_local):
-        try:
-            with open(dacte_path_local, 'rb') as f:
-                pdf_bytes = f.read()
-            dacte_nome = (
-                f"{cte_comp.ctrc_numero or cte_comp.numero_comp}-dacte.pdf"
-            )
-            pdf_buffer = BytesIO(pdf_bytes)
-            pdf_buffer.name = dacte_nome
-            dacte_s3_path = storage.save_file(
-                pdf_buffer,
-                folder='carvia/ctes_complementares_dacte',
-                filename=dacte_nome,
-            )
-            if dacte_s3_path:
-                extras['dacte_s3_path'] = dacte_s3_path
-                extras['dacte_nome_arquivo'] = dacte_nome
-        except Exception as e:
-            logger.warning("Falha ao persistir DACTE: %s", e)
-            extras['dacte_persist_erro'] = str(e)
-
-    return extras
+    return persistir_cte_complementar_completo(
+        cte_comp=cte_comp,
+        xml_bytes=xml_bytes,
+        xml_nome=xml_nome,
+        dacte_bytes=dacte_bytes,
+        custo_entrega=custo_entrega,
+        # motivo_ssw e filial_ssw ja estao na emissao existente — helper
+        # nao recria, apenas atualiza. Os defaults aqui sao fallback se
+        # por algum motivo a emissao nao existir.
+        motivo_ssw='C',
+        filial_ssw='CAR',
+        icms_pai=icms_pai_dict,
+        valor_calculado=valor_calculado_final,
+        criado_por='worker_ssw',
+        origem='WORKER_SSW',
+    )

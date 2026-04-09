@@ -463,31 +463,42 @@ class CTeXMLParser:
         # Buscar ICMS dentro de imp
         icms_element = self._find_tag('ICMS', root=imp_element)
         if icms_element is not None:
-            # ICMS pode estar em diversos grupos: ICMS00, ICMS20, ICMS45, ICMS60, ICMS90, etc
-            # Buscar vICMS, vBC, pICMS em qualquer um desses grupos
+            # ICMS pode estar em diversos grupos por CST:
+            # - ICMS00, ICMS20, ICMS45, ICMS60, ICMS90: tributacao padrao
+            #   → tags sem sufixo: vBC, pICMS, vICMS
+            # - ICMSOutraUF: prestacao iniciada em UF diferente da do prestador
+            #   (CFOP 5932/6932, CST 90) — ICMS devido a outra UF
+            #   → tags COM sufixo: vBCOutraUF, pICMSOutraUF, vICMSOutraUF
+            # - ICMSSN: Simples Nacional (estrutura especifica, nao tratado aqui)
             for child in icms_element:
                 local_name = child.tag.split('}')[-1] if '}' in child.tag else child.tag
 
-                # Identificar grupos ICMS (ex: ICMS00, ICMS20, ICMS45, etc)
-                if local_name.startswith('ICMS') or local_name == 'ICMSOutraUF' or local_name == 'ICMSSN':
-                    # Buscar vICMS
+                if local_name == 'ICMSOutraUF':
+                    # Frete onde o prestador e de outra UF:
+                    # tags com sufixo OutraUF
+                    vicms = self._find_tag('vICMSOutraUF', root=child)
+                    vbc = self._find_tag('vBCOutraUF', root=child)
+                    picms = self._find_tag('pICMSOutraUF', root=child)
+                elif local_name.startswith('ICMS') and local_name != 'ICMSSN':
+                    # ICMS00, ICMS20, ICMS45, ICMS60, ICMS90 — tributacao padrao
                     vicms = self._find_tag('vICMS', root=child)
-                    if vicms is not None and vicms.text:
-                        resultado['valor_icms'] = self._to_decimal(vicms.text.strip())
-
-                    # Buscar vBC (base de cálculo)
                     vbc = self._find_tag('vBC', root=child)
-                    if vbc is not None and vbc.text:
-                        resultado['base_icms'] = self._to_decimal(vbc.text.strip())
-
-                    # Buscar pICMS (alíquota)
                     picms = self._find_tag('pICMS', root=child)
-                    if picms is not None and picms.text:
-                        resultado['aliquota_icms'] = self._to_decimal(picms.text.strip())
+                else:
+                    # ICMSSN (Simples Nacional) ou outros — pular por enquanto.
+                    # Estruturas especiais precisam tratamento dedicado.
+                    continue
 
-                    # Se encontrou valores, parar a busca
-                    if resultado['valor_icms'] is not None:
-                        break
+                if vicms is not None and vicms.text:
+                    resultado['valor_icms'] = self._to_decimal(vicms.text.strip())
+                if vbc is not None and vbc.text:
+                    resultado['base_icms'] = self._to_decimal(vbc.text.strip())
+                if picms is not None and picms.text:
+                    resultado['aliquota_icms'] = self._to_decimal(picms.text.strip())
+
+                # Se encontrou valores, parar a busca
+                if resultado['valor_icms'] is not None:
+                    break
 
         # Buscar PIS (se existir - raro em CTe)
         pis_element = self._find_tag('PIS', root=imp_element)
