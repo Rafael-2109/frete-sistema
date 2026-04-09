@@ -651,16 +651,30 @@ async def emitir_cte(args):
             except Exception as e:
                 campos_ok["peso_real_erro"] = str(e)
 
-            # ── 5e. Frete informado ──
-            # Gravacao: clicar link "Frete informado:" → fill → #lnk_frt_inf_env
+            # ── 5e. Frete informado (OVERRIDE manual sobre tabela) ──
+            # Fluxo correto documentado em SCRIPTS.md:
+            #   1. showhide('parc') ou click "Frete informado:" — abre painel
+            #   2. fill em #id_frt_inf_frete_peso — valor em R$
+            #   3. fechafrtparc('C') — CONFIRMA e PERSISTE o override
+            #
+            # ATENCAO: Chamar #lnk_frt_inf_env NAO persiste o valor —
+            # apenas fecha visualmente o painel. O SSW entao recalcula
+            # pela tabela no calculafrete() posterior (bug anterior que
+            # gerava CTes com valor da tabela em vez do informado).
             try:
+                # Abrir painel 'parc' via click no link (equivalente a showhide('parc'))
                 await popup.get_by_role("link", name="Frete informado:").click()
                 await asyncio.sleep(0.5)
+
+                # Preencher valor
                 await popup.locator('#id_frt_inf_frete_peso').fill(frete_peso)
                 await asyncio.sleep(0.3)
-                await popup.locator('#lnk_frt_inf_env').click()
+
+                # CONFIRMAR via fechafrtparc('C') — persiste como override manual
+                await popup.evaluate("fechafrtparc('C')")
                 await asyncio.sleep(2)
                 campos_ok["frete_peso"] = frete_peso
+                campos_ok["frete_metodo"] = "fechafrtparc_C"
             except Exception as e:
                 campos_ok["frete_erro"] = str(e)
 
