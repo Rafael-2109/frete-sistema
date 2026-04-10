@@ -58,38 +58,66 @@ def _extrair_json(text: str) -> dict:
     return json.loads(text)
 
 # Prompt otimizado para extracao estruturada dos 3 formatos de etiqueta
+# Inclui regras de desambiguacao O/0, S/5, I/1 baseadas em padroes reais
 SYSTEM_PROMPT = """You extract motorcycle label data from images of shipping box labels.
+Return ONLY a JSON object — no extra text, no explanation.
 
-There are three label formats you must handle:
+## THREE LABEL FORMATS
 
-1. **Brazilian (Manaus production)**: Portuguese fields.
-   - "Modelo:" or header text = model name (e.g. SCOOTER JET, SCOOTER MA TRI)
-   - Color shown as text ("AZUL") and/or a colored circle
-   - Chassis in barcode text and printed text (e.g. MCBRJET2509250027, SXKJ2250612O327)
-   - "Numero de serie do motor:" = motor serial number
+### Format 1: Brazilian (Manaus)
+Models: SCOOTER JET, SCOOTER MA TRI
+Layout:
+- Header row: model name (left) + color text + colored circle (right)
+- Large text with barcode below = CHASSIS number
+- "Modelo:" field, "Codigo:" field, "Quantidade:", "Numero de serie do motor:"
+- Footer: "PRODUZIDO NO POLO INDUSTRIAL DE MANAUS"
 
-2. **Chinese (GIGA)**: Minimal label.
-   - Model name printed prominently: "GIGA"
-   - Color in Chinese character + sometimes English: 蓝=Azul, 黑=Preto, 白=Branco, 红=Vermelho, 绿=Verde, 灰=Cinza
-   - Chassis encoded in barcode text (e.g. LA20255A1100068363)
+CHASSIS PATTERN: alpha prefix (4-7 letters) + ONLY DIGITS after that.
+Examples: MCBRJET2509250027 (prefix MCBRJET + 11 digits), SXKJ22506120327 (prefix SXKJ + 13 digits)
+RULE: After the initial letter prefix, every character MUST be a digit 0-9. If you see "O" after the prefix, it is "0". If you see "I", it is "1". If you see "S", it is "5".
 
-3. **JETMAX (imported)**: English fields.
-   - "MODEL:" = model name (JETMAX)
-   - "COLOR:" = color in English (BLACK, WHITE, RED, BLUE)
-   - "VIN:" = chassis/VIN number (e.g. LTDAE393G11204162, may have * delimiters)
-   - "MOTOR NO:" = motor serial number
+### Format 2: GIGA
+Model: GIGA (always)
+Layout: minimal label with "GIGA" in large text, Chinese color character + English, barcode with chassis.
+Colors: 蓝/Blue=AZUL, 黑/Black=PRETO, 白/White=BRANCO, 红/Red=VERMELHO, 绿/Green=VERDE, 灰/Grey=CINZA
 
-Return ONLY valid JSON with exactly these keys:
+CHASSIS PATTERN: LA + 4-digit year + 5A + 11 + 8 digits
+Example: LA20255A1100068363
+RULE: Position 7 is digit "5" NOT letter "S". The only letter after "LA" is a single "A" at position 8. Everything else is digits.
+
+### Format 3: JETMAX
+Model: JETMAX (always)
+Layout: English fields — MODEL, COLOR, VIN, MOTOR NO., ORDER NO., CTN NO., MADE IN CHINA
+VIN and MOTOR NO. are delimited by asterisks (*).
+
+VIN (chassis) PATTERN: LTDAE393 + 1 letter + 8 alphanumeric chars = 17 chars total (ISO 3779)
+Example: LTDAE393G11204162
+RULE: VINs NEVER contain letters I, O, or Q (ISO standard). Strip * delimiters.
+
+MOTOR NO. PATTERN: JYX1000W + 10 digits
+Example: JYX1000W2601826162
+RULE: After "W", everything is digits. Strip * delimiters.
+
+COLOR translation: BLACK=PRETO, WHITE=BRANCO, RED=VERMELHO, BLUE=AZUL, GREEN=VERDE
+
+## CRITICAL DISAMBIGUATION RULES (apply to ALL formats)
+When a character is ambiguous between letter and digit:
+- O → 0 (zero) in chassis/VIN serial portions
+- I → 1 (one) in chassis/VIN serial portions
+- S → 5 in digit-only portions
+- Z → 2 in digit-only portions
+- B → 8 in digit-only portions
+These substitutions apply ONLY in positions where digits are expected per the patterns above.
+
+## OUTPUT FORMAT
 {"modelo": "...", "cor": "...", "chassi": "...", "numero_motor": "...", "confianca": 0.95}
 
-Rules:
-- modelo: the motorcycle model name, uppercase
-- cor: ALWAYS in Portuguese (AZUL, PRETO, BRANCO, VERMELHO, VERDE, CINZA, AMARELO, LARANJA, ROSA)
-- chassi: alphanumeric only (strip * delimiters), typically 10-30 chars
-- numero_motor: motor serial number if visible, null otherwise
-- confianca: your confidence in the overall extraction (0.0 to 1.0)
-- If a field is not visible or unreadable, use null
-- Do NOT guess or invent values — use null for anything uncertain"""
+- modelo: model name UPPERCASE (SCOOTER JET, SCOOTER MA TRI, GIGA, JETMAX)
+- cor: ALWAYS Portuguese (AZUL, PRETO, BRANCO, VERMELHO, VERDE, CINZA)
+- chassi: cleaned alphanumeric (no * delimiters, no spaces), with disambiguation rules applied
+- numero_motor: motor serial if visible, null otherwise
+- confianca: 0.0-1.0
+- Use null for unreadable fields. Do NOT guess."""
 
 # Maximo de bytes da imagem base64 (500KB encoded ~= 375KB raw)
 MAX_IMAGE_BASE64_BYTES = 500_000
