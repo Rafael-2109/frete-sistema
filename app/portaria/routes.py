@@ -773,6 +773,21 @@ def adicionar_embarque():
             except Exception as e:
                 print(f"[AVISO] Hook CarVia FreteService falhou (vinculacao): {e}")
 
+            # Hook Nacom: gerar fretes (vinculacao apos saida)
+            try:
+                from app.fretes.routes import processar_lancamento_automatico_fretes
+                sucesso_nacom, resultado_nacom = processar_lancamento_automatico_fretes(
+                    embarque_id=embarque_id,
+                    usuario=current_user.email,
+                )
+                print(f"[DEBUG] Hook Nacom frete (vinculacao): sucesso={sucesso_nacom}, resultado={resultado_nacom}")
+                if sucesso_nacom and "lançado(s) automaticamente" in resultado_nacom:
+                    flash(resultado_nacom, 'info')
+                elif resultado_nacom:
+                    flash(f'Frete Nacom: {resultado_nacom}', 'info')
+            except Exception as e:
+                print(f"[AVISO] Hook Nacom FreteService falhou (vinculacao): {e}")
+
             # 🔧 CORREÇÃO: Sincroniza com sistema de entregas para cada item do embarque
             if embarque.itens:
                 print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
