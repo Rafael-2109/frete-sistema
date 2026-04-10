@@ -316,6 +316,16 @@ def register_frete_routes(bp):
             if auto_operacao and auto_operacao.cte_valor:
                 valor_venda_sugerido = float(auto_operacao.cte_valor)
 
+            # Calcular peso cubado por NF (motos com modelo cadastrado)
+            peso_cubado_por_nf = {}
+            try:
+                from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
+                moto_svc = MotoRecognitionService()
+                nf_ids = [nf.id for nf in todas_nfs]
+                peso_cubado_por_nf = moto_svc.calcular_peso_cubado_batch(nf_ids) if nf_ids else {}
+            except Exception as e:
+                logger.warning('Erro ao calcular peso cubado batch: %s', e)
+
             return render_template(
                 'carvia/fretes/backfill.html',
                 seed_nf=seed_nf,
@@ -323,6 +333,7 @@ def register_frete_routes(bp):
                 nf_operacoes=nf_operacoes,
                 auto_operacao=auto_operacao,
                 valor_venda_sugerido=valor_venda_sugerido,
+                peso_cubado_por_nf=peso_cubado_por_nf,
             )
 
         # --- POST: Criar CarviaFrete ---

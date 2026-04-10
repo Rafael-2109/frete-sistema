@@ -6,9 +6,11 @@
         <div>
             <h2><i class="fas fa-history"></i> Criar Frete Backfill</h2>
             <p class="text-muted mb-0">
-                <strong>{{ seed_nf.nome_emitente or seed_nf.cnpj_emitente }}</strong>
+                <strong>{{ seed_nf.nome_emitente or 'N/D' }}</strong>
+                <small class="ms-1">({{ seed_nf.cnpj_emitente|cnpj_br }})</small>
                 <i class="fas fa-arrow-right mx-1"></i>
-                <strong>{{ seed_nf.nome_destinatario or seed_nf.cnpj_destinatario }}</strong>
+                <strong>{{ seed_nf.nome_destinatario or 'N/D' }}</strong>
+                <small class="ms-1">({{ seed_nf.cnpj_destinatario|cnpj_br }})</small>
             </p>
         </div>
         <a href="{{ url_for('carvia.detalhe_nf', nf_id=seed_nf.id) }}" class="btn btn-outline-secondary">
@@ -63,7 +65,10 @@
                         <tbody>
                             {% for nf in todas_nfs %}
                             {% set ops = nf_operacoes.get(nf.id, []) %}
-                            <tr data-peso="{{ nf.peso_bruto or 0 }}" data-valor="{{ nf.valor_total or 0 }}">
+                            {% set cubado = peso_cubado_por_nf.get(nf.id, 0) %}
+                            {% set bruto = (nf.peso_bruto or 0)|float %}
+                            {% set peso_efetivo = cubado if cubado > bruto else bruto %}
+                            <tr data-peso="{{ peso_efetivo }}" data-valor="{{ nf.valor_total or 0 }}">
                                 <td>
                                     <input type="checkbox" name="nf_ids" value="{{ nf.id }}"
                                            class="nf-check"
@@ -78,7 +83,16 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ nf.criado_em.strftime('%d/%m/%Y') if nf.criado_em else '-' }}</td>
-                                <td>{{ nf.peso_bruto|numero_br(1) if nf.peso_bruto else '-' }} kg</td>
+                                <td>
+                                    {% if cubado > 0 and cubado >= bruto %}
+                                        {{ cubado|numero_br(1) }} kg
+                                        <small class="text-muted d-block">cubado</small>
+                                    {% elif bruto > 0 %}
+                                        {{ bruto|numero_br(1) }} kg
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
                                 <td class="valor-col">{{ nf.valor_total|valor_br if nf.valor_total else '-' }}</td>
                                 <td>
                                     {% if ops %}
@@ -130,10 +144,12 @@
                     </div>
                     <div id="col-transportadora" class="col-md-5">
                         <label class="form-label">Transportadora <span class="text-danger">*</span></label>
-                        <input type="text" id="busca-transportadora" class="form-control"
-                               placeholder="Buscar transportadora..." autocomplete="off">
-                        <input type="hidden" name="transportadora_id" id="transportadora_id">
-                        <div id="transportadora-results" class="carvia-autocomplete-results" style="display:none"></div>
+                        <div class="carvia-autocomplete-wrapper">
+                            <input type="text" id="busca-transportadora" class="form-control"
+                                   placeholder="Buscar transportadora..." autocomplete="off">
+                            <input type="hidden" name="transportadora_id" id="transportadora_id">
+                            <div id="transportadora-results" class="carvia-autocomplete-results"></div>
+                        </div>
                     </div>
                     <div id="col-modalidade" class="col-md-2" style="display:none">
                         <label class="form-label">Modalidade</label>
@@ -380,6 +396,12 @@
     var UF_DESTINO = '{{ seed_nf.uf_destinatario or "" }}';
     var CIDADE_DESTINO = '{{ seed_nf.cidade_destinatario or "" }}';
     var CSRF = '{{ csrf_token() }}';
+    var PIS_COFINS = 0.0925;
+    var COMISSAO = 0.03;
+
+    // --- Estado margem ---
+    var transportadoraFreteiro = false;
+    var icmsAplicado = 0;
 
     // --- Elementos ---
     var checkAll = document.getElementById('check-all');
@@ -429,7 +451,14 @@
         document.getElementById('resumo-venda').textContent = venda > 0 ? formatBRL(venda) : '-';
 
         if (custo > 0 && venda > 0) {
-            var margem = venda - custo;
+            // A = Venda * (1 - ICMS) * (1 - PIS/COFINS) - Venda * Comissao
+            var icmsFator = 1 - (icmsAplicado / 100);
+            var A = venda * icmsFator * (1 - PIS_COFINS) - venda * COMISSAO;
+
+            // B = Custo * (1 - PIS/COFINS) se nao freteiro, senao Custo
+            var B = transportadoraFreteiro ? custo : custo * (1 - PIS_COFINS);
+
+            var margem = A - B;
             var pct = (margem / venda * 100).toFixed(1);
             document.getElementById('resumo-margem').textContent = formatBRL(margem) + ' (' + pct + '%)';
             document.getElementById('resumo-margem').className = margem >= 0 ? 'fs-5 text-success' : 'fs-5 text-danger';
@@ -508,7 +537,7 @@
         clearTimeout(debounceTimer);
         var query = this.value.trim();
         if (query.length < 2) {
-            transportadoraResults.style.display = 'none';
+            transportadoraResults.classList.remove('show');
             return;
         }
         debounceTimer = setTimeout(function() {
@@ -528,13 +557,18 @@
                         div.addEventListener('click', function() {
                             transportadoraInput.value = t.razao_social;
                             transportadoraId.value = t.id;
-                            transportadoraResults.style.display = 'none';
+                            transportadoraFreteiro = !!t.freteiro;
+                            transportadoraResults.classList.remove('show');
                             popularModalidades(t.modalidades || []);
                             onTransportadoraSelecionada();
                         });
                         transportadoraResults.appendChild(div);
                     });
-                    transportadoraResults.style.display = data.transportadoras && data.transportadoras.length ? '' : 'none';
+                    if (data.transportadoras && data.transportadoras.length) {
+                        transportadoraResults.classList.add('show');
+                    } else {
+                        transportadoraResults.classList.remove('show');
+                    }
                 });
         }, 300);
     });
@@ -542,7 +576,7 @@
     // Fechar autocomplete ao clicar fora
     document.addEventListener('click', function(e) {
         if (!transportadoraInput.contains(e.target) && !transportadoraResults.contains(e.target)) {
-            transportadoraResults.style.display = 'none';
+            transportadoraResults.classList.remove('show');
         }
     });
 
@@ -624,6 +658,7 @@
                 preencherParametros(data.parametros, data.tabela_nome);
                 atualizarBreakdown(data.breakdown, data.valor_cotado);
                 hValorCotado.value = data.valor_cotado;
+                icmsAplicado = parseFloat(data.breakdown.icms_aplicado) || 0;
                 atualizarResumoMargem();
             } else {
                 secaoParametros.style.display = 'none';
@@ -661,6 +696,7 @@
             if (data.sucesso) {
                 document.getElementById('ref-tabela-nome').textContent = data.tabela_nome || '';
                 document.getElementById('ref-tabela-valor').textContent = formatBRL(data.valor_cotado);
+                icmsAplicado = parseFloat(data.breakdown.icms_aplicado) || 0;
                 refDiv.style.cssText = '';
             } else {
                 refDiv.style.cssText = 'display:none !important';
@@ -758,6 +794,7 @@
             if (data.sucesso) {
                 atualizarBreakdown(data.breakdown, data.valor_cotado);
                 hValorCotado.value = data.valor_cotado;
+                icmsAplicado = parseFloat(data.breakdown.icms_aplicado) || 0;
                 atualizarResumoMargem();
             }
         });
