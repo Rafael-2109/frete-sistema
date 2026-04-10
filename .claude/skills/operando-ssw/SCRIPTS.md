@@ -60,6 +60,27 @@ python .claude/skills/operando-ssw/scripts/emitir_cte_004.py \
 
 `sucesso` = `true` somente se CTRC extraido do resultado (numero capturado dos dialogs ou DOM).
 
+### Atualizacoes 2026-04-09
+
+Mudancas importantes no fluxo interno (sem breaking change nos parametros CLI):
+
+- **Frete informado usa `#lnk_frt_inf_env`** (NAO `fechafrtparc('C')`). Fonte de verdade: codegen manual do usuario. `fechafrtparc('C')` isolado quebra o fluxo com null pointer em `doDis`/`concluindo`. Commit `9e6fd75e` reverteu tentativa anterior.
+- **Helper `_clicar_simular()`** com fallback em cascata (commit `74295621`):
+  1. Click nativo `get_by_role("link", name="►")` timeout 5s
+  2. Fallback 1: `document.getElementById('lnk_env').click()` via evaluate
+  3. Fallback 2: scan `querySelectorAll('a')` buscando `onclick` com `calculafrete`
+  - Motivo: overlay invisivel `<div id="errorpanel">` sem `pointer-events: none` bloqueia clicks nativos do Playwright.
+  - Campo `campos_ok["simular_metodo"]` no retorno indica qual tentativa funcionou.
+- **Match "Gravar" via regex** `re.compile(r"Gravar", re.IGNORECASE)` (commit `4428231d`). SSW renderiza link como "1. Gravar", "1.Gravar", "Gravar" ou "gravar" — literal nao funciona.
+- **3 tentativas em cascata para Gravar** (commit `4428231d`):
+  1. `get_by_role("link", name=re.compile("Gravar", IGNORECASE))` com timeout 5s
+  2. JS click no link com onclick contendo `concluindo('C')`
+  3. `evaluate("concluindo('C')")` direto
+- **NAO_RECONHECIDO dumpa HTML** quando loop de avisos encontra dialog desconhecido: `body[:3000]` + `html[:8000]` em `avisos_tratados[...]['debug']`.
+- **Envio SEFAZ via `ajaxEnvia`** (commit `973e9739`): substituido click no botao por `ajaxEnvia('', 1, 'ssw0767?act=REM&chamador=ssw0024')` no popup pos-gravar. Popup 007 aberto apenas para capturar status fila (Digitados/Enviados/Autorizados/Denegados/Rejeitados) via regex sobre body. Fallback: se popup 004 fechou, retry em popup_007.
+- **`trocar_filial()` extraida** em helper (commit `973e9739`) — reutilizada entre scripts.
+- **Retorno enriquecido**: `campos_ok["frete_metodo"] = "lnk_frt_inf_env"` (observabilidade — se aparecer no JSON, fluxo correto rodou).
+
 ---
 
 ## 2. consultar_ctrc_101.py
@@ -216,6 +237,120 @@ python .claude/skills/operando-ssw/scripts/gerar_fatura_ssw_437.py \
 
 ---
 
+## 5. emitir_cte_complementar_222.py
+
+**Proposito:** Emite CT-e complementar no SSW via opcao **222** (+ envio SEFAZ 007 + baixar XML/DACTE via 101). Usado para ajustar valores, complementar ICMS, cobrar custos extras. Fluxo **11 fases** baseado em codegen capturado (NAO adicionar logica defensiva extra).
+
+```bash
+# Com auto-calculo de valor (consulta 101 do pai + grossing up):
+python .claude/skills/operando-ssw/scripts/emitir_cte_complementar_222.py \
+  --ctrc-pai CAR-113-9 \
+  --motivo D \
+  --valor-base 200.00 \
+  [--tp-doc C] [--unid-emit D] [--enviar-sefaz] \
+  --dry-run
+
+# Com valor final ja calculado (sem consulta 101):
+python .claude/skills/operando-ssw/scripts/emitir_cte_complementar_222.py \
+  --ctrc-pai CAR-113-9 \
+  --motivo D \
+  --valor-outros 227.90 \
+  --dry-run
+```
+
+| Parametro | Obrig | Default | Descricao |
+|-----------|-------|---------|-----------|
+| `--ctrc-pai` | **Sim** | — | CTRC pai no formato `FILIAL-NUMERO-DV` (ex: `CAR-113-9`) |
+| `--motivo` | **Sim** | — | Motivo do complemento. Validos: `C`, `D`, `V`, `E`, `R` |
+| `--valor-outros` | Sim* | — | Valor final do complementar (pos-grossing up, float) |
+| `--valor-base` | Sim* | — | Valor bruto (aciona grossing up automatico via ICMS do pai) |
+| `--tp-doc` | Nao | `C` | Tipo de documento. Validos: `C` |
+| `--unid-emit` | Nao | `D` | Unidade emissora. Validos: `D`, `O` (SSW pode forcar readonly) |
+| `--enviar-sefaz` | Nao | — | Envia ao SEFAZ via opcao 007 pos-emissao |
+| `--dry-run` | — | — | Preenche tela inicial, nao submete. **OBRIGATORIO 1a execucao** |
+
+\* `--valor-outros` OU `--valor-base` — **mutuamente exclusivos**, um obrigatorio.
+
+### Pre-fase: auto-calculo do valor_outros
+
+Se `--valor-base` fornecido (sem `--valor-outros`), script executa:
+
+1. Delega para `consultar_ctrc_101.py` (consulta 101 do pai — filial detectada do CTRC)
+2. Extrai `ICMS/ISS (R$)` e `Valor frete (R$)` do body via regex
+3. Calcula `aliquota = (valor_icms / valor_frete) * 100`
+4. Aplica grossing up: `valor_base / 0.9075 / (1 - aliquota/100)` (mesma formula de `custo_entrega_routes.py`)
+5. Seta `valor_outros = valor_calculado`
+
+Constante: `PISCOFINS_DIVISOR = 0.9075` (fixo, mesma regra do Nacom).
+
+### Fluxo 11 fases
+
+```
+Fase 1:  login_ssw()
+Fase 2:  abrir_opcao_popup(222) → popup page1
+Fase 3:  Preencher page1:
+           #motivo = args.motivo
+           [id="1"] = filial_pai (extraida do CTRC-FILIAL-NUMERO-DV)
+           [id="2"] = ctrc_concatenado (numero+dv SEM hifen, ex: "1139")
+Fase 4:  Click [id="3"] → expect_popup → popup page2
+Fase 5:  Preencher page2:
+           #vlr_outros = valor BR ("227,90") → click + fill
+           #tp_doc = "C" → click + fill
+           #unid_emit = "D" → dblclick + fill (OU readonly: respeitar SSW)
+Fase 6:  Click ► (get_by_role) OU fallback ajaxEnvia('ENV2') via evaluate
+         Loop Continuar (MAX=5x): [id="0"] → get_by_role → evaluate scan onclick btn_200='S'
+         HTML de debug salvo em /tmp/ssw_operacoes/222_debug_page2_*.html
+Fase 7:  Capturar CTRC complementar:
+           - Fonte 1: dialog nativo "Novo CTRC: FILIAL000NUMERO-DV" (regex em handler context.on("page",...))
+           - Fonte 2: fallback scan innerText em todos frames/pages
+Fase 8:  Trocar filial no main_frame para filial_complementar (pode ser != filial_pai)
+Fase 9:  Abrir opcao 007 → click "Enviar à SEFAZ" (page3)
+Fase 10: Abrir opcao 101 → baixar XML (ajaxEnvia('XML',0) → extrai ZIP) + DACTE
+Fase 11: Retornar resultado consolidado
+```
+
+### Retorno JSON
+
+```json
+{
+  "sucesso": true,
+  "ctrc_pai": "CAR-113-9",
+  "ctrc_complementar": "CAR-2037-1",
+  "filial_complementar": "CAR",
+  "motivo": "D",
+  "valor_base": 200.00,
+  "valor_outros": 227.90,
+  "icms_pai": {
+    "valor_frete": 1863.72,
+    "valor_icms": 223.65,
+    "aliquota_icms": 12.0,
+    "ctrc_completo": "000113-9 CAR 68-0",
+    "cte": "..."
+  },
+  "tp_doc": "C",
+  "unid_emit_usado": "D",
+  "unid_emit_readonly": false,
+  "sefaz_enviado": true,
+  "xml": "/tmp/ssw_operacoes/222/CTe_...xml",
+  "dacte": "/tmp/ssw_operacoes/222/DACTE_...pdf",
+  "dialog_messages": [
+    {"type": "alert", "msg": "Novo CTRC: CAR002037-1"}
+  ]
+}
+```
+
+### Gotchas criticos
+
+- **CTRC formato sem hifen**: `[id="2"]` espera `"1139"` (numero + dv concatenados). Script converte `CAR-113-9` → `"1139"` automaticamente.
+- **`unid_emit` pode vir readonly**: SSW decide filial do complementar baseado na carga. Script detecta via `el.readOnly || el.hasAttribute('readonly')` e loga `unid_emit_readonly: true`. NAO tentar forcar.
+- **Dialog nativo captura CTRC**: SSW usa `alert()` JavaScript ("Novo CTRC: XXX"). Handler registrado em `context.on("page", ...)` captura em TODAS as pages do context (popup 222, page2, etc.) via `_attach_dialog_handler`.
+- **Pre-requisito**: CTe pai autorizado e consultavel na opcao 101 da filial correta (para `--valor-base` funcionar).
+- **Loop "Continuar" (MAX=5)**: multiplos avisos CFOP/ICMS/GNRE — script clica todos automaticamente.
+- **`valor_base` vs `valor_outros`**: mutuamente exclusivos. NAO passar ambos.
+- **Motivos validos**: `C` (correcao), `D` (diferenca), `V` (valor), `E` (estorno), `R` (retificacao). Outro motivo = erro de validacao.
+
+---
+
 ## Exemplos de Uso
 
 ### Cenario 1: Emitir CT-e fracionado completo
@@ -242,4 +377,19 @@ Comando: consultar_ctrc_101.py --nf 35714 --baixar-xml --baixar-dacte
 Pergunta: "cancelar CT-e 66, serie CAR 68-0, motivo: nota vinculada errada"
 Comando 1 (dry-run): cancelar_cte_004.py --ctrc 66 --serie "CAR 68-0" --motivo "nota vinculada errada" --dry-run
 Comando 2 (real):    cancelar_cte_004.py --ctrc 66 --serie "CAR 68-0" --motivo "nota vinculada errada"
+```
+
+### Cenario 5: Emitir CT-e complementar com auto-calculo de valor
+```
+Pergunta: "emitir CT-e complementar do CAR-113-9, motivo D (desconto), valor base 200"
+Comando 1 (dry-run): emitir_cte_complementar_222.py --ctrc-pai CAR-113-9 --motivo D --valor-base 200 --dry-run
+  (script consulta 101 do pai → extrai ICMS real → aplica grossing up → preenche valor final)
+Comando 2 (real):    emitir_cte_complementar_222.py --ctrc-pai CAR-113-9 --motivo D --valor-base 200 --enviar-sefaz
+```
+
+### Cenario 6: Emitir CT-e complementar com valor ja calculado
+```
+Pergunta: "emitir CT-e complementar CAR-113-9, motivo V, valor final R$ 227,90"
+Comando 1 (dry-run): emitir_cte_complementar_222.py --ctrc-pai CAR-113-9 --motivo V --valor-outros 227.90 --dry-run
+Comando 2 (real):    emitir_cte_complementar_222.py --ctrc-pai CAR-113-9 --motivo V --valor-outros 227.90 --enviar-sefaz
 ```

@@ -14,7 +14,10 @@ description: >-
   "consultar CTRC", "consultar CT-e", "status do CT-e", "baixar DACTE",
   "baixar XML CT-e", "cancelar CT-e", "gerar fatura SSW", "faturar CTRC",
   "fatura 437", "opcao 437", "emitir CT-e com medidas moto",
-  "emitir CT-e com dimensoes", "cubagem moto".
+  "emitir CT-e com dimensoes", "cubagem moto",
+  "emitir CT-e complementar", "CTE complementar", "opcao 222",
+  "complementar valor frete", "complementar ICMS", "ajustar CTe",
+  "complementar CTRC", "grossing up complementar".
   Requer --dry-run obrigatorio na primeira execucao e confirmacao do
   usuario antes da execucao real (exceto consultar_ctrc_101.py que e read-only).
   NAO USAR QUANDO:
@@ -54,6 +57,10 @@ Separada de `acessando-ssw` (apenas consulta/documentacao).
 - **Medidas moto em METROS**: `--medidas` aceita dimensoes em metros. Se os dados vierem de `carvia_modelos_moto` (CM), dividir por 100 ANTES de passar ao script. O SswEmissaoService faz isso automaticamente.
 - **CT-e chave NF-e = 44 digitos exatos**: Se usuario fornecer chave com menos ou mais digitos, REJEITAR. NAO completar com zeros. NAO remover digitos.
 - **Consulta 101 e READ-ONLY**: `consultar_ctrc_101.py` NAO altera dados. NAO pedir confirmacao nem --dry-run. Executar diretamente.
+- **CT-e Complementar filial**: Script 222 detecta filial do CTe pai automaticamente do formato CTRC `FILIAL-NUMERO-DV`. NAO passar filial manualmente.
+- **CT-e Complementar valor**: `--valor-outros` OU `--valor-base` — um obrigatorio, mutuamente exclusivos. `--valor-base` aciona grossing up automatico via consulta 101 do pai (extrai ICMS real e aplica `valor_base / 0.9075 / (1 - icms/100)`).
+- **CT-e Complementar unid_emit**: Pode vir readonly no SSW — SSW decide filial do complementar baseado na carga. Script respeita e loga `unid_emit_readonly: true`. NAO tentar forcar.
+- **CT-e Complementar CTRC formato**: `[id="2"]` espera numero+dv SEM hifen. Ex: CTRC `CAR-113-9` → `[id="2"]="1139"`. Script faz essa conversao automaticamente.
 
 ## TRATAMENTO DE ERROS
 
@@ -71,6 +78,11 @@ Separada de `acessando-ssw` (apenas consulta/documentacao).
 | "Cliente nao encontrado" na 437 | CNPJ tomador nao cadastrado no SSW | Verificar CNPJ com usuario (14 digitos sem formatacao) |
 | Grid vazio na 437 (APO) | CTe nao disponivel para faturamento | Verificar se CTe foi autorizado no SEFAZ antes de faturar |
 | Fatura nao gerada (nro_fatura vazio) | Erro ao apontar documento na 437 | Verificar CTe selecionado no grid, tentar novamente |
+| "Nao conseguiu consultar ICMS do CTe pai" no 222 | Consulta 101 do pai retornou erro | Passar `--valor-outros` manual (valor final pos-grossing up) |
+| "Aliquota ICMS invalida" no 222 | Frete ou ICMS do pai zerado na 101 | Verificar CTe pai manualmente na 101, usar `--valor-outros` |
+| Loop "Continuar" no 222 | Multiplos avisos CFOP/ICMS/GNRE | Normal — script clica todos via loop MAX=5x |
+| `errorpanel` bloqueia click em `►` no 004 | Overlay invisivel sem `pointer-events: none` | Script ja usa `_clicar_simular()` com fallback JS (native → lnk_env → onclick_calculafrete) |
+| Match "Gravar" nao encontra no 004 | SSW renderiza como "1. Gravar", "1.Gravar", "Gravar" | Script usa `re.compile(r"Gravar", re.IGNORECASE)` — se falhar, usa fallback JS `concluindo('C')` |
 
 ---
 
@@ -130,6 +142,16 @@ Consultar CTRC / CT-e (101)?
   → OU: consultar_ctrc_101.py --nf 35714 [--baixar-xml] [--baixar-dacte]
   → READ-ONLY: executar diretamente, sem --dry-run nem confirmacao
   → Detalhes: [SCRIPTS.md](SCRIPTS.md)
+Emitir CT-e complementar (222)?
+  → Perguntar: CTRC pai (formato FILIAL-NUM-DV, ex: CAR-113-9), motivo (C/D/V/E/R), valor (bruto ou final)
+  → Com valor bruto (auto-calc via ICMS do pai):
+    emitir_cte_complementar_222.py --ctrc-pai CAR-113-9 --motivo D --valor-base 200.00 --dry-run
+    (script consulta 101 do pai → extrai ICMS → grossing up `valor_base / 0.9075 / (1 - icms/100)`)
+  → Com valor final ja calculado:
+    emitir_cte_complementar_222.py --ctrc-pai CAR-113-9 --motivo D --valor-outros 227.90 --dry-run
+  → OPERACAO FISCAL — apos confirmar: --enviar-sefaz (+ baixa auto XML/DACTE via 101)
+  → GOTCHA: CTRC [id="2"] sem hifen (CAR-113-9 → "1139"). unid_emit pode vir readonly (SSW decide filial).
+  → Detalhes: [SCRIPTS.md](SCRIPTS.md) | POP-C03 (emitir CT-e complementar)
 Cancelar CT-e autorizado (004)?
   → cancelar_cte_004.py --ctrc 66 --serie "CAR 68-0" --motivo "NF vinculada incorretamente" --dry-run
   → OPERACAO FISCAL IRREVERSIVEL — prazo 7 dias SEFAZ
@@ -181,6 +203,7 @@ Scripts sao standalone (Playwright headless), NAO dependem do Flask app.
 | 15 | `emitir_cte_004.py` | 004 | Emitir CT-e completo (004 → 007 → 101) |
 | 16 | `consultar_ctrc_101.py` | 101 | Consultar CTRC/CT-e + baixar DACTE/XML (read-only) |
 | 17 | `gerar_fatura_ssw_437.py` | 437 | Gerar fatura SSW (filial MTZ) + download PDF |
+| 18 | `emitir_cte_complementar_222.py` | 222 | Emitir CT-e complementar (222 → 007 → 101) com auto-calc ICMS via 101 do pai |
 
 ---
 
