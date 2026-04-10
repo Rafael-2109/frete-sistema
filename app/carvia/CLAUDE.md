@@ -1,13 +1,15 @@
 # CarVia — Guia de Desenvolvimento
 
-**78 arquivos** | **~42.1K LOC** | **86 templates** | **Atualizado**: 06/04/2026
+**81 arquivos** | **~45.7K LOC** | **93 templates** | **Atualizado**: 2026-04-09
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe,
 subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora.
+Tambem **emite CTe diretamente no SSW** via Playwright (opcao 004 + 222 + 437).
 
 > Campos de tabelas: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`
 > Revisao de gaps: `app/carvia/REVISAO_GAPS.md` — 37 gaps mapeados com fluxogramas (03/03/2026)
 > **Integracao Embarque**: `app/carvia/INTEGRACAO_EMBARQUE.md` — fluxo completo, decisoes, progresso
+> **Integracao SSW (Playwright)**: `app/carvia/SSW_INTEGRATION.md` — emissao CTe + CTe Comp. + workers + SSL resilience
 > Fluxograma: `app/carvia/fluxograma_refatoracao.md` — Mermaid do processo E2E
 
 ---
@@ -67,17 +69,32 @@ app/carvia/
   ├── routes/          # 22 sub-rotas (dashboard, importacao, nf, operacao, subcontrato, fatura, api,
   │                    #   despesa, fluxo_caixa, conciliacao, config, cte_complementar,
   │                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, exportacao, tabela_carvia, receita, frete, gerencial)
-  ├── services/        # 26 services (parsers, matching, importacao, cotacao, cotacao_v2, conferencia,
+  ├── services/        # 26+ services (parsers, matching, importacao, cotacao, cotacao_v2, conferencia,
   │                    #   fatura_pdf_parser, linking, fluxo_caixa, carvia_conciliacao, dacte_pdf_parser,
   │                    #   admin, carvia_frete, embarque_carvia, cliente, config, margem, carvia_tabela,
   │                    #   carvia_csv_razao, carvia_ofx, dacte_generator, moto_recognition, gerencial,
   │                    #   nfe_xml_parser, danfe_pdf_parser)
-  ├── models.py        # 36 models (NF, NfItem, Operacao, Junction, Subcontrato, 2 Faturas, 2 FaturaItem,
-  │                    #   Despesa, ContaMovimentacao, ExtratoLinha, Conciliacao,
-  │                    #   CteComplementar, CustoEntrega, CustoEntregaAnexo,
-  │                    #   CategoriaMoto, ModeloMoto, PrecoCategoriaMoto, EmpresaCubagem, AdminAudit,
-  │                    #   Config, Cliente, ClienteEndereco, Cotacao, CotacaoMoto, Pedido, PedidoItem,
-  │                    #   GrupoCliente, GrupoClienteMembro, TabelaFrete, CidadeAtendida, Receita, Frete)
+  │                    # + services/documentos/ssw_emissao_service.py (orquestrador emissao SSW)
+  │                    # + services/cte_complementar_persistencia.py (S3 + backfill 222)
+  ├── workers/         # 3 workers RQ com SSL-drop resilience (R15):
+  │                    #   ssw_cte_jobs.py — emissao 004+007+101+437 (7 etapas)
+  │                    #   ssw_cte_complementar_jobs.py — emissao 222 + upload S3
+  │                    #   verificar_ctrc_ssw_jobs.py — backfill 101 corretivo (low-priority)
+  ├── models/          # Pacote — 11 arquivos (anteriormente models.py monolitico):
+  │                    #   documentos.py — CarviaOperacao, CarviaOperacaoNf, CarviaSubcontrato
+  │                    #   cte_custos.py — CarviaCteComplementar, CarviaCustoEntrega, CarviaCustoEntregaAnexo,
+  │                    #                   CarviaEmissaoCteComplementar (tracking emissao 222)
+  │                    #   frete.py — CarviaFrete, CarviaEmissaoCte (tracking emissao SSW 004)
+  │                    #   faturas.py — CarviaFaturaCliente, CarviaFaturaTransportadora + items
+  │                    #   cotacao.py — CarviaCotacao, CarviaSessaoCotacao, CarviaPedido, etc.
+  │                    #   financeiro.py — CarviaContaMovimentacao, CarviaExtratoLinha, CarviaConciliacao,
+  │                    #                   CarviaDespesa, CarviaReceita
+  │                    #   config_moto.py — CarviaModeloMoto, CarviaCategoriaMoto, CarviaPrecoCategoriaMoto, CarviaEmpresaCubagem
+  │                    #   clientes.py — CarviaCliente, CarviaClienteEndereco
+  │                    #   admin.py — CarviaAdminAudit
+  │                    #   tabelas.py — CarviaTabelaFrete, CidadeAtendida
+  │                    #   comissao.py
+  │                    #   __init__.py — re-exporta todos os modelos
   └── forms.py         # 4 forms WTForms
 
 app/templates/carvia/
@@ -253,6 +270,44 @@ GAP-20 previa apenas soft-delete (CANCELADO). `AdminService` permite hard delete
 
 **Preview editavel**: Importacao em `/carvia/importar` permite click-to-edit, remover items e reclassificar CTes/Faturas ANTES de salvar. APIs mutam dados no Redis (`carvia:importacao:{user_id}:{uuid}`).
 
+### R15: Emissao SSW — SSL Drop Resilience (workers Playwright)
+
+Workers que chamam scripts Playwright (60-120s+) **DEVEM** isolar a conexao de banco. PostgreSQL
+do Render tem `tcp_keepalive` que mata conexoes idle durante o script. `pool_pre_ping=True` NAO
+ajuda — a conexao ja estava checked-out antes do Playwright.
+
+**Padrao canonico** (ver `app/carvia/workers/ssw_cte_jobs.py`):
+
+```python
+# ANTES do Playwright (libera conexao do pool):
+db.session.commit()   # flush pendencias
+db.session.close()    # libera transacao
+db.engine.dispose()   # fecha pool (conexoes idle morrem)
+
+# Snapshot de campos ORM em variaveis locais — objeto fica stale durante o Playwright
+ctrc_numero_local = emissao.ctrc_numero
+filial_local = emissao.filial_ssw
+
+# ... rodar script Playwright via subprocess (60-120s+) ...
+
+# APOS o Playwright (re-buscar + retry):
+ensure_connection()                                  # SELECT 1 revive pool
+obj = db.session.get(CarviaEmissaoCte, emissao_id)   # re-busca (objeto antigo stale)
+# aplicar updates + commit com retry 3x backoff (1s, 2s, 4s) em SSL/DBAPI errors
+```
+
+**Implementacao canonica**: `app/carvia/workers/ssw_cte_jobs.py`
+- `_liberar_conexao_antes_playwright()` — antes de cada chamada Playwright
+- `_commit_pos_playwright(emissao_id, **updates)` — re-busca objeto + retry 3x
+- Snapshot ORM em variaveis locais antes de liberar (nao depender de session durante Playwright)
+
+**Quando aplicar**: TODOS os workers que chamam scripts Playwright:
+- `ssw_cte_jobs.py` (emissao CTe principal)
+- `ssw_cte_complementar_jobs.py` (emissao CTe Complementar opcao 222)
+- `verificar_ctrc_ssw_jobs.py` (backfill 101 corretivo)
+
+**Detalhes completos**: `app/carvia/SSW_INTEGRATION.md`
+
 ---
 
 ## Modelos
@@ -263,16 +318,18 @@ GAP-20 previa apenas soft-delete (CANCELADO). `AdminService` permite hard delete
 |--------|--------|---------|
 | CarviaNf | `carvia_nfs` | `chave_acesso_nf` UNIQUE mas nullable (manual/referencia). `tipo_fonte`: PDF_DANFE, XML_NFE, MANUAL, FATURA_REFERENCIA (stub criado por backfill/importacao). **`status`**: ATIVA (default), CANCELADA (soft-delete GAP-20). Campos de auditoria: `cancelado_em`, `cancelado_por`, `motivo_cancelamento`. Rotas: `POST /carvia/nfs/<id>/cancelar`, **`POST /carvia/nfs/<id>/criar-cte`** (cria CTe CarVia diretamente da NF). Helpers: `get_faturas_cliente()`, `get_faturas_transportadora()` |
 | CarviaNfItem | `carvia_nf_itens` | Itens de produto da NF. FK `nf_id`. Cascade delete-orphan |
-| CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id`. `nfs_referenciadas_json` (JSONB) armazena refs NF do CTe XML para re-linking retroativo. **`gerar_numero_cte()`**: static method, retorna CTe-### (R8) |
+| CarviaOperacao | `carvia_operacoes` | `cte_chave_acesso` UNIQUE nullable. `peso_utilizado` e CALCULADO (R3). FK `fatura_cliente_id`. `nfs_referenciadas_json` (JSONB) armazena refs NF do CTe XML para re-linking retroativo. **`gerar_numero_cte()`**: static method, retorna CTe-### (R8). **Campos SSW**: `ctrc_numero` VARCHAR(30) `CAR-{nCT}-{cDV}`, `cte_xml_path` (S3 `carvia/ctes_xml/`), `cte_pdf_path` (S3 `carvia/ctes_pdf/`), `icms_aliquota` NUMERIC(5,2) (usado para grossing up de complementares). Pacote: `app/carvia/models/documentos.py` |
 | CarviaOperacaoNf | `carvia_operacao_nfs` | Junction N:N com UNIQUE(operacao_id, nf_id) |
 | CarviaSubcontrato | `carvia_subcontratos` | `valor_final` e @property (valor_acertado ou valor_cotado). FK `transportadora_id` e `tabela_frete_id`. `numero_sequencial_transportadora` (R7). **`gerar_numero_sub()`**: static method, retorna Sub-### (R8). **Conferencia individual**: `valor_considerado`, `status_conferencia` (PENDENTE/APROVADO/DIVERGENTE), `conferido_por`, `conferido_em`, `detalhes_conferencia` (JSONB snapshot) |
 | CarviaFaturaCliente | `carvia_faturas_cliente` | **UNIQUE(numero_fatura, cnpj_cliente)**. Status: PENDENTE, EMITIDA, PAGA, CANCELADA. `pago_por`/`pago_em` preenchidos ao pagar. 14 campos extras SSW (tipo_frete, pagador_*, cancelada, etc). `cnpj_cliente` = CNPJ do PAGADOR (NAO do beneficiario/CarVia). Relationship `itens` → CarviaFaturaClienteItem |
 | CarviaFaturaClienteItem | `carvia_fatura_cliente_itens` | Itens CTe de detalhe por fatura. FK `fatura_cliente_id` CASCADE. **FK `operacao_id` e `nf_id`** (nullable, resolvidos por LinkingService). Campos: cte_numero, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, frete, icms, iss, st, base_calculo |
 | CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **UNIQUE(numero_fatura, transportadora_id)**. **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
 | CarviaFaturaTransportadoraItem | `carvia_fatura_transportadora_itens` | Itens de detalhe por fatura subcontrato. FK `fatura_transportadora_id` CASCADE. **FK `subcontrato_id`, `operacao_id`, `nf_id`** (nullable). Campos: cte_numero, cte_data_emissao, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, valor_frete, valor_cotado, valor_acertado |
-| CarviaCteComplementar | `carvia_cte_complementares` | CTe complementar emitido ao cliente para cobrar custos extras. `numero_comp` COMP-### (`gerar_numero_comp()`). FK `operacao_id` NOT NULL (CTe pai). FK `fatura_cliente_id` nullable (fatura que inclui). `cte_valor` NOT NULL. Status: RASCUNHO→EMITIDO→FATURADO, CANCELADO exceto FATURADO. **SEM integracao financeira propria** — financeiro e da CarviaFaturaCliente. `cnpj_cliente`/`nome_cliente` herdados da operacao |
+| CarviaCteComplementar | `carvia_cte_complementares` | CTe complementar emitido ao cliente para cobrar custos extras. `numero_comp` COMP-### (`gerar_numero_comp()`) — usado internamente. **UI exibe `cte_numero + ctrc_numero`** via macro `carvia_ref` (commit `672a1836`). FK `operacao_id` NOT NULL (CTe pai). FK `fatura_cliente_id` nullable (fatura que inclui). `cte_valor` NOT NULL. Status: RASCUNHO→EMITIDO→FATURADO, CANCELADO exceto FATURADO. **SEM integracao financeira propria** — financeiro e da CarviaFaturaCliente. `cnpj_cliente`/`nome_cliente` herdados da operacao. **Campos SSW (commit `06f27d0d`)**: `cte_chave_acesso` UNIQUE nullable, `ctrc_numero` VARCHAR(30), `cte_xml_path` (S3), `cte_pdf_path` (S3) — populados pelo worker pos-emissao 222. Pacote: `app/carvia/models/cte_custos.py` |
 | CarviaCustoEntrega | `carvia_custos_entrega` | Custos que CarVia pagou/incorreu (DEBITO). `numero_custo` CE-### (`gerar_numero_custo()`). `TIPOS_CUSTO`: DIARIA, REENTREGA, ARMAZENAGEM, DEVOLUCAO, AVARIA, PEDAGIO_EXTRA, TAXA_DESCARGA, OUTROS. FK `operacao_id` NOT NULL, FK `cte_complementar_id` nullable. `fornecedor_nome`/`fornecedor_cnpj` opcionais. **COM integracao financeira**: FluxoCaixa (por `data_vencimento`), Conciliacao (`tipo_doc='custo_entrega'`, DEBITO), ContaMovimentacao (automatico). Campos `pago_por`/`pago_em`/`total_conciliado`/`conciliado` identicos a CarviaDespesa |
 | CarviaCustoEntregaAnexo | `carvia_custo_entrega_anexos` | Comprovantes S3 (1:N por custo). Segue padrao `AnexoOcorrencia` de devolucao. `ativo` Boolean para soft-delete. Upload AJAX (PDF/JPG/PNG/DOC/XLS/MSG, max 10MB). Download via presigned URL S3. `FileStorage` de `app/utils/file_storage.py` |
+| CarviaEmissaoCte | `carvia_emissao_cte` | **Tracking de emissao SSW (opcao 004 + 007 + 101 + 437)**. Status: `PENDENTE → EM_PROCESSAMENTO → SUCESSO/ERRO/CANCELADO`. Etapas: `LOGIN, PREENCHIMENTO, SEFAZ, CONSULTA_101, IMPORTACAO_CTE, FATURA_437, IMPORTACAO_FAT`. FK `nf_id` NOT NULL (NF que motivou), FK `operacao_id` (preenchido por `importar_resultado_cte` via `cte_chave_acesso`). Campos: `placa`, `uf_origem`, `filial_ssw`, `cnpj_tomador`, `frete_valor`, `data_vencimento`, `medidas_json`, `xml_path`/`dacte_path` (LOCAIS temporarios — caminhos S3 finais ficam em `CarviaOperacao.cte_xml_path/cte_pdf_path`), `fatura_numero`, `erro_ssw`, `resultado_json`. Properties `em_andamento` e `finalizado`. Service: `SswEmissaoService`. Worker: `ssw_cte_jobs.emitir_cte_ssw_job(id)` com SSL drop resilience (R15). Pacote: `app/carvia/models/frete.py` |
+| CarviaEmissaoCteComplementar | `carvia_emissao_cte_complementar` | **Tracking de emissao CT-e Complementar SSW (opcao 222 + 007 + 101)**. Status: `PENDENTE → EM_PROCESSAMENTO → SUCESSO/ERRO`. Etapas: `PREENCHIMENTO, SEFAZ, CONSULTA_101`. FK `custo_entrega_id` NOT NULL (motiva), FK `cte_complementar_id` NOT NULL (preenchido pos-sucesso), FK `operacao_id` NOT NULL (CTe pai). Campos: `ctrc_pai` VARCHAR(30) `FILIAL-NUMERO-DV`, `motivo_ssw` (C/D/E/R), `filial_ssw`, `valor_calculado` NUMERIC(15,2) (apos grossing up), `icms_aliquota_usada` NUMERIC(5,2) (snapshot do ICMS do pai). Worker: `ssw_cte_complementar_jobs.emitir_cte_complementar_job(id)` — chama script 222 com `valor_base=custo.valor` (auto-calc ICMS via 101 do pai). Pos-sucesso: `_persistir_artefatos_complementar()` faz upload XML/DACTE S3 + backfill `CarviaCteComplementar.ctrc_numero/cte_xml_path/cte_pdf_path`. Retry: `POST /carvia/api/custos-entrega/emissao-comp/<id>/retry` (commit `6ca7b942`). Pacote: `app/carvia/models/cte_custos.py` |
 | CarviaContaMovimentacao | `carvia_conta_movimentacoes` | Movimentacoes financeiras da conta. `tipo_doc`: fatura_cliente/fatura_transportadora/despesa/custo_entrega/receita/saldo_inicial/ajuste. `doc_id`=0 para saldo_inicial. **UNIQUE(tipo_doc, doc_id)** impede duplicata. `tipo_movimento`: CREDITO/DEBITO. `valor` sempre positivo. Saldo calculado por SUM (nao armazenado) |
 | CarviaSessaoCotacao | `carvia_sessoes_cotacao` | Sessao de cotacao comercial. `numero_sessao` COTACAO-### (prefixo atualizado de SC-###, backfill aplicado). Status: RASCUNHO→ENVIADO→APROVADO/CONTRA_PROPOSTA, CANCELADO (exceto de APROVADO). `valor_contra_proposta` obrigatorio quando CONTRA_PROPOSTA. **Campos contato cliente**: `cliente_nome`, `cliente_email`, `cliente_telefone`, `cliente_responsavel` (todos opcionais). Properties: `valor_total_frete`, `qtd_demandas`, `todas_demandas_com_frete`. `gerar_numero_sessao()`: static method (busca max de ambos prefixos SC e COTACAO) |
 | CarviaSessaoDemanda | `carvia_sessao_demandas` | Demanda de rota dentro de sessao. UNIQUE(sessao_id, ordem). FK `transportadora_id` e `tabela_frete_id` (preenchidos ao selecionar opcao). `detalhes_calculo` JSON com breakdown da CalculadoraFrete. `limpar_frete_selecionado()` zera campos ao editar |
@@ -497,6 +554,34 @@ CANCELADO <── cancelar (de qualquer estado exceto APROVADO)
 
 ---
 
+## Emissao SSW — Integracao Playwright
+
+CarVia emite CTe diretamente no SSW via scripts Playwright standalone (skill `operando-ssw`).
+Arquitetura: Route → Service → Model tracking → Worker RQ → Script Playwright → Service importar.
+
+**Detalhes completos** (fluxos, lifecycle, SSL resilience, endpoints, refactor `carvia_ref`):
+`app/carvia/SSW_INTEGRATION.md`
+
+**Componentes principais**:
+- **Services**: `SswEmissaoService` (`services/documentos/ssw_emissao_service.py`), `cte_complementar_persistencia.py`
+- **Workers** (todos com SSL drop resilience R15):
+  - `workers/ssw_cte_jobs.py` — emissao CTe principal (opcao 004 + 007 + 101 + 437)
+  - `workers/ssw_cte_complementar_jobs.py` — emissao CTe Complementar (opcao 222)
+  - `workers/verificar_ctrc_ssw_jobs.py` — backfill 101 corretivo (low-priority)
+- **Models de tracking**: `CarviaEmissaoCte` e `CarviaEmissaoCteComplementar` (ver tabela acima)
+- **Scripts Playwright**: `.claude/skills/operando-ssw/scripts/emitir_cte_004.py`, `emitir_cte_complementar_222.py`, `consultar_ctrc_101.py`, `gerar_fatura_ssw_437.py`
+
+**Fluxos** (ver `SSW_INTEGRATION.md` para detalhes):
+1. **NF → CTe + Fatura**: `POST /carvia/api/nfs/<id>/emitir-cte-ssw` enfileira `CarviaEmissaoCte` PENDENTE → worker executa 004 → SEFAZ → 101 → importar → opcionalmente 437. JS faz polling em `GET /carvia/api/emissao-cte/<id>/status` (5s).
+2. **CustoEntrega → CTe Complementar**: `POST /carvia/api/custos-entrega/<id>/emitir-cte-comp` enfileira `CarviaEmissaoCteComplementar` → worker chama script 222 com `valor_base=custo.valor` → auto-calc ICMS via 101 do pai → grossing up → SEFAZ → upload XML/DACTE S3 → backfill `CarviaCteComplementar`.
+3. **Retry**: `POST /carvia/api/custos-entrega/emissao-comp/<id>/retry` reseta `status=PENDENTE` e re-enfileira (apenas se ERRO + RASCUNHO).
+
+**Auto-extracao de medidas motos** (`baffaaad`): `SswEmissaoService.extrair_medidas_da_nf(nf_id)` faz GROUP BY `modelo_moto_id` em `CarviaNfItem` se medidas vierem vazias. UI (`nfs/detalhe.html`) mostra preview auto-detectado e mantem campo manual em `<details>` colapsado.
+
+**Regra critica**: ver R15 (SSL Drop Resilience) acima.
+
+---
+
 ## Interdependencias
 
 | Importa de | O que | Cuidado |
@@ -572,3 +657,28 @@ Busca via `GET /carvia/api/opcoes-transportadora?busca=X&uf_destino=Y`.
 Ultimo item fixo: "Criar Nova Transportadora" → modal `#modalCriarTransportadora`.
 Modal usa `POST /carvia/api/cadastrar-transportadora` (JSON). Apos cadastro: fecha modal + auto-seleciona.
 CSS: `css/modules/_carvia.css` (`.carvia-autocomplete-*`)
+
+### Macro `carvia_ref` — Identificador unificado CTe + CTRC
+
+Arquivo: `app/templates/carvia/_macros.html`
+
+Renderiza identificador de `CarviaOperacao` ou `CarviaCteComplementar` no formato unificado
+`CTe-### | CTRC SSW {ctrc_numero}` (ex: `"CTe-042 | CTRC SSW CAR-113-9"`).
+
+```jinja
+{{ carvia_ref(operacao) }}        {# CTe-042 | CTRC SSW CAR-113-9 #}
+{{ carvia_ref(cte_complementar) }} {# CTe Comp. 2037 | CTRC SSW CAR-2037-1 #}
+```
+
+Usado em **12 templates** apos refactor `672a1836`:
+- `detalhe_operacao.html`, `listar_operacoes.html` (legado)
+- `ctes_complementares/{listar,criar,detalhe,editar}.html`
+- `subcontratos/{criar,detalhe}.html`
+- `faturas_cliente/{nova,detalhe}.html`
+- `faturas_transportadora/detalhe.html`
+- `custos_entrega/detalhe.html`
+
+**Razao do refactor (commit `672a1836`)**: identificadores internos (`#id` ou `numero_comp = COMP-###`)
+sao **incompreensiveis** para o usuario CarVia, que opera no SSW e ve `CTe-042` e `CAR-113-9`.
+As UIs agora espelham 1:1 o que o usuario ve no SSW. APIs (`api_routes.py`) enriquecidas com
+`ctrc_numero` e `operacao_cte_numero` para alimentar a macro.
