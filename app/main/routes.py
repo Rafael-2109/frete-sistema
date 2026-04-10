@@ -746,7 +746,8 @@ def api_dashboard_separacoes_programadas():
             Separacao.num_pedido
         ).order_by(
             func.min(Separacao.expedicao).asc(),
-            func.min(Separacao.raz_social_red).asc()
+            func.min(Separacao.raz_social_red).asc(),
+            func.sum(Separacao.valor_saldo).desc()
         ).limit(15).all()
 
         return jsonify({
