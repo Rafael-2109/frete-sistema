@@ -156,16 +156,16 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_titulo_status",
+      "name": "idx_extrato_titulo_receber",
       "columns": [
-        "status"
+        "titulo_receber_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_extrato_titulo_receber",
+      "name": "ix_extrato_item_titulo_extrato_item_id",
       "columns": [
-        "titulo_receber_id"
+        "extrato_item_id"
       ],
       "unique": false
     },
@@ -177,9 +177,9 @@
       "unique": false
     },
     {
-      "name": "ix_extrato_item_titulo_extrato_item_id",
+      "name": "ix_extrato_item_titulo_status",
       "columns": [
-        "extrato_item_id"
+        "status"
       ],
       "unique": false
     },

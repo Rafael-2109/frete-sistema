@@ -148,9 +148,23 @@
   ],
   "indices": [
     {
+      "name": "ix_frete_devolucao_despesa_extra_id",
+      "columns": [
+        "despesa_extra_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_frete_dev_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_frete_devolucao_ocorrencia_devolucao_id",
+      "columns": [
+        "ocorrencia_devolucao_id"
       ],
       "unique": false
     },
@@ -162,16 +176,16 @@
       "unique": false
     },
     {
-      "name": "ix_frete_devolucao_ativo",
+      "name": "idx_frete_dev_transportadora",
       "columns": [
-        "ativo"
+        "transportadora_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_frete_dev_transportadora",
+      "name": "ix_frete_devolucao_ativo",
       "columns": [
-        "transportadora_id"
+        "ativo"
       ],
       "unique": false
     },
@@ -186,20 +200,6 @@
       "name": "ix_frete_devolucao_chave_cte",
       "columns": [
         "chave_cte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_frete_devolucao_ocorrencia_devolucao_id",
-      "columns": [
-        "ocorrencia_devolucao_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_frete_devolucao_despesa_extra_id",
-      "columns": [
-        "despesa_extra_id"
       ],
       "unique": false
     }

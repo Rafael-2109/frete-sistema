@@ -98,16 +98,16 @@
   ],
   "indices": [
     {
-      "name": "ix_recebimento_fisico_status",
+      "name": "ix_recebimento_fisico_odoo_picking_id",
       "columns": [
-        "status"
+        "odoo_picking_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_recebimento_fisico_odoo_picking_id",
+      "name": "ix_recebimento_fisico_status",
       "columns": [
-        "odoo_picking_id"
+        "status"
       ],
       "unique": false
     }

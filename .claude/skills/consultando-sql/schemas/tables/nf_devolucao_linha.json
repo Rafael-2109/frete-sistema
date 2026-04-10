@@ -62,7 +62,7 @@
     },
     {
       "name": "quantidade_convertida",
-      "type": "numeric(15,3)"
+      "type": "numeric(15,4)"
     },
     {
       "name": "qtd_por_caixa",
@@ -122,6 +122,13 @@
       "unique": false
     },
     {
+      "name": "ix_nf_devolucao_linha_codigo_produto_interno",
+      "columns": [
+        "codigo_produto_interno"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_linha_nf_devolucao_id",
       "columns": [
         "nf_devolucao_id"
@@ -130,13 +137,6 @@
     },
     {
       "name": "idx_nfd_linha_produto_interno",
-      "columns": [
-        "codigo_produto_interno"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_linha_codigo_produto_interno",
       "columns": [
         "codigo_produto_interno"
       ],
