@@ -724,31 +724,43 @@ def api_dashboard_embarques_recentes():
 @main_bp.route('/api/dashboard/separacoes-programadas')
 @login_required
 def api_dashboard_separacoes_programadas():
-    """Separacoes futuras pendentes (painel rotativo)."""
+    """Separacoes futuras agrupadas por pedido (painel rotativo)."""
     try:
         hoje = date.today()
 
-        separacoes = Separacao.query.filter(
+        # Agrupar por pedido: total itens, valor, peso
+        resultados = db.session.query(
+            Separacao.num_pedido,
+            func.min(Separacao.raz_social_red).label('cliente'),
+            func.min(Separacao.nome_cidade).label('cidade'),
+            func.min(Separacao.cod_uf).label('uf'),
+            func.min(Separacao.expedicao).label('expedicao'),
+            func.min(Separacao.rota).label('rota'),
+            func.count(Separacao.id).label('total_itens'),
+            func.coalesce(func.sum(Separacao.valor_saldo), 0).label('valor_total'),
+            func.coalesce(func.sum(Separacao.peso), 0).label('peso_total')
+        ).filter(
             Separacao.expedicao >= hoje,
             Separacao.sincronizado_nf == False  # noqa: E712
+        ).group_by(
+            Separacao.num_pedido
         ).order_by(
-            Separacao.expedicao.asc(),
-            Separacao.rota,
-            Separacao.sub_rota
+            func.min(Separacao.expedicao).asc(),
+            func.min(Separacao.raz_social_red).asc()
         ).limit(15).all()
 
         return jsonify({
             'success': True,
             'data': [{
-                'num_pedido': s.num_pedido,
-                'cliente': s.raz_social_red or 'N/A',
-                'cidade': f"{s.nome_cidade}/{s.cod_uf}" if s.nome_cidade else s.cod_uf,
-                'produto': s.nome_produto or 'N/A',
-                'qtd': float(s.qtd_saldo) if s.qtd_saldo else 0,
-                'peso': float(s.peso) if s.peso else 0,
-                'expedicao': s.expedicao.strftime('%d/%m/%Y') if s.expedicao else '-',
-                'rota': s.rota or '-'
-            } for s in separacoes]
+                'num_pedido': r.num_pedido,
+                'cliente': r.cliente or 'N/A',
+                'cidade': f"{r.cidade}/{r.uf}" if r.cidade else (r.uf or '-'),
+                'total_itens': r.total_itens,
+                'valor_total': float(r.valor_total),
+                'peso_total': float(r.peso_total),
+                'expedicao': r.expedicao.strftime('%d/%m/%Y') if r.expedicao else '-',
+                'rota': r.rota or '-'
+            } for r in resultados]
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

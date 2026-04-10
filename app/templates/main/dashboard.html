@@ -281,7 +281,7 @@
                         </div>
                     </div>
 
-                    <!-- Panel 4: Separacoes Programadas -->
+                    <!-- Panel 4: Separacoes Programadas (agrupadas por pedido) -->
                     <div class="dash-panel" id="panel-4">
                         <div class="dash-loading" id="loading-separacoes">
                             <i class="fas fa-spinner fa-spin"></i>
@@ -294,8 +294,8 @@
                                         <th>Pedido</th>
                                         <th>Cliente</th>
                                         <th>Destino</th>
-                                        <th>Produto</th>
-                                        <th class="text-end">Qtd</th>
+                                        <th class="text-end">Itens</th>
+                                        <th class="text-end">Valor</th>
                                         <th class="text-end">Peso</th>
                                         <th>Expedicao</th>
                                         <th>Rota</th>
@@ -783,9 +783,9 @@ async function carregarSeparacoes() {
                     <td><strong>${s.num_pedido}</strong></td>
                     <td>${truncar(s.cliente, 25)}</td>
                     <td>${s.cidade}</td>
-                    <td>${truncar(s.produto, 25)}</td>
-                    <td class="text-end">${formatarNumero(s.qtd)}</td>
-                    <td class="text-end">${formatarNumero(s.peso)} kg</td>
+                    <td class="text-end">${s.total_itens}</td>
+                    <td class="text-end">${formatarMoeda(s.valor_total)}</td>
+                    <td class="text-end">${formatarNumero(s.peso_total)} kg</td>
                     <td>${s.expedicao}</td>
                     <td>${s.rota}</td>
                 </tr>
