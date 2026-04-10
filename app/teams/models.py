@@ -16,7 +16,12 @@ class TeamsTask(db.Model):
     Tarefa assíncrona para processamento de mensagem do Teams.
 
     Ciclo de vida:
+    queued → processing → completed | error | awaiting_user_input | timeout
     pending → processing → completed | error | awaiting_user_input | timeout
+
+    Quando usuario envia msg durante processamento:
+    nova msg → queued (max 1 por conversa, nova substitui anterior)
+    task ativa completa → queued transiciona para processing automaticamente
 
     Quando o agente chama AskUserQuestion:
     processing → awaiting_user_input → (resposta) → processing → completed

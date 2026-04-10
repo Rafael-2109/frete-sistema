@@ -1534,6 +1534,9 @@ def process_teams_task_async(
                 f"resposta_len={len(resposta_texto) if resposta_texto else 0}"
             )
 
+            # Verificar fila de mensagens pendentes para esta conversa
+            _process_queued_task(app, conversation_id, task_id)
+
         except Exception as e:
             logger.error(
                 f"[TEAMS-ASYNC] Erro fatal: task={task_id[:8]}... error={e}",
@@ -1554,6 +1557,9 @@ def process_teams_task_async(
             except Exception:
                 logger.error("[TEAMS-ASYNC] Erro ao marcar task como error", exc_info=True)
                 db.session.rollback()
+
+            # Mesmo com erro, processar mensagem queued (usuario ja enviou)
+            _process_queued_task(app, conversation_id, task_id)
 
         finally:
             # Cleanup de contextos
@@ -1588,9 +1594,72 @@ def process_teams_task_async(
             logger.debug(f"[TEAMS-ASYNC] Cleanup finalizado: task={task_id[:8]}...")
 
 
+def _process_queued_task(app, conversation_id: str, finished_task_id: str) -> None:
+    """
+    Verifica se ha mensagem queued para a conversa e processa.
+
+    Chamado apos conclusao (sucesso ou erro) de uma task.
+    Processa a mensagem queued NA MESMA THREAD para manter contexto
+    e reutilizar a sessao Teams (TTL 4h).
+
+    NOTA: Chamada recursiva via process_teams_task_async() — nao e
+    recursao infinita porque a task queued muda para 'processing'
+    antes da chamada, saindo do filtro de concorrencia.
+    """
+    try:
+        from app.teams.models import TeamsTask
+        from app import db
+
+        with db.session.no_autoflush:
+            queued_task = TeamsTask.query.filter(
+                TeamsTask.conversation_id == conversation_id,
+                TeamsTask.status == 'queued',
+            ).order_by(TeamsTask.created_at.asc()).first()
+
+        if not queued_task:
+            return
+
+        logger.info(
+            f"[TEAMS-QUEUE] Mensagem queued encontrada: "
+            f"task={queued_task.id[:8]}... msg={queued_task.mensagem[:80]}... "
+            f"(apos task={finished_task_id[:8]}...)"
+        )
+
+        # Atualizar status para processing antes de chamar
+        # R2: _commit_with_retry obrigatorio em thread longa (SSL drop risk)
+        queued_task.status = 'processing'
+        if not _commit_with_retry("[TEAMS-QUEUE]"):
+            # SSL dropped — re-fetch e re-apply
+            queued_task = db.session.get(TeamsTask, queued_task.id)
+            if not queued_task:
+                logger.error("[TEAMS-QUEUE] Task queued perdida apos SSL drop")
+                return
+            queued_task.status = 'processing'
+            _commit_with_retry("[TEAMS-QUEUE-RETRY]")
+
+        # Processar na mesma thread (non-daemon), mesma sessao
+        process_teams_task_async(
+            app=app,
+            task_id=queued_task.id,
+            mensagem=queued_task.mensagem,
+            usuario=queued_task.user_name,
+            conversation_id=conversation_id,
+            teams_user_id=queued_task.user_id,
+        )
+
+    except Exception as e:
+        logger.warning(
+            f"[TEAMS-QUEUE] Erro ao processar fila (ignorado): {e}",
+            exc_info=True,
+        )
+
+
 def cleanup_stale_teams_tasks() -> int:
     """
-    Marca tasks stale (pending/processing > 5 min) como timeout.
+    Marca tasks stale como timeout.
+
+    - pending/processing/awaiting_user_input: > 5 min sem update
+    - queued: > 10 min sem update (threshold maior porque aguarda task ativa)
 
     Chamado no início de cada bot_message() (lazy cleanup, sem cron extra).
 
@@ -1610,13 +1679,23 @@ def cleanup_stale_teams_tasks() -> int:
             pass
 
         threshold = agora_utc_naive() - timedelta(minutes=5)
+        queued_threshold = agora_utc_naive() - timedelta(minutes=10)
 
         # P2-C: Usar updated_at ao invés de created_at para evitar matar tasks legítimas.
         # Uma task criada há 5+ min pode ter mudado para awaiting_user_input há 30s.
         # Com created_at, seria marcada como timeout enquanto o usuário ainda responde.
+        # Tasks queued usam threshold maior (10 min) porque aguardam task ativa terminar.
         stale_tasks = TeamsTask.query.filter(
-            TeamsTask.status.in_(['pending', 'processing', 'awaiting_user_input']),
-            TeamsTask.updated_at < threshold,
+            db.or_(
+                db.and_(
+                    TeamsTask.status.in_(['pending', 'processing', 'awaiting_user_input']),
+                    TeamsTask.updated_at < threshold,
+                ),
+                db.and_(
+                    TeamsTask.status == 'queued',
+                    TeamsTask.updated_at < queued_threshold,
+                ),
+            ),
         ).all()
 
         count = 0

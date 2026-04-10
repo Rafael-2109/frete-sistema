@@ -60,9 +60,23 @@ Usar `finally` para garantias (Event.set, cleanup).
 
 > Campos: `.claude/skills/consultando-sql/schemas/tables/teams_tasks.json`
 
-**Lifecycle**: `pending → processing → completed|error|awaiting_user_input|timeout`
+**Lifecycle**:
+```
+queued ──────────────────────────────────┐
+                                         ↓
+pending → processing → completed|error|awaiting_user_input|timeout
+```
+- `queued → processing` (automaticamente quando task anterior completa ou falha)
 - `awaiting_user_input → processing` (apos resposta via `/bot/answer`)
 - Timeout: `updated_at` > 5 min idle → `timeout` (lazy cleanup em `bot_message`)
+- Timeout queued: `updated_at` > 10 min → `timeout`
+- Limite: max 1 task `queued` por `conversation_id` (nova msg substitui anterior)
+
+### R8: Fila de mensagens — max 1 por conversa
+Quando usuario envia msg durante processamento, msg e enfileirada (`status='queued'`) em vez de rejeitada.
+Apos task ativa completar (sucesso ou erro), `_process_queued_task()` verifica fila e processa
+na MESMA THREAD (recursao via `process_teams_task_async`). Azure Function inicia polling para task queued.
+— FONTE: `bot_routes.py:139-190`, `services.py:_process_queued_task()`
 
 ---
 

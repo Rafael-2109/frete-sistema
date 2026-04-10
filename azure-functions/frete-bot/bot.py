@@ -718,6 +718,17 @@ async def _poll_and_respond(
                 )
                 return
 
+            elif status == "queued":
+                # Task ainda na fila aguardando task ativa terminar
+                # Enviar typing indicator para manter conexão viva
+                try:
+                    await turn_context.send_activity(
+                        Activity(type=ActivityTypes.typing)
+                    )
+                except Exception:
+                    pass
+                continue
+
             elif status == "busy":
                 # Não deveria chegar aqui (busy é tratado no bot_message)
                 resposta = result.get("resposta", "Sistema ocupado.")
@@ -899,17 +910,31 @@ class FreteBot(ActivityHandler):
         # 3. Trata resposta
 
         # Modo async: resposta contém task_id → polling
-        if result.get("task_id") and result.get("status") in ("processing", "busy"):
+        if result.get("task_id") and result.get("status") in ("processing", "busy", "queued"):
             task_id = result["task_id"]
             status = result["status"]
 
             if status == "busy":
-                # Já tem task ativa — informa e retorna
+                # Fallback legado — não deveria mais acontecer
                 resposta = result.get(
                     "resposta",
                     "Ainda estou processando a pergunta anterior."
                 )
                 await turn_context.send_activity(resposta)
+                return
+
+            if status == "queued":
+                # Mensagem enfileirada — avisar usuario e iniciar polling
+                # para a task queued (sera processada apos a atual)
+                resposta = result.get(
+                    "resposta",
+                    "Recebi sua mensagem. Processando na sequência."
+                )
+                await turn_context.send_activity(resposta)
+                logger.info(f"[BOT] Mensagem queued: polling task={task_id[:8]}...")
+                await _poll_and_respond(
+                    turn_context, task_id, user_name, http_session=http_session
+                )
                 return
 
             # status == "processing" → inicia polling

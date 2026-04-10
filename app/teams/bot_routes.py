@@ -17,6 +17,7 @@ import threading
 from flask import request, jsonify, current_app
 from app.teams import teams_bp
 from app import csrf
+from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
 
@@ -136,20 +137,57 @@ def _handle_async_message(mensagem: str, usuario: str, conversation_id: str):
     cleanup_stale_teams_tasks()
 
     # Controle de concorrência: apenas 1 task ativa por conversa
+    # Se já existe task ativa, enfileira a mensagem (max 1 na fila)
     if conversation_id:
         active = TeamsTask.query.filter(
             TeamsTask.conversation_id == conversation_id,
-            TeamsTask.status.in_(['pending', 'processing', 'awaiting_user_input']),
+            TeamsTask.status.in_(['pending', 'processing', 'awaiting_user_input', 'queued']),
         ).first()
         if active:
-            logger.warning(
-                f"[TEAMS-BOT] Task ativa existente para conv={conversation_id[:30]}...: "
-                f"task={active.id[:8]}... status={active.status}"
+            logger.info(
+                f"[TEAMS-BOT] Task ativa para conv={conversation_id[:30]}...: "
+                f"task={active.id[:8]}... status={active.status} — enfileirando mensagem"
             )
+
+            # Verificar se já existe task queued (limite: 1 por conversa)
+            existing_queued = TeamsTask.query.filter(
+                TeamsTask.conversation_id == conversation_id,
+                TeamsTask.status == 'queued',
+            ).first()
+
+            if existing_queued:
+                # Substituir mensagem pendente (mais recente prevalece)
+                existing_queued.mensagem = mensagem
+                existing_queued.user_name = usuario
+                existing_queued.updated_at = agora_utc_naive()
+                db.session.commit()
+                task_id = existing_queued.id
+                logger.info(
+                    f"[TEAMS-BOT] Mensagem queued ATUALIZADA: task={task_id[:8]}... "
+                    f"msg={mensagem[:80]}..."
+                )
+            else:
+                # Criar nova task queued
+                teams_user_id = _get_or_create_teams_user(usuario)
+                queued_task = TeamsTask(
+                    conversation_id=conversation_id,
+                    user_name=usuario,
+                    user_id=teams_user_id,
+                    status='queued',
+                    mensagem=mensagem,
+                )
+                db.session.add(queued_task)
+                db.session.commit()
+                task_id = queued_task.id
+                logger.info(
+                    f"[TEAMS-BOT] Mensagem ENFILEIRADA: task={task_id[:8]}... "
+                    f"msg={mensagem[:80]}..."
+                )
+
             return jsonify({
-                "status": "busy",
-                "resposta": "Ainda estou processando a pergunta anterior. Aguarde a resposta.",
-                "task_id": active.id,
+                "status": "queued",
+                "resposta": "Recebi sua mensagem. Vou processar assim que terminar a anterior.",
+                "task_id": task_id,
             })
 
     # Obter user_id real
@@ -226,6 +264,7 @@ def bot_task_status(task_id: str):
     Polling de status de uma TeamsTask.
 
     Retorna:
+    - queued: {"status": "queued"} — aguardando task ativa terminar
     - processing: {"status": "processing"}
     - completed: {"status": "completed", "resposta": "..."}
     - error: {"status": "error", "resposta": "..."}
