@@ -78,6 +78,11 @@ class _StreamParseState:
 # Formato: (tool_pattern, error_pattern, corrective_instruction)
 # tool_pattern=None → qualquer tool. Ordem importa (first match wins).
 ERROR_CLASSIFICATIONS = [
+    # Input validation — parâmetro obrigatório ausente (modelo chamou tool com args incompletos)
+    (None, r'required property|is required|missing.*required',
+     "Parâmetro obrigatório ausente na chamada. Revise o schema da tool e inclua TODOS os campos "
+     "required. Para mcp__sql__consultar_sql: o parâmetro se chama 'pergunta' (string)."),
+
     # Dados (campo/schema) — ORDEM IMPORTA: tabela antes de campo (ambos contêm "does not exist")
     (None, r'relation.*does not exist|undefined table',
      "Tabela não encontrada. Consulte schemas em .claude/skills/consultando-sql/schemas/tables/."),
