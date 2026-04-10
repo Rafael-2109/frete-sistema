@@ -351,10 +351,74 @@ class DactePDFParser:
 
     # --- Metodos de extracao ---
 
+    def _extrair_chave_overlay_url(self) -> Optional[str]:
+        """Extrai chave 44 digitos sobreposta a URL de consulta SEFAZ.
+
+        Em DACTEs gerados pelo SSW (e por outros formatos similares), a chave
+        de acesso e impressa fisicamente sobre a frase
+            "Chave de acesso para consulta de autenticidade no site
+             www.cte.fazenda.gov.br"
+        no QR code area. pdfplumber extrai os caracteres em ordem X,
+        intercalando digitos da chave com letras da URL.
+
+        Niveis 1-3 (regex puro de \\d{44}, blocos formatados, busca por
+        "CHAVE DE ACESSO") FALHAM nesse cenario porque os digitos da chave
+        nao sao consecutivos no texto extraido — estao separados por letras.
+        Esta funcao isola a linha contendo a URL via marcadores robustos
+        ("FAZENDA", "AUTENTICIDADE") e extrai os digitos em ordem.
+
+        Validacao da chave usa modulo 11 (CDV) — garantia criptografica
+        contra noise digit-blocks que coincidentemente passem em cUF+modelo.
+
+        IMPORTANTE: NAO usa filtro de CNPJ emitente porque `_extrair_cnpj`
+        e ingenuo (pode extrair "57"+protocolo como CNPJ). A URL overlay e
+        unica por DACTE, entao cUF + modelo=57 + CDV sao suficientes.
+
+        Returns:
+            Chave de 44 digitos com cUF valido + modelo=57 + CDV correto,
+            ou None.
+        """
+        # Marcadores robustos da URL SSW (palavras suficientemente raras
+        # para nao colidir com nomes de empresas/produtos). Exigir AMBAS
+        # ("FAZENDA" + "AUTENTICIDADE") torna o gate praticamente imune
+        # a falso positivo.
+        URL_MARKERS = ('FAZENDA', 'AUTENTICIDADE')
+
+        for linha in self._linhas():
+            # Extrai apenas letras da linha para detectar a URL.
+            # Os digitos da chave estao intercalados, mas removendo TUDO
+            # que nao e letra preserva a sequencia das palavras da URL
+            # ("Chavedeacessoparaconsultadeautenticidadenositewwwctefazenda...")
+            so_letras = re.sub(r'[^A-Za-z]', '', linha).upper()
+            if not all(kw in so_letras for kw in URL_MARKERS):
+                continue
+
+            # Extrair digitos em ordem (mantem a sequencia da chave)
+            digitos = re.sub(r'\D', '', linha)
+            if len(digitos) < 44:
+                continue
+
+            # Sliding window 44 chars com validacao tripla:
+            # cUF (codigo IBGE) + modelo CTe=57 + CDV (modulo 11).
+            # CDV e cryptografico — elimina falso positivo de noise digits.
+            for i in range(len(digitos) - 43):
+                chave = digitos[i:i + 44]
+                if chave[0:2] not in self._VALID_CUF:
+                    continue
+                if chave[20:22] != '57':
+                    continue
+                if self._calc_cdv_nfe(chave[:43]) != int(chave[43]):
+                    continue
+                return chave
+
+        return None
+
     def get_chave_acesso_cte(self) -> Optional[str]:
         """Extrai chave de acesso do CTe (44 digitos com modelo=57).
 
-        3 niveis de busca para suportar todos os formatos:
+        4 niveis de busca para suportar todos os formatos:
+        0. URL overlay SSW: chave sobreposta a "Chave de acesso para
+           consulta...www.cte.fazenda.gov.br" no QR code area
         1. Chave com 44 digitos consecutivos no texto original
         2. Blocos de digitos com separadores (formatado) — limpa por match
         3. Secao "Chave de acesso" — busca localizada
@@ -366,7 +430,17 @@ class DactePDFParser:
         - Chave cujo CNPJ (pos 6-19) bate com o emitente do header
         - Se nao bate, retorna a primeira encontrada
         """
+        # Nivel 0 (PRIORIDADE MAXIMA): chave overlaid em URL SEFAZ
+        # Em SSW, esta e a unica fonte garantidamente correta — Niveis 1-3
+        # podem retornar chave garbled por causa de outros digit-blocks no
+        # PDF (Apolice/Seguradora/QR code) que parecem chave.
+        # Validada via CDV (modulo 11) — sem necessidade de filtro CNPJ.
+        chave_overlay = self._extrair_chave_overlay_url()
+        if chave_overlay:
+            return chave_overlay
+
         # Detectar CNPJ do emitente no header para priorizar chave correta
+        # nos Niveis 1-3 (fallback quando overlay nao encontra)
         cnpj_emitente = None
         linhas = self._linhas()
         for linha in linhas[:10]:
@@ -1563,6 +1637,243 @@ class DactePDFParser:
 
         return None
 
+    # ─────────────────────────────────────────────────────────────────────
+    # Tipo de CTe (Normal, Complementar, Anulacao, Substituto)
+    # ─────────────────────────────────────────────────────────────────────
+
+    def get_tipo_cte(self) -> str:
+        """Detecta o tipo do CTe via texto do DACTE.
+
+        Equivalente a CTeXMLParser.get_tipo_cte() para PDFs (que nao tem
+        a tag <tpCTe>). Usa marcadores SSW-especificos restritos:
+
+        Marcador 1 (PRIMARIO): campo formal "TIPO DO CT-E" no header do
+            DACTE seguido pelo valor na linha imediatamente posterior.
+            Layout SSW:
+                TIPO DO CT-E TIPO DO SERVICO CFOP - NATUREZA DA PRESTACAO
+                COMPLEMENTAR NORMAL 5932 ...
+
+        Marcador 2 (FALLBACK): observacao SSW exata "CTRC EMITIDO P/ COMPL.
+            DO XXX0000NN-N" presente em todo CTe Complementar SSW. O sufixo
+            (filial+numero+dv) restringe contra falso positivo.
+
+        Returns:
+            '0' = Normal
+            '1' = Complementar
+            '2' = Anulacao
+            '3' = Substituto
+        """
+        upper = self.texto_completo.upper()
+
+        # Marcador 1: campo formal "TIPO DO CT-E" + valor na linha seguinte
+        if re.search(
+            r'TIPO\s+DO\s+CT[\-\s]?E\b[^\n]*\n\s*COMPLEMENTAR\b',
+            upper,
+        ):
+            return '1'
+        if re.search(
+            r'TIPO\s+DO\s+CT[\-\s]?E\b[^\n]*\n\s*ANULA[CÇ][AÃ]O\b',
+            upper,
+        ):
+            return '2'
+        if re.search(
+            r'TIPO\s+DO\s+CT[\-\s]?E\b[^\n]*\n\s*SUBSTITUTO\b',
+            upper,
+        ):
+            return '3'
+
+        # Marcador 2: observacao SSW exata "CTRC EMITIDO P/ COMPL. DO XXX-NN-N"
+        if re.search(
+            r'CTRC\s+EMITIDO\s+P/\s*COMPL\.?\s+DO\s+[A-Z]{3,4}\s*0*\d+\s*-\s*\d',
+            upper,
+        ):
+            return '1'
+
+        return '0'
+
+    def get_tipo_cte_descricao(self) -> str:
+        """Retorna descricao textual do tipo de CTe."""
+        tipos = {
+            '0': 'Normal',
+            '1': 'Complementar',
+            '2': 'Anulacao',
+            '3': 'Substituto',
+        }
+        return tipos.get(self.get_tipo_cte(), 'Normal')
+
+    def get_ctrc_formatado(self) -> Optional[str]:
+        """Extrai o CTRC do PROPRIO CTe (nao do pai) no formato XXX-NNN-D.
+
+        Padrao SSW: o CTRC do CTe atual aparece no rodape da DACTE em frases
+        como "CONTRATO DE TRANSPORTE CAR 000143-1" (linha de assinatura).
+
+        Returns:
+            String no formato "{filial}-{numero}-{dv}" (zeros a esquerda
+            removidos do numero), ou None se nao encontrado.
+        """
+        # Padrao primario: rodape "CONTRATO DE TRANSPORTE {CTRC}"
+        m = re.search(
+            r'CONTRATO\s+DE\s+TRANSPORTE\s+([A-Z]{3,4})\s*0*(\d+)\s*-\s*(\d)',
+            self.texto_completo,
+            re.IGNORECASE,
+        )
+        if m:
+            prefix = m.group(1).upper()
+            num = m.group(2)
+            dv = m.group(3)
+            return f"{prefix}-{num}-{dv}"
+        return None
+
+    def _extrair_chave_pai_complementar(self, bloco: str) -> Optional[str]:
+        """Extrai chave de 44 digitos do CTe pai a partir do bloco "P/ COMPL".
+
+        SSW imprime a chave em colunas — o pdfplumber junta colunas
+        adjacentes na mesma linha, intercalando ruido (ICMS/PIS/COFINS).
+        Alem disso, a chave esta partida em duas linhas fisicas (a primeira
+        9 digitos no fim da linha 1, os 35 restantes no inicio da linha 2).
+
+        Estrategia robusta:
+          1. Para cada digit-sequence >= 6 chars que comeca com cUF valido
+             (35, 33, 31, etc.), considerar como potencial inicio de chave
+          2. Se ja tem 44+ digitos, validar direto
+          3. Senao, concatenar com a primeira digit-sequence >= 6 chars
+             da PROXIMA linha (pula colunas-ruido)
+          4. Validar: chave[0:2] in cUF, chave[20:22] == '57', CDV correto
+             (modulo 11 — garantia criptografica)
+
+        Returns:
+            Chave de 44 digitos com CDV correto, ou None.
+        """
+        linhas = bloco.split('\n')
+
+        for i, linha in enumerate(linhas):
+            for m in re.finditer(r'\d{6,}', linha):
+                cand = m.group()
+                if cand[:2] not in self._VALID_CUF:
+                    continue
+
+                # Caso 1: chave inteira em uma sequencia
+                if len(cand) >= 44:
+                    chave = cand[:44]
+                    if (chave[20:22] == '57'
+                            and self._calc_cdv_nfe(chave[:43]) == int(chave[43])):
+                        return chave
+                    continue
+
+                # Caso 2: tentar concatenar com a primeira sequencia >= 6
+                # digitos das proximas (ate) 2 linhas
+                for j in range(i + 1, min(i + 3, len(linhas))):
+                    m_next = re.search(r'\d{6,}', linhas[j])
+                    if not m_next:
+                        continue
+                    combinada = cand + m_next.group()
+                    if len(combinada) >= 44:
+                        chave = combinada[:44]
+                        if (chave[20:22] == '57'
+                                and self._calc_cdv_nfe(chave[:43]) == int(chave[43])):
+                            return chave
+                    break  # so a primeira proxima linha com digit-seq
+
+        return None
+
+    def get_protocolo_autorizacao(self) -> Optional[Dict]:
+        """Extrai protocolo de autorizacao SEFAZ do header do DACTE.
+
+        DACTE so e impresso pelo SSW (e qualquer ERP serio) APOS autorizacao
+        SEFAZ. A presenca do protocolo no PDF e evidencia suficiente de
+        autorizacao (cStat=100).
+
+        Layout SSW (label + valor em linhas adjacentes):
+            SERIE NUMERO MODAL MODELO Nº PROTOCOLO       <- header
+            1 000000140 RODOVIARIO 57 135261679947334    <- valor
+
+        O protocolo SEFAZ tem 15 digitos:
+          - Pos 0: tipo (1=normal, 9=evento)
+          - Pos 1-3: cUF
+          - Pos 3-5: AA (ano)
+          - Pos 5-15: sequencial
+
+        Returns:
+            Dict equivalente ao do XML parser:
+                {
+                    'numero': str (15 digitos),
+                    'codigo_status': '100' (sintetizado — DACTE so existe
+                                            quando cStat=100),
+                    'data_recebimento': None,  (nao disponivel no PDF)
+                    'motivo': None,
+                }
+            ou None se nao encontrado.
+        """
+        # Buscar label PROTOCOLO seguido (em linha adjacente) por 15 digitos.
+        # Layout: header line "...PROTOCOLO" + value line ending with the
+        # 15-digit number.
+        # Lookarounds (?<!\d) e (?!\d) garantem que os 15 digitos estejam
+        # isolados — sem isso, um numero de 16+ digitos (codigo de barras,
+        # CNPJ sem separadores, etc.) cairia no match e o group(1) pegaria
+        # apenas os ultimos 15, gerando protocolo invalido.
+        m = re.search(
+            r'PROTOCOLO[^\n]*\n[^\n]*?(?<!\d)(\d{15})(?!\d)',
+            self.texto_completo,
+            re.IGNORECASE,
+        )
+        if not m:
+            return None
+
+        return {
+            'numero': m.group(1),
+            'codigo_status': '100',
+            'data_recebimento': None,
+            'motivo': None,
+        }
+
+    def get_info_complementar(self) -> Optional[Dict]:
+        """Extrai info do CTe pai quando o atual e Complementar.
+
+        Equivalente a CTeXMLParser.get_info_complementar() para PDFs.
+        Procura na observacao SSW "CTRC EMITIDO P/ COMPL. DO ..." e extrai:
+          - chave_cte_original: chave de 44 digitos do CTe complementado
+            (modelo 57 nas posicoes 20-22)
+          - motivo: texto apos "MOTIVO:" (descarga, frete, etc.)
+
+        Returns:
+            Dict {chave_cte_original, motivo} ou None se nao for complementar
+            ou nao encontrar a chave.
+        """
+        if self.get_tipo_cte() != '1':
+            return None
+
+        texto = self.texto_completo
+
+        # Capturar bloco entre "P/ COMPL" e "CHAVES" (ou fim do texto)
+        m_bloco = re.search(
+            r'P/\s*COMPL\.?\s+DO\b(.*?)(?:CHAVES\s+NF[\-\s]?E|$)',
+            texto,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not m_bloco:
+            return None
+
+        bloco = m_bloco.group(1)
+
+        chave_original = self._extrair_chave_pai_complementar(bloco)
+        if not chave_original:
+            return None
+
+        # Extrair motivo (limita a primeira sequencia alfa apos "MOTIVO:")
+        motivo = None
+        m_motivo = re.search(
+            r'MOTIVO:\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]*?)(?:\s*-\s|\s*CST|\s*$)',
+            bloco,
+            re.IGNORECASE,
+        )
+        if m_motivo:
+            motivo = m_motivo.group(1).strip()
+
+        return {
+            'chave_cte_original': chave_original,
+            'motivo': motivo,
+        }
+
     def get_todas_informacoes(self) -> Dict:
         """Extrai todas as informacoes do DACTE.
 
@@ -1604,8 +1915,13 @@ class DactePDFParser:
             # CTe
             'cte_numero': numero,
             'cte_chave_acesso': chave,
+            'ctrc_numero': self.get_ctrc_formatado(),
             'cte_valor': frete,
             'cte_data_emissao': self.get_data_emissao(),
+            'tipo_cte': self.get_tipo_cte(),
+            'tipo_cte_descricao': self.get_tipo_cte_descricao(),
+            'info_complementar': self.get_info_complementar(),
+            'protocolo_autorizacao': self.get_protocolo_autorizacao(),
             # Rota
             'uf_origem': rota.get('uf_origem'),
             'cidade_origem': rota.get('cidade_origem'),

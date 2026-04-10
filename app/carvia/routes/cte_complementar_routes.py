@@ -424,7 +424,6 @@ def register_cte_complementar_routes(bp):
 
         # Localizar caminho do DACTE no resultado_json da emissao vinculada
         dacte_path = None
-        dacte_filename = None
         emissao = db.session.query(CarviaEmissaoCteComplementar).filter(
             CarviaEmissaoCteComplementar.cte_complementar_id == cte_comp_id,
             CarviaEmissaoCteComplementar.status == 'SUCESSO',
@@ -434,7 +433,6 @@ def register_cte_complementar_routes(bp):
 
         if emissao and isinstance(emissao.resultado_json, dict):
             dacte_path = emissao.resultado_json.get('dacte_s3_path')
-            dacte_filename = emissao.resultado_json.get('dacte_nome_arquivo')
 
         if not dacte_path:
             flash('DACTE nao disponivel para este CTe Complementar.', 'warning')
@@ -443,9 +441,12 @@ def register_cte_complementar_routes(bp):
                 or url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id)
             )
 
+        # Computa filename FRESH (ignora dacte_nome_arquivo legacy salvo
+        # com ctrc_numero) para que registros antigos tambem se beneficiem
+        # da prioridade cte_numero -> ctrc_numero -> numero_comp.
         filename = (
-            dacte_filename
-            or f"{cte_comp.ctrc_numero or cte_comp.numero_comp}-dacte.pdf"
+            f"{cte_comp.cte_numero or cte_comp.ctrc_numero or cte_comp.numero_comp}"
+            f"-dacte.pdf"
         )
 
         try:

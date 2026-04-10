@@ -497,7 +497,13 @@ def persistir_cte_complementar_completo(
     # ── 3. Upload DACTE para S3 ──
     if dacte_bytes:
         if not dacte_nome:
-            base = cte_comp.ctrc_numero or cte_comp.numero_comp
+            # Prioriza cte_numero (numero do CT-e SEFAZ) sobre ctrc_numero
+            # (CTRC interno do SSW) para o nome do arquivo de download.
+            base = (
+                cte_comp.cte_numero
+                or cte_comp.ctrc_numero
+                or cte_comp.numero_comp
+            )
             dacte_nome = f"{base}-dacte.pdf"
         dacte_s3_path = upload_dacte_s3(dacte_bytes, dacte_nome)
         if dacte_s3_path:

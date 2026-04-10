@@ -870,6 +870,28 @@ class ImportacaoService:
                             continue
 
                     numero_comp = CarviaCteComplementar.gerar_numero_comp()
+
+                    # Status inicial:
+                    # - XML disponivel: SEMPRE comeca RASCUNHO. O helper
+                    #   persistir_cte_complementar_completo parseia o XML
+                    #   e e a fonte de verdade — promove para EMITIDO se
+                    #   <protCTe>/cStat=100. Pre-promover do PDF aqui criaria
+                    #   inconsistencia se o XML tivesse cStat != 100 (helper
+                    #   so promove RASCUNHO->EMITIDO, nunca demota).
+                    # - PDF only: pre-promove se DACTE PDF tem protocolo
+                    #   SEFAZ (DACTE so e impresso quando autorizado). Sem
+                    #   XML, o helper nao tem como avaliar o status.
+                    xml_disponivel = bool(cte_data.get('cte_xml_path'))
+                    protocolo_data = cte_data.get('protocolo_autorizacao') or {}
+                    status_inicial = (
+                        'EMITIDO'
+                        if (
+                            not xml_disponivel
+                            and protocolo_data.get('codigo_status') == '100'
+                        )
+                        else 'RASCUNHO'
+                    )
+
                     cte_comp = CarviaCteComplementar(
                         numero_comp=numero_comp,
                         operacao_id=operacao_original.id,
@@ -882,7 +904,7 @@ class ImportacaoService:
                         ),
                         cnpj_cliente=operacao_original.cnpj_cliente,
                         nome_cliente=operacao_original.nome_cliente,
-                        status='RASCUNHO',
+                        status=status_inicial,
                         observacoes=info_comp.get('motivo'),
                         criado_por=criado_por,
                     )
