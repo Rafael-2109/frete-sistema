@@ -439,10 +439,19 @@ async function carregarKPIs() {
         renderVariacao(d.embarcado_7d.variacao_pct, 'kpi-embarcado-var');
 
         document.getElementById('kpi-carteira').textContent = formatarMoedaCurta(d.carteira_ativa.valor);
-        if (d.carteira_ativa.cotacao !== undefined && d.carteira_ativa.cotacao !== null) {
-            document.getElementById('kpi-carteira-var').innerHTML =
-                '<small class="text-muted">Cotacao: ' + formatarMoedaCurta(d.carteira_ativa.cotacao) + '</small>';
-            document.getElementById('kpi-carteira-var').className = 'kpi-variation neutral';
+        {
+            let extra = '';
+            if (d.carteira_ativa.standby) {
+                extra += '<small class="text-muted">Standby: ' + formatarMoedaCurta(d.carteira_ativa.standby) + '</small>';
+            }
+            if (d.carteira_ativa.cotacao) {
+                if (extra) extra += '<br>';
+                extra += '<small class="text-muted">Cotacao: ' + formatarMoedaCurta(d.carteira_ativa.cotacao) + '</small>';
+            }
+            if (extra) {
+                document.getElementById('kpi-carteira-var').innerHTML = extra;
+                document.getElementById('kpi-carteira-var').className = 'kpi-variation neutral';
+            }
         }
 
         document.getElementById('kpi-entregas').textContent = formatarNumero(d.entregas_pendentes.valor);

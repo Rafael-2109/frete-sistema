@@ -13,7 +13,7 @@ from app.monitoramento.models import EntregaMonitorada
 from app.embarques.models import Embarque, EmbarqueItem
 from app.fretes.models import Frete
 from app.transportadoras.models import Transportadora
-from app.carteira.models import CarteiraPrincipal
+from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.manufatura.models import PedidoCompras
 from app.producao.models import ProgramacaoProducao
 from app.separacao.models import Separacao
@@ -445,6 +445,13 @@ def api_dashboard_kpis():
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0
         ).scalar()
 
+        # Standby (pedidos pausados — deduzir da carteira ativa)
+        carteira_standby = db.session.query(
+            func.coalesce(func.sum(SaldoStandby.valor_saldo), 0)
+        ).filter(
+            SaldoStandby.status_standby == 'ATIVO'
+        ).scalar()
+
         # Cotacao (pedidos em status Cotacao)
         carteira_cotacao = db.session.query(
             func.coalesce(
@@ -520,7 +527,8 @@ def api_dashboard_kpis():
                     'variacao_pct': variacao(emb_atual, emb_anterior)
                 },
                 'carteira_ativa': {
-                    'valor': float(carteira_valor),
+                    'valor': float(carteira_valor) - float(carteira_standby),
+                    'standby': float(carteira_standby),
                     'cotacao': float(carteira_cotacao),
                     'variacao_pct': None
                 },
