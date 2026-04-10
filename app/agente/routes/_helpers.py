@@ -29,6 +29,26 @@ def _sse_event(event_type: str, data: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _session_meets_extraction_threshold(session, msg_threshold: int) -> bool:
+    """
+    Threshold inteligente: msg_count >= threshold OU cost >= cost_threshold.
+
+    Resolve o gap de sessoes curtas mas substantivas (ex: 2 msgs + 40 tool calls
+    = $0.54, message_count=2 mas conteudo rico para extracao).
+
+    Ref: Pre-mortem 10/04/2026 — sessao Denise user_id=2 com 43 eventos e $0.54
+    nao gerou summary/extracao porque message_count=2 < threshold=3.
+    """
+    from app.agente.config.feature_flags import POST_SESSION_COST_THRESHOLD
+
+    msg_count = session.message_count or 0
+    if msg_count >= msg_threshold:
+        return True
+
+    cost = float(session.total_cost_usd or 0)
+    return cost >= POST_SESSION_COST_THRESHOLD
+
+
 def run_post_session_processing(
     app,
     session,
@@ -76,10 +96,16 @@ def run_post_session_processing(
     try:
         from app.agente.config.feature_flags import USE_SESSION_SUMMARY, SESSION_SUMMARY_THRESHOLD
 
-        if USE_SESSION_SUMMARY and session.needs_summarization(SESSION_SUMMARY_THRESHOLD):
+        # Threshold inteligente: needs_summarization (msg_count) OU cost substantivo
+        needs_summary = session.needs_summarization(SESSION_SUMMARY_THRESHOLD)
+        if not needs_summary and not session.summary:
+            # Sessao sem summary e com custo alto = substantiva (ex: 2 msgs + 40 tool calls)
+            needs_summary = _session_meets_extraction_threshold(session, SESSION_SUMMARY_THRESHOLD)
+
+        if USE_SESSION_SUMMARY and needs_summary:
             logger.info(
                 f"[POST_SESSION] Trigger sumarizacao para sessao {session_id[:8]}... "
-                f"(msgs={session.message_count}, threshold={SESSION_SUMMARY_THRESHOLD})"
+                f"(msgs={session.message_count}, cost=${float(session.total_cost_usd or 0):.2f}, threshold={SESSION_SUMMARY_THRESHOLD})"
             )
             from app.agente.services.session_summarizer import summarize_and_save
             summarize_and_save(
@@ -139,8 +165,7 @@ def run_post_session_processing(
         )
 
         if USE_POST_SESSION_EXTRACTION and user_message and assistant_message:
-            msg_count = session.message_count or 0
-            if msg_count >= POST_SESSION_EXTRACTION_MIN_MESSAGES:
+            if _session_meets_extraction_threshold(session, POST_SESSION_EXTRACTION_MIN_MESSAGES):
                 from threading import Thread
                 from app.agente.services.pattern_analyzer import extrair_conhecimento_sessao
 
@@ -178,7 +203,8 @@ def run_post_session_processing(
                 thread.start()
                 logger.info(
                     f"[POST_SESSION] Trigger extracao pos-sessao em background "
-                    f"para usuario {user_id} (message_count={msg_count})"
+                    f"para usuario {user_id} (message_count={session.message_count or 0}, "
+                    f"cost=${float(session.total_cost_usd or 0):.2f})"
                 )
     except Exception as extraction_error:
         logger.warning(f"[POST_SESSION] Erro na extracao pos-sessao (ignorado): {extraction_error}")
@@ -193,8 +219,7 @@ def run_post_session_processing(
         )
 
         if USE_POST_SESSION_PERSONAL_EXTRACTION and user_message and assistant_message:
-            personal_msg_count = session.message_count or 0
-            if personal_msg_count >= PERSONAL_MIN_MSGS:
+            if _session_meets_extraction_threshold(session, PERSONAL_MIN_MSGS):
                 from threading import Thread
                 from app.agente.services.pattern_analyzer import extrair_insights_pessoais_sessao
 
@@ -230,7 +255,8 @@ def run_post_session_processing(
                 personal_thread.start()
                 logger.info(
                     f"[POST_SESSION] Trigger extracao pessoal em background "
-                    f"para usuario {user_id} (message_count={personal_msg_count})"
+                    f"para usuario {user_id} (message_count={session.message_count or 0}, "
+                    f"cost=${float(session.total_cost_usd or 0):.2f})"
                 )
     except Exception as personal_err:
         logger.warning(f"[POST_SESSION] Erro na extracao pessoal (ignorado): {personal_err}")

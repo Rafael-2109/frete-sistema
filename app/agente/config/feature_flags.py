@@ -119,12 +119,17 @@ PROFILE_COST_THRESHOLD = float(os.getenv("AGENT_PROFILE_COST_THRESHOLD", "5.0"))
 # Analisa TODAS as mensagens via Sonnet para extrair: definicoes de termos,
 # cargos, regras de negocio, correcoes factuais. Salva como memorias empresa (user_id=0).
 # Custo: ~$0.003 por execucao (Sonnet, contexto completo). Volume baixo (~4 sessoes/dia).
-# Trigger: a cada exchange (min 3 msgs), roda em daemon thread (background).
+# Trigger: a cada exchange (min 3 msgs OU cost >= $0.10), roda em daemon thread (background).
 # A ultima execucao de cada sessao contem toda a conversa (= extracao de fim de sessao).
 USE_POST_SESSION_EXTRACTION = os.getenv("AGENT_POST_SESSION_EXTRACTION", "true").lower() == "true"
 
 # Minimo de mensagens para iniciar extracao (evita rodar em sessoes triviais)
 POST_SESSION_EXTRACTION_MIN_MESSAGES = int(os.getenv("AGENT_POST_SESSION_EXTRACTION_MIN_MESSAGES", "3"))
+
+# Threshold de custo: sessoes com custo >= este valor disparam extracao
+# MESMO se message_count < threshold. Resolve sessoes curtas mas substantivas
+# (ex: 2 msgs + 40 tool calls = $0.54, message_count=2 mas conteudo rico).
+POST_SESSION_COST_THRESHOLD = float(os.getenv("AGENT_POST_SESSION_COST_THRESHOLD", "0.10"))
 
 # Extracao pos-sessao de insights PESSOAIS (complementar a empresa)
 # Analisa mensagens via Sonnet para extrair: correcoes, preferencias, expertise do usuario.
