@@ -9,7 +9,10 @@
             <h2><i class="fas fa-truck-moving"></i> CarVia — Dashboard</h2>
             <p class="text-muted mb-0">Gestao de frete subcontratado</p>
         </div>
-        <div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.scanner_moto') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-camera"></i> Scanner Moto
+            </a>
             <a href="{{ url_for('carvia.importar') }}" class="btn btn-primary">
                 <i class="fas fa-upload"></i> Importar Documentos
             </a>

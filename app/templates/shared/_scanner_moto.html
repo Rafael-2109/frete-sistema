@@ -1,0 +1,52 @@
+{#
+  Partial: Scanner de Etiqueta Moto
+  ==================================
+
+  Componente reutilizavel que abre camera do celular/tablet para ler
+  etiquetas de motos (modelo, cor, chassi) via barcode + Vision AI.
+
+  Requer: scanner-moto.js + html5-qrcode incluidos no template pai.
+
+  Variaveis disponiveis (passar via contexto ou usar defaults):
+    sc_campo_modelo  : selector do campo modelo (ex: "#modelo")
+    sc_campo_cor     : selector do campo cor (ex: "#cor")
+    sc_campo_chassi  : selector do campo chassi (ex: "#numero_chassi")
+    sc_campo_motor   : selector do campo motor (ex: "#numero_motor") — opcional
+    sc_titulo        : titulo do overlay (default: "Escanear Etiqueta")
+    sc_btn_label     : texto do botao (default: "Escanear Etiqueta")
+    sc_btn_class     : classes CSS do botao (default: "btn btn-secondary")
+    sc_btn_icon      : icone do botao (default: "fas fa-camera")
+    sc_api           : URL da API (default: usa default do JS)
+
+  Exemplo de uso:
+    {% set sc_campo_chassi = "#numero_chassi" %}
+    {% set sc_campo_cor = "#cor" %}
+    {% set sc_campo_modelo = "#modelo_display" %}
+    {% include 'shared/_scanner_moto.html' %}
+
+  Evento JS disparado ao confirmar:
+    document.addEventListener('moto-scanned', function(e) {
+        console.log(e.detail.modelo, e.detail.cor, e.detail.chassi);
+    });
+#}
+
+{% set _sc_campo_modelo = sc_campo_modelo|default('') %}
+{% set _sc_campo_cor = sc_campo_cor|default('') %}
+{% set _sc_campo_chassi = sc_campo_chassi|default('') %}
+{% set _sc_campo_motor = sc_campo_motor|default('') %}
+{% set _sc_titulo = sc_titulo|default('Escanear Etiqueta') %}
+{% set _sc_btn_label = sc_btn_label|default('Escanear Etiqueta') %}
+{% set _sc_btn_class = sc_btn_class|default('btn btn-secondary') %}
+{% set _sc_btn_icon = sc_btn_icon|default('fas fa-camera') %}
+
+<button type="button"
+        class="{{ _sc_btn_class }}"
+        data-scanner-moto
+        data-scanner-campo-modelo="{{ _sc_campo_modelo }}"
+        data-scanner-campo-cor="{{ _sc_campo_cor }}"
+        data-scanner-campo-chassi="{{ _sc_campo_chassi }}"
+        data-scanner-campo-motor="{{ _sc_campo_motor }}"
+        data-scanner-titulo="{{ _sc_titulo }}"
+        {% if sc_api is defined and sc_api %}data-scanner-api="{{ sc_api }}"{% endif %}>
+    <i class="{{ _sc_btn_icon }}"></i> {{ _sc_btn_label }}
+</button>

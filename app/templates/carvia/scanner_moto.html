@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}Scanner Etiqueta Moto — CarVia{% endblock %}
+
+{% block extra_css %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    {# ── Header ── #}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-camera"></i> Scanner de Etiqueta Moto</h2>
+            <p class="text-muted mb-0">Leitura automatica de modelo, cor e chassi via camera</p>
+        </div>
+        <div class="d-flex gap-2">
+            {% set sc_campo_modelo = "#scan-modelo" %}
+            {% set sc_campo_cor = "#scan-cor" %}
+            {% set sc_campo_chassi = "#scan-chassi" %}
+            {% set sc_campo_motor = "#scan-motor" %}
+            {% set sc_titulo = "Escanear Etiqueta Moto" %}
+            {% set sc_btn_label = "Abrir Scanner" %}
+            {% set sc_btn_class = "btn btn-primary" %}
+            {% set sc_btn_icon = "fas fa-camera" %}
+            {% include 'shared/_scanner_moto.html' %}
+
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'scanner' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="row g-3">
+        {# ── Ultima Leitura ── #}
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header card-header-theme py-2">
+                    <h6 class="m-0 fw-bold small">
+                        <i class="fas fa-barcode text-accent"></i> Ultima Leitura
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="ultima-leitura-vazia" class="text-center text-muted py-5">
+                        <i class="fas fa-camera fa-3x mb-3 d-block scanner-moto-placeholder-icon"></i>
+                        <p>Nenhuma etiqueta lida ainda.</p>
+                        <p class="small">Clique em <strong>"Abrir Scanner"</strong> para iniciar.</p>
+                    </div>
+
+                    <div id="ultima-leitura-dados" style="display: none;">
+                        <input type="hidden" id="scan-modelo">
+                        <input type="hidden" id="scan-cor">
+                        <input type="hidden" id="scan-chassi">
+                        <input type="hidden" id="scan-motor">
+
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <th class="text-muted" style="width: 120px;">Modelo</th>
+                                    <td id="display-modelo" class="fw-bold">—</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Cor</th>
+                                    <td id="display-cor">—</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Chassi</th>
+                                    <td id="display-chassi" class="font-monospace small">—</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Motor</th>
+                                    <td id="display-motor" class="font-monospace small">—</td>
+                                </tr>
+                                <tr>
+                                    <th class="text-muted">Confianca</th>
+                                    <td><span id="display-confianca" class="badge">—</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="d-flex gap-2 mt-3">
+                            <button id="btn-adicionar-lista" class="btn btn-success btn-sm">
+                                <i class="fas fa-plus"></i> Adicionar a Lista
+                            </button>
+                            <button id="btn-descartar" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-times"></i> Descartar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ── Lista de Leituras ── #}
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header card-header-theme py-2 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold small">
+                        <i class="fas fa-list text-accent"></i> Leituras Realizadas
+                        <span id="contador-leituras" class="badge bg-secondary ms-1">0</span>
+                    </h6>
+                    <div class="d-flex gap-2">
+                        <button id="btn-exportar" class="btn btn-outline-secondary btn-sm" disabled>
+                            <i class="fas fa-download"></i> Exportar
+                        </button>
+                        <button id="btn-limpar-lista" class="btn btn-outline-danger btn-sm" disabled>
+                            <i class="fas fa-trash"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="lista-vazia" class="text-center text-muted py-5">
+                        <i class="fas fa-inbox fa-2x mb-2 d-block scanner-moto-placeholder-icon"></i>
+                        <p class="mb-0">Escaneie etiquetas e adicione a lista.</p>
+                    </div>
+
+                    <div id="lista-container" style="display: none;">
+                        <div class="table-responsive">
+                            <table class="table table-sm carvia-table mb-0">
+                                <thead>
+                                    <tr class="table-thead-theme">
+                                        <th style="width: 30px;">#</th>
+                                        <th>Modelo</th>
+                                        <th>Cor</th>
+                                        <th>Chassi</th>
+                                        <th>Motor</th>
+                                        <th style="width: 50px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lista-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ url_for('static', filename='js/shared/scanner-moto.js') }}"></script>
+
+<script>
+(function () {
+    'use strict';
+
+    var leituras = [];
+    var ultimaLeitura = null;
+
+    // ── Elementos DOM ──
+    var vaziaEl = document.getElementById('ultima-leitura-vazia');
+    var dadosEl = document.getElementById('ultima-leitura-dados');
+    var displayModelo = document.getElementById('display-modelo');
+    var displayCor = document.getElementById('display-cor');
+    var displayChassi = document.getElementById('display-chassi');
+    var displayMotor = document.getElementById('display-motor');
+    var displayConfianca = document.getElementById('display-confianca');
+    var listaTbody = document.getElementById('lista-tbody');
+    var listaVazia = document.getElementById('lista-vazia');
+    var listaContainer = document.getElementById('lista-container');
+    var contadorEl = document.getElementById('contador-leituras');
+    var btnExportar = document.getElementById('btn-exportar');
+    var btnLimpar = document.getElementById('btn-limpar-lista');
+
+    // ── Evento do scanner ──
+    document.addEventListener('moto-scanned', function (e) {
+        var data = e.detail;
+        ultimaLeitura = data;
+        exibirUltimaLeitura(data);
+    });
+
+    function exibirUltimaLeitura(data) {
+        vaziaEl.style.display = 'none';
+        dadosEl.style.display = 'block';
+
+        displayModelo.textContent = data.modelo || '—';
+        displayCor.textContent = data.cor || '—';
+        displayChassi.textContent = data.chassi || '—';
+        displayMotor.textContent = data.numero_motor || '—';
+
+        var conf = data.confianca || 0;
+        var pct = Math.round(conf * 100);
+        displayConfianca.textContent = pct + '%';
+        displayConfianca.className = 'badge ' + (conf >= 0.8 ? 'bg-success' : (conf >= 0.5 ? 'bg-warning text-dark' : 'bg-danger'));
+    }
+
+    // ── Adicionar a lista ──
+    document.getElementById('btn-adicionar-lista').addEventListener('click', function () {
+        if (!ultimaLeitura) return;
+
+        // Verificar duplicata por chassi
+        var chassi = ultimaLeitura.chassi;
+        if (chassi) {
+            var duplicata = leituras.some(function (l) { return l.chassi === chassi; });
+            if (duplicata) {
+                if (window.toastr) toastr.warning('Chassi ja esta na lista: ' + chassi);
+                return;
+            }
+        }
+
+        leituras.push({
+            modelo: ultimaLeitura.modelo || '',
+            cor: ultimaLeitura.cor || '',
+            chassi: ultimaLeitura.chassi || '',
+            numero_motor: ultimaLeitura.numero_motor || '',
+            confianca: ultimaLeitura.confianca || 0
+        });
+
+        renderizarLista();
+        limparUltimaLeitura();
+
+        if (window.toastr) toastr.success('Adicionado a lista!');
+    });
+
+    // ── Descartar ──
+    document.getElementById('btn-descartar').addEventListener('click', function () {
+        limparUltimaLeitura();
+    });
+
+    function limparUltimaLeitura() {
+        ultimaLeitura = null;
+        vaziaEl.style.display = 'block';
+        dadosEl.style.display = 'none';
+    }
+
+    // ── Renderizar lista ──
+    function renderizarLista() {
+        contadorEl.textContent = leituras.length;
+
+        if (leituras.length === 0) {
+            listaVazia.style.display = 'block';
+            listaContainer.style.display = 'none';
+            btnExportar.disabled = true;
+            btnLimpar.disabled = true;
+            return;
+        }
+
+        listaVazia.style.display = 'none';
+        listaContainer.style.display = 'block';
+        btnExportar.disabled = false;
+        btnLimpar.disabled = false;
+
+        listaTbody.innerHTML = '';
+        leituras.forEach(function (l, i) {
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td class="text-muted">' + (i + 1) + '</td>' +
+                '<td class="fw-bold">' + esc(l.modelo) + '</td>' +
+                '<td>' + esc(l.cor) + '</td>' +
+                '<td class="font-monospace small">' + esc(l.chassi) + '</td>' +
+                '<td class="font-monospace small">' + esc(l.numero_motor || '—') + '</td>' +
+                '<td><button class="btn btn-sm btn-outline-danger py-0 px-1" data-remover="' + i + '" title="Remover"><i class="fas fa-times"></i></button></td>';
+            listaTbody.appendChild(tr);
+        });
+    }
+
+    // ── Remover item ──
+    listaTbody.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-remover]');
+        if (!btn) return;
+        var idx = parseInt(btn.getAttribute('data-remover'), 10);
+        leituras.splice(idx, 1);
+        renderizarLista();
+    });
+
+    // ── Limpar lista ──
+    btnLimpar.addEventListener('click', function () {
+        if (!confirm('Limpar todas as ' + leituras.length + ' leituras?')) return;
+        leituras = [];
+        renderizarLista();
+    });
+
+    // ── Exportar CSV ──
+    btnExportar.addEventListener('click', function () {
+        if (leituras.length === 0) return;
+
+        var csv = 'Modelo;Cor;Chassi;Motor\n';
+        leituras.forEach(function (l) {
+            csv += esc_csv(l.modelo) + ';' + esc_csv(l.cor) + ';' + esc_csv(l.chassi) + ';' + esc_csv(l.numero_motor) + '\n';
+        });
+
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'leituras_moto_' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        if (window.toastr) toastr.success('CSV exportado!');
+    });
+
+    // ── Helpers ──
+    function esc(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function esc_csv(str) {
+        if (!str) return '';
+        if (str.indexOf(';') >= 0 || str.indexOf('"') >= 0) {
+            return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+    }
+})();
+</script>
+{% endblock %}

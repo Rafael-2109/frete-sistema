@@ -909,6 +909,10 @@ def create_app(config_name=None):
     from app.relatorios_fiscais import relatorios_fiscais_bp
     app.register_blueprint(relatorios_fiscais_bp)
 
+    # 📷 Scanner de Etiqueta Moto - Leitura por camera
+    from app.scanner import init_app as init_scanner
+    init_scanner(app)
+
     # 🚛 CarVia - Gestão de Frete Subcontratado
     from app.carvia import init_app as init_carvia
     init_carvia(app)
