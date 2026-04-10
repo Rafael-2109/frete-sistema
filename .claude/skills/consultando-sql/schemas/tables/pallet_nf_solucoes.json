@@ -155,10 +155,17 @@
   ],
   "indices": [
     {
-      "name": "idx_nf_solucao_emitente",
+      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
       "columns": [
-        "cnpj_emitente",
-        "tipo"
+        "nf_remessa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_solucao_confirmado",
+      "columns": [
+        "confirmado",
+        "vinculacao"
       ],
       "unique": false
     },
@@ -177,6 +184,14 @@
       "unique": false
     },
     {
+      "name": "idx_nf_solucao_emitente",
+      "columns": [
+        "cnpj_emitente",
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pallet_nf_solucoes_odoo_picking_id",
       "columns": [
         "odoo_picking_id"
@@ -188,13 +203,6 @@
       "columns": [
         "tipo",
         "vinculacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
-      "columns": [
-        "nf_remessa_id"
       ],
       "unique": false
     },
@@ -216,14 +224,6 @@
       "name": "ix_pallet_nf_solucoes_tipo",
       "columns": [
         "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nf_solucao_confirmado",
-      "columns": [
-        "confirmado",
-        "vinculacao"
       ],
       "unique": false
     }

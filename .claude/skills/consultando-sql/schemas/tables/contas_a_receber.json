@@ -240,6 +240,13 @@
       "unique": false
     },
     {
+      "name": "ix_contas_a_receber_titulo_nf",
+      "columns": [
+        "titulo_nf"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_receber_odoo_line_id",
       "columns": [
         "odoo_line_id"
@@ -254,9 +261,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_empresa",
+      "name": "ix_contas_a_receber_metodo_baixa",
       "columns": [
-        "empresa"
+        "metodo_baixa"
       ],
       "unique": false
     },
@@ -268,13 +275,6 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_metodo_baixa",
-      "columns": [
-        "metodo_baixa"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_receber_vencimento",
       "columns": [
         "vencimento"
@@ -282,9 +282,9 @@
       "unique": false
     },
     {
-      "name": "idx_conta_receber_odoo_line_id",
+      "name": "ix_contas_a_receber_empresa",
       "columns": [
-        "odoo_line_id"
+        "empresa"
       ],
       "unique": false
     },
@@ -296,16 +296,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_titulo_nf",
+      "name": "ix_contas_a_receber_cnpj",
       "columns": [
-        "titulo_nf"
+        "cnpj"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_cnpj",
+      "name": "idx_conta_receber_odoo_line_id",
       "columns": [
-        "cnpj"
+        "odoo_line_id"
       ],
       "unique": false
     }

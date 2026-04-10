@@ -235,6 +235,28 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_devolucao_numero_nfd",
+      "columns": [
+        "numero_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_numero_serie",
+      "columns": [
+        "numero_nfd",
+        "serie_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_origem_registro",
       "columns": [
         "origem_registro"
@@ -246,13 +268,6 @@
       "columns": [
         "cnpj_emitente",
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_tipo_documento",
-      "columns": [
-        "tipo_documento"
       ],
       "unique": false
     },
@@ -274,6 +289,13 @@
       "name": "idx_nfd_nf_venda",
       "columns": [
         "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_tipo_documento",
+      "columns": [
+        "tipo_documento"
       ],
       "unique": false
     },
@@ -321,18 +343,18 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_odoo_nota_credito_id",
-      "columns": [
-        "odoo_nota_credito_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_chave_nfd",
       "columns": [
         "chave_nfd"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nota_credito_id",
+      "columns": [
+        "odoo_nota_credito_id"
+      ],
+      "unique": false
     },
     {
       "name": "ix_nf_devolucao_cnpj_emitente",
@@ -356,13 +378,6 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_entrega_monitorada_id",
       "columns": [
         "entrega_monitorada_id"
@@ -370,24 +385,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_numero_nfd",
+      "name": "ix_nf_devolucao_cnpj_destinatario",
       "columns": [
-        "numero_nfd"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_numero_serie",
-      "columns": [
-        "numero_nfd",
-        "serie_nfd"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_status",
-      "columns": [
-        "status"
+        "cnpj_destinatario"
       ],
       "unique": false
     }
