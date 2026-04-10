@@ -81,25 +81,33 @@
             '</div>' +
             '<div class="scanner-moto-viewfinder">' +
                 '<div id="' + READER_ID + '"></div>' +
+                // Status e resultado SOBRE o viewfinder (visivel no mobile sem scroll)
+                '<div class="scanner-moto-floating-status" id="scanner-moto-floating-status">' +
+                    '<div class="scanner-moto-status" id="scanner-moto-status"></div>' +
+                    '<div class="scanner-moto-result" id="scanner-moto-result">' +
+                        '<div class="scanner-moto-result-grid" id="scanner-moto-result-grid"></div>' +
+                        '<div id="scanner-moto-confianca-area"></div>' +
+                        '<div id="scanner-moto-aviso-area"></div>' +
+                        '<div class="scanner-moto-actions" id="scanner-moto-actions">' +
+                            '<button class="scanner-moto-btn-confirmar" id="scanner-moto-btn-confirmar">Confirmar</button>' +
+                            '<button class="scanner-moto-btn-reescanear" id="scanner-moto-btn-reescanear">Reescanear</button>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
             '</div>' +
             '<div class="scanner-moto-status-area">' +
                 '<div class="scanner-moto-instructions">' +
                     '<strong>Aponte a camera para a etiqueta da moto.</strong><br>' +
-                    'O codigo de barras sera lido automaticamente.' +
+                    'Barcode detecta automaticamente, ou toque em <strong>Capturar</strong>.' +
                 '</div>' +
-                '<div class="scanner-moto-status" id="scanner-moto-status"></div>' +
-                '<div class="scanner-moto-result" id="scanner-moto-result">' +
-                    '<div class="scanner-moto-result-grid" id="scanner-moto-result-grid"></div>' +
-                    '<div id="scanner-moto-confianca-area"></div>' +
-                    '<div id="scanner-moto-aviso-area"></div>' +
-                    '<div class="scanner-moto-actions" id="scanner-moto-actions">' +
-                        '<button class="scanner-moto-btn-confirmar" id="scanner-moto-btn-confirmar">Confirmar</button>' +
-                        '<button class="scanner-moto-btn-reescanear" id="scanner-moto-btn-reescanear">Reescanear</button>' +
-                    '</div>' +
+                '<div class="scanner-moto-bottom-actions">' +
+                    '<button class="scanner-moto-btn-capturar" id="scanner-moto-btn-capturar">' +
+                        'Capturar' +
+                    '</button>' +
+                    '<button class="scanner-moto-btn-manual" id="scanner-moto-btn-manual">' +
+                        'Digitar manualmente' +
+                    '</button>' +
                 '</div>' +
-                '<button class="scanner-moto-btn-manual" id="scanner-moto-btn-manual">' +
-                    'Digitar manualmente' +
-                '</button>' +
             '</div>';
 
         document.body.appendChild(overlay);
@@ -117,6 +125,14 @@
         });
         document.getElementById('scanner-moto-btn-confirmar').addEventListener('click', confirmarResultado);
         document.getElementById('scanner-moto-btn-reescanear').addEventListener('click', reescanear);
+        document.getElementById('scanner-moto-btn-capturar').addEventListener('click', function () {
+            // Captura manual — sem depender de barcode
+            if (isProcessing) return;
+            isProcessing = true;
+            lastScanTime = Date.now();
+            if (navigator.vibrate) navigator.vibrate(200);
+            capturarEEnviar();
+        });
     }
 
     function removerOverlay() {
@@ -155,7 +171,7 @@
 
         var qrConfig = {
             fps: 8,
-            qrbox: { width: 280, height: 150 },
+            // Sem qrbox: escaneia o frame inteiro (barcode detectado de longe)
             formatsToSupport: getFormatos()
         };
 
@@ -221,9 +237,9 @@
         var dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         var base64 = dataUrl.split(',')[1];
 
-        // Pausar scanner
+        // Pausar scanner (false = sem banner "Scanner paused")
         if (html5QrCode) {
-            html5QrCode.pause(true);
+            html5QrCode.pause(false);
         }
 
         // Mostrar loading

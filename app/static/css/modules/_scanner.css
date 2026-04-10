@@ -53,6 +53,7 @@
 
 /* ── Viewfinder (camera area) ── */
 .scanner-moto-viewfinder {
+  position: relative;
   flex: 1;
   max-width: 600px;
   width: 100%;
@@ -70,6 +71,20 @@
 /* html5-qrcode overrides para combinar com o tema dark */
 .scanner-moto-viewfinder #scanner-moto-reader video {
   border-radius: 12px;
+}
+
+/* ── Floating status (sobre o viewfinder — visivel no mobile sem scroll) ── */
+.scanner-moto-floating-status {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.scanner-moto-floating-status > * {
+  pointer-events: auto;
 }
 
 /* ── Area de status/resultado ── */
@@ -253,6 +268,30 @@
 
 .scanner-moto-btn-manual:active {
   background: hsla(0, 0%, 100%, 0.08);
+}
+
+/* ── Bottom actions (Capturar + Digitar) ── */
+.scanner-moto-bottom-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.scanner-moto-btn-capturar {
+  background: hsl(38 92% 50%);
+  color: hsl(0 0% 10%);
+  border: none;
+  padding: 12px 28px;
+  border-radius: 25px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.scanner-moto-btn-capturar:active {
+  opacity: 0.85;
 }
 
 /* ── Aviso de baixa confianca ── */

@@ -19,8 +19,43 @@ Custo: ~R$0,01 por leitura (Claude Haiku Vision)
 
 import json
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+
+def _extrair_json(text: str) -> dict:
+    """
+    Extrai o primeiro objeto JSON valido de uma string.
+
+    Haiku frequentemente retorna JSON seguido de texto explicativo:
+        {"modelo": "SCOOTER JET", ...}
+        Note: I detected the label format as Brazilian...
+
+    json.loads() falha com "Extra data" nesses casos.
+    Usa json.JSONDecoder().raw_decode() que para no fim do JSON valido.
+    """
+    text = text.strip()
+
+    # Remover markdown fencing (```json ... ```)
+    if text.startswith('```'):
+        lines = text.split('\n')
+        text = '\n'.join(lines[1:-1]).strip()
+
+    # Tentar raw_decode (ignora texto apos o JSON)
+    try:
+        decoder = json.JSONDecoder()
+        # Encontrar o inicio do JSON (primeiro { ou [)
+        match = re.search(r'[{\[]', text)
+        if match:
+            result, _ = decoder.raw_decode(text, match.start())
+            if isinstance(result, dict):
+                return result
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: tentar json.loads direto (caso nao tenha extra data)
+    return json.loads(text)
 
 # Prompt otimizado para extracao estruturada dos 3 formatos de etiqueta
 SYSTEM_PROMPT = """You extract motorcycle label data from images of shipping box labels.
@@ -140,13 +175,8 @@ class ScannerMotoService:
             # Extrair texto da resposta
             response_text = response.content[0].text.strip()
 
-            # Limpar possivel markdown (```json ... ```)
-            if response_text.startswith('```'):
-                lines = response_text.split('\n')
-                # Remove primeira e ultima linha (``` delimiters)
-                response_text = '\n'.join(lines[1:-1]).strip()
-
-            result = json.loads(response_text)
+            # Extrair JSON da resposta (Haiku pode adicionar texto apos o JSON)
+            result = _extrair_json(response_text)
 
             # Garantir campos esperados
             campos = ['modelo', 'cor', 'chassi', 'numero_motor', 'confianca']
