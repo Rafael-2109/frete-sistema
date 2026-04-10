@@ -82,7 +82,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="kpi-label text-muted">Entregas Pendentes</div>
+                            <div class="kpi-label text-muted">Entregas Atrasadas</div>
                             <div class="kpi-value" id="kpi-entregas">
                                 <i class="fas fa-spinner fa-spin text-muted"></i>
                             </div>
@@ -99,7 +99,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="kpi-label text-muted">Producao Dia</div>
+                            <div class="kpi-label text-muted">Programado Hoje</div>
                             <div class="kpi-value" id="kpi-producao">
                                 <i class="fas fa-spinner fa-spin text-muted"></i>
                             </div>
@@ -173,8 +173,9 @@
                         <div class="d-flex gap-1" id="panel-dots">
                             <button class="panel-dot active" data-panel="0" title="Compras"></button>
                             <button class="panel-dot" data-panel="1" title="Producao"></button>
-                            <button class="panel-dot" data-panel="2" title="Embarques"></button>
-                            <button class="panel-dot" data-panel="3" title="Separacoes"></button>
+                            <button class="panel-dot" data-panel="2" title="Embarcados"></button>
+                            <button class="panel-dot" data-panel="3" title="Pendentes"></button>
+                            <button class="panel-dot" data-panel="4" title="Separacoes"></button>
                         </div>
                         <button class="btn btn-sm btn-outline-secondary" id="panel-next" title="Proximo">
                             <i class="fas fa-chevron-right"></i>
@@ -256,8 +257,32 @@
                         </div>
                     </div>
 
-                    <!-- Panel 3: Separacoes Programadas -->
+                    <!-- Panel 3: Embarques Pendentes -->
                     <div class="dash-panel" id="panel-3">
+                        <div class="dash-loading" id="loading-embarques-pend">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <div>Carregando embarques pendentes...</div>
+                        </div>
+                        <div class="table-responsive" id="table-embarques-pend" style="display:none;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Embarque</th>
+                                        <th>Transportadora</th>
+                                        <th>Tipo</th>
+                                        <th class="text-end">Valor</th>
+                                        <th class="text-end">Peso</th>
+                                        <th class="text-end">Pallets</th>
+                                        <th class="text-end">Fretes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-embarques-pend"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Panel 4: Separacoes Programadas -->
+                    <div class="dash-panel" id="panel-4">
                         <div class="dash-loading" id="loading-separacoes">
                             <i class="fas fa-spinner fa-spin"></i>
                             <div>Carregando separacoes...</div>
@@ -414,7 +439,11 @@ async function carregarKPIs() {
         renderVariacao(d.embarcado_7d.variacao_pct, 'kpi-embarcado-var');
 
         document.getElementById('kpi-carteira').textContent = formatarMoedaCurta(d.carteira_ativa.valor);
-        renderVariacao(d.carteira_ativa.variacao_pct, 'kpi-carteira-var');
+        if (d.carteira_ativa.cotacao !== undefined && d.carteira_ativa.cotacao !== null) {
+            document.getElementById('kpi-carteira-var').innerHTML =
+                '<small class="text-muted">Cotacao: ' + formatarMoedaCurta(d.carteira_ativa.cotacao) + '</small>';
+            document.getElementById('kpi-carteira-var').className = 'kpi-variation neutral';
+        }
 
         document.getElementById('kpi-entregas').textContent = formatarNumero(d.entregas_pendentes.valor);
         renderVariacao(d.entregas_pendentes.variacao_pct, 'kpi-entregas-var');
@@ -422,7 +451,7 @@ async function carregarKPIs() {
         document.getElementById('kpi-producao').textContent = formatarNumero(d.producao_ultimo_dia.valor);
         renderVariacao(d.producao_ultimo_dia.variacao_pct, 'kpi-producao-var');
 
-        document.getElementById('kpi-compras').textContent = formatarNumero(d.compras_recebidas.valor);
+        document.getElementById('kpi-compras').textContent = formatarMoedaCurta(d.compras_recebidas.valor);
         renderVariacao(d.compras_recebidas.variacao_pct, 'kpi-compras-var');
 
         document.getElementById('dash-timestamp').textContent =
@@ -512,7 +541,7 @@ async function carregarChartTopProdutos() {
             const nome = p.nome_produto || p.cod_produto;
             return nome.length > 25 ? nome.substring(0, 22) + '...' : nome;
         });
-        const values = json.data.map(p => p.valor_total);
+        const values = json.data.map(p => p.qtd_total);
         const colors = ChartColors.seriesArray(json.data.length);
 
         chartTopProdutos = new Chart(ctx, {
@@ -520,7 +549,7 @@ async function carregarChartTopProdutos() {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Valor',
+                    label: 'Quantidade',
                     data: values,
                     backgroundColor: colors.map(c => c + '99'),
                     borderColor: colors,
@@ -536,7 +565,7 @@ async function carregarChartTopProdutos() {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: (ctx) => formatarMoeda(ctx.parsed.x)
+                            label: (ctx) => formatarNumero(ctx.parsed.x) + ' un'
                         }
                     }
                 },
@@ -544,7 +573,7 @@ async function carregarChartTopProdutos() {
                     x: {
                         beginAtZero: true,
                         ticks: {
-                            callback: (val) => formatarMoedaCurta(val),
+                            callback: (val) => formatarNumero(val),
                             color: () => getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim()
                         },
                         grid: {
@@ -568,16 +597,17 @@ async function carregarChartTopProdutos() {
 // =====================================================================
 // SECTION 6: Paineis Rotativos
 // =====================================================================
-const PANEL_COUNT = 4;
+const PANEL_COUNT = 5;
 const PANEL_INTERVAL = 15000;
 let currentPanel = 0;
 let panelTimer = null;
 
 const panelConfig = [
     { id: 'panel-0', title: 'Ultimas Compras Recebidas', icon: 'fa-boxes' },
-    { id: 'panel-1', title: 'Producao do Ultimo Dia Util', icon: 'fa-industry' },
-    { id: 'panel-2', title: 'Ultimos Embarques', icon: 'fa-truck' },
-    { id: 'panel-3', title: 'Separacoes Programadas', icon: 'fa-clipboard-check' }
+    { id: 'panel-1', title: 'Producao Programada Hoje', icon: 'fa-industry' },
+    { id: 'panel-2', title: 'Ultimos Embarques Embarcados', icon: 'fa-truck' },
+    { id: 'panel-3', title: 'Embarques Pendentes', icon: 'fa-clock' },
+    { id: 'panel-4', title: 'Separacoes Programadas', icon: 'fa-clipboard-check' }
 ];
 
 function showPanel(index) {
@@ -670,13 +700,13 @@ async function carregarProducao() {
 
 async function carregarEmbarques() {
     try {
-        const resp = await fetch('/api/dashboard/embarques-recentes');
+        const resp = await fetch('/api/dashboard/embarques-recentes?tipo=embarcados');
         const json = await resp.json();
         if (!json.success) return;
 
         const tbody = document.getElementById('tbody-embarques');
         if (!json.data.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhum embarque ativo</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhum embarque recente</td></tr>';
         } else {
             tbody.innerHTML = json.data.map(e => `
                 <tr>
@@ -696,6 +726,36 @@ async function carregarEmbarques() {
     } catch (err) {
         console.error('Erro ao carregar embarques:', err);
         document.getElementById('loading-embarques').innerHTML = '<span class="text-danger">Erro ao carregar</span>';
+    }
+}
+
+async function carregarEmbarquesPendentes() {
+    try {
+        const resp = await fetch('/api/dashboard/embarques-recentes?tipo=pendentes');
+        const json = await resp.json();
+        if (!json.success) return;
+
+        const tbody = document.getElementById('tbody-embarques-pend');
+        if (!json.data.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum embarque pendente</td></tr>';
+        } else {
+            tbody.innerHTML = json.data.map(e => `
+                <tr>
+                    <td><strong>#${e.numero}</strong></td>
+                    <td>${truncar(e.transportadora, 25)}</td>
+                    <td>${e.tipo_carga}</td>
+                    <td class="text-end">${formatarMoeda(e.valor_total)}</td>
+                    <td class="text-end">${formatarNumero(e.peso_total)} kg</td>
+                    <td class="text-end">${e.pallet_total}</td>
+                    <td class="text-end">${e.total_fretes}</td>
+                </tr>
+            `).join('');
+        }
+        document.getElementById('loading-embarques-pend').style.display = 'none';
+        document.getElementById('table-embarques-pend').style.display = 'block';
+    } catch (err) {
+        console.error('Erro ao carregar embarques pendentes:', err);
+        document.getElementById('loading-embarques-pend').innerHTML = '<span class="text-danger">Erro ao carregar</span>';
     }
 }
 
@@ -747,6 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
         carregarCompras(),
         carregarProducao(),
         carregarEmbarques(),
+        carregarEmbarquesPendentes(),
         carregarSeparacoes()
     ]);
 

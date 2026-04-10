@@ -433,6 +433,7 @@ def api_dashboard_kpis():
         ).scalar()
 
         # --- 3. Carteira Ativa (valor total) ---
+        # Filtro ativo=True necessario para excluir registros inativos
         carteira_valor = db.session.query(
             func.coalesce(
                 func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido),
@@ -440,39 +441,62 @@ def api_dashboard_kpis():
             )
         ).filter(
             CarteiraPrincipal.status_pedido == 'Pedido de venda',
+            CarteiraPrincipal.ativo == True,  # noqa: E712
             CarteiraPrincipal.qtd_saldo_produto_pedido > 0
         ).scalar()
 
-        # --- 4. Entregas Pendentes ---
+        # Cotacao (pedidos em status Cotacao)
+        carteira_cotacao = db.session.query(
+            func.coalesce(
+                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido),
+                0
+            )
+        ).filter(
+            CarteiraPrincipal.status_pedido == 'Cotação',
+            CarteiraPrincipal.ativo == True,  # noqa: E712
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).scalar()
+
+        # --- 4. Entregas Pendentes (apenas atrasadas ou sem data prevista) ---
+        from sqlalchemy import or_
         entregas_pendentes = EntregaMonitorada.query.filter(
-            EntregaMonitorada.entregue == False  # noqa: E712
+            EntregaMonitorada.entregue == False,  # noqa: E712
+            or_(
+                EntregaMonitorada.data_entrega_prevista < hoje,
+                EntregaMonitorada.data_entrega_prevista == None  # noqa: E711
+            )
         ).count()
 
-        # --- 5. Producao Ultimo Dia Util ---
-        dia_util = _ultimo_dia_util(hoje)
+        # --- 5. Producao Programada Hoje ---
         prod_atual = db.session.query(
             func.coalesce(func.sum(ProgramacaoProducao.qtd_programada), 0)
         ).filter(
-            ProgramacaoProducao.data_programacao == dia_util
+            ProgramacaoProducao.data_programacao == hoje
         ).scalar()
 
-        dia_util_anterior = _ultimo_dia_util(dia_util)
+        ontem_util = _ultimo_dia_util(hoje)
         prod_anterior = db.session.query(
             func.coalesce(func.sum(ProgramacaoProducao.qtd_programada), 0)
         ).filter(
-            ProgramacaoProducao.data_programacao == dia_util_anterior
+            ProgramacaoProducao.data_programacao == ontem_util
         ).scalar()
 
-        # --- 6. Compras Recebidas 7d ---
-        compras_recebidas = db.session.query(
-            func.count(func.distinct(PedidoCompras.num_pedido))
+        # --- 6. Compras Recebidas 7d (valor) ---
+        compras_valor = db.session.query(
+            func.coalesce(
+                func.sum(PedidoCompras.qtd_recebida * PedidoCompras.preco_produto_pedido),
+                0
+            )
         ).filter(
             PedidoCompras.qtd_recebida > 0,
             PedidoCompras.atualizado_em >= inicio_7d
         ).scalar()
 
-        compras_recebidas_ant = db.session.query(
-            func.count(func.distinct(PedidoCompras.num_pedido))
+        compras_valor_ant = db.session.query(
+            func.coalesce(
+                func.sum(PedidoCompras.qtd_recebida * PedidoCompras.preco_produto_pedido),
+                0
+            )
         ).filter(
             PedidoCompras.qtd_recebida > 0,
             PedidoCompras.atualizado_em >= inicio_14d,
@@ -497,6 +521,7 @@ def api_dashboard_kpis():
                 },
                 'carteira_ativa': {
                     'valor': float(carteira_valor),
+                    'cotacao': float(carteira_cotacao),
                     'variacao_pct': None
                 },
                 'entregas_pendentes': {
@@ -505,12 +530,12 @@ def api_dashboard_kpis():
                 },
                 'producao_ultimo_dia': {
                     'valor': float(prod_atual),
-                    'data_ref': dia_util.isoformat(),
+                    'data_ref': hoje.isoformat(),
                     'variacao_pct': variacao(prod_atual, prod_anterior)
                 },
                 'compras_recebidas': {
-                    'valor': compras_recebidas,
-                    'variacao_pct': variacao(compras_recebidas, compras_recebidas_ant)
+                    'valor': float(compras_valor),
+                    'variacao_pct': variacao(compras_valor, compras_valor_ant)
                 }
             }
         })
@@ -561,7 +586,7 @@ def api_dashboard_faturamento_diario():
 @main_bp.route('/api/dashboard/top-produtos')
 @login_required
 def api_dashboard_top_produtos():
-    """Top 5 produtos por valor faturado nos ultimos 7 dias."""
+    """Top 5 produtos por quantidade faturada nos ultimos 7 dias."""
     try:
         hoje = date.today()
         inicio_7d = hoje - timedelta(days=7)
@@ -569,7 +594,7 @@ def api_dashboard_top_produtos():
         resultados = db.session.query(
             FaturamentoProduto.cod_produto,
             FaturamentoProduto.nome_produto,
-            func.sum(FaturamentoProduto.valor_produto_faturado).label('valor_total')
+            func.sum(FaturamentoProduto.qtd_produto_faturado).label('qtd_total')
         ).filter(
             FaturamentoProduto.data_fatura >= inicio_7d,
             FaturamentoProduto.status_nf == 'Lançado',
@@ -578,7 +603,7 @@ def api_dashboard_top_produtos():
             FaturamentoProduto.cod_produto,
             FaturamentoProduto.nome_produto
         ).order_by(
-            func.sum(FaturamentoProduto.valor_produto_faturado).desc()
+            func.sum(FaturamentoProduto.qtd_produto_faturado).desc()
         ).limit(5).all()
 
         return jsonify({
@@ -586,7 +611,7 @@ def api_dashboard_top_produtos():
             'data': [{
                 'cod_produto': r.cod_produto,
                 'nome_produto': r.nome_produto,
-                'valor_total': float(r.valor_total)
+                'qtd_total': float(r.qtd_total)
             } for r in resultados]
         })
     except Exception as e:
@@ -624,12 +649,12 @@ def api_dashboard_ultimas_compras():
 @main_bp.route('/api/dashboard/producao-ultimo-dia')
 @login_required
 def api_dashboard_producao_ultimo_dia():
-    """Producao programada do ultimo dia util (painel rotativo)."""
+    """Producao programada para hoje (painel rotativo)."""
     try:
-        dia_util = _ultimo_dia_util(date.today())
+        hoje = date.today()
 
         producao = ProgramacaoProducao.query.filter(
-            ProgramacaoProducao.data_programacao == dia_util
+            ProgramacaoProducao.data_programacao == hoje
         ).order_by(
             ProgramacaoProducao.linha_producao,
             ProgramacaoProducao.cod_produto
@@ -637,7 +662,7 @@ def api_dashboard_producao_ultimo_dia():
 
         return jsonify({
             'success': True,
-            'data_referencia': dia_util.strftime('%d/%m/%Y'),
+            'data_referencia': hoje.strftime('%d/%m/%Y'),
             'data': [{
                 'cod_produto': p.cod_produto,
                 'nome_produto': p.nome_produto,
@@ -653,16 +678,24 @@ def api_dashboard_producao_ultimo_dia():
 @main_bp.route('/api/dashboard/embarques-recentes')
 @login_required
 def api_dashboard_embarques_recentes():
-    """Ultimos embarques ativos (painel rotativo)."""
+    """Embarques ativos — tipo=embarcados (com data) ou tipo=pendentes (sem data)."""
     try:
-        embarques = Embarque.query.options(
+        tipo = request.args.get('tipo', 'embarcados')
+
+        query = Embarque.query.options(
             joinedload(Embarque.transportadora)
-        ).filter(
-            Embarque.status == 'ativo'
-        ).order_by(Embarque.id.desc()).limit(10).all()
+        ).filter(Embarque.status == 'ativo')
+
+        if tipo == 'pendentes':
+            query = query.filter(Embarque.data_embarque == None)  # noqa: E711
+        else:
+            query = query.filter(Embarque.data_embarque != None)  # noqa: E711
+
+        embarques = query.order_by(Embarque.id.desc()).limit(10).all()
 
         return jsonify({
             'success': True,
+            'tipo': tipo,
             'data': [{
                 'id': e.id,
                 'numero': e.numero,
