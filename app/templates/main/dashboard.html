@@ -146,10 +146,10 @@
         <div class="col-lg-4">
             <div class="card h-100">
                 <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0"><i class="fas fa-trophy text-warning"></i> Top 5 Produtos (7d)</h6>
+                    <h6 class="mb-0"><i class="fas fa-trophy text-warning"></i> Top 10 Produtos (7d)</h6>
                 </div>
                 <div class="card-body">
-                    <div class="dash-chart-container">
+                    <div class="dash-chart-container-tall">
                         <canvas id="chart-top-produtos"></canvas>
                     </div>
                 </div>
@@ -546,10 +546,10 @@ async function carregarChartTopProdutos() {
         const ctx = document.getElementById('chart-top-produtos').getContext('2d');
         if (chartTopProdutos) chartTopProdutos.destroy();
 
-        const labels = json.data.map(p => {
-            const nome = p.nome_produto || p.cod_produto;
-            return nome.length > 25 ? nome.substring(0, 22) + '...' : nome;
-        });
+        const nomesCompletos = json.data.map(p => p.nome_produto || p.cod_produto);
+        const labels = nomesCompletos.map(nome =>
+            nome.length > 25 ? nome.substring(0, 22) + '...' : nome
+        );
         const values = json.data.map(p => p.qtd_total);
         const colors = ChartColors.seriesArray(json.data.length);
 
@@ -574,6 +574,7 @@ async function carregarChartTopProdutos() {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
+                            title: (items) => nomesCompletos[items[0].dataIndex],
                             label: (ctx) => formatarNumero(ctx.parsed.x) + ' un'
                         }
                     }
@@ -660,8 +661,8 @@ async function carregarCompras() {
             tbody.innerHTML = json.data.map(c => `
                 <tr>
                     <td><strong>${c.num_pedido}</strong></td>
-                    <td>${truncar(c.fornecedor, 30)}</td>
-                    <td>${truncar(c.nome_produto, 30)}</td>
+                    <td>${truncar(c.fornecedor, 45)}</td>
+                    <td>${truncar(c.nome_produto, 45)}</td>
                     <td class="text-end">${formatarNumero(c.qtd_pedida)}</td>
                     <td class="text-end">${formatarNumero(c.qtd_recebida)}</td>
                     <td class="text-end">${formatarMoeda(c.preco)}</td>
@@ -692,7 +693,7 @@ async function carregarProducao() {
             tbody.innerHTML = json.data.map(p => `
                 <tr>
                     <td>${p.cod_produto}</td>
-                    <td>${truncar(p.nome_produto, 35)}</td>
+                    <td>${truncar(p.nome_produto, 50)}</td>
                     <td class="text-end"><strong>${formatarNumero(p.qtd_programada)}</strong></td>
                     <td>${p.linha_producao}</td>
                     <td>${p.cliente}</td>
@@ -720,7 +721,7 @@ async function carregarEmbarques() {
             tbody.innerHTML = json.data.map(e => `
                 <tr>
                     <td><strong>#${e.numero}</strong></td>
-                    <td>${truncar(e.transportadora, 25)}</td>
+                    <td>${truncar(e.transportadora, 40)}</td>
                     <td>${e.data_embarque}</td>
                     <td>${e.tipo_carga}</td>
                     <td class="text-end">${formatarMoeda(e.valor_total)}</td>
@@ -751,7 +752,7 @@ async function carregarEmbarquesPendentes() {
             tbody.innerHTML = json.data.map(e => `
                 <tr>
                     <td><strong>#${e.numero}</strong></td>
-                    <td>${truncar(e.transportadora, 25)}</td>
+                    <td>${truncar(e.transportadora, 40)}</td>
                     <td>${e.tipo_carga}</td>
                     <td class="text-end">${formatarMoeda(e.valor_total)}</td>
                     <td class="text-end">${formatarNumero(e.peso_total)} kg</td>
@@ -781,7 +782,7 @@ async function carregarSeparacoes() {
             tbody.innerHTML = json.data.map(s => `
                 <tr>
                     <td><strong>${s.num_pedido}</strong></td>
-                    <td>${truncar(s.cliente, 25)}</td>
+                    <td>${truncar(s.cliente, 40)}</td>
                     <td>${s.cidade}</td>
                     <td class="text-end">${s.total_itens}</td>
                     <td class="text-end">${formatarMoeda(s.valor_total)}</td>

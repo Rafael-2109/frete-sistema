@@ -612,7 +612,7 @@ def api_dashboard_top_produtos():
             FaturamentoProduto.nome_produto
         ).order_by(
             func.sum(FaturamentoProduto.qtd_produto_faturado).desc()
-        ).limit(5).all()
+        ).limit(10).all()
 
         return jsonify({
             'success': True,

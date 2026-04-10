@@ -68,6 +68,12 @@
     height: 280px;
   }
 
+  /* Top produtos precisa de mais altura para 10 barras */
+  .dash-chart-container-tall {
+    position: relative;
+    height: 380px;
+  }
+
   /* ═══════════════════════════════════════════════════════════════
      PAINEIS ROTATIVOS — Show/hide + dots de navegacao
      ═══════════════════════════════════════════════════════════════ */
