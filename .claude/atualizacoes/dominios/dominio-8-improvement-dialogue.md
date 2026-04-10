@@ -50,19 +50,24 @@ Se o valor retornado for vazio, PULAR a persistencia no banco e registrar em `er
 Query no Render Postgres:
 
 ```sql
-SELECT id, suggestion_key, version, category, severity, title,
-       description, evidence_json, source_session_ids, created_at
-FROM agent_improvement_dialogue
-WHERE status = 'proposed'
-  AND author = 'agent_sdk'
-  AND version = 1
+SELECT a.id, a.suggestion_key, a.version, a.category, a.severity, a.title,
+       a.description, a.evidence_json, a.source_session_ids, a.created_at
+FROM agent_improvement_dialogue a
+WHERE a.status = 'proposed'
+  AND a.author = 'agent_sdk'
+  AND a.version = 1
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_improvement_dialogue v2
+      WHERE v2.suggestion_key = a.suggestion_key
+        AND v2.version = 2
+  )
 ORDER BY
-    CASE severity
+    CASE a.severity
         WHEN 'critical' THEN 0
         WHEN 'warning' THEN 1
         ELSE 2
     END,
-    created_at ASC
+    a.created_at ASC
 LIMIT 10
 ```
 

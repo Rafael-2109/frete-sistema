@@ -20,7 +20,12 @@
       "Bash(python3:*)",
       "WebFetch(domain:platform.claude.com)",
       "WebFetch(domain:docs.anthropic.com)",
-      "WebFetch(domain:code.claude.com)"
+      "WebFetch(domain:code.claude.com)",
+      "Write(/home/rafaelnascimento/projetos/frete_sistema/.claude/atualizacoes/**)",
+      "Edit(/home/rafaelnascimento/projetos/frete_sistema/.claude/atualizacoes/**)",
+      "Bash(curl:*)",
+      "Bash(echo:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [
       "Bash(rm -rf /)",

@@ -201,7 +201,9 @@
       "Bash(systemctl list-timers:*)",
       "Bash(service cron:*)",
       "Bash(sudo cat:*)",
-      "Read(//var/spool/cron/crontabs/**)"
+      "Read(//var/spool/cron/crontabs/**)",
+      "Write(/home/rafaelnascimento/projetos/frete_sistema/.claude/atualizacoes/**)",
+      "Edit(/home/rafaelnascimento/projetos/frete_sistema/.claude/atualizacoes/**)"
     ],
     "deny": [],
     "defaultMode": "auto"
