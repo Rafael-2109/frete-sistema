@@ -97,16 +97,17 @@ def api_resolver_produto():
             quantidade=float(quantidade) if quantidade else None
         )
 
-        # Normalizar unidade para contexto de conversao
+        # Normalizar unidade para contexto de conversao (deterministic-first, Haiku so se OUTRO)
         tipo_unidade = None
-        fator_conversao = None
         if unidade_cliente:
-            try:
-                result_unidade = service.normalizar_unidade(unidade_cliente)
-                tipo_unidade = result_unidade.tipo
-                fator_conversao = result_unidade.fator_conversao
-            except Exception:
-                pass
+            tipo_unidade = service._normalizar_unidade_deterministico(unidade_cliente)
+            if tipo_unidade == 'OUTRO':
+                try:
+                    result_unidade = service.normalizar_unidade(unidade_cliente)
+                    if result_unidade.tipo != 'OUTRO' and result_unidade.confianca >= 0.7:
+                        tipo_unidade = result_unidade.tipo
+                except Exception:
+                    pass
 
         # Calcular conversao para sugestao principal (busca nome no CadastroPalletizacao)
         def calcular_conversao(codigo_interno, nome_fallback, depara_fator=None):
@@ -135,14 +136,14 @@ def api_resolver_produto():
             qtd_convertida = None
             if tipo_unidade == 'CAIXA' and quantidade:
                 # Ja e caixa: conversao 1:1
-                qtd_convertida = round(float(quantidade), 3)
+                qtd_convertida = round(float(quantidade), 4)
             elif tipo_unidade == 'UNIDADE' and qtd_por_caixa and quantidade:
-                qtd_convertida = round(float(quantidade) / qtd_por_caixa, 3)
+                qtd_convertida = round(float(quantidade) / qtd_por_caixa, 4)
             elif tipo_unidade == 'PESO' and produto and produto.peso_bruto and quantidade:
                 # Converter kg -> caixas via peso da caixa
                 peso_caixa = float(produto.peso_bruto)
                 if peso_caixa > 0:
-                    qtd_convertida = round(float(quantidade) / peso_caixa, 3)
+                    qtd_convertida = round(float(quantidade) / peso_caixa, 4)
 
             # Calcular peso
             peso_calculado = None
@@ -156,8 +157,10 @@ def api_resolver_produto():
                 'peso_calculado': peso_calculado
             }
 
-        # Propagar fator do De-Para se metodo for DEPARA ou DEPARA_GRUPO
-        depara_fator = fator_conversao if resultado.metodo_resolucao in ('DEPARA', 'DEPARA_GRUPO') else None
+        # Propagar fator do De-Para real se metodo for DEPARA ou DEPARA_GRUPO
+        depara_fator = None
+        if resultado.metodo_resolucao in ('DEPARA', 'DEPARA_GRUPO') and resultado.sugestao_principal:
+            depara_fator = resultado.sugestao_principal.fator_conversao
 
         # Preparar resposta da sugestao principal
         sugestao_principal_response = None
@@ -199,7 +202,7 @@ def api_resolver_produto():
             'metodo_resolucao': resultado.metodo_resolucao,
             'unidade_cliente': unidade_cliente,
             'tipo_unidade': tipo_unidade,
-            'fator_conversao': fator_conversao,
+            'fator_conversao': depara_fator,
             'quantidade': float(quantidade) if quantidade else None,
             'sugestao_principal': sugestao_principal_response,
             'outras_sugestoes': outras_sugestoes_response
@@ -381,7 +384,6 @@ def api_normalizar_unidade():
             'sucesso': True,
             'unidade_original': resultado.unidade_original,
             'tipo': resultado.tipo,
-            'fator_conversao': resultado.fator_conversao,
             'confianca': resultado.confianca
         })
 

@@ -928,13 +928,13 @@ function atualizarQtdDescarte(input, tipo) {
             qtdUnidades = qtdOriginal;
             inputUn.value = qtdUnidades;
         }
-        inputCx.value = (qtdUnidades / qtdPorCaixa).toFixed(2);
+        inputCx.value = (qtdUnidades / qtdPorCaixa).toFixed(4);
     } else {
         const qtdCaixas = parseFloat(inputCx.value) || 0;
         qtdUnidades = qtdCaixas * qtdPorCaixa;
         if (qtdUnidades > qtdOriginal) {
             qtdUnidades = qtdOriginal;
-            inputCx.value = (qtdUnidades / qtdPorCaixa).toFixed(2);
+            inputCx.value = (qtdUnidades / qtdPorCaixa).toFixed(4);
         }
         inputUn.value = Math.round(qtdUnidades);
     }
@@ -1631,7 +1631,7 @@ function calcularQtdConvertida() {
     const qtdOriginal = parseFloat(qtdMatch[0].replace(',', '.'));
     const qtdConvertida = qtdOriginal / fator;
 
-    document.getElementById('prod-qtd-convertida').value = qtdConvertida.toFixed(2);
+    document.getElementById('prod-qtd-convertida').value = qtdConvertida.toFixed(4);
 
     if (produtoSelecionadoInfo && produtoSelecionadoInfo.peso_bruto) {
         const peso = qtdConvertida * produtoSelecionadoInfo.peso_bruto;

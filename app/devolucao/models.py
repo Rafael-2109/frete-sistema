@@ -394,7 +394,7 @@ class NFDevolucaoLinha(db.Model):
     # CONVERSAO PARA NOSSO PADRAO (CAIXAS)
     # =========================================================================
     # Quantidade convertida para caixas (nosso padrao de venda)
-    quantidade_convertida = db.Column(db.Numeric(15, 3), nullable=True)
+    quantidade_convertida = db.Column(db.Numeric(15, 4), nullable=True)
     # Qtd de unidades por caixa do nosso produto (ex: 12X180G = 12)
     qtd_por_caixa = db.Column(db.Integer, nullable=True)
 

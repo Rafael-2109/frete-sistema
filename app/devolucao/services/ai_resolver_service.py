@@ -134,7 +134,6 @@ class ResultadoNormalizacaoUnidade:
     """Resultado da normalizacao de unidade"""
     unidade_original: str
     tipo: str  # CAIXA, UNIDADE, PESO, OUTRO
-    fator_conversao: Optional[float]
     confianca: float
 
 
@@ -374,7 +373,6 @@ CATEGORIZE EM:
 RESPONDA EM JSON:
 {{
     "tipo": "CAIXA|UNIDADE|PESO|OUTRO",
-    "fator_conversao": 1.0 (ou o numero de unidades por caixa caso seja unidade, pois nós vendemos por caixa),
     "confianca": 0.0 a 1.0
 }}"""
 
@@ -1852,14 +1850,13 @@ class AIResolverService:
             unidade: Unidade original (ex: CXA1, UNI9, KG)
 
         Returns:
-            ResultadoNormalizacaoUnidade com tipo e fator
+            ResultadoNormalizacaoUnidade com tipo e confianca
         """
         try:
             if not unidade:
                 return ResultadoNormalizacaoUnidade(
                     unidade_original='',
                     tipo='OUTRO',
-                    fator_conversao=None,
                     confianca=0.0
                 )
 
@@ -1887,13 +1884,12 @@ class AIResolverService:
             resultado = ResultadoNormalizacaoUnidade(
                 unidade_original=unidade,
                 tipo=dados.get('tipo', 'OUTRO'),
-                fator_conversao=dados.get('fator_conversao'),
                 confianca=float(dados.get('confianca', 0))
             )
 
             logger.info(
                 f"[AI_RESOLVER] Unidade normalizada: {unidade} -> "
-                f"{resultado.tipo} (fator: {resultado.fator_conversao})"
+                f"{resultado.tipo} (confianca={resultado.confianca:.0%})"
             )
 
             return resultado
@@ -1903,7 +1899,6 @@ class AIResolverService:
             return ResultadoNormalizacaoUnidade(
                 unidade_original=unidade,
                 tipo='OUTRO',
-                fator_conversao=None,
                 confianca=0.0
             )
 
@@ -2309,14 +2304,18 @@ class AIResolverService:
             qtd_convertida_caixas = float(linha.quantidade) / qtd_por_caixa
             if linha.valor_unitario:
                 valor_convertido = float(linha.valor_unitario) * qtd_por_caixa
-            logger.info(f"[AI_RESOLVER] Conversao: {linha.quantidade} UN / {qtd_por_caixa} = {qtd_convertida_caixas:.2f} CX")
+            logger.info(f"[AI_RESOLVER] Conversao: {linha.quantidade} UN / {qtd_por_caixa} = {qtd_convertida_caixas:.4f} CX")
+        elif tipo_unidade == 'CAIXA' and linha.quantidade:
+            # Ja e caixa: conversao 1:1
+            qtd_convertida_caixas = float(linha.quantidade)
+            logger.info(f"[AI_RESOLVER] Unidade CAIXA: {linha.quantidade} CX (sem conversao)")
         else:
-            # FALLBACK: Se quantidade >= qtd_por_caixa, provavelmente e unidade
-            if qtd_por_caixa and linha.quantidade and float(linha.quantidade) >= qtd_por_caixa:
+            # FALLBACK: Se NAO e CAIXA e quantidade >= qtd_por_caixa, provavelmente e unidade
+            if tipo_unidade != 'CAIXA' and qtd_por_caixa and linha.quantidade and float(linha.quantidade) >= qtd_por_caixa:
                 qtd_convertida_caixas = float(linha.quantidade) / qtd_por_caixa
                 if linha.valor_unitario:
                     valor_convertido = float(linha.valor_unitario) * qtd_por_caixa
-                logger.info(f"[AI_RESOLVER] Conversao FALLBACK: {linha.quantidade} / {qtd_por_caixa} = {qtd_convertida_caixas:.2f} CX")
+                logger.info(f"[AI_RESOLVER] Conversao FALLBACK: {linha.quantidade} / {qtd_por_caixa} = {qtd_convertida_caixas:.4f} CX")
 
         # Calcular peso
         peso_calculado = None
@@ -2332,7 +2331,7 @@ class AIResolverService:
             'nome': nome_interno,
             'justificativa': justificativa,
             'qtd_por_caixa': qtd_por_caixa,
-            'qtd_convertida_caixas': round(qtd_convertida_caixas, 3) if qtd_convertida_caixas else None,
+            'qtd_convertida_caixas': round(qtd_convertida_caixas, 4) if qtd_convertida_caixas else None,
             'valor_convertido_caixa': round(valor_convertido, 2) if valor_convertido else None,
             'peso_calculado': peso_calculado
         }
@@ -2373,7 +2372,7 @@ class AIResolverService:
             peso_outra = None
 
             if tipo_unidade == 'UNIDADE' and qtd_caixa_outra and linha.quantidade:
-                qtd_conv_outra = round(float(linha.quantidade) / qtd_caixa_outra, 3)
+                qtd_conv_outra = round(float(linha.quantidade) / qtd_caixa_outra, 4)
                 if linha.valor_unitario:
                     valor_conv_outra = round(float(linha.valor_unitario) * qtd_caixa_outra, 2)
 

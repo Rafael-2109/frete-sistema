@@ -946,7 +946,7 @@ class NFDService:
                             linha.quantidade_convertida = quantidade
                         elif tipo_unidade == 'UNIDADE' and fator > 0 and quantidade:
                             linha.qtd_por_caixa = int(fator)
-                            linha.quantidade_convertida = round(quantidade / fator, 3)
+                            linha.quantidade_convertida = round(quantidade / fator, 4)
 
                         # Buscar CadastroPalletizacao UMA vez (PESO + peso calculado)
                         try:
@@ -958,7 +958,7 @@ class NFDService:
                                 # PESO: converter kg -> caixas
                                 if tipo_unidade == 'PESO' and produto_cad.peso_bruto and float(produto_cad.peso_bruto) > 0 and quantidade:
                                     peso_caixa = float(produto_cad.peso_bruto)
-                                    linha.quantidade_convertida = round(quantidade / peso_caixa, 3)
+                                    linha.quantidade_convertida = round(quantidade / peso_caixa, 4)
                                 # Peso calculado (todas as UM)
                                 if produto_cad.peso_bruto:
                                     qtd_para_peso = float(linha.quantidade_convertida) if linha.quantidade_convertida else float(quantidade or 0)
