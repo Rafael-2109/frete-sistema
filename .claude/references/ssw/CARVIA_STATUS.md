@@ -1,6 +1,7 @@
 # CarVia — Status de Adocao por POP
 
 > **Criado em**: 2026-02-16
+> **Atualizado em**: 2026-04-09 (C03 saiu de NAO IMPLANTADO → ATIVO via automacao Playwright)
 > **Fonte**: CARVIA_OPERACAO.md (secao 8) + CATALOGO_POPS.md
 > **Objetivo**: Permitir ao agente saber se um POP e teorico ou se a CarVia ja executa no dia-a-dia
 
@@ -39,7 +40,7 @@
 | **B05** | Relatorios gerenciais | NAO IMPLANTADO | — | Rafael/Jessica | Nunca acessou opcao 056 | 056 |
 | **C01** | Emitir CTe fracionado | ATIVO | Rafael | Rafael/Jaqueline | — | 004, 007 |
 | **C02** | Emitir CTe carga direta | ATIVO | Rafael | Rafael | — | 004, 007 |
-| **C03** | Emitir CTe complementar | NAO IMPLANTADO | — | Rafael | Nunca emitiu, nao sabe como | 007 |
+| **C03** | Emitir CTe complementar | ATIVO | Rafael (via automacao) | Rafael/Jaqueline | — | 222, 007, 101 |
 | **C04** | Registrar custos extras | NAO CONHECE | — | Rafael | Nao sabe onde cadastrar TDE/diaria | 459 |
 | **C05** | Imprimir CTe | ATIVO | Rafael | Rafael | — | 007 |
 | **C06** | Cancelar CTe | NAO IMPLANTADO | — | Rafael | Nunca precisou, mas sabe que existe | 007 |
@@ -74,9 +75,9 @@
 
 | Status | Quantidade | % |
 |--------|-----------|---|
-| ATIVO | 13 | 29% |
+| ATIVO | 14 | 31% |
 | PARCIAL | 5 | 11% |
-| NAO IMPLANTADO | 22 | 49% |
+| NAO IMPLANTADO | 21 | 47% |
 | NAO CONHECE | 4 | 9% |
 | EXTERNO | 1 | 2% |
 | **TOTAL** | **45** | **100%** |

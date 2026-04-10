@@ -21,7 +21,9 @@ O SSW eh o sistema usado pela CarVia Logistica para gestao de frete. NAO possui 
 As operacoes sao organizadas por numero de opcao no SSW:
 - **002**: Cotacao de frete
 - **004**: Emissao e cancelamento de CT-e
+- **007**: Envio de CT-e ao SEFAZ (usado internamente por 004 e 222)
 - **101**: Consulta de CTRC/CT-e (read-only)
+- **222**: Emissao de CT-e complementar (com auto-calc ICMS via 101 do pai)
 - **401**: Cadastro de unidade parceira (Terceiro/Filial/Matriz)
 - **402**: Cadastro/importacao de cidades atendidas
 - **437**: Faturamento de CTe (filial MTZ)
@@ -85,6 +87,10 @@ NAO inventar CNPJ, IE, endereco ou qualquer dado fiscal.
 5. **Emissao CT-e sem confirmar antes** → Verificacao: tenho confirmacao explicita via AskUserQuestion apos mostrar dry-run? CT-e em SEFAZ tem 7 dias para cancelar (prazo rigido).
 
 6. **Campos de `ssw_defaults.json` sem validacao** → Verificacao: campos nao fornecidos vem do ssw_defaults. Se ssw_defaults tem valor errado, operacao e aplicada com valor errado.
+
+7. **CT-e Complementar sem consultar ICMS do pai** (opcao 222) → Verificacao: `--valor-base` aciona consulta 101 automatica do pai (grossing up). Se 101 falhar, script retorna erro com campo `icms_pai` no JSON — NAO prosseguir com `--valor-base`. Usar `--valor-outros` com valor final ja calculado.
+
+8. **CT-e Complementar com `unid_emit` errado** (opcao 222) → Verificacao: SSW pode forcar `unid_emit` readonly baseado na carga. Script respeita e loga `unid_emit_readonly: true`. NAO tentar forcar — significa que SSW decidiu a filial automaticamente.
 
 **Decisao**:
 - [ ] Prosseguir (dry-run OK, confirmacao obtida, filial correta)
@@ -160,6 +166,18 @@ OPERACAO SOLICITADA
 │     cancelar_cte_004.py --ctrc 66 --serie "CAR 68-0" --motivo "..." --dry-run
 │     IRREVERSIVEL: prazo 7 dias SEFAZ
 │
+├─ EMITIR CT-e COMPLEMENTAR (opcao 222)
+│  └─ Skill: operando-ssw
+│     Com auto-calc valor (consulta 101 do pai → ICMS → grossing up):
+│       emitir_cte_complementar_222.py --ctrc-pai CAR-113-9 --motivo D --valor-base 200.00 --dry-run
+│     OU com valor final ja calculado:
+│       emitir_cte_complementar_222.py --ctrc-pai CAR-113-9 --motivo D --valor-outros 227.90 --dry-run
+│     Motivos: C (correcao), D (diferenca), V (valor), E (estorno), R (retificacao)
+│     GOTCHA: CTRC formato FILIAL-NUMERO-DV (ex: CAR-113-9). [id="2"] preenchido sem hifen ("1139").
+│     GOTCHA: unid_emit pode vir readonly (SSW decide filial baseado na carga) — respeitar.
+│     Pre-requisito (--valor-base): CTe pai autorizado e consultavel na 101 da filial correta.
+│     FISCAL: apos confirmar --enviar-sefaz (script ja baixa XML/DACTE via 101 automaticamente)
+│
 ├─ GERAR FATURA SSW (opcao 437)
 │  └─ Skill: operando-ssw
 │     gerar_fatura_ssw_437.py --cnpj-tomador "..." --ctrc 94 --data-vencimento "150426" --dry-run
@@ -194,6 +212,10 @@ OPERACAO SOLICITADA
 | "Nao inclusas" no import CSV | Valores IDENTICOS ao existente | NAO eh erro — SSW reporta Incluidas/Alteradas/Nao inclusas |
 | 478 com `inclusao=S` | Fornecedor nao finalizado | 408 vai rejeitar — concluir 478 primeiro |
 | Script falha com excecao | Varias causas | Reportar erro exato, sugerir alternativa |
+| "Nao conseguiu consultar ICMS do CTe pai" no 222 | Consulta 101 do pai retornou erro | Usar `--valor-outros` manual (valor final pos-grossing up) |
+| "Aliquota ICMS invalida" no 222 | Frete ou ICMS do pai zerado na 101 | Verificar CTe pai manualmente, usar `--valor-outros` |
+| `unid_emit_readonly: true` no 222 | SSW decidiu filial baseado na carga | Normal — respeitar decisao do SSW, nao tentar forcar |
+| Loop "Continuar" no 222 | Multiplos avisos CFOP/ICMS/GNRE | Normal — script clica todos via loop MAX=5x |
 
 ---
 

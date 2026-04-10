@@ -1,7 +1,7 @@
 # SSW Sistemas — Indice de Documentacao
 
 > **Fonte**: Paginas de ajuda do SSW (`sistema.ssw.inf.br/ajuda/`)
-> **Coletado em**: 2026-02-14 | **Atualizado**: 2026-02-16
+> **Coletado em**: 2026-02-14 | **Atualizado**: 2026-04-09 (POP-C03 corrigido: opcao 222 + automacao Playwright)
 > **Dominio Nacom**: CV1 (CARVIA LOGISTICA E TRANSPORTE LTDA)
 > **Cobertura**: 220 opcoes documentadas, 228 arquivos .md, 20 fluxos end-to-end
 
@@ -127,7 +127,7 @@ O SSW e um sistema integrado para transportadoras que cobre: operacional, comerc
 
 | POP | Arquivo | Descricao |
 |-----|---------|-----------|
-| C03 | [pops/POP-C03-emitir-cte-complementar.md](pops/POP-C03-emitir-cte-complementar.md) | Emitir CT-e complementar (opcao 007, diferenca de frete/ICMS/peso) |
+| C03 | [pops/POP-C03-emitir-cte-complementar.md](pops/POP-C03-emitir-cte-complementar.md) | Emitir CT-e complementar (opcao 222 + 007 envio + 101 XML, automatizado via Playwright em 2026-04-09) |
 | C04 | [pops/POP-C04-custos-extras.md](pops/POP-C04-custos-extras.md) | Registrar custos extras — TDE, diaria, pernoite (opcao 459) |
 | C05 | [pops/POP-C05-imprimir-cte.md](pops/POP-C05-imprimir-cte.md) | Imprimir/reimprimir DACTe (opcao 007) |
 | C06 | [pops/POP-C06-cancelar-cte.md](pops/POP-C06-cancelar-cte.md) | Cancelar CT-e (opcao 007, prazo SEFAZ 7 dias) |

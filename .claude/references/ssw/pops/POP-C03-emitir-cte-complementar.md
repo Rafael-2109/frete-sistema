@@ -1,9 +1,10 @@
 # POP-C03 — Emitir CT-e Complementar
 
-> **Versao**: 1.0
+> **Versao**: 2.0
 > **Criado em**: 2026-02-16
-> **Status CarVia**: A IMPLANTAR
-> **Opcoes SSW**: 007
+> **Atualizado em**: 2026-04-09 (automacao Playwright opcao 222 implantada)
+> **Status CarVia**: ATIVO (via automacao Playwright — opcao 222)
+> **Opcoes SSW**: 222 (emissao), 007 (envio SEFAZ), 101 (consulta XML/DACTE)
 > **Executor atual**: Rafael
 > **Executor futuro**: Rafael / Jaqueline
 
@@ -33,10 +34,11 @@ Por demanda — processo excepcional, mas importante conhecer.
 
 ## Pre-requisitos
 
-- CT-e original JA autorizado pelo SEFAZ ([opcao 007](../operacional/007-emissao-cte-complementar.md))
-- Numero do CT-e original (serie + numero)
-- Motivo do complemento claramente definido
-- Valores corretos calculados (diferenca a complementar)
+- CT-e original JA autorizado pelo SEFAZ
+- CTRC do CT-e pai (formato `FILIAL-NUMERO-DV`, ex: `CAR-113-9`)
+- CT-e pai consultavel na opcao 101 (necessario para `--valor-base` funcionar com auto-calc)
+- Motivo do complemento claramente definido (C/D/V/E/R)
+- Valores corretos calculados (valor bruto OU valor final pos-grossing up)
 - Cliente ciente do complemento (se aplicavel)
 
 ---
@@ -74,10 +76,28 @@ Por demanda — processo excepcional, mas importante conhecer.
 
 ---
 
-### ETAPA 3 — Emitir CT-e Complementar (Opcao 007)
+### ETAPA 3 — Emitir CT-e Complementar (Opcao 222)
 
-6. Acessar [opcao **007**](../operacional/007-emissao-cte-complementar.md)
-7. Procurar funcao **"CT-e Complementar"** ou link especifico para complementares
+> **CORRECAO 2026-04-09**: A opcao real para emissao de CT-e Complementar e a **222**
+> (nao a 007 como inicialmente documentado). A opcao 007 e usada APENAS para envio ao SEFAZ
+> apos a gravacao na 222.
+
+6. Acessar **opcao 222** (CT-e Complementar) — **NAO e dentro da 007**
+7. Preencher tela inicial (page1):
+   - **Motivo**: `C` (correcao), `D` (diferenca), `V` (valor), `E` (estorno) ou `R` (retificacao)
+   - **Filial do CTe pai**: ex: `CAR`
+   - **CTRC concatenado**: numero+dv SEM hifen, ex: `1139` (para CTRC `113-9`)
+8. Click `►` → abre popup secundario (page2)
+9. Preencher tela principal (page2):
+   - **Valor outros (`vlr_outros`)**: valor final pos-grossing up, formato BR (`227,90`)
+   - **Tipo de documento (`tp_doc`)**: `C`
+   - **Unidade emissora (`unid_emit`)**: `D` ou `O` — **respeitar se SSW forcar readonly**
+     (SSW pode decidir filial do complementar baseado na carga; nao tentar forcar)
+10. Click `►` → loop de "Continuar" (multiplos avisos CFOP/ICMS/GNRE — clicar todos)
+11. Capturar mensagem dialog **"Novo CTRC: FILIAL000NUMERO-DV"** (ex: `CAR002037-1`)
+12. Trocar para a filial do complementar (se diferente da filial do pai)
+13. Acessar **opcao 007** → click "Enviar a SEFAZ"
+14. Acessar **opcao 101** → consultar CTRC complementar → baixar XML + DACTE
    - [CONFIRMAR] A funcao pode estar em menu lateral ou botao na tela inicial da 007
 
 8. Informar dados do CT-e original:
@@ -135,18 +155,76 @@ Por demanda — processo excepcional, mas importante conhecer.
 
 ---
 
+## Automacao CarVia (CarviaEmissaoCteComplementar + Playwright)
+
+> **Implantado em 2026-04-09** — automacao end-to-end via Playwright (commits `1b2e1ac0`, `06f27d0d`, `6ca7b942`).
+
+### Script Playwright (uso direto)
+
+```bash
+# Com auto-calculo de valor (consulta 101 do pai → grossing up):
+python .claude/skills/operando-ssw/scripts/emitir_cte_complementar_222.py \
+  --ctrc-pai CAR-113-9 \
+  --motivo D \
+  --valor-base 200.00 \
+  --enviar-sefaz
+
+# Com valor final ja calculado:
+python .claude/skills/operando-ssw/scripts/emitir_cte_complementar_222.py \
+  --ctrc-pai CAR-113-9 \
+  --motivo D \
+  --valor-outros 227.90 \
+  --enviar-sefaz
+```
+
+Detalhes: [`.claude/skills/operando-ssw/SCRIPTS.md` secao 5](../../../skills/operando-ssw/SCRIPTS.md) e [`references/CTE.md`](../../../skills/operando-ssw/references/CTE.md).
+
+### Integracao CarVia (via worker RQ)
+
+| Componente | Caminho |
+|------------|---------|
+| **Model** | `app/carvia/models/cte_custos.py` → `CarviaEmissaoCteComplementar` (tracking lifecycle) |
+| **Worker** | `app/carvia/workers/ssw_cte_complementar_jobs.py` → `emitir_cte_complementar_job(id)` |
+| **Persistencia** | `app/carvia/services/cte_complementar_persistencia.py` |
+| **Route retry** | `POST /carvia/api/custos-entrega/emissao-comp/<id>/retry` |
+| **Download S3** | `GET /carvia/ctes-complementares/<id>/download-xml` e `download-dacte` |
+
+### Auto-calculo de valor (grossing up)
+
+`--valor-base` aciona pre-fase no script:
+
+1. Delega para `consultar_ctrc_101.py` (consulta 101 do pai)
+2. Extrai `ICMS/ISS (R$)` e `Valor frete (R$)` do body via regex
+3. Calcula `aliquota = (valor_icms / valor_frete) * 100`
+4. Aplica grossing up: `valor_outros = valor_base / 0.9075 / (1 - aliquota / 100)`
+5. Constante: `PISCOFINS_DIVISOR = 0.9075` (mesma formula de `app/carvia/routes/custo_entrega_routes.py`)
+
+### Retry de emissao travada em ERRO
+
+```
+POST /carvia/api/custos-entrega/emissao-comp/<id>/retry
+```
+
+Valida `emissao.status == ERRO` e `cte_comp.status == RASCUNHO`, reseta `status=PENDENTE` e re-enfileira o job RQ.
+
+---
+
 ## Contexto CarVia
 
-### Hoje
-Rafael nunca emitiu CT-e complementar. Se houver erro de valor, ele:
-- Cancela o CT-e original (se dentro do prazo de 7 dias)
-- Reemite com valor correto
-- Ou "deixa pra la" se diferenca for pequena
+### Hoje (2026-04-09)
+Automacao Playwright implantada via opcao 222. Fluxo end-to-end funcionando: extracao
+automatica de ICMS via 101 → grossing up → emissao → SEFAZ → backfill XML/DACTE no S3.
 
-### Futuro (com POP implantado)
-- Usar CT-e complementar quando cancelamento nao for possivel (prazo vencido ou mercadoria ja embarcada)
-- Formalizar cobranc a de custos extras acordados posteriormente
-- Evitar cancelamentos desnecessarios (que "poluem" historico fiscal)
+### Antes da automacao (pre-2026-04-09)
+Rafael nunca havia emitido CT-e complementar. Se houvesse erro de valor, ele:
+- Cancelava o CT-e original (se dentro do prazo de 7 dias)
+- Reemitia com valor correto
+- Ou "deixava pra la" se diferenca fosse pequena
+
+### Futuro
+- Treinar Jaqueline no fluxo via UI (`/carvia/custos-entrega/<id>` → botao "Emitir CTe Complementar")
+- Monitorar emissoes em ERRO via dashboard CarVia (rota retry disponivel)
+- Avaliar abertura de fluxo manual via UI para casos edge nao cobertos pelo auto-calc
 
 ---
 
@@ -192,3 +270,4 @@ Rafael nunca emitiu CT-e complementar. Se houver erro de valor, ele:
 | Data | Versao | Alteracao |
 |------|--------|-----------|
 | 2026-02-16 | 1.0 | Criacao inicial (Onda 5) |
+| 2026-04-09 | 2.0 | Correcao: opcao real e 222 (nao 007). Status: NAO IMPLANTADO → ATIVO. Adicionada secao "Automacao CarVia" com script Playwright + worker RQ + auto-calc de ICMS via 101 do pai. Commits: `1b2e1ac0`, `06f27d0d`, `6ca7b942`. |
