@@ -1,0 +1,183 @@
+/**
+ * _dashboard.css - Dashboard Module
+ *
+ * Estilos especificos do dashboard principal.
+ * Reutiliza .kpi-card / .kpi-value / .kpi-label do _bi.css (sem duplicacao).
+ * Dashboard-specific overrides scoped por #kpi-row.
+ *
+ * Componentes:
+ * - KPI card overrides (6-across layout)
+ * - Variacao percentual (up/down/neutral)
+ * - Chart container
+ * - Paineis rotativos com dots de navegacao
+ * - Quick access bar
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════
+     KPI CARDS — Overrides para dashboard (6 cards por row)
+     ═══════════════════════════════════════════════════════════════ */
+
+  #kpi-row .kpi-card .kpi-value {
+    font-size: 1.4rem;
+  }
+
+  #kpi-row .kpi-card .card-body {
+    padding: 0.75rem 1rem;
+  }
+
+  #kpi-row .kpi-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  #kpi-row .kpi-card:hover {
+    transform: translateY(-2px);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     VARIACAO PERCENTUAL — Badge dentro dos KPI cards
+     ═══════════════════════════════════════════════════════════════ */
+
+  .kpi-variation {
+    font-size: 0.8rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .kpi-variation.up {
+    color: var(--semantic-success);
+  }
+
+  .kpi-variation.down {
+    color: var(--semantic-danger);
+  }
+
+  .kpi-variation.neutral {
+    color: var(--text-muted);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     CHART CONTAINER — Altura fixa para graficos
+     ═══════════════════════════════════════════════════════════════ */
+
+  .dash-chart-container {
+    position: relative;
+    height: 280px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PAINEIS ROTATIVOS — Show/hide + dots de navegacao
+     ═══════════════════════════════════════════════════════════════ */
+
+  .dash-panel {
+    display: none;
+    min-height: 280px;
+  }
+
+  .dash-panel.active {
+    display: block;
+    animation: dashPanelFadeIn 0.3s ease-out;
+  }
+
+  @keyframes dashPanelFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .dash-panel .table {
+    margin-bottom: 0;
+  }
+
+  /* Dot indicators */
+  .panel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+    border: none;
+    padding: 0;
+  }
+
+  .panel-dot:hover {
+    transform: scale(1.3);
+  }
+
+  .panel-dot.active {
+    background: var(--amber-55);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     QUICK ACCESS BAR — Atalhos compactos para modulos
+     ═══════════════════════════════════════════════════════════════ */
+
+  .dash-quick-access {
+    padding: 0.75rem 0;
+  }
+
+  .dash-quick-link {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    min-width: 85px;
+    text-align: center;
+  }
+
+  .dash-quick-link:hover {
+    color: var(--text);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: var(--amber-50);
+    text-decoration: none;
+  }
+
+  .dash-quick-link i {
+    font-size: 1.25rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     DASHBOARD HEADER
+     ═══════════════════════════════════════════════════════════════ */
+
+  .dash-header {
+    padding: 0.5rem 0;
+  }
+
+  .dash-header h4 {
+    color: var(--text);
+  }
+
+  .dash-header small {
+    color: var(--text-muted);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     LOADING SKELETON — Placeholder enquanto dados carregam
+     ═══════════════════════════════════════════════════════════════ */
+
+  .dash-loading {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+  }
+
+  .dash-loading i {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+} /* End @layer modules */

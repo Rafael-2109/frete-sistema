@@ -1,50 +1,42 @@
 from flask import Blueprint, render_template, redirect, url_for, send_from_directory, current_app, request, jsonify, send_file
 from flask_login import current_user, login_required
 import os
-from app.utils.api_helper import APIDataHelper, get_dashboard_stats, get_system_alerts
+from app.utils.api_helper import APIDataHelper
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from app.utils.timezone import agora_utc_naive
 
 from app import db
 from app.pedidos.models import Pedido
-from app.faturamento.models import RelatorioFaturamentoImportado
+from app.faturamento.models import FaturamentoProduto
 from app.monitoramento.models import EntregaMonitorada
 from app.embarques.models import Embarque, EmbarqueItem
 from app.fretes.models import Frete
 from app.transportadoras.models import Transportadora
-from sqlalchemy import desc
+from app.carteira.models import CarteiraPrincipal
+from app.manufatura.models import PedidoCompras
+from app.producao.models import ProgramacaoProducao
+from app.separacao.models import Separacao
+from sqlalchemy import desc, func
 from sqlalchemy.orm import joinedload
 main_bp = Blueprint('main', __name__)
+
+def _ultimo_dia_util(ref_date):
+    """Retorna o ultimo dia util antes de ref_date (pula sabado/domingo)."""
+    d = ref_date - timedelta(days=1)
+    while d.weekday() >= 5:  # 5=sabado, 6=domingo
+        d -= timedelta(days=1)
+    return d
+
 
 @main_bp.route('/dashboard')
 @main_bp.route('/main/dashboard')
 @login_required
 def dashboard():
-    """Dashboard principal com dados da API"""
-    # Verifica se o usuário é vendedor e redireciona para o dashboard comercial
+    """Dashboard principal — dados carregados via AJAX pelos endpoints /api/dashboard/*"""
     if current_user.perfil == 'vendedor':
         return redirect(url_for('comercial.dashboard_diretoria'))
-
-    try:
-        # Usa o API Helper para obter estatísticas
-        stats_data = get_dashboard_stats()
-        alertas_data = get_system_alerts()
-        
-        # Dados para o template
-        estatisticas = stats_data.get('data', {}) if stats_data.get('success') else {}
-        alertas = alertas_data.get('data', []) if alertas_data.get('success') else []
-        
-        return render_template('main/dashboard.html', 
-                             usuario=current_user,
-                             estatisticas=estatisticas,
-                             alertas=alertas)
-    except Exception as e:
-        # Fallback em caso de erro
-        return render_template('main/dashboard.html', 
-                             usuario=current_user,
-                             estatisticas={},
-                             alertas=[])
+    return render_template('main/dashboard.html', usuario=current_user)
 
 @main_bp.route('/relatorio_gerencial')
 @login_required
@@ -395,7 +387,334 @@ def api_embarques_internos():
        }), 500
 
 # ==========================================
-# 🔗 INTEGRAÇÃO ODOO
+# DASHBOARD APIs (novos — alimentam dashboard principal)
+# ==========================================
+
+@main_bp.route('/api/dashboard/kpis')
+@login_required
+def api_dashboard_kpis():
+    """6 KPIs do dashboard com variacao percentual vs periodo anterior."""
+    try:
+        hoje = date.today()
+        inicio_7d = hoje - timedelta(days=7)
+        inicio_14d = hoje - timedelta(days=14)
+
+        # --- 1. Faturamento 7d ---
+        fat_filtro = [
+            FaturamentoProduto.status_nf == 'Lançado',
+            FaturamentoProduto.revertida == False,  # noqa: E712
+        ]
+        fat_atual = db.session.query(
+            func.coalesce(func.sum(FaturamentoProduto.valor_produto_faturado), 0)
+        ).filter(*fat_filtro, FaturamentoProduto.data_fatura >= inicio_7d).scalar()
+
+        fat_anterior = db.session.query(
+            func.coalesce(func.sum(FaturamentoProduto.valor_produto_faturado), 0)
+        ).filter(
+            *fat_filtro,
+            FaturamentoProduto.data_fatura >= inicio_14d,
+            FaturamentoProduto.data_fatura < inicio_7d
+        ).scalar()
+
+        # --- 2. Embarcado 7d ---
+        emb_atual = db.session.query(
+            func.coalesce(func.sum(Embarque.valor_total), 0)
+        ).filter(
+            Embarque.status == 'ativo',
+            Embarque.data_embarque >= inicio_7d
+        ).scalar()
+
+        emb_anterior = db.session.query(
+            func.coalesce(func.sum(Embarque.valor_total), 0)
+        ).filter(
+            Embarque.status == 'ativo',
+            Embarque.data_embarque >= inicio_14d,
+            Embarque.data_embarque < inicio_7d
+        ).scalar()
+
+        # --- 3. Carteira Ativa (valor total) ---
+        carteira_valor = db.session.query(
+            func.coalesce(
+                func.sum(CarteiraPrincipal.qtd_saldo_produto_pedido * CarteiraPrincipal.preco_produto_pedido),
+                0
+            )
+        ).filter(
+            CarteiraPrincipal.status_pedido == 'Pedido de venda',
+            CarteiraPrincipal.qtd_saldo_produto_pedido > 0
+        ).scalar()
+
+        # --- 4. Entregas Pendentes ---
+        entregas_pendentes = EntregaMonitorada.query.filter(
+            EntregaMonitorada.entregue == False  # noqa: E712
+        ).count()
+
+        # --- 5. Producao Ultimo Dia Util ---
+        dia_util = _ultimo_dia_util(hoje)
+        prod_atual = db.session.query(
+            func.coalesce(func.sum(ProgramacaoProducao.qtd_programada), 0)
+        ).filter(
+            ProgramacaoProducao.data_programacao == dia_util
+        ).scalar()
+
+        dia_util_anterior = _ultimo_dia_util(dia_util)
+        prod_anterior = db.session.query(
+            func.coalesce(func.sum(ProgramacaoProducao.qtd_programada), 0)
+        ).filter(
+            ProgramacaoProducao.data_programacao == dia_util_anterior
+        ).scalar()
+
+        # --- 6. Compras Recebidas 7d ---
+        compras_recebidas = db.session.query(
+            func.count(func.distinct(PedidoCompras.num_pedido))
+        ).filter(
+            PedidoCompras.qtd_recebida > 0,
+            PedidoCompras.atualizado_em >= inicio_7d
+        ).scalar()
+
+        compras_recebidas_ant = db.session.query(
+            func.count(func.distinct(PedidoCompras.num_pedido))
+        ).filter(
+            PedidoCompras.qtd_recebida > 0,
+            PedidoCompras.atualizado_em >= inicio_14d,
+            PedidoCompras.atualizado_em < inicio_7d
+        ).scalar()
+
+        def variacao(atual, anterior):
+            if not anterior or float(anterior) == 0:
+                return None
+            return round((float(atual) - float(anterior)) / float(anterior) * 100, 1)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'faturamento_7d': {
+                    'valor': float(fat_atual),
+                    'variacao_pct': variacao(fat_atual, fat_anterior)
+                },
+                'embarcado_7d': {
+                    'valor': float(emb_atual),
+                    'variacao_pct': variacao(emb_atual, emb_anterior)
+                },
+                'carteira_ativa': {
+                    'valor': float(carteira_valor),
+                    'variacao_pct': None
+                },
+                'entregas_pendentes': {
+                    'valor': entregas_pendentes,
+                    'variacao_pct': None
+                },
+                'producao_ultimo_dia': {
+                    'valor': float(prod_atual),
+                    'data_ref': dia_util.isoformat(),
+                    'variacao_pct': variacao(prod_atual, prod_anterior)
+                },
+                'compras_recebidas': {
+                    'valor': compras_recebidas,
+                    'variacao_pct': variacao(compras_recebidas, compras_recebidas_ant)
+                }
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/dashboard/faturamento-diario')
+@login_required
+def api_dashboard_faturamento_diario():
+    """Faturamento por dia nos ultimos 7 dias (para bar chart). Inclui hoje."""
+    try:
+        hoje = date.today()
+        inicio = hoje - timedelta(days=6)  # 6 dias atras + hoje = 7 barras
+
+        resultados = db.session.query(
+            FaturamentoProduto.data_fatura,
+            func.sum(FaturamentoProduto.valor_produto_faturado)
+        ).filter(
+            FaturamentoProduto.data_fatura >= inicio,
+            FaturamentoProduto.status_nf == 'Lançado',
+            FaturamentoProduto.revertida == False  # noqa: E712
+        ).group_by(
+            FaturamentoProduto.data_fatura
+        ).order_by(
+            FaturamentoProduto.data_fatura
+        ).all()
+
+        # Mapear resultados por data
+        dados_por_dia = {r[0]: float(r[1]) for r in resultados}
+
+        # Preencher todos os 7 dias (incluindo zeros)
+        labels = []
+        values = []
+        for i in range(7):
+            d = inicio + timedelta(days=i)
+            labels.append(d.strftime('%d/%m'))
+            values.append(dados_por_dia.get(d, 0))
+
+        return jsonify({
+            'success': True,
+            'data': {'labels': labels, 'values': values}
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/dashboard/top-produtos')
+@login_required
+def api_dashboard_top_produtos():
+    """Top 5 produtos por valor faturado nos ultimos 7 dias."""
+    try:
+        hoje = date.today()
+        inicio_7d = hoje - timedelta(days=7)
+
+        resultados = db.session.query(
+            FaturamentoProduto.cod_produto,
+            FaturamentoProduto.nome_produto,
+            func.sum(FaturamentoProduto.valor_produto_faturado).label('valor_total')
+        ).filter(
+            FaturamentoProduto.data_fatura >= inicio_7d,
+            FaturamentoProduto.status_nf == 'Lançado',
+            FaturamentoProduto.revertida == False  # noqa: E712
+        ).group_by(
+            FaturamentoProduto.cod_produto,
+            FaturamentoProduto.nome_produto
+        ).order_by(
+            func.sum(FaturamentoProduto.valor_produto_faturado).desc()
+        ).limit(5).all()
+
+        return jsonify({
+            'success': True,
+            'data': [{
+                'cod_produto': r.cod_produto,
+                'nome_produto': r.nome_produto,
+                'valor_total': float(r.valor_total)
+            } for r in resultados]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/dashboard/ultimas-compras')
+@login_required
+def api_dashboard_ultimas_compras():
+    """Ultimas compras recebidas com produtos (painel rotativo)."""
+    try:
+        compras = PedidoCompras.query.filter(
+            PedidoCompras.qtd_recebida > 0
+        ).order_by(
+            PedidoCompras.atualizado_em.desc()
+        ).limit(10).all()
+
+        return jsonify({
+            'success': True,
+            'data': [{
+                'num_pedido': c.num_pedido,
+                'fornecedor': c.raz_social or 'N/A',
+                'cod_produto': c.cod_produto,
+                'nome_produto': c.nome_produto or 'N/A',
+                'qtd_pedida': float(c.qtd_produto_pedido) if c.qtd_produto_pedido else 0,
+                'qtd_recebida': float(c.qtd_recebida) if c.qtd_recebida else 0,
+                'preco': float(c.preco_produto_pedido) if c.preco_produto_pedido else 0,
+                'data_entrega': c.data_pedido_entrega.strftime('%d/%m/%Y') if c.data_pedido_entrega else '-'
+            } for c in compras]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/dashboard/producao-ultimo-dia')
+@login_required
+def api_dashboard_producao_ultimo_dia():
+    """Producao programada do ultimo dia util (painel rotativo)."""
+    try:
+        dia_util = _ultimo_dia_util(date.today())
+
+        producao = ProgramacaoProducao.query.filter(
+            ProgramacaoProducao.data_programacao == dia_util
+        ).order_by(
+            ProgramacaoProducao.linha_producao,
+            ProgramacaoProducao.cod_produto
+        ).all()
+
+        return jsonify({
+            'success': True,
+            'data_referencia': dia_util.strftime('%d/%m/%Y'),
+            'data': [{
+                'cod_produto': p.cod_produto,
+                'nome_produto': p.nome_produto,
+                'qtd_programada': float(p.qtd_programada) if p.qtd_programada else 0,
+                'linha_producao': p.linha_producao or '-',
+                'cliente': p.cliente_produto or '-'
+            } for p in producao]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/dashboard/embarques-recentes')
+@login_required
+def api_dashboard_embarques_recentes():
+    """Ultimos embarques ativos (painel rotativo)."""
+    try:
+        embarques = Embarque.query.options(
+            joinedload(Embarque.transportadora)
+        ).filter(
+            Embarque.status == 'ativo'
+        ).order_by(Embarque.id.desc()).limit(10).all()
+
+        return jsonify({
+            'success': True,
+            'data': [{
+                'id': e.id,
+                'numero': e.numero,
+                'status': e.status,
+                'transportadora': e.transportadora.razao_social if e.transportadora else 'N/A',
+                'data_embarque': e.data_embarque.strftime('%d/%m/%Y') if e.data_embarque else '-',
+                'tipo_carga': e.tipo_carga or '-',
+                'valor_total': float(e.valor_total) if e.valor_total else 0,
+                'peso_total': float(e.peso_total) if e.peso_total else 0,
+                'pallet_total': float(e.pallet_total) if e.pallet_total else 0,
+                'total_fretes': len(e.fretes) if e.fretes else 0
+            } for e in embarques]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/dashboard/separacoes-programadas')
+@login_required
+def api_dashboard_separacoes_programadas():
+    """Separacoes futuras pendentes (painel rotativo)."""
+    try:
+        hoje = date.today()
+
+        separacoes = Separacao.query.filter(
+            Separacao.expedicao >= hoje,
+            Separacao.sincronizado_nf == False  # noqa: E712
+        ).order_by(
+            Separacao.expedicao.asc(),
+            Separacao.rota,
+            Separacao.sub_rota
+        ).limit(15).all()
+
+        return jsonify({
+            'success': True,
+            'data': [{
+                'num_pedido': s.num_pedido,
+                'cliente': s.raz_social_red or 'N/A',
+                'cidade': f"{s.nome_cidade}/{s.cod_uf}" if s.nome_cidade else s.cod_uf,
+                'produto': s.nome_produto or 'N/A',
+                'qtd': float(s.qtd_saldo) if s.qtd_saldo else 0,
+                'peso': float(s.peso) if s.peso else 0,
+                'expedicao': s.expedicao.strftime('%d/%m/%Y') if s.expedicao else '-',
+                'rota': s.rota or '-'
+            } for s in separacoes]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ==========================================
+# INTEGRAÇÃO ODOO
 # ==========================================
 
 @main_bp.route('/odoo-integration')

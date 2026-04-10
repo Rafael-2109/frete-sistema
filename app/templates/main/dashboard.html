@@ -2,476 +2,790 @@
 
 {% block title %}Dashboard - Sistema de Fretes{% endblock %}
 
+{% block extra_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <div class="row mb-4">
+<div class="container-fluid mt-3">
+
+    <!-- HEADER -->
+    <div class="dash-header d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-0"><i class="fas fa-tachometer-alt"></i> Dashboard</h4>
+            <small>Visao geral operacional</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <small class="text-muted d-none d-md-inline" id="dash-timestamp"></small>
+            <button id="btn-refresh-all" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- ROW 1: KPI CARDS -->
+    <div class="row g-3 mb-4" id="kpi-row">
+        <!-- Faturamento 7d -->
+        <div class="col-xl-2 col-md-4 col-sm-6">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label text-muted">Faturamento 7d</div>
+                            <div class="kpi-value" id="kpi-faturamento">
+                                <i class="fas fa-spinner fa-spin text-muted"></i>
+                            </div>
+                            <span class="kpi-variation neutral" id="kpi-faturamento-var"></span>
+                        </div>
+                        <i class="fas fa-file-invoice-dollar fa-lg text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Embarcado 7d -->
+        <div class="col-xl-2 col-md-4 col-sm-6">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label text-muted">Embarcado 7d</div>
+                            <div class="kpi-value" id="kpi-embarcado">
+                                <i class="fas fa-spinner fa-spin text-muted"></i>
+                            </div>
+                            <span class="kpi-variation neutral" id="kpi-embarcado-var"></span>
+                        </div>
+                        <i class="fas fa-truck fa-lg text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Carteira Ativa -->
+        <div class="col-xl-2 col-md-4 col-sm-6">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label text-muted">Carteira Ativa</div>
+                            <div class="kpi-value" id="kpi-carteira">
+                                <i class="fas fa-spinner fa-spin text-muted"></i>
+                            </div>
+                            <span class="kpi-variation neutral" id="kpi-carteira-var"></span>
+                        </div>
+                        <i class="fas fa-clipboard-list fa-lg text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Entregas Pendentes -->
+        <div class="col-xl-2 col-md-4 col-sm-6">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label text-muted">Entregas Pendentes</div>
+                            <div class="kpi-value" id="kpi-entregas">
+                                <i class="fas fa-spinner fa-spin text-muted"></i>
+                            </div>
+                            <span class="kpi-variation neutral" id="kpi-entregas-var"></span>
+                        </div>
+                        <i class="fas fa-truck-loading fa-lg text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Producao Ultimo Dia -->
+        <div class="col-xl-2 col-md-4 col-sm-6">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label text-muted">Producao Dia</div>
+                            <div class="kpi-value" id="kpi-producao">
+                                <i class="fas fa-spinner fa-spin text-muted"></i>
+                            </div>
+                            <span class="kpi-variation neutral" id="kpi-producao-var"></span>
+                        </div>
+                        <i class="fas fa-industry fa-lg text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Compras Recebidas 7d -->
+        <div class="col-xl-2 col-md-4 col-sm-6">
+            <div class="card kpi-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label text-muted">Compras Recebidas 7d</div>
+                            <div class="kpi-value" id="kpi-compras">
+                                <i class="fas fa-spinner fa-spin text-muted"></i>
+                            </div>
+                            <span class="kpi-variation neutral" id="kpi-compras-var"></span>
+                        </div>
+                        <i class="fas fa-boxes fa-lg text-muted"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ROW 2: CHARTS -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="fas fa-chart-bar text-primary"></i> Faturamento Diario - 7 dias</h6>
+                </div>
+                <div class="card-body">
+                    <div class="dash-chart-container">
+                        <canvas id="chart-faturamento-diario"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="fas fa-trophy text-warning"></i> Top 5 Produtos (7d)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="dash-chart-container">
+                        <canvas id="chart-top-produtos"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ROW 3: PAINEIS ROTATIVOS -->
+    <div class="row g-3 mb-4">
         <div class="col-12">
-            <h1 class="h3 mb-0 text-gray-800">Dashboard</h1>
-            <p class="mb-0 text-muted">Visão geral do sistema</p>
+            <div class="card">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0" id="panel-title">
+                        <i class="fas fa-exchange-alt text-info"></i>
+                        <span id="panel-title-text">Ultimas Compras Recebidas</span>
+                    </h6>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" id="panel-prev" title="Anterior">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div class="d-flex gap-1" id="panel-dots">
+                            <button class="panel-dot active" data-panel="0" title="Compras"></button>
+                            <button class="panel-dot" data-panel="1" title="Producao"></button>
+                            <button class="panel-dot" data-panel="2" title="Embarques"></button>
+                            <button class="panel-dot" data-panel="3" title="Separacoes"></button>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary" id="panel-next" title="Proximo">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Panel 0: Compras Recebidas -->
+                    <div class="dash-panel active" id="panel-0">
+                        <div class="dash-loading" id="loading-compras">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <div>Carregando compras...</div>
+                        </div>
+                        <div class="table-responsive" id="table-compras" style="display:none;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Pedido</th>
+                                        <th>Fornecedor</th>
+                                        <th>Produto</th>
+                                        <th class="text-end">Qtd Pedida</th>
+                                        <th class="text-end">Qtd Recebida</th>
+                                        <th class="text-end">Preco</th>
+                                        <th>Entrega</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-compras"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Panel 1: Producao Ultimo Dia -->
+                    <div class="dash-panel" id="panel-1">
+                        <div class="dash-loading" id="loading-producao">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <div>Carregando producao...</div>
+                        </div>
+                        <div class="table-responsive" id="table-producao" style="display:none;">
+                            <div class="mb-2">
+                                <small class="text-muted">Data de referencia: <strong id="producao-data-ref"></strong></small>
+                            </div>
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Codigo</th>
+                                        <th>Produto</th>
+                                        <th class="text-end">Qtd Programada</th>
+                                        <th>Linha</th>
+                                        <th>Cliente/Marca</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-producao"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Panel 2: Embarques Recentes -->
+                    <div class="dash-panel" id="panel-2">
+                        <div class="dash-loading" id="loading-embarques">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <div>Carregando embarques...</div>
+                        </div>
+                        <div class="table-responsive" id="table-embarques" style="display:none;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Embarque</th>
+                                        <th>Transportadora</th>
+                                        <th>Data Embarque</th>
+                                        <th>Tipo</th>
+                                        <th class="text-end">Valor</th>
+                                        <th class="text-end">Peso</th>
+                                        <th class="text-end">Pallets</th>
+                                        <th class="text-end">Fretes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-embarques"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Panel 3: Separacoes Programadas -->
+                    <div class="dash-panel" id="panel-3">
+                        <div class="dash-loading" id="loading-separacoes">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <div>Carregando separacoes...</div>
+                        </div>
+                        <div class="table-responsive" id="table-separacoes" style="display:none;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Pedido</th>
+                                        <th>Cliente</th>
+                                        <th>Destino</th>
+                                        <th>Produto</th>
+                                        <th class="text-end">Qtd</th>
+                                        <th class="text-end">Peso</th>
+                                        <th>Expedicao</th>
+                                        <th>Rota</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-separacoes"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- 🆕 Cards com Dados da API JSON -->
-    <div class="row mb-4" id="api-stats-cards">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Embarques Pendentes
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-embarques">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-truck fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Fretes Pendentes
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="fretes-pendentes">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-clock fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Pedidos Abertos
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="pedidos-abertos">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-file-alt fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-danger shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                Entregas Pendentes
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="entregas-pendentes">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-truck-loading fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 🏭 CARTEIRA & PRODUÇÃO - Novos Módulos Implementados -->
-    <div class="row mb-4">
+    <!-- ROW 4: QUICK ACCESS -->
+    <div class="row mb-3">
         <div class="col-12">
-            <div class="card shadow border-left-success">
-                <div
-                    class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-gradient-success">
-                    <h6 class="m-0 font-weight-bold text-black">🏭 Carteira & Produção</h6>
-                    <div>
-                        <span class="badge bg-light">✅ 6 MÓDULOS</span>
-                        <span class="badge bg-warning text-dark ms-1">NOVO</span>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h5 class="text-dark mb-2">Sistema Completo de Gestão</h5>
-                            <p class="text-muted mb-3">
-                                Acesse os <strong>6 novos módulos</strong> para gestão completa da carteira de pedidos,
-                                produção, estoque, faturamento e rotas de entrega.
-                            </p>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <ul class="list-unstyled text-sm">
-                                        <li><i class="fas fa-check text-success"></i> Faturamento por Produto</li>
-                                        <li><i class="fas fa-check text-success"></i> Programação de Produção</li>
-                                    </ul>
-                                </div>
-                                <div class="col-md-4">
-                                    <ul class="list-unstyled text-sm">
-                                        <li><i class="fas fa-check text-success"></i> Movimentação de Estoque</li>
-                                        <li><i class="fas fa-check text-success"></i> Cadastro de Palletização</li>
-                                    </ul>
-                                </div>
-                                <div class="col-md-4">
-                                    <ul class="list-unstyled text-sm">
-                                        <li><i class="fas fa-check text-success"></i> Cadastro de Rotas</li>
-                                        <li><i class="fas fa-check text-success"></i> Cadastro de Sub-rotas</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 text-center">
-                            <div class="mb-3">
-                                <i class="fas fa-industry fa-3x text-success mb-2"></i>
-                                <p class="text-muted small">Sistema Integrado</p>
-                            </div>
-                            <div class="btn-group-vertical w-100" role="group">
-                                <a href="{{ url_for('carteira.index') }}" class="btn btn-success btn-sm">
-                                    <i class="fas fa-clipboard-list"></i> 📋 Carteira de Pedidos
-                                </a>
-                                <a href="{{ url_for('producao.index') }}" class="btn btn-success btn-sm">
-                                    <i class="fas fa-tachometer-alt"></i> Dashboard Produção
-                                </a>
-                                <a href="{{ url_for('estoque.index') }}" class="btn btn-info btn-sm">
-                                    <i class="fas fa-warehouse"></i> Dashboard Estoque
-                                </a>
-                                <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}"
-                                    class="btn btn-primary btn-sm">
-                                    <i class="fas fa-receipt"></i> Faturamento por Produto
-                                </a>
-                                <button type="button" class="btn btn-outline-success btn-sm"
-                                    onclick="mostrarModulosCarteira()">
-                                    <i class="fas fa-list"></i> Ver Todos os Módulos
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Lista completa oculta inicialmente -->
-                    <div id="modulos-carteira" class="mt-4" style="display: none;">
-                        <hr>
-                        <h6 class="text-success mb-3">📋 Acesso Rápido aos 6 Módulos:</h6>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="card border-primary mb-3">
-                                    <div class="card-header">
-                                        <h6 class="mb-0">📋 Carteira</h6>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('carteira.listar_pedidos_agrupados') }}"
-                                                class="list-group-item list-group-item-action py-2">
-                                                <i class="fas fa-layer-group text-warning"></i> Carteira Agrupada
-                                                <span class="badge bg-success ml-2">NOVO</span>
-                                            </a>
-                                            <!-- Links removidos - funcionalidades desativadas após limpeza carteira -->
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="card border-success mb-3">
-                                    <div class="card-header">
-                                        <h6 class="mb-0">🏭 Produção</h6>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('producao.listar_programacao') }}"
-                                                class="list-group-item list-group-item-action py-2">
-                                                <i class="fas fa-calendar-check text-primary"></i> Programação de
-                                                Produção
-                                            </a>
-                                            <a href="{{ url_for('producao.listar_palletizacao') }}"
-                                                class="list-group-item list-group-item-action py-2">
-                                                <i class="fas fa-cubes text-warning"></i> Cadastro de Palletização
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="card border-info mb-3">
-                                    <div class="card-header">
-                                        <h6 class="mb-0">📦 Estoque</h6>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('estoque.listar_movimentacoes') }}"
-                                                class="list-group-item list-group-item-action py-2">
-                                                <i class="fas fa-exchange-alt text-info"></i> Movimentações de Estoque
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="card border-dark mb-3">
-                                    <div class="card-header">
-                                        <h6 class="mb-0">💰 Faturamento</h6>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}"
-                                                class="list-group-item list-group-item-action py-2">
-                                                <i class="fas fa-receipt text-success"></i> Faturamento por Produto
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="card border-warning mb-3">
-                                    <div class="card-header">
-                                        <h6 class="mb-0">🗺️ Rotas</h6>
-                                    </div>
-                                    <div class="card-body p-2">
-                                        <div class="list-group list-group-flush">
-                                            <a href="{{ url_for('localidades.listar_rotas') }}"
-                                                class="list-group-item list-group-item-action py-2">
-                                                <i class="fas fa-route text-warning"></i> Cadastro de Rotas
-                                            </a>
-                                            <a href="{{ url_for('localidades.listar_sub_rotas') }}"
-                                                class="list-group-item list-group-item-action py-2">
-                                                <i class="fas fa-map-marker-alt text-danger"></i> Cadastro de Sub-rotas
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="text-center mt-3">
-                            <div class="btn-group" role="group">
-                                <a href="{{ url_for('carteira.index') }}" class="btn btn-primary">
-                                    📋 Dashboard Carteira
-                                </a>
-                                <a href="{{ url_for('producao.index') }}" class="btn btn-success">
-                                    📊 Dashboard Produção
-                                </a>
-                                <a href="{{ url_for('estoque.index') }}" class="btn btn-info">
-                                    📊 Dashboard Estoque
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="dash-quick-access d-flex flex-wrap gap-2 justify-content-center">
+                <a href="{{ url_for('carteira.index') }}" class="dash-quick-link">
+                    <i class="fas fa-clipboard-list"></i>
+                    Carteira
+                </a>
+                <a href="{{ url_for('producao.index') }}" class="dash-quick-link">
+                    <i class="fas fa-industry"></i>
+                    Producao
+                </a>
+                <a href="{{ url_for('estoque.index') }}" class="dash-quick-link">
+                    <i class="fas fa-warehouse"></i>
+                    Estoque
+                </a>
+                <a href="{{ url_for('faturamento.listar_faturamento_produtos') }}" class="dash-quick-link">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    Faturamento
+                </a>
+                <a href="{{ url_for('embarques.listar_embarques') }}" class="dash-quick-link">
+                    <i class="fas fa-truck"></i>
+                    Embarques
+                </a>
+                <a href="{{ url_for('financeiro.dashboard') }}" class="dash-quick-link">
+                    <i class="fas fa-coins"></i>
+                    Financeiro
+                </a>
+                <a href="{{ url_for('monitoramento.listar_entregas') }}" class="dash-quick-link">
+                    <i class="fas fa-satellite-dish"></i>
+                    Monitoramento
+                </a>
+                <a href="{{ url_for('manufatura.index') }}" class="dash-quick-link">
+                    <i class="fas fa-boxes"></i>
+                    Compras
+                </a>
             </div>
         </div>
     </div>
 
-    <!-- 🆕 Tabela com Últimos Embarques da API -->
-    <div class="row">
-        <div class="card shadow mb-4">
-            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                <h6 class="m-0 font-weight-bold text-primary">Últimos Embarques (via API)</h6>
-                <button class="btn btn-sm btn-outline-primary" onclick="recarregarDados()">
-                    <i class="fas fa-sync-alt"></i> Atualizar
-                </button>
-            </div>
-            <div class="card-body">
-                <div id="loading-embarques" class="text-center">
-                    <i class="fas fa-spinner fa-spin"></i> Carregando dados da API...
-                </div>
-                <div id="tabela-embarques" style="display: none;">
-                    <div class="table-responsive">
-                        <table class="table table-bordered" width="100%" cellspacing="0">
-                            <thead>
-                                <tr>
-                                    <th>Embarque</th>
-                                    <th>Status</th>
-                                    <th>Transportadora</th>
-                                    <th>Data Prevista</th>
-                                    <th>Data de Embarque</th>
-                                    <th>Tipo de Carga</th>
-                                    <th>Modalidade</th>
-                                    <th>Valor Total</th>
-                                    <th>Pallet Total</th>
-                                    <th>Peso Total</th>
-                                    <th>Fretes</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tbody-embarques">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // 🚀 Carrega dados iniciais
-        carregarEstatisticas();
-        carregarUltimosEmbarques();
+// =====================================================================
+// SECTION 1: ChartColors — theme-aware (mesmo padrao BI)
+// =====================================================================
+const ChartColors = {
+    get(name) {
+        return getComputedStyle(document.documentElement)
+            .getPropertyValue(`--chart-${name}`).trim();
+    },
+    primary: () => ChartColors.get('primary'),
+    secondary: () => ChartColors.get('secondary'),
+    success: () => ChartColors.get('success'),
+    danger: () => ChartColors.get('danger'),
+    info: () => ChartColors.get('info'),
+    warning: () => ChartColors.get('warning'),
+    bgPrimary: () => ChartColors.get('bg-primary'),
+    bgSecondary: () => ChartColors.get('bg-secondary'),
+    series: (index) => ChartColors.get(`series-${(index % 5) + 1}`),
+    seriesArray: (count) => Array.from({length: count}, (_, i) => ChartColors.series(i))
+};
 
-        // Event listener para consulta de cliente
-        document.getElementById('form-consulta-cliente').addEventListener('submit', function (e) {
-            e.preventDefault();
-            consultarCliente();
+// =====================================================================
+// SECTION 2: MutationObserver — reage a troca de tema
+// =====================================================================
+const themeObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'data-bs-theme') {
+            Object.values(Chart.instances).forEach(chart => {
+                if (chart && chart.update) chart.update('none');
+            });
+        }
+    });
+});
+themeObserver.observe(document.documentElement, { attributes: true });
+
+// =====================================================================
+// SECTION 3: Formatadores
+// =====================================================================
+function formatarMoeda(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency', currency: 'BRL'
+    }).format(valor);
+}
+
+function formatarMoedaCurta(valor) {
+    if (valor >= 1000000) return 'R$ ' + (valor / 1000000).toFixed(1).replace('.', ',') + 'M';
+    if (valor >= 1000) return 'R$ ' + (valor / 1000).toFixed(1).replace('.', ',') + 'K';
+    return formatarMoeda(valor);
+}
+
+function formatarNumero(numero) {
+    return new Intl.NumberFormat('pt-BR').format(numero);
+}
+
+function renderVariacao(pct, elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    if (pct === null || pct === undefined) {
+        el.textContent = '';
+        el.className = 'kpi-variation neutral';
+        return;
+    }
+    const icon = pct >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+    const cls = pct >= 0 ? 'up' : 'down';
+    el.innerHTML = `<i class="fas ${icon}"></i> ${Math.abs(pct).toFixed(1)}%`;
+    el.className = `kpi-variation ${cls}`;
+}
+
+// =====================================================================
+// SECTION 4: KPIs
+// =====================================================================
+async function carregarKPIs() {
+    try {
+        const resp = await fetch('/api/dashboard/kpis');
+        const json = await resp.json();
+        if (!json.success) return;
+        const d = json.data;
+
+        document.getElementById('kpi-faturamento').textContent = formatarMoedaCurta(d.faturamento_7d.valor);
+        renderVariacao(d.faturamento_7d.variacao_pct, 'kpi-faturamento-var');
+
+        document.getElementById('kpi-embarcado').textContent = formatarMoedaCurta(d.embarcado_7d.valor);
+        renderVariacao(d.embarcado_7d.variacao_pct, 'kpi-embarcado-var');
+
+        document.getElementById('kpi-carteira').textContent = formatarMoedaCurta(d.carteira_ativa.valor);
+        renderVariacao(d.carteira_ativa.variacao_pct, 'kpi-carteira-var');
+
+        document.getElementById('kpi-entregas').textContent = formatarNumero(d.entregas_pendentes.valor);
+        renderVariacao(d.entregas_pendentes.variacao_pct, 'kpi-entregas-var');
+
+        document.getElementById('kpi-producao').textContent = formatarNumero(d.producao_ultimo_dia.valor);
+        renderVariacao(d.producao_ultimo_dia.variacao_pct, 'kpi-producao-var');
+
+        document.getElementById('kpi-compras').textContent = formatarNumero(d.compras_recebidas.valor);
+        renderVariacao(d.compras_recebidas.variacao_pct, 'kpi-compras-var');
+
+        document.getElementById('dash-timestamp').textContent =
+            'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    } catch (err) {
+        console.error('Erro ao carregar KPIs:', err);
+        ['kpi-faturamento','kpi-embarcado','kpi-carteira','kpi-entregas','kpi-producao','kpi-compras'].forEach(id => {
+            document.getElementById(id).innerHTML = '<span class="text-danger">Erro</span>';
         });
+    }
+}
+
+// =====================================================================
+// SECTION 5: Charts
+// =====================================================================
+let chartFaturamento = null;
+let chartTopProdutos = null;
+
+async function carregarChartFaturamento() {
+    try {
+        const resp = await fetch('/api/dashboard/faturamento-diario');
+        const json = await resp.json();
+        if (!json.success) return;
+
+        const ctx = document.getElementById('chart-faturamento-diario').getContext('2d');
+        if (chartFaturamento) chartFaturamento.destroy();
+
+        chartFaturamento = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: json.data.labels,
+                datasets: [{
+                    label: 'Faturamento',
+                    data: json.data.values,
+                    backgroundColor: ChartColors.primary() + '99',
+                    borderColor: ChartColors.primary(),
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => formatarMoeda(ctx.parsed.y)
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (val) => formatarMoedaCurta(val),
+                            color: () => getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim()
+                        },
+                        grid: {
+                            color: () => getComputedStyle(document.documentElement).getPropertyValue('--border').trim() + '40'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: () => getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim()
+                        },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    } catch (err) {
+        console.error('Erro ao carregar chart faturamento:', err);
+    }
+}
+
+async function carregarChartTopProdutos() {
+    try {
+        const resp = await fetch('/api/dashboard/top-produtos');
+        const json = await resp.json();
+        if (!json.success || !json.data.length) return;
+
+        const ctx = document.getElementById('chart-top-produtos').getContext('2d');
+        if (chartTopProdutos) chartTopProdutos.destroy();
+
+        const labels = json.data.map(p => {
+            const nome = p.nome_produto || p.cod_produto;
+            return nome.length > 25 ? nome.substring(0, 22) + '...' : nome;
+        });
+        const values = json.data.map(p => p.valor_total);
+        const colors = ChartColors.seriesArray(json.data.length);
+
+        chartTopProdutos = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Valor',
+                    data: values,
+                    backgroundColor: colors.map(c => c + '99'),
+                    borderColor: colors,
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => formatarMoeda(ctx.parsed.x)
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (val) => formatarMoedaCurta(val),
+                            color: () => getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim()
+                        },
+                        grid: {
+                            color: () => getComputedStyle(document.documentElement).getPropertyValue('--border').trim() + '40'
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: () => getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim()
+                        },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    } catch (err) {
+        console.error('Erro ao carregar chart top produtos:', err);
+    }
+}
+
+// =====================================================================
+// SECTION 6: Paineis Rotativos
+// =====================================================================
+const PANEL_COUNT = 4;
+const PANEL_INTERVAL = 15000;
+let currentPanel = 0;
+let panelTimer = null;
+
+const panelConfig = [
+    { id: 'panel-0', title: 'Ultimas Compras Recebidas', icon: 'fa-boxes' },
+    { id: 'panel-1', title: 'Producao do Ultimo Dia Util', icon: 'fa-industry' },
+    { id: 'panel-2', title: 'Ultimos Embarques', icon: 'fa-truck' },
+    { id: 'panel-3', title: 'Separacoes Programadas', icon: 'fa-clipboard-check' }
+];
+
+function showPanel(index) {
+    currentPanel = index;
+    panelConfig.forEach((p, i) => {
+        const el = document.getElementById(p.id);
+        if (i === index) {
+            el.classList.add('active');
+        } else {
+            el.classList.remove('active');
+        }
+    });
+    document.getElementById('panel-title-text').textContent = panelConfig[index].title;
+    // Update dots
+    document.querySelectorAll('.panel-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === index);
+    });
+    resetPanelTimer();
+}
+
+function nextPanel() { showPanel((currentPanel + 1) % PANEL_COUNT); }
+function prevPanel() { showPanel((currentPanel - 1 + PANEL_COUNT) % PANEL_COUNT); }
+
+function resetPanelTimer() {
+    if (panelTimer) clearInterval(panelTimer);
+    panelTimer = setInterval(nextPanel, PANEL_INTERVAL);
+}
+
+// --- Panel Loaders ---
+
+async function carregarCompras() {
+    try {
+        const resp = await fetch('/api/dashboard/ultimas-compras');
+        const json = await resp.json();
+        if (!json.success) return;
+
+        const tbody = document.getElementById('tbody-compras');
+        if (!json.data.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhuma compra recebida recentemente</td></tr>';
+        } else {
+            tbody.innerHTML = json.data.map(c => `
+                <tr>
+                    <td><strong>${c.num_pedido}</strong></td>
+                    <td>${truncar(c.fornecedor, 30)}</td>
+                    <td>${truncar(c.nome_produto, 30)}</td>
+                    <td class="text-end">${formatarNumero(c.qtd_pedida)}</td>
+                    <td class="text-end">${formatarNumero(c.qtd_recebida)}</td>
+                    <td class="text-end">${formatarMoeda(c.preco)}</td>
+                    <td>${c.data_entrega}</td>
+                </tr>
+            `).join('');
+        }
+        document.getElementById('loading-compras').style.display = 'none';
+        document.getElementById('table-compras').style.display = 'block';
+    } catch (err) {
+        console.error('Erro ao carregar compras:', err);
+        document.getElementById('loading-compras').innerHTML = '<span class="text-danger">Erro ao carregar</span>';
+    }
+}
+
+async function carregarProducao() {
+    try {
+        const resp = await fetch('/api/dashboard/producao-ultimo-dia');
+        const json = await resp.json();
+        if (!json.success) return;
+
+        document.getElementById('producao-data-ref').textContent = json.data_referencia;
+
+        const tbody = document.getElementById('tbody-producao');
+        if (!json.data.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sem producao programada para esta data</td></tr>';
+        } else {
+            tbody.innerHTML = json.data.map(p => `
+                <tr>
+                    <td>${p.cod_produto}</td>
+                    <td>${truncar(p.nome_produto, 35)}</td>
+                    <td class="text-end"><strong>${formatarNumero(p.qtd_programada)}</strong></td>
+                    <td>${p.linha_producao}</td>
+                    <td>${p.cliente}</td>
+                </tr>
+            `).join('');
+        }
+        document.getElementById('loading-producao').style.display = 'none';
+        document.getElementById('table-producao').style.display = 'block';
+    } catch (err) {
+        console.error('Erro ao carregar producao:', err);
+        document.getElementById('loading-producao').innerHTML = '<span class="text-danger">Erro ao carregar</span>';
+    }
+}
+
+async function carregarEmbarques() {
+    try {
+        const resp = await fetch('/api/dashboard/embarques-recentes');
+        const json = await resp.json();
+        if (!json.success) return;
+
+        const tbody = document.getElementById('tbody-embarques');
+        if (!json.data.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhum embarque ativo</td></tr>';
+        } else {
+            tbody.innerHTML = json.data.map(e => `
+                <tr>
+                    <td><strong>#${e.numero}</strong></td>
+                    <td>${truncar(e.transportadora, 25)}</td>
+                    <td>${e.data_embarque}</td>
+                    <td>${e.tipo_carga}</td>
+                    <td class="text-end">${formatarMoeda(e.valor_total)}</td>
+                    <td class="text-end">${formatarNumero(e.peso_total)} kg</td>
+                    <td class="text-end">${e.pallet_total}</td>
+                    <td class="text-end">${e.total_fretes}</td>
+                </tr>
+            `).join('');
+        }
+        document.getElementById('loading-embarques').style.display = 'none';
+        document.getElementById('table-embarques').style.display = 'block';
+    } catch (err) {
+        console.error('Erro ao carregar embarques:', err);
+        document.getElementById('loading-embarques').innerHTML = '<span class="text-danger">Erro ao carregar</span>';
+    }
+}
+
+async function carregarSeparacoes() {
+    try {
+        const resp = await fetch('/api/dashboard/separacoes-programadas');
+        const json = await resp.json();
+        if (!json.success) return;
+
+        const tbody = document.getElementById('tbody-separacoes');
+        if (!json.data.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhuma separacao programada</td></tr>';
+        } else {
+            tbody.innerHTML = json.data.map(s => `
+                <tr>
+                    <td><strong>${s.num_pedido}</strong></td>
+                    <td>${truncar(s.cliente, 25)}</td>
+                    <td>${s.cidade}</td>
+                    <td>${truncar(s.produto, 25)}</td>
+                    <td class="text-end">${formatarNumero(s.qtd)}</td>
+                    <td class="text-end">${formatarNumero(s.peso)} kg</td>
+                    <td>${s.expedicao}</td>
+                    <td>${s.rota}</td>
+                </tr>
+            `).join('');
+        }
+        document.getElementById('loading-separacoes').style.display = 'none';
+        document.getElementById('table-separacoes').style.display = 'block';
+    } catch (err) {
+        console.error('Erro ao carregar separacoes:', err);
+        document.getElementById('loading-separacoes').innerHTML = '<span class="text-danger">Erro ao carregar</span>';
+    }
+}
+
+function truncar(texto, max) {
+    if (!texto) return '-';
+    return texto.length > max ? texto.substring(0, max - 2) + '...' : texto;
+}
+
+// =====================================================================
+// SECTION 7: Inicializacao
+// =====================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Carregar tudo em paralelo
+    Promise.all([
+        carregarKPIs(),
+        carregarChartFaturamento(),
+        carregarChartTopProdutos(),
+        carregarCompras(),
+        carregarProducao(),
+        carregarEmbarques(),
+        carregarSeparacoes()
+    ]);
+
+    // Iniciar rotacao de paineis
+    showPanel(0);
+
+    // Wiring: navegacao de paineis
+    document.getElementById('panel-prev').addEventListener('click', prevPanel);
+    document.getElementById('panel-next').addEventListener('click', nextPanel);
+    document.querySelectorAll('.panel-dot').forEach(dot => {
+        dot.addEventListener('click', () => showPanel(parseInt(dot.dataset.panel)));
     });
 
-    // 📊 Função para carregar estatísticas via API interna
-    async function carregarEstatisticas() {
-        try {
-            const response = await fetch('/api/estatisticas-internas');
-            const data = await response.json();
+    // Wiring: refresh all
+    document.getElementById('btn-refresh-all').addEventListener('click', refreshAll);
 
-            if (data.success) {
-                const stats = data.data;
-
-                // Atualiza os cards
-                // Embarques pendentes (sem data de embarque)
-                document.getElementById('total-embarques').textContent = stats.embarques.pendentes || '0';
-
-                // Fretes pendentes
-                document.getElementById('fretes-pendentes').textContent = stats.fretes.pendentes_aprovacao || '0';
-
-                // Pedidos abertos - será calculado na API
-                document.getElementById('pedidos-abertos').textContent = stats.pedidos?.abertos || '0';
-
-                // Entregas pendentes (já vem calculado da API)
-                document.getElementById('entregas-pendentes').textContent = stats.entregas.pendentes || '0';
-            }
-        } catch (error) {
-            console.error('Erro ao carregar estatísticas:', error);
-            // Fallback visual
-            document.getElementById('total-embarques').innerHTML = '<span class="text-danger">Erro</span>';
-            document.getElementById('fretes-pendentes').innerHTML = '<span class="text-danger">Erro</span>';
-            document.getElementById('pedidos-abertos').innerHTML = '<span class="text-danger">Erro</span>';
-            document.getElementById('entregas-pendentes').innerHTML = '<span class="text-danger">Erro</span>';
-        }
-    }
-
-    // 📋 Função para carregar últimos embarques via API interna
-    async function carregarUltimosEmbarques() {
-        try {
-            const response = await fetch('/api/embarques-internos?limite=8');
-            const data = await response.json();
-
-            if (data.success) {
-                const tbody = document.getElementById('tbody-embarques');
-                tbody.innerHTML = '';
-
-                data.data.forEach(embarque => {
-                    const row = `
-                    <tr>
-                        <td><strong>#${embarque.numero}</strong></td>
-                        <td>
-                            <span class="badge bg-${embarque.status === 'ativo' ? 'success' : 'secondary'}">
-                                ${embarque.status}
-                            </span>
-                        </td>
-                        <td>${embarque.transportadora || 'N/A'}</td>
-                        <td>${embarque.data_prevista_embarque ? new Date(embarque.data_prevista_embarque).toLocaleDateString('pt-BR') : '-'}</td>
-                        <td>${embarque.data_embarque ? new Date(embarque.data_embarque).toLocaleDateString('pt-BR') : '-'}</td>
-                        <td>${embarque.tipo_carga}</td>
-                        <td>${embarque.modalidade}</td>
-                        <td>${embarque.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        <td>${embarque.pallet_total.toFixed(2)}</td>
-                        <td>${embarque.peso_total.toFixed(0)}</td>
-                        <td>${embarque.total_fretes} fretes</td>
-                    </tr>
-                `;
-                    tbody.innerHTML += row;
-                });
-
-                document.getElementById('loading-embarques').style.display = 'none';
-                document.getElementById('tabela-embarques').style.display = 'block';
-            }
-        } catch (error) {
-            console.error('Erro ao carregar embarques:', error);
-            document.getElementById('loading-embarques').innerHTML = '<span class="text-danger">Erro ao carregar dados</span>';
-        }
-    }
-
-    // 🔍 Função para consultar cliente via API (TEMPORARIAMENTE DESABILITADA)
-    async function consultarCliente() {
-        const nomeCliente = document.getElementById('cliente-nome').value.trim();
-
-        if (!nomeCliente) {
-            alert('Digite o nome do cliente');
-            return;
-        }
-
-        // Funcionalidade temporariamente desabilitada
-        const resultadoDiv = document.getElementById('resultado-consulta');
-        const dadosDiv = document.getElementById('dados-cliente');
-
-        dadosDiv.innerHTML = `
-        <div class="alert alert-warning">
-            <i class="fas fa-wrench"></i> 
-            <strong>Funcionalidade em manutenção</strong><br>
-            A consulta rápida de clientes está temporariamente indisponível.
-            Use o menu "Pedidos > Lista de Pedidos" para consultar informações de clientes.
-        </div>
-    `;
-        resultadoDiv.style.display = 'block';
-    }
-
-    // 📥 Função para download de Excel via API (TEMPORARIAMENTE DESABILITADA)
-    function downloadExcelCliente() {
-        alert('Funcionalidade temporariamente indisponível. Use o menu "Relatórios" para exportar dados.');
-    }
-
-    // 🔄 Função para recarregar todos os dados
-    function recarregarDados() {
-        carregarEstatisticas();
-        carregarUltimosEmbarques();
-    }
-
-    // 🔄 Auto-refresh a cada 5 minutos
-    setInterval(function () {
-        carregarEstatisticas();
-        carregarUltimosEmbarques();
+    // Auto-refresh KPIs + painel ativo a cada 5 min
+    setInterval(() => {
+        carregarKPIs();
     }, 5 * 60 * 1000);
+});
 
-    // 🤖 Função para mostrar/ocultar exemplos MCP
-    function mostrarExemplos() {
-        const exemploDiv = document.getElementById('exemplos-mcp');
-        const botao = event.target;
+async function refreshAll() {
+    const btn = document.getElementById('btn-refresh-all');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
 
-        if (exemploDiv.style.display === 'none') {
-            exemploDiv.style.display = 'block';
-            botao.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar Exemplos';
+    await Promise.all([
+        carregarKPIs(),
+        carregarChartFaturamento(),
+        carregarChartTopProdutos(),
+        carregarCompras(),
+        carregarProducao(),
+        carregarEmbarques(),
+        carregarSeparacoes()
+    ]);
 
-            // Scroll suave para os exemplos
-            exemploDiv.scrollIntoView({ behavior: 'smooth' });
-        } else {
-            exemploDiv.style.display = 'none';
-            botao.innerHTML = '<i class="fas fa-lightbulb"></i> Ver Exemplos';
-        }
-    }
-
-    // 🏭 Função para mostrar/ocultar módulos da carteira
-    function mostrarModulosCarteira() {
-        const modulosDiv = document.getElementById('modulos-carteira');
-        const botao = event.target;
-
-        if (modulosDiv.style.display === 'none') {
-            modulosDiv.style.display = 'block';
-            botao.innerHTML = '<i class="fas fa-eye-slash"></i> Ocultar Módulos';
-
-            // Scroll suave para os módulos
-            modulosDiv.scrollIntoView({ behavior: 'smooth' });
-        } else {
-            modulosDiv.style.display = 'none';
-            botao.innerHTML = '<i class="fas fa-list"></i> Ver Todos os Módulos';
-        }
-    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-sync-alt"></i> Atualizar';
+}
 </script>
-
 {% endblock %}
