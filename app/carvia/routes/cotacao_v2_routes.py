@@ -656,35 +656,49 @@ def register_cotacao_v2_routes(bp):
             return jsonify({'erro': 'Nome comercial obrigatorio.'}), 400
 
         try:
-            # Guard: verificar se cliente ja existe pelo CNPJ do emitente
-            cliente_existente = None
-            orig_data = data.get('origem', {})
-            cnpj_orig = orig_data.get('cnpj', '')
-            if cnpj_orig:
-                import re as _re
-                cnpj_limpo = _re.sub(r'\D', '', cnpj_orig)
-                enderecos_existentes = CarviaClienteService.buscar_enderecos_por_cnpj(cnpj_limpo)
-                for end in enderecos_existentes:
-                    if end.cliente_id:
-                        from app.carvia.models import CarviaCliente
-                        cliente_existente = db.session.get(CarviaCliente, end.cliente_id)
-                        break
-
-            if cliente_existente:
-                # Ajuste 1: retornar cliente existente sem criar novo ou sobrescrever nome
-                cliente = cliente_existente
+            # Modo 1: cliente existente selecionado pelo usuario no wizard
+            cliente_id_existente = data.get('cliente_id_existente')
+            if cliente_id_existente:
+                from app.carvia.models import CarviaCliente
+                cliente = db.session.get(CarviaCliente, cliente_id_existente)
+                if not cliente:
+                    return jsonify({'erro': f'Cliente ID {cliente_id_existente} nao encontrado.'}), 404
                 logger.info(
-                    "api_criar_cliente_rapido: cliente ja existe (id=%s, nome=%s), nao criando novo.",
+                    "api_criar_cliente_rapido: usando cliente existente selecionado (id=%s, nome=%s).",
                     cliente.id, cliente.nome_comercial,
                 )
             else:
-                # 1. Criar cliente
-                cliente, erro = CarviaClienteService.criar_cliente(
-                    nome_comercial=nome,
-                    criado_por=current_user.email,
-                )
-                if erro:
-                    return jsonify({'erro': erro}), 400
+                # Guard: verificar se cliente ja existe pelo CNPJ do emitente
+                cliente_existente = None
+                orig_data_guard = data.get('origem', {})
+                cnpj_orig = orig_data_guard.get('cnpj', '')
+                if cnpj_orig:
+                    import re as _re
+                    cnpj_limpo = _re.sub(r'\D', '', cnpj_orig)
+                    enderecos_existentes = CarviaClienteService.buscar_enderecos_por_cnpj(cnpj_limpo)
+                    for end in enderecos_existentes:
+                        if end.cliente_id:
+                            from app.carvia.models import CarviaCliente
+                            cliente_existente = db.session.get(CarviaCliente, end.cliente_id)
+                            break
+
+                if cliente_existente:
+                    # Ajuste 1: retornar cliente existente sem criar novo ou sobrescrever nome
+                    cliente = cliente_existente
+                    logger.info(
+                        "api_criar_cliente_rapido: cliente ja existe (id=%s, nome=%s), nao criando novo.",
+                        cliente.id, cliente.nome_comercial,
+                    )
+                else:
+                    # Criar cliente novo
+                    cliente, erro = CarviaClienteService.criar_cliente(
+                        nome_comercial=nome,
+                        criado_por=current_user.email,
+                    )
+                    if erro:
+                        return jsonify({'erro': erro}), 400
+
+            orig_data = data.get('origem', {})
 
             resultado = {
                 'cliente_id': cliente.id,
@@ -2233,6 +2247,35 @@ def register_cotacao_v2_routes(bp):
                     'label': f'{o.cnpj} - {o.razao_social or "Sem razao"} ({o.fisico_cidade}/{o.fisico_uf})',
                 }
                 for o in origens
+            ]
+        })
+
+    # ==================== API: BUSCAR CLIENTES (autocomplete wizard) ====================
+
+    @bp.route('/api/cotacoes/buscar-clientes') # type: ignore
+    @login_required
+    def api_buscar_clientes_cotacao(): # type: ignore
+        """Busca clientes ativos por nome (autocomplete para wizard step 1).
+
+        Query params:
+            busca: texto para filtrar por nome (ilike)
+        Retorna lista de {id, nome_comercial} (max 15 resultados).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaCliente
+
+        busca = request.args.get('busca', '').strip()
+        query = CarviaCliente.query.filter_by(ativo=True)
+        if busca:
+            query = query.filter(CarviaCliente.nome_comercial.ilike(f'%{busca}%'))
+
+        clientes = query.order_by(CarviaCliente.nome_comercial).limit(15).all()
+        return jsonify({
+            'clientes': [
+                {'id': c.id, 'nome_comercial': c.nome_comercial}
+                for c in clientes
             ]
         })
 

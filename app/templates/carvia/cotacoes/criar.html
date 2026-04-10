@@ -64,6 +64,13 @@
                     <div id="wizStep1">
                         <h6 class="mb-3">1. Cliente</h6>
                         <div class="mb-2">
+                            <label class="form-label">Selecionar cliente existente</label>
+                            <select class="form-select" id="wizClienteExistente" onchange="onWizClienteExistenteChange()">
+                                <option value="">-- Criar novo cliente --</option>
+                            </select>
+                            <div class="form-text">Busque um cliente ja cadastrado ou crie um novo abaixo.</div>
+                        </div>
+                        <div id="wizBlocoNomeNovo" class="mb-2">
                             <label class="form-label">Nome Comercial <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="wizNomeCliente" placeholder="Nome do cliente">
                         </div>

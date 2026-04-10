@@ -99,7 +99,7 @@
                             </td>
                             <td class="text-center">
                                 <button type="button" class="btn btn-outline-primary btn-sm"
-                                        data-endereco='{{ {'tipo': end.tipo, 'fisico_logradouro': end.fisico_logradouro, 'fisico_numero': end.fisico_numero, 'fisico_bairro': end.fisico_bairro, 'fisico_cidade': end.fisico_cidade, 'fisico_uf': end.fisico_uf, 'fisico_cep': end.fisico_cep, 'fisico_complemento': end.fisico_complemento}|tojson }}'
+                                        data-endereco='{{ {'tipo': end.tipo, 'principal': end.principal, 'fisico_logradouro': end.fisico_logradouro, 'fisico_numero': end.fisico_numero, 'fisico_bairro': end.fisico_bairro, 'fisico_cidade': end.fisico_cidade, 'fisico_uf': end.fisico_uf, 'fisico_cep': end.fisico_cep, 'fisico_complemento': end.fisico_complemento}|tojson }}'
                                         onclick="editarEndereco({{ end.id }}, JSON.parse(this.dataset.endereco))"
                                         title="Editar endereco fisico">
                                     <i class="fas fa-edit"></i>
@@ -297,6 +297,13 @@
                             <option value="ORIGEM">Origem</option>
                             <option value="DESTINO">Destino</option>
                         </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Principal?</label>
+                        <div class="form-check mt-1">
+                            <input type="checkbox" class="form-check-input" id="editPrincipal">
+                            <label class="form-check-label small" for="editPrincipal">Endereco principal</label>
+                        </div>
                     </div>
                 </div>
                 <div class="row mb-3">
@@ -541,6 +548,7 @@ function salvarEndereco() {
 function editarEndereco(id, end) {
     document.getElementById('editEndId').value = id;
     document.getElementById('editTipo').value = end.tipo || 'ORIGEM';
+    document.getElementById('editPrincipal').checked = !!end.principal;
     document.getElementById('editFisLogradouro').value = end.fisico_logradouro || '';
     document.getElementById('editFisNumero').value = end.fisico_numero || '';
     document.getElementById('editFisBairro').value = end.fisico_bairro || '';
@@ -555,6 +563,7 @@ function atualizarEndereco() {
     const id = document.getElementById('editEndId').value;
     const payload = {
         tipo: document.getElementById('editTipo').value,
+        principal: document.getElementById('editPrincipal').checked,
         fisico_logradouro: document.getElementById('editFisLogradouro').value,
         fisico_numero: document.getElementById('editFisNumero').value,
         fisico_bairro: document.getElementById('editFisBairro').value,

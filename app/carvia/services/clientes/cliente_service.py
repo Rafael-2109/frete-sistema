@@ -51,6 +51,13 @@ class CarviaClienteService:
         if not nome:
             return None, 'Nome comercial e obrigatorio.'
 
+        # Dedup: verificar se ja existe cliente com mesmo nome (case-insensitive)
+        existente = CarviaCliente.query.filter(
+            db.func.lower(CarviaCliente.nome_comercial) == nome.lower(),
+        ).first()
+        if existente:
+            return None, f'Ja existe um cliente com o nome "{existente.nome_comercial}" (ID {existente.id}).'
+
         cliente = CarviaCliente(
             nome_comercial=nome,
             observacoes=observacoes,
@@ -75,6 +82,13 @@ class CarviaClienteService:
             nome = (dados['nome_comercial'] or '').strip()
             if not nome:
                 return False, 'Nome comercial e obrigatorio.'
+            # Dedup: verificar se outro cliente ja tem esse nome (case-insensitive)
+            existente = CarviaCliente.query.filter(
+                db.func.lower(CarviaCliente.nome_comercial) == nome.lower(),
+                CarviaCliente.id != cliente_id,
+            ).first()
+            if existente:
+                return False, f'Ja existe um cliente com o nome "{existente.nome_comercial}" (ID {existente.id}).'
             cliente.nome_comercial = nome
 
         if 'observacoes' in dados:
@@ -184,6 +198,14 @@ class CarviaClienteService:
         # Se dados_fisico nao fornecido, copiar da Receita (pre-preenchido)
         fisico = dados_fisico if dados_fisico else dict(receita)
 
+        # Se marcando como principal, desmarcar outros do mesmo (cliente_id, tipo)
+        if principal:
+            CarviaClienteEndereco.query.filter(
+                CarviaClienteEndereco.cliente_id == cliente_id,
+                CarviaClienteEndereco.tipo == tipo,
+                CarviaClienteEndereco.principal.is_(True),
+            ).update({'principal': False})
+
         endereco = CarviaClienteEndereco(
             cliente_id=cliente_id,
             cnpj=cnpj_limpo,
@@ -240,6 +262,15 @@ class CarviaClienteService:
         if 'razao_social' in dados:
             endereco.razao_social = dados['razao_social']
         if 'principal' in dados:
+            # Se marcando como principal, desmarcar outros do mesmo (cliente_id, tipo)
+            if dados['principal'] and endereco.cliente_id:
+                from app.carvia.models import CarviaClienteEndereco as _CCE
+                _CCE.query.filter(
+                    _CCE.cliente_id == endereco.cliente_id,
+                    _CCE.tipo == endereco.tipo,
+                    _CCE.principal.is_(True),
+                    _CCE.id != endereco_id,
+                ).update({'principal': False})
             endereco.principal = dados['principal']
 
         # Atualizar CNPJ (para completar destino provisorio)

@@ -123,6 +123,50 @@ function removerLinhaMotos(idx) {
 let _setupData = null; // dados retornados pelo setup-nf
 let _wizStep = 1;
 let _wizSteps = []; // passos necessarios (1=cliente, 2=origem, 3=destino)
+let _wizClienteExistenteId = null; // ID do cliente existente selecionado no wizard
+
+/* ===== Wizard: popular select de clientes existentes ===== */
+function popularWizClientesExistentes(nomeSugerido) {
+    const sel = document.getElementById('wizClienteExistente');
+    if (!sel) return;
+
+    // Reset: manter apenas a primeira option
+    sel.innerHTML = '<option value="">-- Criar novo cliente --</option>';
+    _wizClienteExistenteId = null;
+
+    const busca = (nomeSugerido || '').trim();
+    const url = '/carvia/api/cotacoes/buscar-clientes' + (busca ? '?busca=' + encodeURIComponent(busca) : '');
+
+    fetch(url)
+    .then(r => r.json())
+    .then(data => {
+        if (!data.clientes) return;
+        data.clientes.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.nome_comercial;
+            sel.appendChild(opt);
+        });
+    })
+    .catch(() => {}); // silenciar erros de rede
+}
+
+/* ===== Wizard: callback ao selecionar cliente existente ===== */
+function onWizClienteExistenteChange() {
+    const sel = document.getElementById('wizClienteExistente');
+    const blocoNome = document.getElementById('wizBlocoNomeNovo');
+    const id = sel.value;
+
+    if (id) {
+        // Cliente existente selecionado — esconder campo de nome
+        _wizClienteExistenteId = parseInt(id);
+        blocoNome.classList.add('d-none');
+    } else {
+        // "Criar novo" selecionado — mostrar campo de nome
+        _wizClienteExistenteId = null;
+        blocoNome.classList.remove('d-none');
+    }
+}
 
 function iniciarSetupNF() {
     const fileInput = document.getElementById('inpNFPrePreencher');
@@ -228,6 +272,15 @@ function iniciarSetupNF() {
                 fb.style.display = 'block';
             }
 
+            // Se step 1 presente, popular select de clientes existentes
+            if (_wizSteps.includes(1)) {
+                popularWizClientesExistentes(nf.nome_emitente || '');
+                // Reset: mostrar campo de nome (modo "criar novo")
+                _wizClienteExistenteId = null;
+                document.getElementById('wizBlocoNomeNovo').classList.remove('d-none');
+                document.getElementById('wizClienteExistente').value = '';
+            }
+
             // Abrir wizard no primeiro passo necessario
             _wizStep = 0;
             wizMostrarPasso(_wizSteps[0]);
@@ -284,6 +337,88 @@ function wizAvancar() {
 }
 
 function wizConcluir() {
+    // Se cliente existente selecionado, usar diretamente sem criar novo
+    if (_wizClienteExistenteId) {
+        const sel = document.getElementById('wizClienteExistente');
+        const nomeExistente = sel.options[sel.selectedIndex].textContent;
+
+        _setupData.cliente.id = _wizClienteExistenteId;
+        _setupData.cliente.nome = nomeExistente;
+        _setupData.cliente.existe = true;
+
+        // Se ainda precisa criar enderecos, chamar API com cliente_id existente
+        const precisaEnderecos = _wizSteps.includes(2) || _wizSteps.includes(3);
+        if (precisaEnderecos) {
+            const payload = {
+                nome_comercial: nomeExistente,
+                cliente_id_existente: _wizClienteExistenteId,
+                origem: {
+                    cnpj: document.getElementById('wizOrigCnpj').value,
+                    razao_social: document.getElementById('wizOrigRazao').value,
+                    receita: _setupData.receita_emitente || {},
+                    fisico: {
+                        logradouro: document.getElementById('wizOrigLogradouro').value,
+                        numero: document.getElementById('wizOrigNumero').value,
+                        bairro: document.getElementById('wizOrigBairro').value,
+                        cidade: document.getElementById('wizOrigCidade').value,
+                        uf: document.getElementById('wizOrigUf').value,
+                        cep: document.getElementById('wizOrigCep').value,
+                        complemento: document.getElementById('wizOrigComplemento').value,
+                    }
+                },
+                destino: {
+                    cnpj: document.getElementById('wizDestCnpj').value,
+                    razao_social: document.getElementById('wizDestRazao').value,
+                    provisorio: document.getElementById('wizDestProvisorio').checked,
+                    receita: _setupData.receita_destinatario || {},
+                    fisico: {
+                        logradouro: document.getElementById('wizDestLogradouro').value,
+                        numero: document.getElementById('wizDestNumero').value,
+                        bairro: document.getElementById('wizDestBairro').value,
+                        cidade: document.getElementById('wizDestCidade').value,
+                        uf: document.getElementById('wizDestUf').value,
+                        cep: document.getElementById('wizDestCep').value,
+                        complemento: document.getElementById('wizDestComplemento').value,
+                    }
+                }
+            };
+
+            document.getElementById('btnWizAvancar').disabled = true;
+            fetch('/carvia/api/cotacoes/criar-cliente-rapido', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('btnWizAvancar').disabled = false;
+                if (!d.sucesso) {
+                    const fb = document.getElementById('wizFeedback');
+                    fb.innerHTML = '<div class="alert alert-danger py-1 small">' + (d.erro || 'Erro') + '</div>';
+                    fb.style.display = 'block';
+                    return;
+                }
+                if (d.endereco_origem_id) { _setupData.enderecos.origem_id = d.endereco_origem_id; _setupData.enderecos.origem_existe = true; }
+                if (d.endereco_destino_id) { _setupData.enderecos.destino_id = d.endereco_destino_id; _setupData.enderecos.destino_existe = true; }
+                bootstrap.Modal.getInstance(document.getElementById('modalWizardNF')).hide();
+                aplicarDadosNF(_setupData);
+                aplicarRestricoesTardia();
+            })
+            .catch(err => {
+                document.getElementById('btnWizAvancar').disabled = false;
+                alert('Erro: ' + err.message);
+            });
+            return;
+        }
+
+        // Sem enderecos a criar — fechar wizard direto
+        bootstrap.Modal.getInstance(document.getElementById('modalWizardNF')).hide();
+        aplicarDadosNF(_setupData);
+        aplicarRestricoesTardia();
+        return;
+    }
+
+    // Fluxo original: criar novo cliente + enderecos
     const payload = {
         nome_comercial: document.getElementById('wizNomeCliente').value.trim(),
         origem: {
@@ -723,6 +858,14 @@ document.getElementById('formCotacao').addEventListener('submit', async function
                     '<i class="fas fa-exclamation-triangle me-1"></i>' +
                     '<strong>Emitente:</strong> ' + d.receita_emitente_erro +
                     '. Preencha o endereco manualmente.</div>';
+            }
+
+            // Se step 1 presente, popular select de clientes existentes
+            if (_wizSteps.includes(1)) {
+                popularWizClientesExistentes(nf.nome_emitente || '');
+                _wizClienteExistenteId = null;
+                document.getElementById('wizBlocoNomeNovo').classList.remove('d-none');
+                document.getElementById('wizClienteExistente').value = '';
             }
 
             _wizStep = 0;
