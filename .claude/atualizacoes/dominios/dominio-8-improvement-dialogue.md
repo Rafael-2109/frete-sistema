@@ -28,13 +28,20 @@ DATA: usar output de `date +%Y-%m-%d`
 
 ## RENDER API CONFIG (para persistir respostas)
 
-- **URL**: obtida de `RENDER_EXTERNAL_URL` ou `https://sistema-fretes.onrender.com`
+- **URL**: `https://sistema-fretes.onrender.com`
 - **Endpoint POST**: `/agente/api/improvement-dialogue`
 - **Endpoint GET**: `/agente/api/improvement-dialogue/pending`
-- **Header**: `X-Cron-Key: <valor de CRON_API_KEY env var>`
-- **Tool para POST**: usar `WebFetch` com method POST, ou `Bash` com curl
+- **Header**: `X-Cron-Key: <CRON_API_KEY>`
+- **Tool para POST**: usar `Bash` com curl
 
-Se CRON_API_KEY nao estiver definida, PULAR a persistencia no banco e registrar em `erros` do status.json.
+### OBRIGATORIO: Obter CRON_API_KEY
+
+ANTES de qualquer POST, executar via Bash tool:
+```bash
+echo $CRON_API_KEY
+```
+Guardar o valor retornado e usar em TODOS os curls subsequentes no header `X-Cron-Key`.
+Se o valor retornado for vazio, PULAR a persistencia no banco e registrar em `erros` do status.json.
 
 ---
 
@@ -141,26 +148,20 @@ RESTRICOES:
 
 ## PASSO 4: REGISTRAR RESPOSTAS
 
-Para cada sugestao avaliada, fazer POST para o endpoint:
+Para cada sugestao avaliada, persistir via Bash tool com curl.
+
+Usar o valor de CRON_API_KEY obtido no inicio (secao RENDER API CONFIG).
+
+Exemplo de curl (executar via Bash tool — substituir valores entre chaves):
 
 ```bash
-CRON_KEY="${CRON_API_KEY}"
-RENDER_URL="${RENDER_EXTERNAL_URL:-https://sistema-fretes.onrender.com}"
-
-curl -s -X POST "$RENDER_URL/agente/api/improvement-dialogue" \
+curl -s -X POST "https://sistema-fretes.onrender.com/agente/api/improvement-dialogue" \
   -H "Content-Type: application/json" \
-  -H "X-Cron-Key: $CRON_KEY" \
-  -d '{
-    "suggestion_key": "{KEY}",
-    "version": 2,
-    "author": "claude_code",
-    "status": "responded|rejected",
-    "description": "Avaliacao detalhada...",
-    "implementation_notes": "O que foi feito ou plano proposto...",
-    "affected_files": ["lista", "de", "arquivos"],
-    "auto_implemented": true|false
-  }'
+  -H "X-Cron-Key: VALOR_DA_CRON_API_KEY_OBTIDO_ANTERIORMENTE" \
+  -d '{"suggestion_key": "IMP-YYYY-MM-DD-NNN", "version": 2, "author": "claude_code", "status": "responded", "description": "...", "implementation_notes": "...", "affected_files": [], "auto_implemented": false}'
 ```
+
+IMPORTANTE: Substituir `VALOR_DA_CRON_API_KEY_OBTIDO_ANTERIORMENTE` pelo valor REAL lido via `echo $CRON_API_KEY` no inicio da execucao. NAO usar `${CRON_API_KEY}` inline no curl — resolver o valor ANTES e usar o literal.
 
 ---
 

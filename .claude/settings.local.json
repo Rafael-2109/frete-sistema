@@ -195,7 +195,13 @@
       "Skill(frontend-design)",
       "Bash(sudo crontab:*)",
       "Bash(crontab -l)",
-      "Skill(gerindo-carvia)"
+      "Skill(gerindo-carvia)",
+      "Skill(gerindo-agente)",
+      "Skill(gerindo-agente:*)",
+      "Bash(systemctl list-timers:*)",
+      "Bash(service cron:*)",
+      "Bash(sudo cat:*)",
+      "Read(//var/spool/cron/crontabs/**)"
     ],
     "deny": [],
     "defaultMode": "auto"
