@@ -34,6 +34,11 @@ class CarviaDespesa(db.Model):
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
 
+    @property
+    def numero_despesa(self):
+        """Codigo exibivel no formato DESP-### (mesmo usado no extrato/conciliacao)"""
+        return f'DESP-{self.id:03d}'
+
     def __repr__(self):
         return f'<CarviaDespesa {self.id} {self.tipo_despesa} ({self.status})>'
 

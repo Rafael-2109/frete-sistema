@@ -86,7 +86,7 @@
                     <tbody>
                         {% for d in despesas %}
                         <tr>
-                            <td><strong>{{ d.id }}</strong></td>
+                            <td><strong>{{ d.numero_despesa }}</strong></td>
                             <td><span class="badge bg-secondary">{{ d.tipo_despesa }}</span></td>
                             <td>{{ d.descricao or '-' }}</td>
                             <td class="valor-col">{{ d.valor|valor_br }}</td>

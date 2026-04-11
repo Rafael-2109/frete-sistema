@@ -121,7 +121,12 @@
                                 {% else %}-{% endif %}
                             </td>
                             <td><span class="badge bg-secondary">{{ c.tipo_custo }}</span></td>
-                            <td>{{ c.descricao or '-' }}</td>
+                            <td>
+                                {% set desc = c.descricao or '-' %}
+                                {% if desc|length > 50 %}
+                                <span title="{{ desc }}" style="cursor: help;">{{ desc[:50] }}…</span>
+                                {% else %}{{ desc }}{% endif %}
+                            </td>
                             <td class="valor-col">{{ c.valor|valor_br }}</td>
                             <td>{{ c.data_custo.strftime('%d/%m/%Y') if c.data_custo else '-' }}</td>
                             <td{% if c.data_vencimento and c.status == 'PENDENTE' and c.data_vencimento < today %} class="carvia-vencido"{% endif %}>

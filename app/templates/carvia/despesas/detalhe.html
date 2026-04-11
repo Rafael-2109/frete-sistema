@@ -140,7 +140,7 @@
 {{ modal_admin_excluir(
     entidade_tipo='despesa',
     entidade_id=despesa.id,
-    entidade_label='Despesa #' ~ despesa.id,
+    entidade_label=despesa.numero_despesa,
     impacto_cascade=[
         'Movimentacao financeira e conciliacoes serao removidas',
     ],
