@@ -139,6 +139,15 @@
     opacity: 0.55;
 }
 
+/* Indicadores NF (frete/cotacao) na listagem */
+.carvia-nf-ind {
+    font-size: 0.7rem;
+    text-decoration: none;
+}
+.carvia-nf-ind:hover {
+    opacity: 0.8;
+}
+
 /* Alerta saida sem NF — row vermelha na listagem de cotacoes */
 .carvia-alerta-saida-sem-nf {
     background-color: hsla(0 65% 50% / 0.08);

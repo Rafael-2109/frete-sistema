@@ -14,6 +14,21 @@
                 {% elif tem_cte %}
                 <span class="badge bg-warning text-dark" title="NF possui CTe CarVia mas sem Frete"><i class="fas fa-exclamation-triangle"></i> CTe sem Frete</span>
                 {% endif %}
+                {% if cotacao_id_nf %}
+                <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cotacao_id_nf) }}"
+                   class="badge bg-info text-decoration-none" title="Cotação CarVia vinculada — clique para ver">
+                    <i class="fas fa-file-invoice-dollar"></i> Cotação
+                </a>
+                {% endif %}
+                {% if fat_cliente_paga %}
+                <span class="badge bg-success" title="Fatura cliente paga">
+                    <i class="fas fa-check-circle"></i> Fatura Paga
+                </span>
+                {% elif faturas_cliente %}
+                <span class="badge bg-warning text-dark" title="Fatura cliente pendente de pagamento">
+                    <i class="fas fa-clock"></i> Fatura Pendente
+                </span>
+                {% endif %}
             </h2>
             <p class="text-muted mb-0">
                 {% if nf.serie_nf %}Serie {{ nf.serie_nf }} | {% endif %}

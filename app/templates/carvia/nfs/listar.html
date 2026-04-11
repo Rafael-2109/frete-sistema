@@ -149,6 +149,30 @@
                             </td>
                             <td>
                                 <span class="badge carvia-badge-{{ nf.status|lower }}">{{ nf.status }}</span>
+                                <div class="d-flex gap-1 mt-1">
+                                    {% set frete_id = frete_id_por_nf.get(nf.id) %}
+                                    {% if frete_id %}
+                                    <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete_id) }}"
+                                       class="carvia-nf-ind text-success" title="Frete vinculado — clique para ver">
+                                        <i class="fas fa-truck"></i>
+                                    </a>
+                                    {% else %}
+                                    <span class="carvia-nf-ind text-muted opacity-25" title="Sem frete">
+                                        <i class="fas fa-truck"></i>
+                                    </span>
+                                    {% endif %}
+                                    {% set cot_id = cotacao_id_por_nf.get(nf.id) %}
+                                    {% if cot_id %}
+                                    <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cot_id) }}"
+                                       class="carvia-nf-ind text-success" title="Cotação vinculada — clique para ver">
+                                        <i class="fas fa-file-invoice-dollar"></i>
+                                    </a>
+                                    {% else %}
+                                    <span class="carvia-nf-ind text-muted opacity-25" title="Sem cotação">
+                                        <i class="fas fa-file-invoice-dollar"></i>
+                                    </span>
+                                    {% endif %}
+                                </div>
                             </td>
                             <td>
                                 {% set ctes = ctes_por_nf.get(nf.id, []) %}
@@ -168,7 +192,19 @@
                                 {% set faturas = faturas_por_nf.get(nf.id, []) %}
                                 {% if faturas %}
                                     {% for f in faturas %}
-                                    <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}" class="badge bg-info text-decoration-none d-block mb-1">{{ f.numero_fatura }}</a>
+                                    {% if f.status == 'PAGA' %}
+                                    <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}"
+                                       class="badge bg-success text-decoration-none d-block mb-1"
+                                       title="Fatura paga">{{ f.numero_fatura }} <i class="fas fa-check"></i></a>
+                                    {% elif f.status == 'CANCELADA' %}
+                                    <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}"
+                                       class="badge bg-danger text-decoration-none d-block mb-1"
+                                       title="Fatura cancelada">{{ f.numero_fatura }}</a>
+                                    {% else %}
+                                    <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=f.id) }}"
+                                       class="badge bg-info text-decoration-none d-block mb-1"
+                                       title="Fatura {{ f.status|lower }}">{{ f.numero_fatura }}</a>
+                                    {% endif %}
                                     {% endfor %}
                                 {% else %}
                                 -

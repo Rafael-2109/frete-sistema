@@ -145,6 +145,8 @@ def register_nf_routes(bp):
         subcontratos_por_nf = defaultdict(list)
         faturas_transp_por_nf = defaultdict(list)
         ctes_por_nf = defaultdict(list)
+        frete_id_por_nf = {}
+        cotacao_id_por_nf = {}
 
         if nf_ids:
             # Query 1: Faturas cliente via itens
@@ -217,6 +219,49 @@ def register_nf_routes(bp):
                     seen_cte.add(key)
                     ctes_por_nf[nf_id].append({'id': op_id, 'cte_numero': cte_num, 'ctrc_numero': ctrc_num})
 
+            # Query 5: Frete ID por NF (para indicador clicavel na listagem)
+            from app.carvia.models import CarviaFrete
+
+            rows_frete = db.session.query(
+                CarviaOperacaoNf.nf_id,
+                func.min(CarviaFrete.id).label('frete_id')
+            ).join(
+                CarviaFrete,
+                CarviaFrete.operacao_id == CarviaOperacaoNf.operacao_id
+            ).filter(
+                CarviaOperacaoNf.nf_id.in_(nf_ids),
+                CarviaFrete.status != 'CANCELADO'
+            ).group_by(CarviaOperacaoNf.nf_id).all()
+            frete_id_por_nf = {nf_id: frete_id for nf_id, frete_id in rows_frete}
+
+            # Query 6: Cotacao ID por NF (via pedido_itens.numero_nf → pedido → cotacao)
+            # numero_nf NAO e unique — multiplas NFs podem compartilhar o mesmo numero
+            # (emitentes diferentes). Usar mapping 1:N para nao perder NFs.
+            from app.carvia.models.cotacao import CarviaPedidoItem, CarviaPedido
+
+            numero_to_nf_ids = defaultdict(list)
+            for nf_item, _ in paginacao.items:
+                if nf_item.numero_nf:
+                    numero_to_nf_ids[nf_item.numero_nf].append(nf_item.id)
+
+            cotacao_id_por_nf = {}
+            if numero_to_nf_ids:
+                rows_cot = db.session.query(
+                    CarviaPedidoItem.numero_nf,
+                    CarviaPedido.cotacao_id
+                ).join(
+                    CarviaPedido,
+                    CarviaPedidoItem.pedido_id == CarviaPedido.id
+                ).filter(
+                    CarviaPedidoItem.numero_nf.in_(list(numero_to_nf_ids.keys())),
+                    CarviaPedido.status != 'CANCELADO',
+                    CarviaPedido.cotacao_id.isnot(None),
+                ).distinct().all()
+                for num_nf, cot_id in rows_cot:
+                    for nf_id in numero_to_nf_ids.get(num_nf, []):
+                        if nf_id not in cotacao_id_por_nf:
+                            cotacao_id_por_nf[nf_id] = cot_id
+
         # Batch: peso cubado por NF (2 queries)
         from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
         moto_svc = MotoRecognitionService()
@@ -252,6 +297,8 @@ def register_nf_routes(bp):
             ctes_por_nf=ctes_por_nf,
             peso_cubado_por_nf=peso_cubado_por_nf,
             clientes_por_cnpj=clientes_por_cnpj,
+            frete_id_por_nf=frete_id_por_nf,
+            cotacao_id_por_nf=cotacao_id_por_nf,
         )
 
     # ==================== HELPER: ÚLTIMOS FRETES ====================
@@ -437,6 +484,23 @@ def register_nf_routes(bp):
         _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({nf.cnpj_destinatario})
         cliente_destino = _clientes.get(re.sub(r'\D', '', nf.cnpj_destinatario or ''))
 
+        # Indicador: cotacao vinculada? (com ID para link no header)
+        from app.carvia.models.cotacao import CarviaPedidoItem, CarviaPedido
+        cotacao_id_nf = None
+        if nf.numero_nf:
+            row_cot = db.session.query(CarviaPedido.cotacao_id).join(
+                CarviaPedidoItem, CarviaPedidoItem.pedido_id == CarviaPedido.id
+            ).filter(
+                CarviaPedidoItem.numero_nf == nf.numero_nf,
+                CarviaPedido.status != 'CANCELADO',
+                CarviaPedido.cotacao_id.isnot(None),
+            ).first()
+            if row_cot:
+                cotacao_id_nf = row_cot[0]
+
+        # Indicador: fatura cliente paga?
+        fat_cliente_paga = any(f.status == 'PAGA' for f in faturas_cliente)
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
@@ -457,6 +521,8 @@ def register_nf_routes(bp):
             custos_entrega=custos_entrega,
             ctes_complementares=ctes_complementares,
             cliente_destino=cliente_destino,
+            cotacao_id_nf=cotacao_id_nf,
+            fat_cliente_paga=fat_cliente_paga,
         )
 
     # ==================== CRIAR CTE VIA NF ====================
