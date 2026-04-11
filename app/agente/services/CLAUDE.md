@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~8.0K | **Arquivos**: 13 | **Atualizado**: 06/04/2026
+**LOC**: ~8.0K | **Arquivos**: 14 | **Atualizado**: 2026-04-11
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -10,6 +10,7 @@ Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX
 
 ```
 app/agente/services/
+  ├── _utils.py                  #    57 LOC — Helpers compartilhados (parse_llm_json_response)
   ├── pattern_analyzer.py        # 1,796 LOC — Patterns prescritivos + perfil + extracao (P1-3)
   ├── insights_service.py        # 1,358 LOC — Dashboard admin: metricas + health_score (P2)
   ├── knowledge_graph_service.py # 1,082 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)

@@ -10,6 +10,9 @@ Tambem **emite CTe diretamente no SSW** via Playwright (opcao 004 + 222 + 437).
 > Revisao de gaps: `app/carvia/REVISAO_GAPS.md` — 37 gaps mapeados com fluxogramas (03/03/2026)
 > **Integracao Embarque**: `app/carvia/INTEGRACAO_EMBARQUE.md` — fluxo completo, decisoes, progresso
 > **Integracao SSW (Playwright)**: `app/carvia/SSW_INTEGRATION.md` — emissao CTe + CTe Comp. + workers + SSL resilience
+> **Importacao/Parsers/Linking**: `app/carvia/IMPORTACAO.md` — pipeline de upload, classificacao, matching, linking retroativo
+> **Cotacao/Pricing**: `app/carvia/COTACAO.md` — CidadeAtendida, categorias moto, cotacoes comerciais e de rotas
+> **Migrations**: `app/carvia/MIGRATIONS.md` — historico completo de DDL + backfills
 > Fluxograma: `app/carvia/fluxograma_refatoracao.md` — Mermaid do processo E2E
 
 ---
@@ -343,214 +346,23 @@ obj = db.session.get(CarviaEmissaoCte, emissao_id)   # re-busca (objeto antigo s
 
 ---
 
-## Importacao — Fluxo de Classificacao
+## Importacao, Parsers e Linking
 
-```
-Upload (NF-e XML, CTe XML, DACTE PDF, DANFE PDF, Fatura PDF)
-    │
-    ├── NF-e XML / PDF DANFE → CarviaNf + CarviaNfItem
-    │   └── XML: is_nfe() verifica mod==55 (rejeita CTe disfarçado)
-    │
-    ├── CTe XML / PDF DACTE → Classificar por CNPJ emitente (R6)
-    │   ├── CNPJ == CARVIA_CNPJ → CarviaOperacao (CTe CarVia)
-    │   │   └── Vincular NFs via junction (matching por chave de acesso)
-    │   └── CNPJ != CARVIA_CNPJ → CarviaSubcontrato (CTe Subcontrato)
-    │       └── Vincular a CarviaOperacao via NFs compartilhadas
-    │           Se nao encontrar operacao → erro/warning
-    │
-    ├── [PRE-CHECK] Verificar transportadoras para subcontratos + faturas
-    │   └── CNPJs nao cadastrados → transportadoras_nao_encontradas (alerta + modal)
-    │
-    └── Fatura PDF → parse_multi() (1 fatura por pagina)
-        │   Parser: regex → Haiku → Sonnet (3 camadas escalonadas)
-        │   Extrai: pagador (cliente), beneficiario (CarVia), tipo frete, itens CTe
-        │
-        ├── Dedup: verifica banco por (numero_fatura, cnpj_cliente/data_emissao)
-        │   Se ja existe → log "Fatura ja existe (ignorando)" + return None
-        │
-        ├── CNPJ beneficiario == transportadora cadastrada → CarviaFaturaTransportadora
-        │   └── Warning se CNPJ beneficiario nao cadastrado e != CARVIA_CNPJ
-        └── Outro CNPJ → CarviaFaturaCliente + CarviaFaturaClienteItem (itens)
-            cnpj_cliente = cnpj_PAGADOR (NAO cnpj_emissor/beneficiario)
-```
+> Detalhes completos: `app/carvia/IMPORTACAO.md`
 
-**Env var necessaria**: `CARVIA_CNPJ` (apenas digitos, ex: `12345678000199`).
-Se nao configurada, todos CTes sao classificados como CarVia (compatibilidade) e um aviso e emitido.
+Pipeline: Upload → Classificacao por CNPJ emitente (R6) → Parsing (5 parsers: XML alta, PDF media-variavel) → Matching 3 niveis (chave → cnpj+numero → nao encontrada) → Linking retroativo (`LinkingService`, 15 metodos, ordem independente).
 
-**Pre-check de transportadoras** (no review, ANTES de confirmar):
-- `processar_arquivos()` verifica se CNPJs de emitentes de CTes subcontrato e beneficiarios de faturas
-  estao cadastrados como transportadoras no banco
-- Resultado inclui `transportadoras_nao_encontradas` — lista de CNPJs pendentes com nome/uf/cidade
-- Template `importar_resultado.html` mostra alerta com botoes de cadastro rapido (modal AJAX)
-- Endpoint `POST /carvia/api/cadastrar-transportadora` (CNPJ, razao_social, cidade, UF, freteiro)
-  - Dedup: se CNPJ ja existe, retorna transportadora existente sem erro
-  - Formata CNPJ automaticamente (XX.XXX.XXX/XXXX-XX)
-- Ao cadastrar, badges na tabela de CTes mudam de vermelho para verde via JS
-
-**Classificacao PDF** (ordem de verificacao):
-1. **DACTE**: texto "DACTE"/"Conhecimento de Transporte" ou chave com modelo=57 → `PDF_DACTE`
-2. **DANFE**: chave 44 digitos com modelo != 57 → `PDF_DANFE`
-3. **Fatura**: fallback → `PDF_FATURA`
-
-**CNPJ matriz vs filial**: Faturas podem usar CNPJ matriz (ex: 0001-49) enquanto DACTEs
-usam filial (ex: 0002-20). A classificacao de transportadora busca por CNPJ exato cadastrado.
-
-### Fatura PDF — Multi-Pagina (formato SSW)
-
-PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
-`parse_multi()` retorna `List[Dict]` (1 dict por pagina). `parse()` retorna apenas 1o resultado (backwards compat).
-
-**Pagador vs Beneficiario**:
-- `cnpj_emissor` / `nome_emissor` = beneficiario (CarVia, quem emite a fatura)
-- `cnpj_pagador` / `nome_pagador` = cliente (quem paga) — usado como `cnpj_cliente`
-- Bug anterior: `cnpj_emissor` era gravado como `cnpj_cliente` (CNPJ da CarVia em TODAS as faturas)
-
-**Campos SSW extras** (14 novos em CarviaFaturaCliente):
-- `tipo_frete` (CIF/FOB), `quantidade_documentos`, `valor_mercadoria`, `valor_icms`, `aliquota_icms`, `valor_pedagio`
-- `vencimento_original` (antes de reprogramacao), `cancelada` (flag FATURA CANCELADA → status=CANCELADA)
-- `pagador_endereco`, `pagador_cep`, `pagador_cidade`, `pagador_uf`, `pagador_ie`, `pagador_telefone`
+**Gotchas rapidos**: `cnpj_cliente` = CNPJ do PAGADOR (NAO emissor). Fatura PDF multi-pagina (1/pagina). Pre-check de transportadoras no review.
 
 ---
 
-## Parsers — Ordem de Confiabilidade
+## Cotacao e Pricing
 
-| Parser | Confiabilidade | Notas |
-|--------|---------------|-------|
-| `nfe_xml_parser.py` | Alta | Namespace-agnostic. Fonte de verdade para NF-e. Extrai itens de produto. `is_nfe()` verifica mod==55 |
-| `cte_xml_parser_carvia.py` | Alta | Herda CTeXMLParser. `get_nfs_referenciadas()` para matching. `get_emitente()` para classificacao |
-| `dacte_pdf_parser.py` | Media-Alta | Multi-formato (SSW, Bsoft, ESL, Lonngren, Montenegro). Deteccao automatica via `_detectar_formato()`. Separa chaves modelo=57 (CTe) de modelo=55 (NF-e). Saida identica a `cte_xml_parser_carvia` + campos extras (formato, tipo_servico, cte_carvia_ref, componentes_frete, volumes) |
-| `danfe_pdf_parser.py` | Media | Regex-based com pdfplumber+pypdf fallback. Campo `confianca` (0.0-1.0) |
-| `fatura_pdf_parser.py` | Variavel | 3 camadas: Regex (alta) -> Haiku (media) -> Sonnet (baixa). Campo `confianca` + `metodo_extracao` |
+> Detalhes completos: `app/carvia/COTACAO.md`
 
-### DACTE Multi-Formato — Deteccao e Suporte
-
-| Formato | Emitente(s) | Deteccao (footer) | Campos Extras |
-|---------|-------------|-------------------|---------------|
-| **SSW** | Tocantins, Velocargas, Dago | `SSW.INF.BR` | Referencia completa |
-| **Bsoft** | Transmenezes | `Bsoft Internetworks` | Peso via "PESO X/KG" |
-| **ESL** | Transperola | `ESL Informatica` | Origem/Destino via "INICIO/TERMINO DA PRESTACAO", UF-Cidade invertido, PESO TAXADO/CUBADO |
-| **Lonngren** | CD Uni Brasil | `Lonngren Sistemas` | Frete via "VALOR TOTAL DO SERVICO" |
-| **Montenegro** | Montenegro | `Impresso por :` | Chave robusta (sem strip global), fallback "A RECEBER" |
-
-**Chave de acesso (3 niveis)**: 1) 44 digitos consecutivos → 2) Blocos formatados com separadores (limpa por match, NAO global) → 3) Busca localizada na secao "Chave de acesso"
-
-**Confianca ponderada**: chave=2x, frete=2x, rota=1.5x cada, numero/emitente/peso=1x cada (total 10 pontos)
-
----
-
-## Matching — Algoritmo de 3 Niveis
-
-1. **CHAVE** — Match exato por `chave_acesso_nf` 44 digitos (alta confianca)
-2. **CNPJ_NUMERO** — Fallback por `(cnpj_emitente, numero_nf)` (media confianca)
-3. **NAO_ENCONTRADA** — NF referenciada no CTe nao importada
-
----
-
-## Linking — Vinculacao Cross-Documento
-
-`LinkingService` (`app/carvia/services/linking_service.py`) resolve FKs entre documentos:
-
-| Metodo | Funcao |
-|--------|--------|
-| `resolver_operacao_por_cte(cte_numero)` | Busca CarviaOperacao por CTe, normaliza zeros a esquerda |
-| `resolver_nf_por_numero(nf_numero, cnpj)` | Busca CarviaNf por numero + CNPJ (emitente OU destinatario) |
-| `vincular_nf_a_operacoes_orfas(nf)` | Re-linking CTe→NF: busca operacoes com nfs_referenciadas_json que referenciam a NF e cria junctions |
-| `vincular_operacao_a_itens_fatura_orfaos(operacao)` | Re-linking CTe→Fat: atualiza operacao_id em itens de fatura orfaos + cria junctions |
-| `vincular_nf_a_itens_fatura_orfaos(nf)` | Re-linking NF→Fat: atualiza nf_id em itens de fatura orfaos (incl. stubs FATURA_REFERENCIA) + cria junctions |
-| `vincular_operacoes_da_fatura(fatura_id)` | **Backward binding**: seta `fatura_cliente_id` e `status=FATURADO` nas operacoes via itens ja resolvidos |
-| `vincular_itens_fatura_cliente(fatura_id, auto_criar_nf)` | Resolve `operacao_id` e `nf_id` em itens existentes (3 niveis de fallback) |
-| `_criar_nf_referencia(nf_numero, cnpj, ...)` | Cria CarviaNf stub (FATURA_REFERENCIA) — idempotente |
-| `_resolver_nf_via_junction(nf_numero, operacao_id)` | Busca NF via junction carvia_operacao_nfs |
-| `_criar_junction_se_necessario(operacao_id, nf_id)` | Cria junction se nao existe — idempotente |
-| `criar_itens_fatura_transportadora(fatura_id)` | Gera itens a partir de subcontratos vinculados (usado na importacao) |
-| `criar_itens_fatura_transportadora_incremental(fatura_id, sub_ids)` | Gera itens apenas para subcontratos especificos (usado ao anexar) |
-| `criar_itens_fatura_cliente_from_operacoes(fatura_id)` | Gera itens a partir de operacoes (faturas manuais) |
-| `expandir_itens_com_nfs_do_cte(fatura_id)` | Cria itens suplementares para NFs do CTe ausentes (PDF SSW mostra 1 NF/linha, CTe pode ter N NFs). Valores financeiros NULL para evitar dupla contagem |
-| `backfill_todas_faturas()` | One-time para dados existentes |
-
-**Matching de CTe**: `ltrim(cte_numero, '0')` normaliza "00000001" == "1".
-**Matching de NF**: numero + CNPJ contraparte (emitente OU destinatario), ambos normalizados.
-**Fallback 3 niveis**: 1) Match direto → 2) Via junction → 3) Criar NF referencia (se `auto_criar_nf=True`).
-
-**Chamado automaticamente por**:
-- `ImportacaoService.salvar_importacao()` — durante import de fatura PDF
-- `ImportacaoService.salvar_importacao()` — apos criar NF: `vincular_nf_a_operacoes_orfas` + `vincular_nf_a_itens_fatura_orfaos`
-- `ImportacaoService.salvar_importacao()` — apos criar/reusar CTe: `vincular_operacao_a_itens_fatura_orfaos`
-- `fatura_routes.nova_fatura_cliente()` — ao criar fatura manualmente
-- `fatura_routes.anexar_subcontratos_fatura_transportadora()` — ao anexar subcontratos via AJAX
-
-**Ordem de importacao**: Independente. Re-linking retroativo garante que TODAS as 6 permutacoes (NF, CTe, Fatura) criam vinculos corretos.
-
----
-
-## Cotacao — Fluxo via CidadeAtendida
-
-`CotacaoService` usa o MESMO fluxo do sistema principal:
-```
-Cidade nome + UF → buscar_cidade_unificada() → Cidade.codigo_ibge
-→ CidadeAtendida → grupo_empresarial → TabelaFrete → TabelaFreteManager → CalculadoraFrete
-```
-
-**Reutiliza** (NAO cria novas utils):
-- `buscar_cidade_unificada(cidade, uf)` de `app/utils/frete_simulador.py`
-- `CidadeAtendida.query.filter(codigo_ibge)` de `app/vinculos/models.py`
-- `GrupoEmpresarialService.obter_transportadoras_grupo()` de `app/utils/grupo_empresarial.py`
-- `TabelaFreteManager.preparar_dados_tabela()` de `app/utils/tabela_frete_manager.py`
-- `CalculadoraFrete.calcular_frete_unificado()` de `app/utils/calculadora_frete.py`
-
-**Retorno enriquecido**: `lead_time` (do vinculo CidadeAtendida), `icms_destino` (da Cidade)
-**Fallback**: Se cidade nao encontrada ou sem vinculos, busca por UF (comportamento anterior)
-
-### Cotacao por Categoria de Moto (Preco por Unidade)
-
-Empresas de moto podem ter preco fixo por unidade em vez de calculo por peso.
-Deteccao automatica: se `categorias_moto` fornecido E tabela tem `CarviaPrecoCategoriaMoto`, usa preco por categoria.
-
-```
-CarviaTabelaService.cotar_carvia(categorias_moto=[{categoria_id, quantidade}]):
-  1. Resolver grupo (existente)
-  2. Buscar tabelas (existente)
-  3. Para cada tabela:
-     → TEM precos por categoria? → _calcular_por_categoria_moto()
-     → NAO TEM → calcular_com_tabela_carvia() (peso, existente)
-  4. Retorno inclui tipo_calculo: 'CATEGORIA_MOTO' | 'PESO'
-```
-
-**ICMS**: Aplicado sobre o total por categoria (mesma logica de `icms_incluso`/`icms_proprio`).
-**Backward compat**: Tabelas sem `CarviaPrecoCategoriaMoto` continuam usando calculo por peso.
-
-### Dois tipos de cotacao — coexistem, NAO deprecar
-
-| Feature | Modelo | Prefixo | Label UI | Uso |
-|---------|--------|---------|----------|-----|
-| Cotacao Comercial | `CarviaCotacao` | `COT-###` | "Cotacao Comercial" | Fluxo formal: cliente → pricing → desconto → aprovacao → pedido |
-| Cotacao de Rotas | `CarviaSessaoCotacao` | `COTACAO-###` | "Cotacao de Rotas" | Ferramenta pontual: cotar rota para cliente sob demanda |
-
-Ambos coexistem sem colisao de prefixo. NAO deprecar nenhum.
-
-### Cotacao de Rotas (Ferramenta Comercial)
-
-**Prefixo**: `COTACAO-###` (anteriormente SC-###, backfill aplicado)
-**Campos contato cliente**: `cliente_nome`, `cliente_email`, `cliente_telefone`, `cliente_responsavel` (opcionais)
-**Autocomplete cidade**: Via `GET /localidades/ajax/cidades_por_uf/<uf>` + cache client-side + filtro debounce 200ms
-
-**Fluxo de status**:
-```
-RASCUNHO ── enviar ──> ENVIADO ── resposta ──> APROVADO
-                                           └─> CONTRA_PROPOSTA (com valor)
-CANCELADO <── cancelar (de qualquer estado exceto APROVADO)
-```
-
-**Rotas** (`sessao_cotacao_routes.py`):
-- HTML: `GET /sessoes-cotacao` (listar), `GET|POST /sessoes-cotacao/nova`, `GET /sessoes-cotacao/<id>` (detalhe)
-- HTML: `POST .../adicionar-demanda`, `POST .../remover-demanda/<did>`, `POST .../enviar`, `POST .../resposta`, `POST .../cancelar`
-- API: `POST /api/sessao-cotacao/<id>/cotar-demanda/<did>` (retorna todas opcoes + lead_time + breakdown), `POST .../selecionar-opcao/<did>` (grava escolha)
-
-**Validacoes**:
-- Enviar: TODAS demandas devem ter frete selecionado
-- Cancelar: bloqueado se APROVADO
-- Contra proposta: `valor_contra_proposta` obrigatorio
-- Remover demanda: bloqueado se for a unica
+Dois tipos coexistentes: **Cotacao Comercial** (`COT-###`, fluxo formal) e **Cotacao de Rotas** (`COTACAO-###`, pontual).
+Calculo via `CidadeAtendida → TabelaFrete → CalculadoraFrete` (reutiliza utils do sistema principal).
+Suporte a preco por categoria de moto (`CarviaPrecoCategoriaMoto`) com deteccao automatica.
 
 ---
 
@@ -613,30 +425,9 @@ Menu condicional em `base.html`: `{% if current_user.sistema_carvia %}`.
 
 ## Migrations
 
-- `scripts/migrations/criar_tabelas_carvia.py` + `.sql` — 6 tabelas base, 18 indices
-- `scripts/migrations/adicionar_sistema_carvia_usuarios.py` + `.sql` — Campo no Usuario
-- `scripts/migrations/adicionar_seq_subcontrato.py` + `.sql` — `numero_sequencial_transportadora` + unique index parcial + backfill
-- `scripts/migrations/adicionar_campos_fatura_cliente_v2.py` + `.sql` — 14 novos campos em `carvia_faturas_cliente` + tabela `carvia_fatura_cliente_itens`
-- `scripts/migrations/carvia_linking_v1_schema.py` + `.sql` — FK `operacao_id`/`nf_id` em `carvia_fatura_cliente_itens` + tabela `carvia_fatura_transportadora_itens` (15 cols, 4 indices)
-- `scripts/migrations/carvia_linking_v2_backfill.py` — Backfill de FKs em itens existentes (requer v1 antes)
-- `scripts/migrations/backfill_carvia_nf_linking.py` + `.sql` — Cria CarviaNf stubs (FATURA_REFERENCIA) para NFs referenciadas em faturas que nunca foram importadas, vincula nf_id e cria junctions
-- `scripts/migrations/adicionar_status_pagamento_fatura_transportadora.py` + `.sql` — 3 novos campos (`status_pagamento`, `pago_por`, `pago_em`) + indice
-- `scripts/migrations/add_nfs_referenciadas_json_operacoes.py` + `.sql` — Campo JSONB `nfs_referenciadas_json` em carvia_operacoes (refs NF do CTe XML)
-- `scripts/migrations/backfill_nfs_referenciadas_json.py` + `.sql` — Backfill: popula JSON a partir de junctions existentes
-- `scripts/migrations/criar_tabela_carvia_conta_movimentacoes.py` + `.sql` — Tabela `carvia_conta_movimentacoes` (saldo por SUM, UNIQUE tipo_doc+doc_id)
-- `scripts/migrations/adicionar_pago_em_por_carvia.py` + `.sql` — `pago_em`/`pago_por` em `carvia_faturas_cliente` e `carvia_despesas`
-- `scripts/migrations/backfill_carvia_fatura_operacao_binding.py` + `.sql` — Backfill: seta `fatura_cliente_id` e `status=FATURADO` em operacoes via itens de fatura existentes
-- `scripts/migrations/fix_carvia_faturas_duplicadas.py` + `.sql` — Fix: remover 21 faturas cliente duplicadas (importacao 2x do mesmo PDF)
-- `scripts/migrations/add_unique_faturas_carvia.py` + `.sql` — UNIQUE(numero_fatura, cnpj_cliente) em faturas_cliente + UNIQUE(numero_fatura, transportadora_id) em faturas_transportadora
-- `scripts/migrations/adicionar_status_carvia_nfs.py` + `.sql` — Campo `status` VARCHAR(20) DEFAULT 'ATIVA' + `cancelado_em`, `cancelado_por`, `motivo_cancelamento` + indice
-- `scripts/migrations/backfill_numeracao_sequencial_carvia.py` — Backfill: preenche `cte_numero` NULL com CTe-### (operacoes) e Sub-### (subcontratos). Sem DDL
-- `scripts/migrations/criar_tabelas_sessao_cotacao_carvia.py` + `.sql` — 2 tabelas (`carvia_sessoes_cotacao` + `carvia_sessao_demandas`), 5 indices, 2 constraints
-- `scripts/migrations/adicionar_contato_sessao_cotacao_carvia.py` + `.sql` — 4 campos contato cliente (cliente_nome, cliente_email, cliente_telefone, cliente_responsavel)
-- `scripts/migrations/backfill_prefixo_cotacao_carvia.py` + `.sql` — DML: renomeia SC-### → COTACAO-### em numero_sessao
-- `scripts/migrations/criar_tabelas_custo_entrega_cte_complementar.py` + `.sql` — 3 tabelas (`carvia_cte_complementares`, `carvia_custos_entrega`, `carvia_custo_entrega_anexos`), 13 indices
-- `scripts/migrations/adicionar_conferencia_subcontrato.py` + `.sql` — 5 campos conferencia em `carvia_subcontratos` (`valor_considerado`, `status_conferencia`, `conferido_por`, `conferido_em`, `detalhes_conferencia`) + indice
-- `scripts/migrations/criar_tabelas_categoria_moto.py` + `.sql` — 2 tabelas (`carvia_categorias_moto`, `carvia_precos_categoria_moto`) + FK `categoria_moto_id` em `carvia_modelos_moto` + 3 indices
-- `scripts/migrations/criar_tabela_carvia_admin_audit.py` + `.sql` — Tabela `carvia_admin_audit` (auditoria admin: snapshot JSONB, 4 indices, check constraint acoes)
+> Historico completo (24 migrations): `app/carvia/MIGRATIONS.md`
+
+Regra: DDL requer `.py` + `.sql`. Data fixes apenas Python.
 
 ---
 

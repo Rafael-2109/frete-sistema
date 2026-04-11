@@ -391,9 +391,13 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 ---
 
-## SDK 0.1.53 (atualizado 2026-03-31)
+## SDK 0.1.55 (atualizado 2026-04-11)
 
-**Versao**: `claude-agent-sdk==0.1.53`
+**Versao**: `claude-agent-sdk==0.1.55`
+
+### Features adotadas (0.1.54–0.1.55):
+- **`maxResultSizeChars` MCP fix** (0.1.55): Resultados MCP grandes nao sao mais truncados silenciosamente. CLI 2.1.91.
+- **0.1.54**: Changelog pendente de documentacao — verificar release notes se necessario.
 
 ### Features adotadas (0.1.51–0.1.53):
 - **`typing.Annotated` em MCP tools** (0.1.52): Descriptions por parametro no JSON Schema. `_mcp_enhanced.py:_python_type_to_json_schema()` processa `Annotated[str, "desc"]` → `{"type": "string", "description": "desc"}`. Aplicado em 34 tools (7 MCP servers). Modelo recebe instrucoes por parametro em vez de adivinhar pelo nome.
