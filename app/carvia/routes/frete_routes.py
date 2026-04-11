@@ -419,12 +419,13 @@ def register_frete_routes(bp):
             flash('NF semente sem UF destinatario — nao e possivel criar frete.', 'danger')
             return redirect(url_for('carvia.backfill_frete_carvia', nf_id=seed_nf_id))
 
-        # Dedup: verificar overlap com fretes backfill existentes
+        # Dedup: verificar overlap com fretes backfill existentes (excluir cancelados)
         submitted_nf_nums = {nf.numero_nf for nf in selected_nfs}
         fretes_existentes = CarviaFrete.query.filter(
             CarviaFrete.embarque_id.is_(None),
             CarviaFrete.cnpj_emitente == seed_nf.cnpj_emitente,
             CarviaFrete.cnpj_destino == seed_nf.cnpj_destinatario,
+            CarviaFrete.status != 'CANCELADO',
         ).all()
 
         for fe in fretes_existentes:
