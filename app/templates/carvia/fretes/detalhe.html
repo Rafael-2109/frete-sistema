@@ -40,9 +40,15 @@
             </button>
             {% endif %}
 
+            {% if frete.embarque_id %}
             <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}" class="btn btn-info">
                 <i class="fas fa-truck"></i> Ver Embarque
             </a>
+            {% else %}
+            <span class="btn btn-outline-secondary disabled">
+                <i class="fas fa-history"></i> Backfill (sem embarque)
+            </span>
+            {% endif %}
 
             {% if not frete.fatura_cliente_id and not frete.fatura_transportadora_id and frete.status != 'CANCELADO' %}
             <form method="POST" action="{{ url_for('carvia.cancelar_frete_carvia', id=frete.id) }}"
@@ -117,9 +123,13 @@
                             <h6><i class="fas fa-truck"></i> Transporte</h6>
                             <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social if frete.transportadora else '-' }}</p>
                             <p><strong>Embarque:</strong>
+                                {% if frete.embarque_id %}
                                 <a href="{{ url_for('embarques.visualizar_embarque', id=frete.embarque_id) }}">
                                     #{{ frete.embarque.numero if frete.embarque else frete.embarque_id }}
                                 </a>
+                                {% else %}
+                                <span class="text-muted">Backfill (sem embarque)</span>
+                                {% endif %}
                             </p>
                             <p><strong>Tipo de Carga:</strong>
                                 {% if frete.tipo_carga == 'DIRETA' %}
