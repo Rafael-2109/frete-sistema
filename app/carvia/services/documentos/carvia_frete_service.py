@@ -257,11 +257,15 @@ class CarviaFreteService:
             db.session.add(frete)
             db.session.flush()
 
+            # Vincular CarviaOperacao + FaturaCliente existentes pelas NFs
+            CarviaFreteService._vincular_operacao_existente(frete, nfs)
+
             logger.info(
                 "CarviaFrete criado: embarque=%s, emit=%s→dest=%s, "
-                "custo=%s, venda=%s, %d NFs",
+                "custo=%s, venda=%s, %d NFs, op=%s, fat_cli=%s",
                 embarque.id, cnpj_emitente, cnpj_destino,
                 valor_custo, valor_venda_final, len(nfs),
+                frete.operacao_id, frete.fatura_cliente_id,
             )
 
             return frete.id
@@ -367,6 +371,12 @@ class CarviaFreteService:
                 if novo_custo is not None:
                     frete.valor_cotado = novo_custo
                     frete.valor_considerado = novo_custo
+
+            # 3. Vincular operacao existente se frete ainda nao tem
+            if not frete.operacao_id:
+                CarviaFreteService._vincular_operacao_existente(
+                    frete, list(todas_nfs)
+                )
 
             logger.info(
                 "CarviaFrete %s atualizado com %d NF(s) nova(s): %s "
@@ -513,6 +523,92 @@ class CarviaFreteService:
             logger.warning("Erro ao calcular venda frete CarVia: %s", e)
 
         return None
+
+    # ------------------------------------------------------------------
+    # Vinculacao com entidades existentes
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _vincular_operacao_existente(frete, nfs_numeros: list) -> None:
+        """Busca CarviaOperacao existente pelas NFs e vincula ao frete.
+
+        Quando as NFs do frete ja possuem um CTe CarVia (CarviaOperacao)
+        vinculado via CarviaOperacaoNf, preenche:
+          - frete.operacao_id
+          - frete.fatura_cliente_id (se operacao ja tiver fatura)
+          - frete.valor_venda (atualiza com cte_valor da operacao, se disponivel)
+        """
+        if not nfs_numeros:
+            return
+
+        try:
+            from app.carvia.models import CarviaNf, CarviaOperacaoNf, CarviaOperacao
+
+            # 1. Buscar IDs das CarviaNf ativas por numero
+            nf_ids = [
+                nf_id for (nf_id,) in
+                db.session.query(CarviaNf.id).filter(
+                    CarviaNf.numero_nf.in_(nfs_numeros),
+                    CarviaNf.status == 'ATIVA',
+                ).all()
+            ]
+            if not nf_ids:
+                return
+
+            # 2. Buscar CarviaOperacao vinculadas a essas NFs (via junction)
+            #    Priorizar pela que cobre MAIS NFs do frete (nao apenas a mais recente)
+            from sqlalchemy import func
+
+            op_scores = (
+                db.session.query(
+                    CarviaOperacaoNf.operacao_id,
+                    func.count(CarviaOperacaoNf.nf_id).label('cnt'),
+                )
+                .filter(CarviaOperacaoNf.nf_id.in_(nf_ids))
+                .group_by(CarviaOperacaoNf.operacao_id)
+                .order_by(
+                    func.count(CarviaOperacaoNf.nf_id).desc(),  # maior cobertura
+                    CarviaOperacaoNf.operacao_id.desc(),         # desempate: mais recente
+                )
+                .all()
+            )
+            if not op_scores:
+                return
+
+            # 3. Buscar a primeira operacao ativa (nao cancelada)
+            operacao = None
+            for op_id, _cnt in op_scores:
+                candidata = db.session.get(CarviaOperacao, op_id)
+                if candidata and candidata.status != 'CANCELADO':
+                    operacao = candidata
+                    break
+
+            if not operacao:
+                return
+
+            # 4. Vincular operacao ao frete
+            frete.operacao_id = operacao.id
+
+            # Atualizar valor_venda com cte_valor da operacao se disponivel
+            if operacao.cte_valor and not frete.valor_venda:
+                frete.valor_venda = float(operacao.cte_valor)
+
+            # 5. Propagar fatura_cliente_id se operacao ja tiver fatura
+            if operacao.fatura_cliente_id:
+                frete.fatura_cliente_id = operacao.fatura_cliente_id
+
+            logger.info(
+                "CarviaFrete #%s vinculado a operacao existente %s "
+                "(fatura_cliente_id=%s) via NFs %s",
+                frete.id, operacao.cte_numero,
+                operacao.fatura_cliente_id, nfs_numeros,
+            )
+
+        except Exception as e:
+            logger.warning(
+                "Erro ao vincular operacao existente para frete #%s: %s",
+                frete.id, e,
+            )
 
     # ------------------------------------------------------------------
     # Helpers

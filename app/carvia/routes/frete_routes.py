@@ -484,6 +484,13 @@ def register_frete_routes(bp):
                             pass
 
             db.session.add(frete)
+
+            # Propagar fatura_cliente_id se operacao auto-linkada tiver fatura
+            if auto_operacao_id:
+                op_backfill = db.session.get(CarviaOperacao, auto_operacao_id)
+                if op_backfill and op_backfill.fatura_cliente_id:
+                    frete.fatura_cliente_id = op_backfill.fatura_cliente_id
+
             db.session.commit()
 
             flash(f'Frete backfill #{frete.id} criado com sucesso!', 'success')
@@ -849,11 +856,22 @@ def register_frete_routes(bp):
             return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
 
         op = CarviaOperacao.query.get_or_404(operacao_id)
+
+        # Guard: nao reassociar se frete ja tem operacao diferente
+        if frete.operacao_id and frete.operacao_id != op.id:
+            flash('Frete ja possui CTe CarVia vinculado.', 'warning')
+            return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
+
         frete.operacao_id = op.id
 
         # Atualizar valor_venda com o valor do CTe CarVia
         if op.cte_valor:
             frete.valor_venda = float(op.cte_valor)
+
+        # Propagar fatura_cliente_id se operacao ja tiver fatura vinculada
+        # e frete ainda nao tem fatura (evita sobrescrever silenciosamente)
+        if op.fatura_cliente_id and not frete.fatura_cliente_id:
+            frete.fatura_cliente_id = op.fatura_cliente_id
 
         db.session.commit()
         flash(f'CTe CarVia {op.cte_numero} vinculado ao frete.', 'success')
