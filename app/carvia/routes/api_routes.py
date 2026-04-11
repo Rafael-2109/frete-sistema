@@ -587,48 +587,56 @@ def register_api_routes(bp):
         """Lista transportadoras ativas com tabelas de frete para o UF, agrupando modalidades.
 
         Query params:
-            uf_destino: UF de destino (obrigatorio)
+            uf_destino: UF de destino (obrigatorio, exceto se todas=true)
             busca: texto de busca (opcional)
+            todas: se 'true', retorna TODAS as transportadoras ativas
+                   (sem filtro por UF) para cotacao manual
         """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
         uf_destino = request.args.get('uf_destino', '').strip().upper()
         busca = request.args.get('busca', '').strip()
+        todas = request.args.get('todas', '').strip().lower() == 'true'
 
-        if not uf_destino:
+        if not todas and not uf_destino:
             return jsonify({'erro': 'uf_destino obrigatorio'}), 400
 
         try:
             from app.transportadoras.models import Transportadora
             from app.tabelas.models import TabelaFrete
 
-            # Buscar tabelas para o UF destino
-            tabelas_query = db.session.query(TabelaFrete).filter(
-                TabelaFrete.uf_destino == uf_destino,
-            )
-
-            # Coletar transportadora_ids e modalidades
+            # Buscar tabelas para o UF destino (se informado)
             tabelas_por_transp = {}
-            for t in tabelas_query.all():
-                tid = t.transportadora_id
-                if tid not in tabelas_por_transp:
-                    tabelas_por_transp[tid] = {
-                        'modalidades': set(),
-                        'qtd_tabelas': 0,
-                    }
-                tabelas_por_transp[tid]['qtd_tabelas'] += 1
-                if t.nome_tabela:
-                    tabelas_por_transp[tid]['modalidades'].add(t.nome_tabela)
+            if uf_destino:
+                tabelas_query = db.session.query(TabelaFrete).filter(
+                    TabelaFrete.uf_destino == uf_destino,
+                )
 
-            if not tabelas_por_transp:
+                for t in tabelas_query.all():
+                    tid = t.transportadora_id
+                    if tid not in tabelas_por_transp:
+                        tabelas_por_transp[tid] = {
+                            'modalidades': set(),
+                            'qtd_tabelas': 0,
+                        }
+                    tabelas_por_transp[tid]['qtd_tabelas'] += 1
+                    if t.nome_tabela:
+                        tabelas_por_transp[tid]['modalidades'].add(t.nome_tabela)
+
+            if not todas and not tabelas_por_transp:
                 return jsonify({'sucesso': True, 'transportadoras': []})
 
-            # Buscar transportadoras ativas que tem tabela
+            # Buscar transportadoras ativas
             query = db.session.query(Transportadora).filter(
-                Transportadora.id.in_(tabelas_por_transp.keys()),
                 Transportadora.ativo == True,  # noqa: E712
             )
+
+            # Se nao pediu todas, filtra apenas as que tem tabela para o UF
+            if not todas:
+                query = query.filter(
+                    Transportadora.id.in_(tabelas_por_transp.keys()),
+                )
 
             if busca:
                 busca_like = f'%{busca}%'

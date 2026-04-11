@@ -541,7 +541,7 @@
             return;
         }
         debounceTimer = setTimeout(function() {
-            fetch('/carvia/api/transportadoras-modalidade?busca=' + encodeURIComponent(query) + '&uf_destino=' + UF_DESTINO)
+            fetch('/carvia/api/transportadoras-modalidade?busca=' + encodeURIComponent(query) + '&uf_destino=' + UF_DESTINO + '&todas=true')
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     transportadoraResults.innerHTML = '';
@@ -549,9 +549,14 @@
                         var div = document.createElement('div');
                         div.className = 'carvia-autocomplete-item p-2';
                         div.style.cursor = 'pointer';
+                        var temTabela = t.modalidades && t.modalidades.length > 0;
                         var label = t.razao_social + (t.cnpj ? ' (' + t.cnpj + ')' : '');
-                        if (t.modalidades && t.modalidades.length > 0) {
+                        if (temTabela) {
                             label += ' — ' + t.modalidades.join(', ');
+                        } else {
+                            label += ' — sem tabela p/ ' + UF_DESTINO;
+                            div.style.opacity = '0.65';
+                            div.style.fontStyle = 'italic';
                         }
                         div.textContent = label;
                         div.addEventListener('click', function() {
