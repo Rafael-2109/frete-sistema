@@ -130,6 +130,13 @@
     {% include 'carvia/_modal_data_recebimento.html' %}
 {% endwith %}
 
+<!-- Conciliacoes Bancarias -->
+{% set conc_tipo_documento = 'receita' %}
+{% set conc_documento_id = receita.id %}
+{% set conc_total_conciliado = receita.total_conciliado %}
+{% set conc_conciliado = receita.conciliado %}
+{% include 'carvia/_conciliacoes_documento.html' %}
+
 {{ modal_admin_excluir(
     entidade_tipo='receita',
     entidade_id=receita.id,

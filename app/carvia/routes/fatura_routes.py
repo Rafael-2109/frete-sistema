@@ -1161,6 +1161,28 @@ def register_fatura_routes(bp):
                     'erro': 'Subcontrato nao encontrado nesta fatura.'
                 }), 404
 
+            # Reverter CEs auto-propagados via este sub ANTES de quebrar o vinculo
+            from app.carvia.models import CarviaCustoEntrega
+            ces_cobertos = CarviaCustoEntrega.query.filter_by(
+                subcontrato_id=sub_id
+            ).filter(
+                CarviaCustoEntrega.status == 'PAGO'
+            ).all()
+            for ce_cob in ces_cobertos:
+                if (ce_cob.pago_por or '').startswith('auto:'):
+                    from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                        CarviaConciliacaoService,
+                    )
+                    if not CarviaConciliacaoService._tem_movimentacao_fc('custo_entrega', ce_cob.id):
+                        ce_cob.status = 'PENDENTE'
+                        ce_cob.pago_em = None
+                        ce_cob.pago_por = None
+                        ce_cob.conciliado = False
+                        logger.info(
+                            "CE %s revertido para PENDENTE (desanexar Sub #%d da FT #%d)",
+                            ce_cob.numero_custo, sub_id, fatura_id,
+                        )
+
             # Reverter subcontrato + limpar CarviaFrete
             # Status reverte para CONFIRMADO: subcontratos anexados manualmente
             # passaram pelo fluxo COTADO→CONFIRMADO antes de FATURADO.

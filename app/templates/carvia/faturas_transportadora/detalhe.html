@@ -284,16 +284,7 @@
                 {% endif %}
                 {% endfor %}
             </div>
-            {# Badge conciliacao bancaria #}
-            {% if fatura.conciliado %}
-            <div class="mt-2">
-                <span class="badge carvia-badge-conciliado"><i class="fas fa-check-double"></i> Conciliado no Banco</span>
-            </div>
-            {% elif fatura.total_conciliado and fatura.total_conciliado > 0 %}
-            <div class="mt-2">
-                <span class="badge carvia-badge-parcial"><i class="fas fa-exchange-alt"></i> Parcialmente Conciliado ({{ fatura.total_conciliado|valor_br }})</span>
-            </div>
-            {% endif %}
+            {# Badge conciliacao movido para card _conciliacoes_documento #}
         </div>
     </div>
 
@@ -328,6 +319,7 @@
                             <th>Conf.</th>
                             <th>V. Considerado</th>
                             <th>Status</th>
+                            <th>Custos Cobertos</th>
                             <th>Acao</th>
                         </tr>
                     </thead>
@@ -365,6 +357,20 @@
                                 {{ sub.valor_considerado|valor_br if sub.valor_considerado else '-' }}
                             </td>
                             <td><span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span></td>
+                            <td>
+                                {% set ces_cobertos = sub.custos_entrega_cobertos.all() %}
+                                {% if ces_cobertos %}
+                                {% for ce in ces_cobertos %}
+                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
+                                   class="badge bg-secondary text-decoration-none me-1"
+                                   title="{{ ce.tipo_custo }} — {{ ce.valor|valor_br }}">
+                                    {{ ce.numero_custo }}
+                                </a>
+                                {% endfor %}
+                                {% else %}
+                                <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if fatura.status_conferencia != 'CONFERIDO' %}
                                 <div class="btn-group">
@@ -918,6 +924,13 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Conciliacoes Bancarias -->
+{% set conc_tipo_documento = 'fatura_transportadora' %}
+{% set conc_documento_id = fatura.id %}
+{% set conc_total_conciliado = fatura.total_conciliado %}
+{% set conc_conciliado = fatura.conciliado %}
+{% include 'carvia/_conciliacoes_documento.html' %}
 
 {{ modal_admin_excluir(
     entidade_tipo='fatura-transportadora',

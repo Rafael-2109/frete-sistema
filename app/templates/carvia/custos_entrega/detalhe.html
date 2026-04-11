@@ -78,7 +78,12 @@
                         </div>
                         <div class="col-12">
                             <small class="text-muted d-block">Descricao</small>
-                            <strong>{{ custo.descricao or '-' }}</strong>
+                            {% set desc = custo.descricao or '-' %}
+                            {% if desc|length > 50 %}
+                            <strong title="{{ desc }}" style="cursor: help;">{{ desc[:50] }}…</strong>
+                            {% else %}
+                            <strong>{{ desc }}</strong>
+                            {% endif %}
                         </div>
                         <div class="col-6">
                             <small class="text-muted d-block">Valor</small>
@@ -102,11 +107,49 @@
                         </div>
                         {% endif %}
                     </div>
-                    {% if custo.conciliado %}
+                    {# Secao de cobertura por subcontrato #}
+                    {% if custo.subcontrato_id %}
                     <hr>
+                    <small class="text-muted d-block">Cobertura por CTe Subcontrato</small>
+                    {% set sub = custo.subcontrato %}
                     <span class="badge bg-info">
-                        <i class="fas fa-check-double"></i> Conciliado ({{ custo.total_conciliado|valor_br }})
+                        <i class="fas fa-link"></i>
+                        <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}" class="text-white text-decoration-none">
+                            {{ sub.cte_numero or 'Sub #' ~ sub.id }}
+                        </a>
                     </span>
+                    {% if sub.fatura_transportadora_id and sub.fatura_transportadora %}
+                    <span class="badge bg-success ms-1">
+                        <i class="fas fa-arrow-right"></i>
+                        <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=sub.fatura_transportadora_id) }}" class="text-white text-decoration-none">
+                            FT {{ sub.fatura_transportadora.numero_fatura }}
+                        </a>
+                        ({{ sub.fatura_transportadora.status_pagamento }})
+                    </span>
+                    <div class="alert alert-info py-2 mt-2 mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Conciliacao bloqueada:</strong> este custo e coberto pela
+                        <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=sub.fatura_transportadora_id) }}">
+                            Fatura {{ sub.fatura_transportadora.numero_fatura }}
+                        </a>. Sera quitado automaticamente quando a fatura for conciliada.
+                    </div>
+                    {% else %}
+                    <small class="text-muted d-block mt-1">Sub sem fatura ainda — pode ser conciliado diretamente.</small>
+                    {% endif %}
+                    {% if custo.status == 'PENDENTE' %}
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-1"
+                            onclick="desvincularSubcontrato({{ custo.id }})">
+                        <i class="fas fa-unlink"></i> Desvincular
+                    </button>
+                    {% endif %}
+                    {% elif custo.status == 'PENDENTE' %}
+                    <hr>
+                    <small class="text-muted d-block">Cobertura por CTe Subcontrato</small>
+                    <span class="text-muted small">Nao vinculado</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
+                            data-bs-toggle="modal" data-bs-target="#modalVincularSubcontrato">
+                        <i class="fas fa-link"></i> Vincular Subcontrato
+                    </button>
                     {% endif %}
                     {% if custo.observacoes %}
                     <hr>
@@ -535,6 +578,136 @@
     </div>
     {% endif %}
     {% endif %}
+
+    <!-- Conciliacoes Bancarias -->
+    {% set conc_tipo_documento = 'custo_entrega' %}
+    {% set conc_documento_id = custo.id %}
+    {% set conc_total_conciliado = custo.total_conciliado %}
+    {% set conc_conciliado = custo.conciliado %}
+    {% include 'carvia/_conciliacoes_documento.html' %}
+
+    <!-- Modal Vincular Subcontrato -->
+    {% if custo.status == 'PENDENTE' and not custo.subcontrato_id %}
+    <div class="modal fade" id="modalVincularSubcontrato" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-link"></i> Vincular Subcontrato</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        Selecione o CTe Subcontrato que cobra este custo de entrega.
+                        Somente subcontratos da mesma operacao ({{ custo.operacao.cte_numero if custo.operacao else '-' }}) sao exibidos.
+                    </p>
+                    <div id="vincular-sub-loading" class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-secondary"></div>
+                        <span class="ms-2 text-muted small">Carregando subcontratos...</span>
+                    </div>
+                    <div id="vincular-sub-empty" class="text-muted text-center py-3 d-none">
+                        Nenhum subcontrato disponivel para esta operacao.
+                    </div>
+                    <select id="selectSubcontrato" class="form-select d-none" size="5">
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnConfirmarVinculo" disabled>
+                        <i class="fas fa-link"></i> Vincular
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function() {
+        'use strict';
+        var custoId = {{ custo.id }};
+        var modal = document.getElementById('modalVincularSubcontrato');
+        var select = document.getElementById('selectSubcontrato');
+        var btnConfirmar = document.getElementById('btnConfirmarVinculo');
+        var loaded = false;
+
+        if (!modal) return;
+
+        modal.addEventListener('show.bs.modal', function() {
+            if (loaded) return;
+            loaded = true;
+            fetch('/carvia/api/custos-entrega/' + custoId + '/subcontratos-disponiveis')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                document.getElementById('vincular-sub-loading').classList.add('d-none');
+                if (!data.subcontratos || data.subcontratos.length === 0) {
+                    document.getElementById('vincular-sub-empty').classList.remove('d-none');
+                    return;
+                }
+                select.classList.remove('d-none');
+                data.subcontratos.forEach(function(s) {
+                    var opt = document.createElement('option');
+                    opt.value = s.id;
+                    var label = s.cte_numero + ' | ' + s.transportadora +
+                                ' | ' + parseFloat(s.valor_final).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+                    if (s.fatura_numero) {
+                        label += ' → FT ' + s.fatura_numero;
+                    }
+                    opt.textContent = label;
+                    select.appendChild(opt);
+                });
+            });
+        });
+
+        select.addEventListener('change', function() {
+            btnConfirmar.disabled = !this.value;
+        });
+
+        btnConfirmar.addEventListener('click', function() {
+            var subId = select.value;
+            if (!subId) return;
+            btnConfirmar.disabled = true;
+            btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Vinculando...';
+            fetch('/carvia/api/custos-entrega/' + custoId + '/vincular-subcontrato', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({subcontrato_id: parseInt(subId)}),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.sucesso) {
+                    location.reload();
+                } else {
+                    alert(d.erro || 'Erro ao vincular');
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.innerHTML = '<i class="fas fa-link"></i> Vincular';
+                }
+            })
+            .catch(function(err) {
+                alert('Erro: ' + err.message);
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = '<i class="fas fa-link"></i> Vincular';
+            });
+        });
+    })();
+    </script>
+    {% endif %}
+
+    <script>
+    function desvincularSubcontrato(custoId) {
+        if (!confirm('Desvincular este custo do subcontrato?')) return;
+        fetch('/carvia/api/custos-entrega/' + custoId + '/desvincular-subcontrato', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.sucesso) {
+                location.reload();
+            } else {
+                alert(d.erro || 'Erro ao desvincular');
+            }
+        })
+        .catch(function(err) { alert('Erro: ' + err.message); });
+    }
+    </script>
 
     <!-- Anexos -->
     <div class="card mt-4">

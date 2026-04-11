@@ -929,3 +929,79 @@ def register_custo_entrega_routes(bp):
             'carvia.detalhe_custo_entrega',
             custo_id=emissao.custo_entrega_id,
         ))
+
+    # ===================================================================
+    # API: Cobertura CE ↔ Subcontrato
+    # ===================================================================
+
+    @bp.route('/api/custos-entrega/<int:custo_id>/vincular-subcontrato', methods=['POST']) # type: ignore
+    @login_required
+    def api_vincular_subcontrato(custo_id): # type: ignore
+        """Vincula CustoEntrega ao Subcontrato que cobra este custo."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        data = request.get_json()
+        if not data or not data.get('subcontrato_id'):
+            return jsonify({'sucesso': False, 'erro': 'subcontrato_id obrigatorio'}), 400
+
+        try:
+            from app.carvia.services.financeiro.custo_entrega_cobertura_service import (
+                CustoEntregaCoberturaService,
+            )
+            resultado = CustoEntregaCoberturaService.vincular(
+                custo_id, int(data['subcontrato_id']), current_user.email
+            )
+            db.session.commit()
+            return jsonify(resultado)
+
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'sucesso': False, 'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao vincular CE #{custo_id} a subcontrato: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/custos-entrega/<int:custo_id>/desvincular-subcontrato', methods=['POST']) # type: ignore
+    @login_required
+    def api_desvincular_subcontrato(custo_id): # type: ignore
+        """Remove vinculo CustoEntrega ↔ Subcontrato."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.services.financeiro.custo_entrega_cobertura_service import (
+                CustoEntregaCoberturaService,
+            )
+            resultado = CustoEntregaCoberturaService.desvincular(
+                custo_id, current_user.email
+            )
+            db.session.commit()
+            return jsonify(resultado)
+
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'sucesso': False, 'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao desvincular CE #{custo_id} de subcontrato: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/custos-entrega/<int:custo_id>/subcontratos-disponiveis') # type: ignore
+    @login_required
+    def api_subcontratos_disponiveis_ce(custo_id): # type: ignore
+        """Retorna subcontratos da mesma operacao disponiveis para vincular."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.services.financeiro.custo_entrega_cobertura_service import (
+                CustoEntregaCoberturaService,
+            )
+            subs = CustoEntregaCoberturaService.subcontratos_disponiveis(custo_id)
+            return jsonify({'subcontratos': subs})
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar subcontratos disponiveis para CE #{custo_id}: {e}")
+            return jsonify({'erro': str(e)}), 500

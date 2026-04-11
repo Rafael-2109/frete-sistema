@@ -249,9 +249,19 @@ class CarviaConciliacaoService:
                 })
 
             # Custos de entrega
+            # Excluir CEs cobertos por sub com FT vinculada (serao pagos via FT)
+            from app.carvia.models import CarviaSubcontrato
             custos = CarviaCustoEntrega.query.filter(
                 CarviaCustoEntrega.conciliado.is_(False),
                 CarviaCustoEntrega.status != 'CANCELADO',
+                db.or_(
+                    CarviaCustoEntrega.subcontrato_id.is_(None),
+                    ~CarviaCustoEntrega.subcontrato_id.in_(
+                        db.session.query(CarviaSubcontrato.id).filter(
+                            CarviaSubcontrato.fatura_transportadora_id.isnot(None)
+                        )
+                    )
+                )
             ).order_by(CarviaCustoEntrega.data_custo.desc()).all()
 
             for c in custos:
@@ -347,6 +357,17 @@ class CarviaConciliacaoService:
                 doc = db.session.get(CarviaCustoEntrega, doc_id)
                 if not doc:
                     raise ValueError(f'Custo de entrega {doc_id} nao encontrado')
+                # Bloquear CE coberto por sub com FT vinculada
+                if doc.subcontrato_id:
+                    from app.carvia.models import CarviaSubcontrato as _Sub
+                    _sub = db.session.get(_Sub, doc.subcontrato_id)
+                    if _sub and _sub.fatura_transportadora_id:
+                        raise ValueError(
+                            f'Custo {doc.numero_custo} e coberto pelo '
+                            f'subcontrato #{doc.subcontrato_id} que esta '
+                            f'vinculado a uma fatura transportadora. '
+                            f'Concilie a fatura, nao o custo diretamente.'
+                        )
                 doc_valor_total = float(doc.valor or 0)
                 doc_total_conciliado = float(doc.total_conciliado or 0)
             elif tipo_doc == 'receita':
@@ -580,12 +601,20 @@ class CarviaConciliacaoService:
                     doc.pago_em = agora_utc_naive()
                     doc.pago_por = usuario
                     logger.info("Fatura transportadora %s quitada via conciliacao por %s", doc.numero_fatura, usuario)
+                    # Propagar PAGO para CEs cobertos pelos subs desta FT
+                    CarviaConciliacaoService._propagar_status_ces_cobertos(
+                        documento_id, 'PAGO', usuario
+                    )
                 elif not agora_conciliado and doc.status_pagamento == 'PAGO':
                     if not CarviaConciliacaoService._tem_movimentacao_fc('fatura_transportadora', documento_id):
                         doc.status_pagamento = 'PENDENTE'
                         doc.pago_em = None
                         doc.pago_por = None
                         logger.info("Fatura transportadora %s revertida para PENDENTE (desconciliacao)", doc.numero_fatura)
+                        # Propagar PENDENTE para CEs cobertos pelos subs desta FT
+                        CarviaConciliacaoService._propagar_status_ces_cobertos(
+                            documento_id, 'PENDENTE', usuario
+                        )
                     else:
                         logger.info(
                             "Fatura transportadora %s desconciliada mas status mantido PAGO "
@@ -726,6 +755,95 @@ class CarviaConciliacaoService:
             'pendentes': pendentes,
             'valor_pendente': float(valor_pendente),
         }
+
+    @staticmethod
+    def obter_conciliacoes_documento(tipo_documento, documento_id):
+        """Retorna conciliacoes bancarias vinculadas a um documento.
+
+        Usado pelas paginas de detalhe para exibir a secao
+        'Conciliacoes Bancarias' com links de volta ao extrato.
+
+        Args:
+            tipo_documento: str (fatura_cliente | fatura_transportadora |
+                                  despesa | custo_entrega | receita)
+            documento_id: int
+
+        Returns:
+            list[dict] com: conciliacao_id, extrato_linha_id, data, descricao,
+                            razao_social, valor_linha, tipo_linha,
+                            valor_alocado, conciliado_por, conciliado_em
+        """
+        from app.carvia.models import CarviaConciliacao
+
+        conciliacoes = CarviaConciliacao.query.filter_by(
+            tipo_documento=tipo_documento,
+            documento_id=documento_id,
+        ).order_by(CarviaConciliacao.conciliado_em.desc()).all()
+
+        resultado = []
+        for c in conciliacoes:
+            linha = c.extrato_linha
+            resultado.append({
+                'conciliacao_id': c.id,
+                'extrato_linha_id': c.extrato_linha_id,
+                'data': linha.data.strftime('%d/%m/%Y') if linha and linha.data else '-',
+                'descricao': (linha.descricao or linha.memo or '-') if linha else '-',
+                'razao_social': (linha.razao_social or '') if linha else '',
+                'valor_linha': float(linha.valor) if linha else 0,
+                'tipo_linha': linha.tipo if linha else '-',
+                'valor_alocado': float(c.valor_alocado),
+                'conciliado_por': c.conciliado_por or '-',
+                'conciliado_em': c.conciliado_em.strftime('%d/%m/%Y %H:%M') if c.conciliado_em else '-',
+            })
+        return resultado
+
+    @staticmethod
+    def _propagar_status_ces_cobertos(fatura_transportadora_id, novo_status, usuario):
+        """Propaga status PAGO ou PENDENTE para CEs cobertos pelos subs desta FT.
+
+        Guards:
+        - PAGO: so propaga para CEs com status PENDENTE (nao sobrescreve manual ou CANCELADO)
+        - PENDENTE: so reverte CEs auto-propagados (pago_por startswith 'auto:') sem FC
+        """
+        from app.carvia.models import CarviaSubcontrato, CarviaCustoEntrega
+        from app.utils.timezone import agora_utc_naive
+
+        sub_ids = [s.id for s in CarviaSubcontrato.query.filter_by(
+            fatura_transportadora_id=fatura_transportadora_id
+        ).all()]
+        if not sub_ids:
+            return
+
+        ces = CarviaCustoEntrega.query.filter(
+            CarviaCustoEntrega.subcontrato_id.in_(sub_ids)
+        ).all()
+
+        for ce in ces:
+            if novo_status == 'PAGO' and ce.status == 'PENDENTE':
+                ce.status = 'PAGO'
+                ce.pago_em = agora_utc_naive()
+                ce.pago_por = f'auto:{usuario}:via_ft_{fatura_transportadora_id}'
+                # NAO setar ce.conciliado=True — conciliado reflete CarviaConciliacao
+                # junction table, nao status de cobertura. PAGO via FT != conciliado no banco.
+                logger.info(
+                    "CE %s marcado PAGO via propagacao FT #%d por %s",
+                    ce.numero_custo, fatura_transportadora_id, usuario,
+                )
+            elif novo_status == 'PENDENTE' and ce.status == 'PAGO':
+                if (ce.pago_por or '').startswith('auto:'):
+                    if not CarviaConciliacaoService._tem_movimentacao_fc('custo_entrega', ce.id):
+                        ce.status = 'PENDENTE'
+                        ce.pago_em = None
+                        ce.pago_por = None
+                        logger.info(
+                            "CE %s revertido para PENDENTE via despropagacao FT #%d por %s",
+                            ce.numero_custo, fatura_transportadora_id, usuario,
+                        )
+                    else:
+                        logger.info(
+                            "CE %s mantido PAGO (tem movimentacao FC propria)",
+                            ce.numero_custo,
+                        )
 
     @staticmethod
     def _enriquecer_fatura_cliente_para_conciliacao(fatura) -> dict:

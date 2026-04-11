@@ -160,16 +160,7 @@
                         {% endif %}
                         {% endfor %}
                     </div>
-                    {# Badge conciliacao bancaria #}
-                    {% if fatura.conciliado %}
-                    <div class="mt-2">
-                        <span class="badge carvia-badge-conciliado"><i class="fas fa-check-double"></i> Conciliado no Banco</span>
-                    </div>
-                    {% elif fatura.total_conciliado and fatura.total_conciliado > 0 %}
-                    <div class="mt-2">
-                        <span class="badge carvia-badge-parcial"><i class="fas fa-exchange-alt"></i> Parcialmente Conciliado ({{ fatura.total_conciliado|valor_br }})</span>
-                    </div>
-                    {% endif %}
+                    {# Badge conciliacao movido para card _conciliacoes_documento #}
                     <hr>
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">CTe CarVia Vinculados: {{ operacoes|length }}</h6>
@@ -593,6 +584,13 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Conciliacoes Bancarias -->
+{% set conc_tipo_documento = 'fatura_cliente' %}
+{% set conc_documento_id = fatura.id %}
+{% set conc_total_conciliado = fatura.total_conciliado %}
+{% set conc_conciliado = fatura.conciliado %}
+{% include 'carvia/_conciliacoes_documento.html' %}
 
 {{ modal_admin_excluir(
     entidade_tipo='fatura-cliente',

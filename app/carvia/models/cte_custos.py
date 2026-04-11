@@ -149,6 +149,16 @@ class CarviaCustoEntrega(db.Model):
         index=True
     )
 
+    # Vinculo com Subcontrato que cobra este custo
+    # (ex: diaria cobrada via CTe da transportadora)
+    # FT derivada via sub.fatura_transportadora_id
+    subcontrato_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_subcontratos.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True
+    )
+
     # Conciliacao bancaria
     total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     conciliado = db.Column(db.Boolean, nullable=False, default=False)
@@ -169,6 +179,11 @@ class CarviaCustoEntrega(db.Model):
         backref='custo_entrega',
         lazy='dynamic',
         cascade='all, delete-orphan'
+    )
+    subcontrato = db.relationship(
+        'CarviaSubcontrato',
+        backref=db.backref('custos_entrega_cobertos', lazy='dynamic'),
+        foreign_keys=[subcontrato_id]
     )
 
     @staticmethod

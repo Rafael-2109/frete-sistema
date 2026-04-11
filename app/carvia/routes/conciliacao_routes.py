@@ -952,6 +952,40 @@ def register_conciliacao_routes(bp):
             return jsonify({'erro': str(e)}), 500
 
     # ===================================================================
+    # API: Conciliacoes de um Documento (rastreabilidade reversa)
+    # ===================================================================
+
+    @bp.route('/api/conciliacao/conciliacoes-documento/<tipo>/<int:doc_id>') # type: ignore
+    @login_required
+    def api_conciliacoes_documento(tipo, doc_id): # type: ignore
+        """Retorna conciliacoes bancarias vinculadas a um documento.
+
+        Usado pelas paginas de detalhe dos 5 tipos de documento para exibir
+        a secao 'Conciliacoes Bancarias' com links de volta ao extrato.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        tipos_validos = (
+            'fatura_cliente', 'fatura_transportadora', 'despesa',
+            'custo_entrega', 'receita',
+        )
+        if tipo not in tipos_validos:
+            return jsonify({'erro': f'Tipo invalido: {tipo}'}), 400
+
+        try:
+            from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                CarviaConciliacaoService,
+            )
+            conciliacoes = CarviaConciliacaoService.obter_conciliacoes_documento(
+                tipo, doc_id
+            )
+            return jsonify({'conciliacoes': conciliacoes})
+        except Exception as e:
+            logger.error(f"Erro ao buscar conciliacoes do documento {tipo}/{doc_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
     # Editar Razao Social / Observacao
     # ===================================================================
 

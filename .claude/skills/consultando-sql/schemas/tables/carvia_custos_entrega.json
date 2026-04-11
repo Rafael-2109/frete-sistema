@@ -74,6 +74,11 @@
       "description": "FK → carvia_fretes.id"
     },
     {
+      "name": "subcontrato_id",
+      "type": "integer",
+      "description": "FK → carvia_subcontratos.id — Sub que cobra este custo. FT derivada via sub.fatura_transportadora_id"
+    },
+    {
       "name": "total_conciliado",
       "type": "numeric(15,2)",
       "nullable": false,
@@ -117,6 +122,10 @@
     {
       "column": "frete_id",
       "references": "carvia_fretes.id"
+    },
+    {
+      "column": "subcontrato_id",
+      "references": "carvia_subcontratos.id"
     }
   ],
   "indices": [

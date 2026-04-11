@@ -1,0 +1,166 @@
+{#
+  Partial: Conciliacoes Bancarias de um Documento
+  ================================================
+  Exibe as linhas do extrato bancario vinculadas a este documento.
+  Substitui o badge estatico 'Conciliado (R$ X)' por secao interativa.
+
+  Parametros (via {% set %} antes do include):
+    conc_tipo_documento — ex: 'despesa', 'fatura_cliente'  (string)
+    conc_documento_id   — ex: despesa.id                   (integer)
+    conc_total_conciliado — ex: despesa.total_conciliado    (Decimal)
+    conc_conciliado     — ex: despesa.conciliado            (bool)
+#}
+<div class="card mt-4" id="cardConciliacoesBancarias">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-university"></i> Conciliacoes Bancarias
+        </h5>
+        <div id="conc-resumo-badge">
+            {% if conc_conciliado %}
+            <span class="badge carvia-badge-conciliado">
+                <i class="fas fa-check-double"></i>
+                Conciliado ({{ conc_total_conciliado|valor_br }})
+            </span>
+            {% elif conc_total_conciliado and conc_total_conciliado > 0 %}
+            <span class="badge carvia-badge-parcial">
+                <i class="fas fa-exchange-alt"></i>
+                Parcial ({{ conc_total_conciliado|valor_br }})
+            </span>
+            {% else %}
+            <span class="badge bg-secondary">
+                <i class="fas fa-clock"></i> Pendente
+            </span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div id="conc-loading" class="text-center py-3">
+            <div class="spinner-border spinner-border-sm text-secondary"></div>
+            <span class="ms-2 text-muted small">Carregando conciliacoes...</span>
+        </div>
+        <div id="conc-empty" class="text-muted text-center py-3 px-3 d-none">
+            <i class="fas fa-info-circle me-1"></i>
+            Nenhuma conciliacao bancaria vinculada a este documento.
+        </div>
+        <div id="conc-table" class="d-none">
+            <div class="table-responsive">
+                <table class="table table-sm carvia-table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Descricao</th>
+                            <th>Contraparte</th>
+                            <th class="text-end">Valor Linha</th>
+                            <th class="text-end">Valor Alocado</th>
+                            <th>Por</th>
+                            <th>Em</th>
+                            <th class="text-end"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="conc-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    var docId = {{ conc_documento_id }};
+    var tipo  = '{{ conc_tipo_documento }}';
+
+    var elLoading = document.getElementById('conc-loading');
+    var elEmpty   = document.getElementById('conc-empty');
+    var elTable   = document.getElementById('conc-table');
+    var elTbody   = document.getElementById('conc-tbody');
+
+    function fmtValor(v) {
+        return parseFloat(v).toLocaleString('pt-BR', {
+            style: 'currency', currency: 'BRL'
+        });
+    }
+
+    function desconciliar(concId, btn) {
+        if (!confirm('Remover esta conciliacao bancaria?')) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        fetch('/carvia/api/conciliacao/desconciliar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({conciliacao_id: parseInt(concId)}),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.sucesso) {
+                location.reload();
+            } else {
+                alert(d.erro || 'Erro ao desconciliar');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-unlink"></i>';
+            }
+        })
+        .catch(function(err) {
+            alert('Erro: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-unlink"></i>';
+        });
+    }
+
+    function carregarConciliacoes() {
+        fetch('/carvia/api/conciliacao/conciliacoes-documento/' + tipo + '/' + docId)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            elLoading.classList.add('d-none');
+            if (!data.conciliacoes || data.conciliacoes.length === 0) {
+                elEmpty.classList.remove('d-none');
+                return;
+            }
+            elTable.classList.remove('d-none');
+            data.conciliacoes.forEach(function(conc) {
+                var tr = document.createElement('tr');
+                var valorCls = conc.tipo_linha === 'CREDITO'
+                    ? 'text-success' : 'text-danger';
+                tr.innerHTML =
+                    '<td class="small">' + conc.data + '</td>' +
+                    '<td class="small">' + conc.descricao + '</td>' +
+                    '<td class="small text-muted">' + (conc.razao_social || '-') + '</td>' +
+                    '<td class="text-end small ' + valorCls + '">' +
+                        fmtValor(conc.valor_linha) + '</td>' +
+                    '<td class="text-end small fw-semibold">' +
+                        fmtValor(conc.valor_alocado) + '</td>' +
+                    '<td class="small text-muted">' + conc.conciliado_por + '</td>' +
+                    '<td class="small text-muted">' + conc.conciliado_em + '</td>' +
+                    '<td class="text-end">' +
+                        '<a href="/carvia/extrato-bancario" ' +
+                           'class="btn btn-xs btn-outline-secondary me-1" ' +
+                           'title="Ver extrato bancario">' +
+                            '<i class="fas fa-external-link-alt"></i>' +
+                        '</a>' +
+                        '<button type="button" ' +
+                                'class="btn btn-xs btn-outline-danger btn-desconciliar-doc" ' +
+                                'data-conc-id="' + conc.conciliacao_id + '" ' +
+                                'title="Desconciliar esta linha">' +
+                            '<i class="fas fa-unlink"></i>' +
+                        '</button>' +
+                    '</td>';
+                elTbody.appendChild(tr);
+            });
+
+            // Bind desconciliar
+            elTbody.querySelectorAll('.btn-desconciliar-doc').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    desconciliar(this.dataset.concId, this);
+                });
+            });
+        })
+        .catch(function(err) {
+            elLoading.classList.add('d-none');
+            elEmpty.textContent = 'Erro ao carregar conciliacoes.';
+            elEmpty.classList.remove('d-none');
+        });
+    }
+
+    carregarConciliacoes();
+})();
+</script>
