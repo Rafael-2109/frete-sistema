@@ -321,6 +321,162 @@
                                 </a>
                             </div>
                             {% endif %}
+
+                            {# ---------------------------------------- #}
+                            {# Precificacao Venda (Tabela CarVia)       #}
+                            {# ---------------------------------------- #}
+                            {% if cotacao_venda and cotacao_venda.tabela_carvia %}
+                            {# Estado A: Cotacao com tabela CarVia #}
+                            {% set tabela = cotacao_venda.tabela_carvia %}
+                            <hr>
+                            <div class="card border-0 bg-light mb-0">
+                                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-table"></i> Tabela de Frete Venda (CarVia)
+                                        <span class="badge bg-info ms-1">{{ tabela.nome_tabela }}</span>
+                                    </h6>
+                                    <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cotacao_venda.id) }}"
+                                       class="btn btn-outline-secondary btn-sm">
+                                        <i class="fas fa-external-link-alt"></i> {{ cotacao_venda.numero_cotacao }}
+                                    </a>
+                                </div>
+                                <div class="card-body">
+                                    {# Resumo desconto #}
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Valor Tabela</small>
+                                            <strong>{{ cotacao_venda.valor_tabela|valor_br if cotacao_venda.valor_tabela else '-' }}</strong>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Desconto</small>
+                                            <strong>
+                                                {% if cotacao_venda.percentual_desconto and cotacao_venda.percentual_desconto > 0 %}
+                                                {{ cotacao_venda.percentual_desconto|numero_br(2) }}%
+                                                {% else %}
+                                                0,00%
+                                                {% endif %}
+                                            </strong>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <small class="text-muted d-block">Valor Final Aprovado</small>
+                                            <strong class="text-success">{{ cotacao_venda.valor_final_aprovado|valor_br if cotacao_venda.valor_final_aprovado else '-' }}</strong>
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    {# Detalhes da tabela CarVia #}
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p><strong>Valor por Kg:</strong> {{ tabela.valor_kg|valor_br(4) if tabela.valor_kg else 'N/A' }}</p>
+                                            <p><strong>% Valor Mercadoria:</strong> {{ tabela.percentual_valor|numero_br(2) ~ '%' if tabela.percentual_valor else 'N/A' }}</p>
+                                            <p><strong>Frete Minimo Peso:</strong> {{ tabela.frete_minimo_peso|numero_br(2) ~ ' kg' if tabela.frete_minimo_peso else 'N/A' }}</p>
+                                            <p><strong>Frete Minimo Valor:</strong> {{ tabela.frete_minimo_valor|valor_br if tabela.frete_minimo_valor else 'N/A' }}</p>
+                                            <p><strong>ICMS:</strong> {{ tabela.icms_proprio|numero_br(2) ~ '%' if tabela.icms_proprio else 'N/A' }}</p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <p><strong>GRIS:</strong> {{ tabela.percentual_gris|numero_br(2) ~ '%' if tabela.percentual_gris else 'N/A' }}
+                                                {% if tabela.gris_minimo %}
+                                                <span class="text-muted small">(min. {{ tabela.gris_minimo|valor_br }})</span>
+                                                {% endif %}
+                                            </p>
+                                            <p><strong>ADV:</strong> {{ tabela.percentual_adv|numero_br(2) ~ '%' if tabela.percentual_adv else 'N/A' }}
+                                                {% if tabela.adv_minimo %}
+                                                <span class="text-muted small">(min. {{ tabela.adv_minimo|valor_br }})</span>
+                                                {% endif %}
+                                            </p>
+                                            <p><strong>RCA:</strong> {{ tabela.percentual_rca|numero_br(2) ~ '%' if tabela.percentual_rca else 'N/A' }}</p>
+                                            <p><strong>Pedagio/100kg:</strong> {{ tabela.pedagio_por_100kg|valor_br if tabela.pedagio_por_100kg else 'N/A' }}</p>
+                                            <p><strong>TAS:</strong> {{ tabela.valor_tas|valor_br if tabela.valor_tas else 'N/A' }}</p>
+                                            <p><strong>Valor Despacho:</strong> {{ tabela.valor_despacho|valor_br if tabela.valor_despacho else 'N/A' }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {% elif cotacao_venda %}
+                            {# Estado B: Cotacao sem tabela (manual ou tabela removida) #}
+                            <hr>
+                            <div class="card border-0 bg-light mb-0">
+                                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">
+                                        {% if cotacao_venda.cotacao_manual %}
+                                        <i class="fas fa-hand-paper"></i> Cotacao Manual
+                                        <span class="badge bg-warning text-dark ms-1">Manual</span>
+                                        {% else %}
+                                        <i class="fas fa-table"></i> Cotacao sem Tabela
+                                        <span class="badge bg-secondary ms-1">Sem tabela</span>
+                                        {% endif %}
+                                    </h6>
+                                    <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cotacao_venda.id) }}"
+                                       class="btn btn-outline-secondary btn-sm">
+                                        <i class="fas fa-external-link-alt"></i> {{ cotacao_venda.numero_cotacao }}
+                                    </a>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p><strong>Valor Final Aprovado:</strong>
+                                                <span class="text-success fw-bold">{{ cotacao_venda.valor_final_aprovado|valor_br if cotacao_venda.valor_final_aprovado else '-' }}</span>
+                                            </p>
+                                            {% if frete_eh_moto %}
+                                            <p><strong>Tipo:</strong> <span class="badge bg-info">Moto</span></p>
+                                            {% if cotacao_qtd_motos > 0 %}
+                                            <p><strong>Qtd Motos:</strong> {{ cotacao_qtd_motos }}</p>
+                                            <p><strong>Valor por Moto:</strong>
+                                                {{ (cotacao_venda.valor_final_aprovado / cotacao_qtd_motos)|valor_br if cotacao_venda.valor_final_aprovado else '-' }}
+                                            </p>
+                                            {% endif %}
+                                            {% else %}
+                                            <p><strong>Tipo:</strong> <span class="badge bg-secondary">Carga Geral</span></p>
+                                            {% if frete.peso_total and frete.peso_total > 0 and cotacao_venda.valor_final_aprovado %}
+                                            <p><strong>Valor por KG:</strong>
+                                                {{ (cotacao_venda.valor_final_aprovado / frete.peso_total)|valor_br(4) }}
+                                            </p>
+                                            {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {% elif not cotacao_venda and frete.valor_venda %}
+                            {# Estado C: Sem cotacao mas com valor_venda (backfill) #}
+                            <hr>
+                            <div class="card border-0 bg-light mb-0">
+                                <div class="card-header bg-transparent">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-hand-paper"></i> Cotacao Manual
+                                        <span class="badge bg-warning text-dark ms-1">Manual</span>
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p><strong>Valor Venda:</strong>
+                                                <span class="text-success fw-bold">{{ frete.valor_venda|valor_br }}</span>
+                                            </p>
+                                            {% if frete_eh_moto %}
+                                            <p><strong>Tipo:</strong> <span class="badge bg-info">Moto</span></p>
+                                            <p><strong>Valor por Moto:</strong>
+                                                <span class="text-success fw-bold">{{ frete.valor_venda|valor_br }}</span>
+                                            </p>
+                                            {% else %}
+                                            <p><strong>Tipo:</strong> <span class="badge bg-secondary">Carga Geral</span></p>
+                                            {% if frete.peso_total and frete.peso_total > 0 %}
+                                            <p><strong>Valor por KG:</strong>
+                                                {{ (frete.valor_venda / frete.peso_total)|valor_br(4) }}
+                                            </p>
+                                            {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle"></i>
+                                        Cotacao nao disponivel (frete retroativo ou sem embarque vinculado)
+                                    </small>
+                                </div>
+                            </div>
+                            {% endif %}
+
                         </div>
 
                     </div>{# /tab-content #}

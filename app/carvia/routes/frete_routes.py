@@ -140,6 +140,42 @@ def register_frete_routes(bp):
         fatura_cliente = frete.fatura_cliente_rel if frete.fatura_cliente_id else None
         fatura_transportadora = frete.fatura_transportadora_rel if frete.fatura_transportadora_id else None
 
+        # --- Buscar cotacao de venda via embarque (tabela CarVia) ---
+        cotacao_venda = None
+        cotacao_qtd_motos = 0
+        frete_eh_moto = False
+
+        if frete.embarque_id:
+            from app.embarques.models import EmbarqueItem
+            from app.carvia.models import CarviaCotacao
+
+            item_cot = EmbarqueItem.query.filter(
+                EmbarqueItem.embarque_id == frete.embarque_id,
+                EmbarqueItem.carvia_cotacao_id.isnot(None),
+                EmbarqueItem.status == 'ativo',
+                EmbarqueItem.cnpj_cliente == frete.cnpj_destino,
+            ).first()
+
+            if item_cot:
+                cotacao_venda = db.session.get(CarviaCotacao, item_cot.carvia_cotacao_id)
+
+        # Determinar tipo material e pre-computar dados de moto
+        if cotacao_venda:
+            frete_eh_moto = (cotacao_venda.tipo_material == 'MOTO')
+            if frete_eh_moto:
+                cotacao_qtd_motos = cotacao_venda.qtd_total_motos
+        elif operacao:
+            # Fallback: detectar moto via CarviaNfVeiculo das NFs da operacao
+            from app.carvia.models.documentos import CarviaNfVeiculo, CarviaOperacaoNf
+            frete_eh_moto = db.session.query(
+                db.exists().where(
+                    db.and_(
+                        CarviaNfVeiculo.nf_id == CarviaOperacaoNf.nf_id,
+                        CarviaOperacaoNf.operacao_id == operacao.id,
+                    )
+                )
+            ).scalar() or False
+
         return render_template(
             'carvia/fretes/detalhe.html',
             frete=frete,
@@ -148,6 +184,9 @@ def register_frete_routes(bp):
             subcontratos=subcontratos_list,
             fatura_cliente=fatura_cliente,
             fatura_transportadora=fatura_transportadora,
+            cotacao_venda=cotacao_venda,
+            cotacao_qtd_motos=cotacao_qtd_motos,
+            frete_eh_moto=frete_eh_moto,
         )
 
     # ------------------------------------------------------------------
