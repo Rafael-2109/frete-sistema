@@ -197,11 +197,7 @@
                                     </a>
 
                                     {% if current_user.perfil == 'administrador' %}
-                                    <!-- Editar (admin) -->
-                                    <a href="{{ url_for('carvia.admin_editar', tipo='fatura-transportadora', id=f.id) }}"
-                                        class="btn btn-sm btn-outline-warning mb-1" title="Editar fatura">
-                                        <i class="fas fa-edit"></i> Editar
-                                    </a>
+                                    {# Botao admin_editar removido (Sprint 0 — FIELD_EDIT era bypass de guards) #}
 
                                     <!-- Excluir (admin, sem subcontratos) -->
                                     {% if not qtd_subs %}
