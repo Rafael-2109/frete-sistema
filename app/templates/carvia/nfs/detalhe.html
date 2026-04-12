@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+{# modal_admin_excluir removido (Sprint 0 — NF nao suporta hard delete) #}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -87,16 +87,7 @@
                 <i class="fas fa-ban"></i> Cancelar NF
             </button>
             {% endif %}
-            {% if current_user.perfil == 'administrador' %}
-            <a href="{{ url_for('carvia.admin_editar', tipo='nf', id=nf.id) }}" class="btn carvia-admin-btn"
-               title="Edicao completa (admin)">
-                <i class="fas fa-shield-alt"></i> Editar
-            </a>
-            <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
-                    title="Exclusao permanente (admin)">
-                <i class="fas fa-shield-alt"></i> Excluir
-            </button>
-            {% endif %}
+            {# Botoes admin removidos (Sprint 0): FIELD_EDIT e excluir_nf eram bypass de guards #}
             <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
@@ -779,16 +770,7 @@
 
 {% include 'carvia/_cotacao_modal_partial.html' %}
 
-{{ modal_admin_excluir(
-    entidade_tipo='nf',
-    entidade_id=nf.id,
-    entidade_label='NF ' ~ nf.numero_nf,
-    impacto_cascade=[
-        'Itens de produto da NF (' ~ (nf.itens.count() if nf.itens else 0) ~ ')',
-        'Junctions operacao-NF',
-        'FKs em itens de fatura serao desvinculados (nf_id=NULL)',
-    ]
-) }}
+{# modal_admin_excluir removido (Sprint 0) #}
 {% endblock %}
 
 {% block scripts %}
@@ -1174,6 +1156,7 @@ function abrirModalEmissaoSsw(modo) {
     }
 })();
 </script>
+{% endif %}
 
 <script>
 // Carregar modelos de moto para TODOS os selects (itens + emissao SSW)
@@ -1313,7 +1296,6 @@ document.getElementById('btnAddMedida')?.addEventListener('click', function() {
     container.appendChild(newRow);
 });
 </script>
-{% endif %}
 
 {# Toggle Moto/Geral nas tabelas de ultimos fretes #}
 <script>

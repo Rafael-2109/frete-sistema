@@ -112,11 +112,27 @@ class MotoRecognitionService:
 
         texto_upper = texto.upper().strip()
 
-        # 1. Patterns customizados do banco
-        for modelo in modelos:
+        # 1. Patterns customizados do banco — ordenar por tamanho do nome DESC
+        # para priorizar patterns mais especificos (JETMAX antes de JET,
+        # MIA TRI antes de MIA, X11 MINI antes de X11).
+        modelos_ordenados = sorted(
+            modelos, key=lambda m: len(m.nome or ''), reverse=True
+        )
+        for modelo in modelos_ordenados:
             if modelo.regex_pattern:
                 try:
-                    if re.search(modelo.regex_pattern, texto_upper, re.IGNORECASE):
+                    # Remover flag (?i) inline — ja passamos re.IGNORECASE.
+                    # Envelope word boundary automatico evita falso-positivo
+                    # (ex: pattern "(?i)jet" nao matcha "JETMAX").
+                    pattern_limpo = re.sub(
+                        r'^\(\?[iLmsux]+\)', '', modelo.regex_pattern
+                    )
+                    pattern_com_boundary = (
+                        r'(?<![A-Za-z0-9])(?:'
+                        + pattern_limpo
+                        + r')(?![A-Za-z0-9])'
+                    )
+                    if re.search(pattern_com_boundary, texto_upper, re.IGNORECASE):
                         return modelo.nome
                 except re.error:
                     pass
