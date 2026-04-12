@@ -525,19 +525,47 @@ class CarviaConciliacaoService:
 
     @staticmethod
     def _tem_movimentacao_fc(tipo_doc, doc_id):
-        """Verifica se existe movimentacao no Fluxo de Caixa para este documento.
+        """Verifica se existe pagamento via Fluxo de Caixa para este documento.
 
-        Usado como guard na desconciliacao: se existe movimentacao FC,
+        Usado como guard na desconciliacao: se existe pagamento FC,
         o pagamento via Fluxo de Caixa e autoritativo e NAO deve ser
         revertido pela desconciliacao bancaria.
+
+        W10 Nivel 2 (Sprint 3 followup): ha DOIS paths FC historicamente:
+        1. LEGADO: CarviaContaMovimentacao (criada diretamente pelo FC antigo)
+        2. NOVO: CarviaConciliacao com linha de extrato origem='FC_VIRTUAL'
+           (criada pelo FC via "Outros Extratos")
+
+        Ambos devem ser considerados como "pago via FC" para nao serem
+        revertidos quando o usuario desconcilia uma linha OFX real
+        referenciando o mesmo doc (dual-path legitimo).
         """
-        from app.carvia.models import CarviaContaMovimentacao
-        return db.session.query(
+        from app.carvia.models import (
+            CarviaContaMovimentacao, CarviaConciliacao, CarviaExtratoLinha,
+        )
+
+        # Path 1 (legado): CarviaContaMovimentacao direta
+        tem_mov_legado = db.session.query(
             CarviaContaMovimentacao.query.filter(
                 CarviaContaMovimentacao.tipo_doc == tipo_doc,
                 CarviaContaMovimentacao.doc_id == doc_id,
             ).exists()
         ).scalar()
+        if tem_mov_legado:
+            return True
+
+        # Path 2 (novo W10 N2): conciliacao com linha FC_VIRTUAL
+        tem_fc_virtual = db.session.query(
+            CarviaConciliacao.query.join(
+                CarviaExtratoLinha,
+                CarviaExtratoLinha.id == CarviaConciliacao.extrato_linha_id,
+            ).filter(
+                CarviaConciliacao.tipo_documento == tipo_doc,
+                CarviaConciliacao.documento_id == doc_id,
+                CarviaExtratoLinha.origem == 'FC_VIRTUAL',
+            ).exists()
+        ).scalar()
+        return bool(tem_fc_virtual)
 
     @staticmethod
     def _atualizar_totais_documento(tipo_documento, documento_id, usuario=None):

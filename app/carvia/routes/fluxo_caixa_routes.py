@@ -316,33 +316,33 @@ def register_fluxo_caixa_routes(bp):
             else:
                 return jsonify({'erro': f'Tipo de documento invalido: {tipo_doc}'}), 400
 
-            # Criar movimentacao na conta
-            descricao = _gerar_descricao(tipo_doc, doc)
-            _criar_movimentacao(tipo_doc, doc_id, valor_mov, descricao, usuario)
+            # W10 Nivel 2 (Sprint 3): Dois fluxos distintos
+            # ------------------------------------------------
+            # (a) COM extrato_linha_id: pagamento via Extrato Bancario real.
+            #     Concilia diretamente, sem criar ContaMovimentacao nem
+            #     linha virtual. Conciliacao e SOT.
+            # (b) SEM extrato_linha_id: pagamento avulso via FC.
+            #     Cria CarviaExtratoLinha VIRTUAL (origem='FC_VIRTUAL')
+            #     e concilia atraves dela. ContaMovimentacao vira legado —
+            #     nao e mais criado neste fluxo.
 
-            # Se extrato_linha_id fornecido, conciliar documento com linha bancaria
+            from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                CarviaConciliacaoService,
+            )
+            from app.carvia.models import CarviaConciliacao, CarviaExtratoLinha
+
             conciliou = False
-            if extrato_linha_id:
-                try:
-                    from app.carvia.models import CarviaConciliacao
-                    from app.carvia.services.financeiro.carvia_conciliacao_service import (
-                        CarviaConciliacaoService,
-                    )
 
-                    # Guard: verificar se ja existe conciliacao para este par
+            if extrato_linha_id:
+                # Fluxo (a): concilia com linha bancaria real
+                try:
                     ja_existe = db.session.query(CarviaConciliacao).filter_by(
                         extrato_linha_id=int(extrato_linha_id),
                         tipo_documento=tipo_doc,
                         documento_id=int(doc_id),
                     ).first()
 
-                    if ja_existe:
-                        conciliou = True
-                        logger.info(
-                            f"Conciliacao ja existe para {tipo_doc} #{doc_id} "
-                            f"x linha #{extrato_linha_id} — skip"
-                        )
-                    else:
+                    if not ja_existe:
                         CarviaConciliacaoService.conciliar(
                             int(extrato_linha_id),
                             [{
@@ -352,17 +352,60 @@ def register_fluxo_caixa_routes(bp):
                             }],
                             usuario,
                         )
-                        conciliou = True
-                        logger.info(
-                            f"Fluxo caixa: {tipo_doc} #{doc_id} conciliado com "
-                            f"extrato linha #{extrato_linha_id}"
-                        )
+                    conciliou = True
+                    logger.info(
+                        f"FC: {tipo_doc} #{doc_id} conciliado com linha "
+                        f"real #{extrato_linha_id}"
+                    )
                 except (ValueError, Exception) as e:
-                    # Conciliacao falhou mas pagamento segue — nao bloqueia
-                    logger.warning(
+                    db.session.rollback()
+                    logger.error(
                         f"Conciliacao falhou para {tipo_doc} #{doc_id} "
                         f"(linha #{extrato_linha_id}): {e}"
                     )
+                    return jsonify({'erro': f'Conciliacao falhou: {e}'}), 500
+            else:
+                # Fluxo (b): cria linha VIRTUAL + concilia
+                # fitid unico: FC-{tipo}-{doc_id}-{timestamp}
+                import time
+                fitid_virtual = f"FC-{tipo_doc}-{doc_id}-{int(time.time() * 1000)}"
+                # Tipo bancario: DEBITO se e pagamento que sai da conta,
+                # CREDITO se e recebimento (receita, fatura cliente)
+                tipo_linha = 'CREDITO' if tipo_doc in (
+                    'fatura_cliente', 'receita'
+                ) else 'DEBITO'
+
+                linha_virtual = CarviaExtratoLinha(
+                    fitid=fitid_virtual,
+                    data=data_pagamento,
+                    valor=valor_mov,
+                    tipo=tipo_linha,
+                    descricao=_gerar_descricao(tipo_doc, doc),
+                    memo='Pagamento via Fluxo de Caixa (Outros Extratos)',
+                    status_conciliacao='PENDENTE',
+                    total_conciliado=0,
+                    arquivo_ofx='FC_VIRTUAL',
+                    origem='FC_VIRTUAL',
+                    criado_por=usuario,
+                )
+                db.session.add(linha_virtual)
+                db.session.flush()  # obter id
+
+                # Conciliar o doc com a linha virtual
+                CarviaConciliacaoService.conciliar(
+                    linha_virtual.id,
+                    [{
+                        'tipo_documento': tipo_doc,
+                        'documento_id': int(doc_id),
+                        'valor_alocado': valor_mov,
+                    }],
+                    usuario,
+                )
+                conciliou = True
+                logger.info(
+                    f"FC: {tipo_doc} #{doc_id} pago via linha virtual "
+                    f"#{linha_virtual.id} ({fitid_virtual})"
+                )
 
             db.session.commit()
             saldo_atual = _obter_saldo_atual()
@@ -392,11 +435,14 @@ def register_fluxo_caixa_routes(bp):
     @bp.route('/api/fluxo-caixa/desfazer', methods=['POST'])
     @login_required
     def api_fluxo_caixa_desfazer():
-        """Desfaz marcacao de pagamento e remove movimentacao da conta.
+        """Desfaz marcacao de pagamento.
 
-        W10 (Sprint 2): Conciliacao e SOT. Se o documento tem
-        CarviaConciliacao, FC NAO pode reverter — usuario deve
-        desconciliar via Extrato Bancario primeiro.
+        W10 (Sprint 2/3): Conciliacao e SOT.
+        - Se doc esta conciliado com linha REAL (OFX/CSV): BLOQUEIA,
+          usuario deve desconciliar via Extrato Bancario.
+        - Se doc esta conciliado com linha VIRTUAL (FC_VIRTUAL): FC pode
+          desfazer — ele proprio criou a linha. Desconcilia e remove a
+          linha virtual se ela ficou orfa.
         """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -411,19 +457,31 @@ def register_fluxo_caixa_routes(bp):
         if not tipo_doc or not doc_id:
             return jsonify({'erro': 'tipo_doc e id sao obrigatorios'}), 400
 
-        # W10: Bloquear se tem conciliacao — Conciliacao e SOT.
-        from app.carvia.models import CarviaConciliacao
-        conciliacoes = CarviaConciliacao.query.filter_by(
-            tipo_documento=tipo_doc,
-            documento_id=int(doc_id),
+        # W10: Analisar conciliacoes — bloquear apenas se REAL (nao FC_VIRTUAL)
+        from app.carvia.models import CarviaConciliacao, CarviaExtratoLinha
+        conciliacoes = db.session.query(CarviaConciliacao).join(
+            CarviaExtratoLinha,
+            CarviaExtratoLinha.id == CarviaConciliacao.extrato_linha_id,
+        ).filter(
+            CarviaConciliacao.tipo_documento == tipo_doc,
+            CarviaConciliacao.documento_id == int(doc_id),
         ).all()
+
         if conciliacoes:
-            return jsonify({
-                'erro': (
-                    f'Documento possui {len(conciliacoes)} conciliacao(oes) '
-                    'bancaria(s). Desconcilie via Extrato Bancario primeiro.'
-                ),
-            }), 400
+            # Separar reais (OFX/CSV) de virtuais (FC_VIRTUAL)
+            conciliacoes_reais = [
+                c for c in conciliacoes
+                if c.extrato_linha and c.extrato_linha.origem != 'FC_VIRTUAL'
+            ]
+            if conciliacoes_reais:
+                return jsonify({
+                    'erro': (
+                        f'Documento possui {len(conciliacoes_reais)} conciliacao(oes) '
+                        'bancaria(s) real(is). Desconcilie via Extrato Bancario primeiro.'
+                    ),
+                }), 400
+            # Todas sao FC_VIRTUAL — FC pode desfazer
+            # Desconciliar e remover linhas virtuais abaixo (apos reverter status)
 
         try:
             from app.carvia.models import (
@@ -482,18 +540,58 @@ def register_fluxo_caixa_routes(bp):
             else:
                 return jsonify({'erro': f'Tipo de documento invalido: {tipo_doc}'}), 400
 
-            # Remover movimentacao da conta (se existir)
+            # W10 Nivel 2: Desconciliar linhas virtuais (FC_VIRTUAL)
+            # Se ha conciliacoes FC_VIRTUAL, precisamos desconcilia-las
+            # e remover as linhas virtuais orfas.
+            from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                CarviaConciliacaoService,
+            )
+            linhas_virtuais_ids = set()
+            for conc in conciliacoes:
+                # Guarda o id da linha virtual antes de desconciliar
+                if conc.extrato_linha and conc.extrato_linha.origem == 'FC_VIRTUAL':
+                    linhas_virtuais_ids.add(conc.extrato_linha_id)
+                # W10 N2 fix (Sprint 3 followup): NAO silenciar excecao —
+                # se desconciliar falha, aborta o desfazer completo para
+                # evitar estado inconsistente (linha virtual + conciliacao
+                # parcialmente removidas).
+                try:
+                    CarviaConciliacaoService.desconciliar(
+                        conc.id, current_user.email
+                    )
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(
+                        f"Erro ao desconciliar #{conc.id} em desfazer FC: {e}"
+                    )
+                    return jsonify({
+                        'erro': (
+                            f'Falha ao desconciliar #{conc.id}: {e}. '
+                            f'Operacao abortada para preservar integridade.'
+                        ),
+                    }), 500
+
+            # Remover linhas virtuais orfas (sem outras conciliacoes)
+            for linha_id in linhas_virtuais_ids:
+                restantes = CarviaConciliacao.query.filter_by(
+                    extrato_linha_id=linha_id
+                ).count()
+                if restantes == 0:
+                    linha = db.session.get(CarviaExtratoLinha, linha_id)
+                    if linha:
+                        db.session.delete(linha)
+                        logger.info(
+                            f"Linha virtual FC #{linha_id} removida (orfa)"
+                        )
+
+            # Remover movimentacao legada (ContaMovimentacao) se existir
+            # — apenas para compat com dados historicos
             removida = _remover_movimentacao(tipo_doc, doc_id)
             if not removida:
-                logger.warning(
-                    f"Movimentacao nao encontrada ao desfazer {tipo_doc} #{doc_id} "
-                    f"(pagamento pre-feature)"
+                logger.debug(
+                    f"Movimentacao legada nao encontrada ao desfazer "
+                    f"{tipo_doc} #{doc_id} (esperado para novos pagamentos)"
                 )
-
-            # W10 (Sprint 2): NAO reverte conciliacoes aqui. Se chegou ate
-            # este ponto, significa que NAO ha conciliacao (guard no inicio
-            # do metodo ja bloqueou). Revisao do paradigma: Conciliacao e
-            # SOT e deve ser gerenciada exclusivamente via Extrato Bancario.
 
             db.session.commit()
             saldo_atual = _obter_saldo_atual()
@@ -573,6 +671,14 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Despesa nao encontrada'}), 404
                 if doc.status in ('PAGO', 'CANCELADO'):
                     return jsonify({'erro': f'Despesa com status {doc.status} nao pode ter vencimento alterado'}), 400
+                # W13 (Sprint 1 followup): Despesa COMISSAO e imutavel
+                if doc.tipo_despesa == 'COMISSAO':
+                    return jsonify({
+                        'erro': (
+                            'Vencimento de Despesa COMISSAO e gerenciado '
+                            'pelo Fechamento de Comissao (data_fim).'
+                        ),
+                    }), 400
                 doc.data_vencimento = novo_vencimento
 
             elif tipo_doc == 'custo_entrega':

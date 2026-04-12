@@ -111,7 +111,18 @@ class CarviaContaMovimentacao(db.Model):
 
 
 class CarviaExtratoLinha(db.Model):
-    """Linhas importadas do extrato bancario OFX — base para conciliacao"""
+    """Linhas importadas do extrato bancario OFX — base para conciliacao.
+
+    W10 Nivel 2 (Sprint 3): adicionado campo `origem` para distinguir
+    linhas reais de virtuais:
+      - OFX        → importada de arquivo OFX (default, legacy)
+      - CSV        → importada de CSV bancario
+      - FC_VIRTUAL → criada pelo Fluxo de Caixa para representar
+                     pagamentos fora do extrato bancario
+
+    Linhas FC_VIRTUAL permitem que todos os pagamentos passem pelo
+    Conciliacao como SOT — elimina dual-path com CarviaContaMovimentacao.
+    """
     __tablename__ = 'carvia_extrato_linhas'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -130,6 +141,12 @@ class CarviaExtratoLinha(db.Model):
     total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     arquivo_ofx = db.Column(db.String(255), nullable=False, index=True)
     conta_bancaria = db.Column(db.String(50))
+
+    # W10 Nivel 2: origem da linha (OFX | CSV | FC_VIRTUAL)
+    origem = db.Column(
+        db.String(20), nullable=False, default='OFX', index=True
+    )
+
     criado_por = db.Column(db.String(100), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
 

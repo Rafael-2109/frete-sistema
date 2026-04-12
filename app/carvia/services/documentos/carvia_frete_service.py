@@ -120,13 +120,38 @@ class CarviaFreteService:
                     CarviaFreteService._limpar_frete_cancelado(existente)
                     # NAO dar continue — cair no _criar_frete_completo abaixo
                 else:
-                    # NF tardia: atualizar frete existente com novos totais
-                    atualizado = CarviaFreteService._atualizar_frete_existente(
-                        existente, itens_grupo, embarque=embarque
+                    # W11 (Sprint 3): Proibir NF tardia em frete existente.
+                    # Check por NF + CNPJ emitente: se qualquer NF do grupo
+                    # AINDA NAO esta no frete existente, bloquear.
+                    # Apos portaria (frete gerado), adicionar NFs muda pesos
+                    # e valores de forma nao controlada — usuario deve
+                    # cancelar o frete e recriar explicitamente.
+                    nfs_no_frete = set(
+                        (existente.numeros_nfs or '').split(',')
                     )
-                    if atualizado:
-                        fretes_resultado.append(existente.id)
-                        itens_com_frete.extend(itens_grupo)
+                    nfs_no_frete.discard('')
+                    nfs_novas = {
+                        item.nota_fiscal for item in itens_grupo
+                        if item.nota_fiscal
+                    } - nfs_no_frete
+
+                    if nfs_novas:
+                        logger.warning(
+                            "W11: BLOQUEADO NF tardia para frete #%d "
+                            "(emitente=%s, destino=%s). NFs novas: %s. "
+                            "Cancele o frete e recrie para adicionar.",
+                            existente.id, cnpj_emitente, cnpj_destino,
+                            sorted(nfs_novas),
+                        )
+                        # Registra no resultado (frete existente continua)
+                        # mas NAO atualiza com as NFs novas.
+                    else:
+                        # Nenhuma NF nova — nada a fazer, frete ja reflete.
+                        logger.debug(
+                            "Frete #%d: todas as NFs ja presentes, skip.",
+                            existente.id,
+                        )
+                    fretes_resultado.append(existente.id)
                     continue
 
             # Criar operacao + subcontrato + frete (sequencia atomica)
