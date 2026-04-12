@@ -852,14 +852,23 @@ def register_operacao_routes(bp):
             flash(f'Subcontrato {sub.status} nao permite alteracao de valor.', 'warning')
             return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
-        # W4: Se sub ja esta em fatura transportadora, delega para o guard da FT
+        # W4: Se sub ja esta em fatura transportadora, delega para o guard da FT.
+        # W4 fix (Sprint 2 followup): se FK existe mas relationship retorna None
+        # (dangling reference), erro explicito — antes era silent bypass.
         if sub.fatura_transportadora_id:
             ft = sub.fatura_transportadora
-            if ft:
-                pode, razao = ft.pode_editar_sub_valor()
-                if not pode:
-                    flash(razao, 'warning')
-                    return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+            if ft is None:
+                flash(
+                    f'Subcontrato aponta para Fatura Transportadora '
+                    f'#{sub.fatura_transportadora_id} que nao existe mais '
+                    f'(dangling FK). Contate o admin.',
+                    'danger',
+                )
+                return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+            pode, razao = ft.pode_editar_sub_valor()
+            if not pode:
+                flash(razao, 'warning')
+                return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
         try:
             # GAP-17: Aceitar formato BR (1.234,56) e formato US (1234.56)
@@ -1039,12 +1048,17 @@ def register_operacao_routes(bp):
             junction = CarviaOperacaoNf(operacao_id=operacao_id, nf_id=nf_id)
             db.session.add(junction)
 
-            # Recalcular peso_bruto como soma das NFs
+            # Recalcular peso_bruto como soma das NFs.
+            # W3 fix (Sprint 2 followup): assignment incondicional — simetria
+            # com api_desvincular_nf_operacao. Antes tinha guard `if peso_total > 0`
+            # que deixava peso stale ao vincular NF com peso=0.
             nfs_vinculadas = operacao.nfs.all()
-            peso_total = sum(float(n.peso_bruto or 0) for n in nfs_vinculadas) + float(nf.peso_bruto or 0)
-            if peso_total > 0:
-                operacao.peso_bruto = peso_total
-                operacao.calcular_peso_utilizado()
+            peso_total = (
+                sum(float(n.peso_bruto or 0) for n in nfs_vinculadas)
+                + float(nf.peso_bruto or 0)
+            )
+            operacao.peso_bruto = peso_total
+            operacao.calcular_peso_utilizado()
 
             db.session.commit()
 
