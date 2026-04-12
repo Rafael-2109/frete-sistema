@@ -71,7 +71,10 @@ USE_SESSION_SUMMARY = os.getenv("AGENT_SESSION_SUMMARY", "true").lower() == "tru
 
 # Threshold de mensagens para trigger de sumarizacao
 # Sumariza quando message_count >= threshold e summary esta stale (delta >= threshold)
-SESSION_SUMMARY_THRESHOLD = int(os.getenv("AGENT_SESSION_SUMMARY_THRESHOLD", "5"))
+# Reduzido de 5→3 em 2026-04-12 (v2.2): auditoria mostrou que 57% das sessoes
+# em 30d tinham <5 msgs (especialmente Teams curto), perdendo rolling window.
+# Custo marginal: ~$0.36/mes. Sessoes 1-2 msgs continuam sem summary (trivial).
+SESSION_SUMMARY_THRESHOLD = int(os.getenv("AGENT_SESSION_SUMMARY_THRESHOLD", "3"))
 
 # ====================================================================
 # Melhorias de UX (P1)
@@ -104,9 +107,12 @@ PATTERN_LEARNING_THRESHOLD = int(os.getenv("AGENT_PATTERN_LEARNING_THRESHOLD", "
 
 # Behavioral Profile — gera user.xml (Tier 1) com perfil comportamental
 # Reutiliza mesma chamada Sonnet do patterns (zero custo adicional quando coincidem)
-# Threshold menor que patterns (5 vs 10) para perfil mais rapido
+# Threshold menor que patterns (3 vs 10) para perfil mais rapido.
+# Reduzido de 5→3 em 2026-04-12 (v2.2): auditoria mostrou que users low-freq
+# (Jessica, Thamires, Marcus Souza, Nicoly) tinham 2-4 sessoes desde ultimo
+# update mas nunca atingiam 5 — user.xml stale indefinidamente.
 USE_BEHAVIORAL_PROFILE = os.getenv("AGENT_BEHAVIORAL_PROFILE", "true").lower() == "true"
-BEHAVIORAL_PROFILE_THRESHOLD = int(os.getenv("AGENT_BEHAVIORAL_PROFILE_THRESHOLD", "5"))
+BEHAVIORAL_PROFILE_THRESHOLD = int(os.getenv("AGENT_BEHAVIORAL_PROFILE_THRESHOLD", "3"))
 
 # Thresholds adaptativos para profile — disparam atualizacao mesmo com poucas sessoes
 # Sessao longa (>= N msgs) desde ultimo update de user.xml → trigger imediato
@@ -180,6 +186,35 @@ USE_AUTO_MEMORY_INJECTION = os.getenv("AGENT_AUTO_MEMORY_INJECTION", "true").low
 # Memorias protegidas (user.xml, preferences.xml) sao SEMPRE injetadas (Tier 1)
 # Ajustar em producao sem deploy: AGENT_MEMORY_MIN_SIMILARITY=0.50
 MEMORY_INJECTION_MIN_SIMILARITY = float(os.getenv("AGENT_MEMORY_MIN_SIMILARITY", "0.45"))
+
+# User.xml Pointer (v2.2, 2026-04-12) — Camada 2 da Mudanca 4
+# Quando user.xml > THRESHOLD e modelo tem budget finito (Sonnet/Haiku),
+# injetar apenas <resumo> + <contextualizacao> + ponteiro instruindo o
+# agente a chamar view_memories para detalhes operacionais.
+# Evidencia: 5/12 users excedem 67% do budget Sonnet (6000) apenas com
+# Tier 1 (user.xml + preferences.xml) — Gabriella e Marcus excedem 100%
+# e Tier 2 fica zerado sistematicamente.
+# Default false: ativar apos validar que agente chama view_memories
+# corretamente (verificar via logs [MEMORY_INJECT] e amostras reais).
+# Camada 1 (guidance no prompt gerador, em pattern_analyzer.py) e a
+# solucao de causa raiz — este ponteiro cobre periodo de transicao.
+USE_USER_XML_POINTER = os.getenv("AGENT_USER_XML_POINTER", "false").lower() == "true"
+USER_XML_POINTER_THRESHOLD = int(os.getenv("AGENT_USER_XML_POINTER_THRESHOLD", "3000"))
+
+# Operational Directives (v2.2, 2026-04-12) — Mudanca 1
+# Promove heuristicas empresa nivel 5 (importance >= 0.7) de contexto
+# passivo (<user_memories>) para diretriz operacional obrigatoria
+# (<operational_directives>). O system_prompt.md instrui o agente a
+# tratar este bloco como regra, nao como referencia.
+# Evidencia: meta-heuristica id=300 "Memorias de usuario devem funcionar
+# como protocolo ativo" tem 12% efetividade. O proprio sistema documenta
+# que memorias sao lidas mas nao obedecidas. Causa e estrutural: onde
+# a memoria aparece no prompt. Solucao deterministica (zero LLM).
+# Inspirado na arquitetura CLAUDE.md do Claude Code (setting_sources).
+# Default false: ativar apos revisao manual das candidatas filtradas.
+USE_OPERATIONAL_DIRECTIVES = os.getenv("AGENT_OPERATIONAL_DIRECTIVES", "false").lower() == "true"
+MANDATORY_IMPORTANCE_THRESHOLD = float(os.getenv("AGENT_MANDATORY_IMPORTANCE_THRESHOLD", "0.7"))
+MANDATORY_MAX_COUNT = int(os.getenv("AGENT_MANDATORY_MAX_COUNT", "5"))
 
 # Consolidacao periodica de memorias via Sonnet
 # Quando usuario excede thresholds, consolida memorias redundantes em resumos compactos

@@ -27,6 +27,19 @@ def _normalize_pendencia(text: str) -> str:
     return re.sub(r'\s+', ' ', text.strip().lower())
 
 
+def _is_nivel_5(content_lower: str) -> bool:
+    """
+    Detecta se conteudo de memoria representa heuristica nivel 5-9 (alto valor).
+
+    Fonte unica para `_build_operational_directives` (Tier 0) e `Tier 1.6`.
+    Aceita: 'nivel=5', 'nivel: 5', 'nivel "5"', 'nivel  5', '<nivel>5</nivel>', etc.
+
+    NAO alterar sem atualizar ambos os callers — ver memory_injection.py:362 e :685.
+    """
+    import re
+    return bool(re.search(r'nivel\s*[=:"\s>]+[5-9]', content_lower))
+
+
 def _build_session_window(user_id: int) -> Optional[str]:
     """
     Memory v2 — Rolling Window: últimas 5 sessões do banco.
@@ -162,22 +175,63 @@ def _calculate_category_decay(category: str, hours_since: float) -> float:
     return rate ** hours_since
 
 
-# Correction penalty (S2): cada correção reduz importance em 15%, piso 10%
-_CORRECTION_PENALTY_RATE = 0.15
-_CORRECTION_PENALTY_FLOOR = 0.1
+# =====================================================================
+# USER.XML POINTER — Camada 2 da Mudanca 4 (v2.2, 2026-04-12)
+# =====================================================================
+# Quando user.xml excede threshold e budget Sonnet/Haiku e finito,
+# injetar versao parcial contendo apenas <resumo> + <contextualizacao>
+# + ponteiro instruindo o agente a chamar view_memories para detalhes.
+# Preserva informacao sem truncate destrutivo e sem parser XML complexo.
+# Camada 1 (guidance no gerador) e a solucao de causa raiz — esta
+# camada 2 cobre o periodo de transicao ate re-geracao natural.
 
 
-def _adjust_importance_for_corrections(importance: float, correction_count: int) -> float:
-    """Penaliza importance_score baseado no número de correções."""
-    if correction_count <= 0:
-        return importance
-    factor = max(_CORRECTION_PENALTY_FLOOR, 1 - _CORRECTION_PENALTY_RATE * correction_count)
-    return importance * factor
+def _build_user_profile_pointer(content: str) -> str:
+    """
+    Constroi versao parcial de user.xml com ponteiro para a versao completa.
+
+    Extrai apenas <resumo> e <contextualizacao> (blocos prescritivos).
+    Se regex nao encontrar NENHUM dos dois, retorna content original
+    (fallback seguro — nao degrada o estado atual).
+
+    Args:
+        content: Conteudo completo do user.xml
+
+    Returns:
+        String XML parcial com ponteiro, ou content original se fallback.
+    """
+    import re
+    resumo = re.search(r'<resumo>.*?</resumo>', content, re.DOTALL)
+    contexto = re.search(
+        r'<contextualizacao.*?</contextualizacao>',
+        content,
+        re.DOTALL,
+    )
+    if not resumo and not contexto:
+        return content  # Fallback: regex falhou, preserva original
+
+    parts = ['<user_profile_partial reason="tamanho_excede_budget">']
+    if resumo:
+        parts.append(f'  {resumo.group(0)}')
+    if contexto:
+        parts.append(f'  {contexto.group(0)}')
+    parts.append(
+        '  <pointer>Perfil completo (atividades, clientes, insights) em '
+        '/memories/user.xml. Use view_memories("/memories/user.xml") '
+        'se precisar de detalhes operacionais.</pointer>'
+    )
+    parts.append('</user_profile_partial>')
+    return '\n'.join(parts)
 
 
 # =====================================================================
 # ROUTING CONTEXT — Contexto de despacho para decisão de roteamento
 # =====================================================================
+# Nota (v2.2, 2026-04-12): removido _adjust_importance_for_corrections e
+# constantes _CORRECTION_PENALTY_* — era dead code. correction_count = 0
+# em 197/197 memórias (nada incrementa o contador). A função legacy
+# sempre retornava importance inalterado. Coluna correction_count
+# permanece em models.py para backwards-compat do dashboard insights.
 
 # Mapeamento domínio → keywords para detecção em session summaries
 _DOMAIN_KEYWORDS = {
@@ -262,12 +316,145 @@ def _compute_user_domain(user_id: int) -> Optional[str]:
         return None
 
 
+def _build_operational_directives(user_id: int) -> Optional[str]:
+    """
+    Constroi bloco <operational_directives> com heuristicas empresa nivel 5
+    de alta confianca (importance >= 0.7). Estas sao promovidas de "contexto
+    passivo" para "diretriz operacional obrigatoria" — o system_prompt.md
+    instrui o agente a tratar este bloco como regra, nao como referencia.
+
+    Inspirado na arquitetura do Claude Code: CLAUDE.md e carregado no
+    system_prompt como instrucao de alta prioridade, nao como user memory.
+    Nao da para colocar memorias dinamicas no system_prompt sem invalidar
+    cache, entao imitamos o efeito via framing explicito + instrucao no
+    system_prompt ensinando o agente a obedecer.
+
+    Zero LLM. Zero schema change. Determinist1co.
+
+    v2.2 (2026-04-12) — substitui proposta de judge LLM da v1 do plano.
+
+    Args:
+        user_id: ID do usuario (nao usado na query, mas mantido para
+            interface consistente com _build_routing_context)
+
+    Returns:
+        String XML para injecao ou None se sem conteudo.
+    """
+    try:
+        from ..models import AgentMemory
+        from ..config.feature_flags import (
+            USE_OPERATIONAL_DIRECTIVES,
+            MANDATORY_IMPORTANCE_THRESHOLD,
+            MANDATORY_MAX_COUNT,
+        )
+        import re as _re
+
+        if not USE_OPERATIONAL_DIRECTIVES:
+            return None
+
+        # Buscar heuristicas empresa de alta importancia (nivel 5)
+        # Ordenar por effective_count desc (mais aplicadas primeiro)
+        candidates = AgentMemory.query.filter(
+            AgentMemory.user_id == 0,
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.is_cold == False,  # noqa: E712
+            AgentMemory.path.like('/memories/empresa/heuristicas/%'),
+            AgentMemory.importance_score >= MANDATORY_IMPORTANCE_THRESHOLD,
+        ).order_by(
+            AgentMemory.effective_count.desc()
+        ).limit(MANDATORY_MAX_COUNT * 3).all()
+
+        # Filtrar por nivel 5 no conteudo (mesmo pattern usado em Tier 1.6)
+        directives = []
+        for mem in candidates:
+            if len(directives) >= MANDATORY_MAX_COUNT:
+                break
+
+            content_lower = (mem.content or '').lower()
+            # Detecta nivel 5-9 — formato unificado via _is_nivel_5() para
+            # garantir consistencia com Tier 1.6 (memory_injection.py:685)
+            if not _is_nivel_5(content_lower):
+                continue
+
+            content = mem.content or ''
+
+            # Extrair titulo, when, prescricao — suporta 2 formatos
+            titulo_match = _re.search(r'<titulo>(.*?)</titulo>', content, _re.DOTALL)
+            presc_match = _re.search(r'<prescricao>(.*?)</prescricao>', content, _re.DOTALL)
+            when_match = _re.search(r'<when>(.*?)</when>', content, _re.DOTALL)
+
+            titulo = titulo_match.group(1).strip() if titulo_match else ''
+            presc = presc_match.group(1).strip() if presc_match else ''
+            when_text = when_match.group(1).strip() if when_match else ''
+
+            # Fallback: formato compacto WHEN:/DO: em texto
+            if not presc:
+                lines = content.strip().split('\n')
+                if not titulo and lines:
+                    # Primeira linha significativa como titulo
+                    for line in lines:
+                        stripped = line.strip()
+                        if stripped and not stripped.startswith(('```', '[', '<')):
+                            titulo = stripped
+                            break
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped.startswith('WHEN:') and not when_text:
+                        when_text = stripped[5:].strip()
+                    elif stripped.startswith('DO:') and not presc:
+                        presc = stripped[3:].strip()
+
+            # Precisa de prescricao para ser uma diretiva acionavel
+            if not presc:
+                continue
+
+            # Truncar para caber dentro do budget
+            if len(titulo) > 100:
+                titulo = titulo[:97] + '...'
+            if len(when_text) > 250:
+                when_text = when_text[:247] + '...'
+            if len(presc) > 350:
+                presc = presc[:347] + '...'
+
+            d_parts = [f'  <directive id="{mem.id}">']
+            if titulo:
+                d_parts.append(f'    <titulo>{titulo}</titulo>')
+            if when_text:
+                d_parts.append(f'    <when>{when_text}</when>')
+            d_parts.append(f'    <do>{presc}</do>')
+            d_parts.append('  </directive>')
+            directives.append('\n'.join(d_parts))
+
+        if not directives:
+            return None
+
+        parts = [
+            '<operational_directives priority="critical">',
+            '  <!-- Diretivas obrigatorias de operacao. Verifique WHEN antes de responder -->',
+            '  <!-- e aplique DO silenciosamente se aplicavel. Violar = erro grave. -->',
+        ]
+        parts.extend(directives)
+        parts.append('</operational_directives>')
+
+        result = '\n'.join(parts)
+        logger.info(
+            f"[OPERATIONAL_DIRECTIVES] user_id={user_id} "
+            f"directives={len(directives)} chars={len(result)}"
+        )
+        return result
+
+    except Exception as e:
+        logger.debug(f"[OPERATIONAL_DIRECTIVES] Build failed: {e}")
+        return None
+
+
 def _build_routing_context(user_id: int) -> Optional[str]:
     """
     Constrói contexto de despacho para routing do agente principal.
     Zero-LLM: SQL queries apenas. Max ~500 chars.
 
     Conteúdo:
+    - Operational directives (v2.2: heuristicas nivel 5 promovidas a regra)
     - Domínio predominante do usuário
     - Top 3 armadilhas ativas do domínio (ou gerais se domínio indeterminado)
     - Skills sugeridas para o domínio
@@ -281,7 +468,14 @@ def _build_routing_context(user_id: int) -> Optional[str]:
 
         domain = _compute_user_domain(user_id)
 
-        parts = ['<routing_context>']
+        # v2.2: operational_directives vem ANTES do routing_context
+        # como bloco separado de prioridade critica
+        sections = []
+        directives_block = _build_operational_directives(user_id)
+        if directives_block:
+            sections.append(directives_block)
+
+        parts = ['<routing_context priority="advisory">']
 
         # Domínio predominante
         if domain:
@@ -350,12 +544,19 @@ def _build_routing_context(user_id: int) -> Optional[str]:
 
         parts.append('</routing_context>')
 
-        # Só retornar se tem conteúdo útil (mais que tags vazias)
-        if len(parts) <= 2:  # Só tem abertura e fechamento
+        # routing_context so entra se tem conteudo util (> tags vazias)
+        if len(parts) > 2:
+            sections.append('\n'.join(parts))
+
+        if not sections:
             return None
 
-        result = '\n'.join(parts)
-        logger.debug(f"[ROUTING_CONTEXT] user_id={user_id} domain={domain} chars={len(result)}")
+        # Juntar operational_directives + routing_context (separados por linha em branco)
+        result = '\n\n'.join(sections)
+        logger.debug(
+            f"[ROUTING_CONTEXT] user_id={user_id} domain={domain} "
+            f"sections={len(sections)} chars={len(result)}"
+        )
         return result
 
     except Exception as e:
@@ -483,25 +684,38 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             # ── Tier 1.6: Heuristicas empresa nivel 5 (SEMPRE injetadas, como user.xml) ──
             # Armadilhas nivel 5 sao heuristicas emergentes de alto valor (~3-5 por empresa).
             # Deveriam estar SEMPRE no contexto para prevencao proativa de erros.
+            #
+            # NOTA: Quando USE_OPERATIONAL_DIRECTIVES=True, estas heuristicas ja sao
+            # injetadas via <operational_directives> (Tier 0, como diretiva obrigatoria).
+            # Pulamos Tier 1.6 para evitar duplicacao no contexto — mesma regra em dois
+            # frames (obrigatoria + contextual) confunde o modelo e dobra consumo de budget.
             tier16_memories = []
             try:
-                tier16_query = AgentMemory.query.filter(
-                    AgentMemory.user_id == 0,  # empresa
-                    AgentMemory.is_directory == False,  # noqa: E712
-                    AgentMemory.is_cold == False,  # noqa: E712
-                    AgentMemory.path.like('/memories/empresa/heuristicas/%'),
-                ).all()
-                # Filtrar: apenas memorias com nivel >= 5 no conteudo
-                for mem in tier16_query:
-                    content_lower = (mem.content or '').lower()
-                    # Checar nivel 5+ (heuristicas emergentes)
-                    if any(f'nivel={n}' in content_lower for n in range(5, 10)) and mem.id not in protected_ids:
-                        tier16_memories.append(mem)
-                        protected_ids.add(mem.id)
-                if tier16_memories:
-                    logger.info(
-                        f"[MEMORY_INJECT] Tier 1.6: {len(tier16_memories)} heuristicas nivel 5 injetadas"
+                from ..config.feature_flags import USE_OPERATIONAL_DIRECTIVES
+                if USE_OPERATIONAL_DIRECTIVES:
+                    logger.debug(
+                        "[MEMORY_INJECT] Tier 1.6 SKIP: USE_OPERATIONAL_DIRECTIVES=True "
+                        "(heuristicas nivel 5 ja vem como <operational_directives>)"
                     )
+                else:
+                    tier16_query = AgentMemory.query.filter(
+                        AgentMemory.user_id == 0,  # empresa
+                        AgentMemory.is_directory == False,  # noqa: E712
+                        AgentMemory.is_cold == False,  # noqa: E712
+                        AgentMemory.path.like('/memories/empresa/heuristicas/%'),
+                    ).all()
+                    # Filtrar: apenas memorias com nivel >= 5 no conteudo
+                    # Usa helper unificado _is_nivel_5() — mesma deteccao do
+                    # _build_operational_directives (memory_injection.py:362)
+                    for mem in tier16_query:
+                        content_lower = (mem.content or '').lower()
+                        if _is_nivel_5(content_lower) and mem.id not in protected_ids:
+                            tier16_memories.append(mem)
+                            protected_ids.add(mem.id)
+                    if tier16_memories:
+                        logger.info(
+                            f"[MEMORY_INJECT] Tier 1.6: {len(tier16_memories)} heuristicas nivel 5 injetadas"
+                        )
             except Exception as t16_err:
                 logger.debug(f"[MEMORY_INJECT] Tier 1.6 falhou (ignorado): {t16_err}")
 
@@ -558,7 +772,6 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                             for mem in mem_objects:
                                 similarity = sim_map.get(mem.id, 0)
                                 importance = mem.importance_score if mem.importance_score is not None else 0.5
-                                importance = _adjust_importance_for_corrections(importance, mem.correction_count or 0)  # S2
 
                                 # v2: Decay por categoria
                                 last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
@@ -619,7 +832,6 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                         for mem in graph_mem_objects:
                             similarity = graph_sim_map.get(mem.id, 0.5)
                             importance = mem.importance_score if mem.importance_score is not None else 0.5
-                            importance = _adjust_importance_for_corrections(importance, mem.correction_count or 0)  # S2
                             last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
                             if last_access:
                                 hours_since = max(0, (now_graph - last_access).total_seconds() / 3600)
@@ -701,6 +913,26 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 content = (mem.content or "").strip()
                 if not content:
                     continue
+                # P1-3 Camada 2: user.xml > threshold em budget finito → ponteiro
+                # Evidencia: 5/12 users excedem 67% do budget Sonnet so com Tier 1.
+                # Gabriella e Marcus (10K+ bytes) ficam com Tier 2 zerado sistematicamente.
+                # Camada 1 (guidance no gerador) resolvera em 1-4 semanas via re-geracao.
+                from ..config.feature_flags import (
+                    USE_USER_XML_POINTER,
+                    USER_XML_POINTER_THRESHOLD,
+                )
+                if (
+                    USE_USER_XML_POINTER
+                    and mem.path == "/memories/user.xml"
+                    and budget is not None
+                    and len(content) > USER_XML_POINTER_THRESHOLD
+                ):
+                    original_len = len(content)
+                    content = _build_user_profile_pointer(content)
+                    logger.debug(
+                        f"[MEMORY_INJECT] user.xml pointer aplicado: "
+                        f"user_id={user_id} orig={original_len} new={len(content)}"
+                    )
                 mem_text = f'<memory path="{mem.path}">\n{content}\n</memory>\n'
                 tier1_texts.append((mem, mem_text))
                 tier1_chars += len(mem_text)
@@ -747,7 +979,6 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 else:
                     now_sel = agora_utc_naive()
                     importance = mem.importance_score if mem.importance_score is not None else 0.5
-                    importance = _adjust_importance_for_corrections(importance, mem.correction_count or 0)  # S2
                     last_access = mem.last_accessed_at or mem.updated_at or mem.created_at
                     if last_access:
                         hours_since = max(0, (now_sel - last_access).total_seconds() / 3600)

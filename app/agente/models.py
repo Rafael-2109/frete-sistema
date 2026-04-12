@@ -349,13 +349,21 @@ class AgentSession(db.Model):
     # =========================================================================
 
     @classmethod
-    def get_or_create(cls, session_id: str, user_id: int = None) -> Tuple['AgentSession', bool]:
+    def get_or_create(
+        cls,
+        session_id: str,
+        user_id: int = None,
+        channel: str = 'web',
+    ) -> Tuple['AgentSession', bool]:
         """
         Busca sessão existente ou cria nova.
 
         Args:
             session_id: ID da sessão (nosso ID, não do SDK)
             user_id: ID do usuário
+            channel: Canal de origem ('web' ou 'teams').
+                Persistido em data['channel'] para analytics (v2.2, 2026-04-12).
+                Default 'web' para backwards-compat com callers existentes.
 
         Returns:
             Tupla (session, created)
@@ -372,6 +380,7 @@ class AgentSession(db.Model):
             data={
                 'messages': [],
                 'total_tokens': 0,
+                'channel': channel,
             },
         )
         db.session.add(session)

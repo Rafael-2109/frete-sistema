@@ -94,6 +94,16 @@ REGRAS CRITICAS:
 - "confianca" = "alta" se padroes claros com 5+ evidencias, "media" se 3-4, "baixa" se < 3
 - NAO inclua patterns genericos tipo "verificar dados antes de responder" — so patterns ESPECIFICOS
 
+RESTRICOES DE CONCISAO (user_profile):
+O user_profile sera salvo como /memories/user.xml e injetado no prompt do agente em todos os turnos.
+Alvo: render total do XML <= 2500 caracteres. Priorize o que MUDA COMPORTAMENTO sobre o que descreve historia.
+- resumo: max 400 caracteres (1-2 paragrafos diretos — nao lista de atividades)
+- contextualizacao_para_agente: max 600 caracteres (regras operacionais prescritivas)
+- atividades_frequentes: MAX 5 items, ordenados por frequencia desc
+- clientes_principais: MAX 5 items, apenas clientes com contexto especifico (nao cite cliente sem contexto de uso)
+- insights: MAX 3 items de alto valor operacional (ex: "quando pede X, sempre Y"). Omita insights puramente descritivos.
+Se informacao historica exceder, OMITA detalhes. Preserve apenas o que ajuda o agente a decidir como responder.
+
 RESPONDA APENAS JSON VALIDO, sem markdown, sem comentarios."""
 
 
@@ -680,7 +690,7 @@ def should_generate_profile(user_id: int, threshold: int = 5) -> bool:
                 if expensive_session:
                     logger.info(
                         f"[PROFILE] Usuário {user_id}: sessão cara "
-                        f"(${expensive_session.total_cost_usd:.2f}) desde último update → trigger"
+                        f"(${float(expensive_session.total_cost_usd or 0):.2f}) desde último update → trigger"
                     )
                     return True
             except Exception:
@@ -1795,13 +1805,22 @@ NAO EXTRAIA:
 FILTRO: Se a conversa nao tiver correcoes, preferencias, expertise ou contexto relevante,
 retorne array vazio. Prefira POUCOS insights de ALTA qualidade.
 
+RESTRICOES DE CONCISAO (insight sera salvo como memoria persistente):
+Cada insight gerado aqui sera salvo como memoria permanente e injetada no contexto
+do agente em sessoes futuras. Economia de tokens e obediencia do modelo dependem de concisao:
+- descricao: max 200 caracteres (direto ao ponto, sem narrativa)
+- prescricao: max 200 caracteres (formato "Quando [situacao], [acao]")
+- Total por insight <= 400 caracteres. Preserve apenas o que MUDA COMPORTAMENTO.
+- preferences.xml (onde insights do tipo "preferencia" sao consolidados) alvo total: <= 1500 caracteres.
+Omita contexto historico; preserve apenas o que ajuda a responder melhor no proximo turno.
+
 Retorne JSON VALIDO:
 {
   "insights": [
     {
       "tipo": "correcao|preferencia|expertise|contexto",
-      "descricao": "O que foi observado (2-3 frases)",
-      "prescricao": "Quando [situacao], o agente deve [acao] porque [razao]"
+      "descricao": "O que foi observado (max 200 chars)",
+      "prescricao": "Quando [situacao], o agente deve [acao] (max 200 chars)"
     }
   ]
 }
