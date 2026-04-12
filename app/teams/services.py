@@ -523,7 +523,7 @@ def _get_or_create_teams_session(
                 user_id=user_id,  # User real auto-cadastrado via _get_or_create_teams_user
                 title=f"Teams - {usuario}",
                 model=TEAMS_DEFAULT_MODEL,
-                data={'messages': [], 'total_tokens': 0},
+                data={'messages': [], 'total_tokens': 0, 'channel': 'teams'},
             )
             db.session.add(session)
             db.session.commit()
