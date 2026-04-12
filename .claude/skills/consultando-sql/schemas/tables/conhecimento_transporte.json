@@ -277,6 +277,55 @@
   ],
   "indices": [
     {
+      "name": "ix_conhecimento_transporte_data_emissao",
+      "columns": [
+        "data_emissao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_tipo",
+      "columns": [
+        "tipo_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_complementa_chave",
+      "columns": [
+        "cte_complementa_chave"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_complementa_id",
+      "columns": [
+        "cte_complementa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_conhecimento_transporte_cnpj_remetente",
       "columns": [
         "cnpj_remetente"
@@ -407,55 +456,6 @@
       "name": "idx_cte_status",
       "columns": [
         "odoo_status_codigo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_data_emissao",
-      "columns": [
-        "data_emissao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_tipo",
-      "columns": [
-        "tipo_cte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_complementa_chave",
-      "columns": [
-        "cte_complementa_chave"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_complementa_id",
-      "columns": [
-        "cte_complementa_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
       ],
       "unique": false
     }

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 257,
+  "total_relationships": 258,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -204,6 +204,12 @@
       "from_table": "carvia_custos_entrega",
       "from_column": "frete_id",
       "to_table": "carvia_fretes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_custos_entrega",
+      "from_column": "subcontrato_id",
+      "to_table": "carvia_subcontratos",
       "to_column": "id"
     },
     {

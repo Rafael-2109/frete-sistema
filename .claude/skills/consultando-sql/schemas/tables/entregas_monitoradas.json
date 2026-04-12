@@ -154,16 +154,30 @@
   ],
   "indices": [
     {
-      "name": "idx_em_data_faturamento",
+      "name": "idx_em_nf_cd",
       "columns": [
-        "data_faturamento"
+        "nf_cd"
       ],
       "unique": false
     },
     {
-      "name": "idx_em_nf_cd",
+      "name": "idx_em_transportadora",
       "columns": [
-        "nf_cd"
+        "transportadora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_status_finalizacao",
+      "columns": [
+        "status_finalizacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_entregue",
+      "columns": [
+        "entregue"
       ],
       "unique": false
     },
@@ -182,37 +196,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_status_finalizacao",
-      "columns": [
-        "status_finalizacao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_em_data_embarque",
       "columns": [
         "data_embarque"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_reagendar",
-      "columns": [
-        "reagendar"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_transportadora",
-      "columns": [
-        "transportadora"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_entregue",
-      "columns": [
-        "entregue"
       ],
       "unique": false
     },
@@ -227,6 +213,20 @@
       "name": "idx_em_data_agenda",
       "columns": [
         "data_agenda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_reagendar",
+      "columns": [
+        "reagendar"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_faturamento",
+      "columns": [
+        "data_faturamento"
       ],
       "unique": false
     }

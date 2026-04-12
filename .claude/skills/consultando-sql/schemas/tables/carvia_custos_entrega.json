@@ -76,7 +76,7 @@
     {
       "name": "subcontrato_id",
       "type": "integer",
-      "description": "FK → carvia_subcontratos.id — Sub que cobra este custo. FT derivada via sub.fatura_transportadora_id"
+      "description": "FK → carvia_subcontratos.id"
     },
     {
       "name": "total_conciliado",
@@ -130,16 +130,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_custos_entrega_numero_custo",
+      "name": "ix_carvia_custos_entrega_status",
       "columns": [
-        "numero_custo"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_status",
+      "name": "ix_carvia_custos_entrega_subcontrato_id",
       "columns": [
-        "status"
+        "subcontrato_id"
       ],
       "unique": false
     },
@@ -151,13 +151,6 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_cte_complementar_id",
-      "columns": [
-        "cte_complementar_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_custos_entrega_frete_id",
       "columns": [
         "frete_id"
@@ -165,9 +158,23 @@
       "unique": false
     },
     {
+      "name": "ix_carvia_custos_entrega_cte_complementar_id",
+      "columns": [
+        "cte_complementar_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_custos_entrega_operacao_id",
       "columns": [
         "operacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_numero_custo",
+      "columns": [
+        "numero_custo"
       ],
       "unique": false
     }

@@ -229,9 +229,16 @@
   ],
   "indices": [
     {
-      "name": "ix_baixa_pagamento_item_status_match",
+      "name": "idx_baixa_pag_item_titulo",
       "columns": [
-        "status_match"
+        "titulo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_cnpj_beneficiario",
+      "columns": [
+        "cnpj_beneficiario"
       ],
       "unique": false
     },
@@ -243,16 +250,16 @@
       "unique": false
     },
     {
-      "name": "ix_baixa_pagamento_item_statement_line_id",
+      "name": "ix_baixa_pagamento_item_status_match",
       "columns": [
-        "statement_line_id"
+        "status_match"
       ],
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_titulo",
+      "name": "ix_baixa_pagamento_item_statement_line_id",
       "columns": [
-        "titulo_id"
+        "statement_line_id"
       ],
       "unique": false
     },
@@ -271,23 +278,9 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_baixa_pag_item_status_match",
       "columns": [
         "status_match"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_baixa_pagamento_item_titulo_id",
-      "columns": [
-        "titulo_id"
       ],
       "unique": false
     },
@@ -299,9 +292,16 @@
       "unique": false
     },
     {
-      "name": "ix_baixa_pagamento_item_cnpj_beneficiario",
+      "name": "idx_baixa_pag_item_status",
       "columns": [
-        "cnpj_beneficiario"
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_baixa_pagamento_item_titulo_id",
+      "columns": [
+        "titulo_id"
       ],
       "unique": false
     }

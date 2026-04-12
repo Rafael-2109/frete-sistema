@@ -165,16 +165,37 @@
   ],
   "indices": [
     {
-      "name": "idx_conta_pagar_nf",
+      "name": "ix_contas_a_pagar_cnpj",
       "columns": [
-        "titulo_nf"
+        "cnpj"
       ],
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_odoo_line",
+      "name": "idx_conta_pagar_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_odoo_line_id",
       "columns": [
         "odoo_line_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_conta_pagar_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_nf",
+      "columns": [
+        "titulo_nf"
       ],
       "unique": false
     },
@@ -193,6 +214,13 @@
       "unique": false
     },
     {
+      "name": "idx_conta_pagar_odoo_line",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_pagar_status_sistema",
       "columns": [
         "status_sistema"
@@ -200,9 +228,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_empresa",
+      "name": "ix_contas_a_pagar_metodo_baixa",
       "columns": [
-        "empresa"
+        "metodo_baixa"
       ],
       "unique": false
     },
@@ -228,39 +256,11 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_metodo_baixa",
+      "name": "ix_contas_a_pagar_empresa",
       "columns": [
-        "metodo_baixa"
+        "empresa"
       ],
       "unique": false
-    },
-    {
-      "name": "idx_conta_pagar_vencimento",
-      "columns": [
-        "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_conta_pagar_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_odoo_line_id",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": true
     }
   ]
 }
