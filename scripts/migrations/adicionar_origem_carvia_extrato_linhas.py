@@ -91,6 +91,14 @@ def verificar_depois():
     """)).scalar()
     print(f"[AFTER] indice ix_carvia_extrato_origem = {'existe' if idx else 'NAO existe'}")
 
+    # CHECK constraint (review Sprint 3 L1)
+    constraint = db.session.execute(db.text("""
+        SELECT constraint_name FROM information_schema.table_constraints
+        WHERE table_name = 'carvia_extrato_linhas'
+        AND constraint_name = 'ck_carvia_extrato_origem'
+    """)).scalar()
+    print(f"[AFTER] constraint ck_carvia_extrato_origem = {'existe' if constraint else 'NAO existe'}")
+
     # Distribuicao
     distrib = db.session.execute(db.text("""
         SELECT origem, COUNT(*) FROM carvia_extrato_linhas
@@ -102,6 +110,7 @@ def verificar_depois():
 
     assert tipo == 'character varying', f"Tipo inesperado: {tipo}"
     assert idx is not None, "Indice nao foi criado"
+    assert constraint is not None, "CHECK constraint nao foi criado"
 
 
 if __name__ == '__main__':

@@ -98,8 +98,8 @@ class CarviaNf(db.Model):
         - Vinculada a CTe CarVia ativo (operacao != CANCELADO)
         - Em item de Fatura Cliente
         - Em item de Fatura Transportadora
-        - Vinculada a Subcontrato ativo (via operacao)
-        - Vinculada a CTe Complementar/Custo Entrega ativo (via operacao)
+        - Em CarviaFrete ativo via CSV `numeros_nfs` (backfill path)
+          — review Sprint 2 IMP-2
 
         Returns:
             tuple[bool, str]: (pode_cancelar, razao_se_nao com lista)
@@ -129,6 +129,27 @@ class CarviaNf(db.Model):
             ids = ', '.join(f.numero_fatura for f in faturas_t[:3])
             extra = f" (+{len(faturas_t)-3})" if len(faturas_t) > 3 else ""
             bloqueios.append(f"{len(faturas_t)} Fatura(s) Transportadora: {ids}{extra}")
+
+        # 4. CarviaFrete ativo via CSV numeros_nfs (review Sprint 2 IMP-2)
+        #    Backfill path: CarviaFrete nao tem FK para CarviaNf — usa CSV
+        #    de numeros de NF. Filtra por correspondencia exata do numero.
+        from app.carvia.models.frete import CarviaFrete
+        if self.numero_nf:
+            fretes_ativos = CarviaFrete.query.filter(
+                CarviaFrete.status != 'CANCELADO',
+                CarviaFrete.numeros_nfs.isnot(None),
+                # Match exato dentro do CSV: ",NF," ou inicio/fim
+                db.or_(
+                    CarviaFrete.numeros_nfs == self.numero_nf,
+                    CarviaFrete.numeros_nfs.like(f"{self.numero_nf},%"),
+                    CarviaFrete.numeros_nfs.like(f"%,{self.numero_nf},%"),
+                    CarviaFrete.numeros_nfs.like(f"%,{self.numero_nf}"),
+                ),
+            ).all()
+            if fretes_ativos:
+                ids = ', '.join(f"#{f.id}" for f in fretes_ativos[:3])
+                extra = f" (+{len(fretes_ativos)-3})" if len(fretes_ativos) > 3 else ""
+                bloqueios.append(f"{len(fretes_ativos)} Frete(s) CarVia: {ids}{extra}")
 
         if bloqueios:
             return (
@@ -383,6 +404,8 @@ class CarviaOperacao(db.Model):
         Bloqueios:
         - Operacao CANCELADO
         - Fatura cliente vinculada esta PAGA
+        - Fatura cliente vinculada tem conciliacao parcial ativa
+          (total_conciliado > 0) — review Sprint 1 IMP-1
 
         Returns:
             tuple[bool, str]: (pode_editar, razao_se_nao)
@@ -392,12 +415,23 @@ class CarviaOperacao(db.Model):
 
         if self.fatura_cliente_id:
             fatura = self.fatura_cliente
-            if fatura and fatura.status == 'PAGA':
-                return (
-                    False,
-                    f"Fatura {fatura.numero_fatura} esta PAGA. "
-                    "Desconcilie e desvincule a operacao da fatura antes de alterar o valor."
-                )
+            if fatura:
+                if fatura.status == 'PAGA':
+                    return (
+                        False,
+                        f"Fatura {fatura.numero_fatura} esta PAGA. "
+                        "Desconcilie e desvincule a operacao da fatura antes de alterar o valor."
+                    )
+                # Review Sprint 1 IMP-1: fatura PENDENTE mas parcialmente
+                # conciliada — alterar valor do CTe descoordena com o valor
+                # ja conciliado no extrato bancario.
+                if fatura.total_conciliado and float(fatura.total_conciliado) > 0:
+                    return (
+                        False,
+                        f"Fatura {fatura.numero_fatura} possui conciliacao "
+                        f"parcial ativa (R$ {float(fatura.total_conciliado):.2f}). "
+                        "Desconcilie no Extrato Bancario antes de alterar o CTe."
+                    )
 
         return True, ""
 
@@ -407,26 +441,38 @@ class CarviaOperacao(db.Model):
         NAO cascadeia — bloqueia se houver qualquer dependencia ativa.
 
         Bloqueios:
-        - Status ja e FATURADO ou CANCELADO
+        - Status ja e CANCELADO
+        - Status FATURADO com fatura nao-CANCELADA (edge case: se fatura
+          ja esta cancelada, permitir cancelar a operacao orfa)
         - Subcontratos ativos (status != CANCELADO)
         - CTe Complementares ativos (status != CANCELADO)
         - CustoEntregas ativos (status != CANCELADO)
+        - CarviaFrete ativo (status != CANCELADO) vinculado
 
         Returns:
             tuple[bool, str]: (pode_cancelar, razao_se_nao)
         """
-        if self.status == 'FATURADO':
-            return (
-                False,
-                "Operacao ja faturada. Desvincule da fatura antes de cancelar."
-            )
         if self.status == 'CANCELADO':
             return False, "Operacao ja esta cancelada."
+
+        # Edge case (review Sprint 1 IMP-2): se operacao esta FATURADO mas
+        # a fatura ja foi cancelada, permitir cancelar a operacao orfa
+        # (sem esse check, a operacao ficaria permanentemente bloqueada).
+        if self.status == 'FATURADO':
+            fatura = self.fatura_cliente
+            if fatura and fatura.status == 'CANCELADA':
+                pass  # permite seguir — fatura ja nao existe efetivamente
+            else:
+                return (
+                    False,
+                    "Operacao ja faturada. Desvincule da fatura antes de cancelar."
+                )
 
         # Contar dependencias ativas — lazy import para evitar circular
         from app.carvia.models.cte_custos import (
             CarviaCteComplementar, CarviaCustoEntrega,
         )
+        from app.carvia.models.frete import CarviaFrete
 
         subs_ativos = self.subcontratos.filter(
             CarviaSubcontrato.status != 'CANCELADO'
@@ -440,7 +486,13 @@ class CarviaOperacao(db.Model):
             CarviaCustoEntrega.status != 'CANCELADO'
         ).count()
 
-        if subs_ativos or ctes_comp_ativos or custos_ativos:
+        # Review Sprint 0 ALTO #2: CarviaFrete ativo vinculado
+        fretes_ativos = CarviaFrete.query.filter(
+            CarviaFrete.operacao_id == self.id,
+            CarviaFrete.status != 'CANCELADO',
+        ).count()
+
+        if subs_ativos or ctes_comp_ativos or custos_ativos or fretes_ativos:
             partes = []
             if subs_ativos:
                 partes.append(f"{subs_ativos} subcontrato(s)")
@@ -448,6 +500,8 @@ class CarviaOperacao(db.Model):
                 partes.append(f"{ctes_comp_ativos} CTe Complementar(es)")
             if custos_ativos:
                 partes.append(f"{custos_ativos} Custo(s) de Entrega")
+            if fretes_ativos:
+                partes.append(f"{fretes_ativos} Frete CarVia")
             return (
                 False,
                 f"Cancele primeiro: {', '.join(partes)}."

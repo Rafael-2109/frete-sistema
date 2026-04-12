@@ -143,8 +143,26 @@ class CarviaFreteService:
                             existente.id, cnpj_emitente, cnpj_destino,
                             sorted(nfs_novas),
                         )
-                        # Registra no resultado (frete existente continua)
-                        # mas NAO atualiza com as NFs novas.
+                        # Review Sprint 3 I1: salvar as NFs bloqueadas em
+                        # flask.g para o caller (portaria/routes) poder
+                        # exibir flash/alerta ao usuario operacional.
+                        try:
+                            from flask import g
+                            if not hasattr(g, 'carvia_w11_bloqueios'):
+                                g.carvia_w11_bloqueios = []
+                            g.carvia_w11_bloqueios.append({
+                                'frete_id': existente.id,
+                                'cnpj_emitente': cnpj_emitente,
+                                'cnpj_destino': cnpj_destino,
+                                'nfs_bloqueadas': sorted(nfs_novas),
+                            })
+                        except Exception:
+                            # Fora de request context — OK, so log
+                            pass
+                        # Itens adicionados a itens_com_frete para marcar
+                        # pedidos como EMBARCADO (fisicamente saiu, mesmo
+                        # que o frete financeiro esteja stale).
+                        itens_com_frete.extend(itens_grupo)
                     else:
                         # Nenhuma NF nova — nada a fazer, frete ja reflete.
                         logger.debug(
@@ -353,67 +371,13 @@ class CarviaFreteService:
             logger.error("Erro ao limpar frete cancelado #%s: %s", frete.id, e)
 
     # ------------------------------------------------------------------
-    # Atualizacao de frete existente (NF tardia)
+    # Atualizacao de frete existente (NF tardia) — REMOVIDO
+    #
+    # W11 (Sprint 3): NF tardia e agora PROIBIDA. O metodo
+    # _atualizar_frete_existente foi removido porque nao e mais chamado
+    # (review Sprint 3 L2: nao manter dead code). Se for preciso alterar
+    # um frete existente, cancele e recrie explicitamente.
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _atualizar_frete_existente(frete, itens_grupo: list, embarque=None) -> bool:
-        """Atualiza frete existente com novos itens (NF tardia).
-
-        Quando NF chega apos portaria e frete ja existe para o grupo:
-        1. Atualiza totais (peso, valor, NFs) no CarviaFrete
-        2. Recalcula valor_cotado (custo) e valor_venda
-        """
-
-        try:
-            nfs_atuais = set((frete.numeros_nfs or '').split(','))
-            novas_nfs = {item.nota_fiscal for item in itens_grupo if item.nota_fiscal}
-            nfs_adicionadas = novas_nfs - nfs_atuais
-
-            if not nfs_adicionadas:
-                return False  # Nenhuma NF nova
-
-            # 1. Recalcular totais com TODOS os itens
-            peso_total = sum(float(item.peso or 0) for item in itens_grupo)
-            valor_total = sum(float(item.valor or 0) for item in itens_grupo)
-            todas_nfs = nfs_atuais | novas_nfs
-            todas_nfs.discard('')
-
-            frete.peso_total = peso_total
-            frete.valor_total_nfs = valor_total
-            frete.quantidade_nfs = len(todas_nfs)
-            frete.numeros_nfs = ','.join(sorted(todas_nfs))
-
-            # 2. Recalcular valor_cotado (custo)
-            if embarque:
-                novo_custo = CarviaFreteService._calcular_custo(
-                    embarque=embarque,
-                    itens=itens_grupo,
-                    peso_total=peso_total,
-                    valor_total=valor_total,
-                    operacao_id=frete.operacao_id,  # pode ser None
-                )
-                if novo_custo is not None:
-                    frete.valor_cotado = novo_custo
-                    frete.valor_considerado = novo_custo
-
-            # 3. Vincular operacao existente se frete ainda nao tem
-            if not frete.operacao_id:
-                CarviaFreteService._vincular_operacao_existente(
-                    frete, list(todas_nfs)
-                )
-
-            logger.info(
-                "CarviaFrete %s atualizado com %d NF(s) nova(s): %s "
-                "(peso=%.1f, valor=%.2f)",
-                frete.id, len(nfs_adicionadas), nfs_adicionadas,
-                peso_total, valor_total,
-            )
-            return True
-
-        except Exception as e:
-            logger.warning("Erro ao atualizar frete existente %s: %s", frete.id, e)
-            return False
 
     # ------------------------------------------------------------------
     # Calculos de custo e venda

@@ -230,6 +230,18 @@ def register_fluxo_caixa_routes(bp):
 
         pago_em_dt = datetime.combine(data_pagamento, datetime.min.time())
 
+        # Review Sprint 3 I5: mensagem diferenciada quando tentando
+        # conciliar via extrato_linha_id um documento ja pago.
+        def _erro_ja_pago(tipo):
+            if extrato_linha_id:
+                return jsonify({
+                    'erro': (
+                        f'{tipo} ja pago. Para vincular a linha do extrato, '
+                        'use a tela de Conciliacao/Extrato Bancario.'
+                    ),
+                }), 409
+            return jsonify({'erro': f'{tipo} ja pago.'}), 409
+
         try:
             from app.carvia.models import (
                 CarviaFaturaCliente,
@@ -247,9 +259,8 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Fatura cliente nao encontrada'}), 404
                 if doc.status == 'CANCELADA':
                     return jsonify({'erro': 'Fatura cancelada nao pode ser paga'}), 400
-                # GAP-14: Verificar se ja esta PAGA
                 if doc.status == 'PAGA':
-                    return jsonify({'erro': 'Fatura ja esta paga'}), 409
+                    return _erro_ja_pago('Fatura cliente')
                 doc.status = 'PAGA'
                 doc.pago_por = usuario
                 doc.pago_em = pago_em_dt
@@ -260,9 +271,8 @@ def register_fluxo_caixa_routes(bp):
                 doc = db.session.get(CarviaFaturaTransportadora, int(doc_id))
                 if not doc:
                     return jsonify({'erro': 'Fatura transportadora nao encontrada'}), 404
-                # GAP-14: Verificar se ja esta PAGO
                 if doc.status_pagamento == 'PAGO':
-                    return jsonify({'erro': 'Fatura transportadora ja esta paga'}), 409
+                    return _erro_ja_pago('Fatura transportadora')
                 doc.status_pagamento = 'PAGO'
                 doc.pago_por = usuario
                 doc.pago_em = pago_em_dt
@@ -275,9 +285,8 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Despesa nao encontrada'}), 404
                 if doc.status == 'CANCELADO':
                     return jsonify({'erro': 'Despesa cancelada nao pode ser paga'}), 400
-                # GAP-14: Verificar se ja esta PAGO
                 if doc.status == 'PAGO':
-                    return jsonify({'erro': 'Despesa ja esta paga'}), 409
+                    return _erro_ja_pago('Despesa')
                 doc.status = 'PAGO'
                 doc.pago_por = usuario
                 doc.pago_em = pago_em_dt
@@ -290,9 +299,8 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
                 if doc.status == 'CANCELADO':
                     return jsonify({'erro': 'Custo cancelado nao pode ser pago'}), 400
-                # GAP-14: Verificar se ja esta PAGO
                 if doc.status == 'PAGO':
-                    return jsonify({'erro': 'Custo de entrega ja esta pago'}), 409
+                    return _erro_ja_pago('Custo de entrega')
                 doc.status = 'PAGO'
                 doc.pago_por = usuario
                 doc.pago_em = pago_em_dt
@@ -306,7 +314,7 @@ def register_fluxo_caixa_routes(bp):
                 if doc.status == 'CANCELADO':
                     return jsonify({'erro': 'Receita cancelada nao pode ser recebida'}), 400
                 if doc.status == 'RECEBIDO':
-                    return jsonify({'erro': 'Receita ja foi recebida'}), 409
+                    return _erro_ja_pago('Receita')
                 doc.status = 'RECEBIDO'
                 doc.recebido_por = usuario
                 doc.recebido_em = pago_em_dt
@@ -366,9 +374,11 @@ def register_fluxo_caixa_routes(bp):
                     return jsonify({'erro': f'Conciliacao falhou: {e}'}), 500
             else:
                 # Fluxo (b): cria linha VIRTUAL + concilia
-                # fitid unico: FC-{tipo}-{doc_id}-{timestamp}
-                import time
-                fitid_virtual = f"FC-{tipo_doc}-{doc_id}-{int(time.time() * 1000)}"
+                # fitid unico: FC-{tipo}-{doc_id}-{uuid}
+                # Review Sprint 3 I2: uuid4 evita collision em concurrent requests
+                # (timestamp-based podia colidir em double-click mesmo ms).
+                import uuid
+                fitid_virtual = f"FC-{tipo_doc}-{doc_id}-{uuid.uuid4().hex[:12]}"
                 # Tipo bancario: DEBITO se e pagamento que sai da conta,
                 # CREDITO se e recebimento (receita, fatura cliente)
                 tipo_linha = 'CREDITO' if tipo_doc in (
@@ -473,11 +483,29 @@ def register_fluxo_caixa_routes(bp):
                 c for c in conciliacoes
                 if c.extrato_linha and c.extrato_linha.origem != 'FC_VIRTUAL'
             ]
+            conciliacoes_virtuais = [
+                c for c in conciliacoes
+                if c.extrato_linha and c.extrato_linha.origem == 'FC_VIRTUAL'
+            ]
+
             if conciliacoes_reais:
+                # Review Sprint 2 IMP-1: UX do deadlock FC_VIRTUAL + OFX real.
+                # Quando ha conciliacao real, usuario deve desconciliar via
+                # Extrato primeiro. Se TAMBEM ha FC_VIRTUAL, explicar o
+                # fluxo em 2 passos.
+                if conciliacoes_virtuais:
+                    msg_extra = (
+                        f' (Ha tambem {len(conciliacoes_virtuais)} pagamento(s) '
+                        'via Outros Extratos — apos desconciliar a linha real, '
+                        'volte aqui para desfazer o pagamento via FC.)'
+                    )
+                else:
+                    msg_extra = ''
                 return jsonify({
                     'erro': (
                         f'Documento possui {len(conciliacoes_reais)} conciliacao(oes) '
-                        'bancaria(s) real(is). Desconcilie via Extrato Bancario primeiro.'
+                        f'bancaria(s) real(is). Desconcilie via Extrato Bancario '
+                        f'primeiro.{msg_extra}'
                     ),
                 }), 400
             # Todas sao FC_VIRTUAL — FC pode desfazer

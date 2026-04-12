@@ -45,10 +45,17 @@ class CarviaConciliacaoService:
         """
         from app.carvia.models import CarviaExtratoLinha
 
+        # Review Sprint 3 I4: por padrao, filtrar linhas FC_VIRTUAL.
+        # Filtro `incluir_virtuais=True` permite ver linhas virtuais para
+        # admin/debug. Linhas FC_VIRTUAL sao criadas pelo FC e nao devem
+        # aparecer no Extrato Bancario normal.
         query = CarviaExtratoLinha.query.order_by(
             CarviaExtratoLinha.data.desc(),
             CarviaExtratoLinha.id.desc()
         )
+
+        if not (filtros and filtros.get('incluir_virtuais')):
+            query = query.filter(CarviaExtratoLinha.origem != 'FC_VIRTUAL')
 
         if filtros:
             if filtros.get('tipo'):
@@ -748,22 +755,32 @@ class CarviaConciliacaoService:
 
     @staticmethod
     def obter_resumo():
-        """Retorna resumo para cards do dashboard de conciliacao."""
+        """Retorna resumo para cards do dashboard de conciliacao.
+
+        Review Sprint 3 I3: exclui linhas FC_VIRTUAL do resumo. Elas sao
+        criadas pelo FC como vouchers de pagamento e nao representam
+        movimentacao bancaria real — inclui-las inflaria os contadores.
+        """
         from app.carvia.models import CarviaExtratoLinha
         from sqlalchemy import func as sqlfunc
 
-        total_linhas = CarviaExtratoLinha.query.count()
+        # Base query: sempre exclui FC_VIRTUAL
+        base = CarviaExtratoLinha.query.filter(
+            CarviaExtratoLinha.origem != 'FC_VIRTUAL'
+        )
 
-        conciliadas = CarviaExtratoLinha.query.filter_by(
-            status_conciliacao='CONCILIADO'
+        total_linhas = base.count()
+
+        conciliadas = base.filter(
+            CarviaExtratoLinha.status_conciliacao == 'CONCILIADO'
         ).count()
 
-        parciais = CarviaExtratoLinha.query.filter_by(
-            status_conciliacao='PARCIAL'
+        parciais = base.filter(
+            CarviaExtratoLinha.status_conciliacao == 'PARCIAL'
         ).count()
 
-        pendentes = CarviaExtratoLinha.query.filter_by(
-            status_conciliacao='PENDENTE'
+        pendentes = base.filter(
+            CarviaExtratoLinha.status_conciliacao == 'PENDENTE'
         ).count()
 
         # Valor pendente (soma absoluta das linhas pendentes)
@@ -773,7 +790,8 @@ class CarviaConciliacaoService:
                 0
             )
         ).filter(
-            CarviaExtratoLinha.status_conciliacao == 'PENDENTE'
+            CarviaExtratoLinha.status_conciliacao == 'PENDENTE',
+            CarviaExtratoLinha.origem != 'FC_VIRTUAL',
         ).scalar()
 
         return {

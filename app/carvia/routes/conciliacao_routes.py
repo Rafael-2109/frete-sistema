@@ -520,10 +520,13 @@ def register_conciliacao_routes(bp):
         valor_min = valor_doc * (1 - margem)
         valor_max = valor_doc * (1 + margem)
 
+        # Review Sprint 3 I3: excluir linhas FC_VIRTUAL do auto-match.
+        # Sao vouchers FC, nao podem ser sugeridas como candidatas.
         linhas_candidatas = CarviaExtratoLinha.query.filter(
             CarviaExtratoLinha.tipo == direcao,
             CarviaExtratoLinha.status_conciliacao.in_(['PENDENTE', 'PARCIAL']),
             db.func.abs(CarviaExtratoLinha.valor).between(valor_min, valor_max),
+            CarviaExtratoLinha.origem != 'FC_VIRTUAL',
         ).order_by(CarviaExtratoLinha.data.desc()).limit(20).all()
 
         # Construir resposta com scoring simplificado

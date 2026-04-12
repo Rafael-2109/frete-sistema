@@ -388,16 +388,16 @@ class AdminService:
     # ------------------------------------------------------------------ #
 
     # Mapeamento tipo URL → model class
+    # Review Sprint 0 MED #4: mapa reduzido para cobrir apenas tipos
+    # ativos nas conversoes suportadas (_CONVERSOES_SUPORTADAS abaixo).
+    # Tipos removidos (nf, cte-complementar, custo-entrega, despesa, receita)
+    # nao sao origem/destino de nenhuma conversao e suas rotas de exclusao
+    # foram removidas — mante-los aqui era dead code.
     _TIPO_MODEL_MAP = {
-        'nf': 'CarviaNf',
         'operacao': 'CarviaOperacao',
         'subcontrato': 'CarviaSubcontrato',
         'fatura-cliente': 'CarviaFaturaCliente',
         'fatura-transportadora': 'CarviaFaturaTransportadora',
-        'cte-complementar': 'CarviaCteComplementar',
-        'custo-entrega': 'CarviaCustoEntrega',
-        'despesa': 'CarviaDespesa',
-        'receita': 'CarviaReceita',
     }
 
     def _get_model_class(self, tipo):

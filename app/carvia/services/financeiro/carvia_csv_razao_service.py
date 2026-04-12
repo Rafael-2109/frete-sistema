@@ -221,9 +221,11 @@ def match_csv_com_extrato(csv_linhas: list[dict]) -> dict:
     max_data = max(datas)
 
     # Buscar linhas OFX no range (com margem de 3 dias)
+    # Review Sprint 3 I3: excluir FC_VIRTUAL — sao vouchers FC, nao OFX real.
     linhas_ofx = CarviaExtratoLinha.query.filter(
         CarviaExtratoLinha.data >= min_data - timedelta(days=3),
         CarviaExtratoLinha.data <= max_data + timedelta(days=3),
+        CarviaExtratoLinha.origem != 'FC_VIRTUAL',
     ).all()
 
     # Agrupar OFX por (data, valor) — valor como string para match exato

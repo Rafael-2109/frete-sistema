@@ -15,6 +15,7 @@ from app.utils.auth_decorators import require_admin
 logger = logging.getLogger(__name__)
 
 # Mapeamento tipo URL → (metodo do service, redirect_endpoint, label)
+# para ACAO admin_excluir (dispatch de hard delete).
 #
 # REMOVIDOS (Sprint 0 — CRITICO + MEDIO):
 #   - 'nf'               (excluir_nf — sem guards, bypass total)
@@ -42,6 +43,22 @@ _TIPO_CONFIG = {
         'redirect': 'carvia.listar_receitas',
         'label': 'Receita',
     },
+}
+
+# Review Sprint 0 ALTO #3: mapa separado para redirect de admin_converter.
+# Cobre todos os tipos suportados pelo converter (inclui nf, operacao,
+# subcontrato, cte-complementar, custo-entrega, despesa que foram removidos
+# do _TIPO_CONFIG principal mas ainda sao destinos validos de conversao).
+_TIPO_REDIRECT_MAP = {
+    'nf': 'carvia.listar_nfs',
+    'operacao': 'carvia.listar_operacoes',
+    'subcontrato': 'carvia.listar_subcontratos',
+    'fatura-cliente': 'carvia.listar_faturas_cliente',
+    'fatura-transportadora': 'carvia.listar_faturas_transportadora',
+    'cte-complementar': 'carvia.listar_ctes_complementares',
+    'custo-entrega': 'carvia.listar_custos_entrega',
+    'despesa': 'carvia.listar_despesas',
+    'receita': 'carvia.listar_receitas',
 }
 
 
@@ -170,8 +187,12 @@ def register_admin_routes(bp):
                     f'{resultado["mensagem"]} (Auditoria #{resultado["auditoria_id"]})',
                     'success',
                 )
-                config_dest = _TIPO_CONFIG.get(tipo_destino, {})
-                return redirect(url_for(config_dest.get('redirect', 'carvia.dashboard')))
+                # Review Sprint 0 ALTO #3: usar _TIPO_REDIRECT_MAP que cobre
+                # todos os tipos (inclui os removidos do _TIPO_CONFIG)
+                redirect_endpoint = _TIPO_REDIRECT_MAP.get(
+                    tipo_destino, 'carvia.dashboard'
+                )
+                return redirect(url_for(redirect_endpoint))
             else:
                 flash(resultado['mensagem'], 'danger')
                 return redirect(request.url)
