@@ -183,6 +183,10 @@ def register_fluxo_caixa_routes(bp):
 
         Aceita extrato_linha_id opcional — se presente, tambem concilia
         o documento com a linha de extrato via CarviaConciliacaoService.
+
+        W10 (Sprint 2): Conciliacao e SOT para pagamento. Se o documento
+        ja tem CarviaConciliacao, FC deve bloquear — o status financeiro
+        e gerenciado pelo Extrato Bancario, nao pelo FC.
         """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -198,6 +202,23 @@ def register_fluxo_caixa_routes(bp):
 
         if not tipo_doc or not doc_id:
             return jsonify({'erro': 'tipo_doc e id sao obrigatorios'}), 400
+
+        # W10: Bloquear se ja tem conciliacao bancaria — Conciliacao e SOT.
+        # Excecao: quando o proprio FC vai criar a conciliacao agora
+        # (extrato_linha_id presente), pular o guard.
+        if not extrato_linha_id:
+            from app.carvia.models import CarviaConciliacao
+            ja_conciliado = CarviaConciliacao.query.filter_by(
+                tipo_documento=tipo_doc,
+                documento_id=int(doc_id),
+            ).first()
+            if ja_conciliado:
+                return jsonify({
+                    'erro': (
+                        'Este documento ja possui conciliacao bancaria. '
+                        'Use a tela de Extrato Bancario para gerenciar o pagamento.'
+                    ),
+                }), 400
 
         # Validar data de pagamento (obrigatoria)
         if not data_pagamento_str:
@@ -371,7 +392,12 @@ def register_fluxo_caixa_routes(bp):
     @bp.route('/api/fluxo-caixa/desfazer', methods=['POST'])
     @login_required
     def api_fluxo_caixa_desfazer():
-        """Desfaz marcacao de pagamento e remove movimentacao da conta."""
+        """Desfaz marcacao de pagamento e remove movimentacao da conta.
+
+        W10 (Sprint 2): Conciliacao e SOT. Se o documento tem
+        CarviaConciliacao, FC NAO pode reverter — usuario deve
+        desconciliar via Extrato Bancario primeiro.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
@@ -384,6 +410,20 @@ def register_fluxo_caixa_routes(bp):
 
         if not tipo_doc or not doc_id:
             return jsonify({'erro': 'tipo_doc e id sao obrigatorios'}), 400
+
+        # W10: Bloquear se tem conciliacao — Conciliacao e SOT.
+        from app.carvia.models import CarviaConciliacao
+        conciliacoes = CarviaConciliacao.query.filter_by(
+            tipo_documento=tipo_doc,
+            documento_id=int(doc_id),
+        ).all()
+        if conciliacoes:
+            return jsonify({
+                'erro': (
+                    f'Documento possui {len(conciliacoes)} conciliacao(oes) '
+                    'bancaria(s). Desconcilie via Extrato Bancario primeiro.'
+                ),
+            }), 400
 
         try:
             from app.carvia.models import (
@@ -450,26 +490,10 @@ def register_fluxo_caixa_routes(bp):
                     f"(pagamento pre-feature)"
                 )
 
-            # Reverter conciliacoes associadas (criadas via "Pagar e Conciliar")
-            from app.carvia.models import CarviaConciliacao
-            conciliacoes_doc = CarviaConciliacao.query.filter_by(
-                tipo_documento=tipo_doc,
-                documento_id=int(doc_id),
-            ).all()
-            if conciliacoes_doc:
-                from app.carvia.services.financeiro.carvia_conciliacao_service import (
-                    CarviaConciliacaoService,
-                )
-                for conc in conciliacoes_doc:
-                    try:
-                        CarviaConciliacaoService.desconciliar(
-                            conc.id, current_user.email
-                        )
-                    except (ValueError, Exception) as e:
-                        logger.warning(
-                            f"Erro ao desconciliar #{conc.id} durante desfazer "
-                            f"{tipo_doc} #{doc_id}: {e}"
-                        )
+            # W10 (Sprint 2): NAO reverte conciliacoes aqui. Se chegou ate
+            # este ponto, significa que NAO ha conciliacao (guard no inicio
+            # do metodo ja bloqueou). Revisao do paradigma: Conciliacao e
+            # SOT e deve ser gerenciada exclusivamente via Extrato Bancario.
 
             db.session.commit()
             saldo_atual = _obter_saldo_atual()

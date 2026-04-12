@@ -831,7 +831,13 @@ def register_operacao_routes(bp):
     @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/valor', methods=['POST'])
     @login_required
     def atualizar_valor_subcontrato(operacao_id, sub_id):
-        """Atualiza valor acertado de um subcontrato"""
+        """Atualiza valor_acertado de um subcontrato.
+
+        W4 (Sprint 2): quando o sub ja tem fatura transportadora vinculada,
+        a regra e do model da fatura (ft.pode_editar_sub_valor) —
+        bloqueia se FT esta CONFERIDA ou PAGA. Antes da anexacao a FT,
+        o guard tradicional por status_subcontrato continua.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -845,6 +851,15 @@ def register_operacao_routes(bp):
         if sub.status in ('CONFERIDO', 'FATURADO'):
             flash(f'Subcontrato {sub.status} nao permite alteracao de valor.', 'warning')
             return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
+
+        # W4: Se sub ja esta em fatura transportadora, delega para o guard da FT
+        if sub.fatura_transportadora_id:
+            ft = sub.fatura_transportadora
+            if ft:
+                pode, razao = ft.pode_editar_sub_valor()
+                if not pode:
+                    flash(razao, 'warning')
+                    return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
         try:
             # GAP-17: Aceitar formato BR (1.234,56) e formato US (1234.56)
@@ -1049,13 +1064,27 @@ def register_operacao_routes(bp):
     @bp.route('/api/operacao/<int:operacao_id>/desvincular-nf/<int:nf_id>', methods=['POST'])
     @login_required
     def api_desvincular_nf_operacao(operacao_id, nf_id):
-        """Remove vinculo NF<->Operacao."""
+        """Remove vinculo NF<->Operacao.
+
+        W2 (Sprint 2): bloqueia se operacao FATURADA ou se NF esta em
+        items de fatura. Tambem corrige bug do W3 — remover a ultima NF
+        agora seta peso_bruto = 0 (antes mantinha valor stale).
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
 
         operacao = db.session.get(CarviaOperacao, operacao_id)
         if not operacao:
             return {'sucesso': False, 'erro': 'Operacao nao encontrada.'}, 404
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            return {'sucesso': False, 'erro': 'NF nao encontrada.'}, 404
+
+        # Guard centralizado no model (Sprint 0)
+        pode, razao = nf.pode_desvincular_de_operacao(operacao_id)
+        if not pode:
+            return {'sucesso': False, 'erro': razao}, 400
 
         try:
             deleted = CarviaOperacaoNf.query.filter_by(
@@ -1065,12 +1094,11 @@ def register_operacao_routes(bp):
             if not deleted:
                 return {'sucesso': False, 'erro': 'Vinculo nao encontrado.'}, 404
 
-            # Recalcular peso_bruto
+            # Recalcular peso_bruto — W3: sempre setar, mesmo se 0
             nfs_vinculadas = operacao.nfs.all()
             peso_total = sum(float(n.peso_bruto or 0) for n in nfs_vinculadas)
-            if peso_total >= 0:
-                operacao.peso_bruto = peso_total if peso_total > 0 else operacao.peso_bruto
-                operacao.calcular_peso_utilizado()
+            operacao.peso_bruto = peso_total
+            operacao.calcular_peso_utilizado()
 
             db.session.commit()
 

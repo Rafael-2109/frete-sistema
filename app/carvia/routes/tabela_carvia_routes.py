@@ -141,22 +141,41 @@ def register_tabela_carvia_routes(bp):
     @bp.route('/api/grupos-cliente/<int:gid>', methods=['DELETE']) # type: ignore
     @login_required
     def desativar_grupo_cliente(gid): # type: ignore
-        """Desativa grupo de cliente"""
+        """Desativa grupo de cliente.
+
+        W7 (Sprint 2): checa referencias ativas em CarviaTabelaFrete.
+        Nao bloqueia (soft-delete e reversivel), mas informa quantas
+        tabelas continuam usando o grupo.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.models import CarviaGrupoCliente
+        from app.carvia.models import CarviaGrupoCliente, CarviaTabelaFrete
 
         grupo = db.session.get(CarviaGrupoCliente, gid)
         if not grupo:
             return jsonify({'erro': 'Grupo nao encontrado.'}), 404
 
+        # W7: Verificar referencias ativas
+        refs_tabelas = CarviaTabelaFrete.query.filter_by(
+            grupo_cliente_id=gid,
+            ativo=True,
+        ).count()
+
         try:
             grupo.ativo = False
             db.session.commit()
+
+            mensagem = f'Grupo "{grupo.nome}" desativado.'
+            if refs_tabelas > 0:
+                mensagem += (
+                    f' AVISO: {refs_tabelas} tabela(s) de frete ainda '
+                    f'referenciam este grupo — considere reavaliar.'
+                )
             return jsonify({
                 'sucesso': True,
-                'mensagem': f'Grupo "{grupo.nome}" desativado.',
+                'mensagem': mensagem,
+                'refs_tabelas': refs_tabelas,
             })
         except Exception as e:
             db.session.rollback()
@@ -451,22 +470,53 @@ def register_tabela_carvia_routes(bp):
     @bp.route('/api/tabelas-frete-carvia/<int:tid>', methods=['DELETE']) # type: ignore
     @login_required
     def desativar_tabela_carvia(tid): # type: ignore
-        """Desativa tabela de frete CarVia"""
+        """Desativa tabela de frete CarVia.
+
+        W7 (Sprint 2): checa referencias ativas em CarviaCotacao e
+        CarviaCidadeAtendida. Nao bloqueia (soft-delete e reversivel),
+        mas alerta sobre o impacto.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
-        from app.carvia.models import CarviaTabelaFrete
+        from app.carvia.models import (
+            CarviaTabelaFrete, CarviaCotacao, CarviaCidadeAtendida,
+        )
 
         tabela = db.session.get(CarviaTabelaFrete, tid)
         if not tabela:
             return jsonify({'erro': 'Tabela nao encontrada.'}), 404
 
+        # W7: Verificar referencias ativas
+        refs_cotacoes = CarviaCotacao.query.filter_by(
+            tabela_carvia_id=tid,
+        ).filter(
+            CarviaCotacao.status.notin_(['CANCELADO', 'RECUSADO']),
+        ).count()
+
+        refs_cidades = CarviaCidadeAtendida.query.filter_by(
+            nome_tabela=tabela.nome_tabela,
+            ativo=True,
+        ).count()
+
         try:
             tabela.ativo = False
             db.session.commit()
+
+            mensagem = f'Tabela "{tabela.nome_tabela}" desativada.'
+            avisos = []
+            if refs_cotacoes > 0:
+                avisos.append(f'{refs_cotacoes} cotacao(oes) ativa(s)')
+            if refs_cidades > 0:
+                avisos.append(f'{refs_cidades} cidade(s) atendida(s) ativa(s)')
+            if avisos:
+                mensagem += f' AVISO: ainda referenciada por {", ".join(avisos)}.'
+
             return jsonify({
                 'sucesso': True,
-                'mensagem': f'Tabela "{tabela.nome_tabela}" desativada.',
+                'mensagem': mensagem,
+                'refs_cotacoes': refs_cotacoes,
+                'refs_cidades': refs_cidades,
             })
         except Exception as e:
             db.session.rollback()

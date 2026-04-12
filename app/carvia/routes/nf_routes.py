@@ -610,7 +610,12 @@ def register_nf_routes(bp):
     @bp.route('/nfs/<int:nf_id>/cancelar', methods=['POST'])
     @login_required
     def cancelar_nf(nf_id):
-        """Cancela uma NF (soft-delete conforme GAP-20)"""
+        """Cancela uma NF (soft-delete conforme GAP-20).
+
+        W2 (Sprint 2): bloqueia se NF esta vinculada a CTe CarVia,
+        Fatura Cliente ou Fatura Transportadora. Usuario deve
+        reverter docs superiores primeiro (ordem inversa do fluxo).
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -620,8 +625,10 @@ def register_nf_routes(bp):
             flash('NF nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_nfs'))
 
-        if nf.status == 'CANCELADA':
-            flash('NF ja esta cancelada.', 'warning')
+        # Guard centralizado no model (Sprint 0)
+        pode, razao = nf.pode_cancelar()
+        if not pode:
+            flash(razao, 'warning')
             return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
 
         motivo = request.form.get('motivo_cancelamento', '').strip()

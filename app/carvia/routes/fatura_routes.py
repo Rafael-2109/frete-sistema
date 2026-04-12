@@ -1135,7 +1135,12 @@ def register_fatura_routes(bp):
     @bp.route('/faturas-transportadora/<int:fatura_id>/desanexar-subcontrato/<int:sub_id>', methods=['POST']) # type: ignore
     @login_required
     def desanexar_subcontrato_fatura_transportadora(fatura_id, sub_id): # type: ignore
-        """Desanexa um subcontrato de uma fatura de transportadora"""
+        """Desanexa um subcontrato de uma fatura de transportadora.
+
+        W4 (Sprint 2): guard via ft.pode_desanexar_subcontrato() que
+        bloqueia tanto CONFERIDO quanto PAGO (status_pagamento). Antes
+        so bloqueava CONFERIDO — faturas PAGAS passavam.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
 
@@ -1143,11 +1148,10 @@ def register_fatura_routes(bp):
         if not fatura:
             return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
 
-        if fatura.status_conferencia == 'CONFERIDO':
-            return jsonify({
-                'sucesso': False,
-                'erro': 'Nao e possivel desanexar subcontratos de fatura ja conferida.'
-            }), 400
+        # Guard centralizado no model (Sprint 0) — CONFERIDO + PAGO + conciliada
+        pode, razao = fatura.pode_desanexar_subcontrato()
+        if not pode:
+            return jsonify({'sucesso': False, 'erro': razao}), 400
 
         try:
             sub = db.session.query(CarviaSubcontrato).filter(
