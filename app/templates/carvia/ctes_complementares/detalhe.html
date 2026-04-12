@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+{# modal_admin_excluir removido (Sprint 0 — CTe Complementar nao suporta hard delete) #}
 {% from 'carvia/_macros.html' import carvia_ref %}
 
 {% block content %}
@@ -37,16 +37,7 @@
                 <i class="fas fa-edit"></i> Editar
             </a>
             {% endif %}
-            {% if current_user.perfil == 'administrador' %}
-            <a href="{{ url_for('carvia.admin_editar', tipo='cte-complementar', id=cte_comp.id) }}" class="btn carvia-admin-btn"
-               title="Edicao completa (admin)">
-                <i class="fas fa-shield-alt"></i> Editar
-            </a>
-            <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
-                    title="Exclusao permanente (admin)">
-                <i class="fas fa-shield-alt"></i> Excluir
-            </button>
-            {% endif %}
+            {# Botoes admin removidos (Sprint 0) #}
             <a href="{{ url_for('carvia.listar_ctes_complementares') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
@@ -218,14 +209,5 @@
     </div>
 </div>
 
-{{ modal_admin_excluir(
-    entidade_tipo='cte-complementar',
-    entidade_id=cte_comp.id,
-    entidade_label='CTe Comp. ' ~ (cte_comp.cte_numero or ('#' ~ cte_comp.id)),
-    impacto_cascade=[
-        'Custos de Entrega vinculados (com anexos)',
-        'Se faturado, valor sera descontado da fatura',
-    ],
-    bloqueios=(['Status FATURADO. Exclua a fatura cliente vinculada primeiro.'] if cte_comp.status == 'FATURADO' else [])
-) }}
+{# modal_admin_excluir removido (Sprint 0) #}
 {% endblock %}

@@ -86,6 +86,102 @@ class CarviaNf(db.Model):
             CarviaFaturaTransportadoraItem.nf_id == self.id
         ).all()
 
+    # ------------------------------------------------------------------ #
+    #  Validacoes de Bloqueio (Sprint 0 — Fundacao)
+    # ------------------------------------------------------------------ #
+
+    def pode_cancelar(self):
+        """Verifica se NF pode ser cancelada (soft-delete).
+
+        Bloqueios (fluxo unidirecional — reverter downstream antes):
+        - Ja CANCELADA
+        - Vinculada a CTe CarVia ativo (operacao != CANCELADO)
+        - Em item de Fatura Cliente
+        - Em item de Fatura Transportadora
+        - Vinculada a Subcontrato ativo (via operacao)
+        - Vinculada a CTe Complementar/Custo Entrega ativo (via operacao)
+
+        Returns:
+            tuple[bool, str]: (pode_cancelar, razao_se_nao com lista)
+        """
+        if self.status == 'CANCELADA':
+            return False, "NF ja esta cancelada."
+
+        bloqueios = []
+
+        # 1. CTe CarVia ativo via junction
+        ops_ativas = [op for op in self.operacoes.all() if op.status != 'CANCELADO']
+        if ops_ativas:
+            ids = ', '.join(op.cte_numero or f"#{op.id}" for op in ops_ativas[:3])
+            extra = f" (+{len(ops_ativas)-3})" if len(ops_ativas) > 3 else ""
+            bloqueios.append(f"{len(ops_ativas)} CTe(s) CarVia: {ids}{extra}")
+
+        # 2. Fatura Cliente via item
+        faturas_c = self.get_faturas_cliente()
+        if faturas_c:
+            ids = ', '.join(f.numero_fatura for f in faturas_c[:3])
+            extra = f" (+{len(faturas_c)-3})" if len(faturas_c) > 3 else ""
+            bloqueios.append(f"{len(faturas_c)} Fatura(s) Cliente: {ids}{extra}")
+
+        # 3. Fatura Transportadora via item
+        faturas_t = self.get_faturas_transportadora()
+        if faturas_t:
+            ids = ', '.join(f.numero_fatura for f in faturas_t[:3])
+            extra = f" (+{len(faturas_t)-3})" if len(faturas_t) > 3 else ""
+            bloqueios.append(f"{len(faturas_t)} Fatura(s) Transportadora: {ids}{extra}")
+
+        if bloqueios:
+            return (
+                False,
+                "NF vinculada a: " + "; ".join(bloqueios) +
+                ". Reverta os documentos na ordem inversa (Fatura → CTe → NF)."
+            )
+
+        return True, ""
+
+    def pode_desvincular_de_operacao(self, operacao_id):
+        """Verifica se NF pode ser removida de uma operacao especifica.
+
+        Bloqueios:
+        - Operacao FATURADA
+        - NF referenciada em itens de fatura (cliente ou transportadora)
+
+        Returns:
+            tuple[bool, str]: (pode_desvincular, razao_se_nao)
+        """
+        from app.carvia.models.documentos import CarviaOperacao
+        op = db.session.get(CarviaOperacao, operacao_id)
+        if not op:
+            return False, "Operacao nao encontrada."
+
+        if op.status == 'FATURADO':
+            return (
+                False,
+                f"Operacao {op.cte_numero or op.id} ja faturada. "
+                "Desvincule da fatura antes de remover NFs."
+            )
+
+        # Checar NF em itens de fatura
+        faturas_c = self.get_faturas_cliente()
+        if faturas_c:
+            ids = ', '.join(f.numero_fatura for f in faturas_c[:3])
+            return (
+                False,
+                f"NF presente em Fatura(s) Cliente: {ids}. "
+                "Desvincule a fatura primeiro."
+            )
+
+        faturas_t = self.get_faturas_transportadora()
+        if faturas_t:
+            ids = ', '.join(f.numero_fatura for f in faturas_t[:3])
+            return (
+                False,
+                f"NF presente em Fatura(s) Transportadora: {ids}. "
+                "Desanexe a fatura primeiro."
+            )
+
+        return True, ""
+
     def __repr__(self):
         return f'<CarviaNf {self.numero_nf} ({self.tipo_fonte})>'
 
@@ -271,6 +367,93 @@ class CarviaOperacao(db.Model):
         cubado = float(self.peso_cubado or 0)
         self.peso_utilizado = max(bruto, cubado)
         return self.peso_utilizado
+
+    # ------------------------------------------------------------------ #
+    #  Validacoes de Bloqueio (Sprint 0 — Fundacao)
+    #
+    #  Metodos pode_* retornam (bool, str) — (pode_executar, razao_se_nao).
+    #  Usados por rotas e admin_service para bloquear operacoes que violariam
+    #  integridade com documentos downstream. Centralizados no model para
+    #  garantir comportamento consistente independente do caller.
+    # ------------------------------------------------------------------ #
+
+    def pode_editar_valor(self):
+        """Verifica se cte_valor pode ser editado.
+
+        Bloqueios:
+        - Operacao CANCELADO
+        - Fatura cliente vinculada esta PAGA
+
+        Returns:
+            tuple[bool, str]: (pode_editar, razao_se_nao)
+        """
+        if self.status == 'CANCELADO':
+            return False, "Operacao cancelada nao pode ser editada."
+
+        if self.fatura_cliente_id:
+            fatura = self.fatura_cliente
+            if fatura and fatura.status == 'PAGA':
+                return (
+                    False,
+                    f"Fatura {fatura.numero_fatura} esta PAGA. "
+                    "Desconcilie e desvincule a operacao da fatura antes de alterar o valor."
+                )
+
+        return True, ""
+
+    def pode_cancelar(self):
+        """Verifica se operacao pode ser cancelada.
+
+        NAO cascadeia — bloqueia se houver qualquer dependencia ativa.
+
+        Bloqueios:
+        - Status ja e FATURADO ou CANCELADO
+        - Subcontratos ativos (status != CANCELADO)
+        - CTe Complementares ativos (status != CANCELADO)
+        - CustoEntregas ativos (status != CANCELADO)
+
+        Returns:
+            tuple[bool, str]: (pode_cancelar, razao_se_nao)
+        """
+        if self.status == 'FATURADO':
+            return (
+                False,
+                "Operacao ja faturada. Desvincule da fatura antes de cancelar."
+            )
+        if self.status == 'CANCELADO':
+            return False, "Operacao ja esta cancelada."
+
+        # Contar dependencias ativas — lazy import para evitar circular
+        from app.carvia.models.cte_custos import (
+            CarviaCteComplementar, CarviaCustoEntrega,
+        )
+
+        subs_ativos = self.subcontratos.filter(
+            CarviaSubcontrato.status != 'CANCELADO'
+        ).count()
+
+        ctes_comp_ativos = self.ctes_complementares.filter(
+            CarviaCteComplementar.status != 'CANCELADO'
+        ).count()
+
+        custos_ativos = self.custos_entrega.filter(
+            CarviaCustoEntrega.status != 'CANCELADO'
+        ).count()
+
+        if subs_ativos or ctes_comp_ativos or custos_ativos:
+            partes = []
+            if subs_ativos:
+                partes.append(f"{subs_ativos} subcontrato(s)")
+            if ctes_comp_ativos:
+                partes.append(f"{ctes_comp_ativos} CTe Complementar(es)")
+            if custos_ativos:
+                partes.append(f"{custos_ativos} Custo(s) de Entrega")
+            return (
+                False,
+                f"Cancele primeiro: {', '.join(partes)}."
+            )
+
+        return True, ""
 
     def calcular_cubagem(self):
         """Calcula peso cubado a partir das dimensoes"""

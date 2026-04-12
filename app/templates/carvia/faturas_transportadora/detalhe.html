@@ -15,12 +15,7 @@
                 <i class="fas fa-download"></i> PDF
             </button>
             {% endif %}
-            {% if fatura.status_conferencia != 'CONFERIDO' and current_user.perfil == 'administrador' %}
-            <a href="{{ url_for('carvia.admin_editar', tipo='fatura-transportadora', id=fatura.id) }}" class="btn btn-warning"
-               title="Edicao completa (admin)">
-                <i class="fas fa-edit"></i> Editar
-            </a>
-            {% endif %}
+            {# Botao admin_editar removido (Sprint 0 — FIELD_EDIT era bypass de guards) #}
             {% if current_user.perfil == 'administrador' %}
             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
                     title="Exclusao permanente (admin)">

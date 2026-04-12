@@ -22,10 +22,7 @@
             </button>
             {% endif %}
             {% if current_user.perfil == 'administrador' %}
-            <a href="{{ url_for('carvia.admin_editar', tipo='fatura-cliente', id=fatura.id) }}" class="btn carvia-admin-btn"
-               title="Edicao completa (admin)">
-                <i class="fas fa-shield-alt"></i> Editar
-            </a>
+            {# Botao admin_editar removido (Sprint 0 — FIELD_EDIT era bypass de guards) #}
             <button type="button" class="btn carvia-admin-btn" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
                     title="Exclusao permanente (admin)">
                 <i class="fas fa-shield-alt"></i> Excluir

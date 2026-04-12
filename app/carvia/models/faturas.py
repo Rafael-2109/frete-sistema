@@ -84,6 +84,47 @@ class CarviaFaturaCliente(db.Model):
                 pass
         return f'FAT-{next_num:03d}'
 
+    # ------------------------------------------------------------------ #
+    #  Validacoes de Bloqueio (Sprint 0 — Fundacao)
+    #
+    #  Fatura e entidade independente — valor_total NAO recalcula
+    #  automaticamente. CTes podem ser desanexados antes de PAGA.
+    # ------------------------------------------------------------------ #
+
+    def pode_editar(self):
+        """Verifica se a fatura pode ser editada.
+
+        Bloqueios:
+        - Status PAGA ou CANCELADA
+        - Conciliacao ativa (total_conciliado > 0)
+
+        Returns:
+            tuple[bool, str]: (pode_editar, razao_se_nao)
+        """
+        if self.status == 'PAGA':
+            return (
+                False,
+                "Fatura PAGA. Desconcilie via Extrato Bancario antes de editar."
+            )
+        if self.status == 'CANCELADA':
+            return False, "Fatura cancelada nao pode ser editada."
+        if self.total_conciliado and float(self.total_conciliado) > 0:
+            return (
+                False,
+                "Fatura tem conciliacao ativa. Desconcilie antes de editar."
+            )
+        return True, ""
+
+    def pode_desanexar_operacao(self):
+        """Verifica se operacoes podem ser desanexadas da fatura.
+
+        Mesma regra de pode_editar() — bloquear se paga/conciliada.
+
+        Returns:
+            tuple[bool, str]: (pode_desanexar, razao_se_nao)
+        """
+        return self.pode_editar()
+
     def __repr__(self):
         return f'<CarviaFaturaCliente {self.numero_fatura} ({self.status})>'
 
@@ -272,6 +313,80 @@ class CarviaFaturaTransportadora(db.Model):
             except (ValueError, TypeError):
                 pass
         return f'FTRANSP-{next_num:03d}'
+
+    # ------------------------------------------------------------------ #
+    #  Validacoes de Bloqueio (Sprint 0 — Fundacao)
+    #
+    #  Fatura Transportadora tem dois status independentes:
+    #  - status_conferencia: PENDENTE → EM_CONFERENCIA → CONFERIDO | DIVERGENTE
+    #  - status_pagamento:   PENDENTE → PAGO
+    #
+    #  CONFERIDO = trava para edicao/desanexar (espelhando FaturaFrete)
+    #  PAGO = trava financeira
+    # ------------------------------------------------------------------ #
+
+    def pode_editar(self):
+        """Verifica se a fatura pode ser editada.
+
+        Bloqueios:
+        - status_conferencia == CONFERIDO
+        - status_pagamento == PAGO
+        - Conciliacao ativa
+
+        Returns:
+            tuple[bool, str]: (pode_editar, razao_se_nao)
+        """
+        if self.status_conferencia == 'CONFERIDO':
+            return (
+                False,
+                "Fatura ja conferida. Reabra a conferencia antes de editar."
+            )
+        if self.status_pagamento == 'PAGO':
+            return (
+                False,
+                "Fatura ja paga. Desconcilie via Extrato Bancario antes de editar."
+            )
+        if self.total_conciliado and float(self.total_conciliado) > 0:
+            return (
+                False,
+                "Fatura tem conciliacao ativa. Desconcilie antes de editar."
+            )
+        return True, ""
+
+    def pode_desanexar_subcontrato(self):
+        """Verifica se subcontratos podem ser desanexados da fatura.
+
+        Mesma regra de pode_editar() — CONFERIDO ou PAGO bloqueia.
+
+        Returns:
+            tuple[bool, str]: (pode_desanexar, razao_se_nao)
+        """
+        return self.pode_editar()
+
+    def pode_editar_sub_valor(self):
+        """Verifica se valor_acertado de subcontratos vinculados pode ser editado.
+
+        Bloqueios:
+        - status_conferencia == CONFERIDO
+        - status_pagamento == PAGO
+
+        Nota: nao bloqueia por conciliacao parcial — valor pode ser ajustado
+        ate a conferencia final. Apenas CONFERIDO trava definitivamente.
+
+        Returns:
+            tuple[bool, str]: (pode_editar, razao_se_nao)
+        """
+        if self.status_conferencia == 'CONFERIDO':
+            return (
+                False,
+                "Fatura conferida. Reabra a conferencia para editar valores de subcontratos."
+            )
+        if self.status_pagamento == 'PAGO':
+            return (
+                False,
+                "Fatura paga. Desconcilie antes de editar valores."
+            )
+        return True, ""
 
     def __repr__(self):
         return f'<CarviaFaturaTransportadora {self.numero_fatura} ({self.status_conferencia})>'

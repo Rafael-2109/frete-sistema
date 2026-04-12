@@ -15,22 +15,18 @@ from app.utils.auth_decorators import require_admin
 logger = logging.getLogger(__name__)
 
 # Mapeamento tipo URL → (metodo do service, redirect_endpoint, label)
+#
+# REMOVIDOS (Sprint 0 — CRITICO + MEDIO):
+#   - 'nf'               (excluir_nf — sem guards, bypass total)
+#   - 'operacao'         (excluir_operacao — bypass CarviaFrete e filhos)
+#   - 'subcontrato'      (excluir_subcontrato — bypass CarviaFrete)
+#   - 'cte-complementar' (excluir_cte_complementar — cascade sem guards)
+#   - 'custo-entrega'    (excluir_custo_entrega — bypass CTe Comp vinculado)
+#   - 'despesa'          (excluir_despesa — bypass COMISSAO)
+#
+# Hard delete bypassava o fluxo unidirecional. Para remover estas entidades,
+# use o fluxo normal: cancelar (status=CANCELADO) apos reverter dependencias.
 _TIPO_CONFIG = {
-    'nf': {
-        'metodo': 'excluir_nf',
-        'redirect': 'carvia.listar_nfs',
-        'label': 'NF',
-    },
-    'operacao': {
-        'metodo': 'excluir_operacao',
-        'redirect': 'carvia.listar_operacoes',
-        'label': 'Operacao',
-    },
-    'subcontrato': {
-        'metodo': 'excluir_subcontrato',
-        'redirect': 'carvia.listar_subcontratos',
-        'label': 'Subcontrato',
-    },
     'fatura-cliente': {
         'metodo': 'excluir_fatura_cliente',
         'redirect': 'carvia.listar_faturas_cliente',
@@ -40,21 +36,6 @@ _TIPO_CONFIG = {
         'metodo': 'excluir_fatura_transportadora',
         'redirect': 'carvia.listar_faturas_transportadora',
         'label': 'Fatura Transportadora',
-    },
-    'cte-complementar': {
-        'metodo': 'excluir_cte_complementar',
-        'redirect': 'carvia.listar_ctes_complementares',
-        'label': 'CTe Complementar',
-    },
-    'custo-entrega': {
-        'metodo': 'excluir_custo_entrega',
-        'redirect': 'carvia.listar_custos_entrega',
-        'label': 'Custo Entrega',
-    },
-    'despesa': {
-        'metodo': 'excluir_despesa',
-        'redirect': 'carvia.listar_despesas',
-        'label': 'Despesa',
     },
     'receita': {
         'metodo': 'excluir_receita',
@@ -98,62 +79,13 @@ def register_admin_routes(bp):
             return redirect(request.referrer or url_for(config['redirect']))
 
     # ------------------------------------------------------------------ #
-    #  Edicao Completa (Fase 4)
+    #  REMOVIDO (Sprint 0 — CRITICO): admin_editar (FIELD_EDIT)
+    #
+    #  A rota permitia setar qualquer campo em qualquer entidade,
+    #  bypassando TODOS os guards de bloqueio. Para editar campos,
+    #  use as rotas especificas da entidade (ex: editar_cte_valor,
+    #  editar_despesa, editar_vencimento).
     # ------------------------------------------------------------------ #
-
-    @bp.route('/admin/editar/<tipo>/<int:id>', methods=['GET', 'POST'])
-    @login_required
-    @require_admin
-    def admin_editar(tipo, id):
-        """Edicao completa de qualquer entidade CarVia (todos os campos)."""
-        from app.carvia.services.admin.admin_service import AdminService
-        service = AdminService()
-
-        ModelClass = service._get_model_class(tipo)
-        if not ModelClass:
-            flash(f'Tipo invalido: {tipo}', 'danger')
-            return redirect(url_for('carvia.dashboard'))
-
-        entity = ModelClass.query.get_or_404(id)
-
-        if request.method == 'POST':
-            motivo = request.form.get('motivo', '').strip()
-            if not motivo or len(motivo) < 10:
-                flash('Motivo obrigatorio (minimo 10 caracteres).', 'danger')
-                return redirect(request.url)
-
-            # Coletar campos do form
-            campos_form = {}
-            for col in entity.__table__.columns:
-                if col.name in request.form:
-                    campos_form[col.name] = request.form[col.name]
-
-            resultado = service.editar_entidade(tipo, id, campos_form, motivo, current_user.email)
-
-            if resultado['sucesso']:
-                flash(
-                    f'{resultado["mensagem"]} (Auditoria #{resultado["auditoria_id"]})',
-                    'success',
-                )
-                # Redirect para detalhe da entidade
-                config = _TIPO_CONFIG.get(tipo, {})
-                return redirect(request.referrer or url_for(config.get('redirect', 'carvia.dashboard')))
-            else:
-                flash(resultado['mensagem'], 'warning')
-                return redirect(request.url)
-
-        # GET: mostrar formulario
-        campos = service.obter_campos_editaveis(tipo, entity)
-        tipo_label = _TIPO_CONFIG.get(tipo, {}).get('label', tipo)
-
-        return render_template(
-            'carvia/admin/editar_completo.html',
-            tipo=tipo,
-            entity=entity,
-            campos=campos,
-            tipo_label=f'{tipo_label} #{id}',
-            url_referrer=request.referrer or url_for('carvia.dashboard'),
-        )
 
     # ------------------------------------------------------------------ #
     #  Re-link NF ↔ CTe (Fase 6.1)
