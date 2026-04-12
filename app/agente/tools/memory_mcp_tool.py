@@ -521,9 +521,16 @@ def _embed_memory_best_effort(
 
             # Gerar embeddings: retrieval (contextual) + dedup (texto limpo)
             svc = EmbeddingService()
-            embeddings = svc.embed_texts(
-                [texto_embedado, dedup_texto], input_type="document"
-            )
+            try:
+                embeddings = svc.embed_texts(
+                    [texto_embedado, dedup_texto], input_type="document"
+                )
+            except Exception as e:
+                from app.embeddings.client import EmbeddingUnavailableError
+                if isinstance(e, EmbeddingUnavailableError):
+                    logger.warning(f"[memory_embed] Voyage indisponivel, pulando: {e}")
+                    return
+                raise
 
             if not embeddings or len(embeddings) < 2:
                 return
@@ -611,7 +618,14 @@ def _save_dedup_embedding_only(user_id: int, path: str, content: str) -> None:
         return
 
     svc = EmbeddingService()
-    embeddings = svc.embed_texts([dedup_texto], input_type="document")
+    try:
+        embeddings = svc.embed_texts([dedup_texto], input_type="document")
+    except Exception as e:
+        from app.embeddings.client import EmbeddingUnavailableError
+        if isinstance(e, EmbeddingUnavailableError):
+            logger.warning(f"[memory_dedup_embed] Voyage indisponivel, pulando: {e}")
+            return
+        raise
     if not embeddings:
         return
 
@@ -943,7 +957,14 @@ def _dedup_embedding_search(
     # DEDUP: usar input_type="document" (mesmo tipo do armazenado)
     # embed_query() usa input_type="query" — cria representação assimétrica
     # que reduz similaridade em ~0.07-0.15 pontos (Voyage AI asymmetric search)
-    query_embedding = svc.embed_texts([clean_content], input_type="document")[0]
+    try:
+        query_embedding = svc.embed_texts([clean_content], input_type="document")[0]
+    except Exception as e:
+        from app.embeddings.client import EmbeddingUnavailableError
+        if isinstance(e, EmbeddingUnavailableError):
+            logger.warning(f"[dedup_search] Voyage indisponivel, pulando dedup: {e}")
+            return None
+        raise
     embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
     # Incluir user_id=0 (memórias empresa) para memória compartilhada

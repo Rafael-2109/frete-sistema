@@ -392,7 +392,14 @@ def _check_effectiveness_semantic(
         all_texts = mem_texts + [response_text]
 
         svc = EmbeddingService()
-        embeddings = svc.embed_texts(all_texts, input_type="document")
+        try:
+            embeddings = svc.embed_texts(all_texts, input_type="document")
+        except Exception as e:
+            from app.embeddings.client import EmbeddingUnavailableError
+            if isinstance(e, EmbeddingUnavailableError):
+                logger.warning(f"[effectiveness] Voyage indisponivel, pulando: {e}")
+                return None  # Signal fallback
+            raise
 
         if not embeddings or len(embeddings) != len(all_texts):
             return None  # Signal fallback
@@ -584,7 +591,14 @@ def _embed_session_turn_best_effort(app, session_id, user_id, user_message, assi
 
         # Gerar embedding
         svc = EmbeddingService()
-        embeddings = svc.embed_texts([texto_embedado], input_type="document")
+        try:
+            embeddings = svc.embed_texts([texto_embedado], input_type="document")
+        except Exception as e:
+            from app.embeddings.client import EmbeddingUnavailableError
+            if isinstance(e, EmbeddingUnavailableError):
+                logger.warning(f"[session_embed] Voyage indisponivel, pulando: {e}")
+                return
+            raise
 
         if not embeddings:
             return

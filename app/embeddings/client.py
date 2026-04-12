@@ -28,6 +28,33 @@ RETRY_DELAYS = [1.0, 2.0, 4.0]  # Backoff exponencial
 REQUEST_TIMEOUT = 30  # segundos
 
 
+class EmbeddingUnavailableError(RuntimeError):
+    """
+    Raised when Voyage AI is unreachable due to external blocking (WAF/CDN 403,
+    network partition, rate limit from edge) — NOT when auth or payload is wrong.
+
+    Herda de RuntimeError para manter compatibilidade com callers antigos que
+    fazem `except RuntimeError`. Callers no hot-path (chat/bot) devem capturar
+    essa exceção e pular a busca semantica, caindo em fallback ILIKE/regex.
+    """
+    pass
+
+
+def _is_edge_block(err: Exception) -> bool:
+    """
+    Detecta se o erro veio de bloqueio de edge (Cloudflare/WAF na frente da
+    Voyage) em vez de um erro legitimo da API (auth, payload, rate legit).
+
+    Heuristica: mensagem de erro contem HTML (`<!doctype`, `<html`) ou
+    `403`/`Forbidden` textual. API Voyage legitima sempre retorna JSON.
+    """
+    msg = str(err).lower()
+    html_markers = ('<!doctype', '<html', '<title>', '403 forbidden')
+    return any(m in msg for m in html_markers) or (
+        '403' in msg and 'forbidden' in msg
+    )
+
+
 def get_voyage_client() -> voyageai.Client:
     """
     Retorna instancia singleton do Voyage AI client.
@@ -84,7 +111,10 @@ def embed_with_retry(
         Lista de embeddings
 
     Raises:
-        RuntimeError: Se todas as tentativas falharem
+        EmbeddingUnavailableError: Se o erro indicar bloqueio externo
+            (WAF/CDN 403 HTML) — callers no hot-path devem capturar e pular
+            a busca semantica.
+        RuntimeError: Outros erros (auth, payload invalido, server 5xx).
     """
     vo = get_voyage_client()
     last_error = None
@@ -103,6 +133,15 @@ def embed_with_retry(
 
         except Exception as e:
             last_error = e
+            # Bloqueio de edge nao se resolve com retry — fail fast
+            if _is_edge_block(e):
+                logger.error(
+                    f"[VoyageClient] Bloqueio externo detectado (WAF/CDN 403): {str(e)[:200]}"
+                )
+                raise EmbeddingUnavailableError(
+                    f"Voyage AI bloqueada por edge/WAF (retry futil): {str(e)[:200]}"
+                ) from e
+
             if attempt < MAX_RETRIES - 1:
                 delay = RETRY_DELAYS[attempt]
                 logger.warning(
@@ -114,6 +153,12 @@ def embed_with_retry(
                 logger.error(
                     f"[VoyageClient] Todas as {MAX_RETRIES} tentativas falharam: {e}"
                 )
+
+    # Apos exhaustion: reclassifica se a ultima falha parecer bloqueio
+    if last_error is not None and _is_edge_block(last_error):
+        raise EmbeddingUnavailableError(
+            f"Voyage AI bloqueada apos {MAX_RETRIES} tentativas: {str(last_error)[:200]}"
+        ) from last_error
 
     raise RuntimeError(
         f"Voyage AI embed falhou apos {MAX_RETRIES} tentativas: {last_error}"

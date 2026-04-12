@@ -96,7 +96,11 @@ class EmbeddingService:
         if not texts:
             return []
 
-        from app.embeddings.client import embed_with_retry, normalize_for_embedding
+        from app.embeddings.client import (
+            embed_with_retry,
+            normalize_for_embedding,
+            EmbeddingUnavailableError,
+        )
 
         model = model or self.model
         all_embeddings = []
@@ -114,6 +118,10 @@ class EmbeddingService:
                     output_dimension=self.dimensions,
                 )
                 all_embeddings.extend(embeddings)
+            except EmbeddingUnavailableError:
+                # Propaga sem envolver — callers no hot-path capturam isso
+                # para fazer fallback gracioso (pular busca semantica).
+                raise
             except Exception as e:
                 raise RuntimeError(
                     f"Erro ao gerar embeddings com Voyage AI (modelo={model}, "
@@ -135,6 +143,25 @@ class EmbeddingService:
         """
         embeddings = self.embed_texts([query], input_type="query", model=model)
         return embeddings[0]
+
+    def _safe_embed_query(self, query: str, model: str = None):
+        """
+        Variante de embed_query que retorna None em vez de propagar
+        EmbeddingUnavailableError quando o Voyage AI esta bloqueado por
+        edge/WAF. Usado pelos metodos search_* para fallback gracioso.
+
+        Retorna:
+            List[float] em caso de sucesso, None quando Voyage esta
+            indisponivel (o caller deve retornar [] para fallback).
+        """
+        from app.embeddings.client import EmbeddingUnavailableError
+        try:
+            return self.embed_query(query, model=model)
+        except EmbeddingUnavailableError as e:
+            logger.warning(
+                f"[search] Voyage indisponivel, pulando busca semantica: {str(e)[:150]}"
+            )
+            return None
 
     # ================================================================
     # BUSCA SEMANTICA — SSW DOCS
@@ -166,7 +193,9 @@ class EmbeddingService:
         min_similarity = min_similarity or THRESHOLD_SSW
 
         # Gerar embedding da query
-        query_embedding = self.embed_query(query)
+        query_embedding = self._safe_embed_query(query)
+        if query_embedding is None:
+            return []
 
         # Buscar por similaridade
         if self._is_pgvector_available():
@@ -382,7 +411,9 @@ class EmbeddingService:
 
         min_similarity = min_similarity or THRESHOLD_PRODUCT
 
-        query_embedding = self.embed_query(query)
+        query_embedding = self._safe_embed_query(query)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_products(query_embedding, limit, min_similarity)
@@ -495,7 +526,9 @@ class EmbeddingService:
         min_similarity = min_similarity or THRESHOLD_ENTITY
 
         # Entidades financeiras usam voyage-finance-2 (P1.1)
-        query_embedding = self.embed_query(query, model=VOYAGE_FINANCE_MODEL)
+        query_embedding = self._safe_embed_query(query, model=VOYAGE_FINANCE_MODEL)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_entities(
@@ -637,7 +670,9 @@ class EmbeddingService:
 
         min_similarity = min_similarity or THRESHOLD_SESSION
 
-        query_embedding = self.embed_query(query)
+        query_embedding = self._safe_embed_query(query)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_session_turns(
@@ -770,7 +805,9 @@ class EmbeddingService:
 
         min_similarity = min_similarity or THRESHOLD_MEMORY
 
-        query_embedding = self.embed_query(query)
+        query_embedding = self._safe_embed_query(query)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_memories(
@@ -899,7 +936,9 @@ class EmbeddingService:
 
         min_similarity = min_similarity or THRESHOLD_SQL_TEMPLATE
 
-        query_embedding = self.embed_query(query)
+        query_embedding = self._safe_embed_query(query)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_sql_templates(
@@ -1024,7 +1063,9 @@ class EmbeddingService:
         min_similarity = min_similarity or THRESHOLD_PAYMENT_CATEGORY
 
         # Categorias de pagamento usam voyage-finance-2 (P1.1)
-        query_embedding = self.embed_query(query, model=VOYAGE_FINANCE_MODEL)
+        query_embedding = self._safe_embed_query(query, model=VOYAGE_FINANCE_MODEL)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_payment_categories(
@@ -1142,7 +1183,9 @@ class EmbeddingService:
 
         min_similarity = min_similarity or THRESHOLD_DEVOLUCAO
 
-        query_embedding = self.embed_query(query)
+        query_embedding = self._safe_embed_query(query)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_devolucao_reasons(
@@ -1282,7 +1325,9 @@ class EmbeddingService:
 
         min_similarity = min_similarity or THRESHOLD_CARRIER
 
-        query_embedding = self.embed_query(query)
+        query_embedding = self._safe_embed_query(query)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_carriers(
@@ -1402,7 +1447,9 @@ class EmbeddingService:
 
         min_similarity = min_similarity or THRESHOLD_ROUTE_TEMPLATE
 
-        query_embedding = self.embed_query(query)
+        query_embedding = self._safe_embed_query(query)
+        if query_embedding is None:
+            return []
 
         if self._is_pgvector_available():
             return self._search_pgvector_routes(
