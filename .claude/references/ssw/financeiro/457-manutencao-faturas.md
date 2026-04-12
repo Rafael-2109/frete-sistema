@@ -51,22 +51,58 @@ Manutencao completa de faturas incluindo consulta, alteracao de vencimento, inst
 | Adicionais | Creditos/debitos lancados |
 | Ocorrencias | Historico de instrucoes bancarias e eventos |
 
-### Instrucoes Bancarias (Siglas)
-| Sigla | Descricao | Tipo |
-|-------|-----------|------|
-| A | Abater | Transmissao (envio) |
-| P | Prorrogar | Transmissao |
-| R | Protestar | Transmissao |
-| S | Sustar Protesto | Transmissao |
-| B | Baixar | Transmissao |
-| T | Entrada Confirmada | Recepcao |
-| L | Liquidado | Recepcao |
+### Menu da Opcao 457 (confirmado 2026-04-12)
 
-### Instrucoes Especiais
-| Codigo | Descricao |
-|--------|-----------|
-| 96 | Marcar para envio ao Serasa/Equifax/SPC |
-| 97 | Marcar para baixa do Serasa/Equifax/SPC |
+> O menu real da 457 e numerado (68-99), nao por siglas. As siglas A/P/R/S/B sao codigos CNAB do arquivo de remessa (opcao 443), documentadas mais abaixo.
+
+| Opcao | Funcao |
+|-------|--------|
+| **82** | Incluir CTRC na fatura |
+| **92** | Excluir CTRCs da fatura |
+| **85** | Mudar data de vencimento |
+| **74** | Mudar data de emissao |
+| **86** | **Lancamento de credito** — subtraido do valor da fatura (desconto) |
+| **87** | **Lancamento de debito** — adicionado ao valor da fatura (multa, taxa) |
+| **94** | Troca unidade responsavel pela fatura |
+| **83** | Mudar cobranca de carteira para agencia |
+| **84** | Mudar de cobranca agencia para carteira |
+| **77** | Observacao impressa na fatura |
+| **95** | Retira do arq. remessa / Libera geracao novo boleto |
+| **90** | Baixa fatura bancaria para carteira |
+| **89** | Pagamento parcial da fatura |
+| **81** | Estorno de pagamento parcial |
+| **73** | Pagamento parcial da fatura por CTRC/Nota |
+| **72** | Estorno de pagamento parcial da fatura por CTRC/Nota |
+| **88** | Liquidacao da fatura |
+| **93** | Estorno de liquidacao de fatura |
+| **76** | Descontar titulo bancario |
+| **75** | Estorno de desconto titulo bancario |
+| **78** | Baixa para carteira fatura descontada em banco |
+| **79** | Liquidacao fatura descontada em banco |
+| **96** | Marca fatura para inclusao no Serasa/Equifax |
+| **97** | Marca fatura p/ baixa no Serasa/Equifax (renegociacao divida) |
+| **68** | Marca fatura para inclusao no SPC |
+| **69** | Marca fatura p/ baixa no SPC (renegociacao divida) |
+| **70** | Marca fatura como protestada |
+| **71** | Desmarca fatura como protestada |
+| **98** | Fatura perdida nao recebivel |
+| **80** | Estorno de Fatura Perdida |
+| **91** | Cancelar fatura |
+| **99** | Incluir informacao ou instrucao |
+
+### Codigos CNAB (Arquivo de Remessa 443) — NAO sao menu da 457
+
+Estes codigos de transmissao sao enviados ao banco via arquivo de remessa ([opcao 443](./443-gera-arquivo-cobranca.md)) a partir de acoes executadas na 457. Nao sao opcoes de menu.
+
+| Codigo | Descricao | Tipo |
+|--------|-----------|------|
+| **A** | Abater | Transmissao (envio) |
+| **P** | Prorrogar | Transmissao |
+| **R** | Protestar | Transmissao |
+| **S** | Sustar Protesto | Transmissao |
+| **B** | Baixar | Transmissao |
+| **T** | Entrada Confirmada | Recepcao (retorno 444) |
+| **L** | Liquidado | Recepcao (retorno 444) |
 
 ## Fluxo de Uso
 
@@ -78,71 +114,110 @@ Manutencao completa de faturas incluindo consulta, alteracao de vencimento, inst
 ### Alterar Data de Vencimento Individual
 1. Acessar opcao 457
 2. Informar numero da fatura
-3. Acessar link "Alterar vencimento"
+3. Selecionar **opcao 85** (Mudar data de vencimento)
 4. Informar nova data de vencimento
 5. Confirmar alteracao
-6. Nao permitido para faturas: liquidadas, canceladas ou em arquivo de remessa
+6. Nao permitido para faturas: liquidadas, canceladas ou em arquivo de remessa ja enviado
 
-### Enviar Instrucao Bancaria (Abater, Prorrogar, Protestar, Baixar)
+### Lancar Credito (Desconto) ou Debito (Multa/Taxa)
 1. Acessar opcao 457
 2. Informar numero da fatura
-3. Acessar link "Instrucoes Gerais"
-4. Selecionar instrucao (A, P, R, S, B)
-5. Confirmar instrucao
-6. Instrucao gravada em ocorrencias da fatura
-7. Instrucao enviada ao banco via arquivo de remessa (opcao 443)
+3. Selecionar **opcao 86** (credito — subtrai do valor) ou **opcao 87** (debito — adiciona ao valor)
+4. Informar valor e motivo
+5. Confirmar lancamento
+6. Sistema atualiza valor da fatura
+
+> **Caso de uso validado 2026-04-12**: Desconto em fatura emitida com valor maior que o negociado, apos 7 dias (CT-e nao pode mais ser cancelado no SEFAZ) — opcao 86 resolve o financeiro. CT-e fiscal permanece com valor original.
 
 ### Marcar Fatura para Serasa/Equifax/SPC
 1. Acessar opcao 457
 2. Informar numero da fatura vencida
-3. Acessar link "Instrucoes Gerais"
-4. Selecionar instrucao 96 (envio ao Serasa/Equifax/SPC)
-5. Confirmar marcacao
-6. Gerar arquivo pela opcao 334 (Serasa), 336 (Equifax) ou 337 (SPC)
-7. Enviar arquivo ao orgao de protecao ao credito
+3. Selecionar:
+   - **opcao 96** — inclusao no Serasa/Equifax
+   - **opcao 68** — inclusao no SPC
+4. Confirmar marcacao
+5. Gerar arquivo pela opcao **334** (Serasa), **336** (Equifax) ou **337** (SPC)
+6. Enviar arquivo ao orgao de protecao ao credito
 
-### Baixar Fatura do Serasa/Equifax/SPC
+### Baixar Fatura do Serasa/Equifax/SPC (cliente pagou / renegociou)
 1. Acessar opcao 457
 2. Informar numero da fatura
-3. Acessar link "Instrucoes Gerais"
-4. Selecionar instrucao 97 (baixa do Serasa/Equifax/SPC)
-5. Confirmar baixa
-6. Baixa seguira automaticamente no proximo arquivo (opcao 334, 336 ou 337)
+3. Selecionar:
+   - **opcao 97** — baixa no Serasa/Equifax
+   - **opcao 69** — baixa no SPC
+4. Confirmar baixa
+5. Baixa seguira automaticamente no proximo arquivo (opcao 334, 336 ou 337)
+
+### Marcar/Desmarcar Fatura como Protestada
+1. Acessar opcao 457
+2. Informar numero da fatura
+3. Selecionar **opcao 70** (marcar como protestada) ou **opcao 71** (desmarcar)
+4. Confirmar
 
 ### Marcar Fatura como Perdida
 1. Acessar opcao 457
 2. Informar numero da fatura em carteira
-3. Acessar link "Marcar como perdida"
+3. Selecionar **opcao 98** (Fatura perdida nao recebivel)
 4. Informar motivo
 5. Confirmar
 6. Valor aparece em Situacao Geral (opcao 001) como "PERDIDO (E)"
+7. Estorno: **opcao 80** (Estorno de Fatura Perdida)
 
-### Retirar CTRC de Fatura
+### Cancelar Fatura
 1. Acessar opcao 457
 2. Informar numero da fatura
-3. Acessar link "Retirar CTRC"
-4. Selecionar CTRC a ser retirado
-5. Confirmar retirada
-6. CTRC fica disponivel para novo faturamento
-7. Necessario antes de estornar liquidacao de CTRC (opcao 429)
+3. Selecionar **opcao 91** (Cancelar fatura)
+4. Confirmar cancelamento
 
-### Lancar Adicional (Credito/Debito)
+### Incluir/Excluir CTRC da Fatura
 1. Acessar opcao 457
 2. Informar numero da fatura
-3. Acessar link "Adicional"
-4. Informar tipo (credito ou debito), valor e motivo
-5. Confirmar lancamento
-6. Credito reduz valor da fatura; debito aumenta
-7. Adicional disponivel em faturamento manual (opcao 437)
+3. Selecionar **opcao 82** (Incluir CTRC) ou **opcao 92** (Excluir CTRCs)
+4. Selecionar CTRC
+5. Confirmar — CTRC excluido fica disponivel para novo faturamento
+6. Necessario (92) antes de estornar liquidacao de CTRC (opcao 429)
 
-### Repassar Fatura para Agencia
+### Registrar Pagamento Parcial / Liquidacao
+| Operacao | Opcao 457 |
+|----------|-----------|
+| Pagamento parcial | **89** |
+| Estorno pagamento parcial | **81** |
+| Pagamento parcial por CTRC/Nota | **73** |
+| Estorno pagamento parcial por CTRC/Nota | **72** |
+| Liquidacao | **88** |
+| Estorno de liquidacao | **93** |
+
+### Mudar Cobranca (Carteira ↔ Agencia)
 1. Acessar opcao 457
 2. Informar numero da fatura
-3. Acessar link "Repassar para agencia"
-4. Selecionar agencia (opcao 466)
-5. Confirmar repasse
-6. Valor lancado via CCF (opcao 486)
-7. Fatura nao pode ser trocada de banco apos repasse (opcao 465)
+3. Selecionar **opcao 83** (carteira → agencia) ou **opcao 84** (agencia → carteira)
+4. Selecionar agencia (opcao 466) — quando aplicavel
+5. Confirmar — valor lancado via CCF (opcao 486)
+6. Fatura nao pode ser trocada de banco apos repasse (opcao 465)
+
+### Outras Operacoes
+| Operacao | Opcao 457 |
+|----------|-----------|
+| Mudar data de emissao | **74** |
+| Troca unidade responsavel | **94** |
+| Observacao impressa na fatura | **77** |
+| Retira do arq. remessa / libera novo boleto | **95** |
+| Baixa fatura bancaria para carteira | **90** |
+| Descontar titulo bancario | **76** |
+| Estorno desconto titulo | **75** |
+| Baixa p/ carteira fatura descontada | **78** |
+| Liquidacao fatura descontada | **79** |
+| Incluir informacao ou instrucao | **99** |
+
+### Envio de Codigos CNAB ao Banco (via Remessa 443)
+
+> Estas instrucoes NAO sao executadas na 457 diretamente — sao **geradas** pela 457 e **enviadas** via arquivo de remessa (opcao 443).
+
+1. Executar operacao na 457 (ex: opcao 86 credito → gera CNAB "A" abater)
+2. Acessar opcao **443** (Gera Arquivo de Cobranca)
+3. Sistema monta arquivo com codigos CNAB correspondentes
+4. Enviar arquivo ao banco
+5. Retorno do banco via opcao **444** (Cobranca Bancaria — Retorno) traz codigos T (Entrada Confirmada) ou L (Liquidado)
 
 ## Integracao com Outras Opcoes
 
@@ -172,11 +247,20 @@ Manutencao completa de faturas incluindo consulta, alteracao de vencimento, inst
 
 ## Observacoes e Gotchas
 
-### Instrucoes Bancarias
+### GOTCHA Critico — Menu 457 e numerado, NAO por siglas (corrigido 2026-04-12)
+
+**Erro comum**: Citar A/P/R/S/B como "opcoes" do menu da 457. Errado.
+
+- **Menu da 457**: numerado 68-99 (ver tabela "Menu da Opcao 457" acima)
+- **Siglas A/P/R/S/B**: sao **codigos CNAB** de transmissao no arquivo de remessa (opcao 443), **nao sao menu**
+- **Siglas T/L**: codigos CNAB de recepcao no arquivo de retorno (opcao 444)
+
+### Codigos CNAB (Fluxo 457 → 443 → Banco → 444)
 - **Transmissao (envio)**: A (Abater), P (Prorrogar), R (Protestar), S (Sustar Protesto), B (Baixar)
 - **Recepcao**: T (Entrada Confirmada), L (Liquidado)
-- Instrucoes enviadas ao banco via arquivo de remessa (opcao 443)
-- Confirmacao recebida via arquivo de retorno (opcao 444)
+- Operacao executada na **457** (menu numerado) gera codigo CNAB correspondente
+- Codigo enviado ao banco via arquivo de remessa (**443**)
+- Confirmacao/retorno recebida via arquivo de retorno (**444**)
 - Ocorrencias cadastradas na opcao 912
 
 ### Tarifa Bancaria
@@ -201,16 +285,20 @@ Manutencao completa de faturas incluindo consulta, alteracao de vencimento, inst
 - Apenas faturas em carteira (banco = 999)
 - Valor aparece em Situacao Geral (opcao 001) como "PERDIDO (E)"
 
-### Adicionais (Credito/Debito)
-- **Credito**: reduz valor da fatura (ex: desconto concedido, devolucao de mercadoria)
-- **Debito**: aumenta valor da fatura (ex: multa, taxa de reentrega)
+### Adicionais (Credito/Debito — opcoes 86 e 87 da 457)
+- **Opcao 86 — Credito**: reduz valor da fatura (ex: desconto concedido, ajuste ao valor negociado, devolucao de mercadoria)
+- **Opcao 87 — Debito**: aumenta valor da fatura (ex: multa, taxa de reentrega)
 - Origem: fatura ja emitida ou lancado em CTR/fatura (opcao 442)
 - Disponiveis em faturamento manual (opcao 437)
 - Relacao de adicionais por cliente (opcao 459)
+- **Caso validado 2026-04-12**: desconto em fatura com valor maior que o negociado apos 7 dias (CT-e nao pode mais ser cancelado no SEFAZ) — opcao 86 resolve o financeiro. O CT-e fiscal permanece com valor original (impacta SPED/ICMS).
 
 ### Serasa/Equifax/SPC
-- **Instrucao 96**: marca para envio ao orgao de protecao ao credito
-- **Instrucao 97**: marca para baixa do orgao
+- **Opcao 96**: inclusao no Serasa/Equifax
+- **Opcao 97**: baixa no Serasa/Equifax (renegociacao divida)
+- **Opcao 68**: inclusao no SPC
+- **Opcao 69**: baixa no SPC (renegociacao divida)
+- **Opcoes 70/71**: marcar/desmarcar fatura como protestada (processo distinto)
 - Arquivos gerados pelas opcoes 334 (Serasa), 336 (Equifax), 337 (SPC)
 - Envio ao orgao feito manualmente pela transportadora
 - Fatura cancelada automaticamente segue para baixa no proximo arquivo
@@ -250,3 +338,12 @@ Manutencao completa de faturas incluindo consulta, alteracao de vencimento, inst
 | [POP-E05](../pops/POP-E05-liquidar-fatura.md) | Liquidar fatura |
 | [POP-E06](../pops/POP-E06-manutencao-faturas.md) | Manutencao faturas |
 | [POP-F05](../pops/POP-F05-bloqueio-financeiro-ctrc.md) | Bloqueio financeiro ctrc |
+
+---
+
+## Historico de Correcoes
+
+| Data | Alteracao |
+|------|-----------|
+| 2026-02-14 | Criacao inicial |
+| 2026-04-12 | Correcao — menu da 457 e numerado (68-99), nao por siglas. Siglas A/P/R/S/B reclassificadas como codigos CNAB do arquivo de remessa 443. Adicionada tabela completa do menu. Validado com usuario: opcao 86 funcionou para desconto em fatura apos 7 dias. |
