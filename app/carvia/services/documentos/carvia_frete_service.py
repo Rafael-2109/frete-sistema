@@ -159,16 +159,17 @@ class CarviaFreteService:
                         except Exception:
                             # Fora de request context — OK, so log
                             pass
-                        # Itens adicionados a itens_com_frete para marcar
-                        # pedidos como EMBARCADO (fisicamente saiu, mesmo
-                        # que o frete financeiro esteja stale).
-                        itens_com_frete.extend(itens_grupo)
                     else:
                         # Nenhuma NF nova — nada a fazer, frete ja reflete.
                         logger.debug(
                             "Frete #%d: todas as NFs ja presentes, skip.",
                             existente.id,
                         )
+                    # Re-review Sprint 3 I2: marcar pedidos como EMBARCADO
+                    # tanto no branch de bloqueio quanto no "ja presentes".
+                    # Em ambos os casos o frete existe e os itens fisicamente
+                    # sairam — pedidos devem refletir EMBARCADO.
+                    itens_com_frete.extend(itens_grupo)
                     fretes_resultado.append(existente.id)
                     continue
 

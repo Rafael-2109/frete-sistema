@@ -446,14 +446,22 @@ def register_nf_routes(bp):
         )
 
         # Fretes CarVia vinculados a esta NF (por numero_nf + CNPJ emitente/destino)
+        # Re-review Sprint 2 IMP-2: usar match por boundaries (como em
+        # CarviaNf.pode_cancelar) para evitar false positives em display.
+        # Ex: NF "123" nao deve bater com frete que tem numeros_nfs="1234,5678".
         from app.carvia.models import CarviaFrete
         fretes_nf = []
         if nf.numero_nf:
             fretes_nf = CarviaFrete.query.filter(
-                CarviaFrete.numeros_nfs.ilike(f'%{nf.numero_nf}%'),
                 CarviaFrete.cnpj_emitente == nf.cnpj_emitente,
                 CarviaFrete.cnpj_destino == nf.cnpj_destinatario,
                 CarviaFrete.status != 'CANCELADO',
+                db.or_(
+                    CarviaFrete.numeros_nfs == nf.numero_nf,
+                    CarviaFrete.numeros_nfs.like(f"{nf.numero_nf},%"),
+                    CarviaFrete.numeros_nfs.like(f"%,{nf.numero_nf},%"),
+                    CarviaFrete.numeros_nfs.like(f"%,{nf.numero_nf}"),
+                ),
             ).all()
         tem_frete = bool(fretes_nf)
         tem_cte = bool(operacoes)

@@ -455,13 +455,19 @@ class CarviaOperacao(db.Model):
         if self.status == 'CANCELADO':
             return False, "Operacao ja esta cancelada."
 
-        # Edge case (review Sprint 1 IMP-2): se operacao esta FATURADO mas
-        # a fatura ja foi cancelada, permitir cancelar a operacao orfa
-        # (sem esse check, a operacao ficaria permanentemente bloqueada).
+        # Edge case (review Sprint 1 IMP-2): se operacao esta FATURADO,
+        # permitir cancelar APENAS se a fatura nao existe mais (dangling FK)
+        # ou ja esta CANCELADA. Caso contrario, bloquear e pedir para
+        # desvincular primeiro.
         if self.status == 'FATURADO':
             fatura = self.fatura_cliente
-            if fatura and fatura.status == 'CANCELADA':
-                pass  # permite seguir — fatura ja nao existe efetivamente
+            if fatura is None:
+                # fatura_cliente_id pode estar NULL ou apontar para
+                # registro inexistente — operacao e orfa, permitir cancelar
+                pass
+            elif fatura.status == 'CANCELADA':
+                # Fatura existe mas foi cancelada — permite cancelar
+                pass
             else:
                 return (
                     False,

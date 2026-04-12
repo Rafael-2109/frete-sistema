@@ -551,9 +551,12 @@ class CarviaConciliacaoService:
             CarviaContaMovimentacao, CarviaConciliacao, CarviaExtratoLinha,
         )
 
-        # Path 1 (legado): CarviaContaMovimentacao direta
+        # Path 1 (legado): CarviaContaMovimentacao direta.
+        # Re-review Sprint 3 C1 fix: usar db.session.query(Model) (nao
+        # Model.query) dentro do exists() para evitar conflito entre as
+        # duas APIs de Query (Flask-SQLAlchemy legacy vs SQLAlchemy core).
         tem_mov_legado = db.session.query(
-            CarviaContaMovimentacao.query.filter(
+            db.session.query(CarviaContaMovimentacao).filter(
                 CarviaContaMovimentacao.tipo_doc == tipo_doc,
                 CarviaContaMovimentacao.doc_id == doc_id,
             ).exists()
@@ -563,7 +566,7 @@ class CarviaConciliacaoService:
 
         # Path 2 (novo W10 N2): conciliacao com linha FC_VIRTUAL
         tem_fc_virtual = db.session.query(
-            CarviaConciliacao.query.join(
+            db.session.query(CarviaConciliacao).join(
                 CarviaExtratoLinha,
                 CarviaExtratoLinha.id == CarviaConciliacao.extrato_linha_id,
             ).filter(

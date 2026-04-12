@@ -372,12 +372,24 @@ def registrar_movimento():
                     if registro.embarque_id:
                         try:
                             from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
+                            from flask import g as _g
                             fretes = CarviaFreteService.lancar_frete_carvia(
                                 embarque_id=registro.embarque_id,
                                 usuario=current_user.email,
                             )
                             if fretes:
                                 flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
+                            # W11 (Sprint 3 I1): exibir avisos de NFs bloqueadas
+                            for bloq in getattr(_g, 'carvia_w11_bloqueios', []):
+                                flash(
+                                    f"NF(s) {', '.join(bloq['nfs_bloqueadas'])} "
+                                    f"bloqueada(s) pelo W11 (frete #{bloq['frete_id']}). "
+                                    f"Cancele o frete CarVia e recrie para incluir.",
+                                    'warning',
+                                )
+                            # Limpar para evitar vazar para proxima request
+                            if hasattr(_g, 'carvia_w11_bloqueios'):
+                                del _g.carvia_w11_bloqueios
                         except Exception as e:
                             print(f"[AVISO] Hook CarVia FreteService falhou: {e}")
 
@@ -764,12 +776,23 @@ def adicionar_embarque():
             # Hook CarVia: gerar fretes (vinculacao apos saida)
             try:
                 from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
+                from flask import g as _g
                 fretes = CarviaFreteService.lancar_frete_carvia(
                     embarque_id=embarque_id,
                     usuario=current_user.email,
                 )
                 if fretes:
                     flash(f'{len(fretes)} frete(s) CarVia gerado(s).', 'info')
+                # W11 (Sprint 3 I1): exibir avisos de NFs bloqueadas
+                for bloq in getattr(_g, 'carvia_w11_bloqueios', []):
+                    flash(
+                        f"NF(s) {', '.join(bloq['nfs_bloqueadas'])} "
+                        f"bloqueada(s) pelo W11 (frete #{bloq['frete_id']}). "
+                        f"Cancele o frete CarVia e recrie para incluir.",
+                        'warning',
+                    )
+                if hasattr(_g, 'carvia_w11_bloqueios'):
+                    del _g.carvia_w11_bloqueios
             except Exception as e:
                 print(f"[AVISO] Hook CarVia FreteService falhou (vinculacao): {e}")
 

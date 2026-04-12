@@ -496,8 +496,9 @@ def register_fluxo_caixa_routes(bp):
                 if conciliacoes_virtuais:
                     msg_extra = (
                         f' (Ha tambem {len(conciliacoes_virtuais)} pagamento(s) '
-                        'via Outros Extratos — apos desconciliar a linha real, '
-                        'volte aqui para desfazer o pagamento via FC.)'
+                        'via Outros Extratos — apos desconciliar no Extrato '
+                        'Bancario, volte aqui no Fluxo de Caixa para desfazer '
+                        'o pagamento restante.)'
                     )
                 else:
                     msg_extra = ''

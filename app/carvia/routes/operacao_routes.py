@@ -573,6 +573,17 @@ def register_operacao_routes(bp):
             return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
         try:
+            # Re-review Sprint 1 CRIT: se a operacao chegou aqui via edge
+            # case (FATURADO + fatura CANCELADA ou fatura orfa/None), limpar
+            # o fatura_cliente_id para evitar FK dangling na operacao
+            # CANCELADA.
+            if operacao.status == 'FATURADO' and operacao.fatura_cliente_id:
+                logger.info(
+                    f"Operacao #{operacao_id}: limpando fatura_cliente_id "
+                    f"({operacao.fatura_cliente_id}) antes de cancelar "
+                    f"(fatura orfa ou CANCELADA)"
+                )
+                operacao.fatura_cliente_id = None
             operacao.status = 'CANCELADO'
             db.session.commit()
             logger.info(
