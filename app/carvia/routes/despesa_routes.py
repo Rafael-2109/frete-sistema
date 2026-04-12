@@ -107,6 +107,17 @@ def register_despesa_routes(bp):
                 flash('Tipo de despesa invalido.', 'warning')
                 return redirect(url_for('carvia.criar_despesa'))
 
+            # W13 (Sprint 1 followup): Despesas COMISSAO so podem ser criadas
+            # pelo ComissaoService (via Fechamento de Comissao). Criar via UI
+            # produz orfa permanentemente bloqueada.
+            if tipo_despesa == 'COMISSAO':
+                flash(
+                    'Despesas de Comissao sao criadas automaticamente pelo '
+                    'Fechamento de Comissao. Use o modulo de Comissao.',
+                    'warning',
+                )
+                return redirect(url_for('carvia.criar_despesa'))
+
             try:
                 # Aceitar virgula como separador decimal
                 valor = float(valor_str.replace(',', '.'))
@@ -210,6 +221,17 @@ def register_despesa_routes(bp):
 
             if tipo_despesa not in TIPOS_DESPESA:
                 flash('Tipo de despesa invalido.', 'warning')
+                return redirect(url_for('carvia.editar_despesa', despesa_id=despesa_id))
+
+            # W13 (Sprint 1 followup): nao permitir MUDAR tipo_despesa PARA
+            # COMISSAO — criaria o mesmo estado orfao que criar_despesa evita.
+            if tipo_despesa == 'COMISSAO':
+                flash(
+                    'Tipo COMISSAO e reservado para despesas criadas pelo '
+                    'Fechamento de Comissao. Nao e possivel converter '
+                    'manualmente.',
+                    'warning',
+                )
                 return redirect(url_for('carvia.editar_despesa', despesa_id=despesa_id))
 
             try:
