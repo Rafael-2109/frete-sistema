@@ -549,7 +549,13 @@ def register_operacao_routes(bp):
     @bp.route('/operacoes/<int:operacao_id>/cancelar', methods=['POST'])
     @login_required
     def cancelar_operacao(operacao_id):
-        """Cancela uma operacao"""
+        """Cancela uma operacao.
+
+        W6 (Sprint 1): NAO cascadeia mais o cancelamento de subcontratos.
+        Bloqueia via operacao.pode_cancelar() se ha filhos ativos
+        (subs, CTe Comp, CustoEntrega). O usuario deve cancelar cada
+        dependencia manualmente, na ordem inversa do fluxo.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -559,19 +565,19 @@ def register_operacao_routes(bp):
             flash('Operacao nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_operacoes'))
 
-        if operacao.status == 'FATURADO':
-            flash('Operacao faturada nao pode ser cancelada.', 'warning')
+        # Guard centralizado no model (Sprint 0) — bloqueia se FATURADO,
+        # CANCELADO, ou se ha filhos ativos.
+        pode, razao = operacao.pode_cancelar()
+        if not pode:
+            flash(razao, 'warning')
             return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
         try:
             operacao.status = 'CANCELADO'
-            # Cancelar subcontratos pendentes
-            # GAP-02: CONFERIDO e pos-FATURADO, nao deve ser cancelado em cascata
-            for sub in operacao.subcontratos.filter(
-                CarviaSubcontrato.status.notin_(['FATURADO', 'CONFERIDO', 'CANCELADO'])
-            ).all():
-                sub.status = 'CANCELADO'
             db.session.commit()
+            logger.info(
+                f"Operacao #{operacao_id} cancelada por {current_user.email}"
+            )
             flash('Operacao cancelada.', 'success')
         except Exception as e:
             db.session.rollback()
@@ -927,7 +933,13 @@ def register_operacao_routes(bp):
     @bp.route('/operacoes/<int:operacao_id>/editar-cte-valor', methods=['POST'])
     @login_required
     def editar_cte_valor(operacao_id):
-        """Edita valor do CTe CarVia. Se FATURADO, recalcula valor_total da fatura."""
+        """Edita cte_valor.
+
+        W1 (Sprint 1): guard via operacao.pode_editar_valor() — bloqueia
+        se fatura PAGA. Fatura e entidade independente, NAO recalcula
+        automaticamente. Para alterar valor em fatura PAGA, o usuario
+        deve reverter primeiro (desconciliar → desanexar).
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -937,8 +949,10 @@ def register_operacao_routes(bp):
             flash('Operacao nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_operacoes'))
 
-        if operacao.status == 'CANCELADO':
-            flash('Operacao cancelada nao pode ser editada.', 'warning')
+        # Guard centralizado no model (Sprint 0)
+        pode, razao = operacao.pode_editar_valor()
+        if not pode:
+            flash(razao, 'warning')
             return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
         cte_valor_raw = request.form.get('cte_valor', '').strip()
@@ -957,27 +971,8 @@ def register_operacao_routes(bp):
             valor_anterior = float(operacao.cte_valor or 0)
             operacao.cte_valor = cte_valor
 
-            # Se operacao faturada, recalcular valor_total da fatura
-            # (inclui CTe Complementares — consistente com api_desvincular_operacao_fatura_cliente)
-            if operacao.fatura_cliente_id:
-                fatura = operacao.fatura_cliente
-                if fatura:
-                    from app.carvia.models import CarviaCteComplementar
-                    soma = db.session.query(
-                        func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
-                    ).filter(
-                        CarviaOperacao.fatura_cliente_id == fatura.id,
-                    ).scalar()
-                    soma_comp = db.session.query(
-                        func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0)
-                    ).filter(
-                        CarviaCteComplementar.fatura_cliente_id == fatura.id,
-                    ).scalar()
-                    fatura.valor_total = (soma or 0) + (soma_comp or 0)
-                    logger.info(
-                        f"Fatura #{fatura.id}: valor_total recalculado para {fatura.valor_total} "
-                        f"(editar CTe #{operacao_id} por {current_user.email})"
-                    )
+            # NAO recalcular fatura.valor_total — fatura e entidade
+            # independente (alinhado com modulo de fretes).
 
             db.session.commit()
             logger.info(

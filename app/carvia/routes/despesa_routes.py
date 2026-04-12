@@ -166,7 +166,12 @@ def register_despesa_routes(bp):
     @bp.route('/despesas/<int:despesa_id>/editar', methods=['GET', 'POST']) # type: ignore
     @login_required
     def editar_despesa(despesa_id): # type: ignore
-        """Edita uma despesa existente"""
+        """Edita uma despesa existente.
+
+        W13 (Sprint 1): Despesas tipo COMISSAO sao imutaveis via rotas
+        normais — alteracoes devem passar pelo fluxo de ComissaoFechamento
+        (que usa ComissaoService._sincronizar_despesa para consistencia).
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -178,6 +183,17 @@ def register_despesa_routes(bp):
 
         if despesa.status == 'CANCELADO':
             flash('Nao e possivel editar despesa cancelada.', 'warning')
+            return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
+
+        # W13: Despesa COMISSAO e imutavel via rotas normais
+        if despesa.tipo_despesa == 'COMISSAO':
+            flash(
+                'Despesa de Comissao nao pode ser editada diretamente. '
+                'Altere o percentual/CTes no Fechamento de Comissao '
+                'correspondente — o valor da despesa sera recalculado '
+                'automaticamente.',
+                'warning',
+            )
             return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
 
         if request.method == 'POST':
@@ -242,6 +258,17 @@ def register_despesa_routes(bp):
         novo_status = request.form.get('status')
         if novo_status not in STATUS_DESPESA:
             flash('Status invalido.', 'warning')
+            return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
+
+        # W13: Despesa COMISSAO nao pode ser cancelada diretamente.
+        # Pagamento (PENDENTE ↔ PAGO) e permitido; CANCELADO deve vir do
+        # fluxo da Comissao (ComissaoService.cancelar).
+        if despesa.tipo_despesa == 'COMISSAO' and novo_status == 'CANCELADO':
+            flash(
+                'Despesa de Comissao nao pode ser cancelada diretamente. '
+                'Cancele o Fechamento de Comissao correspondente.',
+                'warning',
+            )
             return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
 
         try:
