@@ -264,7 +264,7 @@
                         {% for frete in fretes_nf %}
                         <tr>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_frete_carvia', frete_id=frete.id) }}" class="text-decoration-none">
+                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}" class="text-decoration-none">
                                     <strong>{{ frete.ctrc_numero or 'Sem CTRC' }}</strong>
                                 </a>
                             </td>

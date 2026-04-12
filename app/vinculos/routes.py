@@ -200,7 +200,7 @@ def consulta_vinculos():
         
         elif status == 'transportadora_errada':
             # Vínculos que têm tabela mas em transportadora diferente
-            from app.tabelas.models import TabelaFrete
+            # (TabelaFrete já importado no topo do módulo)
             query = query.filter(
                 # Não tem tabela na mesma transportadora
                 ~db.session.query(literal(True)).filter(
