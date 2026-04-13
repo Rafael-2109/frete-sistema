@@ -19,6 +19,10 @@
             <a href="{{ url_for('carvia.conciliacao') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-exchange-alt"></i> Conciliar
             </a>
+            <button class="btn btn-outline-info btn-sm" id="btnTentarResolverPrevinculos"
+                    title="Tenta resolver pre-vinculos ATIVOS contra faturas cliente dos ultimos 90 dias">
+                <i class="fas fa-sync"></i> Resolver Pre-Vinculos
+            </button>
         </div>
     </div>
 
@@ -155,12 +159,11 @@
                     <tr>
                         <th>Data</th>
                         <th>Descricao</th>
-                        <th>Razao Social / Conta</th>
+                        <th style="min-width:220px">Razao Social / Conta / Obs</th>
                         <th>Origem</th>
                         <th class="text-end">Valor</th>
                         <th>Status</th>
                         <th>Docs Conciliados</th>
-                        <th>Obs</th>
                         <th style="width:120px">Acoes</th>
                     </tr>
                 </thead>
@@ -169,26 +172,37 @@
                     <tr class="{{ 'carvia-extrato-row-credito' if linha.tipo == 'CREDITO' else 'carvia-extrato-row-debito' }}">
                         <td class="text-nowrap">{{ linha.data.strftime('%d/%m/%Y') if linha.data }}</td>
                         <td>
-                            <div class="carvia-conciliacao-row-primary">{{ linha.descricao or '-' }}</div>
+                            <div class="carvia-conciliacao-row-primary"{% if linha.descricao and linha.descricao|length > 90 %} title="{{ linha.descricao }}"{% endif %}>
+                                {{ (linha.descricao or '-')|truncate(90, True, '...') }}
+                            </div>
                             {% if linha.memo and linha.memo != linha.descricao %}
-                            <div class="carvia-conciliacao-row-secondary">{{ linha.memo }}</div>
+                            <div class="carvia-conciliacao-row-secondary"{% if linha.memo|length > 90 %} title="{{ linha.memo }}"{% endif %}>
+                                {{ linha.memo|truncate(90, True, '...') }}
+                            </div>
                             {% endif %}
                         </td>
-                        <td>
-                            {% if linha.origem == 'MANUAL' %}
-                                {# Linha MANUAL exibe conta_origem em vez de razao_social #}
-                                <strong class="text-info">{{ linha.conta_origem or '(a informar)' }}</strong>
-                            {% elif linha.razao_social %}
-                            <span class="carvia-editable" data-id="{{ linha.id }}" data-campo="razao_social"
-                                  data-valor="{{ linha.razao_social }}" title="Clique para editar">
-                                {{ linha.razao_social }}
-                            </span>
-                            {% else %}
-                            <span class="carvia-editable text-muted" data-id="{{ linha.id }}" data-campo="razao_social"
-                                  data-valor="" title="Adicionar razao social">
-                                <i class="fas fa-plus-circle" style="font-size:0.75rem"></i>
-                            </span>
-                            {% endif %}
+                        <td class="carvia-col-razao-obs">
+                            <div>
+                                {% if linha.origem == 'MANUAL' %}
+                                    {# Linha MANUAL exibe conta_origem em vez de razao_social #}
+                                    <strong class="text-info">{{ linha.conta_origem or '(a informar)' }}</strong>
+                                {% elif linha.razao_social %}
+                                <span class="carvia-editable" data-id="{{ linha.id }}" data-campo="razao_social"
+                                      data-valor="{{ linha.razao_social }}" title="Clique para editar">
+                                    {{ linha.razao_social }}
+                                </span>
+                                {% else %}
+                                <span class="carvia-editable text-muted" data-id="{{ linha.id }}" data-campo="razao_social"
+                                      data-valor="" title="Adicionar razao social">
+                                    <i class="fas fa-plus-circle" style="font-size:0.75rem"></i> razao social
+                                </span>
+                                {% endif %}
+                            </div>
+                            <input type="text" class="form-control form-control-sm carvia-obs-input mt-1"
+                                   data-id="{{ linha.id }}"
+                                   value="{{ linha.observacao or '' }}"
+                                   placeholder="Observacao..."
+                                   maxlength="1000">
                         </td>
                         <td>
                             {% if linha.origem == 'MANUAL' %}
@@ -213,6 +227,18 @@
                             {% else %}
                                 <span class="badge carvia-badge-pendente">Pendente</span>
                             {% endif %}
+                            {# Pre-vinculo ATIVO (frete pre-pago aguardando fatura) #}
+                            {% set prevs_ativos = linha.previnculos_cotacao.filter_by(status='ATIVO').all() %}
+                            {% if prevs_ativos %}
+                                {% for pv in prevs_ativos %}
+                                <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=pv.cotacao_id) }}"
+                                   class="badge bg-primary border-0 d-block mt-1 text-decoration-none"
+                                   style="font-size:0.6rem"
+                                   title="Pre-vinculada a cotacao {{ pv.cotacao.numero_cotacao if pv.cotacao else '?' }} — aguardando fatura">
+                                    <i class="fas fa-link"></i> Pre: {{ pv.cotacao.numero_cotacao if pv.cotacao else '?' }}
+                                </a>
+                                {% endfor %}
+                            {% endif %}
                         </td>
                         <td>
                             {% for conc in linha.conciliacoes.all() %}
@@ -228,19 +254,6 @@
                             {% else %}
                                 <span class="text-muted small">—</span>
                             {% endfor %}
-                        </td>
-                        <td>
-                            {% if linha.observacao %}
-                            <span class="carvia-editable" data-id="{{ linha.id }}" data-campo="observacao"
-                                  data-valor="{{ linha.observacao }}" title="{{ linha.observacao }}">
-                                <i class="fas fa-sticky-note text-warning" style="font-size:0.75rem"></i>
-                            </span>
-                            {% else %}
-                            <span class="carvia-editable text-muted" data-id="{{ linha.id }}" data-campo="observacao"
-                                  data-valor="" title="Adicionar observacao">
-                                <i class="far fa-sticky-note" style="font-size:0.75rem"></i>
-                            </span>
-                            {% endif %}
                         </td>
                         <td>
                             {% if linha.status_conciliacao == 'PENDENTE' %}
@@ -699,6 +712,49 @@
             });
         });
     });
+
+    // ================================================================
+    // Botao "Resolver Pre-Vinculos" — trigger manual para casos tardios
+    // ================================================================
+    var btnResolver = document.getElementById('btnTentarResolverPrevinculos');
+    if (btnResolver) {
+        btnResolver.addEventListener('click', function() {
+            if (!confirm('Tentar resolver todos os pre-vinculos ATIVOS contra faturas cliente recentes?')) return;
+
+            btnResolver.disabled = true;
+            btnResolver.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Resolvendo...';
+
+            fetch('/carvia/api/previnculos/tentar-resolver-todos', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: '{}',
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.erro) {
+                    alert('Erro: ' + data.erro);
+                    btnResolver.disabled = false;
+                    btnResolver.innerHTML = '<i class="fas fa-sync"></i> Resolver Pre-Vinculos';
+                    return;
+                }
+                var msg = 'Pre-vinculos ativos: ' + (data.total_previnculos_ativos || 0)
+                        + '\nFaturas verificadas: ' + (data.faturas_verificadas || 0)
+                        + '\nResolvidos: ' + (data.resolvidos || 0);
+                alert(msg);
+                if ((data.resolvidos || 0) > 0) {
+                    location.reload();
+                } else {
+                    btnResolver.disabled = false;
+                    btnResolver.innerHTML = '<i class="fas fa-sync"></i> Resolver Pre-Vinculos';
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+                btnResolver.disabled = false;
+                btnResolver.innerHTML = '<i class="fas fa-sync"></i> Resolver Pre-Vinculos';
+            });
+        });
+    }
 })();
 </script>
 

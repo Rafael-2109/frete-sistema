@@ -1,0 +1,301 @@
+{# Modal de Pre-Vinculo Extrato <-> Cotacao
+
+   Usado em cotacoes/detalhe.html quando status=APROVADO.
+   Fluxo:
+     1. Usuario clica "Vincular Linha Extrato" no card Pre-Vinculos
+     2. JS chama window.abrirModalPreVincular(cotacaoId)
+     3. Fetch GET /carvia/api/cotacoes/<id>/linhas-extrato-candidatas
+     4. Tabela exibe linhas CREDITO PENDENTE/PARCIAL na margem +-30%
+     5. Usuario marca linha(s), ajusta valor_alocado, opcional observacao
+     6. POST /carvia/api/cotacoes/<id>/previncular-extrato
+     7. Sucesso -> reload do detalhe (ou update do card via JS)
+#}
+<div class="modal fade" id="modalPreVincularExtrato" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-link"></i> Vincular Linha do Extrato a Cotacao
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                {# Info da cotacao selecionada #}
+                <div id="pvCotacaoInfo" class="alert alert-light mb-3">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Cotacao</small>
+                            <strong id="pvCotacaoNumero">-</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted d-block">Cliente</small>
+                            <strong id="pvCotacaoCliente">-</strong>
+                        </div>
+                        <div class="col-md-4 text-md-end">
+                            <small class="text-muted d-block">Valor Final Aprovado</small>
+                            <strong id="pvCotacaoValor" class="text-success fs-5">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+                {# Loading #}
+                <div id="pvLoading" class="text-center py-4">
+                    <div class="spinner-border spinner-border-sm"></div>
+                    <span class="ms-2">Buscando linhas de extrato candidatas...</span>
+                </div>
+
+                {# Vazio #}
+                <div id="pvVazio" class="alert alert-warning d-none text-center">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Nenhuma linha de extrato candidata encontrada na margem de &plusmn;30%.
+                    Verifique se a linha bancaria foi importada (Extrato Bancario &rarr; Importar OFX).
+                </div>
+
+                {# Tabela de linhas candidatas #}
+                <div id="pvTabelaWrapper" class="d-none">
+                    <div class="small text-muted mb-2">
+                        Selecione a(s) linha(s) que correspondem ao pagamento antecipado desta cotacao.
+                        O pre-vinculo e soft: a linha continua PENDENTE ate a fatura CarVia ser emitida.
+                    </div>
+                    <table class="table table-sm carvia-table">
+                        <thead>
+                            <tr>
+                                <th style="width:30px"></th>
+                                <th>Data</th>
+                                <th>Descricao / Razao Social</th>
+                                <th class="text-end">Valor Linha</th>
+                                <th class="text-end">Saldo</th>
+                                <th style="width:60px">Match</th>
+                                <th style="width:120px">Valor Alocado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pvTbody"></tbody>
+                    </table>
+
+                    <div class="mt-3">
+                        <label for="pvObservacao" class="form-label small mb-1">
+                            Observacao (opcional)
+                        </label>
+                        <textarea id="pvObservacao" class="form-control form-control-sm"
+                                  rows="2"
+                                  placeholder="Ex: cliente pagou via PIX antes do embarque"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <div class="small text-muted" style="font-size:0.68rem">
+                    <span class="badge carvia-badge-score-alto" class="carvia-badge-xs">&#9733;&#9733;&#9733;</span> Valor+Data+Nome
+                    <span class="badge carvia-badge-score-medio ms-1" class="carvia-badge-xs">&#9733;&#9733;</span> Parcial
+                    &mdash; scoring sugestivo
+                </div>
+                <div>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnConfirmarPreVincular" disabled>
+                        <i class="fas fa-link"></i> Criar Pre-Vinculo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    let cotacaoAtualId = null;
+
+    function fmtMoeda(v) {
+        return parseFloat(v || 0).toLocaleString('pt-BR', {
+            style: 'currency', currency: 'BRL'
+        });
+    }
+
+    function fmtNumero(v, dec) {
+        return parseFloat(v || 0).toLocaleString('pt-BR', {
+            minimumFractionDigits: dec || 2,
+            maximumFractionDigits: dec || 2,
+        });
+    }
+
+    // FIX C3: escape HTML para prevenir XSS ao interpolar conteudo de API
+    // (razao_social, descricao, observacao vem do OFX do banco — externamente
+    // controlado por importacoes de arquivos bancarios)
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    window.abrirModalPreVincular = function(cotacaoId) {
+        cotacaoAtualId = cotacaoId;
+
+        const modal = new bootstrap.Modal(document.getElementById('modalPreVincularExtrato'));
+        const loading = document.getElementById('pvLoading');
+        const vazio = document.getElementById('pvVazio');
+        const wrapper = document.getElementById('pvTabelaWrapper');
+        const tbody = document.getElementById('pvTbody');
+        const btnConfirmar = document.getElementById('btnConfirmarPreVincular');
+        const obsInput = document.getElementById('pvObservacao');
+
+        // Reset
+        loading.classList.remove('d-none');
+        vazio.classList.add('d-none');
+        wrapper.classList.add('d-none');
+        tbody.innerHTML = '';
+        obsInput.value = '';
+        btnConfirmar.disabled = true;
+        document.getElementById('pvCotacaoNumero').textContent = '-';
+        document.getElementById('pvCotacaoCliente').textContent = '-';
+        document.getElementById('pvCotacaoValor').textContent = '-';
+
+        modal.show();
+
+        fetch(`/carvia/api/cotacoes/${cotacaoId}/linhas-extrato-candidatas`)
+            .then(r => r.json())
+            .then(data => {
+                loading.classList.add('d-none');
+
+                if (data.erro) {
+                    vazio.textContent = data.erro;
+                    vazio.classList.remove('d-none');
+                    return;
+                }
+
+                // Preencher info da cotacao (textContent ja escapa — seguro)
+                const cot = data.cotacao || {};
+                document.getElementById('pvCotacaoNumero').textContent = cot.numero_cotacao || '-';
+                document.getElementById('pvCotacaoCliente').textContent = cot.cliente_nome || '-';
+                document.getElementById('pvCotacaoValor').textContent = fmtMoeda(cot.valor_final_aprovado);
+
+                const linhas = data.linhas || [];
+                if (linhas.length === 0) {
+                    vazio.classList.remove('d-none');
+                    return;
+                }
+
+                wrapper.classList.remove('d-none');
+
+                linhas.forEach(ln => {
+                    // Score badge
+                    let scoreBadge = '';
+                    if (ln.score_label === 'ALTO') {
+                        scoreBadge = '<span class="badge carvia-badge-score-alto" class="carvia-badge-sm">&#9733;&#9733;&#9733;</span>';
+                    } else if (ln.score_label === 'MEDIO') {
+                        scoreBadge = '<span class="badge carvia-badge-score-medio" class="carvia-badge-sm">&#9733;&#9733;</span>';
+                    } else if (ln.score_label === 'BAIXO') {
+                        scoreBadge = '<span class="badge bg-secondary" class="carvia-badge-sm">&#9733;</span>';
+                    }
+
+                    // FIX C3: escapar campos vindos do OFX para prevenir XSS
+                    const descSafe = escapeHtml(ln.razao_social || ln.descricao || '-');
+                    const dataSafe = escapeHtml(ln.data || '-');
+                    const linhaIdNum = parseInt(ln.id, 10) || 0;
+                    const saldoNum = parseFloat(ln.saldo_a_conciliar || 0);
+                    const valorNum = parseFloat(ln.valor || 0);
+
+                    const saldoDefault = Math.min(
+                        saldoNum,
+                        parseFloat(cot.valor_final_aprovado || 0)
+                    );
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <input type="checkbox" class="form-check-input pv-check"
+                                   data-linha-id="${linhaIdNum}"
+                                   data-saldo="${saldoNum}">
+                        </td>
+                        <td><small>${dataSafe}</small></td>
+                        <td>
+                            <small>${descSafe}</small>
+                            ${ln.status_conciliacao === 'PARCIAL'
+                                ? '<span class="badge bg-warning ms-1 carvia-badge-xs">PARCIAL</span>'
+                                : ''}
+                        </td>
+                        <td class="text-end carvia-conciliacao-valor">
+                            ${fmtNumero(valorNum)}
+                        </td>
+                        <td class="text-end carvia-conciliacao-valor">
+                            ${fmtNumero(saldoNum)}
+                        </td>
+                        <td class="text-center">${scoreBadge}</td>
+                        <td>
+                            <input type="number" class="form-control form-control-sm pv-valor"
+                                   step="0.01" min="0.01"
+                                   max="${saldoNum}"
+                                   value="${saldoDefault.toFixed(2)}"
+                                   disabled style="width:110px">
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Habilitar/desabilitar input ao marcar checkbox
+                tbody.querySelectorAll('.pv-check').forEach(cb => {
+                    cb.addEventListener('change', () => {
+                        const input = cb.closest('tr').querySelector('.pv-valor');
+                        input.disabled = !cb.checked;
+                        btnConfirmar.disabled = !tbody.querySelector('.pv-check:checked');
+                    });
+                });
+            })
+            .catch(err => {
+                loading.classList.add('d-none');
+                vazio.textContent = `Erro: ${err.message}`;
+                vazio.classList.remove('d-none');
+            });
+    };
+
+    // Submit
+    document.getElementById('btnConfirmarPreVincular')?.addEventListener('click', function() {
+        if (!cotacaoAtualId) return;
+
+        const vinculos = [];
+        document.querySelectorAll('.pv-check:checked').forEach(cb => {
+            const valor = parseFloat(cb.closest('tr').querySelector('.pv-valor').value);
+            if (!isNaN(valor) && valor > 0) {
+                vinculos.push({
+                    extrato_linha_id: parseInt(cb.dataset.linhaId),
+                    valor_alocado: valor,
+                });
+            }
+        });
+
+        if (vinculos.length === 0) return;
+
+        const obs = document.getElementById('pvObservacao').value.trim();
+        if (obs) {
+            vinculos.forEach(v => v.observacao = obs);
+        }
+
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        fetch(`/carvia/api/cotacoes/${cotacaoAtualId}/previncular-extrato`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({vinculos}),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                location.reload();
+            } else {
+                alert(data.erro || 'Erro ao criar pre-vinculo');
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-link"></i> Criar Pre-Vinculo';
+            }
+        })
+        .catch(err => {
+            alert('Erro: ' + err.message);
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-link"></i> Criar Pre-Vinculo';
+        });
+    });
+})();
+</script>

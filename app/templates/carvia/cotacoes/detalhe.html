@@ -429,6 +429,9 @@
                     {% endif %}
                 </div>
             </div>
+
+            {# Pre-Vinculos Extrato <-> Cotacao (frete pre-pago) #}
+            {% include 'carvia/_previnculos_cotacao.html' %}
             {% endif %}
         </div>
 
@@ -665,6 +668,9 @@
         </div>
     </div>
 </div>
+
+{# Modal Pre-Vincular Extrato (feature frete pre-pago) #}
+{% include 'carvia/_modal_previncular_extrato.html' %}
 {% endif %}
 {% endblock %}
 

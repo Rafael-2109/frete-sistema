@@ -47,6 +47,7 @@
                             <th class="text-end">Valor</th>
                             <th class="text-center">Pagamento</th>
                             <th class="text-center">Status</th>
+                            <th class="text-center" title="Pre-vinculo com linha do extrato (frete pre-pago)">Extrato</th>
                             <th class="text-center">Data</th>
                         </tr>
                     </thead>
@@ -116,6 +117,21 @@
                                       title="Embarque #{{ cot.alerta_saida_embarque_id or '?' }} saiu sem NF em {{ cot.alerta_saida_sem_nf_em.strftime('%d/%m %H:%M') if cot.alerta_saida_sem_nf_em else '?' }}">
                                     <i class="fas fa-exclamation-triangle"></i> Sem NF
                                 </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% set prev_ativos = cot.previnculos_extrato.filter_by(status='ATIVO').count() %}
+                                {% set prev_resolvidos = cot.previnculos_extrato.filter_by(status='RESOLVIDO').count() %}
+                                {% if prev_ativos > 0 %}
+                                <span class="badge bg-primary" title="{{ prev_ativos }} pre-vinculo(s) aguardando fatura">
+                                    <i class="fas fa-link"></i> {{ prev_ativos }}
+                                </span>
+                                {% elif prev_resolvidos > 0 %}
+                                <span class="badge bg-success" title="{{ prev_resolvidos }} pre-vinculo(s) ja resolvido(s)">
+                                    <i class="fas fa-check"></i> {{ prev_resolvidos }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted small">&mdash;</span>
                                 {% endif %}
                             </td>
                             <td class="text-center small text-muted">

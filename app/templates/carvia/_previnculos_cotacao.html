@@ -1,0 +1,185 @@
+{# Partial: card de Pre-Vinculos Extrato <-> Cotacao
+
+   Usado em cotacoes/detalhe.html dentro do bloco {% if cotacao.status == 'APROVADO' %}.
+   Renderiza card com lista de pre-vinculos (ATIVO, RESOLVIDO, CANCELADO)
+   e botao para abrir modal de vincular nova linha.
+
+   Variaveis esperadas:
+     - cotacao: CarviaCotacao
+     - previnculos: list[CarviaPreVinculoExtratoCotacao] (ja carregada pelo route)
+#}
+{% set prevs_ativos = previnculos | selectattr('status', 'equalto', 'ATIVO') | list %}
+{% set prevs_resolvidos = previnculos | selectattr('status', 'equalto', 'RESOLVIDO') | list %}
+{% set prevs_cancelados = previnculos | selectattr('status', 'equalto', 'CANCELADO') | list %}
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>
+            <i class="fas fa-link text-primary"></i> Pre-Vinculos Extrato
+            {% if prevs_ativos %}
+                <span class="badge bg-primary ms-1">{{ prevs_ativos|length }} ativo(s)</span>
+            {% endif %}
+            {% if prevs_resolvidos %}
+                <span class="badge bg-success ms-1">{{ prevs_resolvidos|length }} resolvido(s)</span>
+            {% endif %}
+        </strong>
+        {% if cotacao.status == 'APROVADO' %}
+        <button type="button" class="btn btn-primary btn-sm"
+                onclick="abrirModalPreVincular({{ cotacao.id }})">
+            <i class="fas fa-plus"></i> Vincular Linha Extrato
+        </button>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if previnculos %}
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="text-muted small">
+                    <tr>
+                        <th>Status</th>
+                        <th>Linha Extrato</th>
+                        <th class="text-end">Valor</th>
+                        <th>Criado</th>
+                        <th>Resolucao / Cancelamento</th>
+                        <th style="width:100px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pv in previnculos %}
+                    {% set linha = pv.extrato_linha %}
+                    <tr>
+                        <td>
+                            {% if pv.status == 'ATIVO' %}
+                                <span class="badge bg-primary">ATIVO</span>
+                            {% elif pv.status == 'RESOLVIDO' %}
+                                <span class="badge bg-success">RESOLVIDO</span>
+                            {% elif pv.status == 'CANCELADO' %}
+                                <span class="badge bg-secondary">CANCELADO</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if linha %}
+                                <small>
+                                    {{ linha.data.strftime('%d/%m/%Y') if linha.data }}
+                                    &middot;
+                                    <span title="{{ linha.descricao or '' }}">
+                                        {{ linha.razao_social or linha.descricao or '-' }}
+                                    </span>
+                                </small>
+                                {% if linha.status_conciliacao == 'CONCILIADO' %}
+                                    <span class="badge bg-success ms-1" class="carvia-badge-xs">CONC</span>
+                                {% elif linha.status_conciliacao == 'PARCIAL' %}
+                                    <span class="badge bg-warning ms-1" class="carvia-badge-xs">PARCIAL</span>
+                                {% elif linha.status_conciliacao == 'PENDENTE' %}
+                                    <span class="badge bg-secondary ms-1" class="carvia-badge-xs">PENDENTE</span>
+                                {% endif %}
+                            {% else %}
+                                <small class="text-muted">(linha removida)</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-end carvia-conciliacao-valor">
+                            {{ pv.valor_alocado|valor_br }}
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {{ pv.criado_em.strftime('%d/%m/%Y %H:%M') if pv.criado_em }}<br>
+                                <span>{{ pv.criado_por }}</span>
+                            </small>
+                        </td>
+                        <td>
+                            {% if pv.status == 'RESOLVIDO' %}
+                                <small class="text-success">
+                                    <i class="fas fa-check"></i>
+                                    {% if pv.fatura_cliente %}
+                                        <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=pv.fatura_cliente.id) }}">
+                                            {{ pv.fatura_cliente.numero_fatura }}
+                                        </a>
+                                    {% else %}
+                                        (fatura removida)
+                                    {% endif %}
+                                    <br>
+                                    <span class="text-muted">
+                                        {{ pv.resolvido_em.strftime('%d/%m/%Y %H:%M') if pv.resolvido_em }}
+                                        {% if pv.resolvido_automatico %}(auto){% endif %}
+                                    </span>
+                                </small>
+                            {% elif pv.status == 'CANCELADO' %}
+                                <small class="text-muted">
+                                    {{ pv.cancelado_em.strftime('%d/%m/%Y') if pv.cancelado_em }}
+                                    por {{ pv.cancelado_por or '-' }}<br>
+                                    {% if pv.motivo_cancelamento %}
+                                    <em title="{{ pv.motivo_cancelamento }}">
+                                        {{ pv.motivo_cancelamento[:40] }}{% if pv.motivo_cancelamento|length > 40 %}...{% endif %}
+                                    </em>
+                                    {% endif %}
+                                </small>
+                            {% elif pv.observacao %}
+                                <small class="text-muted" title="{{ pv.observacao }}">
+                                    {{ pv.observacao[:40] }}{% if pv.observacao|length > 40 %}...{% endif %}
+                                </small>
+                            {% else %}
+                                <small class="text-muted">&mdash;</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if pv.status == 'ATIVO' %}
+                            <button class="btn btn-outline-danger btn-sm btn-cancelar-previnculo"
+                                    data-previnculo-id="{{ pv.id }}"
+                                    title="Cancelar pre-vinculo">
+                                <i class="fas fa-unlink"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-3 text-muted small">
+            <i class="fas fa-info-circle"></i>
+            Nenhum pre-vinculo. Se o cliente pagou esta cotacao antecipadamente,
+            clique em "Vincular Linha Extrato" para associar a linha bancaria.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function() {
+    // Cancelar pre-vinculo ATIVO
+    document.querySelectorAll('.btn-cancelar-previnculo').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const pvId = this.dataset.previnculoId;
+            const motivo = prompt(
+                'Motivo do cancelamento do pre-vinculo (obrigatorio):'
+            );
+            if (!motivo || !motivo.trim()) return;
+
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            fetch(`/carvia/api/previnculos/${pvId}`, {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({motivo: motivo.trim()}),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.sucesso) {
+                    location.reload();
+                } else {
+                    alert(data.erro || 'Erro ao cancelar');
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-unlink"></i>';
+                }
+            })
+            .catch(err => {
+                alert('Erro: ' + err.message);
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-unlink"></i>';
+            });
+        });
+    });
+})();
+</script>

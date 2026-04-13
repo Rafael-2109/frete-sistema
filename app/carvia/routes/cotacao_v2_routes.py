@@ -1230,6 +1230,14 @@ def register_cotacao_v2_routes(bp):
         from app.veiculos.models import Veiculo
         veiculos_direta = Veiculo.query.order_by(Veiculo.peso_maximo.asc()).all()
 
+        # Pre-vinculos extrato <-> cotacao (feature frete pre-pago)
+        from app.carvia.models import CarviaPreVinculoExtratoCotacao
+        previnculos = CarviaPreVinculoExtratoCotacao.query.filter_by(
+            cotacao_id=cotacao_id,
+        ).order_by(
+            CarviaPreVinculoExtratoCotacao.criado_em.desc()
+        ).all()
+
         return render_template(
             'carvia/cotacoes/detalhe.html',
             cotacao=cotacao,
@@ -1242,6 +1250,7 @@ def register_cotacao_v2_routes(bp):
             limite_desconto=limite_desconto,
             veiculos_direta=veiculos_direta,
             tem_cte_existente=tem_cte_existente,
+            previnculos=previnculos,
         )
 
     # ==================== API: ATUALIZAR COTACAO ====================

@@ -317,3 +317,113 @@ class CarviaConciliacao(db.Model):
             f'<CarviaConciliacao linha={self.extrato_linha_id} '
             f'{self.tipo_documento}:{self.documento_id} {self.valor_alocado}>'
         )
+
+
+class CarviaPreVinculoExtratoCotacao(db.Model):
+    """Pre-vinculo soft entre linha de extrato e cotacao aprovada.
+
+    Usado para frete pre-pago: cliente paga antes da fatura ser emitida.
+    A linha do extrato entra no banco como 'orfa' (PENDENTE sem documento
+    para conciliar contra). O usuario abre a cotacao APROVADA e cria um
+    pre-vinculo com uma linha candidata — a linha permanece PENDENTE.
+
+    Quando a CarviaFaturaCliente e criada cobrindo operacoes cuja cadeia
+    FaturaItem.nf_id -> NF.numero_nf -> PedidoItem.numero_nf ->
+    Pedido.cotacao_id aponta para a cotacao vinculada, o trigger automatico
+    em fatura_routes.py cria CarviaConciliacao real (tipo_documento=
+    'fatura_cliente') e marca este pre-vinculo como RESOLVIDO.
+
+    Diferenca crucial vs CarviaConciliacao: pre-vinculo e INTENCAO, nao
+    concilicao financeira final. Linha continua PENDENTE ate a fatura
+    existir. Ponteiro `conciliacao_id` preserva audit trail apos resolver.
+
+    Fluxo:
+      ATIVO -> RESOLVIDO (quando fatura chega)
+      ATIVO -> CANCELADO (usuario desfaz manualmente)
+    """
+    __tablename__ = 'carvia_previnculos_extrato_cotacao'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    extrato_linha_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_extrato_linhas.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    cotacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_cotacoes.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    valor_alocado = db.Column(db.Numeric(15, 2), nullable=False)
+
+    # Estado do pre-vinculo
+    status = db.Column(
+        db.String(20), nullable=False, default='ATIVO', index=True,
+    )  # ATIVO | RESOLVIDO | CANCELADO
+
+    # Resolucao automatica — preenchidos quando fatura chega
+    conciliacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_conciliacoes.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    fatura_cliente_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_faturas_cliente.id', ondelete='SET NULL'),
+        nullable=True,
+    )
+    resolvido_em = db.Column(db.DateTime, nullable=True)
+    resolvido_automatico = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Cancelamento
+    cancelado_em = db.Column(db.DateTime, nullable=True)
+    cancelado_por = db.Column(db.String(100), nullable=True)
+    motivo_cancelamento = db.Column(db.Text, nullable=True)
+
+    # Auditoria
+    observacao = db.Column(db.Text, nullable=True)
+    criado_por = db.Column(db.String(100), nullable=False)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    # Relacionamentos
+    extrato_linha = db.relationship(
+        'CarviaExtratoLinha',
+        backref=db.backref('previnculos_cotacao', lazy='dynamic'),
+    )
+    cotacao = db.relationship(
+        'CarviaCotacao',
+        backref=db.backref('previnculos_extrato', lazy='dynamic'),
+    )
+    conciliacao = db.relationship(
+        'CarviaConciliacao', foreign_keys=[conciliacao_id]
+    )
+    fatura_cliente = db.relationship(
+        'CarviaFaturaCliente', foreign_keys=[fatura_cliente_id]
+    )
+
+    __table_args__ = (
+        # UNIQUE PARCIAL: apenas 1 pre-vinculo ATIVO por (linha, cotacao).
+        # Permite recriar apos CANCELADO, e coexistir com RESOLVIDO historico.
+        db.Index(
+            'uq_previnculo_linha_cotacao_ativo',
+            'extrato_linha_id', 'cotacao_id',
+            unique=True,
+            postgresql_where=db.text("status = 'ATIVO'"),
+        ),
+        db.CheckConstraint(
+            'valor_alocado > 0', name='ck_previnculo_valor_positivo'
+        ),
+        db.CheckConstraint(
+            "status IN ('ATIVO', 'RESOLVIDO', 'CANCELADO')",
+            name='ck_previnculo_status',
+        ),
+        db.Index('ix_previnculo_ativo', 'cotacao_id', 'status'),
+        db.Index('ix_previnculo_resolvido', 'status', 'resolvido_em'),
+    )
+
+    def __repr__(self):
+        return (
+            f'<CarviaPreVinculoExtratoCotacao linha={self.extrato_linha_id} '
+            f'cotacao={self.cotacao_id} {self.status} R${self.valor_alocado}>'
+        )

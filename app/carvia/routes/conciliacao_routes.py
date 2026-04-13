@@ -1378,3 +1378,188 @@ def register_conciliacao_routes(bp):
             db.session.rollback()
             logger.exception(f"Erro ao deletar linha MANUAL #{linha_id}: {e}")
             return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # Pre-Vinculo Extrato <-> Cotacao (frete CarVia pre-pago)
+    # ===================================================================
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/linhas-extrato-candidatas')  # type: ignore
+    @login_required
+    def api_previnculo_linhas_candidatas(cotacao_id):  # type: ignore
+        """Lista linhas de extrato candidatas para pre-vincular a uma cotacao.
+
+        Filtra: tipo=CREDITO, status IN (PENDENTE, PARCIAL), valor absoluto
+        na margem +-30% do valor final aprovado. Aplica scoring sugestivo.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaCotacao
+        from app.carvia.services.financeiro.previnculo_service import (
+            CarviaPreVinculoService,
+        )
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return jsonify({'erro': 'Cotacao nao encontrada'}), 404
+        if cotacao.status != 'APROVADO':
+            return jsonify({
+                'erro': f'Cotacao esta {cotacao.status}, pre-vinculo aceita apenas APROVADO'
+            }), 400
+
+        try:
+            margem = float(request.args.get('margem_pct', 0.30))
+            linhas = CarviaPreVinculoService.listar_candidatos_extrato(
+                cotacao_id, margem_pct=margem,
+            )
+            return jsonify({
+                'cotacao': {
+                    'id': cotacao.id,
+                    'numero_cotacao': cotacao.numero_cotacao,
+                    'valor_final_aprovado': float(
+                        cotacao.valor_final_aprovado or 0
+                    ),
+                    'cliente_nome': (
+                        cotacao.cliente.nome_comercial if cotacao.cliente else ''
+                    ),
+                    'data_cotacao': (
+                        cotacao.data_cotacao.strftime('%d/%m/%Y')
+                        if cotacao.data_cotacao else ''
+                    ),
+                },
+                'linhas': linhas,
+                'total': len(linhas),
+            })
+        except ValueError as e:
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            logger.exception(f'Erro listar linhas candidatas cotacao {cotacao_id}: {e}')
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/previncular-extrato', methods=['POST'])  # type: ignore
+    @login_required
+    def api_previncular_extrato(cotacao_id):  # type: ignore
+        """Cria pre-vinculo(s) entre linha(s) do extrato e esta cotacao.
+
+        Body: {
+            'vinculos': [
+                {'extrato_linha_id': int, 'valor_alocado': float, 'observacao': str?}
+            ],
+        }
+        Aceita 1 ou N vinculos no mesmo POST.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json() or {}
+        vinculos = data.get('vinculos') or []
+        if not vinculos:
+            return jsonify({'erro': 'Nenhum vinculo enviado'}), 400
+
+        from app.carvia.services.financeiro.previnculo_service import (
+            CarviaPreVinculoService,
+        )
+
+        criados = []
+        try:
+            for v in vinculos:
+                linha_id = v.get('extrato_linha_id')
+                valor = v.get('valor_alocado')
+                observacao = v.get('observacao')
+                if not linha_id or valor is None:
+                    raise ValueError(
+                        'Cada vinculo precisa de extrato_linha_id e valor_alocado'
+                    )
+                pv = CarviaPreVinculoService.criar(
+                    cotacao_id=cotacao_id,
+                    extrato_linha_id=int(linha_id),
+                    valor_alocado=float(valor),
+                    observacao=observacao,
+                    usuario=current_user.email,
+                )
+                criados.append(CarviaPreVinculoService._serializar(pv))
+
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'criados': len(criados),
+                'previnculos': criados,
+            })
+
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f'Erro criar pre-vinculo cotacao {cotacao_id}: {e}')
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/previnculos')  # type: ignore
+    @login_required
+    def api_listar_previnculos_cotacao(cotacao_id):  # type: ignore
+        """Lista pre-vinculos de uma cotacao (ATIVO + RESOLVIDO + CANCELADO)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.services.financeiro.previnculo_service import (
+            CarviaPreVinculoService,
+        )
+        try:
+            lista = CarviaPreVinculoService.listar_por_cotacao(
+                cotacao_id, incluir_resolvidos=True,
+            )
+            return jsonify({'previnculos': lista, 'total': len(lista)})
+        except Exception as e:
+            logger.exception(f'Erro listar previnculos cotacao {cotacao_id}: {e}')
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/previnculos/<int:previnculo_id>', methods=['DELETE'])  # type: ignore
+    @login_required
+    def api_cancelar_previnculo(previnculo_id):  # type: ignore
+        """Cancela (soft) um pre-vinculo ATIVO. Exige motivo no body."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json() or {}
+        motivo = (data.get('motivo') or '').strip()
+        if not motivo:
+            return jsonify({'erro': 'Motivo do cancelamento e obrigatorio'}), 400
+
+        from app.carvia.services.financeiro.previnculo_service import (
+            CarviaPreVinculoService,
+        )
+        try:
+            resultado = CarviaPreVinculoService.cancelar(
+                previnculo_id, motivo, current_user.email,
+            )
+            db.session.commit()
+            return jsonify(resultado)
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f'Erro cancelar previnculo {previnculo_id}: {e}')
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/previnculos/tentar-resolver-todos', methods=['POST'])  # type: ignore
+    @login_required
+    def api_tentar_resolver_todos_previnculos():  # type: ignore
+        """Botao manual: varre pre-vinculos ATIVOS e tenta resolver contra
+        faturas cliente dos ultimos 90 dias (casos tardios)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.services.financeiro.previnculo_service import (
+            CarviaPreVinculoService,
+        )
+        try:
+            resultado = CarviaPreVinculoService.tentar_resolver_todos_ativos(
+                current_user.email,
+            )
+            db.session.commit()
+            return jsonify(resultado)
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f'Erro tentar_resolver_todos: {e}')
+            return jsonify({'erro': str(e)}), 500
