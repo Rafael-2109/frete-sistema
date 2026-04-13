@@ -64,6 +64,14 @@
     --_badge-color: hsl(0 0% 10%);
 }
 
+/* Custo de entrega vinculado a Fatura Transportadora, aguardando pagamento.
+   Estado intermediario entre PENDENTE e PAGO — info-blue para sinalizar
+   "linked but not yet paid". */
+.carvia-badge-vinculado_ft {
+    --_badge-bg: var(--semantic-info);
+    --_badge-color: hsl(0 0% 100%);
+}
+
 .carvia-badge-conferido {
     --_badge-bg: var(--semantic-success);
     --_badge-color: hsl(0 0% 100%);
@@ -645,11 +653,23 @@
 .carvia-badge-score-alto {
     --_badge-bg: var(--semantic-success);
     --_badge-color: hsl(0 0% 100%);
+    font-size: 0.6rem;
 }
 
 .carvia-badge-score-medio {
     --_badge-bg: var(--amber-50);
     --_badge-color: hsl(0 0% 10%);
+    font-size: 0.6rem;
+}
+
+/* Badge utilitario de tamanho extra pequeno (pre-vinculos, linhas compactas) */
+.carvia-badge-xs {
+    font-size: 0.55rem;
+}
+
+/* Badge utilitario pequeno (pre-vinculos, metadados secundarios) */
+.carvia-badge-sm {
+    font-size: 0.6rem;
 }
 
 /* Light mode adjustments */

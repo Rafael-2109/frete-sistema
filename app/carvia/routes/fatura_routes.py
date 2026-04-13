@@ -304,6 +304,25 @@ def register_fatura_routes(bp):
                     # Expandir: criar itens para NFs do CTe não presentes
                     linker.expandir_itens_com_nfs_do_cte(fatura.id)
 
+                # PRE-VINCULO: resolver pre-vinculos extrato<->cotacao da cadeia da fatura
+                try:
+                    from app.carvia.services.financeiro.previnculo_service import (
+                        CarviaPreVinculoService,
+                    )
+                    # FIX C2: SAVEPOINT isola erros do resolver da transacao da fatura.
+                    # Sem isso, um IntegrityError no flush do resolver polui a session
+                    # e o db.session.commit() subsequente da rota falha, causando
+                    # rollback completo da criacao da fatura (sintoma: fatura criada
+                    # com sucesso no UI mas some do banco).
+                    with db.session.begin_nested():
+                        CarviaPreVinculoService.resolver_para_fatura(
+                            fatura.id, current_user.email,
+                        )
+                except Exception as _e:
+                    logger.warning(
+                        'Falha ao resolver pre-vinculos fatura %s: %s', fatura.id, _e
+                    )
+
                 db.session.commit()
 
                 partes_msg = []
@@ -1196,6 +1215,25 @@ def register_fatura_routes(bp):
             # Expandir: criar itens para NFs do CTe não presentes
             linker.expandir_itens_com_nfs_do_cte(fatura.id)
 
+            # PRE-VINCULO: resolver pre-vinculos extrato<->cotacao da cadeia
+            try:
+                from app.carvia.services.financeiro.previnculo_service import (
+                    CarviaPreVinculoService,
+                )
+                # FIX C2: SAVEPOINT isola erros do resolver da transacao da fatura.
+                # Sem isso, um IntegrityError no flush do resolver polui a session
+                # e o db.session.commit() subsequente da rota falha, causando
+                # rollback completo da criacao da fatura (sintoma: fatura criada
+                # com sucesso no UI mas some do banco).
+                with db.session.begin_nested():
+                    CarviaPreVinculoService.resolver_para_fatura(
+                        fatura.id, current_user.email,
+                    )
+            except Exception as _e:
+                logger.warning(
+                    'Falha ao resolver pre-vinculos fatura %s: %s', fatura.id, _e
+                )
+
             db.session.commit()
 
             flash(
@@ -1551,27 +1589,10 @@ def register_fatura_routes(bp):
                     'erro': 'Subcontrato nao encontrado nesta fatura.'
                 }), 404
 
-            # Reverter CEs auto-propagados via este sub ANTES de quebrar o vinculo
-            from app.carvia.models import CarviaCustoEntrega
-            ces_cobertos = CarviaCustoEntrega.query.filter_by(
-                subcontrato_id=sub_id
-            ).filter(
-                CarviaCustoEntrega.status == 'PAGO'
-            ).all()
-            for ce_cob in ces_cobertos:
-                if (ce_cob.pago_por or '').startswith('auto:'):
-                    from app.carvia.services.financeiro.carvia_conciliacao_service import (
-                        CarviaConciliacaoService,
-                    )
-                    if not CarviaConciliacaoService._tem_movimentacao_fc('custo_entrega', ce_cob.id):
-                        ce_cob.status = 'PENDENTE'
-                        ce_cob.pago_em = None
-                        ce_cob.pago_por = None
-                        ce_cob.conciliado = False
-                        logger.info(
-                            "CE %s revertido para PENDENTE (desanexar Sub #%d da FT #%d)",
-                            ce_cob.numero_custo, sub_id, fatura_id,
-                        )
+            # Nota: CEs vinculados a esta FT tem FK direta (fatura_transportadora_id),
+            # nao dependem do sub. Desanexar o sub nao afeta o vinculo CE->FT.
+            # Para desvincular um CE da FT, usar POST /custos-entrega/<id>/desvincular-fatura
+            # (CustoEntregaFaturaService.desvincular).
 
             # Reverter subcontrato + limpar CarviaFrete
             # Status reverte para CONFIRMADO: subcontratos anexados manualmente
@@ -1768,12 +1789,20 @@ def register_fatura_routes(bp):
 
         # Reutilizar valores ja calculados pelo service
         soma_considerado = conferencia_resumo.get('soma_considerado', 0.0) or 0.0
+        soma_custos_entrega = conferencia_resumo.get('soma_custos_entrega', 0.0) or 0.0
+        valor_conferido_total = conferencia_resumo.get(
+            'valor_conferido_total', soma_considerado + soma_custos_entrega
+        ) or 0.0
         valor_cte_total = conferencia_resumo.get('soma_cte_valor', 0.0) or 0.0
 
         # Metricas para card "Analise de Valores"
+        # Gate 2 agora considera subs + custos de entrega vinculados diretamente a FT
+        # (padrao DespesaExtra.fatura_frete_id do Nacom).
         valor_fatura = float(fatura.valor_total or 0)
-        diferenca_fatura_considerado = round(abs(valor_fatura - float(soma_considerado)), 2)
-        diferenca_considerado_pago = round(float(soma_considerado) - valor_pago_total, 2)
+        diferenca_fatura_considerado = round(
+            abs(valor_fatura - float(valor_conferido_total)), 2
+        )
+        diferenca_considerado_pago = round(float(valor_conferido_total) - valor_pago_total, 2)
         fatura_dentro_tolerancia = diferenca_fatura_considerado <= 1.00
 
         # Cross-links: itens, NFs, faturas cliente
@@ -1816,14 +1845,16 @@ def register_fatura_routes(bp):
                 CarviaOperacao.id.in_(op_ids)
             ).order_by(CarviaOperacao.cte_data_emissao.desc().nullslast()).all()
 
-        # Custos de entrega e CTes complementares via operacoes
-        custos_entrega_ft = []
+        # Custos de entrega vinculados DIRETAMENTE a esta FT via fatura_transportadora_id
+        # (padrao DespesaExtra.fatura_frete_id do Nacom — FK direta, sem juncao por operacao)
+        from app.carvia.models import CarviaCustoEntrega
+        custos_entrega_ft = CarviaCustoEntrega.query.filter(
+            CarviaCustoEntrega.fatura_transportadora_id == fatura_id
+        ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+
+        # CTes complementares via operacoes (caminho fiscal do CTe Comp — cobra cliente)
         ctes_complementares_ft = []
         if op_ids:
-            from app.carvia.models import CarviaCustoEntrega
-            custos_entrega_ft = CarviaCustoEntrega.query.filter(
-                CarviaCustoEntrega.operacao_id.in_(op_ids)
-            ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
             ctes_complementares_ft = CarviaCteComplementar.query.filter(
                 CarviaCteComplementar.operacao_id.in_(op_ids)
             ).order_by(CarviaCteComplementar.criado_em.desc()).all()
@@ -1836,6 +1867,8 @@ def register_fatura_routes(bp):
             valor_cte_total=valor_cte_total,
             valor_pago_total=valor_pago_total,
             soma_considerado=soma_considerado,
+            soma_custos_entrega=soma_custos_entrega,
+            valor_conferido_total=valor_conferido_total,
             diferenca_fatura_considerado=diferenca_fatura_considerado,
             diferenca_considerado_pago=diferenca_considerado_pago,
             fatura_dentro_tolerancia=fatura_dentro_tolerancia,
@@ -1942,17 +1975,27 @@ def register_fatura_routes(bp):
                 # Gate 2 (W4 parte 2): valor da fatura precisa bater com soma dos valores conferidos
                 # Tolerancia: R$ 1,00 (espelhando app/fretes/routes.py:2196)
                 # NULL tratado como 0, CANCELADO excluido (ver subs_ativos acima)
-                soma_considerado = sum(
-                    float(s.valor_considerado or 0) for s in subs_ativos
+                # INCLUI tambem CarviaCustoEntrega vinculados diretamente a esta FT
+                # via fatura_transportadora_id (padrao DespesaExtra.fatura_frete_id).
+                #
+                # Single source of truth: reusa resumo_conferencia_fatura para
+                # manter Gate 2 e detalhe.html lendo o mesmo calculo.
+                from app.carvia.services.documentos.conferencia_service import ConferenciaService
+                resumo = ConferenciaService().resumo_conferencia_fatura(fatura_id)
+                soma_considerado = float(resumo.get('soma_considerado', 0) or 0)
+                soma_custos_entrega = float(resumo.get('soma_custos_entrega', 0) or 0)
+                valor_conferido_total = float(
+                    resumo.get('valor_conferido_total', soma_considerado + soma_custos_entrega) or 0
                 )
                 valor_fatura = float(fatura.valor_total or 0)
-                diferenca = abs(valor_fatura - soma_considerado)
+                diferenca = abs(valor_fatura - valor_conferido_total)
                 if diferenca > 1.00:
                     flash(
                         f'Diferenca de R$ {diferenca:.2f} entre valor da fatura '
                         f'(R$ {valor_fatura:.2f}) e soma conferida '
-                        f'(R$ {soma_considerado:.2f}). Tolerancia: R$ 1,00. '
-                        f'Ajuste valor_considerado dos subcontratos antes de conferir.',
+                        f'(R$ {valor_conferido_total:.2f}: subs R$ {soma_considerado:.2f} '
+                        f'+ custos entrega R$ {soma_custos_entrega:.2f}). '
+                        f'Tolerancia: R$ 1,00. Ajuste valores antes de conferir.',
                         'warning',
                     )
                     return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
@@ -2032,6 +2075,26 @@ def register_fatura_routes(bp):
             ).filter(CarviaCteComplementar.fatura_cliente_id == fatura.id).scalar()
 
             fatura.valor_total = (soma or 0) + (soma_comp or 0)
+
+            # PRE-VINCULO: nova operacao pode completar cadeia para cotacao com pre-vinculo
+            try:
+                from app.carvia.services.financeiro.previnculo_service import (
+                    CarviaPreVinculoService,
+                )
+                # FIX C2: SAVEPOINT isola erros do resolver da transacao da fatura.
+                # Sem isso, um IntegrityError no flush do resolver polui a session
+                # e o db.session.commit() subsequente da rota falha, causando
+                # rollback completo da criacao da fatura (sintoma: fatura criada
+                # com sucesso no UI mas some do banco).
+                with db.session.begin_nested():
+                    CarviaPreVinculoService.resolver_para_fatura(
+                        fatura.id, current_user.email,
+                    )
+            except Exception as _e:
+                logger.warning(
+                    'Falha ao resolver pre-vinculos fatura %s: %s', fatura.id, _e
+                )
+
             db.session.commit()
 
             logger.info(
@@ -2204,6 +2267,26 @@ def register_fatura_routes(bp):
             ).filter(CarviaCteComplementar.fatura_cliente_id == fatura.id).scalar()
 
             fatura.valor_total = (soma_ops or 0) + (soma_comp or 0)
+
+            # PRE-VINCULO: novo CTe Comp pode completar cadeia para cotacao com pre-vinculo
+            try:
+                from app.carvia.services.financeiro.previnculo_service import (
+                    CarviaPreVinculoService,
+                )
+                # FIX C2: SAVEPOINT isola erros do resolver da transacao da fatura.
+                # Sem isso, um IntegrityError no flush do resolver polui a session
+                # e o db.session.commit() subsequente da rota falha, causando
+                # rollback completo da criacao da fatura (sintoma: fatura criada
+                # com sucesso no UI mas some do banco).
+                with db.session.begin_nested():
+                    CarviaPreVinculoService.resolver_para_fatura(
+                        fatura.id, current_user.email,
+                    )
+            except Exception as _e:
+                logger.warning(
+                    'Falha ao resolver pre-vinculos fatura %s: %s', fatura.id, _e
+                )
+
             db.session.commit()
 
             logger.info(

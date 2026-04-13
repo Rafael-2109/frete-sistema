@@ -407,9 +407,10 @@ class AdminService:
              — estado terminal, indica fluxo completo
           4. CarviaFaturaTransportadoraItem.subcontrato_id aponta
              — defesa em profundidade: caso o item exista mesmo sem fatura
-          5. CarviaCustoEntrega.subcontrato_id aponta
-             — sub cobre custos de entrega; CE pode estar conciliado
-             (tipo_documento='custo_entrega')
+          5. CarviaCustoEntrega.subcontrato_id aponta (LEGADO — pre-FK direta)
+             — CEs agora usam CarviaCustoEntrega.fatura_transportadora_id direto
+             (padrao DespesaExtra.fatura_frete_id do Nacom). O check de sub_id
+             permanece como defesa em profundidade ate a migration destructive.
           6. CarviaFrete.subcontrato_id legado aponta
              — caso historico de FK legado pre-frete_id
 

@@ -55,6 +55,10 @@ CarviaOperacao (CTe CarVia)
 CarviaCteComplementar (CTe Complementar)
     |-- 1:N --> CarviaCustoEntrega                         [via custo.cte_complementar_id]
 
+CarviaFaturaTransportadora (Fatura Subcontrato)
+    |-- 1:N --> CarviaCustoEntrega                         [via custo.fatura_transportadora_id]
+    |                                                        (padrao DespesaExtra.fatura_frete_id do Nacom)
+
 CarviaCustoEntrega (Custo de Entrega)
     |-- 1:N --> CarviaCustoEntregaAnexo                    [via anexo.custo_entrega_id, CASCADE]
 ```
@@ -153,7 +157,7 @@ Ex: 3 motos de 100kg cada num CTe de 350kg (embalagem) → cada moto = 350/3 = 1
 CTe CarVia:         RASCUNHO → COTADO → CONFIRMADO → FATURADO    [CANCELADO exceto FATURADO]
 CTe Subcontrato:    PENDENTE → COTADO → CONFIRMADO → FATURADO → CONFERIDO  [CANCELADO exceto FATURADO]
 CTe Complementar:   RASCUNHO → EMITIDO → FATURADO                [CANCELADO exceto FATURADO]
-Custo Entrega:      PENDENTE → PAGO                              [CANCELADO exceto PAGO via fluxo caixa]
+Custo Entrega:      PENDENTE → VINCULADO_FT → PAGO               [CANCELADO exceto PAGO via fluxo caixa]
 ```
 NUNCA mover status para tras (ex: CONFIRMADO → COTADO). Cancelar e criar novo.
 
@@ -204,6 +208,12 @@ na tela de detalhe via AJAX (nao na criacao). Ao anexar: `status=FATURADO`, `fat
 Ao desanexar (se fatura nao CONFERIDO): `status=CONFIRMADO`, `fatura_transportadora_id=NULL`.
 Faturas CarVia: ao vincular, status muda para FATURADO. NUNCA desvincular operacao apos faturamento.
 
+**Custos de Entrega disponiveis para FT** (padrao DespesaExtra.fatura_frete_id do Nacom):
+`status='PENDENTE', fatura_transportadora_id IS NULL`. Ao vincular via `CustoEntregaFaturaService.vincular()`:
+`fatura_transportadora_id=ft.id`, `status='VINCULADO_FT'`. Se FT ja esta PAGA, auto-propaga `status='PAGO'`.
+Ao desvincular (se FT nao CONFERIDA): `fatura_transportadora_id=NULL`, `status='PENDENTE'`.
+**Gate 2 da conferencia FT** inclui CEs: `abs(ft.valor_total - (sum(sub.valor_considerado) + sum(ce.valor))) <= R$ 1,00`.
+
 ### R6: Classificacao de CTe por CNPJ emitente
 Na importacao, CTes sao classificados automaticamente:
 - CNPJ emitente == `CARVIA_CNPJ` (env var) → **CTe CarVia** (CarviaOperacao)
@@ -246,10 +256,13 @@ Conciliacao 100% de um documento automaticamente altera status de pagamento:
 - `CarviaFaturaCliente`: `status='PAGA'`, `pago_em`, `pago_por`
 - `CarviaFaturaTransportadora`: `status_pagamento='PAGO'`, `pago_em`, `pago_por`
 - `CarviaDespesa`: `status='PAGO'`, `pago_em`, `pago_por`
-- `CarviaCustoEntrega`: `status='PAGO'`, `pago_em`, `pago_por`
+- `CarviaCustoEntrega`: `status='PAGO'`, `pago_em`, `pago_por` (apenas se `fatura_transportadora_id IS NULL`; CEs vinculados a FT sao pagos via propagacao automatica da FT)
 - `CarviaReceita`: `status='RECEBIDO'`, `recebido_em`, `recebido_por`
 
 Desconciliacao reverte: status → PENDENTE, limpa campos pago_em/pago_por.
+**Propagacao FT→CE**: quando FT e paga via conciliacao, `_propagar_status_ces_cobertos()` busca CEs
+via `fatura_transportadora_id=ft.id` e marca `status='PAGO'` com `pago_por='auto:...'`.
+Ao desconciliar FT: CEs auto-propagados revertem para `VINCULADO_FT` (mantem FK, volta status).
 
 ### R12: Fluxo unico para novos fretes (cotacao → embarque → portaria)
 Novos fretes CarVia DEVEM passar pelo fluxo:
@@ -293,7 +306,7 @@ GAP-20 previa apenas soft-delete (CANCELADO). `AdminService` permite hard delete
 - Fatura Cliente: bloqueado se `conciliado=True`
 - Fatura Transportadora: bloqueado se tem `CarviaConciliacao` vinculada
 - CTe Complementar: bloqueado se `status=FATURADO`
-- Custo Entrega: bloqueado se `status=PAGO`
+- Custo Entrega: bloqueado se `status=PAGO` ou `fatura_transportadora_id IS NOT NULL` (desvincular da FT primeiro)
 - Despesa: bloqueado se `status=PAGO`
 
 **Preview editavel**: Importacao em `/carvia/importar` permite click-to-edit, remover items e reclassificar CTes/Faturas ANTES de salvar. APIs mutam dados no Redis (`carvia:importacao:{user_id}:{uuid}`).
@@ -336,6 +349,58 @@ obj = db.session.get(CarviaEmissaoCte, emissao_id)   # re-busca (objeto antigo s
 
 **Detalhes completos**: `app/carvia/SSW_INTEGRATION.md`
 
+### R16: Pre-Vinculo Extrato <-> Cotacao (frete pre-pago)
+
+Clientes CarVia frequentemente pagam fretes ANTECIPADAMENTE, gerando linhas de
+extrato bancario "orfas" (PENDENTE sem documento para conciliar). Quando a
+`CarviaFaturaCliente` eh finalmente emitida, fica dificil identificar qual
+linha bancaria corresponde a qual fatura no meio de outras transacoes.
+
+**Solucao**: tabela lateral `CarviaPreVinculoExtratoCotacao` permite o usuario
+proativamente vincular uma linha de extrato a uma cotacao APROVADA na tela de
+detalhe (`cotacoes/detalhe.html`). O pre-vinculo eh SOFT — a linha permanece
+`status_conciliacao=PENDENTE`. NAO eh `CarviaConciliacao` (nao polui o modelo
+central de conciliacao financeira).
+
+**Fluxo**:
+```
+ATIVO -> RESOLVIDO (automatico quando fatura chega)
+ATIVO -> CANCELADO (usuario desfaz manualmente)
+```
+
+**Trigger de resolucao automatica** (`CarviaPreVinculoService.resolver_para_fatura`):
+Chamado em 4 pontos de `fatura_routes.py` (try/except nao-bloqueante) apos
+criar/editar fatura cliente. Percorre cadeia:
+```
+CarviaFaturaClienteItem.nf_id -> CarviaNf.numero_nf ->
+  CarviaPedidoItem.numero_nf (STRING MATCH — gap Refator 2.5) ->
+    CarviaPedido.cotacao_id -> CarviaCotacao
+```
+Para cada cotacao encontrada com pre-vinculo ATIVO, cria `CarviaConciliacao`
+real (`tipo_documento='fatura_cliente'`) e marca pre-vinculo como `RESOLVIDO`
+com ponteiros `conciliacao_id` + `fatura_cliente_id` para audit trail.
+
+**Botao manual** "Resolver Pre-Vinculos" no extrato bancario chama
+`tentar_resolver_todos_ativos(usuario, dias_lookback=90)` que varre pre-vinculos
+ATIVOS e tenta resolver contra faturas cliente dos ultimos 90 dias. Cobre casos
+tardios (NF anexada ao pedido apos fatura ja criada).
+
+**UNIQUE parcial**: `(extrato_linha_id, cotacao_id) WHERE status='ATIVO'` — apenas
+1 pre-vinculo ATIVO por par (linha, cotacao), permite recriar apos cancelamento.
+
+**Constraint de dominio**: linha deve ser CRÉDITO (pagamento entrante), status
+IN (PENDENTE, PARCIAL); cotacao deve estar APROVADO. Cancelamento de RESOLVIDO
+eh bloqueado (pedir pra desfazer conciliacao primeiro via Extrato Bancario).
+
+**Nao bloqueante em hooks**: se `resolver_para_fatura` falha (ex: session issue,
+cadeia ambigua), a criacao da fatura segue normal. Botao manual cobre.
+
+**Service**: `app/carvia/services/financeiro/previnculo_service.py` (7 metodos).
+**Rotas**: `conciliacao_routes.py` — 5 endpoints em `/api/cotacoes/<id>/...` e
+`/api/previnculos/...`.
+**Templates**: `_modal_previncular_extrato.html`, `_previnculos_cotacao.html`,
+includes em `cotacoes/detalhe.html`.
+
 ---
 
 ## Modelos
@@ -354,7 +419,7 @@ obj = db.session.get(CarviaEmissaoCte, emissao_id)   # re-busca (objeto antigo s
 | CarviaFaturaTransportadora | `carvia_faturas_transportadora` | **UNIQUE(numero_fatura, transportadora_id)**. **2 status independentes**: `status_conferencia` (conferencia documental: PENDENTE/EM_CONFERENCIA/CONFERIDO/DIVERGENTE) e `status_pagamento` (financeiro: PENDENTE/PAGO). `pago_por`/`pago_em` preenchidos ao pagar. Relationship `itens` → CarviaFaturaTransportadoraItem |
 | CarviaFaturaTransportadoraItem | `carvia_fatura_transportadora_itens` | Itens de detalhe por fatura subcontrato. FK `fatura_transportadora_id` CASCADE. **FK `subcontrato_id`, `operacao_id`, `nf_id`** (nullable). Campos: cte_numero, cte_data_emissao, contraparte_cnpj/nome, nf_numero, valor_mercadoria, peso_kg, valor_frete, valor_cotado, valor_acertado |
 | CarviaCteComplementar | `carvia_cte_complementares` | CTe complementar emitido ao cliente para cobrar custos extras. `numero_comp` COMP-### (`gerar_numero_comp()`) — usado internamente. **UI exibe `cte_numero + ctrc_numero`** via macro `carvia_ref` (commit `672a1836`). FK `operacao_id` NOT NULL (CTe pai). FK `fatura_cliente_id` nullable (fatura que inclui). `cte_valor` NOT NULL. Status: RASCUNHO→EMITIDO→FATURADO, CANCELADO exceto FATURADO. **SEM integracao financeira propria** — financeiro e da CarviaFaturaCliente. `cnpj_cliente`/`nome_cliente` herdados da operacao. **Campos SSW (commit `06f27d0d`)**: `cte_chave_acesso` UNIQUE nullable, `ctrc_numero` VARCHAR(30), `cte_xml_path` (S3), `cte_pdf_path` (S3) — populados pelo worker pos-emissao 222. Pacote: `app/carvia/models/cte_custos.py` |
-| CarviaCustoEntrega | `carvia_custos_entrega` | Custos que CarVia pagou/incorreu (DEBITO). `numero_custo` CE-### (`gerar_numero_custo()`). `TIPOS_CUSTO`: DIARIA, REENTREGA, ARMAZENAGEM, DEVOLUCAO, AVARIA, PEDAGIO_EXTRA, TAXA_DESCARGA, OUTROS. FK `operacao_id` NOT NULL, FK `cte_complementar_id` nullable, FK `subcontrato_id` nullable (Sub que cobra este custo — FT derivada via `sub.fatura_transportadora_id`). `fornecedor_nome`/`fornecedor_cnpj` opcionais. **COM integracao financeira**: FluxoCaixa (por `data_vencimento`), Conciliacao (`tipo_doc='custo_entrega'`, DEBITO), ContaMovimentacao (automatico). **Integridade CE↔FT**: se `subcontrato_id` aponta para sub com `fatura_transportadora_id`, CE fica **bloqueado** para conciliacao direta — sera pago via FT (propagacao automatica PAGO/PENDENTE com `pago_por='auto:...'`). Campos `pago_por`/`pago_em`/`total_conciliado`/`conciliado` identicos a CarviaDespesa. Backref: `CarviaSubcontrato.custos_entrega_cobertos` (dynamic) |
+| CarviaCustoEntrega | `carvia_custos_entrega` | Custos que CarVia pagou/incorreu (DEBITO). `numero_custo` CE-### (`gerar_numero_custo()`). `TIPOS_CUSTO`: DIARIA, REENTREGA, ARMAZENAGEM, DEVOLUCAO, AVARIA, PEDAGIO_EXTRA, TAXA_DESCARGA, OUTROS. **`STATUS_CHOICES`**: PENDENTE, VINCULADO_FT, PAGO, CANCELADO. **FKs**: `operacao_id` NOT NULL, `cte_complementar_id` nullable (se virou CTe Comp para cliente), `frete_id` nullable (populado automatico), **`fatura_transportadora_id` nullable** (FK direta para FT — padrao DespesaExtra.fatura_frete_id do Nacom). `subcontrato_id` ainda existe mas e LEGADO (sera removido em migration destructive). `fornecedor_nome`/`fornecedor_cnpj` opcionais. **COM integracao financeira**: FluxoCaixa (por `data_vencimento`), Conciliacao (`tipo_doc='custo_entrega'`, DEBITO), ContaMovimentacao (automatico). **Integridade CE↔FT**: se `fatura_transportadora_id IS NOT NULL`, CE fica **bloqueado** para conciliacao direta — sera pago via propagacao automatica da FT (`pago_por='auto:...'`). `@property pode_vincular_fatura` (PENDENTE e sem FT). Campos `pago_por`/`pago_em`/`total_conciliado`/`conciliado` identicos a CarviaDespesa. Relationship: `fatura_transportadora` + backref `CarviaFaturaTransportadora.custos_entrega` (dynamic). Service: `CustoEntregaFaturaService` (vincular/desvincular/faturas_disponiveis) |
 | CarviaCustoEntregaAnexo | `carvia_custo_entrega_anexos` | Comprovantes S3 (1:N por custo). Segue padrao `AnexoOcorrencia` de devolucao. `ativo` Boolean para soft-delete. Upload AJAX (PDF/JPG/PNG/DOC/XLS/MSG, max 10MB). Download via presigned URL S3. `FileStorage` de `app/utils/file_storage.py` |
 | CarviaEmissaoCte | `carvia_emissao_cte` | **Tracking de emissao SSW (opcao 004 + 007 + 101 + 437)**. Status: `PENDENTE → EM_PROCESSAMENTO → SUCESSO/ERRO/CANCELADO`. Etapas: `LOGIN, PREENCHIMENTO, SEFAZ, CONSULTA_101, IMPORTACAO_CTE, FATURA_437, IMPORTACAO_FAT`. FK `nf_id` NOT NULL (NF que motivou), FK `operacao_id` (preenchido por `importar_resultado_cte` via `cte_chave_acesso`). Campos: `placa`, `uf_origem`, `filial_ssw`, `cnpj_tomador`, `frete_valor`, `data_vencimento`, `medidas_json`, `xml_path`/`dacte_path` (LOCAIS temporarios — caminhos S3 finais ficam em `CarviaOperacao.cte_xml_path/cte_pdf_path`), `fatura_numero`, `erro_ssw`, `resultado_json`. Properties `em_andamento` e `finalizado`. Service: `SswEmissaoService`. Worker: `ssw_cte_jobs.emitir_cte_ssw_job(id)` com SSL drop resilience (R15). Pacote: `app/carvia/models/frete.py` |
 | CarviaEmissaoCteComplementar | `carvia_emissao_cte_complementar` | **Tracking de emissao CT-e Complementar SSW (opcao 222 + 007 + 101)**. Status: `PENDENTE → EM_PROCESSAMENTO → SUCESSO/ERRO`. Etapas: `PREENCHIMENTO, SEFAZ, CONSULTA_101`. FK `custo_entrega_id` NOT NULL (motiva), FK `cte_complementar_id` NOT NULL (preenchido pos-sucesso), FK `operacao_id` NOT NULL (CTe pai). Campos: `ctrc_pai` VARCHAR(30) `FILIAL-NUMERO-DV`, `motivo_ssw` (C/D/E/R), `filial_ssw`, `valor_calculado` NUMERIC(15,2) (apos grossing up), `icms_aliquota_usada` NUMERIC(5,2) (snapshot do ICMS do pai). Worker: `ssw_cte_complementar_jobs.emitir_cte_complementar_job(id)` — chama script 222 com `valor_base=custo.valor` (auto-calc ICMS via 101 do pai). Pos-sucesso: `_persistir_artefatos_complementar()` faz upload XML/DACTE S3 + backfill `CarviaCteComplementar.ctrc_numero/cte_xml_path/cte_pdf_path`. Retry: `POST /carvia/api/custos-entrega/emissao-comp/<id>/retry` (commit `6ca7b942`). Pacote: `app/carvia/models/cte_custos.py` |
@@ -363,6 +428,7 @@ obj = db.session.get(CarviaEmissaoCte, emissao_id)   # re-busca (objeto antigo s
 | CarviaSessaoDemanda | `carvia_sessao_demandas` | Demanda de rota dentro de sessao. UNIQUE(sessao_id, ordem). FK `transportadora_id` e `tabela_frete_id` (preenchidos ao selecionar opcao). `detalhes_calculo` JSON com breakdown da CalculadoraFrete. `limpar_frete_selecionado()` zera campos ao editar |
 | CarviaExtratoLinha | `carvia_extrato_linhas` | Linhas importadas do extrato bancario OFX. `fitid` UNIQUE. `tipo`: CREDITO/DEBITO. `status_conciliacao`: PENDENTE/CONCILIADO/PARCIAL. `total_conciliado` + `saldo_a_conciliar` (@property). Campos enriquecimento CSV: `razao_social`, `observacao` |
 | CarviaConciliacao | `carvia_conciliacoes` | Junction N:N extrato↔documento. UNIQUE(extrato_linha_id, tipo_documento, documento_id). `tipo_documento`: fatura_cliente/fatura_transportadora/despesa/custo_entrega/receita. `valor_alocado` sempre positivo |
+| CarviaPreVinculoExtratoCotacao | `carvia_previnculos_extrato_cotacao` | **Pre-vinculo soft** entre linha de extrato (CREDITO, PENDENTE/PARCIAL) e cotacao (APROVADO). Nao eh conciliacao financeira — linha continua PENDENTE. Resolvido automaticamente quando fatura cliente chega via cadeia `FaturaItem.nf_id -> NF.numero_nf -> PedidoItem.numero_nf (string) -> Pedido.cotacao_id` (ver R16). Status: `ATIVO -> RESOLVIDO` (auto trigger em fatura_routes.py) OU `ATIVO -> CANCELADO` (soft cancel manual com motivo). UNIQUE PARCIAL `(extrato_linha_id, cotacao_id) WHERE status='ATIVO'`. FKs: `conciliacao_id` (SET NULL) e `fatura_cliente_id` (SET NULL) preenchidos pos-resolucao para audit trail. Service: `app/carvia/services/financeiro/previnculo_service.py`. Pacote: `app/carvia/models/financeiro.py` |
 | CarviaCategoriaMoto | `carvia_categorias_moto` | Categorias/tipos de moto para precificacao por unidade. `nome` UNIQUE (ex: "Leve", "Pesada", "Scooter"). `ordem` para UI. Soft-delete via `ativo`. Relationships: `modelos` (CarviaModeloMoto), `precos` (CarviaPrecoCategoriaMoto). CRUD em `/carvia/configuracoes/categorias-moto` |
 | CarviaModeloMoto | `carvia_modelos_moto` | Modelos de moto para calculo automatico de peso cubado. `nome` UNIQUE. `regex_pattern` para match automatico. Dimensoes (comprimento, largura, altura) + `cubagem_minima`. **`categoria_moto_id`** FK nullable para CarviaCategoriaMoto. CRUD inline em `/carvia/configuracoes/modelos-moto` |
 | CarviaPrecoCategoriaMoto | `carvia_precos_categoria_moto` | Preco fixo por unidade para combinacao tabela_frete × categoria_moto. `valor_unitario` NUMERIC(15,2). UNIQUE(tabela_frete_id, categoria_moto_id). Soft-delete via `ativo`. Relationship `tabela_frete` (CarviaTabelaFrete backref `precos_categoria_moto`). CRUD via API em tabelas de frete |

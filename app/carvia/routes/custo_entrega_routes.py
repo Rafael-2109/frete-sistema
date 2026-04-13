@@ -25,7 +25,7 @@ TIPOS_CUSTO = [
     'DIARIA', 'REENTREGA', 'ARMAZENAGEM', 'DEVOLUCAO', 'AVARIA',
     'PEDAGIO_EXTRA', 'TAXA_DESCARGA', 'OUTROS',
 ]
-STATUS_CUSTO = ['PENDENTE', 'PAGO', 'CANCELADO']
+STATUS_CUSTO = ['PENDENTE', 'VINCULADO_FT', 'PAGO', 'CANCELADO']
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'msg', 'eml'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
@@ -363,6 +363,24 @@ def register_custo_entrega_routes(bp):
                 'carvia.detalhe_custo_entrega', custo_id=custo_id
             ))
 
+        # Se vinculado a FT, checa pode_editar() da fatura (bloqueia se CONFERIDA/PAGA).
+        # Permite edicao se FT esta em PENDENTE/EM_CONFERENCIA (fatura em construcao).
+        # Padrao espelhado de DespesaExtra ↔ FaturaFrete no Nacom.
+        if custo.fatura_transportadora_id:
+            from app.carvia.models import CarviaFaturaTransportadora
+            ft = db.session.get(CarviaFaturaTransportadora, custo.fatura_transportadora_id)
+            if ft:
+                pode, razao = ft.pode_editar()
+                if not pode:
+                    flash(
+                        f'Custo vinculado a Fatura Transportadora #{ft.numero_fatura}: {razao} '
+                        f'Desvincule o custo (se possivel) ou reabra a conferencia da fatura antes de editar.',
+                        'warning',
+                    )
+                    return redirect(url_for(
+                        'carvia.detalhe_custo_entrega', custo_id=custo_id
+                    ))
+
         if request.method == 'POST':
             cte_complementar_id_str = request.form.get('cte_complementar_id', '').strip()
             tipo_custo = request.form.get('tipo_custo', '').strip()
@@ -460,48 +478,37 @@ def register_custo_entrega_routes(bp):
                 'carvia.detalhe_custo_entrega', custo_id=custo_id
             ))
 
-        # A5+NI2+NC1 combinados — ORDEM CRITICA para UX correta:
+        # Invariante: CE em VINCULADO_FT nao pode ter status alterado por esta
+        # rota. Tem que desvincular da FT primeiro (via rota dedicada) —
+        # caso contrario ficaria com FK preenchida e status inconsistente.
+        if custo.status == 'VINCULADO_FT':
+            flash(
+                f'Custo esta VINCULADO_FT (fatura #{custo.fatura_transportadora_id}). '
+                f'Desvincule da fatura antes de alterar o status.',
+                'warning',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_custo_entrega', custo_id=custo_id
+            ))
+
+        # A5+NC1 combinados — ORDEM CRITICA para UX correta:
         #
-        # Quando usuario pede CANCELADO, verificamos PRIMEIRO a cobertura
-        # por Fatura Transportadora, porque se o CE esta coberto por FT o
-        # cancelamento e impossivel mesmo apos desfazer o pagamento
-        # (desfazer so recoloca em PENDENTE, e o guard FT continuaria
-        # bloqueando). Mostrar a mensagem "desfaca primeiro" em um caso
-        # que depois vai bloquear de novo desperdica uma acao do usuario.
+        # Quando usuario pede CANCELADO, verificamos PRIMEIRO o vinculo com
+        # Fatura Transportadora, porque se o CE esta vinculado a FT o
+        # cancelamento e impossivel mesmo apos desfazer o pagamento. A unica
+        # via para cancelar e desvincular o CE da FT primeiro.
         #
         # Entao: FT-coverage (terminal blocker) ANTES de NC1 (2-step flow).
-        if novo_status == 'CANCELADO' and custo.subcontrato_id:
-            from app.carvia.models import CarviaSubcontrato
-            sub = db.session.get(CarviaSubcontrato, custo.subcontrato_id)
-            if sub is None:
-                # NI2: FK orfa — sub foi hard-deleted sem limpar FK.
-                logger.error(
-                    "Custo #%s aponta para sub #%s inexistente (FK orfa)",
-                    custo_id, custo.subcontrato_id,
-                )
-                flash(
-                    f'Custo referencia Subcontrato #{custo.subcontrato_id} '
-                    f'inexistente. Contate o suporte para corrigir a FK orfa '
-                    f'antes de cancelar.',
-                    'danger',
-                )
-                return redirect(url_for(
-                    'carvia.detalhe_custo_entrega', custo_id=custo_id
-                ))
-            if sub.fatura_transportadora_id:
-                # A5: CE coberto por FT — bloqueio terminal. Vale tanto se
-                # status=PAGO (ja pago via propagacao da FT) quanto PENDENTE
-                # (aguardando pagamento via FT). Unica via para cancelar: desvincular o sub
-                # do custo/FT primeiro.
-                flash(
-                    f'Custo esta coberto pelo Subcontrato em Fatura Transportadora '
-                    f'#{sub.fatura_transportadora_id}. Nao pode ser cancelado '
-                    f'diretamente — desvincule do subcontrato primeiro.',
-                    'danger',
-                )
-                return redirect(url_for(
-                    'carvia.detalhe_custo_entrega', custo_id=custo_id
-                ))
+        if novo_status == 'CANCELADO' and custo.fatura_transportadora_id:
+            flash(
+                f'Custo esta vinculado a Fatura Transportadora '
+                f'#{custo.fatura_transportadora_id}. Nao pode ser cancelado '
+                f'diretamente — desvincule da fatura primeiro.',
+                'danger',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_custo_entrega', custo_id=custo_id
+            ))
 
         # NC1: bloquear transicao PAGO -> CANCELADO direta (apos FT check).
         # R4 exige que CANCELADO venha de PENDENTE — desfazer pagamento
@@ -562,32 +569,15 @@ def register_custo_entrega_routes(bp):
         if not custo:
             return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
 
-        # Integridade CE-FT: custo coberto por sub em FT nao pode ser pago direto
-        if custo.subcontrato_id:
-            from app.carvia.models import CarviaSubcontrato
-            sub = db.session.get(CarviaSubcontrato, custo.subcontrato_id)
-            # A8: Se a FK esta setada mas o sub nao existe mais (hard delete
-            # sem limpar FK), isso e erro de integridade — nao silenciar.
-            if sub is None:
-                logger.error(
-                    "Custo #%s aponta para sub #%s inexistente (FK orfa)",
-                    custo_id, custo.subcontrato_id,
-                )
-                return jsonify({
-                    'erro': (
-                        f'Custo referencia Subcontrato #{custo.subcontrato_id} '
-                        f'que nao existe mais. Contate o suporte para corrigir '
-                        f'a FK orfa.'
-                    ),
-                }), 500
-            if sub.fatura_transportadora_id:
-                return jsonify({
-                    'erro': (
-                        f'Custo esta coberto pelo Subcontrato #{sub.cte_numero} '
-                        f'(Fatura Transportadora #{sub.fatura_transportadora_id}). '
-                        f'Sera pago automaticamente junto com a fatura.'
-                    ),
-                }), 400
+        # Integridade CE-FT: CE vinculado a FT nao pode ser pago diretamente
+        if custo.fatura_transportadora_id:
+            return jsonify({
+                'erro': (
+                    f'Custo esta vinculado a Fatura Transportadora '
+                    f'#{custo.fatura_transportadora_id}. Sera pago '
+                    f'automaticamente quando a fatura for paga.'
+                ),
+            }), 400
 
         data = request.get_json() or {}
         data_pagamento_str = data.get('data_pagamento', '')
@@ -668,9 +658,9 @@ def register_custo_entrega_routes(bp):
     def desfazer_pagamento_custo_entrega(custo_id): # type: ignore
         """Desfaz pagamento de custo de entrega (JSON).
 
-        Bloqueado se CE e coberto por Subcontrato em FT: nesse caso o
-        pagamento vem da propagacao automatica da FT — nao ha pagamento
-        manual para desfazer. Usuario deve desvincular o sub primeiro.
+        Bloqueado se CE esta vinculado a FT: nesse caso o pagamento vem da
+        propagacao automatica da FT — nao ha pagamento manual para desfazer.
+        Usuario deve desvincular o CE da FT primeiro.
         """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -679,31 +669,17 @@ def register_custo_entrega_routes(bp):
         if not custo:
             return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
 
-        # Simetrico ao guard de pagar_custo_entrega (A8) + atualizar_status
-        # (A5): CE coberto por FT tem pagamento automatico, nao manual.
-        if custo.subcontrato_id:
-            from app.carvia.models import CarviaSubcontrato
-            sub = db.session.get(CarviaSubcontrato, custo.subcontrato_id)
-            if sub is None:
-                logger.error(
-                    "Custo #%s aponta para sub #%s inexistente (FK orfa)",
-                    custo_id, custo.subcontrato_id,
-                )
-                return jsonify({
-                    'erro': (
-                        f'Custo referencia Subcontrato #{custo.subcontrato_id} '
-                        f'inexistente. Contate o suporte para corrigir a FK orfa.'
-                    ),
-                }), 500
-            if sub.fatura_transportadora_id:
-                return jsonify({
-                    'erro': (
-                        f'Custo esta coberto pelo Subcontrato em Fatura '
-                        f'Transportadora #{sub.fatura_transportadora_id}. '
-                        f'Pagamento e automatico via FT — nao ha desfazer '
-                        f'manual. Desvincule do subcontrato primeiro.'
-                    ),
-                }), 400
+        # Simetrico ao guard de pagar_custo_entrega: CE vinculado a FT tem
+        # pagamento automatico, nao manual.
+        if custo.fatura_transportadora_id:
+            return jsonify({
+                'erro': (
+                    f'Custo esta vinculado a Fatura Transportadora '
+                    f'#{custo.fatura_transportadora_id}. Pagamento e '
+                    f'automatico via FT — nao ha desfazer manual. '
+                    f'Desvincule da fatura primeiro.'
+                ),
+            }), 400
 
         from app.carvia.services.financeiro.carvia_pagamento_service import (
             CarviaPagamentoService,
@@ -1146,77 +1122,185 @@ def register_custo_entrega_routes(bp):
         ))
 
     # ===================================================================
-    # API: Cobertura CE ↔ Subcontrato
+    # Gerenciar CEs por status de vinculacao a Fatura Transportadora
+    # (espelho de gerenciar_despesas_extras do Nacom)
     # ===================================================================
 
-    @bp.route('/api/custos-entrega/<int:custo_id>/vincular-subcontrato', methods=['POST']) # type: ignore
+    @bp.route('/custos-entrega/gerenciar') # type: ignore
     @login_required
-    def api_vincular_subcontrato(custo_id): # type: ignore
-        """Vincula CustoEntrega ao Subcontrato que cobra este custo."""
+    def gerenciar_custos_entrega(): # type: ignore
+        """Lista CEs agrupados por status de vinculacao a FT.
+
+        Abas:
+        - Sem Fatura: fatura_transportadora_id IS NULL, status != CANCELADO
+        - Com Fatura: fatura_transportadora_id IS NOT NULL
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        aba = request.args.get('aba', 'sem_fatura')
+        filtro_tipo = request.args.get('tipo_custo', '').strip()
+        busca = request.args.get('busca', '').strip()
+
+        def _aplicar_filtros(query):
+            """Aplica filtros tipo/busca sobre query base (espelho Nacom /despesas/gerenciar)."""
+            if filtro_tipo:
+                query = query.filter(CarviaCustoEntrega.tipo_custo == filtro_tipo)
+            if busca:
+                like = f'%{busca}%'
+                query = query.filter(
+                    db.or_(
+                        CarviaCustoEntrega.numero_custo.ilike(like),
+                        CarviaCustoEntrega.descricao.ilike(like),
+                    )
+                )
+            return query.order_by(CarviaCustoEntrega.criado_em.desc())
+
+        # Eager loading para evitar N+1 no template que acessa
+        # ce.operacao.cte_numero e ce.fatura_transportadora.numero_fatura
+        base_query = CarviaCustoEntrega.query.options(
+            db.joinedload(CarviaCustoEntrega.operacao),
+            db.joinedload(CarviaCustoEntrega.fatura_transportadora),
+        )
+
+        query_sem = _aplicar_filtros(
+            base_query.filter(
+                CarviaCustoEntrega.fatura_transportadora_id.is_(None),
+                CarviaCustoEntrega.status != 'CANCELADO',
+            )
+        )
+        query_com = _aplicar_filtros(
+            base_query.filter(
+                CarviaCustoEntrega.fatura_transportadora_id.isnot(None),
+            )
+        )
+
+        ces_sem_fatura = query_sem.all()
+        ces_com_fatura = query_com.all()
+
+        total_sem = sum(float(ce.valor or 0) for ce in ces_sem_fatura)
+        total_com = sum(float(ce.valor or 0) for ce in ces_com_fatura)
+
+        return render_template(
+            'carvia/custos_entrega/gerenciar.html',
+            ces_sem_fatura=ces_sem_fatura,
+            ces_com_fatura=ces_com_fatura,
+            total_sem=total_sem,
+            total_com=total_com,
+            aba=aba,
+            filtro_tipo=filtro_tipo,
+            busca=busca,
+            tipos_custo=TIPOS_CUSTO,
+        )
+
+    # ===================================================================
+    # Vincular CE a Fatura Transportadora (padrao DespesaExtra.fatura_frete_id)
+    # ===================================================================
+
+    @bp.route('/custos-entrega/<int:custo_id>/vincular-fatura', methods=['GET', 'POST']) # type: ignore
+    @login_required
+    def vincular_fatura_custo_entrega(custo_id): # type: ignore
+        """Vincula CE a uma CarviaFaturaTransportadora (tela dedicada).
+
+        GET: renderiza tela com lista de FTs disponiveis da transportadora do frete
+        POST: executa vinculacao via CustoEntregaFaturaService
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            flash('Custo de entrega nao encontrado.', 'danger')
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        from app.carvia.services.financeiro.custo_entrega_fatura_service import (
+            CustoEntregaFaturaService,
+        )
+
+        if request.method == 'POST':
+            fatura_id = request.form.get('fatura_transportadora_id', type=int)
+            if not fatura_id:
+                flash('Selecione uma Fatura Transportadora.', 'warning')
+                return redirect(url_for(
+                    'carvia.vincular_fatura_custo_entrega', custo_id=custo_id
+                ))
+
+            try:
+                resultado = CustoEntregaFaturaService.vincular(
+                    custo_id, fatura_id, current_user.email
+                )
+                db.session.commit()
+                flash(
+                    f'Custo {resultado["ce_numero"]} vinculado a Fatura '
+                    f'{resultado["ft_numero"]} com sucesso.',
+                    'success',
+                )
+                return redirect(url_for(
+                    'carvia.detalhe_custo_entrega', custo_id=custo_id
+                ))
+            except ValueError as e:
+                db.session.rollback()
+                flash(str(e), 'danger')
+                return redirect(url_for(
+                    'carvia.vincular_fatura_custo_entrega', custo_id=custo_id
+                ))
+            except Exception as e:
+                db.session.rollback()
+                logger.exception(f'Erro ao vincular CE #{custo_id} a FT: {e}')
+                flash(f'Erro: {e}', 'danger')
+                return redirect(url_for(
+                    'carvia.vincular_fatura_custo_entrega', custo_id=custo_id
+                ))
+
+        # GET
+        faturas = CustoEntregaFaturaService.faturas_disponiveis(custo_id)
+        return render_template(
+            'carvia/custos_entrega/vincular_fatura.html',
+            custo=custo,
+            faturas_disponiveis=faturas,
+        )
+
+    @bp.route('/custos-entrega/<int:custo_id>/desvincular-fatura', methods=['POST']) # type: ignore
+    @login_required
+    def desvincular_fatura_custo_entrega(custo_id): # type: ignore
+        """Remove vinculo CE <-> Fatura Transportadora."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
 
-        data = request.get_json()
-        if not data or not data.get('subcontrato_id'):
-            return jsonify({'sucesso': False, 'erro': 'subcontrato_id obrigatorio'}), 400
-
         try:
-            from app.carvia.services.financeiro.custo_entrega_cobertura_service import (
-                CustoEntregaCoberturaService,
+            from app.carvia.services.financeiro.custo_entrega_fatura_service import (
+                CustoEntregaFaturaService,
             )
-            resultado = CustoEntregaCoberturaService.vincular(
-                custo_id, int(data['subcontrato_id']), current_user.email
-            )
-            db.session.commit()
-            return jsonify(resultado)
-
-        except ValueError as e:
-            db.session.rollback()
-            return jsonify({'sucesso': False, 'erro': str(e)}), 400
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro ao vincular CE #{custo_id} a subcontrato: {e}")
-            return jsonify({'sucesso': False, 'erro': str(e)}), 500
-
-    @bp.route('/api/custos-entrega/<int:custo_id>/desvincular-subcontrato', methods=['POST']) # type: ignore
-    @login_required
-    def api_desvincular_subcontrato(custo_id): # type: ignore
-        """Remove vinculo CustoEntrega ↔ Subcontrato."""
-        if not getattr(current_user, 'sistema_carvia', False):
-            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
-
-        try:
-            from app.carvia.services.financeiro.custo_entrega_cobertura_service import (
-                CustoEntregaCoberturaService,
-            )
-            resultado = CustoEntregaCoberturaService.desvincular(
+            resultado = CustoEntregaFaturaService.desvincular(
                 custo_id, current_user.email
             )
             db.session.commit()
             return jsonify(resultado)
-
         except ValueError as e:
             db.session.rollback()
             return jsonify({'sucesso': False, 'erro': str(e)}), 400
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao desvincular CE #{custo_id} de subcontrato: {e}")
+            logger.exception(f'Erro ao desvincular CE #{custo_id}: {e}')
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/custos-entrega/<int:custo_id>/subcontratos-disponiveis') # type: ignore
+    @bp.route('/api/custos-entrega/<int:custo_id>/faturas-transportadora-disponiveis') # type: ignore
     @login_required
-    def api_subcontratos_disponiveis_ce(custo_id): # type: ignore
-        """Retorna subcontratos da mesma operacao disponiveis para vincular."""
+    def api_faturas_transportadora_disponiveis(custo_id): # type: ignore
+        """Retorna JSON com CarviaFaturaTransportadora disponiveis para vincular este CE."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
         try:
-            from app.carvia.services.financeiro.custo_entrega_cobertura_service import (
-                CustoEntregaCoberturaService,
+            from app.carvia.services.financeiro.custo_entrega_fatura_service import (
+                CustoEntregaFaturaService,
             )
-            subs = CustoEntregaCoberturaService.subcontratos_disponiveis(custo_id)
-            return jsonify({'subcontratos': subs})
-
+            faturas = CustoEntregaFaturaService.faturas_disponiveis(custo_id)
+            return jsonify({'faturas': faturas})
         except Exception as e:
-            logger.error(f"Erro ao buscar subcontratos disponiveis para CE #{custo_id}: {e}")
+            logger.error(
+                f'Erro ao buscar FTs disponiveis para CE #{custo_id}: {e}'
+            )
             return jsonify({'erro': str(e)}), 500

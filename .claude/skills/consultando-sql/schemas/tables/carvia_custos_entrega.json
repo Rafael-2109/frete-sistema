@@ -58,7 +58,8 @@
       "name": "status",
       "type": "varchar(20)",
       "nullable": false,
-      "default": "PENDENTE"
+      "default": "PENDENTE",
+      "description": "PENDENTE | VINCULADO_FT | PAGO | CANCELADO — VINCULADO_FT significa CE vinculado a CarviaFaturaTransportadora, aguardando pagamento via propagacao automatica da FT"
     },
     {
       "name": "pago_por",
@@ -76,7 +77,12 @@
     {
       "name": "subcontrato_id",
       "type": "integer",
-      "description": "FK → carvia_subcontratos.id"
+      "description": "FK → carvia_subcontratos.id (LEGADO — sera removido em migration destructive; substituido por fatura_transportadora_id direto)"
+    },
+    {
+      "name": "fatura_transportadora_id",
+      "type": "integer",
+      "description": "FK → carvia_faturas_transportadora.id (ON DELETE SET NULL). CE vinculado diretamente a FT. Padrao DespesaExtra.fatura_frete_id do Nacom. Quando preenchido, CE sera pago via propagacao automatica da FT."
     },
     {
       "name": "total_conciliado",
@@ -126,6 +132,11 @@
     {
       "column": "subcontrato_id",
       "references": "carvia_subcontratos.id"
+    },
+    {
+      "column": "fatura_transportadora_id",
+      "references": "carvia_faturas_transportadora.id",
+      "on_delete": "SET NULL"
     }
   ],
   "indices": [
@@ -175,6 +186,13 @@
       "name": "ix_carvia_custos_entrega_cte_complementar_id",
       "columns": [
         "cte_complementar_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_fatura_transportadora_id",
+      "columns": [
+        "fatura_transportadora_id"
       ],
       "unique": false
     }

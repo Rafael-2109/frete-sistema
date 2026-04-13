@@ -44,6 +44,10 @@
                    href="{{ url_for('carvia.listar_subcontratos') }}">Subcontrato</a></li>
             <li><a class="dropdown-item {{ 'active' if carvia_active == 'custos_entrega' }}"
                    href="{{ url_for('carvia.listar_custos_entrega') }}">Custos Entrega</a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'gerenciar_custos_entrega' }}"
+                   href="{{ url_for('carvia.gerenciar_custos_entrega') }}">
+                <small class="text-muted ms-3">&bull; Gerenciar / Vincular FT</small>
+            </a></li>
             <li><a class="dropdown-item {{ 'active' if carvia_active == 'faturas_transportadora' }}"
                    href="{{ url_for('carvia.listar_faturas_transportadora') }}">Fatura Subcontrato</a></li>
             <li><a class="dropdown-item {{ 'active' if carvia_active == 'despesas' }}"

@@ -412,5 +412,38 @@ class CarviaFaturaTransportadora(db.Model):
             )
         return True, ""
 
+    # ------------------------------------------------------------------ #
+    #  Agregacoes de Custos de Entrega (padrao DespesaExtra/FaturaFrete)
+    #
+    #  Espelha FaturaFrete.total_despesas_extras() / valor_total_despesas_extras()
+    #  / todas_despesas_extras(). Sem tabela de juncao — FK direta em CE.
+    # ------------------------------------------------------------------ #
+
+    def total_custos_entrega(self):
+        """Quantidade de CarviaCustoEntrega vinculados a esta fatura (nao cancelados)."""
+        from app.carvia.models import CarviaCustoEntrega
+        return CarviaCustoEntrega.query.filter(
+            CarviaCustoEntrega.fatura_transportadora_id == self.id,
+            CarviaCustoEntrega.status != 'CANCELADO',
+        ).count()
+
+    def valor_total_custos_entrega(self):
+        """Soma dos valores dos CEs vinculados a esta fatura (nao cancelados)."""
+        from app.carvia.models import CarviaCustoEntrega
+        total = db.session.query(
+            func.coalesce(func.sum(CarviaCustoEntrega.valor), 0)
+        ).filter(
+            CarviaCustoEntrega.fatura_transportadora_id == self.id,
+            CarviaCustoEntrega.status != 'CANCELADO',
+        ).scalar()
+        return float(total or 0)
+
+    def todos_custos_entrega(self):
+        """Lista todos os CarviaCustoEntrega vinculados (incluindo CANCELADO), ordenados por criacao."""
+        from app.carvia.models import CarviaCustoEntrega
+        return CarviaCustoEntrega.query.filter(
+            CarviaCustoEntrega.fatura_transportadora_id == self.id,
+        ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+
     def __repr__(self):
         return f'<CarviaFaturaTransportadora {self.numero_fatura} ({self.status_conferencia})>'

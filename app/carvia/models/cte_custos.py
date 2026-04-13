@@ -100,13 +100,27 @@ class CarviaCteComplementar(db.Model):
 
 
 class CarviaCustoEntrega(db.Model):
-    """Custos de entrega que CarVia pagou/incorreu — repassaveis ao cliente via CTe Complementar"""
+    """Custos de entrega que CarVia pagou/incorreu — repassaveis ao cliente via CTe Complementar.
+
+    Padrao espelhado de DespesaExtra (Nacom):
+    - frete_id FK (equivalente a DespesaExtra.frete_id)
+    - fatura_transportadora_id FK nullable (equivalente a DespesaExtra.fatura_frete_id)
+    - Fluxo: criar sem fatura -> vincular fatura manualmente depois -> propagacao PAGO via FT
+
+    STATUS:
+    - PENDENTE: criado, sem fatura vinculada
+    - VINCULADO_FT: vinculado a CarviaFaturaTransportadora, sera pago junto
+    - PAGO: pago (via propagacao automatica da FT ou conciliacao direta)
+    - CANCELADO: cancelado
+    """
     __tablename__ = 'carvia_custos_entrega'
 
     TIPOS_CUSTO = [
         'DIARIA', 'REENTREGA', 'ARMAZENAGEM', 'DEVOLUCAO', 'AVARIA',
         'PEDAGIO_EXTRA', 'TAXA_DESCARGA', 'OUTROS'
     ]
+
+    STATUS_CHOICES = ['PENDENTE', 'VINCULADO_FT', 'PAGO', 'CANCELADO']
 
     id = db.Column(db.Integer, primary_key=True)
     numero_custo = db.Column(db.String(20), nullable=False, index=True)
@@ -149,12 +163,22 @@ class CarviaCustoEntrega(db.Model):
         index=True
     )
 
-    # Vinculo com Subcontrato que cobra este custo
-    # (ex: diaria cobrada via CTe da transportadora)
-    # FT derivada via sub.fatura_transportadora_id
+    # Vinculo com Subcontrato que cobra este custo (LEGADO — sera removido)
+    # Substituido por fatura_transportadora_id direta (padrao DespesaExtra.fatura_frete_id)
+    # Mantido ate migration destructive para preservar dados em rollout.
     subcontrato_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_subcontratos.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True
+    )
+
+    # Vinculo com Fatura Transportadora (equivalente a DespesaExtra.fatura_frete_id na Nacom)
+    # Nullable porque CE e criado sem fatura e vinculado manualmente depois.
+    # ON DELETE SET NULL: se FT for hard-deleted, CE volta a PENDENTE para re-vinculacao.
+    fatura_transportadora_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_faturas_transportadora.id', ondelete='SET NULL'),
         nullable=True,
         index=True
     )
@@ -185,6 +209,20 @@ class CarviaCustoEntrega(db.Model):
         backref=db.backref('custos_entrega_cobertos', lazy='dynamic'),
         foreign_keys=[subcontrato_id]
     )
+    fatura_transportadora = db.relationship(
+        'CarviaFaturaTransportadora',
+        backref=db.backref('custos_entrega', lazy='dynamic'),
+        foreign_keys=[fatura_transportadora_id]
+    )
+
+    @property
+    def pode_vincular_fatura(self):
+        """Indica se este CE pode ser vinculado a uma CarviaFaturaTransportadora.
+
+        Replica o padrao DespesaExtra.pode_lancar_odoo: um gate de transicao.
+        CE deve estar PENDENTE e sem FT vinculada.
+        """
+        return self.status == 'PENDENTE' and self.fatura_transportadora_id is None
 
     @staticmethod
     def gerar_numero_custo():

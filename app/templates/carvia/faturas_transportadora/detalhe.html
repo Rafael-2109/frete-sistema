@@ -348,7 +348,6 @@
                             <th class="text-end">Valor Pago <span class="text-success small">(concilia)</span></th>
                             <th>Conf.</th>
                             <th>Status</th>
-                            <th>Custos Cobertos</th>
                             <th>Acao</th>
                         </tr>
                     </thead>
@@ -385,20 +384,6 @@
                                 {% endif %}
                             </td>
                             <td><span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span></td>
-                            <td>
-                                {% set ces_cobertos = sub.custos_entrega_cobertos.all() %}
-                                {% if ces_cobertos %}
-                                {% for ce in ces_cobertos %}
-                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
-                                   class="badge bg-secondary text-decoration-none me-1"
-                                   title="{{ ce.tipo_custo }} — {{ ce.valor|valor_br }}">
-                                    {{ ce.numero_custo }}
-                                </a>
-                                {% endfor %}
-                                {% else %}
-                                <span class="text-muted small">-</span>
-                                {% endif %}
-                            </td>
                             <td>
                                 {% if fatura.status_conferencia != 'CONFERIDO' %}
                                 <div class="btn-group">
@@ -891,15 +876,15 @@
     </div>
 
     <!-- Custos de Entrega + CTes Complementares -->
-    {% if custos_entrega or ctes_complementares %}
     <div class="row g-4 mt-0">
-        {% if custos_entrega %}
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-money-bill-wave"></i> Custos de Entrega ({{ custos_entrega|length }})</h5>
+                    <span class="badge bg-info text-dark">Total: {{ soma_custos_entrega|valor_br }}</span>
                 </div>
                 <div class="card-body p-0">
+                    {% if custos_entrega %}
                     <div class="table-responsive">
                         <table class="table table-sm table-hover mb-0 carvia-table">
                             <thead>
@@ -913,24 +898,38 @@
                             </thead>
                             <tbody>
                                 {% for custo in custos_entrega %}
-                                <tr>
+                                <tr id="ce-row-{{ custo.id }}">
                                     <td><strong>{{ custo.numero_custo }}</strong></td>
                                     <td><span class="badge bg-secondary">{{ custo.tipo_custo }}</span></td>
                                     <td class="valor-col">{{ custo.valor|valor_br }}</td>
                                     <td><span class="badge carvia-badge-{{ custo.status|lower }}">{{ custo.status }}</span></td>
                                     <td>
                                         <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}"
-                                           class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a>
+                                           class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        {% if fatura.status_conferencia != 'CONFERIDO' and fatura.status_pagamento != 'PAGO' %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                                onclick="desvincularCustoEntrega({{ custo.id }}, '{{ custo.numero_custo }}')"
+                                                title="Desvincular desta fatura">
+                                            <i class="fas fa-unlink"></i>
+                                        </button>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+                    {% else %}
+                    <div class="text-center text-muted p-4">
+                        <i class="fas fa-inbox"></i> Nenhum custo de entrega vinculado a esta fatura.
+                        <br><small>Vincule custos na tela de detalhe do Custo de Entrega.</small>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
-        {% endif %}
 
         {% if ctes_complementares %}
         <div class="col-md-6">
@@ -973,7 +972,6 @@
         </div>
         {% endif %}
     </div>
-    {% endif %}
 </div>
 
 <!-- Conciliacoes Bancarias -->

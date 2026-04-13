@@ -425,11 +425,16 @@ class ConferenciaService:
         - Subs CANCELADO sao EXCLUIDOS do total e soma (nao contam)
         - valor_considerado NULL e tratado como 0 (nao pulado)
 
+        Gate 2 agora considera tambem CarviaCustoEntrega vinculados diretamente
+        a esta FT via fatura_transportadora_id (padrao DespesaExtra.fatura_frete_id).
+        Campo novo 'valor_conferido_total' = soma_considerado + soma_custos_entrega.
+
         Returns:
             Dict com total, aprovados, divergentes, pendentes,
-            soma_cte_valor, soma_considerado, diferenca
+            soma_cte_valor, soma_considerado (subs), soma_custos_entrega,
+            valor_conferido_total, diferenca (subs), percentual_conferido
         """
-        from app.carvia.models import CarviaSubcontrato
+        from app.carvia.models import CarviaSubcontrato, CarviaCustoEntrega
 
         subs_raw = CarviaSubcontrato.query.filter(
             CarviaSubcontrato.fatura_transportadora_id == fatura_id,
@@ -448,6 +453,16 @@ class ConferenciaService:
         # Gate 2 da rota trata NULL como 0 — espelhar aqui sem filtrar
         soma_considerado = sum(float(s.valor_considerado or 0) for s in subs)
 
+        # Custos de entrega vinculados diretamente a esta FT (nova FK)
+        # Espelha FaturaFrete.valor_total_despesas_extras() do Nacom
+        ces = CarviaCustoEntrega.query.filter(
+            CarviaCustoEntrega.fatura_transportadora_id == fatura_id,
+            CarviaCustoEntrega.status != 'CANCELADO',
+        ).all()
+        soma_custos_entrega = sum(float(ce.valor or 0) for ce in ces)
+        total_ces = len(ces)
+        valor_conferido_total = soma_considerado + soma_custos_entrega
+
         return {
             'total': total,
             'aprovados': aprovados,
@@ -455,6 +470,9 @@ class ConferenciaService:
             'pendentes': pendentes,
             'soma_cte_valor': round(soma_cte_valor, 2),
             'soma_considerado': round(soma_considerado, 2),
+            'soma_custos_entrega': round(soma_custos_entrega, 2),
+            'total_ces': total_ces,
+            'valor_conferido_total': round(valor_conferido_total, 2),
             'diferenca': round(soma_cte_valor - soma_considerado, 2) if total else None,
             'percentual_conferido': round((aprovados + divergentes) / total * 100) if total else 0,
         }

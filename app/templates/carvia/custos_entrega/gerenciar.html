@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-money-bill-wave"></i> Gerenciar Custos de Entrega</h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.listar_custos_entrega') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-list"></i> Listar Todos
+            </a>
+            <a href="{{ url_for('carvia.criar_custo_entrega') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-plus"></i> Novo Custo
+            </a>
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'custos_entrega' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Cards de Total -->
+    <div class="row mb-3 g-3">
+        <div class="col-md-6">
+            <div class="card border-warning">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted d-block">Sem Fatura Transportadora</small>
+                            <strong class="h4 mb-0">{{ ces_sem_fatura|length }}</strong>
+                            <span class="text-muted small">custos</span>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted d-block">Total</small>
+                            <strong class="h5 text-warning mb-0">{{ total_sem|valor_br }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-success">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted d-block">Com Fatura Transportadora</small>
+                            <strong class="h4 mb-0">{{ ces_com_fatura|length }}</strong>
+                            <span class="text-muted small">custos</span>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted d-block">Total</small>
+                            <strong class="h5 text-success mb-0">{{ total_com|valor_br }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <form method="GET" class="row g-2 align-items-end">
+                <input type="hidden" name="aba" value="{{ aba }}">
+                <div class="col-md-3">
+                    <label class="form-label small">Tipo</label>
+                    <select name="tipo_custo" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for tipo in tipos_custo %}
+                        <option value="{{ tipo }}" {{ 'selected' if filtro_tipo == tipo }}>{{ tipo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small">Busca (numero do custo / descricao)</label>
+                    <input type="text" name="busca" class="form-control form-control-sm"
+                           value="{{ busca }}" placeholder="CE-001, REENTREGA, etc.">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('carvia.gerenciar_custos_entrega') }}"
+                       class="btn btn-outline-secondary btn-sm">Limpar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Abas Sem Fatura / Com Fatura -->
+    <ul class="nav nav-tabs" id="tabs-gerenciar" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {{ 'active' if aba == 'sem_fatura' }}"
+                    id="tab-sem" data-bs-toggle="tab" data-bs-target="#pane-sem" type="button">
+                <i class="fas fa-exclamation-circle text-warning"></i>
+                Sem Fatura ({{ ces_sem_fatura|length }})
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {{ 'active' if aba == 'com_fatura' }}"
+                    id="tab-com" data-bs-toggle="tab" data-bs-target="#pane-com" type="button">
+                <i class="fas fa-check-circle text-success"></i>
+                Com Fatura ({{ ces_com_fatura|length }})
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content border border-top-0 p-3">
+        <!-- Aba Sem Fatura -->
+        <div class="tab-pane fade {{ 'show active' if aba == 'sem_fatura' }}" id="pane-sem">
+            {% if ces_sem_fatura %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Numero</th>
+                            <th>Tipo</th>
+                            <th>Operacao</th>
+                            <th class="text-end">Valor</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ce in ces_sem_fatura %}
+                        <tr>
+                            <td><strong>{{ ce.numero_custo }}</strong></td>
+                            <td><span class="badge bg-secondary">{{ ce.tipo_custo }}</span></td>
+                            <td>
+                                {% if ce.operacao %}
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=ce.operacao_id) }}"
+                                   class="text-decoration-none">
+                                    {{ ce.operacao.cte_numero or 'Op #' ~ ce.operacao_id }}
+                                </a>
+                                {% endif %}
+                            </td>
+                            <td class="valor-col">{{ ce.valor|valor_br }}</td>
+                            <td>{{ ce.data_custo.strftime('%d/%m/%Y') if ce.data_custo else '-' }}</td>
+                            <td><span class="badge carvia-badge-{{ ce.status|lower }}">{{ ce.status }}</span></td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if ce.pode_vincular_fatura %}
+                                <a href="{{ url_for('carvia.vincular_fatura_custo_entrega', custo_id=ce.id) }}"
+                                   class="btn btn-sm btn-outline-success" title="Vincular Fatura Transportadora">
+                                    <i class="fas fa-link"></i> Vincular
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center text-muted p-4">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <p class="mb-0">Nenhum custo pendente de vinculacao.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Aba Com Fatura -->
+        <div class="tab-pane fade {{ 'show active' if aba == 'com_fatura' }}" id="pane-com">
+            {% if ces_com_fatura %}
+            <div class="table-responsive">
+                <table class="table table-hover table-sm carvia-table">
+                    <thead>
+                        <tr>
+                            <th>Numero</th>
+                            <th>Tipo</th>
+                            <th>Operacao</th>
+                            <th class="text-end">Valor</th>
+                            <th>Fatura Transportadora</th>
+                            <th>Status</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ce in ces_com_fatura %}
+                        <tr>
+                            <td><strong>{{ ce.numero_custo }}</strong></td>
+                            <td><span class="badge bg-secondary">{{ ce.tipo_custo }}</span></td>
+                            <td>
+                                {% if ce.operacao %}
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=ce.operacao_id) }}"
+                                   class="text-decoration-none">
+                                    {{ ce.operacao.cte_numero or 'Op #' ~ ce.operacao_id }}
+                                </a>
+                                {% endif %}
+                            </td>
+                            <td class="valor-col">{{ ce.valor|valor_br }}</td>
+                            <td>
+                                {% if ce.fatura_transportadora %}
+                                <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=ce.fatura_transportadora_id) }}"
+                                   class="text-decoration-none">
+                                    FT {{ ce.fatura_transportadora.numero_fatura }}
+                                </a>
+                                <br>
+                                <small class="text-muted">
+                                    {{ ce.fatura_transportadora.status_pagamento }}
+                                </small>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge carvia-badge-{{ ce.status|lower }}">{{ ce.status }}</span></td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center text-muted p-4">
+                <i class="fas fa-inbox fa-2x mb-2"></i>
+                <p class="mb-0">Nenhum custo vinculado a fatura.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

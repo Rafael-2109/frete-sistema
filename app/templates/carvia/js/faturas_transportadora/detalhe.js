@@ -398,6 +398,29 @@ function desanexarSubcontrato(subId, cteNumero) {
     .catch(err => alert('Erro de conexao: ' + err.message));
 }
 
+// ====== Desvincular Custo de Entrega ======
+// Remove vinculo CE <-> FT via CustoEntregaFaturaService
+function desvincularCustoEntrega(custoId, numeroCusto) {
+    if (!confirm(`Desvincular custo ${numeroCusto} desta fatura?`)) return;
+
+    fetch(`/carvia/custos-entrega/${custoId}/desvincular-fatura`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CARVIA_DATA.csrfToken,
+        },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            window.location.reload();
+        } else {
+            alert(data.erro || 'Erro ao desvincular custo de entrega.');
+        }
+    })
+    .catch(err => alert('Erro de conexao: ' + err.message));
+}
+
 // ====== Modal Confirmacao de Valor ======
 let pendingSomaSubcontratos = 0;
 

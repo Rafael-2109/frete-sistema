@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-link"></i> Vincular Custo a Fatura Transportadora</h2>
+        <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}"
+           class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <!-- Resumo do CE -->
+    <div class="card mb-3 border-primary">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-info-circle"></i> Custo a Vincular</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Numero</small>
+                    <strong>{{ custo.numero_custo }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Tipo</small>
+                    <span class="badge bg-secondary">{{ custo.tipo_custo }}</span>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Valor</small>
+                    <strong class="h5">{{ custo.valor|valor_br }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Operacao</small>
+                    {% if custo.operacao %}
+                    <strong>{{ custo.operacao.cte_numero or 'Op #' ~ custo.operacao_id }}</strong>
+                    {% endif %}
+                </div>
+            </div>
+            {% if custo.descricao %}
+            <hr class="my-2">
+            <small class="text-muted d-block">Descricao</small>
+            <span>{{ custo.descricao }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Lista de Faturas Disponiveis -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-list"></i> Faturas Transportadora Disponiveis
+                ({{ faturas_disponiveis|length }})
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if faturas_disponiveis %}
+            <div class="alert alert-info py-2 mb-3">
+                <i class="fas fa-info-circle"></i>
+                <strong>Dica:</strong> Selecione uma fatura que tenha espaco suficiente
+                (diferenca >= valor do CE) para acomodar este custo sem quebrar o gate de conferencia.
+            </div>
+            <div class="table-responsive">
+                <form method="POST" action="{{ url_for('carvia.vincular_fatura_custo_entrega', custo_id=custo.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <table class="table table-hover table-sm carvia-table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Fatura</th>
+                                <th>Transportadora</th>
+                                <th class="text-end">Valor Total</th>
+                                <th class="text-end">Soma Subs</th>
+                                <th class="text-end">Soma CEs</th>
+                                <th class="text-end">Diferenca</th>
+                                <th>Vencimento</th>
+                                <th>Status</th>
+                                <th>Cabe?</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ft in faturas_disponiveis %}
+                            <tr class="{{ 'table-success' if ft.cabe_ce else '' }}">
+                                <td>
+                                    <input type="radio" name="fatura_transportadora_id"
+                                           value="{{ ft.id }}" required>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=ft.id) }}"
+                                       target="_blank" class="text-decoration-none">
+                                        <strong>{{ ft.numero_fatura }}</strong>
+                                        <i class="fas fa-external-link-alt small"></i>
+                                    </a>
+                                </td>
+                                <td>{{ ft.transportadora_nome }}</td>
+                                <td class="valor-col">{{ ft.valor_total|valor_br }}</td>
+                                <td class="valor-col text-muted">{{ ft.soma_subs|valor_br }}</td>
+                                <td class="valor-col text-muted">{{ ft.soma_ces|valor_br }}</td>
+                                <td class="valor-col">
+                                    <strong>{{ ft.diferenca|valor_br }}</strong>
+                                </td>
+                                <td><small>{{ ft.vencimento }}</small></td>
+                                <td>
+                                    <small>
+                                        Conf: {{ ft.status_conferencia }}<br>
+                                        Pag: {{ ft.status_pagamento }}
+                                    </small>
+                                </td>
+                                <td>
+                                    {% if ft.cabe_ce %}
+                                    <span class="badge bg-success"><i class="fas fa-check"></i> Sim</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark"><i class="fas fa-exclamation"></i> Nao</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}"
+                           class="btn btn-secondary">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-link"></i> Vincular Fatura Selecionada
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {% else %}
+            <div class="text-center text-muted p-4">
+                <i class="fas fa-inbox fa-2x mb-2"></i>
+                <p class="mb-0">Nenhuma fatura transportadora disponivel.</p>
+                <small>Filtro aplicado: FTs nao CONFERIDAS e nao PAGAS da mesma transportadora do frete.</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
