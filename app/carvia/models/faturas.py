@@ -51,6 +51,16 @@ class CarviaFaturaCliente(db.Model):
     pago_por = db.Column(db.String(100))
     pago_em = db.Column(db.DateTime)
 
+    # Conferencia gerencial (Refator 2.1 — manual puro, independente de pagamento)
+    # PENDENTE → CONFERIDO (binario, gate manual sem validacao automatica)
+    # Ref: scripts/migrations/carvia_fatura_cliente_auditoria.py
+    status_conferencia = db.Column(
+        db.String(20), nullable=False, default='PENDENTE', index=True
+    )
+    conferido_por = db.Column(db.String(100))
+    conferido_em = db.Column(db.DateTime)
+    observacoes_conferencia = db.Column(db.Text)
+
     # Conciliacao bancaria
     total_conciliado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     conciliado = db.Column(db.Boolean, nullable=False, default=False)
@@ -58,6 +68,9 @@ class CarviaFaturaCliente(db.Model):
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
+
+    # Valores validos de status_conferencia (manual binario)
+    STATUSES_CONFERENCIA = ('PENDENTE', 'CONFERIDO')
 
     # Relacionamentos
     itens = db.relationship(
@@ -85,22 +98,33 @@ class CarviaFaturaCliente(db.Model):
         return f'FAT-{next_num:03d}'
 
     # ------------------------------------------------------------------ #
-    #  Validacoes de Bloqueio (Sprint 0 — Fundacao)
+    #  Validacoes de Bloqueio (Sprint 0 — Fundacao + Refator 2.1)
     #
     #  Fatura e entidade independente — valor_total NAO recalcula
     #  automaticamente. CTes podem ser desanexados antes de PAGA.
+    #
+    #  Refator 2.1: status_conferencia=CONFERIDO tambem bloqueia edicao,
+    #  espelhando CarviaFaturaTransportadora.pode_editar().
+    #  Conferencia e gerencial e precede pagamento — uma vez aprovada,
+    #  a fatura fica travada ate ser reaberta explicitamente.
     # ------------------------------------------------------------------ #
 
     def pode_editar(self):
         """Verifica se a fatura pode ser editada.
 
-        Bloqueios:
+        Bloqueios (ordem de verificacao):
+        - status_conferencia == CONFERIDO (Refator 2.1)
         - Status PAGA ou CANCELADA
         - Conciliacao ativa (total_conciliado > 0)
 
         Returns:
             tuple[bool, str]: (pode_editar, razao_se_nao)
         """
+        if self.status_conferencia == 'CONFERIDO':
+            return (
+                False,
+                "Fatura ja conferida. Reabra a conferencia antes de editar."
+            )
         if self.status == 'PAGA':
             return (
                 False,
@@ -118,7 +142,7 @@ class CarviaFaturaCliente(db.Model):
     def pode_desanexar_operacao(self):
         """Verifica se operacoes podem ser desanexadas da fatura.
 
-        Mesma regra de pode_editar() — bloquear se paga/conciliada.
+        Mesma regra de pode_editar() — bloquear se conferida/paga/conciliada.
 
         Returns:
             tuple[bool, str]: (pode_desanexar, razao_se_nao)

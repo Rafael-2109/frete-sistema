@@ -365,15 +365,26 @@ class ConferenciaService:
         """
         Retorna resumo da conferencia de uma fatura.
 
+        IMPORTANTE: espelha exatamente o calculo do gate de conferencia
+        em fatura_routes.py:conferir_fatura_transportadora (Gate 1 + Gate 2).
+        Para manter consistencia entre UI (template usando este resumo)
+        e o backend:
+        - Subs CANCELADO sao EXCLUIDOS do total e soma (nao contam)
+        - valor_considerado NULL e tratado como 0 (nao pulado)
+
         Returns:
             Dict com total, aprovados, divergentes, pendentes,
             soma_cte_valor, soma_considerado, diferenca
         """
         from app.carvia.models import CarviaSubcontrato
 
-        subs = CarviaSubcontrato.query.filter(
+        subs_raw = CarviaSubcontrato.query.filter(
             CarviaSubcontrato.fatura_transportadora_id == fatura_id,
         ).all()
+
+        # Excluir subs CANCELADO — consistente com Gate 1 da rota que
+        # filtra `status in ('FATURADO', 'CONFERIDO')`
+        subs = [s for s in subs_raw if s.status != 'CANCELADO']
 
         total = len(subs)
         aprovados = sum(1 for s in subs if s.status_conferencia == 'APROVADO')
@@ -381,7 +392,8 @@ class ConferenciaService:
         pendentes = total - aprovados - divergentes
 
         soma_cte_valor = sum(float(s.cte_valor or 0) for s in subs)
-        soma_considerado = sum(float(s.valor_considerado or 0) for s in subs if s.valor_considerado)
+        # Gate 2 da rota trata NULL como 0 — espelhar aqui sem filtrar
+        soma_considerado = sum(float(s.valor_considerado or 0) for s in subs)
 
         return {
             'total': total,
@@ -390,6 +402,6 @@ class ConferenciaService:
             'pendentes': pendentes,
             'soma_cte_valor': round(soma_cte_valor, 2),
             'soma_considerado': round(soma_considerado, 2),
-            'diferenca': round(soma_cte_valor - soma_considerado, 2) if soma_considerado else None,
+            'diferenca': round(soma_cte_valor - soma_considerado, 2) if total else None,
             'percentual_conferido': round((aprovados + divergentes) / total * 100) if total else 0,
         }

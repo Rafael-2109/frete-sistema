@@ -878,3 +878,16 @@
     white-space: nowrap;
     vertical-align: bottom;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Refator 2.1 — Conferencia gerencial em Fatura Cliente
+   Historico + summary clicavel (substitui style= inline no template)
+   ═══════════════════════════════════════════════════════════════ */
+.carvia-conferencia-summary {
+    cursor: pointer;
+}
+
+.carvia-conferencia-historico {
+    white-space: pre-wrap;
+    font-family: inherit;
+}

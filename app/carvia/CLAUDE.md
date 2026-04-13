@@ -157,6 +157,18 @@ Custo Entrega:      PENDENTE → PAGO                              [CANCELADO ex
 ```
 NUNCA mover status para tras (ex: CONFIRMADO → COTADO). Cancelar e criar novo.
 
+**Bifurcacao venda/compra — CarVia opera em 2 dominios INDEPENDENTES**
+(`app/carvia/models/frete.py:12-19` comenta explicitamente "2 lados: CUSTO + VENDA"):
+
+| Dominio | Artefatos | Precificacao | Conferencia | Gate |
+|---------|-----------|--------------|-------------|------|
+| **Compra** (custo) | `Sub` → `FaturaTransportadora` | Tabela Nacom | Automatica via `ConferenciaService` com 2 eixos de status | Gate 1: todos subs APROVADO. Gate 2: soma_considerado vs valor_total (tolerancia R$ 1,00) |
+| **Venda** (receita) | `Op` → `FaturaCliente` | Tabela CarVia | Manual gerencial binaria (Refator 2.1) | Nenhum gate automatico — decisao humana registrada com auditoria |
+
+**Os dominios NAO tem relacao de bloqueio**. Fatura cliente pode ser emitida com subs
+em qualquer status de conferencia. Pagamento (`status=PAGA`) e INDEPENDENTE da conferencia
+gerencial (`status_conferencia=CONFERIDO`).
+
 **Conferencia individual de subcontrato** (`status_conferencia`, eixo independente de `status`):
 ```
 Sub.status_conferencia:  PENDENTE → APROVADO | DIVERGENTE
@@ -165,9 +177,22 @@ Fatura.status_conferencia cascade:
   Algum DIVERGENTE → DIVERGENTE
   Mix → EM_CONFERENCIA
 ```
-Fatura so aceita CONFERIDO manual se TODOS subs tem `status_conferencia=APROVADO`.
-Service: `ConferenciaService` em `app/carvia/services/conferencia_service.py`.
-API: `POST /carvia/api/conferencia-subcontrato/<id>/calcular` e `.../registrar`.
+Fatura Transportadora so aceita CONFERIDO manual se:
+1. TODOS subs tem `status_conferencia=APROVADO` (Gate 1)
+2. `abs(fatura.valor_total - sum(sub.valor_considerado)) <= R$ 1,00` (Gate 2 — W4 parte 2, espelhando Fretes)
+
+Service: `ConferenciaService` em `app/carvia/services/documentos/conferencia_service.py`.
+API conferencia subcontrato: `POST /carvia/api/conferencia-subcontrato/<id>/calcular` e `.../registrar`.
+API conferencia fatura: `POST /carvia/faturas-transportadora/<id>/conferencia` com gate de valor.
+
+**Conferencia gerencial da Fatura Cliente** (Refator 2.1 — manual puro):
+```
+FaturaCliente.status_conferencia:  PENDENTE → CONFERIDO  (binario, manual)
+```
+Sem gate automatico. Ao aprovar (`POST /faturas-cliente/<id>/aprovar`), grava
+`conferido_por/em` + `observacoes_conferencia`. Uma vez CONFERIDO, `pode_editar()`
+bloqueia todas as alteracoes (desanexar operacao, editar valor, etc.) ate a
+fatura ser reaberta via `POST /faturas-cliente/<id>/reabrir-conferencia` (exige motivo).
 
 ### R5: Fatura vincula por status elegivel + fatura_id IS NULL
 Faturas CarVia selecionam operacoes `status IN (RASCUNHO, COTADO, CONFIRMADO), fatura_cliente_id IS NULL`.

@@ -9,6 +9,15 @@
             <h2>
                 <i class="fas fa-file-invoice-dollar"></i> Fatura {{ fatura.numero_fatura }}
                 <span class="badge carvia-badge-{{ fatura.status|lower }}">{{ fatura.status }}</span>
+                {% if fatura.status_conferencia == 'CONFERIDO' %}
+                <span class="badge bg-success" title="Conferencia gerencial aprovada">
+                    <i class="fas fa-check-circle"></i> CONFERIDA
+                </span>
+                {% else %}
+                <span class="badge bg-secondary" title="Conferencia gerencial pendente">
+                    <i class="fas fa-hourglass-half"></i> CONF. PENDENTE
+                </span>
+                {% endif %}
             </h2>
             <p class="text-muted mb-0">
                 Fatura CarVia | Criada em {{ fatura.criado_em|formatar_data_hora_brasil if fatura.criado_em else '-' }}
@@ -58,7 +67,7 @@
                                 </a>
                             </div>
                             {% endif %}
-                            {% if fatura.status not in ('PAGA', 'CANCELADA') and entidades_pagador|length > 1 %}
+                            {% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' and entidades_pagador|length > 1 %}
                             <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 mt-1"
                                     data-bs-toggle="modal" data-bs-target="#modalAlterarPagador"
                                     title="Alterar pagador">
@@ -78,7 +87,7 @@
                             <small class="text-muted d-block">Vencimento</small>
                             <strong>{{ fatura.vencimento.strftime('%d/%m/%Y') if fatura.vencimento else '-' }}</strong>
                             {# GAP-35: Bloquear edicao de vencimento em fatura PAGA ou CANCELADA #}
-                            {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                            {% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
                             <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
                                     data-bs-toggle="modal" data-bs-target="#modalEditarVencimento"
                                     title="Editar vencimento">
@@ -89,7 +98,7 @@
                         <div class="col-12">
                             <small class="text-muted d-block">Valor Total</small>
                             <h3 class="text-success mb-0 d-inline">{{ fatura.valor_total|valor_br }}</h3>
-                            {% if current_user.perfil == 'administrador' and fatura.status not in ('PAGA', 'CANCELADA') %}
+                            {% if current_user.perfil == 'administrador' and fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
                             <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
                                     data-bs-toggle="modal" data-bs-target="#modalEditarValor"
                                     title="Editar valor (admin)">
@@ -175,10 +184,54 @@
                         {% endif %}
                     </div>
                     {# Badge conciliacao movido para card _conciliacoes_documento #}
+
+                    {# Refator 2.1 — Conferencia gerencial manual (auditoria independente de pagamento) #}
+                    <hr>
+                    <h6 class="mb-2">
+                        <i class="fas fa-clipboard-check"></i> Conferencia Gerencial
+                    </h6>
+                    <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                        {% if fatura.status_conferencia == 'CONFERIDO' %}
+                        <span class="badge bg-success">
+                            <i class="fas fa-check"></i> CONFERIDA
+                        </span>
+                        <button type="button" class="btn btn-sm btn-outline-warning"
+                                data-bs-toggle="modal" data-bs-target="#modalReabrirConferencia">
+                            <i class="fas fa-unlock"></i> Reabrir Conferencia
+                        </button>
+                        {% else %}
+                        <span class="badge bg-secondary">
+                            <i class="fas fa-hourglass-half"></i> PENDENTE
+                        </span>
+                        {% if fatura.status != 'CANCELADA' %}
+                        <button type="button" class="btn btn-sm btn-success"
+                                data-bs-toggle="modal" data-bs-target="#modalAprovarConferencia">
+                            <i class="fas fa-check"></i> Aprovar Conferencia
+                        </button>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    {% if fatura.conferido_por %}
+                    <p class="small text-muted mb-0">
+                        <strong>Aprovada por:</strong> {{ fatura.conferido_por }}
+                        {% if fatura.conferido_em %}
+                        em {{ fatura.conferido_em|formatar_data_hora_brasil }}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                    {% if fatura.observacoes_conferencia %}
+                    <details class="mt-2">
+                        <summary class="small text-muted carvia-conferencia-summary">
+                            <i class="fas fa-history"></i> Historico de conferencia
+                        </summary>
+                        <pre class="small text-muted mb-0 mt-1 carvia-conferencia-historico">{{ fatura.observacoes_conferencia }}</pre>
+                    </details>
+                    {% endif %}
+
                     <hr>
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">CTe CarVia Vinculados: {{ operacoes|length }}</h6>
-                        {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                        {% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
                         <button type="button" class="btn btn-outline-success btn-xs"
                                 data-bs-toggle="modal" data-bs-target="#modalVincularOp">
                             <i class="fas fa-plus"></i> Vincular
@@ -190,7 +243,7 @@
                     </p>
                     <div class="d-flex justify-content-between align-items-center mt-2">
                         <h6 class="mb-0">CTe Complementares: {{ ctes_complementares|length }}</h6>
-                        {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                        {% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
                         <button type="button" class="btn btn-outline-success btn-xs"
                                 data-bs-toggle="modal" data-bs-target="#modalVincularComp">
                             <i class="fas fa-plus"></i> Vincular
@@ -409,7 +462,7 @@
                             <th>CTe do Frete</th>
                             <th>Valor</th>
                             <th>Status</th>
-                            {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                            {% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
                             <th class="text-center" style="width:80px;">Acao</th>
                             {% endif %}
                         </tr>
@@ -429,7 +482,7 @@
                             </td>
                             <td class="valor-col">{{ comp.cte_valor|valor_br }}</td>
                             <td><span class="badge carvia-badge-{{ comp.status|lower }}">{{ comp.status }}</span></td>
-                            {% if fatura.status not in ('PAGA', 'CANCELADA') %}
+                            {% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
                             <td class="text-center">
                                 <button type="button" class="btn btn-outline-danger btn-xs"
                                         onclick="desvincularComp({{ comp.id }}, '{{ comp.cte_numero or ('#' ~ comp.id) }}')"
@@ -498,7 +551,7 @@
 {% include 'carvia/_modal_pagar_com_conciliacao.html' %}
 
 <!-- Modal Editar Valor (admin only) -->
-{% if current_user.perfil == 'administrador' and fatura.status not in ('PAGA', 'CANCELADA') %}
+{% if current_user.perfil == 'administrador' and fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
 <div class="modal fade" id="modalEditarValor" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
@@ -550,7 +603,7 @@
 </div>
 
 <!-- Modal: Vincular Operacao a Fatura -->
-{% if fatura.status not in ('PAGA', 'CANCELADA') %}
+{% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
 <div class="modal fade" id="modalVincularOp" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -574,7 +627,7 @@
 {% endif %}
 
 <!-- Modal: Vincular CTe Complementar a Fatura -->
-{% if fatura.status not in ('PAGA', 'CANCELADA') %}
+{% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' %}
 <div class="modal fade" id="modalVincularComp" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -617,7 +670,7 @@
 ) }}
 
 {# Modal Alterar Pagador #}
-{% if fatura.status not in ('PAGA', 'CANCELADA') and entidades_pagador|length > 1 %}
+{% if fatura.status not in ('PAGA', 'CANCELADA') and fatura.status_conferencia != 'CONFERIDO' and entidades_pagador|length > 1 %}
 <div class="modal fade" id="modalAlterarPagador" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -651,6 +704,93 @@
                 </button>
             </div>
         </div>
+    </div>
+</div>
+{% endif %}
+
+{# Refator 2.1 — Modal Aprovar Conferencia #}
+{% if fatura.status_conferencia != 'CONFERIDO' and fatura.status != 'CANCELADA' %}
+<div class="modal fade" id="modalAprovarConferencia" tabindex="-1" aria-labelledby="modalAprovarConferenciaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('carvia.aprovar_fatura_cliente', fatura_id=fatura.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalAprovarConferenciaLabel">
+                        <i class="fas fa-check-circle text-success"></i> Aprovar Conferencia
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Aprovacao e uma decisao gerencial manual. Apos aprovada, a fatura ficara
+                        <strong>travada para edicao</strong> (so pode ser alterada apos Reabrir Conferencia).
+                        Pagamento continua independente desta aprovacao.
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes_conferencia" class="form-label">
+                            Observacoes (opcional)
+                        </label>
+                        <textarea class="form-control" id="observacoes_conferencia"
+                                  name="observacoes_conferencia" rows="3"
+                                  placeholder="Ex: conferido contra fatura SSW 12345, valores batem."></textarea>
+                        <small class="text-muted">
+                            Registrado no historico com timestamp e email do conferente.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="fas fa-check"></i> Confirmar Aprovacao
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{# Refator 2.1 — Modal Reabrir Conferencia #}
+{% if fatura.status_conferencia == 'CONFERIDO' %}
+<div class="modal fade" id="modalReabrirConferencia" tabindex="-1" aria-labelledby="modalReabrirConferenciaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" action="{{ url_for('carvia.reabrir_conferencia_fatura_cliente', fatura_id=fatura.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalReabrirConferenciaLabel">
+                        <i class="fas fa-unlock text-warning"></i> Reabrir Conferencia
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Reabrir libera a fatura para edicao novamente. O historico da aprovacao
+                        anterior sera preservado nas observacoes.
+                    </div>
+                    <div class="mb-3">
+                        <label for="motivo_reabertura" class="form-label">
+                            Motivo da Reabertura <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="motivo_reabertura"
+                                  name="motivo_reabertura" rows="3" required
+                                  placeholder="Ex: correcao de valor apos contato com cliente."></textarea>
+                        <small class="text-muted">
+                            Obrigatorio. Registrado no historico para auditoria.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="fas fa-unlock"></i> Confirmar Reabertura
+                    </button>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 {% endif %}

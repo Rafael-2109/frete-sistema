@@ -631,6 +631,15 @@ def register_fatura_routes(bp):
             flash(f'Nao e possivel editar valor de fatura {fatura.status.lower()}.', 'warning')
             return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
+        # Refator 2.1: fatura CONFERIDA bloqueia edicao ate ser reaberta
+        if fatura.status_conferencia == 'CONFERIDO':
+            flash(
+                'Fatura conferida nao pode ter valor alterado. '
+                'Reabra a conferencia antes de editar.',
+                'warning',
+            )
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
         valor_raw = request.form.get('valor_total', '').strip()
         if not valor_raw:
             flash('Informe o valor.', 'warning')
@@ -678,6 +687,15 @@ def register_fatura_routes(bp):
             flash(f'Nao e possivel editar vencimento de fatura {fatura.status.lower()}.', 'warning')
             return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
+        # Refator 2.1: fatura CONFERIDA bloqueia edicao ate ser reaberta
+        if fatura.status_conferencia == 'CONFERIDO':
+            flash(
+                'Fatura conferida nao pode ter vencimento alterado. '
+                'Reabra a conferencia antes de editar.',
+                'warning',
+            )
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
         vencimento_str = request.form.get('vencimento', '').strip()
         if not vencimento_str:
             flash('Informe a data de vencimento.', 'warning')
@@ -710,6 +728,15 @@ def register_fatura_routes(bp):
         if fatura.status in ('PAGA', 'CANCELADA'):
             return jsonify({
                 'erro': f'Nao e possivel alterar pagador de fatura {fatura.status}'
+            }), 400
+
+        # Refator 2.1: fatura CONFERIDA bloqueia alteracao ate ser reaberta
+        if fatura.status_conferencia == 'CONFERIDO':
+            return jsonify({
+                'erro': (
+                    'Fatura conferida nao pode ter pagador alterado. '
+                    'Reabra a conferencia antes.'
+                )
             }), 400
 
         data = request.get_json()
@@ -793,6 +820,18 @@ def register_fatura_routes(bp):
                 'carvia.detalhe_fatura_cliente', fatura_id=fatura_id
             ))
 
+        # Refator 2.1: fatura CONFERIDA bloqueia mudanca de status.
+        # Cancelar fatura conferida e contraditorio — exige reabrir conferencia primeiro.
+        # Nota: a rota /aprovar pode aprovar fatura PAGA, mas /status (cancelamento/retorno
+        # para PENDENTE) deve respeitar a trava da conferencia.
+        if fatura.status_conferencia == 'CONFERIDO':
+            flash(
+                'Fatura conferida nao pode ter status alterado. '
+                'Reabra a conferencia antes de cancelar ou reverter status.',
+                'warning',
+            )
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
         try:
             # Se revertendo de PAGA, usar service de desfazer (desconcilia MANUAL)
             if fatura.status == 'PAGA':
@@ -820,6 +859,143 @@ def register_fatura_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.exception(f"Erro ao atualizar status fatura cliente #{fatura_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+    # ==================== CONFERENCIA GERENCIAL (Refator 2.1) ====================
+    # Aprovacao manual sem gate automatico — decisao do usuario confirmada.
+    # Pagamento (status=PAGA) permanece independente desta auditoria.
+    # Ao CONFERIDO, pode_editar() bloqueia todas as alteracoes ate reabrir.
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/aprovar', methods=['POST']) # type: ignore
+    @login_required
+    def aprovar_fatura_cliente(fatura_id): # type: ignore
+        """Aprova conferencia gerencial de uma fatura cliente.
+
+        Gate: MANUAL puro — nao valida soma de CTes nem status das operacoes.
+        A aprovacao e uma decisao gerencial registrada com auditoria.
+        Permite aprovar fatura em qualquer `status` (PENDENTE ou PAGA).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_cliente'))
+
+        # Defesa: garantir que o valor atual esta na lista de statuses validos
+        if fatura.status_conferencia not in CarviaFaturaCliente.STATUSES_CONFERENCIA:
+            flash(
+                f'Estado de conferencia invalido ({fatura.status_conferencia}). '
+                f'Contate o suporte.',
+                'danger',
+            )
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        if fatura.status_conferencia == 'CONFERIDO':
+            flash('Fatura ja esta conferida.', 'info')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        if fatura.status == 'CANCELADA':
+            flash('Fatura cancelada nao pode ser conferida.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        observacoes = (request.form.get('observacoes_conferencia', '') or '').strip()
+
+        try:
+            from app.utils.timezone import agora_utc_naive
+
+            fatura.status_conferencia = 'CONFERIDO'
+            fatura.conferido_por = current_user.email
+            fatura.conferido_em = agora_utc_naive()
+            if observacoes:
+                timestamp = agora_utc_naive().strftime('%d/%m/%Y %H:%M')
+                entry = f'[{timestamp}] APROVADO por {current_user.email}: {observacoes}'
+                fatura.observacoes_conferencia = (
+                    f'{fatura.observacoes_conferencia}\n{entry}'
+                    if fatura.observacoes_conferencia else entry
+                )
+
+            db.session.commit()
+
+            logger.info(
+                f"Fatura cliente #{fatura_id} APROVADA por {current_user.email}"
+            )
+            flash(f'Fatura {fatura.numero_fatura} aprovada com sucesso.', 'success')
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro ao aprovar fatura cliente #{fatura_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/reabrir-conferencia', methods=['POST']) # type: ignore
+    @login_required
+    def reabrir_conferencia_fatura_cliente(fatura_id): # type: ignore
+        """Reabre conferencia de uma fatura cliente (CONFERIDO -> PENDENTE).
+
+        Libera a fatura para edicao novamente. Requer motivo obrigatorio
+        para auditoria. Historico preservado em observacoes_conferencia.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_cliente'))
+
+        # Defesa: garantir que o valor atual esta na lista de statuses validos
+        if fatura.status_conferencia not in CarviaFaturaCliente.STATUSES_CONFERENCIA:
+            flash(
+                f'Estado de conferencia invalido ({fatura.status_conferencia}). '
+                f'Contate o suporte.',
+                'danger',
+            )
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        if fatura.status_conferencia != 'CONFERIDO':
+            flash('Apenas faturas CONFERIDAS podem ser reabertas.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        motivo = (request.form.get('motivo_reabertura', '') or '').strip()
+        if not motivo:
+            flash('Motivo da reabertura e obrigatorio.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        try:
+            from app.utils.timezone import agora_utc_naive
+
+            timestamp = agora_utc_naive().strftime('%d/%m/%Y %H:%M')
+            aprovado_por_anterior = fatura.conferido_por or '(desconhecido)'
+            entry = (
+                f'[{timestamp}] REABERTA por {current_user.email} '
+                f'(aprovada anteriormente por {aprovado_por_anterior}). Motivo: {motivo}'
+            )
+
+            fatura.status_conferencia = 'PENDENTE'
+            fatura.conferido_por = None
+            fatura.conferido_em = None
+            fatura.observacoes_conferencia = (
+                f'{fatura.observacoes_conferencia}\n{entry}'
+                if fatura.observacoes_conferencia else entry
+            )
+
+            db.session.commit()
+
+            logger.info(
+                f"Fatura cliente #{fatura_id} REABERTA por {current_user.email}: {motivo}"
+            )
+            flash(f'Fatura {fatura.numero_fatura} reaberta. Edicao liberada.', 'success')
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro ao reabrir fatura cliente #{fatura_id}: {e}")
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
@@ -1664,14 +1840,22 @@ def register_fatura_routes(bp):
             from app.utils.timezone import agora_utc_naive
 
             if novo_status == 'CONFERIDO':
-                # Verificar se todos subcontratos tem conferencia individual APROVADO
+                # Subs ativos (exclui CANCELADO) — espelhado em
+                # ConferenciaService.resumo_conferencia_fatura para manter
+                # template e rota consistentes.
+                subs_ativos = [s for s in fatura.subcontratos if s.status != 'CANCELADO']
+
+                # Gate 1: todos subcontratos ativos devem ter conferencia individual APROVADO.
+                # Inclui subs em COTADO/CONFIRMADO (edge case de anexacao atipica) —
+                # defesa em profundidade para impedir bypass do gate via status fora do
+                # fluxo normal (FATURADO → CONFERIDO).
                 subs_pendentes = [
-                    s for s in fatura.subcontratos
-                    if s.status in ('FATURADO', 'CONFERIDO')
-                    and s.status_conferencia != 'APROVADO'
+                    s for s in subs_ativos
+                    if s.status_conferencia != 'APROVADO'
+                    and s.status_conferencia != 'DIVERGENTE'
                 ]
                 subs_divergentes = [
-                    s for s in fatura.subcontratos
+                    s for s in subs_ativos
                     if s.status_conferencia == 'DIVERGENTE'
                 ]
                 if subs_divergentes:
@@ -1685,6 +1869,24 @@ def register_fatura_routes(bp):
                     flash(
                         f'{len(subs_pendentes)} subcontrato(s) ainda nao conferidos individualmente. '
                         f'Confira cada subcontrato antes de aprovar a fatura.',
+                        'warning',
+                    )
+                    return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+
+                # Gate 2 (W4 parte 2): valor da fatura precisa bater com soma dos valores conferidos
+                # Tolerancia: R$ 1,00 (espelhando app/fretes/routes.py:2196)
+                # NULL tratado como 0, CANCELADO excluido (ver subs_ativos acima)
+                soma_considerado = sum(
+                    float(s.valor_considerado or 0) for s in subs_ativos
+                )
+                valor_fatura = float(fatura.valor_total or 0)
+                diferenca = abs(valor_fatura - soma_considerado)
+                if diferenca > 1.00:
+                    flash(
+                        f'Diferenca de R$ {diferenca:.2f} entre valor da fatura '
+                        f'(R$ {valor_fatura:.2f}) e soma conferida '
+                        f'(R$ {soma_considerado:.2f}). Tolerancia: R$ 1,00. '
+                        f'Ajuste valor_considerado dos subcontratos antes de conferir.',
                         'warning',
                     )
                     return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
@@ -1721,6 +1923,16 @@ def register_fatura_routes(bp):
 
         if fatura.status in ('PAGA', 'CANCELADA'):
             return jsonify({'sucesso': False, 'erro': f'Fatura {fatura.status} nao aceita vinculos.'}), 400
+
+        # Refator 2.1: fatura CONFERIDA bloqueia vinculacao de novas operacoes
+        if fatura.status_conferencia == 'CONFERIDO':
+            return jsonify({
+                'sucesso': False,
+                'erro': (
+                    'Fatura conferida nao aceita novas operacoes. '
+                    'Reabra a conferencia antes de vincular.'
+                )
+            }), 400
 
         data = request.get_json(silent=True) or {}
         operacao_id = data.get('operacao_id')
@@ -1780,6 +1992,16 @@ def register_fatura_routes(bp):
 
         if fatura.status in ('PAGA', 'CANCELADA'):
             return jsonify({'sucesso': False, 'erro': f'Fatura {fatura.status} nao permite desvincular.'}), 400
+
+        # Refator 2.1: fatura CONFERIDA bloqueia desvinculacao de operacoes
+        if fatura.status_conferencia == 'CONFERIDO':
+            return jsonify({
+                'sucesso': False,
+                'erro': (
+                    'Fatura conferida nao permite desvincular operacoes. '
+                    'Reabra a conferencia antes de alterar.'
+                )
+            }), 400
 
         try:
             operacao = db.session.query(CarviaOperacao).filter(
@@ -1878,6 +2100,16 @@ def register_fatura_routes(bp):
         if fatura.status in ('PAGA', 'CANCELADA'):
             return jsonify({'sucesso': False, 'erro': f'Fatura {fatura.status} nao aceita vinculos.'}), 400
 
+        # Refator 2.1: fatura CONFERIDA bloqueia vinculacao de novos CTe Comp
+        if fatura.status_conferencia == 'CONFERIDO':
+            return jsonify({
+                'sucesso': False,
+                'erro': (
+                    'Fatura conferida nao aceita novos CTe Complementares. '
+                    'Reabra a conferencia antes de vincular.'
+                )
+            }), 400
+
         data = request.get_json(silent=True) or {}
         cte_comp_id = data.get('cte_comp_id')
         if not cte_comp_id:
@@ -1933,6 +2165,16 @@ def register_fatura_routes(bp):
 
         if fatura.status in ('PAGA', 'CANCELADA'):
             return jsonify({'sucesso': False, 'erro': f'Fatura {fatura.status} nao permite desvincular.'}), 400
+
+        # Refator 2.1: fatura CONFERIDA bloqueia desvinculacao de CTe Comp
+        if fatura.status_conferencia == 'CONFERIDO':
+            return jsonify({
+                'sucesso': False,
+                'erro': (
+                    'Fatura conferida nao permite desvincular CTe Complementares. '
+                    'Reabra a conferencia antes de alterar.'
+                )
+            }), 400
 
         try:
             cte_comp = db.session.query(CarviaCteComplementar).filter(

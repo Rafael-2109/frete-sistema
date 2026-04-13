@@ -237,21 +237,32 @@
             </div>
             {% endif %}
 
-            {% set diff = (fatura.valor_total|float - valor_acertado_total)|abs %}
-            {% if diff > 0.01 %}
+            {# Gate W4 parte 2: diferenca entre fatura e soma_considerado (tolerancia R$ 1,00) #}
+            {% set soma_considerado_value = conferencia_resumo.soma_considerado or 0 %}
+            {% set diff_fatura_considerado = (fatura.valor_total|float - soma_considerado_value)|abs %}
+            {% set dentro_tolerancia = diff_fatura_considerado <= 1.00 %}
+            {% set todos_aprovados = conferencia_resumo.aprovados == conferencia_resumo.total and conferencia_resumo.total > 0 %}
+            {% set pode_conferir = todos_aprovados and dentro_tolerancia %}
+
+            {% if diff_fatura_considerado > 1.00 %}
             <div class="alert alert-warning mb-3">
                 <i class="fas fa-exclamation-triangle"></i>
-                Diferenca de {{ diff|valor_br }} entre valor da fatura e soma dos valores finais.
+                <strong>Diferenca de {{ diff_fatura_considerado|valor_br }}</strong>
+                entre valor da fatura ({{ fatura.valor_total|valor_br }})
+                e soma conferida ({{ soma_considerado_value|valor_br }}).
+                Tolerancia: R$ 1,00.
+                Ajuste <em>valor_considerado</em> dos subcontratos antes de conferir.
             </div>
             {% else %}
             <div class="alert alert-success mb-3">
-                <i class="fas fa-check-circle"></i> Valores conferem.
+                <i class="fas fa-check-circle"></i> Valores conferem (diferenca dentro da tolerancia de R$ 1,00).
             </div>
             {% endif %}
             {% else %}
             <div class="alert alert-info mb-3">
                 <i class="fas fa-info-circle"></i> Nenhum subcontrato anexado ainda. Use o botao abaixo para anexar.
             </div>
+            {% set pode_conferir = false %}
             {% endif %}
 
             {% if fatura.conferido_por %}
@@ -264,6 +275,7 @@
             <div class="d-flex gap-2 flex-wrap">
                 {% for status in ['PENDENTE', 'EM_CONFERENCIA', 'CONFERIDO', 'DIVERGENTE'] %}
                 {% if status != fatura.status_conferencia %}
+                {% set botao_conferido_bloqueado = (status == 'CONFERIDO' and not pode_conferir) %}
                 <form method="POST" action="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura.id) }}" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="status" value="{{ status }}">
@@ -272,7 +284,9 @@
                         {% elif status == 'DIVERGENTE' %}btn-danger
                         {% elif status == 'EM_CONFERENCIA' %}btn-info
                         {% else %}btn-secondary{% endif %}"
-                        {% if status == 'CONFERIDO' %}onclick="return confirm('Confirmar conferencia? Subcontratos serao marcados como CONFERIDO.')"{% endif %}>
+                        {% if botao_conferido_bloqueado %}disabled
+                        title="Bloqueado: {% if not todos_aprovados %}confira todos os subcontratos{% endif %}{% if not todos_aprovados and not dentro_tolerancia %} e {% endif %}{% if not dentro_tolerancia %}ajuste valores (diferenca {{ diff_fatura_considerado|valor_br }}){% endif %}"
+                        {% elif status == 'CONFERIDO' %}onclick="return confirm('Confirmar conferencia? Subcontratos serao marcados como CONFERIDO.')"{% endif %}>
                         {{ status|replace('_', ' ') }}
                     </button>
                 </form>

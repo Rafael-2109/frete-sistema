@@ -3,9 +3,9 @@
 **Data da revisao**: 03/03/2026
 **Versao do modulo**: ~10.8K LOC, 24 arquivos Python, 28 templates, 11 tabelas
 
-## STATUS DE RESOLUCAO (atualizado 04/03/2026)
+## STATUS DE RESOLUCAO (atualizado 12/04/2026)
 
-**36 de 37 gaps resolvidos** (GAP-31 adiado por design).
+**36 de 37 gaps originais resolvidos** (GAP-31 adiado por design) **+ auditoria W1-W14 concluida + Refator 2.1 implementado (12/04/2026)**.
 
 | Sessao | Gaps | Status |
 |--------|------|--------|
@@ -24,6 +24,79 @@ GAP-31 (historico de status) adiado — melhoria futura, requer tabela de histor
 - `scripts/migrations/gap10_unique_parcial_movimentacoes.py` (.sql)
 - `scripts/migrations/gap34_gin_index_nfs_referenciadas.py` (.sql)
 - `scripts/migrations/gap08_cascade_junction_nf_fk.py` (.sql)
+- `scripts/migrations/carvia_fatura_cliente_auditoria.py` (.sql) **← novo (Refator 2.1)**
+
+---
+
+## AUDITORIA W1-W14 (concluida em 12/04/2026)
+
+Plano: `/.claude/plans/shiny-wiggling-harbor.md` (v3). 12 commits aplicados.
+
+| ID | Descricao | Status | Commit |
+|----|-----------|--------|--------|
+| W1 | editar_cte_valor ignora status fatura | CONCLUIDO | Sprint 1 (`55a30be0`) |
+| W2 | NF cancelar/desvincular com deps | CONCLUIDO | Sprint 2 (`8a6665f8`) |
+| W3 | absorvido por W2 | CONCLUIDO | — |
+| W4 parte 1 | Desanexar sub + editar valor sub | CONCLUIDO | Sprint 2 (`8a6665f8`) |
+| **W4 parte 2** | **Gate de valor em CONFERIR FT** | **CONCLUIDO 12/04/2026** | sessao atual (R$ 1,00 tolerancia) |
+| W5 | CTe nao recalcula fatura | CONCLUIDO | Sprint 1 |
+| W6 | Cancelar op cascadeia subs | CONCLUIDO | Sprint 1 + fix round 2 (`e4d6c03e`) |
+| W7 | Desativar tabela/grupo | CONCLUIDO | Sprint 2 |
+| W8 | Admin bypass CarviaFrete | CONCLUIDO | Sprint 0 (remocao) |
+| W9 | Savepoint-per-NF importacao | CONCLUIDO | `155088c9` |
+| W10 N1 | FC <-> Conciliacao bidirecional | CONCLUIDO | Sprint 2 |
+| W10 N2 | FC wrapper de Conciliacao | CONCLUIDO | Sprint 3 (`452d3e9b`) + Sprint 4 (`935c1df2` FC_VIRTUAL → MANUAL) |
+| W11 | NF tardia bloqueia | CONCLUIDO | Sprint 3 (interpretacao restritiva) |
+| W12 | N/A (ja atomico) | — | — |
+| W13 | Despesa COMISSAO imutavel | CONCLUIDO | Sprint 1 + fix round 1 |
+
+---
+
+## REFATORACOES 2.x
+
+| ID | Descricao | Status |
+|----|-----------|--------|
+| 2.1 | **status_conferencia em CarviaFaturaCliente** | **CONCLUIDO 12/04/2026** (sessao atual — manual puro) |
+| 2.2 | FC wrapper de Conciliacao | CONCLUIDO (virou W10 N2 + Sprint 4) |
+| 2.3 | Bloqueios no model (pode_*) | CONCLUIDO (Sprint 0) |
+| 2.4 | Remover `CarviaFrete.subcontrato_id` deprecated | **PENDENTE** (debito tecnico — Prioridade Media) |
+| 2.5 | `CarviaFreteNf` junction table | **PENDENTE** (debito tecnico — Prioridade Alta, problema de performance atual via ILIKE sem indice) |
+| 2.6 | Extrair `FaturaClienteService` e `FaturaTransportadoraService` | **PENDENTE** (debito tecnico — Prioridade Media, refator progressivo) |
+| 2.7 | Dropar campos mortos de `CarviaOperacao` | **PENDENTE** (debito tecnico — Prioridade Baixa) |
+
+---
+
+## DEBITO TECNICO PENDENTE (Refators 2.4-2.7)
+
+Documentado em `/.claude/plans/sequential-wibbling-kahn.md` Secao 4 P3. Nao abordado no ciclo de 12/04/2026 porque:
+
+- **2.5** tem impacto potencial em performance (ILIKE sem indice) — deveria ser priorizado em sprint proprio porque e risco real. Plano v3 elevou para prioridade media, mas ainda nao foi implementado.
+- **2.4** requer migracao de dados + atualizar 5+ code paths que ainda usam `CarviaFrete.subcontrato_id` (FK deprecated). Risco de divergencia entre path novo (`subcontratos` 1:N via `frete_id`) e antigo.
+- **2.6** e refatoracao progressiva — pode ser feito incrementalmente em cada nova feature de fatura.
+- **2.7** e limpeza simples mas baixa prioridade.
+
+---
+
+## MUDANCAS EM 12/04/2026 (sessao atual)
+
+### W4 parte 2 — Gate de valor na conferencia de Fatura Transportadora
+- **Arquivo**: `app/carvia/routes/fatura_routes.py:1666-1707` (`conferir_fatura_transportadora`)
+- **Adicao**: Gate 2 apos Gate 1 — valida `abs(fatura.valor_total - soma(sub.valor_considerado)) <= R$ 1,00`
+- **Tolerancia**: R$ 1,00 (espelhando `app/fretes/routes.py:2196`)
+- **Template**: `app/templates/carvia/faturas_transportadora/detalhe.html` — badge de tolerancia + botao CONFERIDO desabilitado quando fora de tolerancia
+- **Sem migration** — reutiliza campos existentes
+
+### Refator 2.1 — Conferencia gerencial em CarviaFaturaCliente
+- **Decisao**: gate MANUAL puro, sem validacao automatica. Pagamento independente.
+- **Migration**: `scripts/migrations/carvia_fatura_cliente_auditoria.py` + `.sql`
+  - 4 colunas: `status_conferencia`, `conferido_por`, `conferido_em`, `observacoes_conferencia`
+  - Indice parcial em `status_conferencia`
+- **Modelo** (`app/carvia/models/faturas.py`): campos adicionados + `pode_editar()` estendido para bloquear CONFERIDO antes de PAGA (alinhado com `CarviaFaturaTransportadora.pode_editar()`)
+- **Rotas novas** (`fatura_routes.py`):
+  - `POST /faturas-cliente/<id>/aprovar` — sem gate, grava auditoria
+  - `POST /faturas-cliente/<id>/reabrir-conferencia` — exige motivo
+- **Template** (`faturas_cliente/detalhe.html`): badge no cabecalho, secao de conferencia no card "Status e Acoes", modais de Aprovar/Reabrir, historico de conferencia em `<details>`
+- **CLAUDE.md R4**: atualizado com secao "Bifurcacao venda/compra" + referencia ao gate de valor e conferencia manual
 
 ---
 
