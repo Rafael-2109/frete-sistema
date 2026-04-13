@@ -1,6 +1,6 @@
 # Carteira — Guia de Desenvolvimento
 
-**LOC**: ~17.6K | **Arquivos**: 47 | **22 JS** | **Atualizado**: 06/04/2026
+**LOC**: ~17.6K | **Arquivos**: 50 | **22 JS** | **Atualizado**: 13/04/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.

@@ -1,6 +1,6 @@
 # Teams Bot — Guia de Desenvolvimento
 
-**LOC**: ~2.1K | **Arquivos**: 4 | **Atualizado**: 06/04/2026
+**LOC**: ~2.3K | **Arquivos**: 4 | **Atualizado**: 13/04/2026
 
 Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + SSL retry + transcript persistence.
 
@@ -11,9 +11,9 @@ Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + S
 ```
 app/teams/
   ├── __init__.py      # 5 LOC — Blueprint /api/teams
-  ├── models.py        # 72 LOC — TeamsTask (lifecycle 6 estados)
-  ├── bot_routes.py    # 438 LOC — 5 endpoints + auth HMAC
-  └── services.py      # 1,626 LOC — Core: user/session/response/async processing
+  ├── models.py        # 77 LOC — TeamsTask (lifecycle 6 estados)
+  ├── bot_routes.py    # 477 LOC — 5 endpoints + auth HMAC
+  └── services.py      # 1,716 LOC — Core: user/session/response/async processing
 ```
 
 ## Regras Criticas
