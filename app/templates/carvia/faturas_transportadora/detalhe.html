@@ -207,6 +207,12 @@
                 </div>
             </div>
 
+            {# Defaults para variaveis usadas fora do bloco if/else (Jinja2 scoping) #}
+            {% set pode_conferir = false %}
+            {% set todos_aprovados = false %}
+            {% set dentro_tolerancia = true %}
+            {% set diff_fatura_considerado = 0 %}
+
             {% if subcontratos %}
             {# Barra de progresso de conferencia individual #}
             {% if conferencia_resumo.total > 0 %}
