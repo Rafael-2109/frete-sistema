@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-balance-scale"></i> Conta Corrente por Transportadora</h2>
+        <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Dashboard
+        </a>
+    </div>
+
+    {% set carvia_active = 'conta_corrente' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Totais gerais -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-danger">
+                <div class="card-body text-center">
+                    <small class="text-muted d-block">Total a Receber (Transp. nos devem)</small>
+                    <h3 class="mb-0 text-danger">{{ total_geral.total_debito|valor_br }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <small class="text-muted d-block">Total a Pagar (Devemos a transp.)</small>
+                    <h3 class="mb-0 text-success">{{ total_geral.total_credito|valor_br }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <small class="text-muted d-block">Saldo Liquido</small>
+                    <h3 class="mb-0 {{ 'text-danger' if total_geral.saldo > 0 else 'text-success' if total_geral.saldo < 0 else '' }}">
+                        {{ total_geral.saldo|valor_br }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-info small mb-3">
+        <i class="fas fa-info-circle"></i>
+        Saldo positivo = transportadora deve para CarVia (pagamos a mais do que consideravamos).
+        Saldo negativo = CarVia deve para a transportadora (pagamos a menos).
+        Movimentacoes sao geradas via fluxo de aprovacao de subcontratos.
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if saldos %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Transportadora</th>
+                            <th>CNPJ</th>
+                            <th class="text-end">A Receber</th>
+                            <th class="text-end">A Pagar</th>
+                            <th class="text-end">Saldo</th>
+                            <th>Classificacao</th>
+                            <th class="text-center">Movs</th>
+                            <th>Acao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in saldos %}
+                        <tr>
+                            <td>{{ s.transportadora_nome }}</td>
+                            <td><small>{{ s.transportadora_cnpj or '-' }}</small></td>
+                            <td class="text-end">{{ s.total_debito|valor_br }}</td>
+                            <td class="text-end">{{ s.total_credito|valor_br }}</td>
+                            <td class="text-end">
+                                <strong class="{{ 'text-danger' if s.saldo > 0 else 'text-success' if s.saldo < 0 else '' }}">
+                                    {{ s.saldo|valor_br }}
+                                </strong>
+                            </td>
+                            <td>
+                                {% if s.classificacao == 'DEVEDOR' %}
+                                <span class="badge bg-danger">DEVEDOR</span>
+                                {% elif s.classificacao == 'CREDOR' %}
+                                <span class="badge bg-success">CREDOR</span>
+                                {% else %}
+                                <span class="badge bg-secondary">ZERADO</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-primary">{{ s.qtd_movimentacoes }}</span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('carvia.extrato_conta_corrente_carvia', transportadora_id=s.transportadora_id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="Ver extrato">
+                                    <i class="fas fa-list"></i> Extrato
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-success text-center mb-0">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <p class="mb-0">Nenhuma movimentacao ativa na conta corrente.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

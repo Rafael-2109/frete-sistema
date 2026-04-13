@@ -222,15 +222,28 @@ class ConferenciaService:
         """
         Registra conferencia de um subcontrato.
 
+        REFATOR D4 (.claude/plans/wobbly-tumbling-treasure.md):
+        Quando o conferente decide DIVERGENTE, o status_conferencia NAO vai
+        direto para 'DIVERGENTE'. Em vez disso, uma CarviaAprovacaoSubcontrato
+        PENDENTE e criada via AprovacaoSubcontratoService, e o sub fica com
+        status_conferencia='PENDENTE' + requer_aprovacao=True ate o aprovador
+        decidir. APROVADO continua sendo gravado direto.
+
+        Quando APROVADO: tambem se verifica se a diferenca considerado-cotado
+        esta dentro da tolerancia — se nao estiver, abre tratativa mesmo com
+        intencao de APROVAR (evita lancamentos em CC sem aprovacao explicita).
+
         Args:
             subcontrato_id: ID do CarviaSubcontrato
             valor_considerado: Valor registrado pelo conferente
-            status: APROVADO ou DIVERGENTE
+            status: APROVADO ou DIVERGENTE (decisao inicial do conferente)
             usuario: Email do conferente
             observacoes: Texto opcional
 
         Returns:
-            Dict com sucesso, fatura_atualizada, fatura_status
+            Dict com sucesso, status_conferencia (pode diferir do solicitado
+            se virou tratativa), fatura_atualizada, fatura_status,
+            tratativa_aberta (bool), aprovacao_id (se tratativa).
         """
         from app.carvia.models import CarviaSubcontrato
         from app.utils.timezone import agora_utc_naive
@@ -264,7 +277,6 @@ class ConferenciaService:
                 logger.warning(f"Erro ao gerar snapshot conferencia: {e}")
 
             sub.valor_considerado = valor_considerado
-            sub.status_conferencia = status
             sub.conferido_por = usuario
             sub.conferido_em = agora_utc_naive()
             sub.detalhes_conferencia = snapshot
@@ -272,7 +284,45 @@ class ConferenciaService:
             if observacoes:
                 sub.observacoes = (sub.observacoes or '') + f'\n[Conferencia] {observacoes}'
 
-            # Verificar cascade para fatura
+            # REFATOR D4: roteamento entre APROVADO direto ou abrir tratativa
+            from app.carvia.services.documentos.aprovacao_subcontrato_service import (
+                AprovacaoSubcontratoService,
+            )
+            aprov_svc = AprovacaoSubcontratoService()
+
+            tratativa_aberta = False
+            aprovacao_id = None
+
+            if status == 'DIVERGENTE':
+                # DIVERGENTE sempre abre tratativa — status_conferencia
+                # permanece PENDENTE ate o aprovador decidir
+                sub.status_conferencia = 'PENDENTE'
+                resultado_trat = aprov_svc.verificar_e_solicitar_se_necessario(
+                    sub_id=subcontrato_id, usuario=usuario,
+                )
+                if resultado_trat.get('sucesso') and resultado_trat.get('tratativa_aberta'):
+                    tratativa_aberta = True
+                    aprovacao_id = resultado_trat.get('aprovacao_id')
+                else:
+                    # Diff dentro da tolerancia — marca DIVERGENTE final mesmo
+                    # (caso edge: conferente marcou DIVERGENTE com diff < R$5)
+                    sub.status_conferencia = 'DIVERGENTE'
+            else:  # APROVADO
+                # Mesmo APROVADO precisa verificar tolerancia — se a diff
+                # esta acima do limite, abre tratativa antes de confirmar
+                resultado_trat = aprov_svc.verificar_e_solicitar_se_necessario(
+                    sub_id=subcontrato_id, usuario=usuario,
+                )
+                if resultado_trat.get('sucesso') and resultado_trat.get('tratativa_aberta'):
+                    # Diff > tolerancia: abre tratativa mesmo querendo APROVAR
+                    sub.status_conferencia = 'PENDENTE'
+                    tratativa_aberta = True
+                    aprovacao_id = resultado_trat.get('aprovacao_id')
+                else:
+                    # Dentro da tolerancia — APROVADO direto
+                    sub.status_conferencia = 'APROVADO'
+
+            # Verificar cascade para fatura (usa status_conferencia ja atualizado)
             fatura_atualizada = False
             fatura_status = None
             if sub.fatura_transportadora_id:
@@ -284,16 +334,19 @@ class ConferenciaService:
 
             logger.info(
                 f"Conferencia registrada | sub_id={subcontrato_id} | "
-                f"valor_considerado={valor_considerado} | status={status} | "
+                f"valor_considerado={valor_considerado} | solicitado={status} | "
+                f"final={sub.status_conferencia} | tratativa={tratativa_aberta} | "
                 f"usuario={usuario}"
             )
 
             return {
                 'sucesso': True,
-                'status_conferencia': status,
+                'status_conferencia': sub.status_conferencia,
                 'valor_considerado': float(valor_considerado),
                 'fatura_atualizada': fatura_atualizada,
                 'fatura_status': fatura_status,
+                'tratativa_aberta': tratativa_aberta,
+                'aprovacao_id': aprovacao_id,
             }
 
         except Exception as e:

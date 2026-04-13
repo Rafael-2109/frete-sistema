@@ -197,6 +197,14 @@
                                     </a>
                                     {% endif %}
 
+                                    <!-- Conta Corrente da transportadora -->
+                                    {% if f.transportadora_id %}
+                                    <a href="{{ url_for('carvia.extrato_conta_corrente_carvia', transportadora_id=f.transportadora_id) }}"
+                                        class="btn btn-sm btn-outline-secondary mb-1" title="Extrato conta corrente da transportadora">
+                                        <i class="fas fa-balance-scale"></i> CC
+                                    </a>
+                                    {% endif %}
+
                                     {% if f.status_conferencia in ('PENDENTE', 'EM_CONFERENCIA') %}
                                     <!-- Conferir -->
                                     <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}"

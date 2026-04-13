@@ -1,0 +1,98 @@
+{
+  "name": "carvia_aprovacoes_subcontrato",
+  "description": "Tabela carvia_aprovacoes_subcontrato",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "subcontrato_id",
+      "type": "integer",
+      "description": "FK → carvia_subcontratos.id",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "solicitado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "solicitado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "motivo_solicitacao",
+      "type": "text"
+    },
+    {
+      "name": "valor_cotado_snap",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_considerado_snap",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_pago_snap",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "diferenca_snap",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "aprovador",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacoes_aprovacao",
+      "type": "text"
+    },
+    {
+      "name": "lancar_diferenca",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "subcontrato_id",
+      "references": "carvia_subcontratos.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_aprovacoes_subcontrato_subcontrato_id",
+      "columns": [
+        "subcontrato_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_aprovacoes_subcontrato_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

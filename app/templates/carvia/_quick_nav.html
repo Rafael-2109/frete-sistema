@@ -7,7 +7,7 @@
 #}
 
 {# — Grupos para deteccao de secao ativa — #}
-{% set grp_comprados = ['subcontratos', 'custos_entrega', 'faturas_transportadora', 'despesas'] %}
+{% set grp_comprados = ['subcontratos', 'custos_entrega', 'faturas_transportadora', 'despesas', 'aprovacoes_subcontrato', 'conta_corrente'] %}
 {% set grp_vendidos = ['operacoes', 'ctes_complementares', 'faturas_cliente', 'receitas'] %}
 {% set grp_financeiro = ['fretes', 'fluxo_caixa', 'conciliacao', 'extrato_bancario'] %}
 {% set grp_comercial = ['nfs', 'clientes', 'origens_globais', 'cotacoes_v2', 'pedidos_carvia', 'comissoes'] %}
@@ -48,6 +48,18 @@
                    href="{{ url_for('carvia.listar_faturas_transportadora') }}">Fatura Subcontrato</a></li>
             <li><a class="dropdown-item {{ 'active' if carvia_active == 'despesas' }}"
                    href="{{ url_for('carvia.listar_despesas') }}">Despesas Empresa</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'aprovacoes_subcontrato' }}"
+                   href="{{ url_for('carvia.listar_aprovacoes_subcontrato') }}">
+                <i class="fas fa-clipboard-check"></i> Aprovacoes Subcontrato
+                {% if carvia_aprovacoes_pendentes and carvia_aprovacoes_pendentes > 0 %}
+                <span class="badge bg-warning text-dark">{{ carvia_aprovacoes_pendentes }}</span>
+                {% endif %}
+            </a></li>
+            <li><a class="dropdown-item {{ 'active' if carvia_active == 'conta_corrente' }}"
+                   href="{{ url_for('carvia.listar_contas_correntes_carvia') }}">
+                <i class="fas fa-balance-scale"></i> Conta Corrente
+            </a></li>
         </ul>
     </div>
 

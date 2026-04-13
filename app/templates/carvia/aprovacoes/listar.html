@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="fas fa-clipboard-check"></i> Aprovacoes Pendentes — Subcontratos
+            <span class="badge bg-warning text-dark">{{ total }}</span>
+        </h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    {% set carvia_active = 'aprovacoes_subcontrato' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <div class="alert alert-info small mb-3">
+        <i class="fas fa-info-circle"></i>
+        Tratativas sao criadas automaticamente quando a diferenca entre
+        <strong>valor_considerado</strong> ou <strong>valor_pago</strong> e
+        <strong>valor_cotado</strong> ultrapassa a tolerancia de
+        <strong>R$ {{ tolerancia|valor_br }}</strong>. O aprovador decide se a
+        diferenca vai para a conta corrente da transportadora.
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if linhas %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Sub</th>
+                            <th>Transportadora</th>
+                            <th>Operacao</th>
+                            <th class="text-end">Cotado</th>
+                            <th class="text-end">Considerado</th>
+                            <th class="text-end">Pago</th>
+                            <th class="text-end">Diferenca</th>
+                            <th>Solicitado em</th>
+                            <th>Por</th>
+                            <th>Acao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for linha in linhas %}
+                        {% set ap = linha.aprovacao %}
+                        {% set sub = linha.sub %}
+                        {% set op = linha.operacao %}
+                        <tr>
+                            <td><small class="text-muted">#{{ ap.id }}</small></td>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}"
+                                   class="text-decoration-none">
+                                    {{ sub.cte_numero or ('Sub #' ~ sub.id) }}
+                                </a>
+                            </td>
+                            <td>
+                                <span title="{{ linha.transportadora_nome }}">
+                                    {{ linha.transportadora_nome[:30] }}{% if linha.transportadora_nome|length > 30 %}...{% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                {% if op %}
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}"
+                                   class="text-decoration-none">
+                                    {{ op.cte_numero or ('Op #' ~ op.id) }}
+                                </a>
+                                <br><small class="text-muted">{{ op.cidade_destino }}/{{ op.uf_destino }}</small>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ ap.valor_cotado_snap|valor_br if ap.valor_cotado_snap else '-' }}</td>
+                            <td class="text-end">{{ ap.valor_considerado_snap|valor_br if ap.valor_considerado_snap else '-' }}</td>
+                            <td class="text-end">{{ ap.valor_pago_snap|valor_br if ap.valor_pago_snap else '-' }}</td>
+                            <td class="text-end">
+                                {% if ap.diferenca_snap %}
+                                <strong class="text-danger">{{ ap.diferenca_snap|valor_br }}</strong>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ ap.solicitado_em|formatar_data_hora_brasil if ap.solicitado_em else '-' }}</small>
+                            </td>
+                            <td><small>{{ ap.solicitado_por }}</small></td>
+                            <td>
+                                <a href="{{ url_for('carvia.processar_aprovacao_subcontrato', aprovacao_id=ap.id) }}"
+                                   class="btn btn-sm btn-primary">
+                                    <i class="fas fa-gavel"></i> Processar
+                                </a>
+                            </td>
+                        </tr>
+                        {% if ap.motivo_solicitacao %}
+                        <tr>
+                            <td colspan="11" class="small text-muted border-top-0 pt-0">
+                                <i class="fas fa-comment"></i> {{ ap.motivo_solicitacao }}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-success text-center mb-0">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <p class="mb-0">Nenhuma aprovacao pendente.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -90,6 +90,38 @@ def require_carvia():
     return require_permission('pode_acessar_carvia')
 
 
+def require_carvia_aprovador():
+    """Decorador para aprovar tratativas de subcontratos CarVia.
+
+    Autoriza:
+    - Usuarios com toggle sistema_carvia=True, OU
+    - Usuarios com perfil='financeiro' (mesmo sem sistema_carvia)
+    - Administradores (sempre)
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash('Voce precisa fazer login para acessar esta pagina.', 'warning')
+                return redirect(url_for('auth.login'))
+
+            tem_sistema_carvia = getattr(current_user, 'sistema_carvia', False)
+            eh_financeiro = current_user.perfil == 'financeiro'
+            eh_admin = current_user.perfil == 'administrador'
+
+            if not (tem_sistema_carvia or eh_financeiro or eh_admin):
+                flash(
+                    'Acesso negado. Apenas perfis Financeiro/Administrador '
+                    'ou usuarios com sistema CarVia habilitado podem aprovar.',
+                    'danger',
+                )
+                return redirect(url_for('main.dashboard'))
+
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
 def require_seguranca():
     """Decorador para acesso ao modulo de seguranca (apenas administradores)"""
     return require_permission('pode_acessar_seguranca')

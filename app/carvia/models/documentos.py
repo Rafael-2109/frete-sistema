@@ -649,6 +649,15 @@ class CarviaSubcontrato(db.Model):
     conferido_em = db.Column(db.DateTime, nullable=True)
     detalhes_conferencia = db.Column(db.JSON, nullable=True)
 
+    # Pagamento (manual, igual padrao Nacom Frete.valor_pago)
+    # Independente do pagamento da fatura (status_pagamento da FT) — granularidade por sub
+    valor_pago = db.Column(db.Numeric(15, 2), nullable=True)
+    valor_pago_em = db.Column(db.DateTime, nullable=True)
+    valor_pago_por = db.Column(db.String(100), nullable=True)
+
+    # Flag de tratativa: True quando existe CarviaAprovacaoSubcontrato PENDENTE
+    requer_aprovacao = db.Column(db.Boolean, nullable=False, default=False)
+
     # Auditoria
     observacoes = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
@@ -667,6 +676,14 @@ class CarviaSubcontrato(db.Model):
         'CarviaFrete',
         foreign_keys=[frete_id],
         back_populates='subcontratos',
+    )
+    # 1:N com aprovacoes (historico de tratativas)
+    aprovacoes = db.relationship(
+        'CarviaAprovacaoSubcontrato',
+        backref='subcontrato',
+        foreign_keys='CarviaAprovacaoSubcontrato.subcontrato_id',
+        order_by='CarviaAprovacaoSubcontrato.solicitado_em.desc()',
+        lazy='dynamic',
     )
 
     @staticmethod

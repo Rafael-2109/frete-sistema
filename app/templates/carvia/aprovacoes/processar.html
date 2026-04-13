@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="fas fa-gavel"></i> Processar Aprovacao #{{ aprovacao.id }}
+            <span class="badge bg-warning text-dark">PENDENTE</span>
+        </h2>
+        <a href="{{ url_for('carvia.listar_aprovacoes_subcontrato') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Fila de Aprovacoes
+        </a>
+    </div>
+
+    {% set carvia_active = 'aprovacoes_subcontrato' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Info do subcontrato -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-handshake"></i> Subcontrato</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">CTe Numero</small>
+                    <strong>
+                        <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}" class="text-decoration-none">
+                            {{ sub.cte_numero or ('Sub #' ~ sub.id) }}
+                        </a>
+                    </strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Transportadora</small>
+                    <strong>{{ sub.transportadora.razao_social if sub.transportadora else '-' }}</strong>
+                    {% if sub.transportadora and sub.transportadora.cnpj %}
+                    <br><small class="text-muted">{{ sub.transportadora.cnpj }}</small>
+                    {% endif %}
+                </div>
+                {% if operacao %}
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Operacao</small>
+                    <strong>
+                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="text-decoration-none">
+                            {{ operacao.cte_numero or ('Op #' ~ operacao.id) }}
+                        </a>
+                    </strong>
+                    <br><small class="text-muted">{{ operacao.cidade_destino }}/{{ operacao.uf_destino }}</small>
+                </div>
+                {% endif %}
+                {% if fatura %}
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Fatura Transportadora</small>
+                    <strong>
+                        <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura.id) }}" class="text-decoration-none">
+                            {{ fatura.numero_fatura }}
+                        </a>
+                    </strong>
+                    {% if fatura.status_conferencia == 'CONFERIDO' %}
+                    <br><span class="badge bg-success">CONFERIDO</span>
+                    <small class="text-warning">Nao permite lancar CC — reabra a fatura primeiro</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            {% if aprovacao.motivo_solicitacao %}
+            <hr>
+            <small class="text-muted d-block mb-1">Motivo da solicitacao:</small>
+            <div class="alert alert-info mb-0 small">
+                <i class="fas fa-comment"></i> {{ aprovacao.motivo_solicitacao }}
+                <br><small class="text-muted">
+                    Solicitado por <strong>{{ aprovacao.solicitado_por }}</strong>
+                    em {{ aprovacao.solicitado_em|formatar_data_hora_brasil if aprovacao.solicitado_em else '-' }}
+                </small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Caso A: Considerado vs Cotado -->
+        <div class="col-md-6">
+            <div class="card h-100 {% if caso_a and caso_a.acima_tolerancia %}border-warning{% endif %}">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-balance-scale"></i> Caso A — Valor Considerado vs Cotado
+                        {% if caso_a and caso_a.acima_tolerancia %}
+                        <span class="badge bg-warning text-dark">Acima da tolerancia</span>
+                        {% endif %}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if caso_a %}
+                    <div class="row text-center mb-3">
+                        <div class="col">
+                            <small class="text-muted d-block">Cotado</small>
+                            <h5 class="mb-0">{{ caso_a.valor_cotado|valor_br }}</h5>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted d-block">Considerado</small>
+                            <h5 class="mb-0">{{ caso_a.valor_considerado|valor_br }}</h5>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted d-block">Diferenca</small>
+                            <h5 class="mb-0 {{ 'text-danger' if caso_a.diferenca > 0 else 'text-success' if caso_a.diferenca < 0 else '' }}">
+                                {{ caso_a.diferenca|valor_br }}
+                            </h5>
+                        </div>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        Tolerancia: R$ {{ tolerancia|valor_br }}. Diferenca absoluta: R$ {{ caso_a.diferenca_abs|valor_br }}.
+                    </p>
+                    {% else %}
+                    <p class="text-muted mb-0"><em>Valor considerado nao informado.</em></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Caso B: Pago vs Cotado -->
+        <div class="col-md-6">
+            <div class="card h-100 {% if caso_b and caso_b.acima_tolerancia %}border-warning{% endif %}">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-money-check"></i> Caso B — Valor Pago vs Cotado
+                        {% if caso_b and caso_b.acima_tolerancia %}
+                        <span class="badge bg-warning text-dark">Acima da tolerancia</span>
+                        {% endif %}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if caso_b %}
+                    <div class="row text-center mb-3">
+                        <div class="col">
+                            <small class="text-muted d-block">Cotado</small>
+                            <h5 class="mb-0">{{ caso_b.valor_cotado|valor_br }}</h5>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted d-block">Pago</small>
+                            <h5 class="mb-0">{{ caso_b.valor_pago|valor_br }}</h5>
+                        </div>
+                        <div class="col">
+                            <small class="text-muted d-block">Diferenca</small>
+                            <h5 class="mb-0 {{ 'text-success' if caso_b.diferenca > 0 else 'text-danger' if caso_b.diferenca < 0 else '' }}">
+                                {{ caso_b.diferenca|valor_br }}
+                            </h5>
+                        </div>
+                    </div>
+                    <p class="small text-muted mb-0">
+                        Tolerancia: R$ {{ tolerancia|valor_br }}. Diferenca absoluta: R$ {{ caso_b.diferenca_abs|valor_br }}.
+                    </p>
+                    {% else %}
+                    <p class="text-muted mb-0"><em>Valor pago nao informado — registre pagamento antes para habilitar lancamento em CC.</em></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diff Pago vs Considerado (base para CC) -->
+    {% if diff_pago_considerado %}
+    <div class="card mt-3 border-primary">
+        <div class="card-header bg-primary text-white">
+            <h6 class="mb-0">
+                <i class="fas fa-arrow-right"></i> Lancamento em Conta Corrente
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <p class="mb-1">
+                        <strong>{{ diff_pago_considerado.descricao_cc }}</strong>
+                    </p>
+                    <small class="text-muted">
+                        Diferenca entre <em>valor_pago</em> e <em>valor_considerado</em>:
+                        R$ {{ diff_pago_considerado.valor|valor_br }}
+                        ({{ diff_pago_considerado.tipo_cc }})
+                    </small>
+                </div>
+                <div class="col-md-4 text-end">
+                    <h4 class="mb-0 {{ 'text-success' if diff_pago_considerado.tipo_cc == 'CREDITO' else 'text-danger' if diff_pago_considerado.tipo_cc == 'DEBITO' else '' }}">
+                        R$ {{ diff_pago_considerado.abs|valor_br }}
+                    </h4>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Formulario de decisao -->
+    <div class="card mt-3">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-pen"></i> Decisao do Aprovador</h6>
+        </div>
+        <div class="card-body">
+            <form id="form-aprovar" method="POST"
+                  action="{{ url_for('carvia.aprovar_subcontrato', aprovacao_id=aprovacao.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                {% if diff_pago_considerado and diff_pago_considerado.tipo_cc != 'ZERO' %}
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox"
+                           id="lancar_diferenca" name="lancar_diferenca"
+                           {% if fatura and fatura.status_conferencia == 'CONFERIDO' %}disabled{% endif %}>
+                    <label class="form-check-label" for="lancar_diferenca">
+                        <strong>Lancar diferenca na Conta Corrente</strong>
+                        da transportadora ({{ diff_pago_considerado.tipo_cc }} R$ {{ diff_pago_considerado.abs|valor_br }})
+                    </label>
+                    {% if fatura and fatura.status_conferencia == 'CONFERIDO' %}
+                    <br><small class="text-warning">
+                        <i class="fas fa-lock"></i> Fatura CONFERIDO — reabra antes de lancar CC.
+                    </small>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label for="observacoes" class="form-label">
+                        Observacoes do aprovador <span class="text-danger">*</span>
+                    </label>
+                    <textarea id="observacoes" name="observacoes" class="form-control"
+                              rows="3" required minlength="5"
+                              placeholder="Descreva a decisao..."></textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i> Aprovar
+                    </button>
+                    <button type="button" class="btn btn-danger" id="btn-rejeitar">
+                        <i class="fas fa-times"></i> Rejeitar
+                    </button>
+                    <a href="{{ url_for('carvia.listar_aprovacoes_subcontrato') }}" class="btn btn-outline-secondary">
+                        Cancelar
+                    </a>
+                </div>
+            </form>
+
+            <form id="form-rejeitar" method="POST"
+                  action="{{ url_for('carvia.rejeitar_subcontrato', aprovacao_id=aprovacao.id) }}"
+                  style="display:none;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="observacoes" id="rejeitar_observacoes">
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('btn-rejeitar').addEventListener('click', function() {
+    var obs = document.getElementById('observacoes').value.trim();
+    if (obs.length < 5) {
+        alert('Observacoes obrigatorias (minimo 5 caracteres).');
+        document.getElementById('observacoes').focus();
+        return;
+    }
+    if (!confirm('Confirmar REJEICAO? O subcontrato sera marcado como DIVERGENTE e a diferenca NAO sera lancada na Conta Corrente.')) {
+        return;
+    }
+    document.getElementById('rejeitar_observacoes').value = obs;
+    document.getElementById('form-rejeitar').submit();
+});
+
+document.getElementById('form-aprovar').addEventListener('submit', function(e) {
+    var obs = document.getElementById('observacoes').value.trim();
+    if (obs.length < 5) {
+        e.preventDefault();
+        alert('Observacoes obrigatorias (minimo 5 caracteres).');
+        return;
+    }
+    if (!confirm('Confirmar APROVACAO?')) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}

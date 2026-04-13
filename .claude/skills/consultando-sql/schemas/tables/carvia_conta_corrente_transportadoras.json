@@ -1,0 +1,144 @@
+{
+  "name": "carvia_conta_corrente_transportadoras",
+  "description": "Tabela carvia_conta_corrente_transportadoras",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id",
+      "nullable": false
+    },
+    {
+      "name": "subcontrato_id",
+      "type": "integer",
+      "description": "FK → carvia_subcontratos.id",
+      "nullable": false
+    },
+    {
+      "name": "fatura_transportadora_id",
+      "type": "integer",
+      "description": "FK → carvia_faturas_transportadora.id"
+    },
+    {
+      "name": "tipo_movimentacao",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "valor_diferenca",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "valor_debito",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "valor_credito",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "ATIVO"
+    },
+    {
+      "name": "compensado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "compensado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "compensacao_subcontrato_id",
+      "type": "integer",
+      "description": "FK → carvia_subcontratos.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    },
+    {
+      "column": "subcontrato_id",
+      "references": "carvia_subcontratos.id"
+    },
+    {
+      "column": "fatura_transportadora_id",
+      "references": "carvia_faturas_transportadora.id"
+    },
+    {
+      "column": "compensacao_subcontrato_id",
+      "references": "carvia_subcontratos.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_subcontrato_id",
+      "columns": [
+        "subcontrato_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_transportadora_id",
+      "columns": [
+        "transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_fatura_transportadora_id",
+      "columns": [
+        "fatura_transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

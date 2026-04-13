@@ -1567,6 +1567,26 @@ def register_fatura_routes(bp):
             # foi auto-criado via processar_cte_subcontrato sem confirmacao manual)
             sub.fatura_transportadora_id = None
             sub.status = 'CONFIRMADO'
+            sub.requer_aprovacao = False
+
+            # Hook: cancelar movimentacoes CC ativas + rejeitar aprovacoes pendentes
+            # (a diferenca considerado-pago nao se aplica mais sem fatura vinculada)
+            from app.carvia.services.financeiro.conta_corrente_service import (
+                ContaCorrenteService,
+            )
+            from app.carvia.services.documentos.aprovacao_subcontrato_service import (
+                AprovacaoSubcontratoService,
+            )
+            ContaCorrenteService.cancelar_movimentacoes(
+                sub_id=sub.id,
+                motivo=f'Desanexado da fatura #{fatura_id}',
+                usuario=current_user.email,
+            )
+            AprovacaoSubcontratoService().rejeitar_pendentes_de_sub(
+                sub_id=sub.id,
+                motivo=f'Desanexado da fatura #{fatura_id}',
+                usuario=current_user.email,
+            )
             # Propagar para CarviaFrete via frete_id (novo) ou subcontrato_id (deprecated)
             if sub.frete_id:
                 frete_vinc = db.session.get(CarviaFrete, sub.frete_id)

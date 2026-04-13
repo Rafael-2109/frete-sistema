@@ -17,6 +17,26 @@ carvia_bp = Blueprint(
 
 from app.carvia.routes import register_routes  # noqa: E402
 
+
+# Context processor: badge de aprovacoes PENDENTE no menu CarVia.
+# Registrado ANTES do init_app para evitar AssertionError de blueprint
+# ja registrado (Flask 3).
+@carvia_bp.context_processor
+def inject_carvia_aprovacoes_pendentes():
+    from flask_login import current_user
+    if not (current_user.is_authenticated and getattr(current_user, 'sistema_carvia', False)):
+        return {'carvia_aprovacoes_pendentes': 0}
+    try:
+        from app.carvia.services.documentos.aprovacao_subcontrato_service import (
+            AprovacaoSubcontratoService,
+        )
+        return {
+            'carvia_aprovacoes_pendentes': AprovacaoSubcontratoService().contar_pendentes()
+        }
+    except Exception:
+        return {'carvia_aprovacoes_pendentes': 0}
+
+
 _routes_registered = False
 
 

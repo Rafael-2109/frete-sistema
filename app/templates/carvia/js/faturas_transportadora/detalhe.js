@@ -184,11 +184,21 @@ document.getElementById('btn-salvar-conferencia')?.addEventListener('click', fun
     .then(r => r.json())
     .then(data => {
         if (data.sucesso) {
-            // Atualizar badge na tabela
+            // Atualizar badge na tabela (inclui novo estado PENDENTE
+            // quando backend abriu tratativa via refator W4)
             const badgeCell = document.getElementById(`sub-conf-badge-${confSubId}`);
             if (badgeCell) {
-                const badgeClass = data.status_conferencia === 'APROVADO' ? 'bg-success' : 'bg-danger';
-                badgeCell.innerHTML = `<span class="badge ${badgeClass}">${data.status_conferencia}</span>`;
+                let badgeClass = 'bg-secondary';
+                let badgeLabel = data.status_conferencia;
+                if (data.status_conferencia === 'APROVADO') {
+                    badgeClass = 'bg-success';
+                } else if (data.status_conferencia === 'DIVERGENTE') {
+                    badgeClass = 'bg-danger';
+                } else if (data.status_conferencia === 'PENDENTE' && data.tratativa_aberta) {
+                    badgeClass = 'bg-warning text-dark';
+                    badgeLabel = 'EM TRATATIVA';
+                }
+                badgeCell.innerHTML = `<span class="badge ${badgeClass}">${badgeLabel}</span>`;
             }
 
             // Atualizar valor considerado na tabela
@@ -197,12 +207,23 @@ document.getElementById('btn-salvar-conferencia')?.addEventListener('click', fun
                 valCell.textContent = formatarValor(data.valor_considerado);
             }
 
+            // Fechar modal
+            bootstrap.Modal.getInstance(document.getElementById('modalConferenciaSubcontrato')).hide();
+
+            // Aviso quando tratativa aberta (sub precisa de aprovacao antes de fechar fatura)
+            if (data.tratativa_aberta) {
+                alert(
+                    `Tratativa #${data.aprovacao_id || ''} aberta. ` +
+                    `A diferenca ultrapassou a tolerancia e precisa de aprovacao ` +
+                    `antes da conferencia ser finalizada. Acesse "Aprovacoes Subcontrato" no menu CarVia.`
+                );
+                window.location.reload();
+                return;
+            }
+
             // Se fatura mudou de status, recarregar pagina
             if (data.fatura_atualizada) {
-                bootstrap.Modal.getInstance(document.getElementById('modalConferenciaSubcontrato')).hide();
                 window.location.reload();
-            } else {
-                bootstrap.Modal.getInstance(document.getElementById('modalConferenciaSubcontrato')).hide();
             }
         } else {
             alert(data.erro || 'Erro ao salvar conferencia.');

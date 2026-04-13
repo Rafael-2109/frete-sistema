@@ -102,6 +102,24 @@
       "type": "json"
     },
     {
+      "name": "valor_pago",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_pago_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "valor_pago_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "requer_aprovacao",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "observacoes",
       "type": "text"
     },
@@ -145,6 +163,20 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_subcontratos_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_subcontratos_operacao_id",
+      "columns": [
+        "operacao_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_subcontratos_cte_numero",
       "columns": [
         "cte_numero"
@@ -162,20 +194,6 @@
       "name": "ix_carvia_subcontratos_fatura_transportadora_id",
       "columns": [
         "fatura_transportadora_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_subcontratos_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_subcontratos_operacao_id",
-      "columns": [
-        "operacao_id"
       ],
       "unique": false
     }
