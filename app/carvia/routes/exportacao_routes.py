@@ -481,7 +481,14 @@ def register_exportacao_routes(bp):
 
         sortable_columns = {
             'seq': CarviaSubcontrato.numero_sequencial_transportadora,
-            'valor_final': func.coalesce(CarviaSubcontrato.valor_acertado, CarviaSubcontrato.valor_cotado),
+            # Hierarquia alinhada com listagem (fatura_routes.py:1241) e card
+            # Analise de Valores: valor_pago > valor_considerado > valor_acertado > valor_cotado.
+            'valor_final': func.coalesce(
+                CarviaSubcontrato.valor_pago,
+                CarviaSubcontrato.valor_considerado,
+                CarviaSubcontrato.valor_acertado,
+                CarviaSubcontrato.valor_cotado,
+            ),
             'status': CarviaSubcontrato.status,
             'cte_data_emissao': CarviaSubcontrato.cte_data_emissao,
             'criado_em': CarviaSubcontrato.criado_em,
@@ -533,6 +540,14 @@ def register_exportacao_routes(bp):
         data = []
         for sub in items:
             op = sub_op_map.get(sub.operacao_id)
+            # Valor Final alinhado com listagem + card Analise (hierarquia de 4 niveis)
+            valor_final_hierarquico = (
+                sub.valor_pago
+                or sub.valor_considerado
+                or sub.valor_acertado
+                or sub.valor_cotado
+                or 0
+            )
             data.append({
                 'ID': sub.id,
                 'Operacao ID': sub.operacao_id,
@@ -545,7 +560,9 @@ def register_exportacao_routes(bp):
                 'Valor CTe': float(sub.cte_valor or 0),
                 'Valor Cotado': float(sub.valor_cotado or 0),
                 'Valor Acertado': float(sub.valor_acertado or 0) if sub.valor_acertado else '',
-                'Valor Final': float(sub.valor_final or 0) if sub.valor_final else 0,
+                'Valor Considerado': float(sub.valor_considerado or 0) if sub.valor_considerado else '',
+                'Valor Pago': float(sub.valor_pago or 0) if sub.valor_pago else '',
+                'Valor Final': float(valor_final_hierarquico),
                 'Status': sub.status or '',
                 'Qtd Custos Entrega': custos_por_op.get(sub.operacao_id, 0),
                 'Valor Custos Entrega': custos_valor_por_op.get(sub.operacao_id, 0),

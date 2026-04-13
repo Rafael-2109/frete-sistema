@@ -1233,10 +1233,23 @@ def register_fatura_routes(bp):
         direction = request.args.get('direction', 'desc')
 
         # Subquery: contar e somar valor dos subcontratos por fatura
+        # Hierarquia alinhada com tela de conferencia (full mirror Nacom):
+        # valor_pago > valor_considerado > valor_acertado > valor_cotado.
+        # Ex: se operador ja preencheu valor_pago, soma reflete o pago; senao
+        # cai no considerado (conferencia feita); senao acertado (negociado);
+        # senao cotado (teorico). Isso evita divergencia entre listagem e detalhe.
         subq_subs = db.session.query(
             CarviaSubcontrato.fatura_transportadora_id,
             func.count(CarviaSubcontrato.id).label('qtd_subs'),
-            func.sum(func.coalesce(CarviaSubcontrato.valor_acertado, CarviaSubcontrato.valor_cotado, 0)).label('valor_subs'),
+            func.sum(
+                func.coalesce(
+                    CarviaSubcontrato.valor_pago,
+                    CarviaSubcontrato.valor_considerado,
+                    CarviaSubcontrato.valor_acertado,
+                    CarviaSubcontrato.valor_cotado,
+                    0,
+                )
+            ).label('valor_subs'),
         ).filter(
             CarviaSubcontrato.fatura_transportadora_id.isnot(None)
         ).group_by(CarviaSubcontrato.fatura_transportadora_id).subquery()
@@ -1644,6 +1657,18 @@ def register_fatura_routes(bp):
             resultado = []
             for sub in subcontratos:
                 operacao = sub.operacao if hasattr(sub, 'operacao') else None
+                # Valor previsto segue a mesma hierarquia da listagem e do card
+                # Analise de Valores (full mirror Nacom):
+                # valor_pago > valor_considerado > valor_acertado > valor_cotado.
+                # Mantem consistencia com fatura_routes.py:1241 e evita operador
+                # ver numero diferente no modal Anexar vs na listagem.
+                valor_previsto = (
+                    sub.valor_pago
+                    or sub.valor_considerado
+                    or sub.valor_acertado
+                    or sub.valor_cotado
+                    or 0
+                )
                 resultado.append({
                     'id': sub.id,
                     'cte_numero': sub.cte_numero or f'#{sub.id}',
@@ -1654,7 +1679,11 @@ def register_fatura_routes(bp):
                     ),
                     'valor_cotado': float(sub.valor_cotado or 0),
                     'valor_acertado': float(sub.valor_acertado or 0) if sub.valor_acertado else None,
-                    'valor_final': float(sub.valor_final or 0),
+                    'valor_considerado': float(sub.valor_considerado or 0) if sub.valor_considerado else None,
+                    'valor_pago': float(sub.valor_pago or 0) if sub.valor_pago else None,
+                    # valor_final mantido por compat com JS (detalhe.js:293); agora
+                    # reflete a hierarquia de 4 niveis, nao mais a property legada.
+                    'valor_final': float(valor_previsto),
                 })
 
             return jsonify({'sucesso': True, 'subcontratos': resultado})
@@ -1674,11 +1703,9 @@ def register_fatura_routes(bp):
         if not fatura:
             return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
 
-        if fatura.status_conferencia == 'CONFERIDO':
-            return jsonify({
-                'sucesso': False,
-                'erro': 'Nao e possivel alterar valor de fatura ja conferida.'
-            }), 400
+        pode, razao = fatura.pode_editar()
+        if not pode:
+            return jsonify({'sucesso': False, 'erro': razao}), 400
 
         data = request.get_json(silent=True) or {}
         try:
@@ -1729,13 +1756,25 @@ def register_fatura_routes(bp):
             CarviaSubcontrato.fatura_transportadora_id == fatura_id
         ).order_by(CarviaSubcontrato.cte_data_emissao.desc().nullslast()).all()
 
-        # Calcular totais para conferencia
-        valor_cotado_total = sum(float(s.valor_cotado or 0) for s in subcontratos)
-        valor_acertado_total = sum(float(s.valor_final or 0) for s in subcontratos)
+        # Totais para conferencia — Full mirror Nacom (fretes/conferir_fatura.html)
+        # Subs CANCELADO excluidos (consistente com ConferenciaService.resumo_conferencia_fatura)
+        subs_ativos = [s for s in subcontratos if s.status != 'CANCELADO']
+        valor_cotado_total = sum(float(s.valor_cotado or 0) for s in subs_ativos)
+        valor_pago_total = sum(float(s.valor_pago or 0) for s in subs_ativos)
 
-        # Resumo de conferencia individual
+        # Resumo de conferencia individual (ja exclui CANCELADO internamente)
         from app.carvia.services.documentos.conferencia_service import ConferenciaService
         conferencia_resumo = ConferenciaService().resumo_conferencia_fatura(fatura_id)
+
+        # Reutilizar valores ja calculados pelo service
+        soma_considerado = conferencia_resumo.get('soma_considerado', 0.0) or 0.0
+        valor_cte_total = conferencia_resumo.get('soma_cte_valor', 0.0) or 0.0
+
+        # Metricas para card "Analise de Valores"
+        valor_fatura = float(fatura.valor_total or 0)
+        diferenca_fatura_considerado = round(abs(valor_fatura - float(soma_considerado)), 2)
+        diferenca_considerado_pago = round(float(soma_considerado) - valor_pago_total, 2)
+        fatura_dentro_tolerancia = diferenca_fatura_considerado <= 1.00
 
         # Cross-links: itens, NFs, faturas cliente
         from app.carvia.models import (
@@ -1794,7 +1833,12 @@ def register_fatura_routes(bp):
             fatura=fatura,
             subcontratos=subcontratos,
             valor_cotado_total=valor_cotado_total,
-            valor_acertado_total=valor_acertado_total,
+            valor_cte_total=valor_cte_total,
+            valor_pago_total=valor_pago_total,
+            soma_considerado=soma_considerado,
+            diferenca_fatura_considerado=diferenca_fatura_considerado,
+            diferenca_considerado_pago=diferenca_considerado_pago,
+            fatura_dentro_tolerancia=fatura_dentro_tolerancia,
             conferencia_resumo=conferencia_resumo,
             itens=itens,
             nfs=nfs,
@@ -1817,8 +1861,9 @@ def register_fatura_routes(bp):
             flash('Fatura nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_faturas_transportadora'))
 
-        if fatura.status_conferencia == 'CONFERIDO':
-            flash('Nao e possivel editar vencimento de fatura ja conferida.', 'warning')
+        pode, razao = fatura.pode_editar()
+        if not pode:
+            flash(razao, 'warning')
             return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
 
         vencimento_str = request.form.get('vencimento', '').strip()

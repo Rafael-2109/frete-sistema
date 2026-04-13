@@ -102,12 +102,12 @@
                             <strong>{{ sub.valor_cotado|valor_br if sub.valor_cotado else '-' }}</strong>
                         </div>
                         <div class="col-4">
-                            <small class="text-muted d-block">Valor Acertado</small>
-                            <strong>{{ sub.valor_acertado|valor_br if sub.valor_acertado else '-' }}</strong>
+                            <small class="text-muted d-block">Valor Considerado</small>
+                            <strong>{{ sub.valor_considerado|valor_br if sub.valor_considerado else '-' }}</strong>
                         </div>
                         <div class="col-4">
-                            <small class="text-muted d-block">Valor Final</small>
-                            <strong class="text-primary">{{ sub.valor_final|valor_br if sub.valor_final else '-' }}</strong>
+                            <small class="text-muted d-block">Valor Pago</small>
+                            <strong class="text-primary">{{ sub.valor_pago|valor_br if sub.valor_pago else '-' }}</strong>
                         </div>
                     </div>
                     {% if sub.observacoes %}

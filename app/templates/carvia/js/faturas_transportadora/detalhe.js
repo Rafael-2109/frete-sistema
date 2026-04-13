@@ -202,7 +202,7 @@ document.getElementById('btn-salvar-conferencia')?.addEventListener('click', fun
             }
 
             // Atualizar valor considerado na tabela
-            const valCell = document.getElementById(`sub-val-cons-${confSubId}`);
+            const valCell = document.getElementById(`sub-valor-considerado-${confSubId}`);
             if (valCell) {
                 valCell.textContent = formatarValor(data.valor_considerado);
             }
@@ -443,5 +443,61 @@ document.getElementById('btn-atualizar-valor')?.addEventListener('click', functi
     .catch(() => {
         bootstrap.Modal.getInstance(document.getElementById('modalConfirmarValor')).hide();
         window.location.reload();
+    });
+});
+
+// ====== Modal Editar Valor Total (manual) ======
+document.getElementById('modalEditarValorTotal')?.addEventListener('hidden.bs.modal', function() {
+    const erro = document.getElementById('erro-editar-valor');
+    if (erro) erro.classList.add('d-none');
+    const btn = document.getElementById('btn-salvar-valor-total');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Salvar';
+    }
+});
+
+document.getElementById('btn-salvar-valor-total')?.addEventListener('click', function() {
+    const input = document.getElementById('input-valor-total');
+    const erro = document.getElementById('erro-editar-valor');
+    const valor = parseFloat(input.value);
+
+    if (!valor || valor <= 0) {
+        erro.textContent = 'Informe um valor valido maior que zero.';
+        erro.classList.remove('d-none');
+        return;
+    }
+    erro.classList.add('d-none');
+    this.disabled = true;
+    const originalHtml = this.innerHTML;
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch(`/carvia/faturas-transportadora/${CARVIA_DATA.faturaId}/atualizar-valor`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CARVIA_DATA.csrfToken,
+        },
+        body: JSON.stringify({ valor_total: valor }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.sucesso) {
+            const modalEl = document.getElementById('modalEditarValorTotal');
+            const inst = bootstrap.Modal.getInstance(modalEl);
+            if (inst) inst.hide();
+            window.location.reload();
+        } else {
+            erro.textContent = data.erro || 'Erro ao salvar valor.';
+            erro.classList.remove('d-none');
+            this.disabled = false;
+            this.innerHTML = originalHtml;
+        }
+    })
+    .catch(() => {
+        erro.textContent = 'Erro de conexao.';
+        erro.classList.remove('d-none');
+        this.disabled = false;
+        this.innerHTML = originalHtml;
     });
 });
