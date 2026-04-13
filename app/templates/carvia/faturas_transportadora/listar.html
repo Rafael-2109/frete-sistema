@@ -189,6 +189,14 @@
                                         <i class="fas fa-eye"></i> Visualizar
                                     </a>
 
+                                    {% if f.status_conferencia != 'CONFERIDO' %}
+                                    <!-- Lancar CTe (busca por NF e vincula a esta fatura) -->
+                                    <a href="{{ url_for('carvia.lancar_cte_carvia', fatura_id=f.id) }}"
+                                        class="btn btn-sm btn-outline-primary mb-1" title="Lancar CTe nesta fatura">
+                                        <i class="fas fa-plus"></i> CTe
+                                    </a>
+                                    {% endif %}
+
                                     {% if f.status_conferencia in ('PENDENTE', 'EM_CONFERENCIA') %}
                                     <!-- Conferir -->
                                     <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}"
