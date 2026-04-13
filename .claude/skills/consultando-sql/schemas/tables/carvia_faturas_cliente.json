@@ -114,6 +114,24 @@
       "type": "timestamp"
     },
     {
+      "name": "status_conferencia",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "conferido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "conferido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacoes_conferencia",
+      "type": "text"
+    },
+    {
       "name": "total_conciliado",
       "type": "numeric(15,2)",
       "nullable": false,
@@ -148,16 +166,23 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_faturas_cliente_numero_fatura",
+      "name": "ix_carvia_faturas_cliente_cnpj_cliente",
       "columns": [
-        "numero_fatura"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_faturas_cliente_cnpj_cliente",
+      "name": "ix_carvia_faturas_cliente_status_conferencia",
       "columns": [
-        "cnpj_cliente"
+        "status_conferencia"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_faturas_cliente_numero_fatura",
+      "columns": [
+        "numero_fatura"
       ],
       "unique": false
     }

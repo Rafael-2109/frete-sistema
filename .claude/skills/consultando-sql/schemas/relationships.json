@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 258,
+  "total_relationships": 263,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -87,6 +87,12 @@
       "to_column": "id"
     },
     {
+      "from_table": "carvia_aprovacoes_subcontrato",
+      "from_column": "subcontrato_id",
+      "to_table": "carvia_subcontratos",
+      "to_column": "id"
+    },
+    {
       "from_table": "carvia_cliente_enderecos",
       "from_column": "cliente_id",
       "to_table": "carvia_clientes",
@@ -114,6 +120,30 @@
       "from_table": "carvia_conciliacoes",
       "from_column": "extrato_linha_id",
       "to_table": "carvia_extrato_linhas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_conta_corrente_transportadoras",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_conta_corrente_transportadoras",
+      "from_column": "subcontrato_id",
+      "to_table": "carvia_subcontratos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_conta_corrente_transportadoras",
+      "from_column": "fatura_transportadora_id",
+      "to_table": "carvia_faturas_transportadora",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_conta_corrente_transportadoras",
+      "from_column": "compensacao_subcontrato_id",
+      "to_table": "carvia_subcontratos",
       "to_column": "id"
     },
     {

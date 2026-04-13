@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 175,
+  "total_tabelas": 177,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -250,6 +250,15 @@
       ]
     },
     {
+      "name": "carvia_aprovacoes_subcontrato",
+      "description": "Tabela carvia_aprovacoes_subcontrato",
+      "key_fields": [
+        "subcontrato_id",
+        "status",
+        "solicitado_por"
+      ]
+    },
+    {
       "name": "carvia_categorias_moto",
       "description": "Tabela carvia_categorias_moto",
       "key_fields": [
@@ -319,6 +328,15 @@
         "chave",
         "valor",
         "descricao"
+      ]
+    },
+    {
+      "name": "carvia_conta_corrente_transportadoras",
+      "description": "Tabela carvia_conta_corrente_transportadoras",
+      "key_fields": [
+        "transportadora_id",
+        "subcontrato_id",
+        "fatura_transportadora_id"
       ]
     },
     {

@@ -369,9 +369,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_odoo_write_date",
+      "name": "ix_carteira_principal_num_pedido",
       "columns": [
-        "odoo_write_date"
+        "num_pedido"
       ],
       "unique": false
     },
@@ -384,13 +384,6 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_num_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_carteira_produto_saldo",
       "columns": [
         "cod_produto",
@@ -399,32 +392,16 @@
       "unique": false
     },
     {
+      "name": "ix_carteira_principal_odoo_write_date",
+      "columns": [
+        "odoo_write_date"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carteira_principal_cod_produto",
       "columns": [
         "cod_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_ativo_saldo",
-      "columns": [
-        "num_pedido",
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_importante",
-      "columns": [
-        "importante"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_status_data",
-      "columns": [
-        "status_pedido",
-        "data_pedido"
       ],
       "unique": false
     },
@@ -443,9 +420,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_vendedor",
+      "name": "ix_carteira_principal_importante",
       "columns": [
-        "vendedor"
+        "importante"
       ],
       "unique": false
     },
@@ -453,6 +430,29 @@
       "name": "ix_carteira_principal_ativo",
       "columns": [
         "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_vendedor",
+      "columns": [
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_status_data",
+      "columns": [
+        "status_pedido",
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_ativo_saldo",
+      "columns": [
+        "num_pedido",
+        "cod_produto"
       ],
       "unique": false
     }

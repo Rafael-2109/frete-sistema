@@ -75,6 +75,10 @@
       "default": "OFX"
     },
     {
+      "name": "conta_origem",
+      "type": "varchar(100)"
+    },
+    {
       "name": "criado_por",
       "type": "varchar(100)",
       "nullable": false

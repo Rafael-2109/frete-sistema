@@ -151,6 +151,10 @@
       "type": "numeric(5,2)"
     },
     {
+      "name": "cte_tomador",
+      "type": "varchar(20)"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"
@@ -174,16 +178,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_operacoes_ctrc_numero",
+      "name": "ix_carvia_operacoes_cte_numero",
       "columns": [
-        "ctrc_numero"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_operacoes_fatura_cliente_id",
-      "columns": [
-        "fatura_cliente_id"
+        "cte_numero"
       ],
       "unique": false
     },
@@ -195,9 +192,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_cte_numero",
+      "name": "ix_carvia_operacoes_fatura_cliente_id",
       "columns": [
-        "cte_numero"
+        "fatura_cliente_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_operacoes_ctrc_numero",
+      "columns": [
+        "ctrc_numero"
       ],
       "unique": false
     }
