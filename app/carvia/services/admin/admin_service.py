@@ -380,6 +380,289 @@ class AdminService:
         }
 
     # ------------------------------------------------------------------ #
+    #  Excluir Subcontrato Orfao (Legado pre-CarviaFrete)
+    # ------------------------------------------------------------------ #
+
+    def excluir_subcontrato_orfao(self, sub_id, motivo, executado_por):
+        """Hard delete de CarviaSubcontrato que NAO pertence ao fluxo novo.
+
+        Escopo: subcontratos criados antes do fluxo unificado
+        (portaria -> CarviaFrete -> CarviaSubcontrato) via importacao direta
+        de CTe XML. Caracterizados por `frete_id IS NULL` e
+        `fatura_transportadora_id IS NULL`.
+
+        ===================================================================
+        GUARDS (qualquer um bloqueia o delete):
+        ===================================================================
+        Estes guards juntos garantem que nenhuma conciliacao bancaria pode
+        existir vinculada (direta ou indiretamente) a este subcontrato — o
+        sub esta totalmente desconectado do extrato bancario.
+
+          1. frete_id IS NOT NULL
+             — sub pertence ao fluxo atual via CarviaFrete; nao e legado
+          2. fatura_transportadora_id IS NOT NULL
+             — sub esta em fatura; a fatura PODE estar conciliada com extrato
+             (CarviaConciliacao.tipo_documento='fatura_transportadora')
+          3. status IN ('FATURADO', 'CONFERIDO')
+             — estado terminal, indica fluxo completo
+          4. CarviaFaturaTransportadoraItem.subcontrato_id aponta
+             — defesa em profundidade: caso o item exista mesmo sem fatura
+          5. CarviaCustoEntrega.subcontrato_id aponta
+             — sub cobre custos de entrega; CE pode estar conciliado
+             (tipo_documento='custo_entrega')
+          6. CarviaFrete.subcontrato_id legado aponta
+             — caso historico de FK legado pre-frete_id
+
+        ===================================================================
+        DESCONCILIACAO (extrato bancario):
+        ===================================================================
+        Defensivo: o modelo CarviaConciliacao em uso atualmente NAO suporta
+        tipo_documento='subcontrato' (so fatura_cliente, fatura_transportadora,
+        despesa, custo_entrega, receita). Mas tratamos o caso historico via
+        _limpar_movimentacao_financeira('subcontrato', sub_id), que:
+          - Remove CarviaContaMovimentacao(tipo_doc='subcontrato', doc_id=sub_id)
+          - Remove CarviaConciliacao(tipo_documento='subcontrato', documento_id=sub_id)
+          - Recalcula CarviaExtratoLinha.total_conciliado e status_conciliacao
+
+        ===================================================================
+        LIMPEZA DE FKS TECNICAS (NAO eh desconciliacao):
+        ===================================================================
+        Tabelas com FK direta para carvia_subcontratos.id que precisam sair
+        ANTES do delete (FK NOT NULL ou sem ON DELETE CASCADE):
+
+          a. CarviaContaCorrenteTransportadora (subcontrato_id NOT NULL)
+             — DELETE registros + reverter compensacoes apontando via
+             compensacao_subcontrato_id (caso borda)
+          b. CarviaAprovacaoSubcontrato (subcontrato_id NOT NULL)
+             — DELETE registros (tratativas de aprovacao pendentes)
+          c. valor_pago/valor_pago_em/valor_pago_por/requer_aprovacao
+             — reset visivel no snapshot (estado pos-reversao)
+
+        Auditoria: CarviaAdminAudit com snapshot + dados_relacionados.
+        """
+        from app.carvia.models import (
+            CarviaSubcontrato,
+            CarviaFaturaTransportadoraItem,
+            CarviaCustoEntrega,
+            CarviaFrete,
+            CarviaContaCorrenteTransportadora,
+            CarviaAprovacaoSubcontrato,
+            CarviaConciliacao,
+        )
+
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub:
+            return {'sucesso': False, 'mensagem': f'Subcontrato {sub_id} nao encontrado.'}
+
+        # ============================================================
+        # GUARDS — bloqueiam exclusao (qualquer um interrompe)
+        # ============================================================
+        if sub.frete_id is not None:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Subcontrato #{sub_id} faz parte do fluxo atual '
+                    f'(CarviaFrete #{sub.frete_id}). Use o fluxo normal '
+                    f'(cancelar via status).'
+                ),
+            }
+
+        if sub.fatura_transportadora_id is not None:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Subcontrato #{sub_id} esta vinculado a Fatura Transportadora '
+                    f'#{sub.fatura_transportadora_id}. Desanexe a fatura primeiro '
+                    f'(a fatura pode estar conciliada com o extrato bancario).'
+                ),
+            }
+
+        if sub.status in ('FATURADO', 'CONFERIDO'):
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Subcontrato #{sub_id} esta em status {sub.status}, '
+                    f'incompativel com exclusao legada.'
+                ),
+            }
+
+        itens_fat = CarviaFaturaTransportadoraItem.query.filter_by(
+            subcontrato_id=sub_id
+        ).count()
+        if itens_fat > 0:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Subcontrato #{sub_id} tem {itens_fat} itens de Fatura '
+                    f'Transportadora apontando. Remova a vinculacao antes.'
+                ),
+            }
+
+        custos_vinc = CarviaCustoEntrega.query.filter_by(subcontrato_id=sub_id).count()
+        if custos_vinc > 0:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Subcontrato #{sub_id} tem {custos_vinc} Custos de Entrega '
+                    f'vinculados (CE pode estar conciliado com extrato). '
+                    f'Reatribua os custos antes de excluir.'
+                ),
+            }
+
+        fretes_legado = CarviaFrete.query.filter_by(subcontrato_id=sub_id).count()
+        if fretes_legado > 0:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Subcontrato #{sub_id} tem {fretes_legado} CarviaFrete (legado) '
+                    f'apontando via subcontrato_id. Inconsistencia — nao excluir.'
+                ),
+            }
+
+        # Defesa em profundidade: bloqueia se houver conciliacao historica
+        # com tipo_documento='subcontrato' (modelo nao gera, mas pode existir
+        # via importacao legada ou correcao manual). Bloqueio explicito ao
+        # inves de delete silencioso para evitar perda inadvertida.
+        conc_historicas = CarviaConciliacao.query.filter_by(
+            tipo_documento='subcontrato', documento_id=sub_id
+        ).count()
+        if conc_historicas > 0:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Subcontrato #{sub_id} tem {conc_historicas} conciliacao(es) '
+                    f'historica(s) com extrato bancario (tipo_documento="subcontrato"). '
+                    f'Desconcilie via /carvia/conciliacao antes de excluir.'
+                ),
+            }
+
+        # Caso borda: sub esta sem fatura, mas tem mov CC com
+        # fatura_transportadora_id != NULL (vinculacao historica a fatura
+        # que pode ainda estar conciliada). Bloqueia para nao quebrar
+        # historico financeiro de fatura concilada com extrato.
+        cc_com_fatura = CarviaContaCorrenteTransportadora.query.filter(
+            CarviaContaCorrenteTransportadora.subcontrato_id == sub_id,
+            CarviaContaCorrenteTransportadora.fatura_transportadora_id.isnot(None),
+        ).count()
+        if cc_com_fatura > 0:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Subcontrato #{sub_id} tem {cc_com_fatura} movimentacao(oes) '
+                    f'de conta corrente vinculadas a Fatura Transportadora (que '
+                    f'pode estar conciliada com extrato). Resolva o historico '
+                    f'financeiro antes de excluir.'
+                ),
+            }
+
+        # ============================================================
+        # SNAPSHOT — antes de qualquer mutacao
+        # ============================================================
+        snapshot = self.serializar_entidade(sub)
+
+        movs_cc = CarviaContaCorrenteTransportadora.query.filter_by(
+            subcontrato_id=sub_id
+        ).all()
+        aprovacoes = CarviaAprovacaoSubcontrato.query.filter_by(
+            subcontrato_id=sub_id
+        ).all()
+
+        # Caso borda: OUTRO sub foi compensado POR este sub
+        compensacoes_apontando = CarviaContaCorrenteTransportadora.query.filter_by(
+            compensacao_subcontrato_id=sub_id
+        ).all()
+
+        relacionados = self.serializar_relacionados(sub, {
+            'movimentacoes_cc': movs_cc,
+            'aprovacoes': aprovacoes,
+            'compensacoes_apontando': compensacoes_apontando,
+        })
+
+        # ============================================================
+        # DESCONCILIACAO — extrato bancario (defensivo)
+        # ============================================================
+        # Mesmo que conc_historicas == 0 (verificado no guard), executamos
+        # _limpar_movimentacao_financeira para garantir limpeza idempotente
+        # de CarviaContaMovimentacao(tipo_doc='subcontrato') + qualquer
+        # CarviaConciliacao residual + recalculo de status_conciliacao das
+        # CarviaExtratoLinha afetadas. Reusa o helper canonico do AdminService.
+        self._limpar_movimentacao_financeira('subcontrato', sub_id)
+
+        # ============================================================
+        # LIMPEZA DE FKS TECNICAS (FK NOT NULL exige antes do delete)
+        # ============================================================
+        # 1. Reverter CC compensada POR este sub
+        compensacoes_revertidas = 0
+        for cc in compensacoes_apontando:
+            if cc.status == 'COMPENSADO':
+                cc.status = 'ATIVO'
+                cc.compensado_em = None
+                cc.compensado_por = None
+                cc.compensacao_subcontrato_id = None
+                cc.observacoes = (
+                    (cc.observacoes or '') +
+                    f'\n[AUTO {agora_utc_naive().isoformat()}] Compensacao revertida: '
+                    f'sub compensador #{sub_id} sera excluido (orfao legado). '
+                    f'Motivo: {motivo}'
+                ).strip()
+                compensacoes_revertidas += 1
+
+        # 2. DELETE movimentacoes CC deste sub (FK subcontrato_id NOT NULL)
+        for mov in movs_cc:
+            db.session.delete(mov)
+
+        # 3. DELETE aprovacoes deste sub (FK subcontrato_id NOT NULL)
+        for aprov in aprovacoes:
+            db.session.delete(aprov)
+
+        # 4. Reset pagamento no proprio sub (visibilidade no audit)
+        sub.valor_pago = None
+        sub.valor_pago_em = None
+        sub.valor_pago_por = None
+        sub.requer_aprovacao = False
+
+        # ============================================================
+        # DELETE do sub
+        # ============================================================
+        db.session.delete(sub)
+
+        audit = self.registrar_auditoria(
+            acao='HARD_DELETE',
+            entidade_tipo='CarviaSubcontrato',
+            entidade_id=sub_id,
+            dados_snapshot=snapshot,
+            dados_relacionados=relacionados,
+            motivo=motivo,
+            executado_por=executado_por,
+            detalhes={
+                'origem': 'orfao_legado_pre_carviafrete',
+                'desconciliacao_extrato': 'limpar_movimentacao_financeira(subcontrato)',
+                'movs_cc_deletadas': len(movs_cc),
+                'aprovacoes_deletadas': len(aprovacoes),
+                'compensacoes_revertidas': compensacoes_revertidas,
+                'cte_numero': snapshot.get('cte_numero'),
+                'valor_cotado': snapshot.get('valor_cotado'),
+            },
+        )
+
+        db.session.commit()
+        logger.info(
+            f"[ADMIN] Subcontrato orfao #{sub_id} ({snapshot.get('cte_numero')}) "
+            f"excluido por {executado_por}. CC deletadas: {len(movs_cc)}, "
+            f"aprovacoes: {len(aprovacoes)}, compensacoes revertidas: "
+            f"{compensacoes_revertidas}. Audit #{audit.id}"
+        )
+
+        return {
+            'sucesso': True,
+            'mensagem': (
+                f'CTe Subcontrato {snapshot.get("cte_numero") or f"#{sub_id}"} '
+                f'excluido permanentemente (orfao legado).'
+            ),
+            'auditoria_id': audit.id,
+        }
+
+    # ------------------------------------------------------------------ #
     #  Listar Auditoria
     # ------------------------------------------------------------------ #
 

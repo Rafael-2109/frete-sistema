@@ -1,6 +1,11 @@
 {% extends "base.html" %}
-{# modal_admin_excluir removido (Sprint 0 — Subcontrato nao suporta hard delete) #}
+{# Hard delete restrito a subcontratos ORFAOS legados (pre-CarviaFrete).
+   A flag `pode_excluir_orfao` vem da rota detalhe_subcontrato e espelha 1:1
+   os guards do AdminService.excluir_subcontrato_orfao — botao nao aparece
+   se o submit fosse rejeitado. #}
 {% from 'carvia/_macros.html' import carvia_ref %}
+{% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+{% set pode_excluir_orfao = pode_excluir_orfao|default(false) %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -44,7 +49,13 @@
                 <i class="fas fa-file-invoice"></i> Ver CTe CarVia
             </a>
             {% endif %}
-            {# Botoes admin removidos (Sprint 0) #}
+            {% if pode_excluir_orfao %}
+            <button type="button" class="btn carvia-admin-btn"
+                    data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
+                    title="Excluir subcontrato orfao legado (pre-fluxo Fatura Subcontrato)">
+                <i class="fas fa-shield-alt"></i> Excluir (orfao legado)
+            </button>
+            {% endif %}
             <a href="{{ url_for('carvia.listar_subcontratos') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
@@ -472,7 +483,23 @@
     </div>
 </div>
 
-{# modal_admin_excluir removido (Sprint 0) #}
+{% if pode_excluir_orfao %}
+{{ modal_admin_excluir(
+    entidade_tipo='subcontrato-orfao',
+    entidade_id=sub.id,
+    entidade_label='CTe Subcontrato ' ~ (sub.cte_numero or ('#' ~ sub.id)),
+    impacto_cascade=[
+        'Desconciliacao do extrato bancario (CarviaConciliacao + recalculo de status_conciliacao)',
+        'Limpeza de CarviaContaMovimentacao(tipo_doc=subcontrato) historica',
+        'Hard delete de movimentacoes de conta corrente do sub (FK NOT NULL)',
+        'Hard delete de aprovacoes de tratativa pendentes',
+        'Reversao de compensacoes apontando para este sub (voltam a ATIVO)',
+        'Reset de valor_pago/valor_pago_em/valor_pago_por/requer_aprovacao',
+        'Snapshot completo registrado em CarviaAdminAudit',
+    ],
+    bloqueios=[]
+) }}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

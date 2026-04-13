@@ -43,6 +43,15 @@ _TIPO_CONFIG = {
         'redirect': 'carvia.listar_receitas',
         'label': 'Receita',
     },
+    # Caso especial: hard delete restrito a subcontratos ORFAOS do fluxo legado
+    # (anteriores ao pipeline portaria -> CarviaFrete). O service aplica guards
+    # rigorosos — NAO e um bypass generico do cancel path (soft-delete segue
+    # sendo a via oficial para subs do fluxo atual).
+    'subcontrato-orfao': {
+        'metodo': 'excluir_subcontrato_orfao',
+        'redirect': 'carvia.listar_subcontratos',
+        'label': 'Subcontrato Orfao (Legado)',
+    },
 }
 
 # Review Sprint 0 ALTO #3: mapa separado para redirect de admin_converter.

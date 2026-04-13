@@ -310,6 +310,44 @@ def register_subcontrato_routes(bp):
                 CarviaOperacao.id != sub.operacao_id,
             ).order_by(CarviaOperacao.criado_em.desc()).limit(100).all()
 
+        # Flag: subcontrato eh elegivel para hard delete como "orfao legado".
+        # Espelha 1:1 os guards do AdminService.excluir_subcontrato_orfao
+        # (se algum guard falhar, o botao da UI nao aparece — evita submit
+        # que viraria flash de erro).
+        pode_excluir_orfao = False
+        if (
+            getattr(current_user, 'perfil', None) == 'administrador'
+            and sub.frete_id is None
+            and sub.fatura_transportadora_id is None
+            and sub.status not in ('FATURADO', 'CONFERIDO')
+        ):
+            from app.carvia.models import (
+                CarviaFaturaTransportadoraItem,
+                CarviaCustoEntrega,
+                CarviaFrete,
+                CarviaContaCorrenteTransportadora,
+                CarviaConciliacao,
+            )
+            tem_vinculos = (
+                db.session.query(CarviaFaturaTransportadoraItem.id)
+                    .filter_by(subcontrato_id=sub.id).first() is not None
+                or db.session.query(CarviaCustoEntrega.id)
+                    .filter_by(subcontrato_id=sub.id).first() is not None
+                or db.session.query(CarviaFrete.id)
+                    .filter_by(subcontrato_id=sub.id).first() is not None
+                or db.session.query(CarviaConciliacao.id)
+                    .filter_by(tipo_documento='subcontrato', documento_id=sub.id)
+                    .first() is not None
+                # Mov CC com fatura_transportadora_id NOT NULL = vinculada a
+                # fatura que pode estar conciliada — bloqueia a UI tambem
+                or db.session.query(CarviaContaCorrenteTransportadora.id)
+                    .filter(
+                        CarviaContaCorrenteTransportadora.subcontrato_id == sub.id,
+                        CarviaContaCorrenteTransportadora.fatura_transportadora_id.isnot(None),
+                    ).first() is not None
+            )
+            pode_excluir_orfao = not tem_vinculos
+
         return render_template(
             'carvia/subcontratos/detalhe.html',
             sub=sub,
@@ -319,6 +357,7 @@ def register_subcontrato_routes(bp):
             operacoes_disponiveis=operacoes_disponiveis,
             custos_entrega=custos_entrega,
             ctes_complementares=ctes_complementares,
+            pode_excluir_orfao=pode_excluir_orfao,
         )
 
     @bp.route('/subcontratos/<int:sub_id>/vincular-operacao', methods=['POST']) # type: ignore
@@ -559,3 +598,75 @@ def register_subcontrato_routes(bp):
         except Exception as e:
             logger.error(f"Erro ao simular cotacao subcontrato #{sub_id}: {e}")
             return {'sucesso': False, 'erro': str(e)}, 500
+
+    # ==================================================================
+    # Registrar pagamento manual do subcontrato (W4 — valor_pago)
+    # ==================================================================
+    @bp.route('/subcontratos/<int:sub_id>/registrar-pagamento', methods=['POST'])  # type: ignore
+    @login_required
+    def registrar_pagamento_subcontrato(sub_id):  # type: ignore
+        """Registra valor_pago manual do subcontrato.
+
+        Apos gravar, verifica automaticamente se a diferenca pago vs cotado
+        ultrapassa a tolerancia — se sim, abre tratativa via
+        AprovacaoSubcontratoService.verificar_e_solicitar_se_necessario.
+
+        Payload JSON: {valor_pago: float, observacoes: str?}
+        """
+        from flask import jsonify
+        from app.utils.timezone import agora_utc_naive
+        from app.carvia.services.documentos.aprovacao_subcontrato_service import (
+            AprovacaoSubcontratoService,
+        )
+
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub:
+            return jsonify({'sucesso': False, 'erro': 'Subcontrato nao encontrado'}), 404
+
+        if sub.status == 'CANCELADO':
+            return jsonify({
+                'sucesso': False,
+                'erro': 'Subcontrato cancelado — nao aceita pagamento'
+            }), 400
+
+        payload = request.get_json(silent=True) or {}
+        try:
+            valor_pago = float(payload.get('valor_pago', 0))
+        except (ValueError, TypeError):
+            return jsonify({'sucesso': False, 'erro': 'valor_pago invalido'}), 400
+
+        if valor_pago < 0:
+            return jsonify({'sucesso': False, 'erro': 'valor_pago deve ser >= 0'}), 400
+
+        observacoes = (payload.get('observacoes') or '').strip()
+
+        try:
+            sub.valor_pago = valor_pago
+            sub.valor_pago_em = agora_utc_naive()
+            sub.valor_pago_por = current_user.email
+            if observacoes:
+                sub.observacoes = (
+                    (sub.observacoes or '') + f'\n[Pagamento] {observacoes}'
+                ).strip()
+
+            # Verificacao automatica de divergencia (regra B: pago vs cotado)
+            svc = AprovacaoSubcontratoService()
+            resultado_trat = svc.verificar_e_solicitar_se_necessario(
+                sub_id=sub_id, usuario=current_user.email,
+            )
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'valor_pago': valor_pago,
+                'tratativa_aberta': resultado_trat.get('tratativa_aberta', False),
+                'aprovacao_id': resultado_trat.get('aprovacao_id'),
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f'Erro ao registrar pagamento sub {sub_id}: {e}')
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
