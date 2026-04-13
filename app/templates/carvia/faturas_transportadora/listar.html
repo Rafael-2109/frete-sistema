@@ -116,7 +116,7 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
-                            <th>ID</th>
+                            {{ th_sort('id', 'ID', sort, direction) }}
                             {{ th_sort('numero_fatura', 'Numero Fatura', sort, direction) }}
                             <th>Transportadora</th>
                             {{ th_sort('data_emissao', 'Data Emissao', sort, direction) }}

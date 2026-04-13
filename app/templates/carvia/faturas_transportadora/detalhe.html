@@ -263,6 +263,9 @@
                 <i class="fas fa-info-circle"></i> Nenhum subcontrato anexado ainda. Use o botao abaixo para anexar.
             </div>
             {% set pode_conferir = false %}
+            {% set todos_aprovados = false %}
+            {% set dentro_tolerancia = true %}
+            {% set diff_fatura_considerado = 0 %}
             {% endif %}
 
             {% if fatura.conferido_por %}

@@ -1229,7 +1229,7 @@ def register_fatura_routes(bp):
             (str(t.id), t.razao_social) for t in transportadoras
         ]
 
-        sort = request.args.get('sort', 'data_emissao')
+        sort = request.args.get('sort', 'id')
         direction = request.args.get('direction', 'desc')
 
         # Subquery: contar e somar valor dos subcontratos por fatura
@@ -1291,6 +1291,7 @@ def register_fatura_routes(bp):
 
         # Ordenacao dinamica
         sortable_columns = {
+            'id': CarviaFaturaTransportadora.id,
             'numero_fatura': func.lpad(func.coalesce(CarviaFaturaTransportadora.numero_fatura, ''), 20, '0'),
             'data_emissao': CarviaFaturaTransportadora.data_emissao,
             'vencimento': CarviaFaturaTransportadora.vencimento,
@@ -1298,7 +1299,7 @@ def register_fatura_routes(bp):
             'status_conferencia': CarviaFaturaTransportadora.status_conferencia,
             'criado_em': CarviaFaturaTransportadora.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.data_emissao)
+        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.id)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:

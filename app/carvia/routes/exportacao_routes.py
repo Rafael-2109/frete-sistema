@@ -1005,7 +1005,7 @@ def register_exportacao_routes(bp):
         data_emissao_ate = request.args.get('data_emissao_ate', '')
         data_vencimento_de = request.args.get('data_vencimento_de', '')
         data_vencimento_ate = request.args.get('data_vencimento_ate', '')
-        sort = request.args.get('sort', 'data_emissao')
+        sort = request.args.get('sort', 'id')
         direction = request.args.get('direction', 'desc')
 
         query = db.session.query(CarviaFaturaTransportadora)
@@ -1052,6 +1052,7 @@ def register_exportacao_routes(bp):
             )
 
         sortable_columns = {
+            'id': CarviaFaturaTransportadora.id,
             'numero_fatura': func.lpad(func.coalesce(CarviaFaturaTransportadora.numero_fatura, ''), 20, '0'),
             'data_emissao': CarviaFaturaTransportadora.data_emissao,
             'vencimento': CarviaFaturaTransportadora.vencimento,
@@ -1059,7 +1060,7 @@ def register_exportacao_routes(bp):
             'status_conferencia': CarviaFaturaTransportadora.status_conferencia,
             'criado_em': CarviaFaturaTransportadora.criado_em,
         }
-        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.data_emissao)
+        sort_col = sortable_columns.get(sort, CarviaFaturaTransportadora.id)
         if direction == 'asc':
             query = query.order_by(sort_col.asc().nullslast())
         else:
