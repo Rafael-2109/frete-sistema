@@ -3211,10 +3211,35 @@ def conta_corrente_transportadora(transportadora_id):
 @fretes_bp.route("/aprovacoes")
 @login_required
 def listar_aprovacoes():
-    """Lista aprovações pendentes"""
-    aprovacoes = AprovacaoFrete.query.filter_by(status="PENDENTE").order_by(desc(AprovacaoFrete.solicitado_em)).all()
+    """Lista aprovações pendentes com filtros por NF, CTe e Transportadora"""
+    numero_nf = (request.args.get("numero_nf") or "").strip()
+    numero_cte = (request.args.get("numero_cte") or "").strip()
+    transportadora = (request.args.get("transportadora") or "").strip()
 
-    return render_template("fretes/listar_aprovacoes.html", aprovacoes=aprovacoes)
+    query = AprovacaoFrete.query.join(Frete, AprovacaoFrete.frete_id == Frete.id).filter(
+        AprovacaoFrete.status == "PENDENTE"
+    )
+
+    if numero_nf:
+        query = query.filter(Frete.numeros_nfs.ilike(f"%{numero_nf}%"))
+
+    if numero_cte:
+        query = query.filter(Frete.numero_cte.ilike(f"%{numero_cte}%"))
+
+    if transportadora:
+        query = query.join(Transportadora, Frete.transportadora_id == Transportadora.id).filter(
+            Transportadora.razao_social.ilike(f"%{transportadora}%")
+        )
+
+    aprovacoes = query.order_by(desc(AprovacaoFrete.solicitado_em)).all()
+
+    return render_template(
+        "fretes/listar_aprovacoes.html",
+        aprovacoes=aprovacoes,
+        numero_nf=numero_nf,
+        numero_cte=numero_cte,
+        transportadora=transportadora,
+    )
 
 
 @fretes_bp.route("/aprovacoes/<int:aprovacao_id>", methods=["GET", "POST"])

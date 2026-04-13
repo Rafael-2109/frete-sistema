@@ -21,6 +21,44 @@
         </div>
     </div>
 
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="card-title mb-0">
+                <i class="fas fa-filter"></i> Filtros
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('fretes.listar_aprovacoes') }}">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="numero_nf" class="form-label">Número da NF</label>
+                        <input type="text" class="form-control" id="numero_nf" name="numero_nf"
+                               value="{{ numero_nf or '' }}" placeholder="Ex: 12345">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="numero_cte" class="form-label">Número do CTe</label>
+                        <input type="text" class="form-control" id="numero_cte" name="numero_cte"
+                               value="{{ numero_cte or '' }}" placeholder="Ex: 67890">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="transportadora" class="form-label">Transportadora</label>
+                        <input type="text" class="form-control" id="transportadora" name="transportadora"
+                               value="{{ transportadora or '' }}" placeholder="Razão social">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Lista de aprovações -->
     <div class="card">
         <div class="card-header">
