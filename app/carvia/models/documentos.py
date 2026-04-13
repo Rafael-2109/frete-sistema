@@ -355,6 +355,10 @@ class CarviaOperacao(db.Model):
     percentual_remetente = db.Column(db.Numeric(5, 2), nullable=True)
     percentual_destinatario = db.Column(db.Numeric(5, 2), nullable=True)
 
+    # Tomador do frete extraido do CTe XML (<ide>/<toma3> ou <toma4>)
+    # REMETENTE | EXPEDIDOR | RECEBEDOR | DESTINATARIO | TERCEIRO
+    cte_tomador = db.Column(db.String(20), nullable=True)
+
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)

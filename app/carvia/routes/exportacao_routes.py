@@ -350,14 +350,46 @@ def register_exportacao_routes(bp):
             ).filter(CarviaFaturaCliente.id.in_(fat_ids)).all()
             fat_map = {f_id: num for f_id, num in faturas}
 
+        # Batch: primeira NF por operacao (regra CTe = 1 par unico) para
+        # preencher colunas Emitente / Destinatario
+        from app.carvia.utils.tomador import tomador_label_para_export
+        op_ids = [op.id for op in items]
+        primeira_nf_por_op = {}
+        if op_ids:
+            rows = db.session.query(
+                CarviaOperacaoNf.operacao_id,
+                CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
+                CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+            ).filter(
+                CarviaOperacaoNf.operacao_id.in_(op_ids)
+            ).all()
+            for row in rows:
+                oid = row[0]
+                if oid not in primeira_nf_por_op:
+                    primeira_nf_por_op[oid] = {
+                        'emit_nome': row[1] or '',
+                        'emit_cnpj': row[2] or '',
+                        'dest_nome': row[3] or '',
+                        'dest_cnpj': row[4] or '',
+                    }
+
         data = []
         for op in items:
+            nf_info = primeira_nf_por_op.get(op.id) or {}
+            # Fallback para op.cnpj_cliente quando nao ha NF vinculada (manual/freteiro)
+            emit_nome = nf_info.get('emit_nome') or op.nome_cliente or ''
+            emit_cnpj = nf_info.get('emit_cnpj') or op.cnpj_cliente or ''
             data.append({
                 'ID': op.id,
                 'CTe Numero': op.cte_numero or '',
                 'CTRC': op.ctrc_numero or '',
-                'Cliente': op.nome_cliente or '',
-                'CNPJ Cliente': op.cnpj_cliente or '',
+                'Emitente': emit_nome,
+                'CNPJ Emitente': emit_cnpj,
+                'Destinatario': nf_info.get('dest_nome', ''),
+                'CNPJ Destinatario': nf_info.get('dest_cnpj', ''),
+                'Tomador': tomador_label_para_export(op.cte_tomador),
                 'Origem': f'{op.cidade_origem or ""}/{op.uf_origem or ""}',
                 'Destino': f'{op.cidade_destino or ""}/{op.uf_destino or ""}',
                 'Peso Bruto': float(op.peso_bruto or 0),
@@ -892,12 +924,48 @@ def register_exportacao_routes(bp):
                         fat_custos[fc_id] += op_custo_cnt.get(o_id, 0)
                         fat_custos_valor[fc_id] += op_custo_val.get(o_id, 0)
 
+        # Batch: primeira (nf + cte_tomador) por fatura via join triplo
+        # fatura -> operacao -> junction -> nf
+        from app.carvia.utils.tomador import tomador_label_para_export
+        primeira_nf_por_fatura = {}
+        if fat_ids_all:
+            rows_papeis = db.session.query(
+                CarviaOperacao.fatura_cliente_id,
+                CarviaOperacao.cte_tomador,
+                CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
+                CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
+            ).join(
+                CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+            ).filter(
+                CarviaOperacao.fatura_cliente_id.in_(fat_ids_all)
+            ).all()
+            for row in rows_papeis:
+                fid, cte_tom, emit_nome, emit_cnpj, dest_nome, dest_cnpj = row
+                if fid in primeira_nf_por_fatura:
+                    # Atualiza tomador se ainda nao setado
+                    if not primeira_nf_por_fatura[fid]['tomador'] and cte_tom:
+                        primeira_nf_por_fatura[fid]['tomador'] = cte_tom
+                    continue
+                primeira_nf_por_fatura[fid] = {
+                    'emit_nome': emit_nome or '',
+                    'emit_cnpj': emit_cnpj or '',
+                    'dest_nome': dest_nome or '',
+                    'dest_cnpj': dest_cnpj or '',
+                    'tomador': cte_tom,
+                }
+
         data = []
         for f in items:
+            papeis = primeira_nf_por_fatura.get(f.id) or {}
             data.append({
                 'Numero Fatura': f.numero_fatura or '',
-                'Cliente': f.nome_cliente or '',
-                'CNPJ Cliente': f.cnpj_cliente or '',
+                'Emitente': papeis.get('emit_nome', ''),
+                'CNPJ Emitente': papeis.get('emit_cnpj', ''),
+                'Destinatario': papeis.get('dest_nome', ''),
+                'CNPJ Destinatario': papeis.get('dest_cnpj', ''),
+                'Tomador': tomador_label_para_export(papeis.get('tomador')),
                 'Data Emissao': _fmt_date(f.data_emissao),
                 'Vencimento': _fmt_date(f.vencimento),
                 'Valor Total': float(f.valor_total or 0),

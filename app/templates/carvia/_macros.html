@@ -57,3 +57,88 @@
     <em class="text-muted">{{ fallback }}</em>
   {%- endif -%}
 {%- endmacro %}
+
+{#
+  emitente_destinatario — Renderiza emitente + destinatario com destaque opcional
+  no tomador do frete.
+
+  Params:
+    emit          - dict com {nome, cnpj, cidade, uf} ou None
+    dest          - dict com {nome, cnpj, cidade, uf} ou None
+    tomador_label - 'emitente' | 'destinatario' | None (quem paga o frete)
+    compact       - True para celula de listagem (linha unica com seta)
+                    False para card de detalhe (col-6/col-6)
+
+  Comportamento:
+    - tomador_label='emitente'    → badge TOM no emitente + border warning
+    - tomador_label='destinatario' → badge TOM no destinatario + border warning
+    - tomador_label=None           → sem destaque visual
+
+  Exemplos:
+    {{ emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador_label) }}
+    {{ emitente_destinatario(emit, dest, 'emitente', compact=True) }}
+#}
+{% macro emitente_destinatario(emit, dest, tomador_label, compact=False) %}
+  {% if compact %}
+    <div class="small carvia-emit-dest-compact">
+      <span class="cnpj-col" title="{{ emit.cnpj if emit else '' }}">
+        <strong>{{ emit.nome if emit else '-' }}</strong>
+        {% if tomador_label == 'emitente' %}
+          <span class="badge bg-warning text-dark ms-1" title="Tomador do Frete">
+            <i class="fas fa-dollar-sign"></i> TOM
+          </span>
+        {% endif %}
+      </span>
+      <i class="fas fa-arrow-right fa-xs text-muted mx-1"></i>
+      <span class="cnpj-col" title="{{ dest.cnpj if dest else '' }}">
+        <strong>{{ dest.nome if dest else '-' }}</strong>
+        {% if tomador_label == 'destinatario' %}
+          <span class="badge bg-warning text-dark ms-1" title="Tomador do Frete">
+            <i class="fas fa-dollar-sign"></i> TOM
+          </span>
+        {% endif %}
+      </span>
+    </div>
+  {% else %}
+    <div class="row g-3 carvia-emit-dest-full">
+      <div class="col-6 {% if tomador_label == 'emitente' %}carvia-tomador-highlight{% endif %}">
+        <small class="text-muted d-block">
+          Emitente
+          {% if tomador_label == 'emitente' %}
+            <span class="badge bg-warning text-dark ms-1">
+              <i class="fas fa-dollar-sign"></i> TOMADOR
+            </span>
+          {% endif %}
+        </small>
+        {% if emit %}
+          <strong>{{ emit.nome or '-' }}</strong>
+          <div class="cnpj-col small text-muted">{{ emit.cnpj or '-' }}</div>
+          {% if emit.cidade %}
+            <div class="small text-muted">{{ emit.cidade }}/{{ emit.uf or '' }}</div>
+          {% endif %}
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </div>
+      <div class="col-6 {% if tomador_label == 'destinatario' %}carvia-tomador-highlight{% endif %}">
+        <small class="text-muted d-block">
+          Destinatario
+          {% if tomador_label == 'destinatario' %}
+            <span class="badge bg-warning text-dark ms-1">
+              <i class="fas fa-dollar-sign"></i> TOMADOR
+            </span>
+          {% endif %}
+        </small>
+        {% if dest %}
+          <strong>{{ dest.nome or '-' }}</strong>
+          <div class="cnpj-col small text-muted">{{ dest.cnpj or '-' }}</div>
+          {% if dest.cidade %}
+            <div class="small text-muted">{{ dest.cidade }}/{{ dest.uf or '' }}</div>
+          {% endif %}
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endmacro %}

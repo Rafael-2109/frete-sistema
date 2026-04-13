@@ -92,7 +92,21 @@
                     <h5 class="mb-0"><i class="fas fa-info-circle"></i> Dados do CTe CarVia</h5>
                 </div>
                 <div class="card-body">
+                    {% import 'carvia/_macros.html' as carvia_m %}
+                    {% if papeis %}
+                    {{ carvia_m.emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador_label) }}
+                    {% if cliente_comercial %}
+                    <div class="mt-2">
+                        <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cliente_comercial.id) }}"
+                           class="text-decoration-none">
+                            <i class="fas fa-building"></i> {{ cliente_comercial.nome_comercial }}
+                        </a>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    {% endif %}
                     <div class="row g-3">
+                        {% if not papeis %}
                         <div class="col-6">
                             <small class="text-muted d-block">Cliente</small>
                             <strong>{{ operacao.nome_cliente or '-' }}</strong>
@@ -107,6 +121,9 @@
                             {% endif %}
                         </div>
                         <div class="col-6">
+                        {% else %}
+                        <div class="col-12">
+                        {% endif %}
                             <small class="text-muted d-block">CTe CarVia</small>
                             <strong>{{ operacao.cte_numero or 'Sem CTe' }}</strong>
                             {% if operacao.ctrc_numero %}

@@ -694,6 +694,8 @@ class CTeXMLParserCarvia(CTeXMLParser):
             'nfs_referenciadas': nfs,
             # Impostos
             'impostos': self.get_impostos(),
+            # Tomador do servico (<ide>/<toma3> ou <toma4>)
+            'tomador': self.get_tomador(),
         }
 
     def _get_tag_text_in(self, tag_name: str, root) -> Optional[str]:

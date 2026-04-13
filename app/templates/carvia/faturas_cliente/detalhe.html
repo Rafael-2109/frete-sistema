@@ -98,6 +98,11 @@
                             {% endif %}
                         </div>
                     </div>
+                    {% if papeis %}
+                    <hr>
+                    {% import 'carvia/_macros.html' as carvia_m %}
+                    {{ carvia_m.emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador_label) }}
+                    {% endif %}
                     {% if fatura.observacoes %}
                     <hr>
                     <small class="text-muted d-block">Observacoes</small>

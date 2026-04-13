@@ -509,6 +509,15 @@ def register_nf_routes(bp):
         # Indicador: fatura cliente paga?
         fat_cliente_paga = any(f.status == 'PAGA' for f in faturas_cliente)
 
+        # Tomador do frete: primeira CarviaOperacao vinculada com cte_tomador populado
+        from app.carvia.utils.tomador import tomador_label
+        tomador_label_val = None
+        for op in operacoes:
+            if getattr(op, 'cte_tomador', None):
+                tomador_label_val = tomador_label(op.cte_tomador)
+                if tomador_label_val:
+                    break
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
@@ -531,6 +540,7 @@ def register_nf_routes(bp):
             cliente_destino=cliente_destino,
             cotacao_id_nf=cotacao_id_nf,
             fat_cliente_paga=fat_cliente_paga,
+            tomador_label=tomador_label_val,
         )
 
     # ==================== CRIAR CTE VIA NF ====================

@@ -128,26 +128,50 @@ def register_operacao_routes(bp):
         nfs_por_op = defaultdict(list)
         dest_por_op = {}
         op_ids = [op.id for op, _ in paginacao.items]
+        papeis_por_op = {}  # {op_id: {'emit': {...}, 'dest': {...}, 'tomador_label': ...}}
         if op_ids:
+            from app.carvia.utils.tomador import tomador_label as _tomador_label
+            # Batch: NFs + CNPJs/cidade/UF + cte_tomador da operacao via join
             rows_nf = db.session.query(
                 CarviaOperacaoNf.operacao_id,
+                CarviaOperacao.cte_tomador,
                 CarviaNf.id,
                 CarviaNf.numero_nf,
-                CarviaNf.nome_destinatario,
-                CarviaNf.nome_emitente,
+                CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
+                CarviaNf.cidade_emitente, CarviaNf.uf_emitente,
+                CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
+                CarviaNf.cidade_destinatario, CarviaNf.uf_destinatario,
+            ).join(
+                CarviaOperacao, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
             ).join(
                 CarviaNf, CarviaOperacaoNf.nf_id == CarviaNf.id
             ).filter(
                 CarviaOperacaoNf.operacao_id.in_(op_ids)
             ).all()
             seen_nf = set()
-            for oid, nf_id, num_nf, dest, emit in rows_nf:
+            for row in rows_nf:
+                (oid, cte_tom, nf_id, num_nf,
+                 emit_nome, emit_cnpj, emit_cidade, emit_uf,
+                 dest_nome, dest_cnpj, dest_cidade, dest_uf) = row
                 key = (oid, nf_id)
                 if key not in seen_nf:
                     seen_nf.add(key)
                     nfs_por_op[oid].append({'id': nf_id, 'numero_nf': num_nf})
                 if oid not in dest_por_op:
-                    dest_por_op[oid] = {'destinatario': dest, 'embarcador': emit}
+                    dest_por_op[oid] = {'destinatario': dest_nome, 'embarcador': emit_nome}
+                # Papeis: regra CTe = 1 par unico, guarda primeira NF
+                if oid not in papeis_por_op:
+                    papeis_por_op[oid] = {
+                        'emit': {
+                            'nome': emit_nome, 'cnpj': emit_cnpj,
+                            'cidade': emit_cidade, 'uf': emit_uf,
+                        },
+                        'dest': {
+                            'nome': dest_nome, 'cnpj': dest_cnpj,
+                            'cidade': dest_cidade, 'uf': dest_uf,
+                        },
+                        'tomador_label': _tomador_label(cte_tom),
+                    }
 
         # Subquery: info de subcontrato (transportadora subcontratada + cte subcontrato)
         from app.transportadoras.models import Transportadora
@@ -197,6 +221,7 @@ def register_operacao_routes(bp):
             nfs_por_op=nfs_por_op,
             dest_por_op=dest_por_op,
             clientes_por_cnpj=clientes_por_cnpj,
+            papeis_por_op=papeis_por_op,
         )
 
     @bp.route('/operacoes/<int:operacao_id>')
@@ -245,6 +270,27 @@ def register_operacao_routes(bp):
         _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({operacao.cnpj_cliente})
         cliente_comercial = _clientes.get(re.sub(r'\D', '', operacao.cnpj_cliente or ''))
 
+        # Papeis de frete (Emitente/Destinatario/Tomador) — regra: 1 CTe = 1 par unico
+        from app.carvia.utils.tomador import tomador_label
+        papeis = None
+        if nfs:
+            primeira = nfs[0]
+            papeis = {
+                'emit': {
+                    'nome': primeira.nome_emitente,
+                    'cnpj': primeira.cnpj_emitente,
+                    'cidade': primeira.cidade_emitente,
+                    'uf': primeira.uf_emitente,
+                },
+                'dest': {
+                    'nome': primeira.nome_destinatario,
+                    'cnpj': primeira.cnpj_destinatario,
+                    'cidade': primeira.cidade_destinatario,
+                    'uf': primeira.uf_destinatario,
+                },
+                'tomador_label': tomador_label(operacao.cte_tomador),
+            }
+
         return render_template(
             'carvia/detalhe_operacao.html',
             operacao=operacao,
@@ -254,6 +300,7 @@ def register_operacao_routes(bp):
             ctes_complementares=ctes_complementares,
             custos_entrega=custos_entrega,
             cliente_comercial=cliente_comercial,
+            papeis=papeis,
         )
 
     # ==================== CRIAR OPERACAO MANUAL ====================

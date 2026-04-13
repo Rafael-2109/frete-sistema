@@ -142,16 +142,30 @@
                     </div>
                     <hr>
                     <div class="row g-3">
-                        <div class="col-6">
-                            <small class="text-muted d-block">Emitente</small>
+                        <div class="col-6 {% if tomador_label == 'emitente' %}carvia-tomador-highlight{% endif %}">
+                            <small class="text-muted d-block">
+                                Emitente
+                                {% if tomador_label == 'emitente' %}
+                                <span class="badge bg-warning text-dark ms-1">
+                                    <i class="fas fa-dollar-sign"></i> TOMADOR
+                                </span>
+                                {% endif %}
+                            </small>
                             <strong>{{ nf.nome_emitente or '-' }}</strong>
                             <div class="cnpj-col small text-muted">{{ nf.cnpj_emitente }}</div>
                             {% if nf.cidade_emitente %}
                             <div class="small text-muted">{{ nf.cidade_emitente }}/{{ nf.uf_emitente }}</div>
                             {% endif %}
                         </div>
-                        <div class="col-6">
-                            <small class="text-muted d-block">Destinatario</small>
+                        <div class="col-6 {% if tomador_label == 'destinatario' %}carvia-tomador-highlight{% endif %}">
+                            <small class="text-muted d-block">
+                                Destinatario
+                                {% if tomador_label == 'destinatario' %}
+                                <span class="badge bg-warning text-dark ms-1">
+                                    <i class="fas fa-dollar-sign"></i> TOMADOR
+                                </span>
+                                {% endif %}
+                            </small>
                             <strong>{{ nf.nome_destinatario or '-' }}</strong>
                             <div class="cnpj-col small text-muted">{{ nf.cnpj_destinatario or '-' }}</div>
                             {% if nf.cidade_destinatario %}

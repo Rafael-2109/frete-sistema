@@ -856,3 +856,25 @@
     opacity: 0.35;
     pointer-events: none;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Destaque do tomador do frete (Emitente / Destinatario / Pagador)
+   Usado pela macro emitente_destinatario em _macros.html
+   ═══════════════════════════════════════════════════════════════ */
+.carvia-tomador-highlight {
+    border-left: 3px solid var(--bs-warning) !important;
+    padding-left: 0.75rem !important;
+}
+
+.carvia-emit-dest-compact {
+    line-height: 1.3;
+}
+
+.carvia-emit-dest-compact .cnpj-col {
+    display: inline-block;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
