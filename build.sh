@@ -64,6 +64,13 @@ echo "Backfill icms_aliquota CarVia (idempotente)..."
 python scripts/migrations/add_icms_aliquota_carvia_operacoes.py \
     || echo "⚠️ Backfill icms_aliquota falhou, continuando deploy..."
 
+# 7. Migration CarVia: auditoria de conferencia em Fatura Cliente (Refator 2.1)
+# Adiciona status_conferencia, conferido_por, conferido_em, observacoes_conferencia
+# + indice parcial. Idempotente via ADD COLUMN IF NOT EXISTS.
+echo "Migration CarVia: auditoria de conferencia em Fatura Cliente (idempotente)..."
+python scripts/migrations/carvia_fatura_cliente_auditoria.py \
+    || echo "⚠️ Migration carvia_fatura_cliente_auditoria falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
