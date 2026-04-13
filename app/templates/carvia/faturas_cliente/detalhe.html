@@ -134,28 +134,40 @@
                     <h5 class="mb-0"><i class="fas fa-tasks"></i> Status e Acoes</h5>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex gap-2 flex-wrap">
-                        {# GAP-01: EMITIDA removido do fluxo #}
-                        {% for status in ['PENDENTE', 'PAGA', 'CANCELADA'] %}
-                        {% if status != fatura.status %}
-                            {% if status == 'PAGA' %}
-                            {# PAGA abre modal para informar data de pagamento #}
-                            <button type="button" class="btn btn-sm carvia-badge-paga"
-                                    data-bs-toggle="modal" data-bs-target="#modalDataPagamento">
-                                PAGA
+                    <div class="d-flex gap-2 flex-wrap" id="statusAcoesFatura">
+                        {# W10 Nivel 2 (Sprint 4): botoes de acao via service centralizado #}
+                        {% if fatura.status == 'PAGA' %}
+                            <span class="badge carvia-badge-paga" id="statusFaturaBadge">PAGA</span>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-warning"
+                                    id="btnDesfazerPagamentoFatura">
+                                <i class="fas fa-undo"></i> Desfazer Pagamento
                             </button>
-                            {% else %}
+                        {% elif fatura.status == 'CANCELADA' %}
+                            <span class="badge carvia-badge-cancelada" id="statusFaturaBadge">CANCELADA</span>
                             <form method="POST" action="{{ url_for('carvia.atualizar_status_fatura_cliente', fatura_id=fatura.id) }}" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="status" value="{{ status }}">
-                                <button type="submit" class="btn btn-sm carvia-badge-{{ status|lower }}"
-                                        {% if status == 'CANCELADA' %}onclick="return confirm('Cancelar esta fatura?')"{% endif %}>
-                                    {{ status }}
+                                <input type="hidden" name="status" value="PENDENTE">
+                                <button type="submit" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-clock"></i> PENDENTE
                                 </button>
                             </form>
-                            {% endif %}
+                        {% else %}
+                            <span class="badge carvia-badge-{{ fatura.status|lower }}" id="statusFaturaBadge">{{ fatura.status }}</span>
+                            <button type="button"
+                                    class="btn btn-sm btn-success"
+                                    id="btnPagarFatura">
+                                <i class="fas fa-money-check-alt"></i> Pagar
+                            </button>
+                            <form method="POST" action="{{ url_for('carvia.atualizar_status_fatura_cliente', fatura_id=fatura.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="CANCELADA">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Cancelar esta fatura?')">
+                                    <i class="fas fa-times"></i> CANCELADA
+                                </button>
+                            </form>
                         {% endif %}
-                        {% endfor %}
                     </div>
                     {# Badge conciliacao movido para card _conciliacoes_documento #}
                     <hr>
@@ -477,10 +489,8 @@
     {% endif %}
 </div>
 
-{# Modal de data de pagamento (modo Form POST) #}
-{% with form_action=url_for('carvia.atualizar_status_fatura_cliente', fatura_id=fatura.id), form_status='PAGA' %}
-    {% include 'carvia/_modal_data_pagamento.html' %}
-{% endwith %}
+{# Modal de pagamento com conciliacao/manual (W10 Nivel 2 — Sprint 4) #}
+{% include 'carvia/_modal_pagar_com_conciliacao.html' %}
 
 <!-- Modal Editar Valor (admin only) -->
 {% if current_user.perfil == 'administrador' and fatura.status not in ('PAGA', 'CANCELADA') %}
@@ -642,11 +652,10 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/carvia_pagamento_modal.js') }}"></script>
 <script>
-var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
-             || document.querySelector('input[name="csrf_token"]')?.value || '';
-var faturaId = {{ fatura.id }};
-
+// downloadFaturaPdf e desvincularComp precisam ficar no escopo global
+// porque sao chamados via atributo onclick inline nos templates.
 function downloadFaturaPdf(faturaId) {
     fetch(`/carvia/api/fatura-cliente/${faturaId}/pdf`)
         .then(r => r.json())
@@ -660,210 +669,285 @@ function downloadFaturaPdf(faturaId) {
         .catch(() => alert('Erro de conexao ao baixar arquivo'));
 }
 
-// Setar data de hoje como default ao abrir modal de pagamento
+function desvincularComp(compId, numComp) {
+    if (!confirm('Desvincular ' + numComp + ' desta fatura? Status voltara para EMITIDO.')) return;
+    var token = document.querySelector('meta[name="csrf-token"]')?.content
+             || document.querySelector('input[name="csrf_token"]')?.value || '';
+    var fId = {{ fatura.id }};
+    fetch('/carvia/faturas-cliente/' + fId + '/desvincular-cte-comp/' + compId, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': token},
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.sucesso) {
+            location.reload();
+        } else {
+            alert('Erro: ' + (data.erro || 'desconhecido'));
+        }
+    });
+}
+
+// W10 Nivel 2 (Sprint 4): pagamento via CarviaPagamentoModal
 (function() {
     'use strict';
-    var modalEl = document.getElementById('modalDataPagamento');
-    if (modalEl) {
-        modalEl.addEventListener('show.bs.modal', function() {
-            var input = document.getElementById('dataPagamentoInput');
-            if (input && !input.value) {
-                input.value = new Date().toISOString().slice(0, 10);
+
+    var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+                 || document.querySelector('input[name="csrf_token"]')?.value || '';
+    var faturaId = {{ fatura.id }};
+
+    function atualizarUISucesso(novoStatus, pagoEm, pagoPor) {
+        // Substitui bloco de acoes por "PAGA + Desfazer"
+        var container = document.getElementById('statusAcoesFatura');
+        if (!container) return;
+        container.textContent = '';
+
+        var badge = document.createElement('span');
+        badge.className = 'badge carvia-badge-paga';
+        badge.id = 'statusFaturaBadge';
+        badge.textContent = 'PAGA';
+        container.appendChild(badge);
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-warning';
+        btn.id = 'btnDesfazerPagamentoFatura';
+        btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+        container.appendChild(btn);
+
+        bindDesfazer();
+    }
+
+    function bindPagar() {
+        var btn = document.getElementById('btnPagarFatura');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            window.CarviaPagamentoModal.abrir({
+                tipoDoc: 'fatura_cliente',
+                docId: faturaId,
+                endpoint: '/carvia/faturas-cliente/' + faturaId + '/pagar',
+                onSuccess: function(data) {
+                    atualizarUISucesso(data.novo_status, data.pago_em, data.pago_por);
+                },
+            });
+        });
+    }
+
+    function bindDesfazer() {
+        var btn = document.getElementById('btnDesfazerPagamentoFatura');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            if (!confirm('Desfazer o pagamento desta fatura?')) return;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/carvia/faturas-cliente/' + faturaId + '/desfazer-pagamento', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    // Reload garante re-render completo pelo Jinja: #statusAcoesFatura volta a
+                    // ter Pagar + form Cancelar, e os botoes "Vincular" CTe/Complementar (que
+                    // dependem de fatura.status not in PAGA/CANCELADA) reaparecem. Reconstruir
+                    // so "badge + Pagar" via JS perdia esses elementos ate o proximo reload.
+                    location.reload();
+                } else {
+                    alert(data.erro || 'Erro ao desfazer pagamento');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+            });
+        });
+    }
+
+    bindPagar();
+    bindDesfazer();
+
+    // ─── Vincular Operacao ───
+    var buscaOp = document.getElementById('buscaOpVincular');
+    var opResultados = document.getElementById('opVincularResultados');
+    var opLoading = document.getElementById('opVincularLoading');
+    var debounceOp;
+
+    if (buscaOp) {
+        document.getElementById('modalVincularOp')?.addEventListener('show.bs.modal', function() {
+            buscarOpsDisponiveis('');
+        });
+
+        buscaOp.addEventListener('input', function() {
+            clearTimeout(debounceOp);
+            debounceOp = setTimeout(function() {
+                buscarOpsDisponiveis(buscaOp.value);
+            }, 300);
+        });
+    }
+
+    function buscarOpsDisponiveis(busca) {
+        if (!opResultados) return;
+        opLoading.style.display = 'block';
+        opResultados.innerHTML = '';
+
+        var cnpj = '{{ fatura.cnpj_cliente or "" }}';
+        var url = '/carvia/api/operacoes-disponiveis-fatura?busca=' + encodeURIComponent(busca);
+        if (cnpj) url += '&cnpj_cliente=' + encodeURIComponent(cnpj);
+
+        fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                opLoading.style.display = 'none';
+                if (!data.sucesso || !data.operacoes.length) {
+                    opResultados.innerHTML = '<div class="text-center text-muted py-3">Nenhuma operacao disponivel.</div>';
+                    return;
+                }
+                data.operacoes.forEach(function(op) {
+                    var item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'list-group-item list-group-item-action py-2';
+                    var label = op.cte_numero || 'Aguardando emissao';
+                    var ctrc = op.ctrc_numero ? ' <small class="text-info">CTRC SSW ' + op.ctrc_numero + '</small>' : '';
+                    item.innerHTML =
+                        '<div class="d-flex justify-content-between">' +
+                            '<div><strong>' + label + '</strong>' + ctrc + '</div>' +
+                            '<span>' + (op.cte_valor ? 'R$ ' + op.cte_valor.toFixed(2) : '-') + '</span>' +
+                        '</div>' +
+                        '<small class="text-muted">' + (op.nome_cliente || '-') + ' | ' + (op.destino || '-') +
+                        ' | <span class="badge bg-secondary">' + op.status + '</span></small>';
+                    item.addEventListener('click', function() {
+                        vincularOp(op.id, label);
+                    });
+                    opResultados.appendChild(item);
+                });
+            });
+    }
+
+    // ─── Alterar Pagador ───
+    document.getElementById('btnConfirmarPagador')?.addEventListener('click', function() {
+        var selected = document.querySelector('input[name="novo_pagador"]:checked');
+        if (!selected) return;
+
+        var cnpj = selected.value;
+        var nome = selected.dataset.nome || '';
+
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        fetch('/carvia/faturas-cliente/' + faturaId + '/alterar-pagador', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({cnpj: cnpj, nome: nome}),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.sucesso) {
+                location.reload();
+            } else {
+                alert('Erro: ' + (data.erro || 'desconhecido'));
+                document.getElementById('btnConfirmarPagador').disabled = false;
+                document.getElementById('btnConfirmarPagador').innerHTML = '<i class="fas fa-check"></i> Confirmar';
+            }
+        })
+        .catch(function(err) {
+            alert('Erro: ' + err.message);
+            document.getElementById('btnConfirmarPagador').disabled = false;
+            document.getElementById('btnConfirmarPagador').innerHTML = '<i class="fas fa-check"></i> Confirmar';
+        });
+    });
+
+    function vincularOp(opId, cteNumero) {
+        if (!confirm('Vincular ' + cteNumero + ' a esta fatura? Status mudara para FATURADO.')) return;
+        fetch('/carvia/faturas-cliente/' + faturaId + '/vincular-operacao', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({operacao_id: opId}),
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.sucesso) {
+                location.reload();
+            } else {
+                alert('Erro: ' + (data.erro || 'desconhecido'));
+            }
+        });
+    }
+
+    // ─── Vincular CTe Complementar ───
+    var buscaComp = document.getElementById('buscaCompVincular');
+    var compResultados = document.getElementById('compVincularResultados');
+    var compLoading = document.getElementById('compVincularLoading');
+    var debounceComp;
+
+    if (buscaComp) {
+        document.getElementById('modalVincularComp')?.addEventListener('show.bs.modal', function() {
+            buscarCompsDisponiveis('');
+        });
+
+        buscaComp.addEventListener('input', function() {
+            clearTimeout(debounceComp);
+            debounceComp = setTimeout(function() {
+                buscarCompsDisponiveis(buscaComp.value);
+            }, 300);
+        });
+    }
+
+    function buscarCompsDisponiveis(busca) {
+        if (!compResultados) return;
+        compLoading.style.display = 'block';
+        compResultados.innerHTML = '';
+
+        var cnpj = '{{ fatura.cnpj_cliente or "" }}';
+        var url = '/carvia/api/ctes-comp-disponiveis-fatura?busca=' + encodeURIComponent(busca);
+        if (cnpj) url += '&cnpj_cliente=' + encodeURIComponent(cnpj);
+
+        fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                compLoading.style.display = 'none';
+                if (!data.sucesso || !data.ctes_comp.length) {
+                    compResultados.innerHTML = '<div class="text-center text-muted py-3">Nenhum CTe complementar disponivel.</div>';
+                    return;
+                }
+                data.ctes_comp.forEach(function(comp) {
+                    var item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'list-group-item list-group-item-action py-2';
+                    var label = comp.cte_numero || 'Aguardando emissao';
+                    var ctrc = comp.ctrc_numero ? ' <small class="text-info">CTRC SSW ' + comp.ctrc_numero + '</small>' : '';
+                    var paiLabel = comp.operacao_cte_numero || '-';
+                    item.innerHTML =
+                        '<div class="d-flex justify-content-between">' +
+                            '<div><strong>' + label + '</strong>' + ctrc + '</div>' +
+                            '<span>' + (comp.cte_valor ? 'R$ ' + comp.cte_valor.toFixed(2) : '-') + '</span>' +
+                        '</div>' +
+                        '<small class="text-muted">' + (comp.nome_cliente || '-') + ' | CTe do Frete: ' + paiLabel +
+                        ' | <span class="badge bg-secondary">' + comp.status + '</span></small>';
+                    item.addEventListener('click', function() {
+                        vincularComp(comp.id, label);
+                    });
+                    compResultados.appendChild(item);
+                });
+            });
+    }
+
+    function vincularComp(compId, numComp) {
+        if (!confirm('Vincular ' + numComp + ' a esta fatura? Status mudara para FATURADO.')) return;
+        fetch('/carvia/faturas-cliente/' + faturaId + '/vincular-cte-comp', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({cte_comp_id: compId}),
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.sucesso) {
+                location.reload();
+            } else {
+                alert('Erro: ' + (data.erro || 'desconhecido'));
             }
         });
     }
 })();
-
-// ─── Vincular Operacao ───
-var buscaOp = document.getElementById('buscaOpVincular');
-var opResultados = document.getElementById('opVincularResultados');
-var opLoading = document.getElementById('opVincularLoading');
-var debounceOp;
-
-if (buscaOp) {
-    document.getElementById('modalVincularOp')?.addEventListener('show.bs.modal', function() {
-        buscarOpsDisponiveis('');
-    });
-
-    buscaOp.addEventListener('input', function() {
-        clearTimeout(debounceOp);
-        debounceOp = setTimeout(function() {
-            buscarOpsDisponiveis(buscaOp.value);
-        }, 300);
-    });
-}
-
-function buscarOpsDisponiveis(busca) {
-    if (!opResultados) return;
-    opLoading.style.display = 'block';
-    opResultados.innerHTML = '';
-
-    var cnpj = '{{ fatura.cnpj_cliente or "" }}';
-    var url = '/carvia/api/operacoes-disponiveis-fatura?busca=' + encodeURIComponent(busca);
-    if (cnpj) url += '&cnpj_cliente=' + encodeURIComponent(cnpj);
-
-    fetch(url)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            opLoading.style.display = 'none';
-            if (!data.sucesso || !data.operacoes.length) {
-                opResultados.innerHTML = '<div class="text-center text-muted py-3">Nenhuma operacao disponivel.</div>';
-                return;
-            }
-            data.operacoes.forEach(function(op) {
-                var item = document.createElement('button');
-                item.type = 'button';
-                item.className = 'list-group-item list-group-item-action py-2';
-                var label = op.cte_numero || 'Aguardando emissao';
-                var ctrc = op.ctrc_numero ? ' <small class="text-info">CTRC SSW ' + op.ctrc_numero + '</small>' : '';
-                item.innerHTML =
-                    '<div class="d-flex justify-content-between">' +
-                        '<div><strong>' + label + '</strong>' + ctrc + '</div>' +
-                        '<span>' + (op.cte_valor ? 'R$ ' + op.cte_valor.toFixed(2) : '-') + '</span>' +
-                    '</div>' +
-                    '<small class="text-muted">' + (op.nome_cliente || '-') + ' | ' + (op.destino || '-') +
-                    ' | <span class="badge bg-secondary">' + op.status + '</span></small>';
-                item.addEventListener('click', function() {
-                    vincularOp(op.id, label);
-                });
-                opResultados.appendChild(item);
-            });
-        });
-}
-
-// ─── Alterar Pagador ───
-document.getElementById('btnConfirmarPagador')?.addEventListener('click', function() {
-    var selected = document.querySelector('input[name="novo_pagador"]:checked');
-    if (!selected) return;
-
-    var cnpj = selected.value;
-    var nome = selected.dataset.nome || '';
-
-    this.disabled = true;
-    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-    fetch('/carvia/faturas-cliente/' + faturaId + '/alterar-pagador', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify({cnpj: cnpj, nome: nome}),
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.sucesso) {
-            location.reload();
-        } else {
-            alert('Erro: ' + (data.erro || 'desconhecido'));
-            document.getElementById('btnConfirmarPagador').disabled = false;
-            document.getElementById('btnConfirmarPagador').innerHTML = '<i class="fas fa-check"></i> Confirmar';
-        }
-    })
-    .catch(function(err) {
-        alert('Erro: ' + err.message);
-        document.getElementById('btnConfirmarPagador').disabled = false;
-        document.getElementById('btnConfirmarPagador').innerHTML = '<i class="fas fa-check"></i> Confirmar';
-    });
-});
-
-function vincularOp(opId, cteNumero) {
-    if (!confirm('Vincular ' + cteNumero + ' a esta fatura? Status mudara para FATURADO.')) return;
-    fetch('/carvia/faturas-cliente/' + faturaId + '/vincular-operacao', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify({operacao_id: opId}),
-    }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.sucesso) {
-            location.reload();
-        } else {
-            alert('Erro: ' + (data.erro || 'desconhecido'));
-        }
-    });
-}
-
-// ─── Vincular CTe Complementar ───
-var buscaComp = document.getElementById('buscaCompVincular');
-var compResultados = document.getElementById('compVincularResultados');
-var compLoading = document.getElementById('compVincularLoading');
-var debounceComp;
-
-if (buscaComp) {
-    document.getElementById('modalVincularComp')?.addEventListener('show.bs.modal', function() {
-        buscarCompsDisponiveis('');
-    });
-
-    buscaComp.addEventListener('input', function() {
-        clearTimeout(debounceComp);
-        debounceComp = setTimeout(function() {
-            buscarCompsDisponiveis(buscaComp.value);
-        }, 300);
-    });
-}
-
-function buscarCompsDisponiveis(busca) {
-    if (!compResultados) return;
-    compLoading.style.display = 'block';
-    compResultados.innerHTML = '';
-
-    var cnpj = '{{ fatura.cnpj_cliente or "" }}';
-    var url = '/carvia/api/ctes-comp-disponiveis-fatura?busca=' + encodeURIComponent(busca);
-    if (cnpj) url += '&cnpj_cliente=' + encodeURIComponent(cnpj);
-
-    fetch(url)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            compLoading.style.display = 'none';
-            if (!data.sucesso || !data.ctes_comp.length) {
-                compResultados.innerHTML = '<div class="text-center text-muted py-3">Nenhum CTe complementar disponivel.</div>';
-                return;
-            }
-            data.ctes_comp.forEach(function(comp) {
-                var item = document.createElement('button');
-                item.type = 'button';
-                item.className = 'list-group-item list-group-item-action py-2';
-                var label = comp.cte_numero || 'Aguardando emissao';
-                var ctrc = comp.ctrc_numero ? ' <small class="text-info">CTRC SSW ' + comp.ctrc_numero + '</small>' : '';
-                var paiLabel = comp.operacao_cte_numero || '-';
-                item.innerHTML =
-                    '<div class="d-flex justify-content-between">' +
-                        '<div><strong>' + label + '</strong>' + ctrc + '</div>' +
-                        '<span>' + (comp.cte_valor ? 'R$ ' + comp.cte_valor.toFixed(2) : '-') + '</span>' +
-                    '</div>' +
-                    '<small class="text-muted">' + (comp.nome_cliente || '-') + ' | CTe do Frete: ' + paiLabel +
-                    ' | <span class="badge bg-secondary">' + comp.status + '</span></small>';
-                item.addEventListener('click', function() {
-                    vincularComp(comp.id, label);
-                });
-                compResultados.appendChild(item);
-            });
-        });
-}
-
-function vincularComp(compId, numComp) {
-    if (!confirm('Vincular ' + numComp + ' a esta fatura? Status mudara para FATURADO.')) return;
-    fetch('/carvia/faturas-cliente/' + faturaId + '/vincular-cte-comp', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify({cte_comp_id: compId}),
-    }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.sucesso) {
-            location.reload();
-        } else {
-            alert('Erro: ' + (data.erro || 'desconhecido'));
-        }
-    });
-}
-
-function desvincularComp(compId, numComp) {
-    if (!confirm('Desvincular ' + numComp + ' desta fatura? Status voltara para EMITIDO.')) return;
-    fetch('/carvia/faturas-cliente/' + faturaId + '/desvincular-cte-comp/' + compId, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-    }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.sucesso) {
-            location.reload();
-        } else {
-            alert('Erro: ' + (data.erro || 'desconhecido'));
-        }
-    });
-}
 </script>
 {% endblock %}

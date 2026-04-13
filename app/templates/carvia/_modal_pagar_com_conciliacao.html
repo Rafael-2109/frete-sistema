@@ -1,10 +1,20 @@
 {#
-  Modal de Pagamento com Conciliacao Opcional — CarVia
-  =====================================================
-  Fluxo document-first: usuario clica PAGO no Fluxo de Caixa,
-  modal busca linhas de extrato candidatas para conciliacao.
+  Modal de Pagamento com Conciliacao ou Manual — CarVia
+  ======================================================
+  Fluxo document-first: usuario clica PAGAR, modal busca linhas de
+  extrato candidatas para conciliacao. Se nao houver linha adequada,
+  usuario pode pagar manualmente informando conta_origem + descricao.
 
-  Usado em: fluxo_caixa.html (via JS, sem form_action)
+  W10 Nivel 2 (Sprint 4): unificado via CarviaPagamentoService.
+
+  Usado em:
+    - fluxo_caixa.html
+    - faturas_cliente/detalhe.html
+    - despesas/detalhe.html
+    - custos_entrega/detalhe.html
+    - receitas/detalhe.html
+
+  Driver JS: static/js/carvia_pagamento_modal.js
 #}
 <div class="modal fade" id="modalPagarComConciliacao" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -48,6 +58,7 @@
                                     <th style="width:30px"></th>
                                     <th>Data</th>
                                     <th>Descricao</th>
+                                    <th>Origem</th>
                                     <th class="text-end">Valor</th>
                                     <th class="text-end">Saldo</th>
                                     <th style="width:60px">Match</th>
@@ -70,17 +81,48 @@
                         <label for="pcDataPagamento" class="form-label">Data do Pagamento</label>
                         <input type="date" class="form-control" id="pcDataPagamento" required>
                     </div>
+                    <div class="col-md-8">
+                        <div class="form-check mt-4">
+                            <input class="form-check-input" type="checkbox" id="pcToggleManual">
+                            <label class="form-check-label" for="pcToggleManual">
+                                <strong>Pagamento manual</strong>
+                                <small class="text-muted d-block">
+                                    Pago por outra conta que nao a da CarVia
+                                    (pessoal, empresa parceira, dinheiro, etc.)
+                                </small>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
-                {# Confirmacao para pagar sem conciliacao #}
-                <div id="pcConfirmSemConc" class="alert alert-warning mt-3 d-none">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Deseja baixar esse pagamento mesmo sem conciliacao?</strong>
-                    <p class="mb-2 small">O pagamento sera registrado sem vinculo com extrato bancario.</p>
-                    <button type="button" class="btn btn-warning btn-sm" id="btnConfirmarSemConc">
-                        <i class="fas fa-check"></i> Sim, baixar sem conciliacao
-                    </button>
+                {# Bloco de pagamento manual (aparece quando toggle ativo) #}
+                <div id="pcBlocoManual" class="alert alert-info mt-3 d-none">
+                    <h6 class="mb-2">
+                        <i class="fas fa-hand-holding-usd"></i> Dados do lancamento manual
+                    </h6>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label for="pcContaOrigem" class="form-label small mb-1">
+                                Conta de origem <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control form-control-sm" id="pcContaOrigem"
+                                placeholder="Ex: Pessoal Rafael, Empresa Nacom Goya, Dinheiro/Caixa"
+                                maxlength="100" required>
+                            <small class="text-muted">Texto livre — identifica de onde o dinheiro saiu/chegou.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="pcDescricaoPagamento" class="form-label small mb-1">
+                                Descricao <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control form-control-sm" id="pcDescricaoPagamento"
+                                placeholder="Descricao do pagamento" maxlength="500" required>
+                            <small class="text-muted">Detalhes do pagamento para rastreabilidade.</small>
+                        </div>
+                    </div>
                 </div>
+
+                {# Erro #}
+                <div id="pcErro" class="alert alert-danger mt-3 d-none"></div>
             </div>
             <div class="modal-footer justify-content-between">
                 <div class="small text-muted" style="font-size:0.68rem">
@@ -89,8 +131,8 @@
                 </div>
                 <div>
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-outline-warning btn-sm" id="btnPagarSemConc">
-                        <i class="fas fa-money-bill"></i> Pagar sem conciliacao
+                    <button type="button" class="btn btn-warning btn-sm d-none" id="btnPagarManual">
+                        <i class="fas fa-hand-holding-usd"></i> Pagar Manualmente
                     </button>
                     <button type="button" class="btn btn-success btn-sm" id="btnPagarEConciliar" disabled>
                         <i class="fas fa-check-double"></i> Pagar e Conciliar

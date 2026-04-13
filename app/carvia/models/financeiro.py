@@ -111,19 +111,37 @@ class CarviaContaMovimentacao(db.Model):
 
 
 class CarviaExtratoLinha(db.Model):
-    """Linhas importadas do extrato bancario OFX — base para conciliacao.
+    """Linhas do extrato bancario CarVia — base para conciliacao.
 
-    W10 Nivel 2 (Sprint 3): adicionado campo `origem` para distinguir
-    linhas reais de virtuais:
-      - OFX        → importada de arquivo OFX (default, legacy)
-      - CSV        → importada de CSV bancario
-      - FC_VIRTUAL → criada pelo Fluxo de Caixa para representar
-                     pagamentos fora do extrato bancario
+    W10 Nivel 2 (Sprint 4): campo `origem` distingue a fonte da linha:
+      - OFX    -> importada de arquivo OFX (imutavel)
+      - CSV    -> importada de CSV bancario (imutavel)
+      - MANUAL -> lancamento manual fora do extrato bancario CarVia.
+                  Exige `conta_origem` preenchido. Permite edicao/delecao
+                  enquanto nao conciliada. Usada quando o pagamento e feito
+                  por outra conta (pessoal, empresa parceira, dinheiro, etc.)
 
-    Linhas FC_VIRTUAL permitem que todos os pagamentos passem pelo
-    Conciliacao como SOT — elimina dual-path com CarviaContaMovimentacao.
+    Linhas MANUAL permitem que TODOS os pagamentos passem pelo Conciliacao
+    como SOT — elimina dual-path com CarviaContaMovimentacao (que permanece
+    apenas para saldo_inicial).
+
+    Imutabilidade:
+      - OFX/CSV: nunca editaveis/deletaveis (sao import bancario)
+      - MANUAL: editaveis e deletaveis enquanto nao conciliadas
     """
     __tablename__ = 'carvia_extrato_linhas'
+
+    # Enforcement DB: toda linha MANUAL exige conta_origem preenchido.
+    # A constraint e criada pela migration `renomear_fc_virtual_para_manual`
+    # (step 7, `ck_carvia_extrato_manual_conta`). Declaracao aqui e
+    # documental — garante que novas criacoes de schema via create_all
+    # refletem a regra.
+    __table_args__ = (
+        db.CheckConstraint(
+            "origem != 'MANUAL' OR conta_origem IS NOT NULL",
+            name='ck_carvia_extrato_manual_conta',
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     fitid = db.Column(db.String(100), nullable=False, unique=True)
@@ -142,10 +160,14 @@ class CarviaExtratoLinha(db.Model):
     arquivo_ofx = db.Column(db.String(255), nullable=False, index=True)
     conta_bancaria = db.Column(db.String(50))
 
-    # W10 Nivel 2: origem da linha (OFX | CSV | FC_VIRTUAL)
+    # W10 Nivel 2: origem da linha (OFX | CSV | MANUAL)
     origem = db.Column(
         db.String(20), nullable=False, default='OFX', index=True
     )
+    # W10 Nivel 2 refactor: conta de origem para linhas MANUAL
+    # (texto livre — ex: "Conta Pessoal Rafael", "Empresa Nacom Goya",
+    #  "Dinheiro/Caixa"). Obrigatorio para origem='MANUAL', NULL para OFX/CSV.
+    conta_origem = db.Column(db.String(100), nullable=True)
 
     criado_por = db.Column(db.String(100), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
@@ -171,6 +193,47 @@ class CarviaExtratoLinha(db.Model):
     def saldo_a_conciliar(self):
         """Quanto falta conciliar nesta linha"""
         return self.valor_absoluto - float(self.total_conciliado or 0)
+
+    def pode_editar(self):
+        """Valida se a linha pode ser editada.
+
+        OFX/CSV: imutaveis (sao import bancario).
+        MANUAL: editavel apenas se nao conciliada (editar valor
+                alteraria o ja conciliado).
+
+        Returns:
+            (bool, str): (permitido, razao_caso_nao)
+        """
+        if self.origem in ('OFX', 'CSV'):
+            return False, (
+                f"Linha de origem '{self.origem}' e imutavel "
+                f"(importada do extrato bancario)."
+            )
+        if self.status_conciliacao != 'PENDENTE':
+            return False, (
+                "Linha ja esta conciliada — desconcilie antes de editar."
+            )
+        return True, None
+
+    def pode_deletar(self):
+        """Valida se a linha pode ser deletada.
+
+        OFX/CSV: imutaveis.
+        MANUAL: deletavel apenas se nao conciliada.
+
+        Returns:
+            (bool, str): (permitido, razao_caso_nao)
+        """
+        if self.origem in ('OFX', 'CSV'):
+            return False, (
+                f"Linha de origem '{self.origem}' e imutavel "
+                f"(importada do extrato bancario)."
+            )
+        if self.status_conciliacao != 'PENDENTE':
+            return False, (
+                "Linha ja esta conciliada — desconcilie antes de deletar."
+            )
+        return True, None
 
     def __repr__(self):
         return f'<CarviaExtratoLinha {self.fitid} {self.tipo} {self.valor}>'

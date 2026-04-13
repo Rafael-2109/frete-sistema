@@ -449,67 +449,100 @@ def register_custo_entrega_routes(bp):
             return redirect(url_for('carvia.listar_custos_entrega'))
 
         novo_status = request.form.get('status')
-        if novo_status not in STATUS_CUSTO:
-            flash('Status invalido.', 'warning')
+        # W10 Nivel 2 (Sprint 4): apenas PENDENTE e CANCELADO aqui.
+        # Para PAGO, usar endpoint JSON /custos-entrega/<id>/pagar.
+        if novo_status not in ('PENDENTE', 'CANCELADO'):
+            flash(
+                'Status invalido. Para marcar como PAGO, use o botao "Pagar".',
+                'warning',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_custo_entrega', custo_id=custo_id
+            ))
+
+        # A5+NI2+NC1 combinados — ORDEM CRITICA para UX correta:
+        #
+        # Quando usuario pede CANCELADO, verificamos PRIMEIRO a cobertura
+        # por Fatura Transportadora, porque se o CE esta coberto por FT o
+        # cancelamento e impossivel mesmo apos desfazer o pagamento
+        # (desfazer so recoloca em PENDENTE, e o guard FT continuaria
+        # bloqueando). Mostrar a mensagem "desfaca primeiro" em um caso
+        # que depois vai bloquear de novo desperdica uma acao do usuario.
+        #
+        # Entao: FT-coverage (terminal blocker) ANTES de NC1 (2-step flow).
+        if novo_status == 'CANCELADO' and custo.subcontrato_id:
+            from app.carvia.models import CarviaSubcontrato
+            sub = db.session.get(CarviaSubcontrato, custo.subcontrato_id)
+            if sub is None:
+                # NI2: FK orfa — sub foi hard-deleted sem limpar FK.
+                logger.error(
+                    "Custo #%s aponta para sub #%s inexistente (FK orfa)",
+                    custo_id, custo.subcontrato_id,
+                )
+                flash(
+                    f'Custo referencia Subcontrato #{custo.subcontrato_id} '
+                    f'inexistente. Contate o suporte para corrigir a FK orfa '
+                    f'antes de cancelar.',
+                    'danger',
+                )
+                return redirect(url_for(
+                    'carvia.detalhe_custo_entrega', custo_id=custo_id
+                ))
+            if sub.fatura_transportadora_id:
+                # A5: CE coberto por FT — bloqueio terminal. Vale tanto se
+                # status=PAGO (ja pago via propagacao da FT) quanto PENDENTE
+                # (aguardando pagamento via FT). Unica via para cancelar: desvincular o sub
+                # do custo/FT primeiro.
+                flash(
+                    f'Custo esta coberto pelo Subcontrato em Fatura Transportadora '
+                    f'#{sub.fatura_transportadora_id}. Nao pode ser cancelado '
+                    f'diretamente — desvincule do subcontrato primeiro.',
+                    'danger',
+                )
+                return redirect(url_for(
+                    'carvia.detalhe_custo_entrega', custo_id=custo_id
+                ))
+
+        # NC1: bloquear transicao PAGO -> CANCELADO direta (apos FT check).
+        # R4 exige que CANCELADO venha de PENDENTE — desfazer pagamento
+        # primeiro, cancelar depois (2 acoes explicitas).
+        if custo.status == 'PAGO' and novo_status == 'CANCELADO':
+            flash(
+                'Nao e possivel cancelar custo PAGO diretamente. '
+                'Desfaca o pagamento primeiro (isso reverte para PENDENTE), '
+                'depois cancele.',
+                'warning',
+            )
             return redirect(url_for(
                 'carvia.detalhe_custo_entrega', custo_id=custo_id
             ))
 
         try:
-            # Se revertendo de PAGO para outro status, remover movimentacao financeira
-            if custo.status == 'PAGO' and novo_status != 'PAGO':
-                from app.carvia.routes.fluxo_caixa_routes import _remover_movimentacao
-                _remover_movimentacao('custo_entrega', custo_id)
-                custo.pago_por = None
-                custo.pago_em = None
-                logger.info(
-                    f"Custo entrega #{custo_id}: movimentacao removida ao reverter "
-                    f"PAGO -> {novo_status} por {current_user.email}"
+            # Se revertendo de PAGO, usar service de desfazer
+            if custo.status == 'PAGO':
+                from app.carvia.services.financeiro.carvia_pagamento_service import (
+                    CarviaPagamentoService, PagamentoError,
                 )
+                try:
+                    CarviaPagamentoService.desfazer_pagamento(
+                        'custo_entrega', custo_id, current_user.email
+                    )
+                except PagamentoError as e:
+                    db.session.rollback()
+                    flash(str(e), 'danger')
+                    return redirect(url_for(
+                        'carvia.detalhe_custo_entrega', custo_id=custo_id
+                    ))
+                # Compat historico (ContaMovimentacao legada) e feito
+                # INTERNAMENTE por CarviaPagamentoService.desfazer_pagamento.
 
             custo.status = novo_status
-
-            # Ao marcar como PAGO: registrar pago_em/pago_por e criar movimentacao
-            if novo_status == 'PAGO':
-                data_pagamento_str = request.form.get('data_pagamento', '').strip()
-                if not data_pagamento_str:
-                    flash(
-                        'Data de pagamento e obrigatoria para marcar como PAGO.',
-                        'warning',
-                    )
-                    return redirect(url_for(
-                        'carvia.detalhe_custo_entrega', custo_id=custo_id
-                    ))
-                try:
-                    data_pagamento = date.fromisoformat(data_pagamento_str)
-                except ValueError:
-                    flash('Data de pagamento invalida.', 'warning')
-                    return redirect(url_for(
-                        'carvia.detalhe_custo_entrega', custo_id=custo_id
-                    ))
-
-                custo.pago_em = datetime.combine(data_pagamento, datetime.min.time())
-                custo.pago_por = current_user.email
-
-                # Criar movimentacao financeira na conta
-                from app.carvia.routes.fluxo_caixa_routes import (
-                    _criar_movimentacao, _gerar_descricao,
-                )
-                descricao = _gerar_descricao('custo_entrega', custo)
-                _criar_movimentacao(
-                    'custo_entrega', custo_id,
-                    float(custo.valor or 0), descricao, current_user.email,
-                )
-
             db.session.commit()
             flash(f'Status atualizado para {novo_status}.', 'success')
-        except IntegrityError:
-            db.session.rollback()
-            logger.warning(f"Movimentacao duplicada custo entrega #{custo_id}")
-            flash('Este lancamento ja foi processado.', 'warning')
+
         except Exception as e:
             db.session.rollback()
-            logger.error(
+            logger.exception(
                 f"Erro ao atualizar status custo entrega {custo_id}: {e}"
             )
             flash(f'Erro: {e}', 'danger')
@@ -517,6 +550,188 @@ def register_custo_entrega_routes(bp):
         return redirect(url_for(
             'carvia.detalhe_custo_entrega', custo_id=custo_id
         ))
+
+    @bp.route('/custos-entrega/<int:custo_id>/pagar', methods=['POST']) # type: ignore
+    @login_required
+    def pagar_custo_entrega(custo_id): # type: ignore
+        """Paga custo de entrega via CarviaPagamentoService (JSON)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
+
+        # Integridade CE-FT: custo coberto por sub em FT nao pode ser pago direto
+        if custo.subcontrato_id:
+            from app.carvia.models import CarviaSubcontrato
+            sub = db.session.get(CarviaSubcontrato, custo.subcontrato_id)
+            # A8: Se a FK esta setada mas o sub nao existe mais (hard delete
+            # sem limpar FK), isso e erro de integridade — nao silenciar.
+            if sub is None:
+                logger.error(
+                    "Custo #%s aponta para sub #%s inexistente (FK orfa)",
+                    custo_id, custo.subcontrato_id,
+                )
+                return jsonify({
+                    'erro': (
+                        f'Custo referencia Subcontrato #{custo.subcontrato_id} '
+                        f'que nao existe mais. Contate o suporte para corrigir '
+                        f'a FK orfa.'
+                    ),
+                }), 500
+            if sub.fatura_transportadora_id:
+                return jsonify({
+                    'erro': (
+                        f'Custo esta coberto pelo Subcontrato #{sub.cte_numero} '
+                        f'(Fatura Transportadora #{sub.fatura_transportadora_id}). '
+                        f'Sera pago automaticamente junto com a fatura.'
+                    ),
+                }), 400
+
+        data = request.get_json() or {}
+        data_pagamento_str = data.get('data_pagamento', '')
+        extrato_linha_id = data.get('extrato_linha_id')
+        conta_origem = data.get('conta_origem')
+        descricao_pagamento = data.get('descricao_pagamento')
+
+        if not data_pagamento_str:
+            return jsonify({'erro': 'data_pagamento e obrigatoria'}), 400
+        try:
+            data_pagamento = date.fromisoformat(data_pagamento_str)
+        except ValueError:
+            return jsonify({'erro': 'Data de pagamento invalida'}), 400
+
+        from app.carvia.services.financeiro.carvia_pagamento_service import (
+            CarviaPagamentoService,
+            DocumentoJaPagoError,
+            DocumentoCanceladoError,
+            DocumentoNaoEncontradoError,
+            JaConciliadoError,
+            ParametroInvalidoError,
+            PagamentoError,
+        )
+
+        try:
+            if extrato_linha_id:
+                resultado = CarviaPagamentoService.pagar_com_conciliacao(
+                    tipo_doc='custo_entrega',
+                    doc_id=custo_id,
+                    data_pagamento=data_pagamento,
+                    extrato_linha_id=extrato_linha_id,
+                    usuario=current_user.email,
+                )
+            else:
+                resultado = CarviaPagamentoService.pagar_manual(
+                    tipo_doc='custo_entrega',
+                    doc_id=custo_id,
+                    data_pagamento=data_pagamento,
+                    conta_origem=conta_origem,
+                    descricao_pagamento=descricao_pagamento,
+                    usuario=current_user.email,
+                )
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'novo_status': resultado['novo_status'],
+                'pago_em': custo.pago_em.isoformat() if custo.pago_em else None,
+                'pago_por': custo.pago_por,
+                'extrato_linha_id': resultado.get('extrato_linha_id'),
+                'modo': resultado.get('modo'),
+            })
+
+        except DocumentoNaoEncontradoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 404
+        except DocumentoJaPagoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 409
+        except DocumentoCanceladoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except JaConciliadoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except ParametroInvalidoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except PagamentoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro ao pagar custo entrega #{custo_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/custos-entrega/<int:custo_id>/desfazer-pagamento', methods=['POST']) # type: ignore
+    @login_required
+    def desfazer_pagamento_custo_entrega(custo_id): # type: ignore
+        """Desfaz pagamento de custo de entrega (JSON).
+
+        Bloqueado se CE e coberto por Subcontrato em FT: nesse caso o
+        pagamento vem da propagacao automatica da FT — nao ha pagamento
+        manual para desfazer. Usuario deve desvincular o sub primeiro.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            return jsonify({'erro': 'Custo de entrega nao encontrado'}), 404
+
+        # Simetrico ao guard de pagar_custo_entrega (A8) + atualizar_status
+        # (A5): CE coberto por FT tem pagamento automatico, nao manual.
+        if custo.subcontrato_id:
+            from app.carvia.models import CarviaSubcontrato
+            sub = db.session.get(CarviaSubcontrato, custo.subcontrato_id)
+            if sub is None:
+                logger.error(
+                    "Custo #%s aponta para sub #%s inexistente (FK orfa)",
+                    custo_id, custo.subcontrato_id,
+                )
+                return jsonify({
+                    'erro': (
+                        f'Custo referencia Subcontrato #{custo.subcontrato_id} '
+                        f'inexistente. Contate o suporte para corrigir a FK orfa.'
+                    ),
+                }), 500
+            if sub.fatura_transportadora_id:
+                return jsonify({
+                    'erro': (
+                        f'Custo esta coberto pelo Subcontrato em Fatura '
+                        f'Transportadora #{sub.fatura_transportadora_id}. '
+                        f'Pagamento e automatico via FT — nao ha desfazer '
+                        f'manual. Desvincule do subcontrato primeiro.'
+                    ),
+                }), 400
+
+        from app.carvia.services.financeiro.carvia_pagamento_service import (
+            CarviaPagamentoService,
+            DocumentoNaoEncontradoError,
+            PagamentoError,
+        )
+
+        try:
+            resultado = CarviaPagamentoService.desfazer_pagamento(
+                'custo_entrega', custo_id, current_user.email
+            )
+            # Compat historico (ContaMovimentacao legada) e feito
+            # INTERNAMENTE por CarviaPagamentoService.desfazer_pagamento.
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'novo_status': resultado['novo_status'],
+            })
+        except DocumentoNaoEncontradoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 404
+        except PagamentoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro desfazer custo entrega #{custo_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
 
     # ========================================================================
     # AJAX — Anexos

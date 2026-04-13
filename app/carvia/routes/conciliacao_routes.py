@@ -26,6 +26,7 @@ import logging
 import uuid
 from datetime import date, timedelta
 
+from dateutil.relativedelta import relativedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 
@@ -109,6 +110,7 @@ def register_conciliacao_routes(bp):
         default_inicio = hoje - timedelta(days=30)
         tipo = request.args.get('tipo', '')
         status = request.args.get('status', '')
+        origem = request.args.get('origem', '')  # OFX | CSV | MANUAL
         data_inicio_str = request.args.get('data_inicio', '')
         data_fim_str = request.args.get('data_fim', '')
         busca = request.args.get('busca', '')
@@ -122,6 +124,8 @@ def register_conciliacao_routes(bp):
             filtros['tipo'] = tipo
         if status:
             filtros['status'] = status
+        if origem in ('OFX', 'CSV', 'MANUAL'):
+            filtros['origem'] = origem
 
         try:
             if data_inicio_str:
@@ -169,6 +173,7 @@ def register_conciliacao_routes(bp):
             resumo=resumo,
             tipo_filtro=tipo,
             status_filtro=status,
+            origem_filtro=origem,
             data_inicio=data_inicio_str,
             data_fim=data_fim_str,
             busca=busca,
@@ -520,13 +525,13 @@ def register_conciliacao_routes(bp):
         valor_min = valor_doc * (1 - margem)
         valor_max = valor_doc * (1 + margem)
 
-        # Review Sprint 3 I3: excluir linhas FC_VIRTUAL do auto-match.
-        # Sao vouchers FC, nao podem ser sugeridas como candidatas.
+        # W10 Nivel 2 (Sprint 4): incluir TODAS as linhas como candidatas
+        # (OFX/CSV/MANUAL). Linhas MANUAL tambem podem servir de match
+        # — sao pagamentos com rastreabilidade via conta_origem.
         linhas_candidatas = CarviaExtratoLinha.query.filter(
             CarviaExtratoLinha.tipo == direcao,
             CarviaExtratoLinha.status_conciliacao.in_(['PENDENTE', 'PARCIAL']),
             db.func.abs(CarviaExtratoLinha.valor).between(valor_min, valor_max),
-            CarviaExtratoLinha.origem != 'FC_VIRTUAL',
         ).order_by(CarviaExtratoLinha.data.desc()).limit(20).all()
 
         # Construir resposta com scoring simplificado
@@ -564,6 +569,8 @@ def register_conciliacao_routes(bp):
                 'descricao': ln.descricao or '',
                 'razao_social': ln.razao_social or '',
                 'saldo_a_conciliar': ln.saldo_a_conciliar,
+                'origem': ln.origem,
+                'conta_origem': ln.conta_origem or '',
                 'score': round(score, 2),
                 'score_label': label,
             })
@@ -1227,4 +1234,147 @@ def register_conciliacao_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao criar custo fiscal: {e}", exc_info=True)
+            return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # PATCH/DELETE de linha MANUAL (W10 Nivel 2 — Sprint 4)
+    # ===================================================================
+    #
+    # Linhas com origem='MANUAL' sao criadas pelo CarviaPagamentoService
+    # (pagamento fora do extrato bancario — conta pessoal, dinheiro, etc.).
+    # Podem ser editadas/deletadas enquanto nao conciliadas.
+    # OFX/CSV sao imutaveis.
+
+    @bp.route('/api/extrato/linha/<int:linha_id>', methods=['PATCH'])
+    @login_required
+    def api_extrato_linha_editar(linha_id):  # type: ignore
+        """Edita linha MANUAL (data, valor, descricao, conta_origem).
+
+        Bloqueado para OFX/CSV (imutaveis) e para linhas ja conciliadas.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaExtratoLinha
+
+        linha = db.session.get(CarviaExtratoLinha, linha_id)
+        if not linha:
+            return jsonify({'erro': 'Linha nao encontrada'}), 404
+
+        pode, razao = linha.pode_editar()
+        if not pode:
+            return jsonify({'erro': razao}), 400
+
+        data = request.get_json() or {}
+
+        # Campos editaveis (todos opcionais — atualiza apenas os presentes)
+        try:
+            if 'data' in data and data['data']:
+                try:
+                    nova_data = date.fromisoformat(str(data['data']))
+                except (ValueError, TypeError):
+                    return jsonify({
+                        'erro': 'Data invalida (formato: YYYY-MM-DD)'
+                    }), 400
+                hoje = date.today()
+                limite_inf = hoje - relativedelta(years=5)
+                limite_sup = hoje + relativedelta(years=2)
+                if not (limite_inf <= nova_data <= limite_sup):
+                    return jsonify({
+                        'erro': (
+                            f'Data fora do intervalo permitido '
+                            f'({limite_inf} a {limite_sup}).'
+                        )
+                    }), 400
+                linha.data = nova_data
+
+            if 'valor' in data and data['valor'] is not None:
+                novo_valor = float(data['valor'])
+                if novo_valor <= 0:
+                    return jsonify({'erro': 'Valor deve ser positivo'}), 400
+                linha.valor = novo_valor
+
+            if 'descricao' in data:
+                desc = data['descricao']
+                if desc is None or (isinstance(desc, str) and desc.strip() == ''):
+                    linha.descricao = None
+                else:
+                    linha.descricao = str(desc).strip()[:500]
+
+            if 'conta_origem' in data:
+                conta = (data['conta_origem'] or '').strip()
+                if not conta:
+                    return jsonify({
+                        'erro': 'conta_origem e obrigatorio para linha MANUAL'
+                    }), 400
+                linha.conta_origem = conta[:100]
+                linha.memo = f'Pagamento manual — {conta[:100]}'
+
+            if 'tipo' in data and data['tipo']:
+                if data['tipo'] not in ('CREDITO', 'DEBITO'):
+                    return jsonify({'erro': 'tipo deve ser CREDITO ou DEBITO'}), 400
+                linha.tipo = data['tipo']
+
+            db.session.commit()
+
+            logger.info(
+                "Linha MANUAL #%s editada por %s", linha_id, current_user.email
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'linha': {
+                    'id': linha.id,
+                    'data': linha.data.isoformat() if linha.data else None,
+                    'valor': float(linha.valor or 0),
+                    'tipo': linha.tipo,
+                    'descricao': linha.descricao,
+                    'conta_origem': linha.conta_origem,
+                    'origem': linha.origem,
+                    'status_conciliacao': linha.status_conciliacao,
+                },
+            })
+
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'erro': f'Dados invalidos: {e}'}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro ao editar linha MANUAL #{linha_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/extrato/linha/<int:linha_id>', methods=['DELETE'])
+    @login_required
+    def api_extrato_linha_deletar(linha_id):  # type: ignore
+        """Deleta linha MANUAL (se nao conciliada).
+
+        Bloqueado para OFX/CSV (imutaveis) e para linhas com conciliacao.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaExtratoLinha
+
+        linha = db.session.get(CarviaExtratoLinha, linha_id)
+        if not linha:
+            return jsonify({'erro': 'Linha nao encontrada'}), 404
+
+        pode, razao = linha.pode_deletar()
+        if not pode:
+            return jsonify({'erro': razao}), 400
+
+        try:
+            db.session.delete(linha)
+            db.session.commit()
+
+            logger.info(
+                "Linha MANUAL #%s deletada por %s",
+                linha_id, current_user.email,
+            )
+
+            return jsonify({'sucesso': True})
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro ao deletar linha MANUAL #{linha_id}: {e}")
             return jsonify({'erro': str(e)}), 500

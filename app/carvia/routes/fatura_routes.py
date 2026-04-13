@@ -688,7 +688,12 @@ def register_fatura_routes(bp):
     @bp.route('/faturas-cliente/<int:fatura_id>/status', methods=['POST']) # type: ignore
     @login_required
     def atualizar_status_fatura_cliente(fatura_id): # type: ignore
-        """Atualiza status de uma fatura cliente"""
+        """Atualiza status da fatura para PENDENTE ou CANCELADA.
+
+        Para pagamento (PAGA), usar endpoint JSON
+        /faturas-cliente/<id>/pagar via CarviaPagamentoService.
+        W10 Nivel 2 (Sprint 4): pagamento centralizado no service.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -699,61 +704,184 @@ def register_fatura_routes(bp):
             return redirect(url_for('carvia.listar_faturas_cliente'))
 
         novo_status = request.form.get('status')
-        # GAP-01: EMITIDA removido do fluxo (status morto, nunca setado automaticamente)
-        if novo_status not in ('PENDENTE', 'PAGA', 'CANCELADA'):
-            flash('Status invalido.', 'warning')
+        if novo_status not in ('PENDENTE', 'CANCELADA'):
+            flash(
+                'Status invalido. Para marcar como PAGA, use o botao "Pagar".',
+                'warning',
+            )
             return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
+        # NC1: bloquear transicao PAGA -> CANCELADA direta. R4 exige que
+        # CANCELADA venha de PENDENTE — desfazer pagamento primeiro,
+        # cancelar depois (2 acoes explicitas).
+        if fatura.status == 'PAGA' and novo_status == 'CANCELADA':
+            flash(
+                'Nao e possivel cancelar fatura PAGA diretamente. '
+                'Desfaca o pagamento primeiro (isso reverte para PENDENTE), '
+                'depois cancele.',
+                'warning',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_fatura_cliente', fatura_id=fatura_id
+            ))
+
         try:
-            # GAP-05: Se revertendo de PAGA para outro status, remover movimentacao financeira
-            if fatura.status == 'PAGA' and novo_status != 'PAGA':
-                from app.carvia.routes.fluxo_caixa_routes import _remover_movimentacao
-                _remover_movimentacao('fatura_cliente', fatura_id)
-                fatura.pago_por = None
-                fatura.pago_em = None
-                logger.info(
-                    f"Fatura cliente #{fatura_id}: movimentacao removida ao reverter "
-                    f"PAGA -> {novo_status} por {current_user.email}"
+            # Se revertendo de PAGA, usar service de desfazer (desconcilia MANUAL)
+            if fatura.status == 'PAGA':
+                from app.carvia.services.financeiro.carvia_pagamento_service import (
+                    CarviaPagamentoService, PagamentoError,
                 )
-
-            fatura.status = novo_status
-
-            # Ao marcar como PAGA: registrar pago_em/pago_por e criar movimentacao
-            if novo_status == 'PAGA':
-                data_pagamento_str = request.form.get('data_pagamento', '').strip()
-                if not data_pagamento_str:
-                    flash('Data de pagamento e obrigatoria para marcar como PAGA.', 'warning')
-                    return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
                 try:
-                    data_pagamento = date.fromisoformat(data_pagamento_str)
-                except ValueError:
-                    flash('Data de pagamento invalida.', 'warning')
-                    return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+                    CarviaPagamentoService.desfazer_pagamento(
+                        'fatura_cliente', fatura_id, current_user.email
+                    )
+                except PagamentoError as e:
+                    db.session.rollback()
+                    flash(str(e), 'danger')
+                    return redirect(url_for(
+                        'carvia.detalhe_fatura_cliente', fatura_id=fatura_id
+                    ))
+                # Compat historico (ContaMovimentacao legada) e feito
+                # INTERNAMENTE por CarviaPagamentoService.desfazer_pagamento.
 
-                fatura.pago_em = datetime.combine(data_pagamento, datetime.min.time())
-                fatura.pago_por = current_user.email
-
-                # Criar movimentacao financeira na conta
-                from app.carvia.routes.fluxo_caixa_routes import (
-                    _criar_movimentacao, _gerar_descricao,
-                )
-                descricao = _gerar_descricao('fatura_cliente', fatura)
-                _criar_movimentacao(
-                    'fatura_cliente', fatura_id,
-                    float(fatura.valor_total or 0), descricao, current_user.email,
-                )
-
+            # Aplicar novo status (apos desfazer, pode ir para CANCELADA)
+            fatura.status = novo_status
             db.session.commit()
             flash(f'Status atualizado para {novo_status}.', 'success')
-        except IntegrityError:
-            db.session.rollback()
-            logger.warning(f"Movimentacao duplicada fatura cliente #{fatura_id}")
-            flash('Este lancamento ja foi processado.', 'warning')
+
         except Exception as e:
             db.session.rollback()
+            logger.exception(f"Erro ao atualizar status fatura cliente #{fatura_id}: {e}")
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/pagar', methods=['POST']) # type: ignore
+    @login_required
+    def pagar_fatura_cliente(fatura_id): # type: ignore
+        """Paga fatura cliente via CarviaPagamentoService (JSON).
+
+        Dois modos:
+        1. Com conciliacao: {data_pagamento, extrato_linha_id}
+        2. Manual: {data_pagamento, conta_origem, descricao_pagamento}
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            return jsonify({'erro': 'Fatura nao encontrada'}), 404
+
+        data = request.get_json() or {}
+        data_pagamento_str = data.get('data_pagamento', '')
+        extrato_linha_id = data.get('extrato_linha_id')
+        conta_origem = data.get('conta_origem')
+        descricao_pagamento = data.get('descricao_pagamento')
+
+        if not data_pagamento_str:
+            return jsonify({'erro': 'data_pagamento e obrigatoria'}), 400
+        try:
+            data_pagamento = date.fromisoformat(data_pagamento_str)
+        except ValueError:
+            return jsonify({'erro': 'Data de pagamento invalida'}), 400
+
+        from app.carvia.services.financeiro.carvia_pagamento_service import (
+            CarviaPagamentoService,
+            DocumentoJaPagoError,
+            DocumentoCanceladoError,
+            DocumentoNaoEncontradoError,
+            JaConciliadoError,
+            ParametroInvalidoError,
+            PagamentoError,
+        )
+
+        try:
+            if extrato_linha_id:
+                resultado = CarviaPagamentoService.pagar_com_conciliacao(
+                    tipo_doc='fatura_cliente',
+                    doc_id=fatura_id,
+                    data_pagamento=data_pagamento,
+                    extrato_linha_id=extrato_linha_id,
+                    usuario=current_user.email,
+                )
+            else:
+                resultado = CarviaPagamentoService.pagar_manual(
+                    tipo_doc='fatura_cliente',
+                    doc_id=fatura_id,
+                    data_pagamento=data_pagamento,
+                    conta_origem=conta_origem,
+                    descricao_pagamento=descricao_pagamento,
+                    usuario=current_user.email,
+                )
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'novo_status': resultado['novo_status'],
+                'pago_em': fatura.pago_em.isoformat() if fatura.pago_em else None,
+                'pago_por': fatura.pago_por,
+                'extrato_linha_id': resultado.get('extrato_linha_id'),
+                'modo': resultado.get('modo'),
+            })
+
+        except DocumentoNaoEncontradoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 404
+        except DocumentoJaPagoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 409
+        except DocumentoCanceladoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except JaConciliadoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except ParametroInvalidoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except PagamentoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro ao pagar fatura cliente #{fatura_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/faturas-cliente/<int:fatura_id>/desfazer-pagamento', methods=['POST']) # type: ignore
+    @login_required
+    def desfazer_pagamento_fatura_cliente(fatura_id): # type: ignore
+        """Desfaz pagamento via CarviaPagamentoService (JSON)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.services.financeiro.carvia_pagamento_service import (
+            CarviaPagamentoService,
+            DocumentoNaoEncontradoError,
+            PagamentoError,
+        )
+
+        try:
+            resultado = CarviaPagamentoService.desfazer_pagamento(
+                'fatura_cliente', fatura_id, current_user.email
+            )
+            # Compat historico (ContaMovimentacao legada) e feito
+            # INTERNAMENTE por CarviaPagamentoService.desfazer_pagamento.
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'novo_status': resultado['novo_status'],
+            })
+        except DocumentoNaoEncontradoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 404
+        except PagamentoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro desfazer fatura cliente #{fatura_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
 
     # ===================== CRIAR FATURA RAPIDA =====================
 

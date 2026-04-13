@@ -5,7 +5,7 @@ Rotas de Despesas CarVia — CRUD completo
 import logging
 from datetime import date, datetime
 
-from flask import render_template, request, flash, redirect, url_for
+from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
@@ -278,13 +278,16 @@ def register_despesa_routes(bp):
             return redirect(url_for('carvia.listar_despesas'))
 
         novo_status = request.form.get('status')
-        if novo_status not in STATUS_DESPESA:
-            flash('Status invalido.', 'warning')
+        # W10 Nivel 2 (Sprint 4): apenas PENDENTE e CANCELADO aqui.
+        # Para PAGO, usar endpoint JSON /despesas/<id>/pagar (service centralizado).
+        if novo_status not in ('PENDENTE', 'CANCELADO'):
+            flash(
+                'Status invalido. Para marcar como PAGO, use o botao "Pagar".',
+                'warning',
+            )
             return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
 
         # W13: Despesa COMISSAO nao pode ser cancelada diretamente.
-        # Pagamento (PENDENTE ↔ PAGO) e permitido; CANCELADO deve vir do
-        # fluxo da Comissao (ComissaoService.cancelar).
         if despesa.tipo_despesa == 'COMISSAO' and novo_status == 'CANCELADO':
             flash(
                 'Despesa de Comissao nao pode ser cancelada diretamente. '
@@ -293,54 +296,169 @@ def register_despesa_routes(bp):
             )
             return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
 
+        # NC1: bloquear transicao PAGO -> CANCELADO direta. R4 exige que
+        # CANCELADO venha de PENDENTE — desfazer pagamento primeiro,
+        # cancelar depois (2 acoes explicitas).
+        if despesa.status == 'PAGO' and novo_status == 'CANCELADO':
+            flash(
+                'Nao e possivel cancelar despesa PAGA diretamente. '
+                'Desfaca o pagamento primeiro (isso reverte para PENDENTE), '
+                'depois cancele.',
+                'warning',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_despesa', despesa_id=despesa_id
+            ))
+
         try:
-            # GAP-06: Se revertendo de PAGO para outro status, remover movimentacao financeira
-            if despesa.status == 'PAGO' and novo_status != 'PAGO':
-                from app.carvia.routes.fluxo_caixa_routes import _remover_movimentacao
-                _remover_movimentacao('despesa', despesa_id)
-                despesa.pago_por = None
-                despesa.pago_em = None
-                logger.info(
-                    f"Despesa #{despesa_id}: movimentacao removida ao reverter "
-                    f"PAGO -> {novo_status} por {current_user.email}"
+            # Se revertendo de PAGO, usar service de desfazer (desconcilia MANUAL)
+            if despesa.status == 'PAGO':
+                from app.carvia.services.financeiro.carvia_pagamento_service import (
+                    CarviaPagamentoService, PagamentoError,
                 )
+                try:
+                    CarviaPagamentoService.desfazer_pagamento(
+                        'despesa', despesa_id, current_user.email
+                    )
+                except PagamentoError as e:
+                    db.session.rollback()
+                    flash(str(e), 'danger')
+                    return redirect(url_for(
+                        'carvia.detalhe_despesa', despesa_id=despesa_id
+                    ))
+                # Compat historico (ContaMovimentacao legada) e feito
+                # INTERNAMENTE por CarviaPagamentoService.desfazer_pagamento.
 
             despesa.status = novo_status
-
-            # Ao marcar como PAGO: registrar pago_em/pago_por e criar movimentacao
-            if novo_status == 'PAGO':
-                data_pagamento_str = request.form.get('data_pagamento', '').strip()
-                if not data_pagamento_str:
-                    flash('Data de pagamento e obrigatoria para marcar como PAGO.', 'warning')
-                    return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
-                try:
-                    data_pagamento = date.fromisoformat(data_pagamento_str)
-                except ValueError:
-                    flash('Data de pagamento invalida.', 'warning')
-                    return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
-
-                despesa.pago_em = datetime.combine(data_pagamento, datetime.min.time())
-                despesa.pago_por = current_user.email
-
-                # Criar movimentacao financeira na conta
-                from app.carvia.routes.fluxo_caixa_routes import (
-                    _criar_movimentacao, _gerar_descricao,
-                )
-                descricao = _gerar_descricao('despesa', despesa)
-                _criar_movimentacao(
-                    'despesa', despesa_id,
-                    float(despesa.valor or 0), descricao, current_user.email,
-                )
-
             db.session.commit()
             flash(f'Status atualizado para {novo_status}.', 'success')
-        except IntegrityError:
-            db.session.rollback()
-            logger.warning(f"Movimentacao duplicada despesa #{despesa_id}")
-            flash('Este lancamento ja foi processado.', 'warning')
+
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao atualizar status despesa {despesa_id}: {e}")
+            logger.exception(f"Erro ao atualizar status despesa {despesa_id}: {e}")
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_despesa', despesa_id=despesa_id))
+
+    @bp.route('/despesas/<int:despesa_id>/pagar', methods=['POST']) # type: ignore
+    @login_required
+    def pagar_despesa(despesa_id): # type: ignore
+        """Paga despesa via CarviaPagamentoService (JSON).
+
+        Modos: com_conciliacao (extrato_linha_id) ou manual (conta_origem).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        despesa = db.session.get(CarviaDespesa, despesa_id)
+        if not despesa:
+            return jsonify({'erro': 'Despesa nao encontrada'}), 404
+
+        data = request.get_json() or {}
+        data_pagamento_str = data.get('data_pagamento', '')
+        extrato_linha_id = data.get('extrato_linha_id')
+        conta_origem = data.get('conta_origem')
+        descricao_pagamento = data.get('descricao_pagamento')
+
+        if not data_pagamento_str:
+            return jsonify({'erro': 'data_pagamento e obrigatoria'}), 400
+        try:
+            data_pagamento = date.fromisoformat(data_pagamento_str)
+        except ValueError:
+            return jsonify({'erro': 'Data de pagamento invalida'}), 400
+
+        from app.carvia.services.financeiro.carvia_pagamento_service import (
+            CarviaPagamentoService,
+            DocumentoJaPagoError,
+            DocumentoCanceladoError,
+            DocumentoNaoEncontradoError,
+            JaConciliadoError,
+            ParametroInvalidoError,
+            PagamentoError,
+        )
+
+        try:
+            if extrato_linha_id:
+                resultado = CarviaPagamentoService.pagar_com_conciliacao(
+                    tipo_doc='despesa',
+                    doc_id=despesa_id,
+                    data_pagamento=data_pagamento,
+                    extrato_linha_id=extrato_linha_id,
+                    usuario=current_user.email,
+                )
+            else:
+                resultado = CarviaPagamentoService.pagar_manual(
+                    tipo_doc='despesa',
+                    doc_id=despesa_id,
+                    data_pagamento=data_pagamento,
+                    conta_origem=conta_origem,
+                    descricao_pagamento=descricao_pagamento,
+                    usuario=current_user.email,
+                )
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'novo_status': resultado['novo_status'],
+                'pago_em': despesa.pago_em.isoformat() if despesa.pago_em else None,
+                'pago_por': despesa.pago_por,
+                'extrato_linha_id': resultado.get('extrato_linha_id'),
+                'modo': resultado.get('modo'),
+            })
+
+        except DocumentoNaoEncontradoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 404
+        except DocumentoJaPagoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 409
+        except DocumentoCanceladoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except JaConciliadoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except ParametroInvalidoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except PagamentoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro ao pagar despesa #{despesa_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/despesas/<int:despesa_id>/desfazer-pagamento', methods=['POST']) # type: ignore
+    @login_required
+    def desfazer_pagamento_despesa(despesa_id): # type: ignore
+        """Desfaz pagamento da despesa (JSON)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.services.financeiro.carvia_pagamento_service import (
+            CarviaPagamentoService,
+            DocumentoNaoEncontradoError,
+            PagamentoError,
+        )
+
+        try:
+            resultado = CarviaPagamentoService.desfazer_pagamento(
+                'despesa', despesa_id, current_user.email
+            )
+            # Compat historico (ContaMovimentacao legada) e feito
+            # INTERNAMENTE por CarviaPagamentoService.desfazer_pagamento.
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'novo_status': resultado['novo_status'],
+            })
+        except DocumentoNaoEncontradoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 404
+        except PagamentoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro desfazer despesa #{despesa_id}: {e}")
+            return jsonify({'erro': str(e)}), 500

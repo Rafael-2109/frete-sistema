@@ -89,32 +89,36 @@
                 </div>
                 <div class="card-body">
                     <h6>Alterar Status:</h6>
-                    <div class="d-flex gap-2 flex-wrap">
-                        {% for status in ['PENDENTE', 'RECEBIDO', 'CANCELADO'] %}
-                        {% if status != receita.status %}
-                            {% if status == 'RECEBIDO' %}
-                            {# RECEBIDO abre modal para informar data de recebimento #}
-                            <button type="button" class="btn btn-sm btn-success"
-                                    data-bs-toggle="modal" data-bs-target="#modalDataRecebimento">
-                                <i class="fas fa-check"></i> RECEBIDO
+                    <div class="d-flex gap-2 flex-wrap" id="statusAcoesReceita">
+                        {# W10 Nivel 2 (Sprint 4): recebimento via service centralizado #}
+                        {% if receita.status == 'RECEBIDO' %}
+                            <span class="badge carvia-badge-recebido" id="statusReceitaBadge">RECEBIDO</span>
+                            <button type="button" class="btn btn-sm btn-outline-warning" id="btnDesfazerRecebimentoReceita">
+                                <i class="fas fa-undo"></i> Desfazer Recebimento
                             </button>
-                            {% else %}
+                        {% elif receita.status == 'CANCELADO' %}
+                            <span class="badge carvia-badge-cancelado" id="statusReceitaBadge">CANCELADO</span>
                             <form method="POST" action="{{ url_for('carvia.atualizar_status_receita', receita_id=receita.id) }}" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="status" value="{{ status }}">
-                                <button type="submit" class="btn btn-sm
-                                    {% if status == 'CANCELADO' %}btn-danger
-                                    {% else %}btn-warning{% endif %}"
-                                    {% if status == 'CANCELADO' %}onclick="return confirm('Cancelar esta receita?')"{% endif %}>
-                                    <i class="fas
-                                        {% if status == 'CANCELADO' %}fa-times
-                                        {% else %}fa-clock{% endif %}"></i>
-                                    {{ status }}
+                                <input type="hidden" name="status" value="PENDENTE">
+                                <button type="submit" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-clock"></i> PENDENTE
                                 </button>
                             </form>
-                            {% endif %}
+                        {% else %}
+                            <span class="badge carvia-badge-{{ receita.status|lower }}" id="statusReceitaBadge">{{ receita.status }}</span>
+                            <button type="button" class="btn btn-sm btn-success" id="btnReceberReceita">
+                                <i class="fas fa-money-bill-wave"></i> Receber
+                            </button>
+                            <form method="POST" action="{{ url_for('carvia.atualizar_status_receita', receita_id=receita.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="CANCELADO">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Cancelar esta receita?')">
+                                    <i class="fas fa-times"></i> CANCELADO
+                                </button>
+                            </form>
                         {% endif %}
-                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -122,10 +126,8 @@
     </div>
 </div>
 
-{# Modal de data de recebimento (modo Form POST) #}
-{% with form_action=url_for('carvia.atualizar_status_receita', receita_id=receita.id), form_status='RECEBIDO' %}
-    {% include 'carvia/_modal_data_recebimento.html' %}
-{% endwith %}
+{# Modal de pagamento com conciliacao/manual (W10 Nivel 2 — Sprint 4) #}
+{% include 'carvia/_modal_pagar_com_conciliacao.html' %}
 
 <!-- Conciliacoes Bancarias -->
 {% set conc_tipo_documento = 'receita' %}
@@ -146,19 +148,86 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/carvia_pagamento_modal.js') }}"></script>
 <script>
+// W10 Nivel 2 (Sprint 4): recebimento via CarviaPagamentoModal
 (function() {
     'use strict';
-    // Setar data de hoje como default ao abrir o modal
-    var modalEl = document.getElementById('modalDataRecebimento');
-    if (modalEl) {
-        modalEl.addEventListener('show.bs.modal', function() {
-            var input = document.getElementById('dataRecebimentoInput');
-            if (input && !input.value) {
-                input.value = new Date().toISOString().slice(0, 10);
-            }
+    var receitaId = {{ receita.id }};
+    var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+                 || document.querySelector('input[name="csrf_token"]')?.value || '';
+
+    function atualizarUISucesso() {
+        var container = document.getElementById('statusAcoesReceita');
+        if (!container) return;
+        container.textContent = '';
+
+        var badge = document.createElement('span');
+        badge.className = 'badge carvia-badge-recebido';
+        badge.id = 'statusReceitaBadge';
+        badge.textContent = 'RECEBIDO';
+        container.appendChild(badge);
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-warning';
+        btn.id = 'btnDesfazerRecebimentoReceita';
+        btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Recebimento';
+        container.appendChild(btn);
+
+        bindDesfazer();
+    }
+
+    function bindReceber() {
+        var btn = document.getElementById('btnReceberReceita');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            window.CarviaPagamentoModal.abrir({
+                tipoDoc: 'receita',
+                docId: receitaId,
+                endpoint: '/carvia/receitas/' + receitaId + '/receber',
+                onSuccess: atualizarUISucesso,
+            });
         });
     }
+
+    function bindDesfazer() {
+        var btn = document.getElementById('btnDesfazerRecebimentoReceita');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            if (!confirm('Desfazer o recebimento desta receita?')) return;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/carvia/receitas/' + receitaId + '/desfazer-recebimento', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    // Reload garante re-render completo pelo Jinja (badge + Receber + form Cancelar).
+                    // Reconstruir so "badge + Receber" via JS perdia o form Cancelar ate o proximo reload.
+                    location.reload();
+                } else {
+                    alert(data.erro || 'Erro ao desfazer recebimento');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Recebimento';
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Recebimento';
+            });
+        });
+    }
+
+    bindReceber();
+    bindDesfazer();
 })();
 </script>
 {% endblock %}

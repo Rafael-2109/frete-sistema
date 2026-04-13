@@ -5,7 +5,7 @@ Rotas de Receitas CarVia — CRUD completo
 import logging
 from datetime import date, datetime
 
-from flask import render_template, request, flash, redirect, url_for
+from flask import render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
@@ -237,58 +237,180 @@ def register_receita_routes(bp):
             return redirect(url_for('carvia.listar_receitas'))
 
         novo_status = request.form.get('status')
-        if novo_status not in STATUS_RECEITA:
-            flash('Status invalido.', 'warning')
+        # W10 Nivel 2 (Sprint 4): apenas PENDENTE e CANCELADO aqui.
+        # Para RECEBIDO, usar endpoint JSON /receitas/<id>/receber.
+        if novo_status not in ('PENDENTE', 'CANCELADO'):
+            flash(
+                'Status invalido. Para marcar como RECEBIDO, use o botao "Receber".',
+                'warning',
+            )
             return redirect(url_for('carvia.detalhe_receita', receita_id=receita_id))
 
+        # NC1: bloquear transicao RECEBIDO -> CANCELADO direta. R4 exige que
+        # CANCELADO venha de PENDENTE — desfazer recebimento primeiro,
+        # cancelar depois (2 acoes explicitas).
+        if receita.status == 'RECEBIDO' and novo_status == 'CANCELADO':
+            flash(
+                'Nao e possivel cancelar receita RECEBIDA diretamente. '
+                'Desfaca o recebimento primeiro (isso reverte para PENDENTE), '
+                'depois cancele.',
+                'warning',
+            )
+            return redirect(url_for(
+                'carvia.detalhe_receita', receita_id=receita_id
+            ))
+
         try:
-            # Se revertendo de RECEBIDO para outro status, remover movimentacao financeira
-            if receita.status == 'RECEBIDO' and novo_status != 'RECEBIDO':
-                from app.carvia.routes.fluxo_caixa_routes import _remover_movimentacao
-                _remover_movimentacao('receita', receita_id)
-                receita.recebido_por = None
-                receita.recebido_em = None
-                logger.info(
-                    f"Receita #{receita_id}: movimentacao removida ao reverter "
-                    f"RECEBIDO -> {novo_status} por {current_user.email}"
+            # Se revertendo de RECEBIDO, usar service de desfazer
+            if receita.status == 'RECEBIDO':
+                from app.carvia.services.financeiro.carvia_pagamento_service import (
+                    CarviaPagamentoService, PagamentoError,
                 )
+                try:
+                    CarviaPagamentoService.desfazer_pagamento(
+                        'receita', receita_id, current_user.email
+                    )
+                except PagamentoError as e:
+                    db.session.rollback()
+                    flash(str(e), 'danger')
+                    return redirect(url_for(
+                        'carvia.detalhe_receita', receita_id=receita_id
+                    ))
+                # Compat historico (ContaMovimentacao legada) e feito
+                # INTERNAMENTE por CarviaPagamentoService.desfazer_pagamento.
 
             receita.status = novo_status
-
-            # Ao marcar como RECEBIDO: registrar recebido_em/recebido_por e criar movimentacao
-            if novo_status == 'RECEBIDO':
-                data_recebimento_str = request.form.get('data_recebimento', '').strip()
-                if not data_recebimento_str:
-                    flash('Data de recebimento e obrigatoria para marcar como RECEBIDO.', 'warning')
-                    return redirect(url_for('carvia.detalhe_receita', receita_id=receita_id))
-                try:
-                    data_recebimento = date.fromisoformat(data_recebimento_str)
-                except ValueError:
-                    flash('Data de recebimento invalida.', 'warning')
-                    return redirect(url_for('carvia.detalhe_receita', receita_id=receita_id))
-
-                receita.recebido_em = datetime.combine(data_recebimento, datetime.min.time())
-                receita.recebido_por = current_user.email
-
-                # Criar movimentacao financeira na conta
-                from app.carvia.routes.fluxo_caixa_routes import (
-                    _criar_movimentacao, _gerar_descricao,
-                )
-                descricao = _gerar_descricao('receita', receita)
-                _criar_movimentacao(
-                    'receita', receita_id,
-                    float(receita.valor or 0), descricao, current_user.email,
-                )
-
             db.session.commit()
             flash(f'Status atualizado para {novo_status}.', 'success')
-        except IntegrityError:
-            db.session.rollback()
-            logger.warning(f"Movimentacao duplicada receita #{receita_id}")
-            flash('Este lancamento ja foi processado.', 'warning')
+
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao atualizar status receita {receita_id}: {e}")
+            logger.exception(f"Erro ao atualizar status receita {receita_id}: {e}")
             flash(f'Erro: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_receita', receita_id=receita_id))
+
+    @bp.route('/receitas/<int:receita_id>/receber', methods=['POST']) # type: ignore
+    @login_required
+    def receber_receita(receita_id): # type: ignore
+        """Marca receita como RECEBIDO via CarviaPagamentoService (JSON)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        receita = db.session.get(CarviaReceita, receita_id)
+        if not receita:
+            return jsonify({'erro': 'Receita nao encontrada'}), 404
+
+        data = request.get_json() or {}
+        # Aceita tanto data_recebimento quanto data_pagamento (normalizacao)
+        data_recebimento_str = (
+            data.get('data_recebimento') or data.get('data_pagamento') or ''
+        )
+        extrato_linha_id = data.get('extrato_linha_id')
+        conta_origem = data.get('conta_origem')
+        descricao_pagamento = data.get('descricao_pagamento')
+
+        if not data_recebimento_str:
+            return jsonify({'erro': 'data_recebimento e obrigatoria'}), 400
+        try:
+            data_recebimento = date.fromisoformat(data_recebimento_str)
+        except ValueError:
+            return jsonify({'erro': 'Data de recebimento invalida'}), 400
+
+        from app.carvia.services.financeiro.carvia_pagamento_service import (
+            CarviaPagamentoService,
+            DocumentoJaPagoError,
+            DocumentoCanceladoError,
+            DocumentoNaoEncontradoError,
+            JaConciliadoError,
+            ParametroInvalidoError,
+            PagamentoError,
+        )
+
+        try:
+            if extrato_linha_id:
+                resultado = CarviaPagamentoService.pagar_com_conciliacao(
+                    tipo_doc='receita',
+                    doc_id=receita_id,
+                    data_pagamento=data_recebimento,
+                    extrato_linha_id=extrato_linha_id,
+                    usuario=current_user.email,
+                )
+            else:
+                resultado = CarviaPagamentoService.pagar_manual(
+                    tipo_doc='receita',
+                    doc_id=receita_id,
+                    data_pagamento=data_recebimento,
+                    conta_origem=conta_origem,
+                    descricao_pagamento=descricao_pagamento,
+                    usuario=current_user.email,
+                )
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'novo_status': resultado['novo_status'],
+                'pago_em': (
+                    receita.recebido_em.isoformat() if receita.recebido_em else None
+                ),
+                'pago_por': receita.recebido_por,
+                'extrato_linha_id': resultado.get('extrato_linha_id'),
+                'modo': resultado.get('modo'),
+            })
+
+        except DocumentoNaoEncontradoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 404
+        except DocumentoJaPagoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 409
+        except DocumentoCanceladoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except JaConciliadoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except ParametroInvalidoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except PagamentoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro ao receber receita #{receita_id}: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/receitas/<int:receita_id>/desfazer-recebimento', methods=['POST']) # type: ignore
+    @login_required
+    def desfazer_recebimento_receita(receita_id): # type: ignore
+        """Desfaz recebimento de receita (JSON)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from app.carvia.services.financeiro.carvia_pagamento_service import (
+            CarviaPagamentoService,
+            DocumentoNaoEncontradoError,
+            PagamentoError,
+        )
+
+        try:
+            resultado = CarviaPagamentoService.desfazer_pagamento(
+                'receita', receita_id, current_user.email
+            )
+            # Compat historico (ContaMovimentacao legada) e feito
+            # INTERNAMENTE por CarviaPagamentoService.desfazer_pagamento.
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'novo_status': resultado['novo_status'],
+            })
+        except DocumentoNaoEncontradoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 404
+        except PagamentoError as e:
+            db.session.rollback()
+            return jsonify({'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f"Erro desfazer receita #{receita_id}: {e}")
+            return jsonify({'erro': str(e)}), 500

@@ -45,17 +45,17 @@ class CarviaConciliacaoService:
         """
         from app.carvia.models import CarviaExtratoLinha
 
-        # Review Sprint 3 I4: por padrao, filtrar linhas FC_VIRTUAL.
-        # Filtro `incluir_virtuais=True` permite ver linhas virtuais para
-        # admin/debug. Linhas FC_VIRTUAL sao criadas pelo FC e nao devem
-        # aparecer no Extrato Bancario normal.
+        # W10 Nivel 2 (Sprint 4): por padrao, incluir linhas MANUAL
+        # (sao pagamentos manuais com rastreabilidade via conta_origem).
+        # Filtros explicitos via `origem` podem restringir para 'OFX'/'CSV'/'MANUAL'.
         query = CarviaExtratoLinha.query.order_by(
             CarviaExtratoLinha.data.desc(),
             CarviaExtratoLinha.id.desc()
         )
 
-        if not (filtros and filtros.get('incluir_virtuais')):
-            query = query.filter(CarviaExtratoLinha.origem != 'FC_VIRTUAL')
+        # Filtro explicito por origem (se presente)
+        if filtros and filtros.get('origem'):
+            query = query.filter(CarviaExtratoLinha.origem == filtros['origem'])
 
         if filtros:
             if filtros.get('tipo'):
@@ -532,29 +532,28 @@ class CarviaConciliacaoService:
 
     @staticmethod
     def _tem_movimentacao_fc(tipo_doc, doc_id):
-        """Verifica se existe pagamento via Fluxo de Caixa para este documento.
+        """Verifica se existe pagamento fora do extrato bancario real.
 
-        Usado como guard na desconciliacao: se existe pagamento FC,
-        o pagamento via Fluxo de Caixa e autoritativo e NAO deve ser
-        revertido pela desconciliacao bancaria.
+        Usado como guard na desconciliacao: se existe pagamento fora do
+        extrato real (MANUAL ou legado CarviaContaMovimentacao), o pagamento
+        e autoritativo e NAO deve ser revertido pela desconciliacao bancaria.
 
-        W10 Nivel 2 (Sprint 3 followup): ha DOIS paths FC historicamente:
-        1. LEGADO: CarviaContaMovimentacao (criada diretamente pelo FC antigo)
-        2. NOVO: CarviaConciliacao com linha de extrato origem='FC_VIRTUAL'
-           (criada pelo FC via "Outros Extratos")
+        W10 Nivel 2 (Sprint 4): dois paths historicos:
+        1. LEGADO: CarviaContaMovimentacao (criada pelo FC antigo — pre-Sprint 3)
+        2. NOVO: CarviaConciliacao com linha origem='MANUAL' (criada pelo
+           CarviaPagamentoService.pagar_manual)
 
-        Ambos devem ser considerados como "pago via FC" para nao serem
-        revertidos quando o usuario desconcilia uma linha OFX real
-        referenciando o mesmo doc (dual-path legitimo).
+        Ambos devem ser considerados como "pago fora do extrato" para nao
+        serem revertidos quando o usuario desconcilia uma linha OFX real
+        referenciando o mesmo doc.
         """
         from app.carvia.models import (
             CarviaContaMovimentacao, CarviaConciliacao, CarviaExtratoLinha,
         )
 
         # Path 1 (legado): CarviaContaMovimentacao direta.
-        # Re-review Sprint 3 C1 fix: usar db.session.query(Model) (nao
-        # Model.query) dentro do exists() para evitar conflito entre as
-        # duas APIs de Query (Flask-SQLAlchemy legacy vs SQLAlchemy core).
+        # Usar db.session.query(Model) (nao Model.query) dentro do exists()
+        # para evitar conflito entre Flask-SQLAlchemy legacy Query e core.
         tem_mov_legado = db.session.query(
             db.session.query(CarviaContaMovimentacao).filter(
                 CarviaContaMovimentacao.tipo_doc == tipo_doc,
@@ -564,18 +563,18 @@ class CarviaConciliacaoService:
         if tem_mov_legado:
             return True
 
-        # Path 2 (novo W10 N2): conciliacao com linha FC_VIRTUAL
-        tem_fc_virtual = db.session.query(
+        # Path 2 (novo W10 N2 — Sprint 4): conciliacao com linha MANUAL
+        tem_manual = db.session.query(
             db.session.query(CarviaConciliacao).join(
                 CarviaExtratoLinha,
                 CarviaExtratoLinha.id == CarviaConciliacao.extrato_linha_id,
             ).filter(
                 CarviaConciliacao.tipo_documento == tipo_doc,
                 CarviaConciliacao.documento_id == doc_id,
-                CarviaExtratoLinha.origem == 'FC_VIRTUAL',
+                CarviaExtratoLinha.origem == 'MANUAL',
             ).exists()
         ).scalar()
-        return bool(tem_fc_virtual)
+        return bool(tem_manual)
 
     @staticmethod
     def _atualizar_totais_documento(tipo_documento, documento_id, usuario=None):
@@ -760,17 +759,15 @@ class CarviaConciliacaoService:
     def obter_resumo():
         """Retorna resumo para cards do dashboard de conciliacao.
 
-        Review Sprint 3 I3: exclui linhas FC_VIRTUAL do resumo. Elas sao
-        criadas pelo FC como vouchers de pagamento e nao representam
-        movimentacao bancaria real — inclui-las inflaria os contadores.
+        W10 Nivel 2 (Sprint 4): inclui TODAS as linhas (OFX/CSV/MANUAL).
+        Linhas MANUAL sao pagamentos validos com rastreabilidade via
+        conta_origem e fazem parte da visao de conciliacao do usuario.
+        O filtro por origem na UI permite recorte especifico.
         """
         from app.carvia.models import CarviaExtratoLinha
         from sqlalchemy import func as sqlfunc
 
-        # Base query: sempre exclui FC_VIRTUAL
-        base = CarviaExtratoLinha.query.filter(
-            CarviaExtratoLinha.origem != 'FC_VIRTUAL'
-        )
+        base = CarviaExtratoLinha.query
 
         total_linhas = base.count()
 
@@ -794,7 +791,6 @@ class CarviaConciliacaoService:
             )
         ).filter(
             CarviaExtratoLinha.status_conciliacao == 'PENDENTE',
-            CarviaExtratoLinha.origem != 'FC_VIRTUAL',
         ).scalar()
 
         return {

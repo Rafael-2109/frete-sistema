@@ -438,10 +438,7 @@
 
 </div>
 
-{# Modal de data de pagamento (modo AJAX — sem form_action, fallback) #}
-{% include 'carvia/_modal_data_pagamento.html' %}
-
-{# Modal de pagamento com conciliacao opcional (document-first) #}
+{# Modal de pagamento com conciliacao/manual (W10 Nivel 2 — Sprint 4) #}
 {% include 'carvia/_modal_pagar_com_conciliacao.html' %}
 
 {# Modal de alterar vencimento #}
@@ -470,6 +467,7 @@
 
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/carvia_pagamento_modal.js') }}"></script>
 <script>
 (function() {
     'use strict';
@@ -512,212 +510,39 @@
         el.className = 'stat-value ' + (saldo >= 0 ? 'text-success' : 'text-danger');
     }
 
-    // --- Modal de pagamento com conciliacao ---
-    var pcModalEl = document.getElementById('modalPagarComConciliacao');
-    var pcModalInstance = pcModalEl ? new bootstrap.Modal(pcModalEl) : null;
+    // --- Pagamento via CarviaPagamentoModal (JS reusavel) ---
+    // W10 Nivel 2 (Sprint 4): modal unificado com suporte a conciliacao
+    // OFX/CSV ou lancamento manual (conta_origem + descricao).
+    // Ver: app/static/js/carvia_pagamento_modal.js
 
-    // Dados do pagamento pendente (preenchidos ao clicar .btn-pagar)
-    var pendingTipo = null;
-    var pendingId = null;
-    var pendingBtnPagar = null;
-    var pcLinhaIdSelecionada = null;
+    function onPagamentoSucesso(data, btn) {
+        // Atualiza UI da linha sem reload
+        if (btn) {
+            var tr = btn.closest('tr');
+            tr.classList.add('carvia-fluxo-pago');
 
-    // Labels dos tipos de documento
-    var tipoLabels = {
-        'fatura_cliente': 'Fatura Cliente',
-        'fatura_transportadora': 'Fatura Transp.',
-        'despesa': 'Despesa',
-        'custo_entrega': 'Custo Entrega',
-        'receita': 'Receita',
-    };
-
-    function abrirModalPagamento(tipo, id) {
-        pendingTipo = tipo;
-        pendingId = id;
-        pcLinhaIdSelecionada = null;
-
-        // Reset UI
-        document.getElementById('pcDocTipo').textContent = tipoLabels[tipo] || tipo;
-        document.getElementById('pcDocNumero').textContent = '#' + id;
-        document.getElementById('pcDocValor').textContent = '-';
-        document.getElementById('pcDocNome').textContent = '';
-        document.getElementById('pcDocVenc').textContent = '-';
-        document.getElementById('pcLoading').classList.remove('d-none');
-        document.getElementById('pcLinhasContainer').classList.add('d-none');
-        document.getElementById('pcSemLinhas').classList.add('d-none');
-        document.getElementById('pcConfirmSemConc').classList.add('d-none');
-        document.getElementById('btnPagarEConciliar').disabled = true;
-        document.getElementById('pcDataPagamento').value = new Date().toISOString().slice(0, 10);
-
-        pcModalInstance.show();
-
-        // Fetch linhas de extrato candidatas
-        fetch('/carvia/api/conciliacao/matches-por-documento?tipo_doc=' +
-              encodeURIComponent(tipo) + '&doc_id=' + id)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            document.getElementById('pcLoading').classList.add('d-none');
-
-            if (data.erro) {
-                document.getElementById('pcSemLinhas').classList.remove('d-none');
-                document.getElementById('pcSemLinhas').innerHTML =
-                    '<i class="fas fa-exclamation-circle"></i> ' + data.erro;
-                return;
+            var badgeStatus = tr.querySelector('.badge[class*="carvia-badge-"]');
+            if (badgeStatus) {
+                badgeStatus.className = 'badge carvia-badge-' + data.novo_status.toLowerCase();
+                badgeStatus.textContent = data.novo_status;
             }
 
-            // Preencher info do documento
-            var doc = data.documento;
-            if (doc) {
-                document.getElementById('pcDocNumero').textContent = doc.numero || '#' + id;
-                document.getElementById('pcDocValor').textContent =
-                    'R$ ' + parseFloat(doc.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2});
-                document.getElementById('pcDocNome').textContent = doc.nome || '';
-                document.getElementById('pcDocVenc').textContent = doc.vencimento || '-';
-            }
+            var tdAcoes = btn.closest('td');
+            var btnVenc = tdAcoes.querySelector('.btn-alterar-vencimento');
+            if (btnVenc) btnVenc.remove();
 
-            // Preencher linhas de extrato
-            var linhas = data.linhas || [];
-            if (linhas.length === 0) {
-                document.getElementById('pcSemLinhas').classList.remove('d-none');
-                return;
-            }
-
-            var tbody = document.getElementById('pcLinhasBody');
-            tbody.innerHTML = '';
-
-            linhas.forEach(function(ln) {
-                var scoreBadge = '';
-                if (ln.score_label === 'ALTO') {
-                    scoreBadge = '<span class="badge carvia-badge-score-alto" style="font-size:0.6rem">&#9733;&#9733;&#9733;</span>';
-                } else if (ln.score_label === 'MEDIO') {
-                    scoreBadge = '<span class="badge carvia-badge-score-medio" style="font-size:0.6rem">&#9733;&#9733;</span>';
-                } else {
-                    scoreBadge = '<span class="badge carvia-badge-score-baixo" style="font-size:0.6rem">&#9733;</span>';
-                }
-
-                var tr = document.createElement('tr');
-                tr.style.cursor = 'pointer';
-                tr.dataset.linhaId = ln.id;
-                tr.innerHTML =
-                    '<td><input type="radio" name="pcLinha" value="' + ln.id + '" class="form-check-input"></td>' +
-                    '<td>' + ln.data + '</td>' +
-                    '<td class="text-truncate" style="max-width:200px" title="' + (ln.razao_social || ln.descricao) + '">' +
-                        (ln.razao_social || ln.descricao || '-') + '</td>' +
-                    '<td class="text-end">R$ ' + Math.abs(ln.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
-                    '<td class="text-end">R$ ' + parseFloat(ln.saldo_a_conciliar).toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
-                    '<td>' + scoreBadge + '</td>';
-                tbody.appendChild(tr);
-
-                // Click na row seleciona o radio
-                tr.addEventListener('click', function() {
-                    var radio = tr.querySelector('input[type=radio]');
-                    radio.checked = true;
-                    pcLinhaIdSelecionada = ln.id;
-                    document.getElementById('btnPagarEConciliar').disabled = false;
-                    document.getElementById('pcConfirmSemConc').classList.add('d-none');
-                    // Highlight
-                    tbody.querySelectorAll('tr').forEach(function(r) { r.classList.remove('table-active'); });
-                    tr.classList.add('table-active');
-                });
-            });
-
-            document.getElementById('pcLinhasContainer').classList.remove('d-none');
-        })
-        .catch(function(err) {
-            document.getElementById('pcLoading').classList.add('d-none');
-            document.getElementById('pcSemLinhas').classList.remove('d-none');
-            document.getElementById('pcSemLinhas').innerHTML =
-                '<i class="fas fa-exclamation-circle"></i> Erro ao buscar: ' + err.message;
-        });
-    }
-
-    // Funcao compartilhada para processar pagamento
-    function processarPagamento(extratoLinhaId) {
-        var dataPag = document.getElementById('pcDataPagamento').value;
-        if (!dataPag) {
-            document.getElementById('pcDataPagamento').focus();
-            return;
+            var tipo = btn.dataset.tipo;
+            var id = btn.dataset.id;
+            btn.outerHTML =
+                '<button class="btn btn-xs btn-outline-warning btn-desfazer" ' +
+                'data-tipo="' + tipo + '" data-id="' + id + '" title="Desfazer pagamento">' +
+                '<i class="fas fa-undo"></i></button>';
         }
 
-        var payload = {
-            tipo_doc: pendingTipo,
-            id: parseInt(pendingId),
-            data_pagamento: dataPag,
-        };
-        if (extratoLinhaId) {
-            payload.extrato_linha_id = extratoLinhaId;
+        if (typeof data.saldo_atual === 'number') {
+            atualizarSaldoConta(data.saldo_atual);
         }
-
-        // Desabilitar todos os botoes do footer
-        var footer = pcModalEl.querySelector('.modal-footer');
-        footer.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
-
-        fetch('/carvia/api/fluxo-caixa/pagar', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken,
-            },
-            body: JSON.stringify(payload),
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.sucesso) {
-                // Atualizar UI da linha na tabela
-                if (pendingBtnPagar) {
-                    var tr = pendingBtnPagar.closest('tr');
-                    tr.classList.add('carvia-fluxo-pago');
-
-                    var badgeStatus = tr.querySelector('.badge[class*="carvia-badge-"]');
-                    if (badgeStatus) {
-                        badgeStatus.className = 'badge carvia-badge-' + data.novo_status.toLowerCase();
-                        badgeStatus.textContent = data.novo_status;
-                    }
-
-                    // Remover botoes pagar + alterar vencimento, inserir desfazer
-                    var tdAcoes = pendingBtnPagar.closest('td');
-                    var btnVenc = tdAcoes.querySelector('.btn-alterar-vencimento');
-                    if (btnVenc) btnVenc.remove();
-
-                    pendingBtnPagar.outerHTML =
-                        '<button class="btn btn-xs btn-outline-warning btn-desfazer" ' +
-                        'data-tipo="' + pendingTipo + '" data-id="' + pendingId + '" title="Desfazer pagamento">' +
-                        '<i class="fas fa-undo"></i></button>';
-                }
-
-                if (typeof data.saldo_atual === 'number') {
-                    atualizarSaldoConta(data.saldo_atual);
-                }
-
-                pcModalInstance.hide();
-            } else {
-                alert(data.erro || 'Erro ao processar pagamento');
-            }
-        })
-        .catch(function(err) {
-            alert('Erro de rede: ' + err.message);
-        })
-        .finally(function() {
-            footer.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
-        });
     }
-
-    // Botao "Pagar e Conciliar" — usa linha selecionada
-    document.getElementById('btnPagarEConciliar').addEventListener('click', function() {
-        if (!pcLinhaIdSelecionada) return;
-        processarPagamento(pcLinhaIdSelecionada);
-    });
-
-    // Botao "Pagar sem conciliacao" — mostra confirmacao inline
-    document.getElementById('btnPagarSemConc').addEventListener('click', function() {
-        document.getElementById('pcConfirmSemConc').classList.remove('d-none');
-        document.getElementById('pcConfirmSemConc').scrollIntoView({behavior: 'smooth', block: 'nearest'});
-    });
-
-    // Botao "Sim, baixar sem conciliacao" — confirma
-    document.getElementById('btnConfirmarSemConc').addEventListener('click', function() {
-        processarPagamento(null);
-    });
 
     // --- Modal de alterar vencimento ---
     var modalVencEl = document.getElementById('modalAlterarVencimento');
@@ -778,8 +603,15 @@
 
         if (btnPagar) {
             e.preventDefault();
-            pendingBtnPagar = btnPagar;
-            abrirModalPagamento(btnPagar.dataset.tipo, btnPagar.dataset.id);
+            // Capturar o botao em closure local para evitar TOCTOU se o usuario
+            // clicar Pagar em varias linhas sequencialmente antes de confirmar.
+            var capturedBtn = btnPagar;
+            window.CarviaPagamentoModal.abrir({
+                tipoDoc: btnPagar.dataset.tipo,
+                docId: parseInt(btnPagar.dataset.id),
+                endpoint: '/carvia/api/fluxo-caixa/pagar',
+                onSuccess: function(data) { onPagamentoSucesso(data, capturedBtn); },
+            });
         }
 
         if (btnDesfazer) {

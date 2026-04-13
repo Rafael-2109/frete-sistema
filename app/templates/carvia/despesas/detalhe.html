@@ -83,32 +83,38 @@
                 </div>
                 <div class="card-body">
                     <h6>Alterar Status:</h6>
-                    <div class="d-flex gap-2 flex-wrap">
-                        {% for status in ['PENDENTE', 'PAGO', 'CANCELADO'] %}
-                        {% if status != despesa.status %}
-                            {% if status == 'PAGO' %}
-                            {# PAGO abre modal para informar data de pagamento #}
-                            <button type="button" class="btn btn-sm btn-success"
-                                    data-bs-toggle="modal" data-bs-target="#modalDataPagamento">
-                                <i class="fas fa-check"></i> PAGO
+                    <div class="d-flex gap-2 flex-wrap" id="statusAcoesDespesa">
+                        {# W10 Nivel 2 (Sprint 4): pagamento via service centralizado #}
+                        {% if despesa.status == 'PAGO' %}
+                            <span class="badge carvia-badge-pago" id="statusDespesaBadge">PAGO</span>
+                            <button type="button" class="btn btn-sm btn-outline-warning" id="btnDesfazerPagamentoDespesa">
+                                <i class="fas fa-undo"></i> Desfazer Pagamento
                             </button>
-                            {% else %}
+                        {% elif despesa.status == 'CANCELADO' %}
+                            <span class="badge carvia-badge-cancelado" id="statusDespesaBadge">CANCELADO</span>
                             <form method="POST" action="{{ url_for('carvia.atualizar_status_despesa', despesa_id=despesa.id) }}" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="status" value="{{ status }}">
-                                <button type="submit" class="btn btn-sm
-                                    {% if status == 'CANCELADO' %}btn-danger
-                                    {% else %}btn-warning{% endif %}"
-                                    {% if status == 'CANCELADO' %}onclick="return confirm('Cancelar esta despesa?')"{% endif %}>
-                                    <i class="fas
-                                        {% if status == 'CANCELADO' %}fa-times
-                                        {% else %}fa-clock{% endif %}"></i>
-                                    {{ status }}
+                                <input type="hidden" name="status" value="PENDENTE">
+                                <button type="submit" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-clock"></i> PENDENTE
+                                </button>
+                            </form>
+                        {% else %}
+                            <span class="badge carvia-badge-{{ despesa.status|lower }}" id="statusDespesaBadge">{{ despesa.status }}</span>
+                            <button type="button" class="btn btn-sm btn-success" id="btnPagarDespesa">
+                                <i class="fas fa-money-check-alt"></i> Pagar
+                            </button>
+                            {% if despesa.tipo_despesa != 'COMISSAO' %}
+                            <form method="POST" action="{{ url_for('carvia.atualizar_status_despesa', despesa_id=despesa.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="CANCELADO">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Cancelar esta despesa?')">
+                                    <i class="fas fa-times"></i> CANCELADO
                                 </button>
                             </form>
                             {% endif %}
                         {% endif %}
-                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -116,10 +122,8 @@
     </div>
 </div>
 
-{# Modal de data de pagamento (modo Form POST) #}
-{% with form_action=url_for('carvia.atualizar_status_despesa', despesa_id=despesa.id), form_status='PAGO' %}
-    {% include 'carvia/_modal_data_pagamento.html' %}
-{% endwith %}
+{# Modal de pagamento com conciliacao/manual (W10 Nivel 2 — Sprint 4) #}
+{% include 'carvia/_modal_pagar_com_conciliacao.html' %}
 
 <!-- Conciliacoes Bancarias -->
 {% set conc_tipo_documento = 'despesa' %}
@@ -132,19 +136,86 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/carvia_pagamento_modal.js') }}"></script>
 <script>
+// W10 Nivel 2 (Sprint 4): pagamento via CarviaPagamentoModal
 (function() {
     'use strict';
-    // Setar data de hoje como default ao abrir o modal
-    var modalEl = document.getElementById('modalDataPagamento');
-    if (modalEl) {
-        modalEl.addEventListener('show.bs.modal', function() {
-            var input = document.getElementById('dataPagamentoInput');
-            if (input && !input.value) {
-                input.value = new Date().toISOString().slice(0, 10);
-            }
+    var despesaId = {{ despesa.id }};
+    var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+                 || document.querySelector('input[name="csrf_token"]')?.value || '';
+
+    function atualizarUISucesso() {
+        var container = document.getElementById('statusAcoesDespesa');
+        if (!container) return;
+        container.textContent = '';
+
+        var badge = document.createElement('span');
+        badge.className = 'badge carvia-badge-pago';
+        badge.id = 'statusDespesaBadge';
+        badge.textContent = 'PAGO';
+        container.appendChild(badge);
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-warning';
+        btn.id = 'btnDesfazerPagamentoDespesa';
+        btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+        container.appendChild(btn);
+
+        bindDesfazer();
+    }
+
+    function bindPagar() {
+        var btn = document.getElementById('btnPagarDespesa');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            window.CarviaPagamentoModal.abrir({
+                tipoDoc: 'despesa',
+                docId: despesaId,
+                endpoint: '/carvia/despesas/' + despesaId + '/pagar',
+                onSuccess: atualizarUISucesso,
+            });
         });
     }
+
+    function bindDesfazer() {
+        var btn = document.getElementById('btnDesfazerPagamentoDespesa');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            if (!confirm('Desfazer o pagamento desta despesa?')) return;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/carvia/despesas/' + despesaId + '/desfazer-pagamento', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    // Reload garante re-render completo pelo Jinja (badge + Pagar + form Cancelar).
+                    // Reconstruir so "badge + Pagar" via JS perdia o form Cancelar ate o proximo reload.
+                    location.reload();
+                } else {
+                    alert(data.erro || 'Erro ao desfazer pagamento');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+            });
+        });
+    }
+
+    bindPagar();
+    bindDesfazer();
 })();
 </script>
 {% endblock %}

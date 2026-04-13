@@ -165,32 +165,53 @@
                 </div>
                 <div class="card-body">
                     <h6>Alterar Status:</h6>
-                    <div class="d-flex gap-2 flex-wrap">
-                        {% for status in ['PENDENTE', 'PAGO', 'CANCELADO'] %}
-                        {% if status != custo.status %}
-                            {% if status == 'PAGO' %}
-                            {# PAGO abre modal para informar data de pagamento #}
-                            <button type="button" class="btn btn-sm btn-success"
-                                    data-bs-toggle="modal" data-bs-target="#modalDataPagamento">
-                                <i class="fas fa-check"></i> PAGO
-                            </button>
+                    {# coberto_por_ft computado no topo para estar disponivel em todos os branches e no script #}
+                    {% set coberto_por_ft = custo.subcontrato_id and custo.subcontrato and custo.subcontrato.fatura_transportadora_id %}
+                    <div class="d-flex gap-2 flex-wrap" id="statusAcoesCusto">
+                        {# W10 Nivel 2 (Sprint 4): pagamento via service centralizado #}
+                        {% if custo.status == 'PAGO' %}
+                            <span class="badge carvia-badge-pago" id="statusCustoBadge">PAGO</span>
+                            {% if coberto_por_ft %}
+                            <span class="text-muted small">
+                                <i class="fas fa-info-circle"></i>
+                                Pago via FT #{{ custo.subcontrato.fatura_transportadora_id }}
+                            </span>
                             {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-warning" id="btnDesfazerPagamentoCusto">
+                                <i class="fas fa-undo"></i> Desfazer Pagamento
+                            </button>
+                            {% endif %}
+                        {% elif custo.status == 'CANCELADO' %}
+                            <span class="badge carvia-badge-cancelado" id="statusCustoBadge">CANCELADO</span>
                             <form method="POST" action="{{ url_for('carvia.atualizar_status_custo_entrega', custo_id=custo.id) }}" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="status" value="{{ status }}">
-                                <button type="submit" class="btn btn-sm
-                                    {% if status == 'CANCELADO' %}btn-danger
-                                    {% else %}btn-warning{% endif %}"
-                                    {% if status == 'CANCELADO' %}onclick="return confirm('Cancelar este custo?')"{% endif %}>
-                                    <i class="fas
-                                        {% if status == 'CANCELADO' %}fa-times
-                                        {% else %}fa-clock{% endif %}"></i>
-                                    {{ status }}
+                                <input type="hidden" name="status" value="PENDENTE">
+                                <button type="submit" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-clock"></i> PENDENTE
                                 </button>
                             </form>
+                        {% else %}
+                            <span class="badge carvia-badge-{{ custo.status|lower }}" id="statusCustoBadge">{{ custo.status }}</span>
+                            {# Se custo e coberto por sub em FT, nao pode ser pago direto #}
+                            {% if not coberto_por_ft %}
+                            <button type="button" class="btn btn-sm btn-success" id="btnPagarCusto">
+                                <i class="fas fa-money-check-alt"></i> Pagar
+                            </button>
+                            {% else %}
+                            <span class="text-muted small">
+                                <i class="fas fa-info-circle"></i>
+                                Pago via FT #{{ custo.subcontrato.fatura_transportadora_id }}
+                            </span>
                             {% endif %}
+                            <form method="POST" action="{{ url_for('carvia.atualizar_status_custo_entrega', custo_id=custo.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="status" value="CANCELADO">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Cancelar este custo?')">
+                                    <i class="fas fa-times"></i> CANCELADO
+                                </button>
+                            </form>
                         {% endif %}
-                        {% endfor %}
                     </div>
 
                     {# CTe Complementar — Gerar / re-tentar via SSW #}
@@ -802,10 +823,8 @@
     </div>
 </div>
 
-{# Modal de data de pagamento (modo Form POST) #}
-{% with form_action=url_for('carvia.atualizar_status_custo_entrega', custo_id=custo.id), form_status='PAGO' %}
-    {% include 'carvia/_modal_data_pagamento.html' %}
-{% endwith %}
+{# Modal de pagamento com conciliacao/manual (W10 Nivel 2 — Sprint 4) #}
+{% include 'carvia/_modal_pagar_com_conciliacao.html' %}
 
 {# Modal de confirmacao para gerar CTe Complementar #}
 {% if operacao and operacao.ctrc_numero and not custo.cte_complementar_id and custo.status != 'CANCELADO' %}
@@ -878,19 +897,100 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/carvia_pagamento_modal.js') }}"></script>
 <script>
+// W10 Nivel 2 (Sprint 4): pagamento via CarviaPagamentoModal
 (function() {
     'use strict';
-    // Setar data de hoje como default ao abrir o modal
-    var modalEl = document.getElementById('modalDataPagamento');
-    if (modalEl) {
-        modalEl.addEventListener('show.bs.modal', function() {
-            var input = document.getElementById('dataPagamentoInput');
-            if (input && !input.value) {
-                input.value = new Date().toISOString().slice(0, 10);
-            }
+    var custoId = {{ custo.id }};
+    var csrfTokenCusto = document.querySelector('meta[name="csrf-token"]')?.content
+                      || document.querySelector('input[name="csrf_token"]')?.value || '';
+    {# Jinja blocks sao escopos separados — recomputar coberto_por_ft aqui #}
+    {% set coberto_por_ft_js = custo.subcontrato_id and custo.subcontrato and custo.subcontrato.fatura_transportadora_id %}
+    var cobertoPorFt = {{ 'true' if coberto_por_ft_js else 'false' }};
+    var ftIdCobertura = {{ custo.subcontrato.fatura_transportadora_id if coberto_por_ft_js else 'null' }};
+
+    function atualizarUISucessoCusto() {
+        var container = document.getElementById('statusAcoesCusto');
+        if (!container) return;
+        container.textContent = '';
+
+        var badge = document.createElement('span');
+        badge.className = 'badge carvia-badge-pago';
+        badge.id = 'statusCustoBadge';
+        badge.textContent = 'PAGO';
+        container.appendChild(badge);
+
+        if (cobertoPorFt) {
+            // Custo coberto por FT — pago automaticamente, nao permite desfazer pelo UI
+            var info = document.createElement('span');
+            info.className = 'text-muted small';
+            info.innerHTML = '<i class="fas fa-info-circle"></i> Pago via FT #' + ftIdCobertura;
+            container.appendChild(info);
+            return;
+        }
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-warning';
+        btn.id = 'btnDesfazerPagamentoCusto';
+        btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+        container.appendChild(btn);
+
+        bindDesfazerCusto();
+    }
+
+    function bindPagarCusto() {
+        var btn = document.getElementById('btnPagarCusto');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            window.CarviaPagamentoModal.abrir({
+                tipoDoc: 'custo_entrega',
+                docId: custoId,
+                endpoint: '/carvia/custos-entrega/' + custoId + '/pagar',
+                onSuccess: atualizarUISucessoCusto,
+            });
         });
     }
+
+    function bindDesfazerCusto() {
+        var btn = document.getElementById('btnDesfazerPagamentoCusto');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            if (!confirm('Desfazer o pagamento deste custo?')) return;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/carvia/custos-entrega/' + custoId + '/desfazer-pagamento', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfTokenCusto,
+                },
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    // Reload garante re-render completo pelo Jinja (badge + Pagar + form Cancelar
+                    // + texto "Pago via FT" quando coberto por FT). Reconstruir so essas variantes
+                    // via JS perdia o form Cancelar ate o proximo reload.
+                    location.reload();
+                } else {
+                    alert(data.erro || 'Erro ao desfazer pagamento');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+                }
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Pagamento';
+            });
+        });
+    }
+
+    bindPagarCusto();
+    bindDesfazerCusto();
 
     // Upload de anexo via AJAX
     document.getElementById('formUploadAnexo')?.addEventListener('submit', function(e) {

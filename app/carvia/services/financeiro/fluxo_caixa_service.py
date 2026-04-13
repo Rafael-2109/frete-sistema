@@ -8,7 +8,23 @@ Consolida fontes de dados financeiros em visao diaria:
 
 Agrupamento por data de vencimento com saldo acumulado progressivo.
 
-Saldo de conta: calculado por SUM de carvia_conta_movimentacoes (sem cache).
+Saldo de conta (W10 Nivel 2 — Sprint 4):
+  A refatoracao FC_VIRTUAL -> MANUAL substituiu CarviaContaMovimentacao por
+  CarviaExtratoLinha(origem='MANUAL') como veiculo dos pagamentos de documentos
+  CarVia feitos fora do extrato bancario. CarviaContaMovimentacao permanece
+  apenas como SOT de 'saldo_inicial' (e historicamente 'ajuste').
+
+  Formula canonica do saldo:
+      saldo = SUM(CarviaContaMovimentacao signed)           # saldo_inicial + ajuste + legado
+            + SUM(CarviaExtratoLinha[origem='MANUAL'] signed)  # pagamentos via outras contas
+
+  Onde "signed" converte CREDITO para +valor e DEBITO para -valor.
+
+  Linhas OFX/CSV (real-bank) NAO entram neste saldo — elas representam o
+  proprio extrato bancario da conta CarVia, visivel separadamente na tela
+  de Extrato Bancario. A interpretacao e: MANUAL substituiu o papel antes
+  ocupado por CarviaContaMovimentacao (pagamento/recebimento fora do extrato
+  bancario), portanto soma MANUAL para nao congelar o saldo apos a refatoracao.
 """
 
 import logging
@@ -370,14 +386,30 @@ class FluxoCaixaService:
 
     def obter_saldo_conta(self):
         """
-        Calcula saldo atual da conta por SUM de movimentacoes.
+        Calcula saldo atual da conta CarVia.
+
+        W10 Nivel 2 (Sprint 4): apos refatoracao FC_VIRTUAL -> MANUAL,
+        pagamentos de documentos CarVia passaram a criar
+        `CarviaExtratoLinha(origem='MANUAL')` ao inves de
+        `CarviaContaMovimentacao`. Para nao congelar o saldo, somamos
+        AMBAS as fontes:
+
+          - `CarviaContaMovimentacao`: saldo_inicial + ajuste + movimentacoes
+            legadas pre-refatoracao (ainda compativel).
+          - `CarviaExtratoLinha` filtrado por `origem='MANUAL'`: todos os
+            pagamentos/recebimentos feitos fora da conta bancaria CarVia
+            (dinheiro, conta pessoal, outra empresa, etc.).
+
+        Linhas OFX/CSV NAO entram — sao o proprio extrato bancario
+        (visivel na tela de Extrato Bancario) e o usuario nao espera que
+        impactem este card duas vezes.
 
         Returns:
             float — saldo (positivo = credito liquido)
         """
-        from app.carvia.models import CarviaContaMovimentacao
+        from app.carvia.models import CarviaContaMovimentacao, CarviaExtratoLinha
 
-        resultado = db.session.query(
+        saldo_mov = db.session.query(
             func.coalesce(
                 func.sum(
                     case(
@@ -388,13 +420,38 @@ class FluxoCaixaService:
                 ),
                 Decimal('0'),
             )
-        ).scalar()
+        ).scalar() or Decimal('0')
 
-        return float(resultado)
+        saldo_manual = db.session.query(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (CarviaExtratoLinha.tipo == 'CREDITO',
+                         CarviaExtratoLinha.valor),
+                        else_=-CarviaExtratoLinha.valor,
+                    )
+                ),
+                Decimal('0'),
+            )
+        ).filter(
+            CarviaExtratoLinha.origem == 'MANUAL',
+        ).scalar() or Decimal('0')
+
+        return float(saldo_mov + saldo_manual)
 
     def obter_extrato(self, data_inicio, data_fim):
         """
         Monta extrato da conta com saldo acumulado progressivo.
+
+        W10 Nivel 2 (Sprint 4): o extrato exibe movimentacoes de AMBAS as
+        fontes (CarviaContaMovimentacao + CarviaExtratoLinha MANUAL),
+        unificadas e ordenadas por data. Linhas OFX/CSV sao excluidas —
+        o usuario ve esse extrato bancario na tela Extrato Bancario.
+
+        Ordem temporal:
+          - CarviaContaMovimentacao usa `criado_em` (DateTime) como ancora.
+          - CarviaExtratoLinha usa `data` (Date) como ancora; quando duas
+            linhas caem no mesmo dia, usa `criado_em` para desempate.
 
         Args:
             data_inicio: date — inicio do periodo
@@ -402,18 +459,24 @@ class FluxoCaixaService:
 
         Returns:
             dict com saldo_anterior, movimentacoes, saldo_final,
-            total_creditos, total_debitos
+            total_creditos, total_debitos.
+            Cada item em `movimentacoes` traz:
+              id, criado_em, tipo_doc, doc_id, tipo_movimento, valor,
+              descricao, criado_por, saldo_acumulado, fonte
+              (fonte: 'movimentacao' | 'manual')
         """
-        from app.carvia.models import CarviaContaMovimentacao
+        from app.carvia.models import CarviaContaMovimentacao, CarviaExtratoLinha
 
-        # Converter date → datetime para comparacao com TIMESTAMP
+        # Converter date -> datetime para comparacao com TIMESTAMP
         from datetime import datetime, time
 
         dt_inicio = datetime.combine(data_inicio, time.min)
         dt_fim = datetime.combine(data_fim, time(23, 59, 59))
 
-        # Saldo anterior (tudo antes de data_inicio)
-        saldo_anterior_result = db.session.query(
+        # ------------------------------------------------------------
+        # Saldo anterior: soma de TUDO antes de data_inicio em ambas fontes
+        # ------------------------------------------------------------
+        saldo_anterior_mov = db.session.query(
             func.coalesce(
                 func.sum(
                     case(
@@ -426,28 +489,92 @@ class FluxoCaixaService:
             )
         ).filter(
             CarviaContaMovimentacao.criado_em < dt_inicio,
-        ).scalar()
+        ).scalar() or Decimal('0')
 
-        saldo_anterior = float(saldo_anterior_result)
+        saldo_anterior_manual = db.session.query(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (CarviaExtratoLinha.tipo == 'CREDITO',
+                         CarviaExtratoLinha.valor),
+                        else_=-CarviaExtratoLinha.valor,
+                    )
+                ),
+                Decimal('0'),
+            )
+        ).filter(
+            CarviaExtratoLinha.origem == 'MANUAL',
+            CarviaExtratoLinha.data < data_inicio,
+        ).scalar() or Decimal('0')
 
-        # Movimentacoes no periodo
+        saldo_anterior = float(saldo_anterior_mov + saldo_anterior_manual)
+
+        # ------------------------------------------------------------
+        # Movimentacoes no periodo: CarviaContaMovimentacao
+        # ------------------------------------------------------------
         movs = db.session.query(CarviaContaMovimentacao).filter(
             CarviaContaMovimentacao.criado_em >= dt_inicio,
             CarviaContaMovimentacao.criado_em <= dt_fim,
-        ).order_by(
-            CarviaContaMovimentacao.criado_em.asc(),
-            CarviaContaMovimentacao.id.asc(),
         ).all()
 
+        # ------------------------------------------------------------
+        # Movimentacoes no periodo: CarviaExtratoLinha MANUAL
+        # ------------------------------------------------------------
+        linhas_manuais = db.session.query(CarviaExtratoLinha).filter(
+            CarviaExtratoLinha.origem == 'MANUAL',
+            CarviaExtratoLinha.data >= data_inicio,
+            CarviaExtratoLinha.data <= data_fim,
+        ).all()
+
+        # ------------------------------------------------------------
+        # Unificar em lista ordenada por data cronologica
+        # ------------------------------------------------------------
+        eventos = []
+
+        for mov in movs:
+            eventos.append({
+                'ordem': (mov.criado_em, 0, mov.id),
+                'id': mov.id,
+                'criado_em': mov.criado_em,
+                'tipo_doc': mov.tipo_doc,
+                'doc_id': mov.doc_id,
+                'tipo_movimento': mov.tipo_movimento,
+                'valor': float(mov.valor),
+                'descricao': mov.descricao or '',
+                'criado_por': mov.criado_por,
+                'fonte': 'movimentacao',
+            })
+
+        for linha in linhas_manuais:
+            # Ancora temporal = data da linha (escolhida pelo usuario);
+            # desempate por criado_em + id.
+            ancora = datetime.combine(linha.data, time.min)
+            eventos.append({
+                'ordem': (ancora, 1, linha.id),
+                'id': linha.id,
+                'criado_em': linha.criado_em or ancora,
+                'tipo_doc': 'manual',
+                'doc_id': linha.id,
+                'tipo_movimento': linha.tipo,
+                'valor': float(linha.valor),
+                'descricao': linha.descricao or linha.memo or '',
+                'criado_por': linha.criado_por,
+                'fonte': 'manual',
+            })
+
+        eventos.sort(key=lambda e: e['ordem'])
+
+        # ------------------------------------------------------------
         # Calcular saldo acumulado progressivo
+        # ------------------------------------------------------------
         saldo_acumulado = saldo_anterior
         total_creditos = 0.0
         total_debitos = 0.0
         movimentacoes = []
 
-        for mov in movs:
-            valor = float(mov.valor)
-            if mov.tipo_movimento == 'CREDITO':
+        for ev in eventos:
+            valor = ev['valor']
+            if ev['tipo_movimento'] == 'CREDITO':
                 saldo_acumulado += valor
                 total_creditos += valor
             else:
@@ -455,15 +582,16 @@ class FluxoCaixaService:
                 total_debitos += valor
 
             movimentacoes.append({
-                'id': mov.id,
-                'criado_em': mov.criado_em,
-                'tipo_doc': mov.tipo_doc,
-                'doc_id': mov.doc_id,
-                'tipo_movimento': mov.tipo_movimento,
+                'id': ev['id'],
+                'criado_em': ev['criado_em'],
+                'tipo_doc': ev['tipo_doc'],
+                'doc_id': ev['doc_id'],
+                'tipo_movimento': ev['tipo_movimento'],
                 'valor': valor,
-                'descricao': mov.descricao or '',
-                'criado_por': mov.criado_por,
+                'descricao': ev['descricao'],
+                'criado_por': ev['criado_por'],
                 'saldo_acumulado': saldo_acumulado,
+                'fonte': ev['fonte'],
             })
 
         return {

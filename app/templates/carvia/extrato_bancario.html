@@ -104,6 +104,15 @@
                     </select>
                 </div>
                 <div class="col-md-1">
+                    <label class="form-label small">Origem</label>
+                    <select name="origem" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        <option value="OFX" {{ 'selected' if origem_filtro == 'OFX' }}>OFX</option>
+                        <option value="CSV" {{ 'selected' if origem_filtro == 'CSV' }}>CSV</option>
+                        <option value="MANUAL" {{ 'selected' if origem_filtro == 'MANUAL' }}>Manual</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
                     <label class="form-label small">Busca</label>
                     <input type="text" name="busca" class="form-control form-control-sm"
                            placeholder="Descricao..." value="{{ busca }}">
@@ -146,12 +155,13 @@
                     <tr>
                         <th>Data</th>
                         <th>Descricao</th>
-                        <th>Razao Social</th>
+                        <th>Razao Social / Conta</th>
+                        <th>Origem</th>
                         <th class="text-end">Valor</th>
                         <th>Status</th>
                         <th>Docs Conciliados</th>
                         <th>Obs</th>
-                        <th style="width:100px">Acoes</th>
+                        <th style="width:120px">Acoes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -165,7 +175,10 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if linha.razao_social %}
+                            {% if linha.origem == 'MANUAL' %}
+                                {# Linha MANUAL exibe conta_origem em vez de razao_social #}
+                                <strong class="text-info">{{ linha.conta_origem or '(a informar)' }}</strong>
+                            {% elif linha.razao_social %}
                             <span class="carvia-editable" data-id="{{ linha.id }}" data-campo="razao_social"
                                   data-valor="{{ linha.razao_social }}" title="Clique para editar">
                                 {{ linha.razao_social }}
@@ -175,6 +188,15 @@
                                   data-valor="" title="Adicionar razao social">
                                 <i class="fas fa-plus-circle" style="font-size:0.75rem"></i>
                             </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if linha.origem == 'MANUAL' %}
+                                <span class="badge bg-info" title="Lancamento manual">Manual</span>
+                            {% elif linha.origem == 'CSV' %}
+                                <span class="badge bg-secondary">CSV</span>
+                            {% else %}
+                                <span class="badge bg-primary">OFX</span>
                             {% endif %}
                         </td>
                         <td class="text-end carvia-conciliacao-valor {{ 'text-success' if linha.tipo == 'CREDITO' else 'text-danger' }}">
@@ -241,11 +263,29 @@
                                 </button>
                                 {% endif %}
                             {% endif %}
+                            {# W10 Nivel 2: edit/delete so para linhas MANUAL pendentes #}
+                            {% if linha.origem == 'MANUAL' and linha.status_conciliacao == 'PENDENTE' %}
+                            <button class="btn btn-xs btn-outline-primary btn-editar-manual"
+                                    data-linha-id="{{ linha.id }}"
+                                    data-data="{{ linha.data.isoformat() if linha.data else '' }}"
+                                    data-valor="{{ linha.valor|abs }}"
+                                    data-tipo="{{ linha.tipo }}"
+                                    data-descricao="{{ linha.descricao|e }}"
+                                    data-conta-origem="{{ linha.conta_origem|e if linha.conta_origem }}"
+                                    title="Editar linha manual">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-xs btn-outline-danger btn-deletar-manual"
+                                    data-linha-id="{{ linha.id }}"
+                                    title="Deletar linha manual">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-4">
+                        <td colspan="9" class="text-center text-muted py-4">
                             {% if resumo.total_linhas == 0 %}
                                 Nenhuma linha importada. Clique em "Importar OFX" para comecar.
                             {% else %}
@@ -264,6 +304,66 @@
 {% include 'carvia/_modal_importar_csv.html' %}
 {% include 'carvia/_modal_conciliar_inline.html' %}
 {% include 'carvia/_modal_detalhe_doc_conciliado.html' %}
+
+{# Modal de edicao de linha MANUAL (W10 Nivel 2 — Sprint 4) #}
+<div class="modal fade" id="modalEditarLinhaManual" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Editar Linha Manual
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editManualId">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="editManualData" class="form-label">Data</label>
+                        <input type="date" class="form-control form-control-sm" id="editManualData" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="editManualValor" class="form-label">Valor</label>
+                        <input type="number" step="0.01" min="0.01" class="form-control form-control-sm" id="editManualValor" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="editManualTipo" class="form-label">Tipo</label>
+                        <select class="form-select form-select-sm" id="editManualTipo">
+                            <option value="CREDITO">CREDITO</option>
+                            <option value="DEBITO">DEBITO</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Origem</label>
+                        <input type="text" class="form-control form-control-sm" value="MANUAL" disabled>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="editManualContaOrigem" class="form-label">
+                            Conta de origem <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control form-control-sm" id="editManualContaOrigem"
+                               maxlength="100" required
+                               placeholder="Ex: Pessoal Rafael, Empresa X, Dinheiro">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="editManualDescricao" class="form-label">
+                            Descricao <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control form-control-sm" id="editManualDescricao"
+                               maxlength="500" required>
+                    </div>
+                </div>
+                <div id="editManualErro" class="alert alert-danger mt-3 d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnSalvarLinhaManual">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 (function() {
@@ -486,6 +586,117 @@
             inputInicio.value = inicio.toISOString().split('T')[0];
             inputFim.value = hoje.toISOString().split('T')[0];
             form.submit();
+        });
+    });
+
+    // ==================================================================
+    // W10 Nivel 2 (Sprint 4): Editar / Deletar linhas MANUAL
+    // ==================================================================
+    var csrfTokenManual = document.querySelector('meta[name="csrf-token"]')?.content
+                        || document.querySelector('input[name="csrf_token"]')?.value || '';
+
+    var modalEditarEl = document.getElementById('modalEditarLinhaManual');
+    var modalEditarInstance = modalEditarEl ? new bootstrap.Modal(modalEditarEl) : null;
+
+    function mostrarErroEditarManual(msg) {
+        var err = document.getElementById('editManualErro');
+        err.textContent = msg;
+        err.classList.remove('d-none');
+    }
+
+    // Abrir modal de edicao
+    document.querySelectorAll('.btn-editar-manual').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.getElementById('editManualErro').classList.add('d-none');
+            document.getElementById('editManualId').value = btn.dataset.linhaId;
+            document.getElementById('editManualData').value = btn.dataset.data || '';
+            document.getElementById('editManualValor').value = btn.dataset.valor || '';
+            document.getElementById('editManualTipo').value = btn.dataset.tipo || 'DEBITO';
+            document.getElementById('editManualDescricao').value = btn.dataset.descricao || '';
+            document.getElementById('editManualContaOrigem').value = btn.dataset.contaOrigem || '';
+            modalEditarInstance.show();
+        });
+    });
+
+    // Salvar edicao
+    document.getElementById('btnSalvarLinhaManual')?.addEventListener('click', function() {
+        var linhaId = document.getElementById('editManualId').value;
+        var payload = {
+            data: document.getElementById('editManualData').value,
+            valor: parseFloat(document.getElementById('editManualValor').value),
+            tipo: document.getElementById('editManualTipo').value,
+            descricao: document.getElementById('editManualDescricao').value.trim(),
+            conta_origem: document.getElementById('editManualContaOrigem').value.trim(),
+        };
+
+        if (!payload.data || !payload.valor || !payload.descricao || !payload.conta_origem) {
+            mostrarErroEditarManual('Preencha todos os campos obrigatorios.');
+            return;
+        }
+
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        fetch('/carvia/api/extrato/linha/' + linhaId, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfTokenManual,
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(function(r) { return r.json().then(function(data) { return {ok: r.ok, data: data}; }); })
+        .then(function(resp) {
+            if (!resp.ok || resp.data.erro) {
+                mostrarErroEditarManual(resp.data.erro || 'Erro ao salvar');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Salvar';
+                return;
+            }
+            // Sucesso — recarrega a pagina (UI fica consistente)
+            location.reload();
+        })
+        .catch(function(err) {
+            mostrarErroEditarManual('Erro de rede: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Salvar';
+        });
+    });
+
+    // Deletar linha MANUAL
+    document.querySelectorAll('.btn-deletar-manual').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('Deletar esta linha manual? Esta acao e irreversivel.')) return;
+            var linhaId = btn.dataset.linhaId;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            fetch('/carvia/api/extrato/linha/' + linhaId, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfTokenManual,
+                },
+            })
+            .then(function(r) { return r.json().then(function(data) { return {ok: r.ok, data: data}; }); })
+            .then(function(resp) {
+                if (!resp.ok || resp.data.erro) {
+                    alert(resp.data.erro || 'Erro ao deletar');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-trash"></i>';
+                    return;
+                }
+                // Remove a linha da tabela sem reload
+                var tr = btn.closest('tr');
+                if (tr) tr.remove();
+            })
+            .catch(function(err) {
+                alert('Erro de rede: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+            });
         });
     });
 })();
