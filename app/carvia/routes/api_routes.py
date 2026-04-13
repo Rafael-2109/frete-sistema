@@ -621,8 +621,8 @@ def register_api_routes(bp):
                             'qtd_tabelas': 0,
                         }
                     tabelas_por_transp[tid]['qtd_tabelas'] += 1
-                    if t.nome_tabela:
-                        tabelas_por_transp[tid]['modalidades'].add(t.nome_tabela)
+                    if t.modalidade:
+                        tabelas_por_transp[tid]['modalidades'].add(t.modalidade)
 
             if not todas and not tabelas_por_transp:
                 return jsonify({'sucesso': True, 'transportadoras': []})
@@ -1289,7 +1289,7 @@ def register_api_routes(bp):
         valor_mercadoria = float(data.get('valor_mercadoria', 0) or 0)
         uf_destino = (data.get('uf_destino') or '').strip().upper()
         cidade_destino = (data.get('cidade_destino') or '').strip() or None
-        nome_tabela = (data.get('nome_tabela') or '').strip() or None
+        modalidade_filtro = (data.get('modalidade') or '').strip() or None
 
         if not transportadora_id or peso <= 0 or not uf_destino:
             return jsonify({
@@ -1342,9 +1342,9 @@ def register_api_routes(bp):
                     'erro': f'Sem tabela para {transportadora.razao_social} → {uf_destino}',
                 })
 
-            # Filtrar por modalidade (nome_tabela) se informada
-            if nome_tabela and tabelas:
-                filtradas = [t for t in tabelas if t.nome_tabela == nome_tabela]
+            # Filtrar por modalidade real (TabelaFrete.modalidade) se informada
+            if modalidade_filtro and tabelas:
+                filtradas = [t for t in tabelas if t.modalidade == modalidade_filtro]
                 if filtradas:
                     tabelas = filtradas
 
@@ -1369,6 +1369,7 @@ def register_api_routes(bp):
                                 'valor': valor,
                                 'tabela_frete_id': tabela.id,
                                 'tabela_nome': tabela.nome_tabela,
+                                'tabela_modalidade': tabela.modalidade,
                                 'resultado': resultado,
                             }
                             melhor_tabela_dados = tabela_dados
@@ -1423,6 +1424,7 @@ def register_api_routes(bp):
                 'valor_cotado': round(melhor['valor'], 2),
                 'tabela_frete_id': melhor['tabela_frete_id'],
                 'tabela_nome': melhor['tabela_nome'],
+                'tabela_modalidade': melhor['tabela_modalidade'],
                 'parametros': parametros,
                 'breakdown': breakdown,
             })
