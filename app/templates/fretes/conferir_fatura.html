@@ -152,6 +152,14 @@
                                 <span class="badge bg-success">LANÇADO</span>
                                 {% elif doc.status == 'APROVADO' %}
                                 <span class="badge bg-success">APROVADO</span>
+                                {% elif doc.status == 'EM_TRATATIVA' %}
+                                <span class="badge bg-warning text-dark" title="Diferença > R$ 5,00 — resolver em Aprovações">
+                                    EM TRATATIVA
+                                </span>
+                                {% elif doc.status == 'REJEITADO' %}
+                                <span class="badge bg-danger" title="Frete rejeitado em Aprovações — requer ação corretiva">
+                                    REJEITADO
+                                </span>
                                 {% else %}
                                 <span class="badge bg-danger">PENDENTE</span>
                                 {% endif %}
@@ -193,6 +201,24 @@
                     <h6>1. Status dos Documentos:</h6>
                     {% if todos_aprovados %}
                     <span class="badge bg-success">✅ Todos os documentos estão APROVADOS/LANÇADOS</span>
+                    {% elif tem_frete_em_tratativa and tem_frete_rejeitado %}
+                    <span class="badge bg-danger">
+                        ❌ Há fretes EM TRATATIVA e REJEITADOS —
+                        <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="text-white">
+                            <u>resolver em Aprovações</u>
+                        </a>
+                    </span>
+                    {% elif tem_frete_em_tratativa %}
+                    <span class="badge bg-warning text-dark">
+                        ⚠️ Há fretes EM TRATATIVA —
+                        <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="text-dark">
+                            <u>resolver em Aprovações</u>
+                        </a>
+                    </span>
+                    {% elif tem_frete_rejeitado %}
+                    <span class="badge bg-danger">
+                        ❌ Há fretes REJEITADOS — requer ação corretiva antes de conferir
+                    </span>
                     {% else %}
                     <span class="badge bg-danger">❌ Há documentos PENDENTES</span>
                     {% endif %}

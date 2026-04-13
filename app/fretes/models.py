@@ -2,6 +2,14 @@ from app import db
 from datetime import datetime
 from app.utils.timezone import agora_utc_naive
 
+# Status de Frete que BLOQUEIAM a aprovação da fatura (conferir_fatura).
+# Um frete nesses estados precisa de resolução antes da fatura poder ser conferida:
+#   - EM_TRATATIVA: diferença > R$ 5,00 aguardando aprovação manual (via /aprovacoes/<id>)
+#   - REJEITADO:    frete formalmente negado — requer ação corretiva (editar/cancelar)
+# Fonte única de verdade usada em: routes.py (conferir_fatura, aprovar_conferencia_fatura)
+FRETE_STATUS_BLOQUEANTES = ("EM_TRATATIVA", "REJEITADO")
+
+
 class Frete(db.Model):
     """
     Modelo principal para registro de fretes

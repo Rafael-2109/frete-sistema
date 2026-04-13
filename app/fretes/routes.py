@@ -39,6 +39,7 @@ from app.fretes.models import ( # type: ignore # noqa: E402
     AprovacaoFrete,
     ConhecimentoTransporte,
     CtePendenciaCancelamento,
+    FRETE_STATUS_BLOQUEANTES,
 )
 from app.fretes.email_models import EmailAnexado # type: ignore # noqa: E402
 from app.utils.email_handler import EmailHandler # type: ignore # noqa: E402
@@ -2057,11 +2058,27 @@ def conferir_fatura(fatura_id):
     """Inicia o processo de conferência de uma fatura"""
     fatura = FaturaFrete.query.get_or_404(fatura_id)
 
-    # Busca todos os CTes (fretes) da fatura
-    fretes = Frete.query.filter_by(fatura_frete_id=fatura_id).all()
+    # 🔒 Exclui fretes e despesas CANCELADOS da conferência.
+    # Cancelamento via cancelamento_cte_service preserva numero_cte/valor_cte/valor_pago
+    # para auditoria, o que faria o frete cair em status_doc="LANÇADO" na classificação
+    # abaixo — permitindo que a fatura seja aprovada silenciosamente com um CTe cancelado.
+    # Mesmo padrão já aplicado em cancelar_fretes_por_embarque (linha ~3752).
+    # NOTA: os totais (valor_total_cotado/cte/considerado/pago) agora NÃO incluem fretes
+    # cancelados — se `fatura.valor_total_fatura` ainda reflete o valor original emitido
+    # com o CTe cancelado, a tolerância de R$ 1,00 pode não fechar. Neste caso o usuário
+    # deve ajustar a fatura ou solicitar nova emissão (ação fora do escopo desta tela).
+    fretes = (
+        Frete.query.filter(
+            Frete.fatura_frete_id == fatura_id,
+            Frete.status != "CANCELADO",
+        ).all()
+    )
 
     # ✅ Busca despesas extras vinculadas a esta fatura via FK
-    despesas_extras = DespesaExtra.query.filter_by(fatura_frete_id=fatura.id).all()
+    despesas_extras = DespesaExtra.query.filter(
+        DespesaExtra.fatura_frete_id == fatura.id,
+        DespesaExtra.status != "CANCELADO",
+    ).all()
 
     # Analisa status dos documentos
     documentos_status = []
@@ -2074,7 +2091,14 @@ def conferir_fatura(fatura_id):
     for frete in fretes:
         # ✅ LÓGICA ORIGINAL RESTRITIVA (CORRIGIDA):
         # CTe é considerado LANÇADO apenas se tem número, valor E valor_pago
-        if frete.numero_cte and frete.valor_cte and frete.valor_pago:
+        # 🔒 Status BLOQUEANTES (fonte: models.FRETE_STATUS_BLOQUEANTES) têm
+        # precedência sobre presença de campos — mantém o próprio status como
+        # status_doc (EM_TRATATIVA ou REJEITADO), que o template diferencia.
+        # Ambos NUNCA viram LANÇADO: a fatura não pode ser conferida até que
+        # sejam resolvidos (APROVADO via processar_aprovacao, ou CANCELADO).
+        if frete.status in FRETE_STATUS_BLOQUEANTES:
+            status_doc = frete.status
+        elif frete.numero_cte and frete.valor_cte and frete.valor_pago:
             status_doc = "LANÇADO"
         elif frete.status in ["APROVADO", "CONFERIDO"]:
             status_doc = "APROVADO"
@@ -2188,6 +2212,18 @@ def conferir_fatura(fatura_id):
     print(f"Resultado final todos_aprovados: {todos_aprovados_calc}")
     print("=" * 50)
 
+    # 🔒 Flags APENAS para diferenciar UI (badge warning/danger vs PENDENTE genérico).
+    # A lógica de bloqueio já está em todos_aprovados_calc, que exige status in
+    # ["APROVADO", "LANÇADO"] — logo EM_TRATATIVA e REJEITADO já são excluídos
+    # organicamente. Essas flags NÃO são usadas no cálculo de pode_aprovar, apenas
+    # para que o template mostre a razão específica do bloqueio ao usuário.
+    tem_frete_em_tratativa = any(
+        doc["status"] == "EM_TRATATIVA" for doc in documentos_status
+    )
+    tem_frete_rejeitado = any(
+        doc["status"] == "REJEITADO" for doc in documentos_status
+    )
+
     # Verifica se todos os documentos estão aprovados/lançados
     todos_aprovados = todos_aprovados_calc
 
@@ -2222,6 +2258,8 @@ def conferir_fatura(fatura_id):
         documentos_status=documentos_status,
         analise_valores=analise_valores,
         todos_aprovados=todos_aprovados,
+        tem_frete_em_tratativa=tem_frete_em_tratativa,
+        tem_frete_rejeitado=tem_frete_rejeitado,
         pode_aprovar=todos_aprovados and fatura_dentro_tolerancia,
     )
 
@@ -2231,6 +2269,46 @@ def conferir_fatura(fatura_id):
 def aprovar_conferencia_fatura(fatura_id):
     """Aprova a conferência de uma fatura"""
     fatura = FaturaFrete.query.get_or_404(fatura_id)
+
+    # 🔒 Defense in depth: impede aprovação server-side mesmo se o botão foi
+    # disparado via POST direto (curl/devtools) bypassando a checagem do template.
+    # Fonte única de verdade: FRETE_STATUS_BLOQUEANTES (models.py).
+    fretes_bloqueantes = (
+        Frete.query.filter(
+            Frete.fatura_frete_id == fatura_id,
+            Frete.status.in_(FRETE_STATUS_BLOQUEANTES),
+        )
+        .order_by(Frete.id)
+        .all()
+    )
+    if fretes_bloqueantes:
+        detalhes = ", ".join(
+            f"#{f.id} ({f.status})" for f in fretes_bloqueantes
+        )
+        # Orientação diferenciada por tipo de bloqueante — evita beco sem saída:
+        #   - EM_TRATATIVA: resolução em /aprovacoes (aprovar/rejeitar)
+        #   - REJEITADO:    requer ação corretiva manual (editar/cancelar),
+        #                   pois /aprovacoes filtra apenas status='PENDENTE'
+        tem_tratativa = any(f.status == "EM_TRATATIVA" for f in fretes_bloqueantes)
+        tem_rejeitado = any(f.status == "REJEITADO" for f in fretes_bloqueantes)
+        if tem_tratativa and tem_rejeitado:
+            orientacao = (
+                "EM_TRATATIVA: resolver em Aprovações. "
+                "REJEITADO: requer ação corretiva (editar ou cancelar o frete)."
+            )
+        elif tem_tratativa:
+            orientacao = "Resolva em Aprovações antes de prosseguir."
+        else:  # só REJEITADO
+            orientacao = (
+                "Fretes rejeitados requerem ação corretiva "
+                "(editar ou cancelar) antes de conferir a fatura."
+            )
+        flash(
+            f"❌ Fatura não pode ser conferida: {len(fretes_bloqueantes)} frete(s) "
+            f"bloqueante(s) — {detalhes}. {orientacao}",
+            "error",
+        )
+        return redirect(url_for("fretes.conferir_fatura", fatura_id=fatura_id))
 
     try:
         valor_final = request.form.get("valor_final")
@@ -2256,9 +2334,12 @@ def aprovar_conferencia_fatura(fatura_id):
         fatura.observacoes_conferencia = observacoes
 
         # Bloqueia edição dos fretes e despesas
+        # 🔒 Preserva estados BLOQUEANTES: defensivo caso algum caminho futuro
+        # escape da validação upstream. Nunca sobrescreve tratativa pendente
+        # ou frete rejeitado — ambos preservam rastro auditável da disputa.
         fretes = Frete.query.filter_by(fatura_frete_id=fatura_id).all()
         for frete in fretes:
-            if frete.status != "BLOQUEADO":
+            if frete.status != "BLOQUEADO" and frete.status not in FRETE_STATUS_BLOQUEANTES:
                 frete.status = "CONFERIDO"
 
         db.session.commit()
