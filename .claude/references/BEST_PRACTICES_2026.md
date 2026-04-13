@@ -1,6 +1,9 @@
-# Best Practices Anthropic 2026 — Plano de Otimizacao
+# Best Practices Anthropic 2026 — Plano de Otimizacao (SDK features)
 
 **Atualizado**: 23/03/2026
+
+> **Escopo deste doc**: SDK features (prompt caching, structured outputs, pgvector, MCP servers, versoes).
+> Para **prompt engineering conceitual Claude 4.6** (overtriggering, adaptive thinking, prefill deprecation, XML tags, pre-mortem, red team) ver [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md) + [ROADMAP_PROMPT_ENGINEERING_2026.md](ROADMAP_PROMPT_ENGINEERING_2026.md).
 
 ---
 
@@ -187,6 +190,25 @@
 | Redis MCP | Valor marginal |
 | Slack MCP | Time usa Teams |
 | Sentry MCP | INTEGRADO desde 2026-03-11 (20 tools) |
+
+---
+
+## Claude 4.6 Behavioral Changes (adicionado 2026-04-12)
+
+> Sumario rapido. Ref completa: [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md)
+
+Claude Opus 4.6 e Sonnet 4.6 tem mudancas comportamentais que afetam **como escrever prompts**, nao apenas features do SDK:
+
+| Sintoma | Causa | Mitigacao | Ref |
+|---------|-------|-----------|-----|
+| **Overtrigger** de tools/skills | Mais responsivo a linguagem agressiva ("CRITICAL: You MUST") | Dial back para "Use X when..." em routing; manter "NEVER" apenas em safety invariants | STUDY insight 1, ROADMAP R1 |
+| **Overengineering** | Modelo cria arquivos/abstracoes nao pedidos | Adicionar `<avoid_overengineering>` bloco no prompt | STUDY D6 |
+| **Subagent overspawning** | Delega mesmo para tarefas simples | Adicionar `<when_subagents_warranted>` bloco | STUDY H5 |
+| **Prefill deprecated** | 400 error em Mythos Preview | Migrar para Structured Outputs (Pydantic) | STUDY insight 2, ROADMAP R4 |
+| **Thinking config** | `budget_tokens` deprecated | Trocar por `thinking: {type: "adaptive"}` + `effort` | STUDY insight 3, ROADMAP R6 |
+| **Latencia alta default Sonnet 4.6** | `effort: high` e o default | Setar `effort: low` (chat) ou `medium` (tools) explicitamente | STUDY E1 |
+
+**Ao auditar prompts existentes** (system_prompt, agents, skills): executar `grep -niE "(CRITICAL|MUST|NEVER|ALWAYS|OBRIGATORIO)"` e decidir por ocorrencia: manter (safety L1) ou substituir (style/routing). Ver [ROADMAP R1](ROADMAP_PROMPT_ENGINEERING_2026.md) para protocolo.
 
 ---
 

@@ -200,7 +200,7 @@ Revisao completa dos 12 subagents de dominio realizada em 2026-04-09. Principais
 - **ReAct/CoT XML explicito**: agents ja tem arvores de decisao implicitas. Adicionar tags XML seria bloat.
 - **`maxTurns`**: risco de cortar fluxos atomicos. Reavaliar se houver looping em producao.
 - **Memory system aplicado a todos**: so em 2 agents de alto beneficio (especialista-odoo, auditor-financeiro).
-- **Red-teaming sistematico**: proximo passo apos eval estavel. Fora do escopo desta revisao.
+- **Red-teaming sistematico**: proximo passo apos eval estavel. Fora do escopo desta revisao. **Atualizacao 2026-04-12**: framework planejado em [ROADMAP_PROMPT_ENGINEERING_2026.md](ROADMAP_PROMPT_ENGINEERING_2026.md) R9 (P2, 5 dias esforco). 14 attack patterns identificados em [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md) secao RED TEAM (RT-1 a RT-14).
 
 ### Referencias Criadas Nesta Revisao
 

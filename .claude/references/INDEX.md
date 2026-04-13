@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 27/03/2026
+**Ultima atualizacao**: 12/04/2026
 
 ---
 
@@ -29,6 +29,10 @@
 | **Framework aristotelico (analise/planejamento)** | [FRAMEWORK_ARISTOTELICO.md](FRAMEWORK_ARISTOTELICO.md) |
 | **Regras output agente (I1, I5, I6)** | [REGRAS_OUTPUT.md](REGRAS_OUTPUT.md) |
 | **Best Practices Anthropic 2026 (caching, structured output, pgvector)** | [BEST_PRACTICES_2026.md](BEST_PRACTICES_2026.md) |
+| **Estudo System Prompts 2026 (pesquisa + pre-mortem + red team + gaps)** | [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md) |
+| **Quality Review do system_prompt.md v4.2.0 (score 4.39/5 + findings Q1-Q8)** | [STUDY_PROMPT_ENGINEERING_2026_QUALITY_REVIEW.md](STUDY_PROMPT_ENGINEERING_2026_QUALITY_REVIEW.md) |
+| **Roadmap Prompt Engineering 2026 (R1-R17, P0-P3)** | [ROADMAP_PROMPT_ENGINEERING_2026.md](ROADMAP_PROMPT_ENGINEERING_2026.md) |
+| **Prompt Injection Hardening (defense in depth, 6 layers, 12 checklist)** | [PROMPT_INJECTION_HARDENING.md](PROMPT_INJECTION_HARDENING.md) |
 | **Roadmap SDK Client (migracao query→ClaudeSDKClient)** | [ROADMAP_SDK_CLIENT.md](ROADMAP_SDK_CLIENT.md) |
 | **Evolucao do sistema de memoria do agente** | `memory/memory_evolution.md` (auto-memory) |
 | **Gestao do Agente (memorias, sessoes, KG, diagnosticos)** | `.claude/skills/gerindo-agente/SKILL.md` |

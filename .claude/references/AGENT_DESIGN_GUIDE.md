@@ -85,6 +85,27 @@ skills:
 
 ---
 
+## Claude 4.6 Gotchas (adicionado 2026-04-12)
+
+Claude Opus 4.6 e Sonnet 4.6 sao mais responsivos ao system prompt que versoes anteriores — o que significa que **linguagem agressiva agora causa overuse**, nao apenas compliance.
+
+| Sintoma | Causa | Mitigacao ao criar agent |
+|---------|-------|---------------------------|
+| **Overtrigger** de tools/skills | "CRITICAL: You MUST use X" | Usar "Use X when..." em routing. Manter "NEVER" APENAS em safety invariants (L1) |
+| **Overengineering** | Cria arquivos/abstracoes nao pedidos | Adicionar `<avoid_overengineering>` bloco quando agent faz escrita |
+| **Subagent overspawning** | Delega mesmo para tarefas simples | Em agents orquestradores, adicionar `<when_subagents_warranted>` |
+| **Latencia alta Sonnet 4.6** | Default `effort: high` | Setar `effort: low` ou `medium` explicito no frontmatter |
+| **Prefill 400 error** | Deprecated em Claude 4.6 | NAO usar prefill em novos agents. Usar Structured Outputs |
+
+**Ao criar novo agent**: escrever instrucoes positivas para style/routing ("Use X when...", "Prefer Y for..."), reservar negativas explicitas ("NEVER execute...", "NEVER fabricate...") para safety invariants do L1 constitutional.
+
+**Ao editar agent existente**: rodar golden dataset baseline antes de dial back. PM-2.1 documenta cenario de falha (remocao de MUST pode quebrar compliance P1-P7 em analista-carteira).
+
+> Pesquisa completa: [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md) (pre-mortem + red team)
+> Acao planejada: [ROADMAP_PROMPT_ENGINEERING_2026.md](ROADMAP_PROMPT_ENGINEERING_2026.md) R1 (audit + dial back)
+
+---
+
 ## Secoes Obrigatorias no System Prompt
 
 Todo agent deve ter estas secoes (ordem recomendada):
