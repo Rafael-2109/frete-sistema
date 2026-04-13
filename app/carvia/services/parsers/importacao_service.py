@@ -40,6 +40,15 @@ from app.carvia.services.documentos.matching_service import MatchingService
 # CNPJ da CarVia para classificacao de CTes
 CARVIA_CNPJ = re.sub(r'\D', '', os.environ.get('CARVIA_CNPJ', ''))
 
+# Mapeamento SEFAZ toma3/toma4 -> enum persistido em CarviaOperacao.cte_tomador
+_TOMADOR_CODE_MAP = {
+    '0': 'REMETENTE',
+    '1': 'EXPEDIDOR',
+    '2': 'RECEBEDOR',
+    '3': 'DESTINATARIO',
+    '4': 'TERCEIRO',
+}
+
 logger = logging.getLogger(__name__)
 
 if not CARVIA_CNPJ:
@@ -472,81 +481,91 @@ class ImportacaoService:
 
         try:
             # 1. Salvar NFs e seus itens (com deduplicacao)
+            # W9: cada iteracao usa begin_nested() explicito envolvendo
+            # TODO o trabalho (writes + side-effects). Exceptions nao
+            # propagadas por try/except internos saem do `with` e o
+            # SAVEPOINT e revertido automaticamente. As NFs anteriores
+            # ja processadas com sucesso permanecem intactas na sessao.
             nf_map = {}  # chave/numero -> CarviaNf
             for nf_data in nfs_data:
+                chave = nf_data.get('chave_acesso_nf')
+                numero = nf_data.get('numero_nf')
+                cnpj = nf_data.get('cnpj_emitente')
+
+                # Tracking temporario — so e aplicado ao estado global
+                # APOS o savepoint commitar com sucesso (ver pos-with abaixo).
+                nf = None
+                acao = None  # 'criada' | 'reutilizada'
+
                 try:
-                    chave = nf_data.get('chave_acesso_nf')
-                    numero = nf_data.get('numero_nf')
-                    cnpj = nf_data.get('cnpj_emitente')
+                    with db.session.begin_nested():
+                        # Verificar se NF ja existe no banco (evitar UNIQUE violation)
+                        nf_existente = None
+                        if chave:
+                            nf_existente = CarviaNf.query.filter_by(
+                                chave_acesso_nf=chave
+                            ).first()
 
-                    # Verificar se NF ja existe no banco (evitar UNIQUE violation)
-                    nf_existente = None
-                    if chave:
-                        nf_existente = CarviaNf.query.filter_by(
-                            chave_acesso_nf=chave
-                        ).first()
-
-                    # Se nao encontrou por chave, buscar stub FATURA_REFERENCIA
-                    # por numero+CNPJ (stub nao tem chave_acesso_nf)
-                    if not nf_existente and numero and cnpj:
-                        nf_existente = self._buscar_stub_fatura_referencia(
-                            numero, cnpj
-                        )
-
-                    if nf_existente:
-                        if nf_existente.status == 'CANCELADA':
-                            # NF cancelada com mesma chave — reativar e
-                            # atualizar com dados corretos do novo parse.
-                            # Sem isso, NF cancelada com dados errados
-                            # bloqueia re-importacao permanentemente.
-                            self._atualizar_nf_existente(
-                                nf_existente, nf_data, criado_por
+                        # Se nao encontrou por chave, buscar stub FATURA_REFERENCIA
+                        # por numero+CNPJ (stub nao tem chave_acesso_nf)
+                        if not nf_existente and numero and cnpj:
+                            nf_existente = self._buscar_stub_fatura_referencia(
+                                numero, cnpj
                             )
-                            nf_existente.status = 'ATIVA'
-                            nf_existente.cancelado_em = None
-                            nf_existente.cancelado_por = None
-                            nf_existente.motivo_cancelamento = None
-                            nf = nf_existente
-                            nfs_criadas.append(nf)
-                            logger.info(
-                                f"NF cancelada reativada e atualizada: "
-                                f"nf_id={nf.id} chave={chave}"
-                            )
-                        elif nf_existente.tipo_fonte == 'FATURA_REFERENCIA':
-                            # MERGE: promover stub com dados reais da NF
-                            nf = self._merge_nf_sobre_stub(
-                                nf_existente, nf_data, criado_por
-                            )
-                            nfs_criadas.append(nf)
 
-                            # Re-linking retroativo: o stub nao tinha
-                            # chave_acesso_nf, agora a NF real tem — pode
-                            # gerar novas junctions via nfs_referenciadas_json
-                            try:
-                                from app.carvia.services.documentos.linking_service import LinkingService
-                                linker = LinkingService()
-                                junc_count = linker.vincular_nf_a_operacoes_orfas(nf)
-                                if junc_count > 0:
-                                    logger.info(
-                                        f"Re-linking (stub promovido) NF→CTe: "
-                                        f"NF {nf.id} vinculada a {junc_count} "
-                                        f"operacao(oes)"
-                                    )
-                            except Exception as e_link:
-                                logger.warning(
-                                    f"Erro no re-linking do stub promovido "
-                                    f"NF {nf.id}: {e_link}"
+                        if nf_existente:
+                            if nf_existente.status == 'CANCELADA':
+                                # NF cancelada com mesma chave — reativar e
+                                # atualizar com dados corretos do novo parse.
+                                # Sem isso, NF cancelada com dados errados
+                                # bloqueia re-importacao permanentemente.
+                                self._atualizar_nf_existente(
+                                    nf_existente, nf_data, criado_por
                                 )
+                                nf_existente.status = 'ATIVA'
+                                nf_existente.cancelado_em = None
+                                nf_existente.cancelado_por = None
+                                nf_existente.motivo_cancelamento = None
+                                nf = nf_existente
+                                acao = 'criada'
+                                logger.info(
+                                    f"NF cancelada reativada e atualizada: "
+                                    f"nf_id={nf.id} chave={chave}"
+                                )
+                            elif nf_existente.tipo_fonte == 'FATURA_REFERENCIA':
+                                # MERGE: promover stub com dados reais da NF
+                                nf = self._merge_nf_sobre_stub(
+                                    nf_existente, nf_data, criado_por
+                                )
+                                acao = 'criada'
+
+                                # Re-linking retroativo: o stub nao tinha
+                                # chave_acesso_nf, agora a NF real tem — pode
+                                # gerar novas junctions via nfs_referenciadas_json
+                                try:
+                                    from app.carvia.services.documentos.linking_service import LinkingService
+                                    linker = LinkingService()
+                                    junc_count = linker.vincular_nf_a_operacoes_orfas(nf)
+                                    if junc_count > 0:
+                                        logger.info(
+                                            f"Re-linking (stub promovido) NF→CTe: "
+                                            f"NF {nf.id} vinculada a {junc_count} "
+                                            f"operacao(oes)"
+                                        )
+                                except Exception as e_link:
+                                    logger.warning(
+                                        f"Erro no re-linking do stub promovido "
+                                        f"NF {nf.id}: {e_link}"
+                                    )
+                            else:
+                                logger.info(
+                                    f"NF ja importada (reutilizando): "
+                                    f"nf_id={nf_existente.id} chave={chave}"
+                                )
+                                nf = nf_existente
+                                acao = 'reutilizada'
                         else:
-                            logger.info(
-                                f"NF ja importada (reutilizando): "
-                                f"nf_id={nf_existente.id} chave={chave}"
-                            )
-                            nf = nf_existente
-                            nfs_reutilizadas.append(nf)
-                    else:
-                        nf = self._criar_nf(nf_data, criado_por)
-                        with db.session.begin_nested():
+                            nf = self._criar_nf(nf_data, criado_por)
                             db.session.add(nf)
                             db.session.flush()  # Obter ID
 
@@ -566,85 +585,100 @@ class ImportacaoService:
                                 )
                                 db.session.add(item)
 
-                        # Gravar veiculos (chassi/modelo/cor) extraidos do DANFE/XML
-                        veiculos_pendentes = getattr(nf, '_veiculos_pendentes', [])
-                        veic_inseridos = 0
-                        for v_data in veiculos_pendentes:
-                            chassi = (v_data.get('chassi') or '').strip()
-                            if not chassi:
-                                continue
-                            # Dedup: chassi UNIQUE
-                            existente = CarviaNfVeiculo.query.filter_by(
-                                chassi=chassi
-                            ).first()
-                            if existente:
-                                continue
-                            db.session.add(CarviaNfVeiculo(
-                                nf_id=nf.id,
-                                chassi=chassi,
-                                modelo=v_data.get('modelo'),
-                                cor=v_data.get('cor'),
-                                numero_motor=v_data.get('numero_motor'),
-                                ano=v_data.get('ano_modelo'),
-                            ))
-                            veic_inseridos += 1
-                        if veic_inseridos:
-                            db.session.flush()
-                            logger.info(
-                                "NF %s: %d veiculo(s) persistido(s)",
-                                nf.numero_nf, veic_inseridos,
-                            )
-
-                        # Detectar e persistir modelos de moto nos itens
-                        try:
-                            from app.carvia.services.pricing.moto_recognition_service import (
-                                MotoRecognitionService,
-                            )
-                            moto_count = MotoRecognitionService().detectar_e_persistir_nf(nf.id)
-                            if moto_count > 0:
+                            # Gravar veiculos (chassi/modelo/cor) extraidos do DANFE/XML
+                            veiculos_pendentes = getattr(nf, '_veiculos_pendentes', [])
+                            veic_inseridos = 0
+                            for v_data in veiculos_pendentes:
+                                chassi_v = (v_data.get('chassi') or '').strip()
+                                if not chassi_v:
+                                    continue
+                                # Dedup: chassi UNIQUE
+                                existente = CarviaNfVeiculo.query.filter_by(
+                                    chassi=chassi_v
+                                ).first()
+                                if existente:
+                                    continue
+                                db.session.add(CarviaNfVeiculo(
+                                    nf_id=nf.id,
+                                    chassi=chassi_v,
+                                    modelo=v_data.get('modelo'),
+                                    cor=v_data.get('cor'),
+                                    numero_motor=v_data.get('numero_motor'),
+                                    ano=v_data.get('ano_modelo'),
+                                ))
+                                veic_inseridos += 1
+                            if veic_inseridos:
+                                db.session.flush()
                                 logger.info(
-                                    f"Auto-deteccao motos NF {nf.numero_nf}: "
-                                    f"{moto_count} modelo(s) persistido(s)"
-                                )
-                        except Exception as e_moto:
-                            logger.warning(
-                                f"Erro auto-deteccao motos NF {nf.id}: {e_moto}"
-                            )
-
-                        nfs_criadas.append(nf)
-
-                        # Re-linking retroativo: resolver vinculos pendentes
-                        # quando NF chega depois de CTe ou Fatura
-                        try:
-                            from app.carvia.services.documentos.linking_service import LinkingService
-                            linker = LinkingService()
-
-                            # CTe→NF: criar junction via nfs_referenciadas_json
-                            junc_count = linker.vincular_nf_a_operacoes_orfas(nf)
-                            if junc_count > 0:
-                                logger.info(
-                                    f"Re-linking NF→CTe: NF {nf.id} vinculada "
-                                    f"a {junc_count} operacao(oes) orfa(s)"
+                                    "NF %s: %d veiculo(s) persistido(s)",
+                                    nf.numero_nf, veic_inseridos,
                                 )
 
-                            # Fat→NF: atualizar nf_id em itens de fatura
-                            fat_count = linker.vincular_nf_a_itens_fatura_orfaos(nf)
-                            if fat_count > 0:
-                                logger.info(
-                                    f"Re-linking NF→Fatura: NF {nf.id} vinculada "
-                                    f"a {fat_count} item(ns) de fatura"
+                            # Detectar e persistir modelos de moto nos itens
+                            try:
+                                from app.carvia.services.pricing.moto_recognition_service import (
+                                    MotoRecognitionService,
                                 )
-                        except Exception as e_link:
-                            logger.warning(
-                                f"Erro no re-linking retroativo da NF {nf.id}: {e_link}"
-                            )
+                                moto_count = MotoRecognitionService().detectar_e_persistir_nf(nf.id)
+                                if moto_count > 0:
+                                    logger.info(
+                                        f"Auto-deteccao motos NF {nf.numero_nf}: "
+                                        f"{moto_count} modelo(s) persistido(s)"
+                                    )
+                            except Exception as e_moto:
+                                logger.warning(
+                                    f"Erro auto-deteccao motos NF {nf.id}: {e_moto}"
+                                )
 
-                    if chave:
-                        nf_map[chave] = nf
-                    if numero and cnpj:
-                        nf_map[(cnpj, numero)] = nf
+                            acao = 'criada'
+
+                            # Re-linking retroativo: resolver vinculos pendentes
+                            # quando NF chega depois de CTe ou Fatura
+                            try:
+                                from app.carvia.services.documentos.linking_service import LinkingService
+                                linker = LinkingService()
+
+                                # CTe→NF: criar junction via nfs_referenciadas_json
+                                junc_count = linker.vincular_nf_a_operacoes_orfas(nf)
+                                if junc_count > 0:
+                                    logger.info(
+                                        f"Re-linking NF→CTe: NF {nf.id} vinculada "
+                                        f"a {junc_count} operacao(oes) orfa(s)"
+                                    )
+
+                                # Fat→NF: atualizar nf_id em itens de fatura
+                                fat_count = linker.vincular_nf_a_itens_fatura_orfaos(nf)
+                                if fat_count > 0:
+                                    logger.info(
+                                        f"Re-linking NF→Fatura: NF {nf.id} vinculada "
+                                        f"a {fat_count} item(ns) de fatura"
+                                    )
+                            except Exception as e_link:
+                                logger.warning(
+                                    f"Erro no re-linking retroativo da NF {nf.id}: {e_link}"
+                                )
+
+                    # SAVEPOINT commitou com sucesso. Atualiza tracking Python
+                    # (fora do savepoint para evitar entries fantasma se o
+                    # savepoint reverter apos mutacao da lista — listas Python
+                    # nao sao controladas por rollback).
+                    # Guarda defensiva: `nf is not None` evita poluir `nf_map`
+                    # com None se algum caminho futuro esquecer de setar nf
+                    # dentro do with (latent bug protection).
+                    if nf is not None:
+                        if acao == 'criada':
+                            nfs_criadas.append(nf)
+                        elif acao == 'reutilizada':
+                            nfs_reutilizadas.append(nf)
+
+                        if chave:
+                            nf_map[chave] = nf
+                        if numero and cnpj:
+                            nf_map[(cnpj, numero)] = nf
 
                 except IntegrityError as e:
+                    # SAVEPOINT ja revertido automaticamente pelo `with`.
+                    # NFs anteriores permanecem intactas.
                     logger.warning(
                         f"NF duplicada ignorada (IntegrityError): "
                         f"{nf_data.get('numero_nf')} chave={chave}"
@@ -653,7 +687,9 @@ class ImportacaoService:
                         f"NF {nf_data.get('numero_nf')} ignorada (duplicata)"
                     )
                 except Exception as e:
-                    db.session.rollback()
+                    # SAVEPOINT ja revertido automaticamente. NAO chamar
+                    # db.session.rollback() aqui — isso reverteria a
+                    # transacao toda, perdendo NFs anteriores.
                     logger.error(f"Erro ao salvar NF: {e}")
                     erros.append(f"Erro ao salvar NF {nf_data.get('numero_nf')}: {e}")
 
@@ -674,28 +710,43 @@ class ImportacaoService:
                                  and not c.get('_skip_save')]
 
             # 3. Criar Operacoes a partir dos CTes CarVia
+            # W9: cada iteracao envolvida em begin_nested() — se qualquer
+            # write falhar, apenas o SAVEPOINT da operacao corrente e
+            # revertido. Operacoes ja commitadas permanecem intactas.
             for cte_data in ctes_carvia:
+                # Tracking temporario — so registra na lista apos o
+                # savepoint commitar com sucesso (fora do with).
+                operacao_registrada = None
                 try:
-                    # Verificar se CTe ja existe no banco (evitar duplicata)
-                    cte_chave = cte_data.get('cte_chave_acesso')
-                    if cte_chave:
-                        op_existente = CarviaOperacao.query.filter_by(
-                            cte_chave_acesso=cte_chave
-                        ).first()
-                        if op_existente:
+                    with db.session.begin_nested():
+                        # Verificar se CTe ja existe no banco (evitar duplicata)
+                        cte_chave = cte_data.get('cte_chave_acesso')
+                        op_ja_importada = None
+                        if cte_chave:
+                            op_ja_importada = CarviaOperacao.query.filter_by(
+                                cte_chave_acesso=cte_chave
+                            ).first()
+
+                        # Buscar op AUTO_PORTARIA por NFs quando nao ha chave duplicada
+                        nfs_ref = cte_data.get('nfs_referenciadas', [])
+                        op_auto = None
+                        if op_ja_importada is None:
+                            op_auto = self._buscar_op_auto_por_nfs(nfs_ref, nf_map)
+
+                        if op_ja_importada:
+                            # Caminho 1: reimport — reutilizar operacao existente
                             logger.info(
                                 f"CTe ja importado (reutilizando): "
-                                f"op_id={op_existente.id} cte={cte_chave}"
+                                f"op_id={op_ja_importada.id} cte={cte_chave}"
                             )
                             # Vincular NFs que ainda nao estejam vinculadas
-                            nfs_ref = cte_data.get('nfs_referenciadas', [])
-                            self._vincular_nfs(op_existente, nfs_ref, nf_map)
+                            self._vincular_nfs(op_ja_importada, nfs_ref, nf_map)
 
                             # Preencher JSON se ausente (backfill on re-import)
-                            if op_existente.nfs_referenciadas_json is None and nfs_ref:
-                                op_existente.nfs_referenciadas_json = nfs_ref
+                            if op_ja_importada.nfs_referenciadas_json is None and nfs_ref:
+                                op_ja_importada.nfs_referenciadas_json = nfs_ref
                                 logger.info(
-                                    f"Backfill JSON: op={op_existente.id} "
+                                    f"Backfill JSON: op={op_ja_importada.id} "
                                     f"nfs_ref={len(nfs_ref)} refs"
                                 )
 
@@ -703,95 +754,96 @@ class ImportacaoService:
                             try:
                                 from app.carvia.services.documentos.linking_service import LinkingService
                                 linker = LinkingService()
-                                linker.vincular_operacao_a_itens_fatura_orfaos(op_existente)
+                                linker.vincular_operacao_a_itens_fatura_orfaos(op_ja_importada)
                             except Exception as e_link:
                                 logger.warning(
                                     f"Erro re-linking CTe re-import: {e_link}"
                                 )
 
-                            operacoes_criadas.append(op_existente)
-                            continue
-
-                    # Guardrail: buscar op AUTO_PORTARIA existente pelas mesmas NFs
-                    # Se CarviaFreteService ja criou op auto, ENRIQUECER com dados do CTe
-                    nfs_ref = cte_data.get('nfs_referenciadas', [])
-                    op_auto = self._buscar_op_auto_por_nfs(nfs_ref, nf_map)
-                    if op_auto:
-                        # Enriquecer: adicionar XML/chave/PDF ao auto-gerado
-                        op_auto.cte_chave_acesso = cte_data.get('cte_chave_acesso')
-                        op_auto.ctrc_numero = cte_data.get('ctrc_numero')
-                        op_auto.cte_xml_nome_arquivo = cte_data.get('arquivo_nome_original')
-                        op_auto.cte_xml_path = cte_data.get('cte_xml_path')
-                        op_auto.cte_pdf_path = cte_data.get('cte_pdf_path')
-                        op_auto.cte_data_emissao = self._parsear_data_cte(
-                            cte_data.get('cte_data_emissao')
-                        )
-                        if not op_auto.nfs_referenciadas_json and nfs_ref:
-                            op_auto.nfs_referenciadas_json = nfs_ref
-                        # Vincular NFs adicionais
-                        self._vincular_nfs(op_auto, nfs_ref, nf_map)
-                        logger.info(
-                            "CTe CarVia enriqueceu op AUTO_PORTARIA existente: "
-                            "op_id=%s, chave=%s",
-                            op_auto.id, cte_data.get('cte_chave_acesso'),
-                        )
-                        operacoes_criadas.append(op_auto)
-                        continue
-
-                    operacao = self._criar_operacao_de_cte(cte_data, nf_map, criado_por)
-                    with db.session.begin_nested():
-                        db.session.add(operacao)
-                        db.session.flush()
-
-                    # Vincular NFs
-                    self._vincular_nfs(operacao, nfs_ref, nf_map)
-
-                    # Re-linking retroativo: atualizar itens de fatura
-                    # que referenciam este CTe mas foram importados antes
-                    try:
-                        from app.carvia.services.documentos.linking_service import LinkingService
-                        linker = LinkingService()
-                        fat_count = linker.vincular_operacao_a_itens_fatura_orfaos(operacao)
-                        if fat_count > 0:
+                            operacao_registrada = op_ja_importada
+                        elif op_auto:
+                            # Caminho 2: enriquecer op auto-gerada pela portaria
+                            op_auto.cte_chave_acesso = cte_data.get('cte_chave_acesso')
+                            op_auto.ctrc_numero = cte_data.get('ctrc_numero')
+                            op_auto.cte_xml_nome_arquivo = cte_data.get('arquivo_nome_original')
+                            op_auto.cte_xml_path = cte_data.get('cte_xml_path')
+                            op_auto.cte_pdf_path = cte_data.get('cte_pdf_path')
+                            op_auto.cte_data_emissao = self._parsear_data_cte(
+                                cte_data.get('cte_data_emissao')
+                            )
+                            if not op_auto.nfs_referenciadas_json and nfs_ref:
+                                op_auto.nfs_referenciadas_json = nfs_ref
+                            # Vincular NFs adicionais
+                            self._vincular_nfs(op_auto, nfs_ref, nf_map)
                             logger.info(
-                                f"Re-linking CTe→Fatura: op={operacao.id} "
-                                f"vinculada a {fat_count} item(ns) de fatura"
+                                "CTe CarVia enriqueceu op AUTO_PORTARIA existente: "
+                                "op_id=%s, chave=%s",
+                                op_auto.id, cte_data.get('cte_chave_acesso'),
                             )
-                    except Exception as e_link:
-                        logger.warning(
-                            f"Erro no re-linking CTe→Fatura op={operacao.id}: {e_link}"
-                        )
+                            operacao_registrada = op_auto
+                        else:
+                            # Caminho 3: criar operacao nova
+                            operacao = self._criar_operacao_de_cte(
+                                cte_data, nf_map, criado_por
+                            )
+                            db.session.add(operacao)
+                            db.session.flush()
 
-                    # Auto-cubagem para motos (se empresa configurada)
-                    try:
-                        from app.carvia.services.pricing.moto_recognition_service import (
-                            MotoRecognitionService,
-                        )
-                        moto_svc = MotoRecognitionService()
-                        cnpj_cliente = operacao.cnpj_cliente or ''
-                        if cnpj_cliente and moto_svc.empresa_usa_cubagem(cnpj_cliente):
-                            resultado_cubagem = moto_svc.calcular_peso_cubado_operacao(
-                                operacao.id
-                            )
-                            if (
-                                resultado_cubagem
-                                and resultado_cubagem['peso_cubado_total'] > 0
-                            ):
-                                operacao.peso_cubado = resultado_cubagem[
-                                    'peso_cubado_total'
-                                ]
-                                operacao.calcular_peso_utilizado()  # R3
-                                logger.info(
-                                    f"Auto-cubagem op={operacao.id}: "
-                                    f"peso_cubado={operacao.peso_cubado}"
+                            # Vincular NFs
+                            self._vincular_nfs(operacao, nfs_ref, nf_map)
+
+                            # Re-linking retroativo: atualizar itens de fatura
+                            # que referenciam este CTe mas foram importados antes
+                            try:
+                                from app.carvia.services.documentos.linking_service import LinkingService
+                                linker = LinkingService()
+                                fat_count = linker.vincular_operacao_a_itens_fatura_orfaos(operacao)
+                                if fat_count > 0:
+                                    logger.info(
+                                        f"Re-linking CTe→Fatura: op={operacao.id} "
+                                        f"vinculada a {fat_count} item(ns) de fatura"
+                                    )
+                            except Exception as e_link:
+                                logger.warning(
+                                    f"Erro no re-linking CTe→Fatura op={operacao.id}: {e_link}"
                                 )
-                    except Exception as e_cub:
-                        logger.warning(
-                            f"Erro auto-cubagem op={operacao.id}: {e_cub}"
-                        )
 
-                    operacoes_criadas.append(operacao)
+                            # Auto-cubagem para motos (se empresa configurada)
+                            try:
+                                from app.carvia.services.pricing.moto_recognition_service import (
+                                    MotoRecognitionService,
+                                )
+                                moto_svc = MotoRecognitionService()
+                                cnpj_cliente = operacao.cnpj_cliente or ''
+                                if cnpj_cliente and moto_svc.empresa_usa_cubagem(cnpj_cliente):
+                                    resultado_cubagem = moto_svc.calcular_peso_cubado_operacao(
+                                        operacao.id
+                                    )
+                                    if (
+                                        resultado_cubagem
+                                        and resultado_cubagem['peso_cubado_total'] > 0
+                                    ):
+                                        operacao.peso_cubado = resultado_cubagem[
+                                            'peso_cubado_total'
+                                        ]
+                                        operacao.calcular_peso_utilizado()  # R3
+                                        logger.info(
+                                            f"Auto-cubagem op={operacao.id}: "
+                                            f"peso_cubado={operacao.peso_cubado}"
+                                        )
+                            except Exception as e_cub:
+                                logger.warning(
+                                    f"Erro auto-cubagem op={operacao.id}: {e_cub}"
+                                )
+
+                            operacao_registrada = operacao
+
+                    # SAVEPOINT commitou com sucesso — registrar operacao
+                    # (lista Python atualizada apenas apos persist OK).
+                    if operacao_registrada is not None:
+                        operacoes_criadas.append(operacao_registrada)
                 except IntegrityError as e:
+                    # SAVEPOINT ja revertido automaticamente pelo `with`.
                     logger.warning(
                         f"CTe duplicado ignorado (IntegrityError): "
                         f"{cte_data.get('cte_numero')} — {e}"
@@ -800,6 +852,9 @@ class ImportacaoService:
                         f"CTe {cte_data.get('cte_numero')} ignorado (duplicata)"
                     )
                 except Exception as e:
+                    # SAVEPOINT ja revertido automaticamente. NAO chamar
+                    # db.session.rollback() — isso reverteria operacoes
+                    # anteriores commitadas na mesma transacao.
                     logger.error(f"Erro ao criar operacao: {e}")
                     erros.append(
                         f"Erro ao criar operacao CTe {cte_data.get('cte_numero')}: {e}"
@@ -831,180 +886,199 @@ class ImportacaoService:
             # cte_comp ids nao existirao e o job falharia silenciosamente.
             cte_comps_para_verificar_ssw = []
 
+            # W9: cada iteracao usa begin_nested(). Pre-checks sem writes
+            # (falta de chave, op original ausente, comp ja existente)
+            # sao feitos ANTES do savepoint para evitar criar savepoints
+            # vazios. O trabalho real (INSERT do cte_comp + helper de
+            # persistencia) fica dentro do savepoint.
+            #
+            # CUIDADO: o helper `persistir_cte_complementar_completo` faz
+            # I/O no S3 (upload XML/DACTE). Uploads S3 NAO sao
+            # transacionais — se o savepoint reverter, os arquivos ja
+            # carregados ficam orfaos no bucket. Isso ja era assim antes
+            # desta refatoracao, portanto comportamento preservado.
             for cte_data in ctes_complementar:
+                info_comp = cte_data.get('info_complementar') or {}
+                chave_original = info_comp.get('chave_cte_original')
+
+                if not chave_original:
+                    erros.append(
+                        f"CTe Comp {cte_data.get('cte_numero')}: "
+                        f"sem chave do CTe original no XML"
+                    )
+                    continue
+
+                # Buscar operacao original pela chave do CTe complementado
+                operacao_original = CarviaOperacao.query.filter_by(
+                    cte_chave_acesso=chave_original
+                ).first()
+
+                if not operacao_original:
+                    erros.append(
+                        f"CTe Comp {cte_data.get('cte_numero')}: "
+                        f"CTe original nao encontrado "
+                        f"(chave: {chave_original[:20]}...)"
+                    )
+                    continue
+
+                # Dedup por chave de acesso — sem writes
+                cte_chave = cte_data.get('cte_chave_acesso')
+                if cte_chave:
+                    comp_existente = CarviaCteComplementar.query.filter_by(
+                        cte_chave_acesso=cte_chave
+                    ).first()
+                    if comp_existente:
+                        logger.info(
+                            "CTe Comp ja importado: chave=%s", cte_chave
+                        )
+                        ctes_comp_criados.append(comp_existente)
+                        continue
+
+                # Tracking temporario — commitado apos o savepoint.
+                cte_comp_persistido = None
+                cte_comp_id_para_ssw = None
                 try:
-                    info_comp = cte_data.get('info_complementar') or {}
-                    chave_original = info_comp.get('chave_cte_original')
+                    with db.session.begin_nested():
+                        numero_comp = CarviaCteComplementar.gerar_numero_comp()
 
-                    if not chave_original:
-                        erros.append(
-                            f"CTe Comp {cte_data.get('cte_numero')}: "
-                            f"sem chave do CTe original no XML"
+                        # Status inicial:
+                        # - XML disponivel: SEMPRE comeca RASCUNHO. O helper
+                        #   persistir_cte_complementar_completo parseia o XML
+                        #   e e a fonte de verdade — promove para EMITIDO se
+                        #   <protCTe>/cStat=100. Pre-promover do PDF aqui criaria
+                        #   inconsistencia se o XML tivesse cStat != 100 (helper
+                        #   so promove RASCUNHO->EMITIDO, nunca demota).
+                        # - PDF only: pre-promove se DACTE PDF tem protocolo
+                        #   SEFAZ (DACTE so e impresso quando autorizado). Sem
+                        #   XML, o helper nao tem como avaliar o status.
+                        xml_disponivel = bool(cte_data.get('cte_xml_path'))
+                        protocolo_data = cte_data.get('protocolo_autorizacao') or {}
+                        status_inicial = (
+                            'EMITIDO'
+                            if (
+                                not xml_disponivel
+                                and protocolo_data.get('codigo_status') == '100'
+                            )
+                            else 'RASCUNHO'
                         )
-                        continue
 
-                    # Buscar operacao original pela chave do CTe complementado
-                    operacao_original = CarviaOperacao.query.filter_by(
-                        cte_chave_acesso=chave_original
-                    ).first()
-
-                    if not operacao_original:
-                        erros.append(
-                            f"CTe Comp {cte_data.get('cte_numero')}: "
-                            f"CTe original nao encontrado "
-                            f"(chave: {chave_original[:20]}...)"
+                        cte_comp = CarviaCteComplementar(
+                            numero_comp=numero_comp,
+                            operacao_id=operacao_original.id,
+                            cte_valor=float(cte_data.get('cte_valor') or 0),
+                            cte_numero=str(cte_data.get('cte_numero') or '') or None,
+                            cte_chave_acesso=cte_chave,
+                            ctrc_numero=cte_data.get('ctrc_numero'),
+                            cte_data_emissao=self._parsear_data_cte(
+                                cte_data.get('cte_data_emissao')
+                            ),
+                            cnpj_cliente=operacao_original.cnpj_cliente,
+                            nome_cliente=operacao_original.nome_cliente,
+                            status=status_inicial,
+                            observacoes=info_comp.get('motivo'),
+                            criado_por=criado_por,
                         )
-                        continue
 
-                    # Dedup por chave de acesso
-                    cte_chave = cte_data.get('cte_chave_acesso')
-                    if cte_chave:
-                        comp_existente = CarviaCteComplementar.query.filter_by(
-                            cte_chave_acesso=cte_chave
+                        db.session.add(cte_comp)
+                        db.session.flush()  # gerar cte_comp.id antes do helper
+
+                        # Vincular ao CarviaFrete pela operacao
+                        frete = CarviaFrete.query.filter_by(
+                            operacao_id=operacao_original.id
                         ).first()
-                        if comp_existente:
-                            logger.info(
-                                "CTe Comp ja importado: chave=%s", cte_chave
-                            )
-                            ctes_comp_criados.append(comp_existente)
-                            continue
+                        if frete:
+                            cte_comp.frete_id = frete.id
 
-                    numero_comp = CarviaCteComplementar.gerar_numero_comp()
-
-                    # Status inicial:
-                    # - XML disponivel: SEMPRE comeca RASCUNHO. O helper
-                    #   persistir_cte_complementar_completo parseia o XML
-                    #   e e a fonte de verdade — promove para EMITIDO se
-                    #   <protCTe>/cStat=100. Pre-promover do PDF aqui criaria
-                    #   inconsistencia se o XML tivesse cStat != 100 (helper
-                    #   so promove RASCUNHO->EMITIDO, nunca demota).
-                    # - PDF only: pre-promove se DACTE PDF tem protocolo
-                    #   SEFAZ (DACTE so e impresso quando autorizado). Sem
-                    #   XML, o helper nao tem como avaliar o status.
-                    xml_disponivel = bool(cte_data.get('cte_xml_path'))
-                    protocolo_data = cte_data.get('protocolo_autorizacao') or {}
-                    status_inicial = (
-                        'EMITIDO'
-                        if (
-                            not xml_disponivel
-                            and protocolo_data.get('codigo_status') == '100'
+                        # Resolver Custo Entrega (selecionado pelo usuario no
+                        # preview ou auto-match na ausencia de selecao)
+                        custo_entrega = None
+                        custo_id_selecionado = cte_data.get(
+                            'custo_entrega_id_selecionado'
                         )
-                        else 'RASCUNHO'
-                    )
+                        if custo_id_selecionado:
+                            custo_entrega = db.session.get(
+                                CarviaCustoEntrega, int(custo_id_selecionado)
+                            )
+                            if custo_entrega and custo_entrega.cte_complementar_id:
+                                logger.warning(
+                                    "Custo Entrega %s ja vinculado a CTe Comp %s — "
+                                    "ignorando selecao manual",
+                                    custo_entrega.numero_custo,
+                                    custo_entrega.cte_complementar_id,
+                                )
+                                custo_entrega = None
 
-                    cte_comp = CarviaCteComplementar(
-                        numero_comp=numero_comp,
-                        operacao_id=operacao_original.id,
-                        cte_valor=float(cte_data.get('cte_valor') or 0),
-                        cte_numero=str(cte_data.get('cte_numero') or '') or None,
-                        cte_chave_acesso=cte_chave,
-                        ctrc_numero=cte_data.get('ctrc_numero'),
-                        cte_data_emissao=self._parsear_data_cte(
-                            cte_data.get('cte_data_emissao')
-                        ),
-                        cnpj_cliente=operacao_original.cnpj_cliente,
-                        nome_cliente=operacao_original.nome_cliente,
-                        status=status_inicial,
-                        observacoes=info_comp.get('motivo'),
-                        criado_por=criado_por,
-                    )
+                        # Baixar bytes do XML e DACTE do S3 (paths salvos no upload)
+                        xml_bytes = None
+                        xml_path = cte_data.get('cte_xml_path')
+                        if xml_path:
+                            try:
+                                xml_bytes = storage.download_file(xml_path)
+                            except Exception as e_dl:
+                                logger.warning(
+                                    "Falha ao baixar XML CTe Comp %s do S3: %s",
+                                    xml_path, e_dl
+                                )
 
-                    db.session.add(cte_comp)
-                    db.session.flush()  # gerar cte_comp.id antes do helper
+                        dacte_bytes = None
+                        dacte_path = cte_data.get('cte_pdf_path')
+                        if dacte_path:
+                            try:
+                                dacte_bytes = storage.download_file(dacte_path)
+                            except Exception as e_dl:
+                                logger.warning(
+                                    "Falha ao baixar DACTE CTe Comp %s do S3: %s",
+                                    dacte_path, e_dl
+                                )
 
-                    # Vincular ao CarviaFrete pela operacao
-                    frete = CarviaFrete.query.filter_by(
-                        operacao_id=operacao_original.id
-                    ).first()
-                    if frete:
-                        cte_comp.frete_id = frete.id
-
-                    # Resolver Custo Entrega (selecionado pelo usuario no
-                    # preview ou auto-match na ausencia de selecao)
-                    custo_entrega = None
-                    custo_id_selecionado = cte_data.get(
-                        'custo_entrega_id_selecionado'
-                    )
-                    if custo_id_selecionado:
-                        custo_entrega = db.session.get(
-                            CarviaCustoEntrega, int(custo_id_selecionado)
+                        # Persistir tudo via helper (parser, S3 folder correto,
+                        # CarviaEmissaoCteComplementar, vínculo de Custo Entrega)
+                        resultado_persist = persistir_cte_complementar_completo(
+                            cte_comp=cte_comp,
+                            xml_bytes=xml_bytes,
+                            xml_nome=None,  # helper gera baseado na chave
+                            dacte_bytes=dacte_bytes,
+                            dacte_nome=None,
+                            custo_entrega=custo_entrega,
+                            motivo_ssw='C',  # Complementar geral (manual import)
+                            filial_ssw='CAR',
+                            icms_pai=None,  # helper extrai do CTe pai
+                            valor_calculado=None,  # helper usa cte_valor do XML
+                            criado_por=criado_por,
+                            origem='IMPORTACAO_MANUAL',
                         )
-                        if custo_entrega and custo_entrega.cte_complementar_id:
-                            logger.warning(
-                                "Custo Entrega %s ja vinculado a CTe Comp %s — "
-                                "ignorando selecao manual",
-                                custo_entrega.numero_custo,
-                                custo_entrega.cte_complementar_id,
-                            )
-                            custo_entrega = None
 
-                    # Baixar bytes do XML e DACTE do S3 (paths salvos no upload)
-                    xml_bytes = None
-                    xml_path = cte_data.get('cte_xml_path')
-                    if xml_path:
-                        try:
-                            xml_bytes = storage.download_file(xml_path)
-                        except Exception as e_dl:
-                            logger.warning(
-                                "Falha ao baixar XML CTe Comp %s do S3: %s",
-                                xml_path, e_dl
-                            )
+                        if resultado_persist.get('erros'):
+                            for err in resultado_persist['erros']:
+                                erros.append(
+                                    f"CTe Comp {cte_data.get('cte_numero')}: {err}"
+                                )
 
-                    dacte_bytes = None
-                    dacte_path = cte_data.get('cte_pdf_path')
-                    if dacte_path:
-                        try:
-                            dacte_bytes = storage.download_file(dacte_path)
-                        except Exception as e_dl:
-                            logger.warning(
-                                "Falha ao baixar DACTE CTe Comp %s do S3: %s",
-                                dacte_path, e_dl
-                            )
+                        cte_comp_persistido = cte_comp
+                        if cte_data.get('verificar_ctrc_ssw'):
+                            cte_comp_id_para_ssw = cte_comp.id
 
-                    # Persistir tudo via helper (parser, S3 folder correto,
-                    # CarviaEmissaoCteComplementar, vínculo de Custo Entrega)
-                    resultado_persist = persistir_cte_complementar_completo(
-                        cte_comp=cte_comp,
-                        xml_bytes=xml_bytes,
-                        xml_nome=None,  # helper gera baseado na chave
-                        dacte_bytes=dacte_bytes,
-                        dacte_nome=None,
-                        custo_entrega=custo_entrega,
-                        motivo_ssw='C',  # Complementar geral (manual import)
-                        filial_ssw='CAR',
-                        icms_pai=None,  # helper extrai do CTe pai
-                        valor_calculado=None,  # helper usa cte_valor do XML
-                        criado_por=criado_por,
-                        origem='IMPORTACAO_MANUAL',
-                    )
+                        logger.info(
+                            "CTe Complementar criado: %s → op=%s "
+                            "(CTe original: %s, custo_vinculado=%s, "
+                            "emissao_id=%s, status=%s)",
+                            numero_comp, operacao_original.id,
+                            operacao_original.cte_numero,
+                            custo_entrega.numero_custo if custo_entrega else 'NENHUM',
+                            resultado_persist.get('emissao_id'),
+                            cte_comp.status,
+                        )
 
-                    if resultado_persist.get('erros'):
-                        for err in resultado_persist['erros']:
-                            erros.append(
-                                f"CTe Comp {cte_data.get('cte_numero')}: {err}"
-                            )
-
-                    ctes_comp_criados.append(cte_comp)
-
-                    # Marcar para verificar SSW apos o commit final (ver bloco
-                    # pos-commit abaixo). Enfileirar ANTES do commit causa race:
-                    # se commit falhar, job nao encontra o cte_comp.
-                    if cte_data.get('verificar_ctrc_ssw'):
-                        cte_comps_para_verificar_ssw.append(cte_comp.id)
-
-                    logger.info(
-                        "CTe Complementar criado: %s → op=%s "
-                        "(CTe original: %s, custo_vinculado=%s, "
-                        "emissao_id=%s, status=%s)",
-                        numero_comp, operacao_original.id,
-                        operacao_original.cte_numero,
-                        custo_entrega.numero_custo if custo_entrega else 'NENHUM',
-                        resultado_persist.get('emissao_id'),
-                        cte_comp.status,
-                    )
+                    # SAVEPOINT commitou — atualizar tracking Python
+                    if cte_comp_persistido is not None:
+                        ctes_comp_criados.append(cte_comp_persistido)
+                        if cte_comp_id_para_ssw is not None:
+                            cte_comps_para_verificar_ssw.append(cte_comp_id_para_ssw)
 
                 except IntegrityError as e:
-                    db.session.rollback()
+                    # SAVEPOINT ja revertido automaticamente. NAO chamar
+                    # db.session.rollback() — isso reverteria CTes Comp
+                    # anteriores commitados na mesma transacao.
                     logger.warning(
                         "CTe Comp duplicado (IntegrityError): %s", e
                     )
@@ -1013,21 +1087,34 @@ class ImportacaoService:
                         f"ignorado (duplicata)"
                     )
                 except Exception as e:
+                    # SAVEPOINT ja revertido automaticamente.
                     logger.error("Erro ao criar CTe Complementar: %s", e)
                     erros.append(
                         f"Erro CTe Comp {cte_data.get('cte_numero')}: {e}"
                     )
 
             # 4. Criar Subcontratos a partir dos CTes de transportadoras
+            # W9: cada iteracao envolvida em begin_nested(). O helper
+            # `_processar_cte_subcontrato` faz db.session.flush() internamente
+            # — isso e seguro dentro do savepoint (flush escreve mas nao
+            # commita). Se qualquer write falhar, apenas o SAVEPOINT deste
+            # sub e revertido.
             for cte_data in ctes_subcontrato:
+                sub_persistido = None
                 try:
-                    sub = self._processar_cte_subcontrato(
-                        cte_data, nf_map, operacoes_criadas, criado_por
-                    )
-                    if sub:
-                        subcontratos_criados.append(sub)
+                    with db.session.begin_nested():
+                        sub = self._processar_cte_subcontrato(
+                            cte_data, nf_map, operacoes_criadas, criado_por
+                        )
+                        sub_persistido = sub
+
+                    # SAVEPOINT commitou — atualizar tracking Python
+                    if sub_persistido:
+                        subcontratos_criados.append(sub_persistido)
                 except IntegrityError as e:
-                    db.session.rollback()
+                    # SAVEPOINT ja revertido automaticamente. NAO chamar
+                    # db.session.rollback() — isso reverteria subs
+                    # anteriores commitados na mesma transacao.
                     logger.warning(
                         f"CTe Subcontrato duplicado (IntegrityError): {e}"
                     )
@@ -1035,6 +1122,7 @@ class ImportacaoService:
                         f"CTe Sub {cte_data.get('cte_numero')} ignorado (duplicata)"
                     )
                 except Exception as e:
+                    # SAVEPOINT ja revertido automaticamente.
                     logger.warning(f"CTe Subcontrato ignorado: {e}")
                     erros.append(
                         f"CTe Subcontrato {cte_data.get('cte_numero')}: {e}"
@@ -1129,6 +1217,14 @@ class ImportacaoService:
                                 # Itens criados acima podem ter nf_id=NULL se NF nunca
                                 # foi importada. vincular_itens_fatura_cliente com
                                 # auto_criar_nf=True cria CarviaNf stub (FATURA_REFERENCIA).
+                                #
+                                # NOTA (W9): esses stubs NF sao criados DENTRO do
+                                # savepoint da fatura — se o savepoint reverter por
+                                # qualquer motivo (ex: IntegrityError no restante do
+                                # processamento), os stubs tambem sao revertidos.
+                                # Logs do linker dirao "NF referencia criada" mesmo
+                                # em casos de rollback — confuso em post-mortem,
+                                # mas consistente com o estado final do DB.
                                 link_stats = linker.vincular_itens_fatura_cliente(
                                     fatura.id, auto_criar_nf=True
                                 )
@@ -1254,10 +1350,12 @@ class ImportacaoService:
             return {
                 'sucesso': False,
                 'nfs_criadas': 0,
+                'nfs_reutilizadas': 0,
                 'operacoes_criadas': 0,
                 'subcontratos_criados': 0,
                 'ctes_comp_criados': 0,
                 'faturas_criadas': 0,
+                'nfs_sem_cte': 0,
                 'erros': [f'Erro fatal: {e}'] + erros,
             }
 
@@ -1719,6 +1817,10 @@ class ImportacaoService:
         # Persistir referencias de NF do CTe XML para re-linking retroativo
         nfs_ref_json = nfs_ref if nfs_ref else None
 
+        # Tomador do CTe extraido via get_tomador() do parser (<ide>/<toma3> ou <toma4>)
+        tomador_info = cte_data.get('tomador') or {}
+        cte_tomador_persist = _TOMADOR_CODE_MAP.get(tomador_info.get('codigo'))
+
         return CarviaOperacao(
             cte_numero=cte_data.get('cte_numero'),
             cte_chave_acesso=cte_data.get('cte_chave_acesso'),
@@ -1742,6 +1844,7 @@ class ImportacaoService:
             status='RASCUNHO',
             criado_por=criado_por,
             icms_aliquota=cte_data.get('impostos', {}).get('aliquota_icms'),
+            cte_tomador=cte_tomador_persist,
         )
 
     def _vincular_nfs(self, operacao: CarviaOperacao, nfs_ref: List[Dict],
