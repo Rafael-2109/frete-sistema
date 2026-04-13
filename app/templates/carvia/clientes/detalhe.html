@@ -136,9 +136,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                {# Step 1: CNPJ + Tipo #}
+                {# Step 1: CNPJ + Principal (Tipo e fixo como DESTINO —
+                   origens sao globais, cadastradas em "Origens Globais") #}
                 <div class="row mb-3">
-                    <div class="col-md-5">
+                    <div class="col-md-7">
                         <label class="form-label">CNPJ/CPF <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <input type="text" class="form-control" id="endCnpj" placeholder="CNPJ ou CPF">
@@ -147,14 +148,7 @@
                             </button>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Tipo <span class="text-danger">*</span></label>
-                        <select class="form-select" id="endTipo">
-                            <option value="ORIGEM">Origem</option>
-                            <option value="DESTINO">Destino</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-md-5">
                         <label class="form-label">Principal?</label>
                         <div class="form-check mt-2">
                             <input type="checkbox" class="form-check-input" id="endPrincipal">
@@ -290,15 +284,10 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editEndId">
+                {# Tipo nao e editavel — enderecos em Clientes sao sempre DESTINO.
+                   Origens sao globais e gerenciadas em "Origens Globais". #}
                 <div class="row mb-3">
-                    <div class="col-md-4">
-                        <label class="form-label small">Tipo</label>
-                        <select class="form-select form-select-sm" id="editTipo">
-                            <option value="ORIGEM">Origem</option>
-                            <option value="DESTINO">Destino</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label small">Principal?</label>
                         <div class="form-check mt-1">
                             <input type="checkbox" class="form-check-input" id="editPrincipal">
@@ -509,7 +498,9 @@ function salvarEndereco() {
 
     const payload = {
         cnpj: document.getElementById('endCnpj').value.trim(),
-        tipo: document.getElementById('endTipo').value,
+        // Tipo fixo: enderecos em Clientes sao sempre DESTINO.
+        // Origens sao globais e cadastradas na tela "Origens Globais".
+        tipo: 'DESTINO',
         principal: document.getElementById('endPrincipal').checked,
         razao_social: razaoSocial,
         receita_uf: tipoDocumento === 'cnpj' ? document.getElementById('recUf').value : '',
@@ -547,7 +538,6 @@ function salvarEndereco() {
 /* ===== Editar Endereco Fisico ===== */
 function editarEndereco(id, end) {
     document.getElementById('editEndId').value = id;
-    document.getElementById('editTipo').value = end.tipo || 'ORIGEM';
     document.getElementById('editPrincipal').checked = !!end.principal;
     document.getElementById('editFisLogradouro').value = end.fisico_logradouro || '';
     document.getElementById('editFisNumero').value = end.fisico_numero || '';
@@ -562,7 +552,8 @@ function editarEndereco(id, end) {
 function atualizarEndereco() {
     const id = document.getElementById('editEndId').value;
     const payload = {
-        tipo: document.getElementById('editTipo').value,
+        // Tipo nao e enviado — enderecos em Clientes sao sempre DESTINO e nao podem
+        // ser convertidos em ORIGEM (origens sao globais, cliente_id=NULL).
         principal: document.getElementById('editPrincipal').checked,
         fisico_logradouro: document.getElementById('editFisLogradouro').value,
         fisico_numero: document.getElementById('editFisNumero').value,

@@ -217,11 +217,13 @@ function iniciarSetupNF() {
             const re = d.receita_emitente;
             const rd = d.receita_destinatario;
 
-            // Ajuste 1: se cliente existe, usar nome cadastrado (nao sobrescrever com NF)
+            // Ajuste 1: se cliente existe, usar nome cadastrado. Se novo, deixar vazio —
+            // "cliente" aqui e um APELIDO COMERCIAL (ex: "Alice - Motochefe"), nao a razao
+            // social do emitente da NF. Forcar entrada manual evita confundir emitente/cliente.
             if (d.cliente.existe && d.cliente.nome) {
                 document.getElementById('wizNomeCliente').value = d.cliente.nome;
             } else {
-                document.getElementById('wizNomeCliente').value = nf.nome_emitente || '';
+                document.getElementById('wizNomeCliente').value = '';
             }
             document.getElementById('wizOrigCnpj').value = nf.cnpj_emitente || '';
             document.getElementById('wizOrigRazao').value = nf.nome_emitente || '';
@@ -807,11 +809,13 @@ document.getElementById('formCotacao').addEventListener('submit', async function
             // Pre-preencher wizard com dados da NF do banco
             const nf = d.nf;
 
-            // Ajuste 1: se cliente existe, usar nome cadastrado (nao sobrescrever com NF)
+            // Ajuste 1: se cliente existe, usar nome cadastrado. Se novo, deixar vazio —
+            // "cliente" aqui e um APELIDO COMERCIAL (ex: "Alice - Motochefe"), nao a razao
+            // social do emitente da NF. Forcar entrada manual evita confundir emitente/cliente.
             if (d.cliente.existe && d.cliente.nome) {
                 document.getElementById('wizNomeCliente').value = d.cliente.nome;
             } else {
-                document.getElementById('wizNomeCliente').value = nf.nome_emitente || '';
+                document.getElementById('wizNomeCliente').value = '';
             }
             document.getElementById('wizOrigCnpj').value = nf.cnpj_emitente || '';
             document.getElementById('wizOrigRazao').value = nf.nome_emitente || '';
