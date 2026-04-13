@@ -829,6 +829,7 @@ class CarviaConciliacaoService:
                 'data': linha.data.strftime('%d/%m/%Y') if linha and linha.data else '-',
                 'descricao': (linha.descricao or linha.memo or '-') if linha else '-',
                 'razao_social': (linha.razao_social or '') if linha else '',
+                'observacao': (linha.observacao or '') if linha else '',
                 'valor_linha': float(linha.valor) if linha else 0,
                 'tipo_linha': linha.tipo if linha else '-',
                 'valor_alocado': float(c.valor_alocado),

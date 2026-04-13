@@ -198,7 +198,7 @@
                                 </span>
                                 {% endif %}
                             </div>
-                            <input type="text" class="form-control form-control-sm carvia-obs-input mt-1"
+                            <input type="text" class="form-control carvia-obs-input"
                                    data-id="{{ linha.id }}"
                                    value="{{ linha.observacao or '' }}"
                                    placeholder="Observacao..."
@@ -298,7 +298,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="9" class="text-center text-muted py-4">
+                        <td colspan="8" class="text-center text-muted py-4">
                             {% if resumo.total_linhas == 0 %}
                                 Nenhuma linha importada. Clique em "Importar OFX" para comecar.
                             {% else %}
@@ -570,6 +570,53 @@
             });
         });
     });
+
+    // Edicao inline de observacao — input sempre visivel (blur/Enter salva, Escape cancela)
+    document.querySelectorAll('.carvia-obs-input').forEach(function(inp) {
+        let valorOriginal = inp.value;
+        const salvar = function() {
+            const novo = inp.value.trim();
+            if (novo === valorOriginal) return;
+            inp.classList.remove('is-valid', 'is-invalid');
+            fetch('{{ url_for("carvia.api_editar_extrato") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    extrato_id: parseInt(inp.dataset.id),
+                    campo: 'observacao',
+                    valor: novo,
+                }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.sucesso) {
+                    valorOriginal = novo;
+                    inp.classList.add('is-valid');
+                    setTimeout(function() { inp.classList.remove('is-valid'); }, 1500);
+                } else {
+                    inp.value = valorOriginal;
+                    inp.classList.add('is-invalid');
+                    alert(data.erro || 'Erro ao salvar observacao');
+                }
+            })
+            .catch(function(err) {
+                inp.value = valorOriginal;
+                inp.classList.add('is-invalid');
+                alert('Erro: ' + err.message);
+            });
+        };
+        inp.addEventListener('blur', salvar);
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                inp.blur();
+            } else if (e.key === 'Escape') {
+                inp.value = valorOriginal;
+                inp.blur();
+            }
+        });
+    });
+
     // Botoes rapidos de periodo
     const form = document.getElementById('formFiltros');
     const inputInicio = form.querySelector('[name="data_inicio"]');

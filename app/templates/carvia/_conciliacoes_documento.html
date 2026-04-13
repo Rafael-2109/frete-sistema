@@ -81,6 +81,17 @@
         });
     }
 
+    // Escapa HTML para prevenir XSS ao interpolar dados vindos do banco (OFX externo)
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function desconciliar(concId, btn) {
         if (!confirm('Remover esta conciliacao bancaria?')) return;
         btn.disabled = true;
@@ -121,16 +132,19 @@
                 var tr = document.createElement('tr');
                 var valorCls = conc.tipo_linha === 'CREDITO'
                     ? 'text-success' : 'text-danger';
+                var obsHtml = conc.observacao
+                    ? '<div class="text-muted fst-italic" style="font-size:0.68rem"><i class="fas fa-sticky-note text-warning me-1"></i>' + escapeHtml(conc.observacao) + '</div>'
+                    : '';
                 tr.innerHTML =
-                    '<td class="small">' + conc.data + '</td>' +
-                    '<td class="small">' + conc.descricao + '</td>' +
-                    '<td class="small text-muted">' + (conc.razao_social || '-') + '</td>' +
+                    '<td class="small">' + escapeHtml(conc.data) + '</td>' +
+                    '<td class="small">' + escapeHtml(conc.descricao || '-') + obsHtml + '</td>' +
+                    '<td class="small text-muted">' + escapeHtml(conc.razao_social || '-') + '</td>' +
                     '<td class="text-end small ' + valorCls + '">' +
                         fmtValor(conc.valor_linha) + '</td>' +
                     '<td class="text-end small fw-semibold">' +
                         fmtValor(conc.valor_alocado) + '</td>' +
-                    '<td class="small text-muted">' + conc.conciliado_por + '</td>' +
-                    '<td class="small text-muted">' + conc.conciliado_em + '</td>' +
+                    '<td class="small text-muted">' + escapeHtml(conc.conciliado_por) + '</td>' +
+                    '<td class="small text-muted">' + escapeHtml(conc.conciliado_em) + '</td>' +
                     '<td class="text-end">' +
                         '<a href="/carvia/extrato-bancario" ' +
                            'class="btn btn-xs btn-outline-secondary me-1" ' +

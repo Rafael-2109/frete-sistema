@@ -277,6 +277,7 @@ class CarviaPreVinculoService:
                 'descricao': linha.descricao or '',
                 'memo': linha.memo or '',
                 'razao_social': linha.razao_social or '',
+                'observacao': linha.observacao or '',
                 'saldo_a_conciliar': linha.saldo_a_conciliar,
                 'status_conciliacao': linha.status_conciliacao,
                 'origem': linha.origem,

@@ -73,6 +73,12 @@
                                 {% elif linha.status_conciliacao == 'PENDENTE' %}
                                     <span class="badge bg-secondary ms-1" class="carvia-badge-xs">PENDENTE</span>
                                 {% endif %}
+                                {% if linha.observacao %}
+                                <div class="text-muted fst-italic" style="font-size:0.68rem">
+                                    <i class="fas fa-sticky-note text-warning me-1"></i>
+                                    {{ linha.observacao }}
+                                </div>
+                                {% endif %}
                             {% else %}
                                 <small class="text-muted">(linha removida)</small>
                             {% endif %}

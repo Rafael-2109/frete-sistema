@@ -193,6 +193,7 @@
 
                     // FIX C3: escapar campos vindos do OFX para prevenir XSS
                     const descSafe = escapeHtml(ln.razao_social || ln.descricao || '-');
+                    const obsSafe = escapeHtml(ln.observacao || '');
                     const dataSafe = escapeHtml(ln.data || '-');
                     const linhaIdNum = parseInt(ln.id, 10) || 0;
                     const saldoNum = parseFloat(ln.saldo_a_conciliar || 0);
@@ -215,6 +216,9 @@
                             <small>${descSafe}</small>
                             ${ln.status_conciliacao === 'PARCIAL'
                                 ? '<span class="badge bg-warning ms-1 carvia-badge-xs">PARCIAL</span>'
+                                : ''}
+                            ${obsSafe
+                                ? `<div class="text-muted fst-italic" style="font-size:0.68rem"><i class="fas fa-sticky-note text-warning me-1"></i>${obsSafe}</div>`
                                 : ''}
                         </td>
                         <td class="text-end carvia-conciliacao-valor">

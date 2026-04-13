@@ -46,6 +46,17 @@
         return meta ? meta.getAttribute('content') : '';
     }
 
+    // Escapa HTML para prevenir XSS ao interpolar dados vindos do banco (OFX externo)
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function resetModal() {
         el('pcDocTipo').textContent = TIPO_LABELS[state.tipoDoc] || state.tipoDoc;
         el('pcDocNumero').textContent = '#' + state.docId;
@@ -102,14 +113,21 @@
 
             var contaOrigemTxt = ln.conta_origem ? (' — ' + ln.conta_origem) : '';
             var descricao = (ln.razao_social || ln.descricao || '-') + contaOrigemTxt;
+            var descricaoSafe = escapeHtml(descricao);
+            var obsHtml = ln.observacao
+                ? '<div class="text-muted fst-italic" style="font-size:0.65rem"><i class="fas fa-sticky-note text-warning me-1"></i>' + escapeHtml(ln.observacao) + '</div>'
+                : '';
 
             var tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
             tr.dataset.linhaId = ln.id;
             tr.innerHTML =
                 '<td><input type="radio" name="pcLinha" value="' + ln.id + '" class="form-check-input"></td>' +
-                '<td>' + ln.data + '</td>' +
-                '<td class="text-truncate" style="max-width:180px" title="' + descricao + '">' + descricao + '</td>' +
+                '<td>' + escapeHtml(ln.data) + '</td>' +
+                '<td style="max-width:200px" title="' + descricaoSafe + '">' +
+                    '<div class="text-truncate">' + descricaoSafe + '</div>' +
+                    obsHtml +
+                '</td>' +
                 '<td>' + origemBadge + '</td>' +
                 '<td class="text-end">R$ ' + Math.abs(ln.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
                 '<td class="text-end">R$ ' + parseFloat(ln.saldo_a_conciliar).toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +

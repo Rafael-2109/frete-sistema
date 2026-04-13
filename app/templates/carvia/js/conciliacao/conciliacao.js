@@ -10,6 +10,16 @@
 
     const fmtBRL = v => parseFloat(v).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
     const fmtNum = v => parseFloat(v).toLocaleString('pt-BR', {minimumFractionDigits:2});
+    // Escapa HTML para prevenir XSS ao interpolar conteudo vindo do banco (OFX externo)
+    const escapeHtml = s => {
+        if (s == null) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
     const formatCNPJ = c => {
         if (!c || c.length < 14) return c || '';
         const d = c.replace(/\D/g, '');
@@ -77,11 +87,18 @@
                        style="font-size:0.7rem; padding:1px 6px;"
                        data-linha-id="${l.id}"
                        data-valor="${l.saldo_a_conciliar}"
-                       data-data="${l.data}"
-                       data-descricao="${(l.descricao || '').replace(/"/g, '&quot;')}"
+                       data-data="${escapeHtml(l.data)}"
+                       data-descricao="${escapeHtml(l.descricao || '')}"
                        title="Criar Custo Fiscal (GNRE/SEFAZ)">
                        <i class="fas fa-landmark"></i> Custo Fiscal
                    </button>`
+                : '';
+
+            const razaoHtml = l.razao_social ? '<strong>' + escapeHtml(l.razao_social) + '</strong>' : '';
+            const sepHtml = l.razao_social && l.descricao ? ' — ' : '';
+            const descHtml = escapeHtml(l.descricao || '');
+            const obsHtml = l.observacao
+                ? '<div class="ps-4 text-muted fst-italic" style="font-size:0.7rem"><i class="fas fa-sticky-note text-warning me-1"></i>' + escapeHtml(l.observacao) + '</div>'
                 : '';
 
             div.innerHTML = `
@@ -98,7 +115,8 @@
                         ${l.saldo_a_conciliar < Math.abs(l.valor) - 0.01 ? '<small class="text-muted ms-1">(saldo: ' + fmtNum(l.saldo_a_conciliar) + ')</small>' : ''}
                     </span>
                 </div>
-                <div class="carvia-conciliacao-row-secondary ps-4">${l.razao_social ? '<strong>' + l.razao_social + '</strong>' : ''}${l.razao_social && l.descricao ? ' — ' : ''}${l.descricao || ''}</div>
+                <div class="carvia-conciliacao-row-secondary ps-4">${razaoHtml}${sepHtml}${descHtml}</div>
+                ${obsHtml}
             `;
             container.appendChild(div);
         });

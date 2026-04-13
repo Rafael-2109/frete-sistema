@@ -16,7 +16,12 @@
                     <small class="text-muted">
                         <span id="concInlineData">-</span> |
                         Saldo a conciliar: <strong id="concInlineSaldo">-</strong>
+                        <span id="concInlineRazaoWrap" class="ms-2 d-none">| <span id="concInlineRazao"></span></span>
                     </small>
+                    <div id="concInlineObs" class="mt-2 small text-muted fst-italic d-none">
+                        <i class="fas fa-sticky-note text-warning me-1"></i>
+                        <span id="concInlineObsTexto"></span>
+                    </div>
                 </div>
 
                 {# Loading #}
@@ -159,6 +164,26 @@
             document.getElementById('concInlineData').textContent = data.linha.data;
             const saldoFmt = parseFloat(data.linha.saldo_a_conciliar).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
             document.getElementById('concInlineSaldo').textContent = saldoFmt;
+
+            // Razao social (se presente)
+            const razao = data.linha.razao_social || '';
+            const razaoWrap = document.getElementById('concInlineRazaoWrap');
+            if (razao) {
+                document.getElementById('concInlineRazao').textContent = razao;
+                razaoWrap.classList.remove('d-none');
+            } else {
+                razaoWrap.classList.add('d-none');
+            }
+
+            // Observacao (se presente)
+            const obs = data.linha.observacao || '';
+            const obsWrap = document.getElementById('concInlineObs');
+            if (obs) {
+                document.getElementById('concInlineObsTexto').textContent = obs;
+                obsWrap.classList.remove('d-none');
+            } else {
+                obsWrap.classList.add('d-none');
+            }
 
             if (data.documentos.length === 0) {
                 vazio.classList.remove('d-none');

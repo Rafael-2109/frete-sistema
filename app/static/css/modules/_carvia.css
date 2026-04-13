@@ -291,6 +291,39 @@
     white-space: nowrap;
 }
 
+/* Coluna Razao Social + Obs (extrato bancario) — permite quebra para acomodar input */
+.carvia-table td.carvia-col-razao-obs {
+    white-space: normal;
+    min-width: 220px;
+    max-width: 300px;
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
+    line-height: 1.2;
+}
+
+/* Input compacto de observacao — altura fixa para nao crescer a linha alem do necessario */
+.carvia-obs-input {
+    font-size: 0.7rem;
+    line-height: 1.2;
+    padding: 0.05rem 0.35rem;
+    min-height: 0;
+    height: 1.3rem;
+    background-color: transparent;
+    border: 1px dashed var(--border-color, #dee2e6);
+    border-radius: 0.15rem;
+    max-width: 270px;
+    margin-top: 1px;
+    box-shadow: none;
+}
+
+.carvia-obs-input:focus {
+    background-color: var(--bg-body, #fff);
+    border-style: solid;
+    box-shadow: none;
+    outline: 1px solid var(--primary, #0d6efd);
+    outline-offset: -1px;
+}
+
 /* Colunas de texto longo — truncation com ellipsis */
 .carvia-table .text-truncate-col {
     white-space: nowrap;
