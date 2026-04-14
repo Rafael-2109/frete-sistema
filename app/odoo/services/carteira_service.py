@@ -2299,19 +2299,35 @@ class CarteiraService:
             
             # PROTEÇÃO CRÍTICA: Processar pedidos removidos apenas se não estiverem faturados
             # Garantir conexão antes do loop de verificação de separações
+            seps_nao_sync_por_pedido = {}
+            pedidos_com_sep_sync = set()
             if itens_removidos:
                 ensure_connection()
 
-            for num_pedido, _ in itens_removidos:
-                # CORREÇÃO: Verificar diretamente na tabela Separacao com sincronizado_nf=False
-                # em vez de usar a VIEW Pedido que ignora status='PREVISAO'
-
-                # Buscar separações não sincronizadas (não faturadas)
+                # 🚀 OTIMIZACAO (2026-04-14): 1 query batch para todas as separacoes
+                # dos pedidos removidos, ao inves de 2 queries por pedido dentro do
+                # loop (gargalo G5: ~100 queries quando ha 50 pedidos removidos).
                 try:
-                    separacoes_nao_sincronizadas = Separacao.query.filter_by(
-                        num_pedido=num_pedido,
-                        sincronizado_nf=False  # CRÍTICO: apenas não sincronizadas
+                    pedidos_removidos_lista = [num for num, _ in itens_removidos]
+                    todas_seps_removidas = Separacao.query.filter(
+                        Separacao.num_pedido.in_(pedidos_removidos_lista)
                     ).all()
+                    for sep in todas_seps_removidas:
+                        if sep.sincronizado_nf:
+                            pedidos_com_sep_sync.add(sep.num_pedido)
+                        else:
+                            seps_nao_sync_por_pedido.setdefault(sep.num_pedido, []).append(sep)
+                except Exception as e:
+                    logger.error(f"❌ Erro no batch load de Separacao para itens removidos: {e}")
+                    # Em caso de falha no batch, deixar dicts vazios — loop abaixo
+                    # vai tratar cada pedido como "sem separacao para processar"
+                    seps_nao_sync_por_pedido = {}
+                    pedidos_com_sep_sync = set()
+
+            for num_pedido, _ in itens_removidos:
+                try:
+                    # Lookup O(1) nos dicts pre-carregados
+                    separacoes_nao_sincronizadas = seps_nao_sync_por_pedido.get(num_pedido, [])
 
                     if separacoes_nao_sincronizadas:
                         # Tem separações não faturadas, pode processar
@@ -2327,12 +2343,7 @@ class CarteiraService:
                                   f"({len(separacoes_nao_sincronizadas)} separações não sincronizadas com status: {status_str})")
                     else:
                         # Verificar se existem separações sincronizadas (já faturadas)
-                        separacoes_sincronizadas = Separacao.query.filter_by(
-                            num_pedido=num_pedido,
-                            sincronizado_nf=True
-                        ).first()
-
-                        if separacoes_sincronizadas:
+                        if num_pedido in pedidos_com_sep_sync:
                             logger.warning(f"🛡️ PROTEÇÃO: Pedido {num_pedido} removido mas NÃO será processado "
                                          f"(todas as separações já sincronizadas/faturadas)")
                         else:
@@ -2340,11 +2351,6 @@ class CarteiraService:
 
                 except Exception as e:
                     logger.error(f"❌ Erro ao verificar separações do pedido {num_pedido}: {e}")
-                    # Tentar reconectar para o próximo pedido
-                    try:
-                        ensure_connection()
-                    except Exception:
-                        pass
                     # Em caso de erro, não adicionar para processamento por segurança
                     continue
             
@@ -2790,14 +2796,28 @@ class CarteiraService:
                 contador_cnpjs_vazios = 0
                 contador_ja_existentes = 0
 
+                # 🚀 OTIMIZACAO (2026-04-14): pre-load em 1 query batch ao inves de
+                # N .filter_by(cnpj=cnpj).first() dentro do loop (gargalo G4).
+                cnpjs_validos = [
+                    cnpj for (cnpj,) in clientes_necessitam_agendamento
+                    if cnpj and cnpj.strip()
+                ]
+                contatos_por_cnpj = {}
+                if cnpjs_validos:
+                    contatos_por_cnpj = {
+                        c.cnpj: c for c in ContatoAgendamento.query.filter(
+                            ContatoAgendamento.cnpj.in_(cnpjs_validos)
+                        ).all()
+                    }
+
                 for (cnpj,) in clientes_necessitam_agendamento:
                     if not cnpj or not cnpj.strip():
                         contador_cnpjs_vazios += 1
                         logger.debug(f"   ⚠️ CNPJ vazio/None encontrado - pulando")
                         continue
 
-                    # Verificar se existe ContatoAgendamento para este CNPJ
-                    contato_existente = ContatoAgendamento.query.filter_by(cnpj=cnpj).first()
+                    # Lookup O(1) no dict pre-carregado
+                    contato_existente = contatos_por_cnpj.get(cnpj)
 
                     if not contato_existente:
                         # Criar novo registro com forma=ODOO

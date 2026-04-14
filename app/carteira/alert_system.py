@@ -59,33 +59,59 @@ class AlertaSistemaCarteira:
     @staticmethod
     def detectar_alteracoes_separacao_cotada_pos_sincronizacao(alteracoes_detectadas):
         """
-        Detecta alterações que afetaram separações cotadas APÓS sincronização
+        Detecta alterações que afetaram separações cotadas APÓS sincronização.
+
+        OTIMIZACAO (2026-04-14): Usa 1 query batch com JOIN Separacao x Pedido
+        filtrando por num_pedido IN (lista) + status='COTADO', ao inves de
+        N queries individuais dentro do loop (gargalo historico do Step 2
+        do scheduler: 500+ queries por ciclo quando ha muitos itens alterados).
         """
         alertas = []
 
+        if not alteracoes_detectadas:
+            return alertas
+
         try:
             from app.separacao.models import Separacao
+            from app.pedidos.models import Pedido
+
+            # Coletar num_pedidos unicos das alteracoes
+            pedidos_afetados = {
+                a['num_pedido'] for a in alteracoes_detectadas
+                if a.get('num_pedido')
+            }
+            if not pedidos_afetados:
+                return alertas
+
+            # 1 query batch: buscar TODAS separacoes cotadas dos pedidos afetados
+            separacoes_cotadas = db.session.query(
+                Separacao.num_pedido,
+                Separacao.separacao_lote_id
+            ).join(
+                Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
+            ).filter(
+                Separacao.num_pedido.in_(pedidos_afetados),
+                Pedido.status == 'COTADO'
+            ).all()
+
+            # Dict {num_pedido: separacao_lote_id} para lookup O(1)
+            # Se houver mais de uma separacao cotada por pedido, pega a primeira
+            sep_por_pedido = {}
+            for num_pedido, sep_lote_id in separacoes_cotadas:
+                sep_por_pedido.setdefault(num_pedido, sep_lote_id)
 
             for alteracao in alteracoes_detectadas:
-                # Buscar se pedido tem separação cotada - CORRIGIDO: usar Pedido.status
-                from app.pedidos.models import Pedido
-                separacao_cotada = db.session.query(Separacao).join(
-                    Pedido, Separacao.separacao_lote_id == Pedido.separacao_lote_id
-                ).filter(
-                    Separacao.num_pedido == alteracao['num_pedido'],
-                    Pedido.status == 'COTADO'
-                ).first()
-
-                if separacao_cotada:
+                separacao_lote_id = sep_por_pedido.get(alteracao.get('num_pedido'))
+                if separacao_lote_id:
                     alertas.append({
                         'nivel': 'CRITICO',
                         'tipo': 'SEPARACAO_COTADA_ALTERADA',
-                        'separacao_lote_id': separacao_cotada.separacao_lote_id,
+                        'separacao_lote_id': separacao_lote_id,
                         'pedido': alteracao['num_pedido'],
                         'produto': alteracao.get('cod_produto', 'N/A'),
                         'alteracao': alteracao['tipo_alteracao'],
                         'timestamp': agora_utc_naive(),
-                        'mensagem': f'URGENTE: Separacao COTADA {separacao_cotada.separacao_lote_id} foi afetada por alteracao no Odoo',
+                        'mensagem': f'URGENTE: Separacao COTADA {separacao_lote_id} foi afetada por alteracao no Odoo',
                         'acao_requerida': 'Verificar impacto no processo fisico imediatamente'
                     })
 

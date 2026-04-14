@@ -45,7 +45,7 @@ logger.addHandler(_stderr_handler)
 # 🔧 CONFIGURAÇÕES DEFINITIVAS E CORRETAS
 INTERVALO_MINUTOS = int(os.environ.get('SYNC_INTERVAL_MINUTES', 30))
 JANELA_CARTEIRA = int(os.environ.get('JANELA_CARTEIRA', 70))  # 70min = 2×30min intervalo + 10min gordura
-STATUS_FATURAMENTO = int(os.environ.get('STATUS_FATURAMENTO', 5760))
+STATUS_FATURAMENTO = int(os.environ.get('STATUS_FATURAMENTO', 2880))  # 48h — reduzido de 96h (2026-04-14)
 JANELA_REQUISICOES = int(os.environ.get('JANELA_REQUISICOES', 90))  # 90 minutos
 JANELA_PEDIDOS = int(os.environ.get('JANELA_PEDIDOS', 90))  # 90 minutos (mesma janela)
 JANELA_ALOCACOES = int(os.environ.get('JANELA_ALOCACOES', 90))  # 90 minutos (mesma janela)
@@ -55,8 +55,8 @@ JANELA_CONTAS_RECEBER = int(os.environ.get('JANELA_CONTAS_RECEBER', 120))  # ✅
 JANELA_BAIXAS = int(os.environ.get('JANELA_BAIXAS', 120))  # ✅ 120 minutos para Baixas/Reconciliações
 JANELA_CONTAS_PAGAR = int(os.environ.get('JANELA_CONTAS_PAGAR', 120))  # ✅ 120 minutos para Contas a Pagar
 JANELA_NFDS = int(os.environ.get('JANELA_NFDS', 120))  # ✅ 120 minutos para NFDs de Devolução
-JANELA_PALLET = int(os.environ.get('JANELA_PALLET', 5760))  # ✅ 5760 minutos (96h) para Pallets - mesmo que faturamento
-DIAS_REVERSOES = int(os.environ.get('DIAS_REVERSOES', 30))  # ✅ 30 dias para Reversões de NF
+JANELA_PALLET = int(os.environ.get('JANELA_PALLET', 2880))  # 48h — reduzido de 96h (2026-04-14 O3)
+DIAS_REVERSOES = int(os.environ.get('DIAS_REVERSOES', 7))  # 7 dias — reduzido de 30 (2026-04-14 O3)
 JANELA_VALIDACAO_FISCAL = int(os.environ.get('JANELA_VALIDACAO_FISCAL', 120))  # ✅ 120 minutos para Validação Fiscal
 JANELA_EXTRATOS = int(os.environ.get('JANELA_EXTRATOS', 120))  # ✅ 120 minutos para Sincronização de Extratos via Odoo
 JANELA_PICKINGS = int(os.environ.get('JANELA_PICKINGS', 90))  # ✅ 90 minutos para Pickings de Recebimento (Fase 4)
@@ -188,7 +188,7 @@ def executar_sincronizacao():
     logger.info("=" * 60)
     logger.info(f"⚙️ Configurações:")
     logger.info(f"   - Intervalo: {INTERVALO_MINUTOS} minutos")
-    logger.info(f"   - Faturamento: status={STATUS_FATURAMENTO}min (96h)")
+    logger.info(f"   - Faturamento: status={STATUS_FATURAMENTO}min (48h)")
     logger.info(f"   - Carteira: janela={JANELA_CARTEIRA}min")
     logger.info(f"   - Requisições: janela={JANELA_REQUISICOES}min")
     logger.info(f"   - Pedidos: janela={JANELA_PEDIDOS}min")
@@ -199,7 +199,7 @@ def executar_sincronizacao():
     logger.info(f"   - Baixas: janela={JANELA_BAIXAS}min")  # ✅ Adicionar Baixas ao log
     logger.info(f"   - Contas a Pagar: janela={JANELA_CONTAS_PAGAR}min")  # ✅ Adicionar Contas a Pagar ao log
     logger.info(f"   - NFDs Devolução: janela={JANELA_NFDS}min")  # ✅ Adicionar NFDs ao log
-    logger.info(f"   - Pallets: janela={JANELA_PALLET}min (96h)")  # ✅ Adicionar Pallets ao log
+    logger.info(f"   - Pallets: janela={JANELA_PALLET}min (48h)")
     logger.info(f"   - Reversões NF: dias={DIAS_REVERSOES}")  # ✅ Adicionar Reversões ao log
     logger.info(f"   - Monitoramento Sync: automático")  # ✅ Adicionar Monitoramento ao log
     logger.info(f"   - Validação Recebimento (Fase 1+2): janela={JANELA_VALIDACAO_FISCAL}min")  # ✅ Validação de Recebimento (Fase 1 Fiscal + Fase 2 NF×PO)
@@ -237,7 +237,7 @@ def executar_sincronizacao():
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
                 logger.info(f"💰 Sincronizando Faturamento (tentativa {tentativa}/{MAX_RETRIES})...")
-                logger.info(f"   Status: {STATUS_FATURAMENTO} minutos (26 horas)")
+                logger.info(f"   Status: {STATUS_FATURAMENTO} minutos (48 horas)")
 
                 # Usar service já instanciado (FORA do contexto)
                 resultado_faturamento = faturamento_service.sincronizar_faturamento_incremental(
@@ -1089,7 +1089,7 @@ def executar_sincronizacao():
         for tentativa in range(1, MAX_RETRIES + 1):
             try:
                 logger.info(f"📦 Sincronizando Pallets (tentativa {tentativa}/{MAX_RETRIES})...")
-                logger.info(f"   Janela: {JANELA_PALLET} minutos (96h)")
+                logger.info(f"   Janela: {JANELA_PALLET} minutos (48h)")
 
                 # Converter minutos em dias para o service
                 dias_retroativos = JANELA_PALLET // 1440  # 1440 minutos = 1 dia
