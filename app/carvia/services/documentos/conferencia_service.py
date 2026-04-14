@@ -216,136 +216,125 @@ class ConferenciaService:
         opcoes.sort(key=lambda x: x['valor_frete'])
         return opcoes
 
-    def registrar_conferencia(self, subcontrato_id: int, valor_considerado: float,
+    def registrar_conferencia(self, frete_id: int, valor_considerado: float,
                                status: str, usuario: str,
-                               observacoes: str = None) -> Dict:
+                               observacoes: str = None,
+                               valor_pago: float = None) -> Dict:
         """
-        Registra conferencia de um subcontrato.
+        Registra conferencia de um CarviaFrete (unidade de analise — paridade Nacom).
+
+        Paridade Nacom: equivalente a editar_frete com valor_considerado/pago
+        (app/fretes/routes.py:editar_frete linhas ~750-900).
 
         REFATOR D4 (.claude/plans/wobbly-tumbling-treasure.md):
-        Quando o conferente decide DIVERGENTE, o status_conferencia NAO vai
-        direto para 'DIVERGENTE'. Em vez disso, uma CarviaAprovacaoSubcontrato
-        PENDENTE e criada via AprovacaoSubcontratoService, e o sub fica com
+        Quando o conferente decide DIVERGENTE, uma CarviaAprovacaoFrete
+        PENDENTE e criada via AprovacaoFreteService, e o frete fica com
         status_conferencia='PENDENTE' + requer_aprovacao=True ate o aprovador
-        decidir. APROVADO continua sendo gravado direto.
-
-        Quando APROVADO: tambem se verifica se a diferenca considerado-cotado
-        esta dentro da tolerancia — se nao estiver, abre tratativa mesmo com
-        intencao de APROVAR (evita lancamentos em CC sem aprovacao explicita).
-
-        NOTA (2026-04-14): este service sera refatorado na Phase 8 deste plano
-        para operar em CarviaFrete. Esta reversao e temporaria.
+        decidir. APROVADO continua sendo gravado direto (se dentro da tolerancia).
 
         Args:
-            subcontrato_id: ID do CarviaSubcontrato
+            frete_id: ID do CarviaFrete
             valor_considerado: Valor registrado pelo conferente
-            status: APROVADO ou DIVERGENTE (decisao inicial do conferente)
+            status: APROVADO ou DIVERGENTE (decisao inicial)
             usuario: Email do conferente
             observacoes: Texto opcional
+            valor_pago: Valor efetivamente pago (opcional)
 
         Returns:
-            Dict com sucesso, status_conferencia (pode diferir do solicitado
-            se virou tratativa), fatura_atualizada, fatura_status,
-            tratativa_aberta (bool), aprovacao_id (se tratativa).
+            Dict com sucesso, status_conferencia, fatura_atualizada,
+            fatura_status, tratativa_aberta, aprovacao_id.
         """
-        from app.carvia.models import CarviaSubcontrato
+        from app.carvia.models import CarviaFrete
         from app.utils.timezone import agora_utc_naive
 
         if status not in ('APROVADO', 'DIVERGENTE'):
             return {'sucesso': False, 'erro': 'Status deve ser APROVADO ou DIVERGENTE'}
 
-        sub = db.session.get(CarviaSubcontrato, subcontrato_id)
-        if not sub:
-            return {'sucesso': False, 'erro': 'Subcontrato nao encontrado'}
+        frete = db.session.get(CarviaFrete, frete_id)
+        if not frete:
+            return {'sucesso': False, 'erro': 'Frete nao encontrado'}
 
-        if sub.status not in ('FATURADO', 'CONFERIDO'):
-            return {
-                'sucesso': False,
-                'erro': f'Subcontrato deve estar FATURADO ou CONFERIDO '
-                        f'para conferencia (atual: {sub.status})',
-            }
+        if frete.status == 'CANCELADO':
+            return {'sucesso': False, 'erro': 'Frete cancelado — sem conferencia'}
 
         try:
-            # Gravar snapshot dos calculos no momento da conferencia
+            # Snapshot dos calculos (opcional — usar primary sub como proxy)
             snapshot = None
-            try:
-                resultado = self.calcular_opcoes_conferencia(subcontrato_id)
-                if resultado.get('sucesso'):
-                    snapshot = {
-                        'opcoes': resultado.get('opcoes', []),
-                        'operacao_info': resultado.get('operacao_info'),
-                        'conferido_em': str(agora_utc_naive()),
-                    }
-            except Exception as e:
-                logger.warning(f"Erro ao gerar snapshot conferencia: {e}")
+            primary_sub = frete.subcontratos.first()
+            if primary_sub:
+                try:
+                    resultado = self.calcular_opcoes_conferencia(primary_sub.id)
+                    if resultado.get('sucesso'):
+                        snapshot = {
+                            'opcoes': resultado.get('opcoes', []),
+                            'operacao_info': resultado.get('operacao_info'),
+                            'conferido_em': str(agora_utc_naive()),
+                        }
+                except Exception as e:
+                    logger.warning(f"Erro ao gerar snapshot frete {frete_id}: {e}")
 
-            sub.valor_considerado = valor_considerado
-            sub.conferido_por = usuario
-            sub.conferido_em = agora_utc_naive()
-            sub.detalhes_conferencia = snapshot
+            frete.valor_considerado = valor_considerado
+            if valor_pago is not None:
+                frete.valor_pago = valor_pago
+            frete.conferido_por = usuario
+            frete.conferido_em = agora_utc_naive()
+            frete.detalhes_conferencia = snapshot
 
             if observacoes:
-                sub.observacoes = (sub.observacoes or '') + f'\n[Conferencia] {observacoes}'
+                frete.observacoes = (frete.observacoes or '') + f'\n[Conferencia] {observacoes}'
 
             # REFATOR D4: roteamento entre APROVADO direto ou abrir tratativa
-            from app.carvia.services.documentos.aprovacao_subcontrato_service import (
-                AprovacaoSubcontratoService,
+            from app.carvia.services.documentos.aprovacao_frete_service import (
+                AprovacaoFreteService,
             )
-            aprov_svc = AprovacaoSubcontratoService()
+            aprov_svc = AprovacaoFreteService()
 
             tratativa_aberta = False
             aprovacao_id = None
 
             if status == 'DIVERGENTE':
-                # DIVERGENTE sempre abre tratativa — status_conferencia
-                # permanece PENDENTE ate o aprovador decidir
-                sub.status_conferencia = 'PENDENTE'
+                frete.status_conferencia = 'PENDENTE'
                 resultado_trat = aprov_svc.verificar_e_solicitar_se_necessario(
-                    sub_id=subcontrato_id, usuario=usuario,
+                    frete_id=frete_id, usuario=usuario,
                 )
                 if resultado_trat.get('sucesso') and resultado_trat.get('tratativa_aberta'):
                     tratativa_aberta = True
                     aprovacao_id = resultado_trat.get('aprovacao_id')
                 else:
-                    # Diff dentro da tolerancia — marca DIVERGENTE final mesmo
-                    # (caso edge: conferente marcou DIVERGENTE com diff < R$5)
-                    sub.status_conferencia = 'DIVERGENTE'
+                    frete.status_conferencia = 'DIVERGENTE'
             else:  # APROVADO
-                # Mesmo APROVADO precisa verificar tolerancia — se a diff
-                # esta acima do limite, abre tratativa antes de confirmar
                 resultado_trat = aprov_svc.verificar_e_solicitar_se_necessario(
-                    sub_id=subcontrato_id, usuario=usuario,
+                    frete_id=frete_id, usuario=usuario,
                 )
                 if resultado_trat.get('sucesso') and resultado_trat.get('tratativa_aberta'):
-                    # Diff > tolerancia: abre tratativa mesmo querendo APROVAR
-                    sub.status_conferencia = 'PENDENTE'
+                    frete.status_conferencia = 'PENDENTE'
                     tratativa_aberta = True
                     aprovacao_id = resultado_trat.get('aprovacao_id')
                 else:
-                    # Dentro da tolerancia — APROVADO direto
-                    sub.status_conferencia = 'APROVADO'
+                    frete.status_conferencia = 'APROVADO'
 
-            # Verificar cascade para fatura (usa status_conferencia ja atualizado)
+            # Cascade para fatura
             fatura_atualizada = False
             fatura_status = None
-            if sub.fatura_transportadora_id:
+            if frete.fatura_transportadora_id:
                 fatura_atualizada, fatura_status = self._verificar_fatura_completa(
-                    sub.fatura_transportadora_id, usuario,
+                    frete.fatura_transportadora_id, usuario,
                 )
 
             db.session.commit()
 
             logger.info(
-                f"Conferencia registrada | sub_id={subcontrato_id} | "
-                f"valor_considerado={valor_considerado} | solicitado={status} | "
-                f"final={sub.status_conferencia} | tratativa={tratativa_aberta} | "
-                f"usuario={usuario}"
+                f"Conferencia registrada | frete_id={frete_id} | "
+                f"considerado={valor_considerado} | pago={valor_pago} | "
+                f"solicitado={status} | final={frete.status_conferencia} | "
+                f"tratativa={tratativa_aberta} | usuario={usuario}"
             )
 
             return {
                 'sucesso': True,
-                'status_conferencia': sub.status_conferencia,
+                'status_conferencia': frete.status_conferencia,
                 'valor_considerado': float(valor_considerado),
+                'valor_pago': float(valor_pago) if valor_pago is not None else None,
                 'fatura_atualizada': fatura_atualizada,
                 'fatura_status': fatura_status,
                 'tratativa_aberta': tratativa_aberta,
@@ -354,7 +343,7 @@ class ConferenciaService:
 
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao registrar conferencia sub {subcontrato_id}: {e}")
+            logger.error(f"Erro ao registrar conferencia frete {frete_id}: {e}")
             return {'sucesso': False, 'erro': str(e)}
 
     def _verificar_fatura_completa(self, fatura_id: int, usuario: str):
