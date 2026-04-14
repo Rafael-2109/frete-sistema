@@ -2943,13 +2943,14 @@ class CarteiraService:
             if alteracoes_erro:
                 logger.warning(f"   ⚠️ {len(alteracoes_erro)} alterações com erro")
             
-            # Audit Supply Chain: enriquecer eventos com projecao D0
+            # Audit Supply Chain: enfileirar enrichment (fire-and-forget)
+            # Substitui chamada sincrona que bloqueava o retorno do sync
             if _audit_session_id:
                 try:
-                    from app.supply_chain.services.enrichment_service import enriquecer_projecao
-                    enriquecer_projecao(_audit_session_id)
-                except Exception:
-                    pass
+                    from app.supply_chain.services.enrichment_service import enqueue_enrichment
+                    enqueue_enrichment(_audit_session_id)
+                except Exception as e:
+                    logger.warning(f"[AUDIT_SC] Falha ao enfileirar enrichment carteira: {e}")
 
             # Retorno compatível com sincronizar_carteira_odoo original
             return {

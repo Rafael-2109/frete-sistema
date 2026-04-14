@@ -162,13 +162,13 @@ class PedidoComprasServiceOtimizado:
             self.logger.info(f"   Linhas ignoradas: {resultado['linhas_ignoradas']}")
             self.logger.info("=" * 80)
 
-            # Audit Supply Chain: enriquecer eventos com projecao D0
+            # Audit Supply Chain: enfileirar enrichment (fire-and-forget)
             if _audit_session_id:
                 try:
-                    from app.supply_chain.services.enrichment_service import enriquecer_projecao
-                    enriquecer_projecao(_audit_session_id)
-                except Exception:
-                    pass
+                    from app.supply_chain.services.enrichment_service import enqueue_enrichment
+                    enqueue_enrichment(_audit_session_id)
+                except Exception as e:
+                    self.logger.warning(f"[AUDIT_SC] Falha ao enfileirar enrichment compras: {e}")
 
             return {
                 'sucesso': True,

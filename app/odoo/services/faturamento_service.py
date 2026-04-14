@@ -1147,13 +1147,13 @@ class FaturamentoService:
             logger.info(f"   ⏱️ Tempo execução: {tempo_execucao:.2f}s")
             logger.info(f"   ❌ {contador_erros} erros principais + {len(stats_sincronizacao['erros_sincronizacao'])} erros de sincronização")
             
-            # Audit Supply Chain: enriquecer eventos com projecao D0
+            # Audit Supply Chain: enfileirar enrichment (fire-and-forget)
             if _audit_session_id:
                 try:
-                    from app.supply_chain.services.enrichment_service import enriquecer_projecao
-                    enriquecer_projecao(_audit_session_id)
-                except Exception:
-                    pass
+                    from app.supply_chain.services.enrichment_service import enqueue_enrichment
+                    enqueue_enrichment(_audit_session_id)
+                except Exception as e:
+                    logger.warning(f"[AUDIT_SC] Falha ao enfileirar enrichment faturamento: {e}")
 
             return {
                 'sucesso': True,

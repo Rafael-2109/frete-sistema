@@ -92,3 +92,42 @@ def enriquecer_projecao(session_id):
             db.session.rollback()
         except Exception:
             pass
+
+
+def enqueue_enrichment(session_id):
+    """
+    Fire-and-forget: enfileira job RQ de enrichment para um session_id.
+
+    Chamado por sync jobs Odoo (carteira, faturamento, compras) e rotas web
+    apos commit da operacao principal. NUNCA propaga excecao — falha no
+    enqueue (Redis offline, fila indisponivel) deve apenas logar e seguir.
+
+    Fila: 'default' (ja consumida por worker_render.py e worker_atacadao.py).
+    Timeout: 5m (enrichment tipicamente < 30s).
+    Retry: None — se falhar, eventos ficam com qtd_projetada_dia=NULL (ML tolera).
+
+    Args:
+        session_id: ID do ciclo de sync (gerado por gerar_session_id())
+
+    Returns:
+        None. Logs sucesso (INFO) ou falha (ERROR).
+    """
+    if not session_id or not str(session_id).strip():
+        return
+
+    try:
+        from app.portal.workers import enqueue_job
+        from app.supply_chain.workers.enrichment_jobs import job_enriquecer_projecao
+
+        enqueue_job(
+            job_enriquecer_projecao,
+            session_id,
+            queue_name='default',
+            timeout='5m',
+            retry=None,
+        )
+        logger.info(f"[ENRICH] Job enfileirado para session={session_id}")
+    except Exception as e:
+        # Falha no enqueue NAO deve abortar o sync principal.
+        # Graceful degradation: evento fica com qtd_projetada_dia=NULL.
+        logger.error(f"[ENRICH] Falha ao enfileirar job para session={session_id}: {e}")

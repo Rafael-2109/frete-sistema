@@ -397,8 +397,10 @@ def create_app(config_name=None):
             try:
                 from app.supply_chain.services.context_middleware import set_pg_audit_context
                 set_pg_audit_context()
-            except Exception:
-                pass
+            except Exception as e:
+                # Nao abortar request se audit context falhar, mas logar para
+                # detectar regressoes silenciosas (ex: modulo supply_chain removido).
+                logger.warning(f"[AUDIT_SC] set_pg_audit_context falhou: {e}")
 
             # Query Profiler: inicia contagem se habilitado
             if app.config.get("ENABLE_QUERY_PROFILING"):

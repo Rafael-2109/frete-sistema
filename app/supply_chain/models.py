@@ -43,7 +43,8 @@ class EventoSupplyChain(db.Model):
     origem              = db.Column(db.String(50))       # SYNC_ODOO, USUARIO, SISTEMA, UPLOAD_EXCEL
     session_id          = db.Column(db.String(100))      # Correlaciona eventos de um mesmo sync
     registrado_em       = db.Column(db.DateTime, nullable=False)
-    registrado_por      = db.Column(db.String(100))      # Usuario ou 'SISTEMA'
+    registrado_por      = db.Column(db.String(100))      # Usuario ou 'SISTEMA' (string livre)
+    usuario_id          = db.Column(db.Integer)          # FK logica para usuarios.id (sem constraint — tabela append-only)
 
     # Indices definidos no SQL de migracao (nao duplicar aqui)
     # O SQLAlchemy detecta a tabela via metadata para Flask-Migrate
@@ -72,6 +73,7 @@ class EventoSupplyChain(db.Model):
             'session_id': self.session_id,
             'registrado_em': self.registrado_em.strftime('%d/%m/%Y %H:%M:%S') if self.registrado_em else None,
             'registrado_por': self.registrado_por,
+            'usuario_id': self.usuario_id,
         }
         if include_snapshots:
             result['dados_antes'] = self.dados_antes
