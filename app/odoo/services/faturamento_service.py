@@ -251,6 +251,7 @@ class FaturamentoService:
 
             from app.estoque.models import MovimentacaoEstoque
             from app.separacao.models import Separacao
+            from app.monitoramento.models import EntregaMonitorada
 
             # SALVAGUARDA: Verificar se NF já foi revertida (não deve ser "cancelada")
             # NFs revertidas são tratadas pelo ReversaoService com lógica diferente
@@ -309,10 +310,29 @@ class FaturamentoService:
                 'numero_nf': None,
                 'sincronizado_nf': False
             })
-            
+
             if separacoes_atualizadas > 0:
                 logger.info(f"   ✅ {separacoes_atualizadas} separações revertidas para não sincronizado")
-            
+
+            # 4.5 Reverter EntregaMonitorada (cobre FOB auto-entregue + entregas manuais)
+            # Sem isso, NFs FOB marcadas como "Entregue" pelo sincronizar_entrega_por_nf
+            # ficam órfãs (entregue=True sem vínculo com embarque).
+            entregas_atualizadas = db.session.query(EntregaMonitorada).filter(
+                EntregaMonitorada.numero_nf == numero_nf
+            ).update({
+                'status_finalizacao': 'Cancelada',
+                'entregue': False,
+                'data_hora_entrega_realizada': None,
+                'data_embarque': None,
+                'data_entrega_prevista': None,
+                'nova_nf': None,
+                'finalizado_em': agora_utc_naive(),
+                'finalizado_por': 'Sistema - NF Cancelada no Odoo',
+            })
+
+            if entregas_atualizadas > 0:
+                logger.info(f"   ✅ {entregas_atualizadas} entrega(s) monitorada(s) marcada(s) como Cancelada")
+
             # 5. Atualizar saldos na CarteiraPrincipal
             pedidos_afetados = {}
             if faturamentos_atualizados > 0:
@@ -338,11 +358,13 @@ class FaturamentoService:
             logger.info(f"   - Movimentações inativadas: {movs_atualizadas}")
             logger.info(f"   - Embarques limpos: {embarques_limpos}")
             logger.info(f"   - Separações revertidas: {separacoes_atualizadas}")
+            logger.info(f"   - Entregas monitoradas canceladas: {entregas_atualizadas}")
             if pedidos_afetados:
                 logger.info(f"   - Saldos da carteira atualizados: {len(pedidos_afetados)} pedidos")
 
             # Commit apenas se houve alterações
-            if faturamentos_atualizados > 0 or movs_atualizadas > 0 or embarques_limpos > 0 or separacoes_atualizadas > 0:
+            if (faturamentos_atualizados > 0 or movs_atualizadas > 0 or embarques_limpos > 0
+                    or separacoes_atualizadas > 0 or entregas_atualizadas > 0):
                 db.session.commit()
 
             return True
