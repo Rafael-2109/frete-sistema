@@ -102,6 +102,17 @@ class CarviaFrete(db.Model):
     # --- Status: PENDENTE -> CONFERIDO -> FATURADO ---
     status = db.Column(db.String(20), default='PENDENTE', index=True)
 
+    # --- Conferencia (paridade Nacom Frete + FaturaFrete.status_conferencia) ---
+    # Migrado de CarviaSubcontrato em 2026-04-14 (Frete = CTe analisado).
+    status_conferencia = db.Column(
+        db.String(20), nullable=False, default='PENDENTE', index=True
+    )  # PENDENTE | APROVADO | DIVERGENTE
+    conferido_por = db.Column(db.String(100), nullable=True)
+    conferido_em = db.Column(db.DateTime, nullable=True)
+    detalhes_conferencia = db.Column(db.JSON, nullable=True)
+    # Flag de tratativa: True quando existe CarviaAprovacaoFrete PENDENTE
+    requer_aprovacao = db.Column(db.Boolean, nullable=False, default=False)
+
     # --- Auditoria ---
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
@@ -171,6 +182,77 @@ class CarviaFrete(db.Model):
         if self.valor_venda and self.valor_venda > 0 and self.margem is not None:
             return (self.margem / self.valor_venda) * 100
         return None
+
+    # ------------------------------------------------------------------
+    # Metodos dinamicos de divergencia (paridade Frete Nacom)
+    # Ref: app/fretes/models.py::Frete linhas 115-174
+    # ------------------------------------------------------------------
+    def diferenca_considerado_pago(self):
+        """Diferenca valor_pago - valor_considerado (para conta corrente)."""
+        if self.valor_pago is not None and self.valor_considerado is not None:
+            return float(self.valor_pago) - float(self.valor_considerado)
+        return 0
+
+    def classificacao_valor_pago_considerado(self):
+        """Classifica a relacao entre valor pago e considerado."""
+        if self.valor_pago is None or self.valor_considerado is None:
+            return ""
+        vp = float(self.valor_pago)
+        vc = float(self.valor_considerado)
+        if vp < vc:
+            return "Valor abaixo da tabela"
+        elif vp > vc:
+            return "Transportadora deve para o Nacom"
+        return "Valores iguais"
+
+    def requer_aprovacao_por_valor(self):
+        """Verifica se requer aprovacao baseado em diferencas > R$ 5,00.
+
+        Regras (paridade Frete Nacom linhas 145-174):
+        - Regra A: |valor_considerado - valor_pago| > R$ 5,00
+        - Regra B: |valor_considerado - valor_cotado| > R$ 5,00
+
+        Returns:
+            tuple(bool, list[str]): (requer, motivos)
+        """
+        requer = False
+        motivos = []
+
+        if self.valor_considerado is not None and self.valor_pago is not None:
+            vc = float(self.valor_considerado)
+            vp = float(self.valor_pago)
+            diff = abs(vc - vp)
+            if diff > 5.00:
+                requer = True
+                if vp > vc:
+                    motivos.append(
+                        f"Valor Pago (R$ {vp:.2f}) superior ao "
+                        f"Considerado (R$ {vc:.2f}) em R$ {diff:.2f}"
+                    )
+                else:
+                    motivos.append(
+                        f"Valor Considerado (R$ {vc:.2f}) superior ao "
+                        f"Pago (R$ {vp:.2f}) em R$ {diff:.2f}"
+                    )
+
+        if self.valor_considerado is not None and self.valor_cotado is not None:
+            vc = float(self.valor_considerado)
+            vco = float(self.valor_cotado)
+            diff = abs(vc - vco)
+            if diff > 5.00:
+                requer = True
+                if vc > vco:
+                    motivos.append(
+                        f"Valor Considerado (R$ {vc:.2f}) superior ao "
+                        f"Cotado (R$ {vco:.2f}) em R$ {diff:.2f}"
+                    )
+                else:
+                    motivos.append(
+                        f"Valor Cotado (R$ {vco:.2f}) superior ao "
+                        f"Considerado (R$ {vc:.2f}) em R$ {diff:.2f}"
+                    )
+
+        return requer, motivos
 
     def __repr__(self):
         return (
