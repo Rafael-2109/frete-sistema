@@ -329,13 +329,12 @@ def register_frete_routes(bp):
                 )
                 frete.observacoes = form.observacoes.data
 
-                # Sincronizar CarviaFrete → CarviaSubcontrato
-                if sub:
-                    if frete.valor_cte:
-                        sub.cte_valor = frete.valor_cte
-                        sub.valor_acertado = frete.valor_cte
-                    if frete.valor_considerado:
-                        sub.valor_considerado = frete.valor_considerado
+                # Sincronizar CarviaFrete → CarviaSubcontrato (somente CTe)
+                # Phase C: valor_considerado/valor_pago foram migrados para
+                # Frete como fonte unica — nao sincronizamos mais para Sub.
+                if sub and frete.valor_cte:
+                    sub.cte_valor = frete.valor_cte
+                    sub.valor_acertado = frete.valor_cte
 
                 db.session.commit()
                 flash('Frete atualizado com sucesso!', 'success')
