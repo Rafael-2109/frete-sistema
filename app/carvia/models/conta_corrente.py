@@ -44,12 +44,21 @@ class CarviaContaCorrenteTransportadora(db.Model):
         nullable=False,
         index=True,
     )
+    # DEPRECATED: manter ate drop migration final.
+    # Fonte canonica agora e frete_id (paridade Nacom).
     subcontrato_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_subcontratos.id'),
-        nullable=False,
+        nullable=True,  # afrouxado para permitir novos registros sem sub
         index=True,
     )
+    frete_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_fretes.id'),
+        nullable=True,
+        index=True,
+    )
+
     fatura_transportadora_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_faturas_transportadora.id'),
@@ -88,6 +97,7 @@ class CarviaContaCorrenteTransportadora(db.Model):
         'CarviaSubcontrato',
         foreign_keys=[subcontrato_id],
     )
+    frete = db.relationship('CarviaFrete', foreign_keys=[frete_id])
     fatura_transportadora = db.relationship(
         'CarviaFaturaTransportadora',
         foreign_keys=[fatura_transportadora_id],
