@@ -876,6 +876,12 @@ def register_config_routes(bp):
         if not config:
             return jsonify({'erro': 'Parametro nao encontrado.'}), 404
 
+        # Bloquear exclusao do toggle critico
+        if config.chave == 'exigir_aprovacao_admin':
+            return jsonify({
+                'erro': 'Parametro "exigir_aprovacao_admin" nao pode ser excluido. Use o toggle na tela da cotacao.'
+            }), 400
+
         try:
             chave = config.chave
             db.session.delete(config)
@@ -887,4 +893,67 @@ def register_config_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error("Erro ao excluir parametro #%s: %s", config_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    # ==================== TOGGLE: exigir_aprovacao_admin (admin-only) ====================
+
+    @bp.route('/api/config/exigir-aprovacao-admin', methods=['PUT']) # type: ignore
+    @login_required
+    def api_toggle_exigir_aprovacao_admin(): # type: ignore
+        """Toggle global 'exigir_aprovacao_admin' — apenas admin.
+
+        Body JSON: { "valor": true|false }
+
+        Quando true (default): descontos acima do limite e cotacoes manuais
+        exigem aprovacao do administrador (status PENDENTE_ADMIN).
+        Quando false: esses cenarios sao liberados direto em RASCUNHO.
+
+        So afeta novas acoes — cotacoes ja em PENDENTE_ADMIN permanecem
+        ate admin aprovar manualmente.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        # Guard: apenas administradores
+        if getattr(current_user, 'perfil', '') != 'administrador':
+            return jsonify({
+                'erro': 'Apenas administradores podem alterar este parametro.'
+            }), 403
+
+        data = request.get_json()
+        if data is None or 'valor' not in data:
+            return jsonify({'erro': 'Campo "valor" (boolean) obrigatorio.'}), 400
+
+        valor_bool = bool(data['valor'])
+        valor_str = 'true' if valor_bool else 'false'
+
+        try:
+            from app.carvia.services.pricing.config_service import CarviaConfigService
+            CarviaConfigService.set(
+                chave='exigir_aprovacao_admin',
+                valor=valor_str,
+                descricao=(
+                    'Quando true, descontos acima do limite e cotacoes manuais '
+                    'exigem aprovacao do administrador (status PENDENTE_ADMIN). '
+                    'Quando false, sao liberados direto em RASCUNHO. Editavel '
+                    'apenas por administradores via tela de detalhe da cotacao.'
+                ),
+                atualizado_por=current_user.email,
+            )
+            db.session.commit()
+            logger.info(
+                "Toggle 'exigir_aprovacao_admin' = %s por %s",
+                valor_str, current_user.email,
+            )
+            return jsonify({
+                'sucesso': True,
+                'valor': valor_bool,
+                'mensagem': (
+                    'Aprovacao admin ATIVADA.' if valor_bool
+                    else 'Aprovacao admin DESATIVADA.'
+                ),
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao alterar toggle exigir_aprovacao_admin: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500

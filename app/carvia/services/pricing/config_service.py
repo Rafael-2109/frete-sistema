@@ -103,3 +103,8 @@ class CarviaConfigService:
     def limite_desconto_percentual() -> float:
         """Retorna limite de desconto que Jessica pode aprovar sem admin."""
         return CarviaConfigService.get_float('limite_desconto_percentual', 5.0)
+
+    @staticmethod
+    def exigir_aprovacao_admin() -> bool:
+        """Toggle global: quando False, pula o check PENDENTE_ADMIN."""
+        return CarviaConfigService.get_bool('exigir_aprovacao_admin', True)

@@ -332,8 +332,7 @@
                 </div>
             </div>
 
-            {# Pedidos (se APROVADO) #}
-            {% if cotacao.status == 'APROVADO' %}
+            {# Pedidos — sempre visivel (gestao de NF/Pedido independente do status da cotacao) #}
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <strong>Pedidos ({{ pedidos|length }})</strong>
@@ -430,13 +429,30 @@
                 </div>
             </div>
 
-            {# Pre-Vinculos Extrato <-> Cotacao (frete pre-pago) #}
+            {# Pre-Vinculos Extrato <-> Cotacao (frete pre-pago) — apenas APROVADO #}
+            {% if cotacao.status == 'APROVADO' %}
             {% include 'carvia/_previnculos_cotacao.html' %}
             {% endif %}
         </div>
 
         {# ===== COLUNA DIREITA: Pricing + Acoes ===== #}
         <div class="col-md-4">
+            {# Toggle admin-only: pular check de exigencia de aprovacao admin #}
+            {% if current_user.perfil == 'administrador' %}
+            <div class="card mb-3 border-warning">
+                <div class="card-body py-2">
+                    <div class="form-check form-switch mb-0">
+
+                        <input class="form-check-input" type="checkbox" id="toggleExigirAprovacao"
+                               {% if exigir_aprovacao_admin %}checked{% endif %}
+                               onchange="alterarExigirAprovacaoAdmin(this.checked)">
+                        <label class="form-check-label small fw-bold" for="toggleExigirAprovacao">
+                            <i class="fas fa-user-shield"></i> Exigir aprovacao admin
+                        </label>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             <div class="card mb-3">
                 <div class="card-header"><strong>Pricing</strong></div>
                 <div class="card-body">
@@ -472,7 +488,7 @@
                         </div>
                     </div>
 
-                    {% if cotacao.status in ('RASCUNHO', 'PENDENTE_ADMIN') %}
+                    {% if cotacao.status in ('RASCUNHO', 'PENDENTE_ADMIN', 'RECUSADO') %}
                     {# --- Dropdown veiculo (DIRETA only) --- #}
                     <div id="blocoVeiculoDireta" class="{{ 'd-none' if cotacao.tipo_carga != 'DIRETA' }} mb-2">
                         <label class="form-label small mb-1">
@@ -509,9 +525,15 @@
                                 <i class="fas fa-check"></i> Definir
                             </button>
                         </div>
+                        {% if exigir_aprovacao_admin %}
                         <div class="alert alert-warning py-1 small mt-1 mb-0">
                             <i class="fas fa-info-circle"></i> Valor manual requer aprovacao do administrador.
                         </div>
+                        {% else %}
+                        <div class="alert alert-success py-1 small mt-1 mb-0">
+                            <i class="fas fa-check-circle"></i> Aprovacao admin desativada — valor manual liberado.
+                        </div>
+                        {% endif %}
                     </div>
 
                     {# --- Desconto / Markup (so quando tem valor_tabela e NAO e manual) --- #}
@@ -537,9 +559,15 @@
                             <small class="text-muted">Limite: {{ limite_desconto }}%</small>
                             <button class="btn btn-outline-primary btn-sm" onclick="aplicarDesconto()">Aplicar</button>
                         </div>
+                        {% if exigir_aprovacao_admin %}
                         <div class="alert alert-info py-1 small mb-1">
                             <i class="fas fa-info-circle"></i> Descontos acima de {{ limite_desconto }}% requerem aprovacao. Valores acima da tabela sao livres.
                         </div>
+                        {% else %}
+                        <div class="alert alert-success py-1 small mb-1">
+                            <i class="fas fa-check-circle"></i> Aprovacao admin desativada — descontos liberados.
+                        </div>
+                        {% endif %}
                     </div>
                     {% endif %}
                     {% if cotacao.status == 'PENDENTE_ADMIN' %}
@@ -559,9 +587,13 @@
                     <button class="btn btn-danger btn-sm w-100 mb-1" onclick="adminRejeitar()">Rejeitar</button>
                     {% endif %}
                     {% endif %}
-                    {% if cotacao.valor_final_aprovado and cotacao.status == 'RASCUNHO' %}
+                    {% if cotacao.valor_final_aprovado and cotacao.status in ('RASCUNHO', 'RECUSADO') %}
                     <button class="btn btn-success btn-sm w-100" onclick="enviarCotacao()">
+                        {% if cotacao.status == 'RECUSADO' %}
+                        <i class="fas fa-redo"></i> Re-enviar Cotacao
+                        {% else %}
                         <i class="fas fa-save"></i> Gravar
+                        {% endif %}
                     </button>
                     {% endif %}
                     {% endif %}
@@ -603,8 +635,7 @@
     </div>
 </div>
 
-{# Modais: Pedido + NF #}
-{% if cotacao.status == 'APROVADO' %}
+{# Modais: Pedido + NF — sempre disponiveis (gestao de NF/Pedido independe do status da cotacao) #}
 <div class="modal fade" id="modalNovoPedido" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -669,7 +700,8 @@
     </div>
 </div>
 
-{# Modal Pre-Vincular Extrato (feature frete pre-pago) #}
+{# Modal Pre-Vincular Extrato (feature frete pre-pago) — apenas APROVADO #}
+{% if cotacao.status == 'APROVADO' %}
 {% include 'carvia/_modal_previncular_extrato.html' %}
 {% endif %}
 {% endblock %}

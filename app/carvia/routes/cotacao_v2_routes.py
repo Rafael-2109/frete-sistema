@@ -1222,9 +1222,10 @@ def register_cotacao_v2_routes(bp):
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
         clientes = CarviaClienteService.listar_clientes(apenas_ativos=True)
 
-        # Limite desconto para UI
+        # Limite desconto + toggle exigir aprovacao admin (global)
         from app.carvia.services.pricing.config_service import CarviaConfigService
         limite_desconto = CarviaConfigService.limite_desconto_percentual()
+        exigir_aprovacao_admin = CarviaConfigService.exigir_aprovacao_admin()
 
         # Veiculos para dropdown DIRETA
         from app.veiculos.models import Veiculo
@@ -1248,6 +1249,7 @@ def register_cotacao_v2_routes(bp):
             clientes=clientes,
             modelos_moto_json=modelos_moto_json,
             limite_desconto=limite_desconto,
+            exigir_aprovacao_admin=exigir_aprovacao_admin,
             veiculos_direta=veiculos_direta,
             tem_cte_existente=tem_cte_existente,
             previnculos=previnculos,

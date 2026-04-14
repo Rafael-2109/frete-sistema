@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
 from app import db
+from app.utils.json_helpers import sanitize_for_json
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +118,8 @@ class CotacaoV2Service:
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
             return None, 'Cotacao nao encontrada.'
-        if cotacao.status != 'RASCUNHO':
-            return None, 'Cotacao nao esta em RASCUNHO.'
+        if cotacao.status not in ('RASCUNHO', 'PENDENTE_ADMIN', 'RECUSADO'):
+            return None, f'Cotacao em status {cotacao.status} nao permite adicionar motos.'
         if cotacao.tipo_material != 'MOTO':
             return None, 'Cotacao nao e do tipo MOTO.'
 
@@ -234,7 +235,9 @@ class CotacaoV2Service:
             cotacao.dentro_tabela = True
             cotacao.valor_tabela = Decimal(str(resultado_carvia['valor']))
             cotacao.tabela_carvia_id = resultado_carvia.get('tabela_carvia_id')
-            cotacao.detalhes_calculo = resultado_carvia.get('detalhes')
+            # Sanitize Decimals da CalculadoraFrete antes do campo db.JSON
+            # (`frete_base`, `gris`, `adv`, etc. sao Decimal quantizado)
+            cotacao.detalhes_calculo = sanitize_for_json(resultado_carvia.get('detalhes'))
 
             # Se era manual e recalculou com tabela, limpar flag manual
             if cotacao.cotacao_manual:
@@ -358,10 +361,12 @@ class CotacaoV2Service:
         from app.carvia.models import CarviaCotacao
         from app.utils.timezone import agora_utc_naive
 
+        from app.carvia.services.pricing.config_service import CarviaConfigService
+
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
             return False, 'Cotacao nao encontrada.'
-        if cotacao.status not in ('RASCUNHO', 'PENDENTE_ADMIN'):
+        if cotacao.status not in ('RASCUNHO', 'PENDENTE_ADMIN', 'RECUSADO'):
             return False, f'Cotacao em status {cotacao.status} nao permite valor manual.'
 
         if valor <= 0:
@@ -375,13 +380,18 @@ class CotacaoV2Service:
         cotacao.percentual_desconto = Decimal('0')
         cotacao.valor_descontado = Decimal(str(valor))
         cotacao.valor_final_aprovado = Decimal(str(valor))
-        cotacao.detalhes_calculo = {
+        cotacao.detalhes_calculo = sanitize_for_json({
             'tipo': 'manual',
             'valor_manual': valor,
             'definido_por': usuario,
             'definido_em': str(agora_utc_naive()),
-        }
-        cotacao.status = 'PENDENTE_ADMIN'
+        })
+        # Toggle global: exigir_aprovacao_admin controla se valor manual exige admin
+        if CarviaConfigService.exigir_aprovacao_admin():
+            cotacao.status = 'PENDENTE_ADMIN'
+        else:
+            # Toggle OFF: valor manual e aprovado direto (permanece em RASCUNHO)
+            cotacao.status = 'RASCUNHO'
 
         db.session.flush()
         return True, None
@@ -422,7 +432,7 @@ class CotacaoV2Service:
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
             return False, 'Cotacao nao encontrada.'
-        if cotacao.status not in ('RASCUNHO', 'PENDENTE_ADMIN'):
+        if cotacao.status not in ('RASCUNHO', 'PENDENTE_ADMIN', 'RECUSADO'):
             return False, f'Cotacao em status {cotacao.status} nao permite desconto.'
         if cotacao.cotacao_manual:
             return False, 'Cotacao manual nao permite desconto. Use valor manual diretamente.'
@@ -444,12 +454,16 @@ class CotacaoV2Service:
 
         # Verificar limite — markup (desconto < 0) nao requer aprovacao
         limite = CarviaConfigService.limite_desconto_percentual()
-        if desconto > limite:
+        exige_admin = CarviaConfigService.exigir_aprovacao_admin()
+        if desconto > limite and exige_admin:
             cotacao.status = 'PENDENTE_ADMIN'
         else:
-            # Markup (acima tabela) ou desconto dentro do limite — livre
+            # Markup, dentro do limite, OU toggle OFF — livre
             if cotacao.status == 'PENDENTE_ADMIN':
                 cotacao.status = 'RASCUNHO'
+            elif cotacao.status == 'RECUSADO':
+                # Editar RECUSADO mantem status ate usuario clicar Gravar
+                pass
 
         db.session.flush()
         return True, None
@@ -498,8 +512,8 @@ class CotacaoV2Service:
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
             return False, 'Cotacao nao encontrada.'
-        if cotacao.status != 'RASCUNHO':
-            return False, f'Cotacao em status {cotacao.status}, esperado RASCUNHO.'
+        if cotacao.status not in ('RASCUNHO', 'RECUSADO'):
+            return False, f'Cotacao em status {cotacao.status}, esperado RASCUNHO ou RECUSADO.'
         if cotacao.valor_final_aprovado is None:
             return False, 'Cotacao sem valor final. Calcule o preco primeiro.'
         if cotacao.data_expedicao is None:

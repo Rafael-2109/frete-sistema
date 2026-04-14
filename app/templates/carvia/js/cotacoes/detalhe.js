@@ -454,6 +454,10 @@ function cancelarCotacao() {
 function reabrirCotacao() { if (!confirm('Reabrir cotacao? O status voltara para RASCUNHO.')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/reabrir`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function adminAprovar() { if (!confirm('Aprovar desconto?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/admin-aprovar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
 function adminRejeitar() { if (!confirm('Rejeitar desconto?')) return; apiCall(`/carvia/api/cotacoes/${cotacaoId}/admin-rejeitar`).then(d => { if (d.sucesso) location.reload(); else alert(d.erro); }); }
+function alterarExigirAprovacaoAdmin(val) {
+    apiCall('/carvia/api/config/exigir-aprovacao-admin', 'PUT', { valor: val })
+        .then(d => { if (!d.sucesso) { alert(d.erro || 'Erro.'); document.getElementById('toggleExigirAprovacao').checked = !val; } });
+}
 
 /* ===== Pedidos ===== */
 function criarPedido() {

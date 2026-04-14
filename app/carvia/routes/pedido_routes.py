@@ -16,20 +16,34 @@ def register_pedido_routes(bp):
     @bp.route('/pedidos-carvia')
     @login_required
     def listar_pedidos_carvia():
-        """Lista pedidos CarVia"""
+        """Lista pedidos CarVia
+
+        Filtra pedidos cujas cotacoes estao em status "em edicao" ou finalizados:
+        - Esconde: RASCUNHO, PENDENTE_ADMIN, RECUSADO, CANCELADO
+        - Exibe: ENVIADO, APROVADO
+        Cotacao ainda em edicao gera pedidos apenas internamente (visiveis na tela
+        de detalhe da cotacao, mas NAO na listagem publica de pedidos).
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        from app.carvia.models import CarviaPedido
+        from app.carvia.models import CarviaPedido, CarviaCotacao
         from collections import Counter
 
         status = request.args.get('status')
         cotacao_id = request.args.get('cotacao_id', type=int)
 
-        query = CarviaPedido.query
+        # Filtro por status de COTACAO pai: apenas ENVIADO e APROVADO
+        # aparecem na listagem publica de pedidos (cotacoes em edicao
+        # ou finalizadas sem sucesso permanecem invisiveis aqui).
+        query = CarviaPedido.query.join(
+            CarviaCotacao, CarviaPedido.cotacao_id == CarviaCotacao.id
+        ).filter(
+            CarviaCotacao.status.in_(['ENVIADO', 'APROVADO'])
+        )
         if cotacao_id:
-            query = query.filter_by(cotacao_id=cotacao_id)
+            query = query.filter(CarviaPedido.cotacao_id == cotacao_id)
 
         todos = query.order_by(CarviaPedido.criado_em.desc()).all()
 
@@ -111,8 +125,8 @@ def register_pedido_routes(bp):
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
             return jsonify({'erro': 'Cotacao nao encontrada.'}), 404
-        if cotacao.status != 'APROVADO':
-            return jsonify({'erro': 'Cotacao nao esta APROVADA.'}), 400
+        if cotacao.status == 'CANCELADO':
+            return jsonify({'erro': 'Cotacao cancelada nao permite criar pedidos.'}), 400
 
         data = request.get_json()
         if not data:
