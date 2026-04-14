@@ -639,73 +639,8 @@ def register_subcontrato_routes(bp):
             return {'sucesso': False, 'erro': str(e)}, 500
 
     # ==================================================================
-    # Registrar pagamento manual do subcontrato (W4 — valor_pago)
+    # Registrar pagamento manual do subcontrato — REMOVIDO em 2026-04-14
+    # Campos valor_pago/valor_pago_em/valor_pago_por migrados para CarviaFrete.
+    # Pagamento agora e feito via editar_frete_carvia (form de edicao do Frete).
+    # Ref: docs/superpowers/plans/2026-04-14-carvia-frete-conferencia-migration.md
     # ==================================================================
-    @bp.route('/subcontratos/<int:sub_id>/registrar-pagamento', methods=['POST'])  # type: ignore
-    @login_required
-    def registrar_pagamento_subcontrato(sub_id):  # type: ignore
-        """Registra valor_pago manual do subcontrato.
-
-        Apos gravar, verifica automaticamente se a diferenca pago vs cotado
-        ultrapassa a tolerancia — se sim, abre tratativa via
-        AprovacaoSubcontratoService.verificar_e_solicitar_se_necessario.
-
-        Payload JSON: {valor_pago: float, observacoes: str?}
-        """
-        from flask import jsonify
-        from app.utils.timezone import agora_utc_naive
-        from app.carvia.services.documentos.aprovacao_subcontrato_service import (
-            AprovacaoSubcontratoService,
-        )
-
-        if not getattr(current_user, 'sistema_carvia', False):
-            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
-
-        sub = db.session.get(CarviaSubcontrato, sub_id)
-        if not sub:
-            return jsonify({'sucesso': False, 'erro': 'Subcontrato nao encontrado'}), 404
-
-        if sub.status == 'CANCELADO':
-            return jsonify({
-                'sucesso': False,
-                'erro': 'Subcontrato cancelado — nao aceita pagamento'
-            }), 400
-
-        payload = request.get_json(silent=True) or {}
-        try:
-            valor_pago = float(payload.get('valor_pago', 0))
-        except (ValueError, TypeError):
-            return jsonify({'sucesso': False, 'erro': 'valor_pago invalido'}), 400
-
-        if valor_pago < 0:
-            return jsonify({'sucesso': False, 'erro': 'valor_pago deve ser >= 0'}), 400
-
-        observacoes = (payload.get('observacoes') or '').strip()
-
-        try:
-            sub.valor_pago = valor_pago
-            sub.valor_pago_em = agora_utc_naive()
-            sub.valor_pago_por = current_user.email
-            if observacoes:
-                sub.observacoes = (
-                    (sub.observacoes or '') + f'\n[Pagamento] {observacoes}'
-                ).strip()
-
-            # Verificacao automatica de divergencia (regra B: pago vs cotado)
-            svc = AprovacaoSubcontratoService()
-            resultado_trat = svc.verificar_e_solicitar_se_necessario(
-                sub_id=sub_id, usuario=current_user.email,
-            )
-
-            db.session.commit()
-
-            return jsonify({
-                'sucesso': True,
-                'valor_pago': valor_pago,
-                'tratativa_aberta': resultado_trat.get('tratativa_aberta', False),
-                'aprovacao_id': resultado_trat.get('aprovacao_id'),
-            })
-        except Exception as e:
-            db.session.rollback()
-            logger.exception(f'Erro ao registrar pagamento sub {sub_id}: {e}')
-            return jsonify({'sucesso': False, 'erro': str(e)}), 500
