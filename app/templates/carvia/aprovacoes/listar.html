@@ -87,14 +87,14 @@
                     <tbody>
                         {% for linha in linhas %}
                         {% set ap = linha.aprovacao %}
-                        {% set sub = linha.sub %}
+                        {% set frete = linha.frete %}
                         {% set op = linha.operacao %}
                         <tr>
                             <td><small class="text-muted">#{{ ap.id }}</small></td>
                             <td>
-                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}"
+                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}"
                                    class="text-decoration-none">
-                                    {{ sub.cte_numero or ('Sub #' ~ sub.id) }}
+                                    {{ linha.sub_cte_numero or ('Frete #' ~ frete.id) }}
                                 </a>
                             </td>
                             <td>
