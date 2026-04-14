@@ -2,7 +2,15 @@
 {% block content %}
 <div class="container mt-4 monitoramento-page">
   <div class="d-flex flex-column mb-3">
-      <h2>Entrega NF {{ entrega.numero_nf }} - {{ entrega.cliente }}</h2>
+      <h2>
+        Entrega NF {{ entrega.numero_nf }} - {{ entrega.cliente }}
+        {% if entrega.origem == 'CARVIA' %}
+          <span class="badge bg-warning text-dark ms-2"
+                title="NF gerenciada pelo subsistema CarVia (frete subcontratado)">
+            <i class="fas fa-truck"></i> CarVia
+          </span>
+        {% endif %}
+      </h2>
       <h6>Vendedor: {{ entrega.vendedor or '—' }}</h6>
   
       {% if entrega.transportadora and entrega.transportadora != '-' %}
@@ -336,7 +344,103 @@
       <div class="tab-pane fade" id="custo" role="tabpanel">
         {% if feedback == 'custo' %}<div class="alert alert-success">✔️ Custo registrado com sucesso.</div>{% endif %}
 
+        {% if current_user.sistema_carvia %}
+        <!-- === Bloco CarVia: Custos de Entrega (Frete Subcontratado) === -->
+        <div class="card border-warning mb-4">
+          <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+            <strong><i class="fas fa-truck"></i> Custos CarVia (Frete Subcontratado)</strong>
+            {% if tem_frete_carvia %}
+              <a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia', numero_nf=entrega.numero_nf) }}"
+                 class="btn btn-sm btn-dark"
+                 title="Lanca um CarviaCustoEntrega vinculado ao CarviaFrete desta NF">
+                <i class="fas fa-plus"></i> Lancar Custo Extra CarVia
+              </a>
+            {% else %}
+              <button type="button" class="btn btn-sm btn-secondary" disabled
+                      title="Nenhum CarviaFrete registrado para esta NF. O frete e gerado automaticamente ao passar pela portaria.">
+                <i class="fas fa-plus"></i> Lancar Custo Extra CarVia
+              </button>
+            {% endif %}
+          </div>
+          <div class="card-body">
+            {% if not tem_frete_carvia %}
+              <p class="text-muted small mb-0">
+                <i class="fas fa-info-circle"></i>
+                Aguardando registro do CarviaFrete. O frete e gerado automaticamente
+                quando o embarque passa pela portaria.
+              </p>
+            {% elif not custos_entrega_carvia %}
+              <p class="text-muted small mb-0">
+                <i class="fas fa-info-circle"></i>
+                Frete CarVia #{{ frete_carvia.id }} vinculado. Nenhum custo extra lancado ainda.
+              </p>
+            {% else %}
+              <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                  <thead>
+                    <tr>
+                      <th>Numero</th>
+                      <th>Tipo</th>
+                      <th class="text-end">Valor</th>
+                      <th>Data</th>
+                      <th>Status</th>
+                      <th>Fatura Transp.</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for ce in custos_entrega_carvia %}
+                    <tr>
+                      <td><code>{{ ce.numero_custo }}</code></td>
+                      <td>{{ ce.tipo_custo }}</td>
+                      <td class="text-end">R$ {{ '%.2f' | format(ce.valor) }}</td>
+                      <td>{{ ce.data_custo.strftime('%d/%m/%Y') if ce.data_custo else '—' }}</td>
+                      <td>
+                        {% if ce.status == 'PAGO' %}
+                          <span class="badge bg-success">Pago</span>
+                        {% elif ce.status == 'VINCULADO_FT' %}
+                          <span class="badge bg-primary">Vinculado FT</span>
+                        {% elif ce.status == 'PENDENTE' %}
+                          <span class="badge bg-warning text-dark">Pendente</span>
+                        {% else %}
+                          <span class="badge bg-secondary">{{ ce.status }}</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if ce.fatura_transportadora_id %}
+                          FT #{{ ce.fatura_transportadora_id }}
+                        {% else %}
+                          <span class="text-muted">—</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <a href="{{ url_for('carvia.detalhe_custo_entrega', id=ce.id) }}"
+                           class="btn btn-sm btn-outline-primary" target="_blank"
+                           title="Abrir detalhe no CarVia (nova aba)">
+                          <i class="fas fa-external-link-alt"></i>
+                        </a>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                  <tfoot>
+                    <tr class="table-warning">
+                      <th colspan="2">Total ({{ custos_entrega_carvia|length }})</th>
+                      <th class="text-end">R$ {{ '%.2f' | format(custos_entrega_carvia | sum(attribute='valor')) }}</th>
+                      <th colspan="4"></th>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+        <hr class="my-4">
+        <h6 class="text-muted">Custos Nacom (TDE, Diaria, Reentrega)</h6>
+        {% else %}
         <h5>Custos associados</h5>
+        {% endif %}
+
         <ul class="list-group mb-3">
           {% for custo in entrega.custos_extras %}
           <li class="list-group-item d-flex justify-content-between align-items-center">

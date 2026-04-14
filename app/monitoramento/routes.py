@@ -258,6 +258,44 @@ def visualizar_entrega(id):
                     'destino': ocorrencia.destino
                 })
 
+    # Lookup CarVia (apenas para usuarios com acesso CarVia)
+    # Carrega CarviaFrete vinculado por numero_nf (match exato CSV) e
+    # CEs existentes para exibicao readonly na aba Custos.
+    tem_frete_carvia = False
+    frete_carvia = None
+    custos_entrega_carvia = []
+
+    if getattr(current_user, 'sistema_carvia', False):
+        try:
+            from app.carvia.models import CarviaFrete, CarviaCustoEntrega
+
+            frete_carvia = (
+                CarviaFrete.query
+                .filter(
+                    db.or_(
+                        CarviaFrete.numeros_nfs == entrega.numero_nf,
+                        CarviaFrete.numeros_nfs.like(f"{entrega.numero_nf},%"),
+                        CarviaFrete.numeros_nfs.like(f"%,{entrega.numero_nf},%"),
+                        CarviaFrete.numeros_nfs.like(f"%,{entrega.numero_nf}"),
+                    ),
+                    CarviaFrete.status != 'CANCELADO',
+                )
+                .order_by(CarviaFrete.criado_em.desc())
+                .first()
+            )
+            tem_frete_carvia = frete_carvia is not None
+
+            if frete_carvia:
+                custos_entrega_carvia = (
+                    CarviaCustoEntrega.query
+                    .filter_by(frete_id=frete_carvia.id)
+                    .filter(CarviaCustoEntrega.status != 'CANCELADO')
+                    .order_by(CarviaCustoEntrega.data_custo.desc())
+                    .all()
+                )
+        except Exception as e_carvia:
+            print(f"[AVISO] Lookup CarVia visualizar_entrega falhou: {e_carvia}")
+
     return render_template(
         'monitoramento/visualizar_entrega.html',
         entrega=entrega,
@@ -269,7 +307,10 @@ def visualizar_entrega(id):
         comentarios=comentarios,
         feedback=feedback,
         ocorrencias_devolucao=ocorrencias_devolucao,
-        contato_agendamento=contato_prev
+        contato_agendamento=contato_prev,
+        tem_frete_carvia=tem_frete_carvia,
+        frete_carvia=frete_carvia,
+        custos_entrega_carvia=custos_entrega_carvia,
     )
 
 @monitoramento_bp.route('/<int:id>/adicionar_log', methods=['POST'])
@@ -843,6 +884,12 @@ def listar_entregas():
             AgendamentoEntrega.status == 'aguardando',
             EntregaMonitorada.status_finalizacao.is_(None)  # Não finalizada
         )
+
+    # Filtro por origem (NACOM / CARVIA / Todas)
+    # Permite segregar NFs do fluxo principal das do subsistema CarVia
+    origem_filtro = (request.args.get('origem') or '').strip().upper()
+    if origem_filtro in ('NACOM', 'CARVIA'):
+        query = query.filter(EntregaMonitorada.origem == origem_filtro)
 
     # Filtro sem_agendamento — usa cache de contatos e IN() ao invés de OR-explosion
     if status == 'sem_agendamento':

@@ -28,8 +28,16 @@
     </div>
     <div class="col-md-2">
       <label class="form-label">Cliente</label>
-      <input type="text" name="cliente" class="form-control" placeholder="Cliente" 
+      <input type="text" name="cliente" class="form-control" placeholder="Cliente"
              value="{{ request.args.get('cliente', '') }}">
+    </div>
+    <div class="col-md-1">
+      <label class="form-label">Origem</label>
+      <select name="origem" class="form-select">
+        <option value="">Todas</option>
+        <option value="NACOM" {% if request.args.get('origem') == 'NACOM' %}selected{% endif %}>Nacom</option>
+        <option value="CARVIA" {% if request.args.get('origem') == 'CARVIA' %}selected{% endif %}>CarVia</option>
+      </select>
     </div>
     <div class="col-md-2">
       <label class="form-label">CNPJ</label>
@@ -480,7 +488,7 @@
               </span>
             {% endif %}
             <small class="text-muted" {% if e.observ_ped_1 %}title="{{ e.observ_ped_1 }}" style="cursor: help; text-decoration: underline dotted;"{% endif %}>{{ e.num_pedido or 'N/A' }}</small><br>
-            {{ e.numero_nf }}{% if e.nf_cancelada %} <span class="badge bg-dark ">Canc.</span>{% endif %}<br>
+            {{ e.numero_nf }}{% if e.origem == 'CARVIA' %} <span class="badge bg-warning text-dark" title="Frete subcontratado CarVia"><i class="fas fa-truck"></i></span>{% endif %}{% if e.nf_cancelada %} <span class="badge bg-dark ">Canc.</span>{% endif %}<br>
             <small class="text-muted">{{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
           </td>
           <td class="sticky-col-2">

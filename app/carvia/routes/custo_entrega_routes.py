@@ -1470,6 +1470,10 @@ def register_custo_entrega_routes(bp):
         """Busca CarviaFrete por numero de NF para criar despesa extra.
 
         Xerox de fretes.nova_despesa_extra_por_nf.
+
+        Suporta `numero_nf` via GET (?numero_nf=X) para integracao com o
+        monitoramento (botao "Lancar Custo Extra CarVia" em visualizar_entrega.html).
+        Quando GET traz numero_nf, executa a busca automaticamente.
         """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -1477,25 +1481,47 @@ def register_custo_entrega_routes(bp):
 
         from app.carvia.models import CarviaFrete
 
-        if request.method == 'POST':
-            numero_nf = (request.form.get('numero_nf') or '').strip()
+        # Aceita numero_nf via POST (form) OU GET (?numero_nf=X do monitoramento)
+        numero_nf = (
+            request.form.get('numero_nf')
+            or request.args.get('numero_nf')
+            or ''
+        ).strip()
 
-            if not numero_nf:
-                flash('Digite o numero da NF!', 'warning')
-                return render_template('carvia/custos_entrega/nova_por_nf.html')
-
-            # Busca CarviaFrete contendo a NF em `numeros_nfs` (CSV)
-            fretes_encontrados = CarviaFrete.query.filter(
-                CarviaFrete.numeros_nfs.contains(numero_nf)
-            ).order_by(CarviaFrete.criado_em.desc()).all()
+        if numero_nf:
+            # Match EXATO em CSV (4 patterns) — evita falso-positivo com contains()
+            # Ex: NF '12' nao deve casar com '12345' dentro de '1,12345,999'
+            fretes_encontrados = (
+                CarviaFrete.query
+                .filter(
+                    db.or_(
+                        CarviaFrete.numeros_nfs == numero_nf,
+                        CarviaFrete.numeros_nfs.like(f"{numero_nf},%"),
+                        CarviaFrete.numeros_nfs.like(f"%,{numero_nf},%"),
+                        CarviaFrete.numeros_nfs.like(f"%,{numero_nf}"),
+                    )
+                )
+                .order_by(CarviaFrete.criado_em.desc())
+                .all()
+            )
 
             if not fretes_encontrados:
                 flash(
-                    f'Nenhum frete encontrado com a NF {numero_nf}!',
+                    f'Nenhum CarviaFrete encontrado para NF {numero_nf}. '
+                    f'O frete e gerado automaticamente quando o embarque '
+                    f'passa pela portaria.',
                     'warning',
                 )
                 return render_template('carvia/custos_entrega/nova_por_nf.html')
 
+            # 1 resultado: redireciona direto para o form de criacao
+            if len(fretes_encontrados) == 1:
+                return redirect(url_for(
+                    'carvia.criar_despesa_por_frete_carvia',
+                    frete_id=fretes_encontrados[0].id,
+                ))
+
+            # Multiplos: usuario escolhe qual frete
             return render_template(
                 'carvia/custos_entrega/selecionar_frete.html',
                 fretes=fretes_encontrados,

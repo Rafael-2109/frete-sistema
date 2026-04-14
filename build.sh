@@ -85,6 +85,22 @@ echo "Migration CarVia 4/4: drop campos conferencia obsoletos de Sub..."
 python scripts/migrations/carvia_drop_sub_conferencia_fields.py \
     || echo "⚠️ Migration carvia_drop_sub_conferencia_fields falhou, continuando deploy..."
 
+# 8. Migration Monitoramento + CarVia (2026-04-14): coluna origem em entregas_monitoradas.
+# Permite que NFs CarVia coexistam com NFs Nacom no monitoramento sem colisao de numero_nf.
+# Default 'NACOM' preserva registros existentes; novos registros CarVia usam origem='CARVIA'.
+# Idempotente (IF NOT EXISTS + verificacao information_schema).
+# Ref: .claude/plans/quiet-humming-spark.md
+echo "Migration: coluna origem em entregas_monitoradas..."
+python scripts/migrations/add_origem_entrega_monitorada.py \
+    || echo "⚠️ Migration add_origem_entrega_monitorada falhou, continuando deploy..."
+
+# 9. Backfill: cria EntregaMonitorada(origem='CARVIA') para CarviaNf ATIVAS existentes.
+# Idempotente (upsert via sincronizar_entrega_carvia_por_nf). Roda APOS a coluna existir.
+# Ref: .claude/plans/quiet-humming-spark.md
+echo "Backfill: EntregaMonitorada origem='CARVIA' para CarviaNf existentes..."
+python scripts/migrations/backfill_entrega_monitorada_carvia.py \
+    || echo "⚠️ Backfill entrega monitorada CarVia falhou, continuando deploy..."
+
 
 echo "Build concluído com sucesso!"
 

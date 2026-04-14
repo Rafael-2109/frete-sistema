@@ -17,6 +17,9 @@ class EntregaMonitorada(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     numero_nf = db.Column(db.String(20), nullable=False, index=True)
+    # Discriminador de origem: 'NACOM' (fluxo principal) | 'CARVIA' (frete subcontratado)
+    # Evita colisao de numero_nf entre os dois dominios — ver plano de integracao CarVia
+    origem = db.Column(db.String(10), nullable=False, default='NACOM', index=True)
     cliente = db.Column(db.String(255), nullable=False)
     transportadora = db.Column(db.String(255), nullable=True)
     municipio = db.Column(db.String(100), nullable=True)

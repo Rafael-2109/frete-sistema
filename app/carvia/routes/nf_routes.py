@@ -661,6 +661,7 @@ def register_nf_routes(bp):
             return redirect(url_for('carvia.detalhe_nf', nf_id=nf_id))
 
         try:
+            numero_nf_local = nf.numero_nf  # snapshot antes do commit
             nf.status = 'CANCELADA'
             nf.cancelado_em = agora_utc_naive()
             nf.cancelado_por = current_user.email
@@ -668,10 +669,23 @@ def register_nf_routes(bp):
             db.session.commit()
 
             logger.info(
-                f"NF cancelada: nf_id={nf.id} numero={nf.numero_nf} "
+                f"NF cancelada: nf_id={nf.id} numero={numero_nf_local} "
                 f"por={current_user.email} motivo={motivo}"
             )
-            flash(f'NF {nf.numero_nf} cancelada com sucesso.', 'success')
+            flash(f'NF {numero_nf_local} cancelada com sucesso.', 'success')
+
+            # Hook monitoramento: marcar EntregaMonitorada CarVia como Cancelada
+            # (nao-bloqueante: erro aqui nao reverte o cancelamento da NF)
+            try:
+                from app.utils.sincronizar_entregas_carvia import (
+                    arquivar_entrega_carvia_cancelada,
+                )
+                arquivar_entrega_carvia_cancelada(numero_nf_local)
+            except Exception as e_sync:
+                logger.warning(
+                    f"Sync monitoramento cancelamento NF {numero_nf_local} "
+                    f"falhou: {e_sync}"
+                )
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao cancelar NF {nf_id}: {e}")

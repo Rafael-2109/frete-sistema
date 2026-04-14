@@ -1298,6 +1298,32 @@ class ImportacaoService:
 
             db.session.commit()
 
+            # Hook Monitoramento CarVia: sincroniza NFs recem-importadas com
+            # EntregaMonitorada (origem='CARVIA'). Usa status_inicial para
+            # marcar como 'Aguardando Embarque' e nao poluir filtro sem_previsao.
+            # Nao-bloqueante: erro aqui nao reverte a importacao.
+            if nfs_criadas:
+                try:
+                    from app.utils.sincronizar_entregas_carvia import (
+                        sincronizar_entrega_carvia_por_nf,
+                    )
+                    for nf_criada in nfs_criadas:
+                        try:
+                            sincronizar_entrega_carvia_por_nf(
+                                nf_criada.numero_nf,
+                                status_inicial='Aguardando Embarque',
+                            )
+                        except Exception as e_item:
+                            logger.warning(
+                                "Sync monitoramento NF import %s falhou: %s",
+                                nf_criada.numero_nf, e_item,
+                            )
+                except Exception as e_sync:
+                    logger.warning(
+                        "Hook monitoramento (importacao CarVia) falhou: %s",
+                        e_sync,
+                    )
+
             # Enfileirar jobs de verificacao SSW APOS commit bem-sucedido.
             # Fazer antes do commit causa race: se o commit falhar, o cte_comp
             # nao existe mas o job ja esta na fila (retorna SKIPPED silencioso).

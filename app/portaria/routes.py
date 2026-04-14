@@ -393,6 +393,41 @@ def registrar_movimento():
                         except Exception as e:
                             print(f"[AVISO] Hook CarVia FreteService falhou: {e}")
 
+                    # Hook Monitoramento CarVia: sincronizar EntregaMonitorada para NFs CarVia
+                    # Cria/atualiza EntregaMonitorada(origem='CARVIA') apos CarviaFrete existir,
+                    # compartilhando gatilhos/recursos do monitoramento (agenda, canhoto, etc).
+                    if registro.embarque_id:
+                        try:
+                            from app.utils.sincronizar_entregas_carvia import (
+                                sincronizar_entrega_carvia_por_nf,
+                            )
+                            from app.embarques.models import EmbarqueItem as _EI
+                            itens_carvia_nf = _EI.query.filter(
+                                _EI.embarque_id == registro.embarque_id,
+                                _EI.status == 'ativo',
+                                _EI.separacao_lote_id.ilike('CARVIA-%'),
+                                _EI.nota_fiscal.isnot(None),
+                                _EI.nota_fiscal != '',
+                            ).all()
+                            sync_ok = 0
+                            for item_c in itens_carvia_nf:
+                                try:
+                                    sincronizar_entrega_carvia_por_nf(item_c.nota_fiscal)
+                                    sync_ok += 1
+                                except Exception as e_item:
+                                    print(
+                                        f"[AVISO] Sync monitoramento CarVia NF "
+                                        f"{item_c.nota_fiscal} falhou: {e_item}"
+                                    )
+                            if sync_ok:
+                                flash(
+                                    f'{sync_ok} NF(s) CarVia sincronizada(s) '
+                                    f'com monitoramento.',
+                                    'info',
+                                )
+                        except Exception as e_sync:
+                            print(f"[AVISO] Hook monitoramento CarVia falhou: {e_sync}")
+
                     # Hook Nacom: gerar fretes (mesma lógica do embarque save)
                     if registro.embarque_id:
                         try:

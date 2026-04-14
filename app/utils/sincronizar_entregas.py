@@ -82,19 +82,25 @@ def sincronizar_entrega_por_nf(numero_nf):
     if not fat:
         # Se a NF não estiver no faturamento, não faz nada
         return
-    
+
     # 🆕 NÃO SINCRONIZA NFs INATIVAS
     if not getattr(fat, 'ativo', True):  # Compatibilidade com NFs antigas sem campo ativo
         # Se a NF foi inativada, remove do monitoramento se existir
-        entrega_existente = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+        # Filtra por origem='NACOM' para nao afetar registros CarVia de mesmo numero_nf
+        entrega_existente = EntregaMonitorada.query.filter_by(
+            numero_nf=numero_nf, origem='NACOM'
+        ).first()
         if entrega_existente:
             db.session.delete(entrega_existente)
             db.session.commit()
         return
- 
-    entrega = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+
+    # Filtra por origem='NACOM' para nao colidir com registros CarVia
+    entrega = EntregaMonitorada.query.filter_by(
+        numero_nf=numero_nf, origem='NACOM'
+    ).first()
     if not entrega:
-        entrega = EntregaMonitorada(numero_nf=numero_nf)
+        entrega = EntregaMonitorada(numero_nf=numero_nf, origem='NACOM')
         db.session.add(entrega)
 
     # Inicializa variáveis
@@ -278,7 +284,10 @@ def sincronizar_entrega_por_nf(numero_nf):
 
 def sincronizar_nova_entrega_por_nf(numero_nf, embarque, item_embarque):
 
-    entrega = EntregaMonitorada.query.filter_by(numero_nf=numero_nf).first()
+    # Filtra por origem='NACOM' — fluxo de re-embarque so afeta entregas Nacom
+    entrega = EntregaMonitorada.query.filter_by(
+        numero_nf=numero_nf, origem='NACOM'
+    ).first()
     pedido = Pedido.query.filter_by(nf=numero_nf).first()
     if not entrega:
         return
