@@ -142,14 +142,14 @@
                         <tr>
                             <td><small>{{ m.criado_em|formatar_data_hora_brasil if m.criado_em else '-' }}</small></td>
                             <td>
-                                {% if m.sub_id %}
-                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=m.sub_id) }}"
+                                {% if m.frete_id %}
+                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=m.frete_id) }}"
                                    class="text-decoration-none">
-                                    Sub #{{ m.sub_id }}
+                                    Frete #{{ m.frete_id }}
                                 </a>
                                 {% else %}-{% endif %}
                             </td>
-                            <td><small>{{ m.sub_cte_numero or '-' }}</small></td>
+                            <td><small>{{ m.frete_cte_numero or '-' }}</small></td>
                             <td>
                                 {% if m.op_id %}
                                 <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=m.op_id) }}"
@@ -159,8 +159,8 @@
                                 {% else %}-{% endif %}
                             </td>
                             <td><small>{{ (m.op_cidade_destino ~ '/' ~ m.op_uf_destino) if m.op_cidade_destino else '-' }}</small></td>
-                            <td class="text-end"><small>{{ m.sub_valor_considerado|valor_br if m.sub_valor_considerado is not none else '-' }}</small></td>
-                            <td class="text-end"><small>{{ m.sub_valor_pago|valor_br if m.sub_valor_pago is not none else '-' }}</small></td>
+                            <td class="text-end"><small>{{ m.frete_valor_considerado|valor_br if m.frete_valor_considerado is not none else '-' }}</small></td>
+                            <td class="text-end"><small>{{ m.frete_valor_pago|valor_br if m.frete_valor_pago is not none else '-' }}</small></td>
                             <td class="text-center">
                                 {% if m.tipo == 'DEBITO' %}
                                 <span class="badge bg-danger">DEBITO</span>
