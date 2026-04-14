@@ -2167,54 +2167,55 @@ def register_fatura_routes(bp):
 
         from app.utils.timezone import agora_utc_naive
 
-        # Subs ativos (exclui CANCELADO) — usa backref existente em
-        # CarviaSubcontrato.fatura_transportadora (backref='subcontratos')
-        subs_ativos = [
-            s for s in fatura.subcontratos if s.status != 'CANCELADO'
-        ]
+        # Fretes da fatura (exclui CANCELADO) — paridade Nacom, Frete e a
+        # unidade de conferencia (Phase C refactor 2026-04-14)
+        fretes_ativos = CarviaFrete.query.filter(
+            CarviaFrete.fatura_transportadora_id == fatura_id,
+            CarviaFrete.status != 'CANCELADO',
+        ).all()
 
-        # Gate 1: todos subs APROVADO (defense in depth).
-        # 3 checks: DIVERGENTE (sub reprovado), requer_aprovacao (tratativa
-        # D4 pendente no AprovacaoSubcontratoService) e ausencia de
-        # conferencia individual. Espelha classificacao de status_doc na
-        # rota GET /conferir para evitar bypass via POST direto.
-        subs_divergentes = [
-            s for s in subs_ativos if s.status_conferencia == 'DIVERGENTE'
+        # Gate 1: todos fretes APROVADO (defense in depth).
+        # 3 checks: DIVERGENTE (frete reprovado), requer_aprovacao (tratativa
+        # D4 pendente no AprovacaoFreteService) e ausencia de conferencia
+        # individual. Espelha classificacao de status_doc na rota GET /conferir
+        # para evitar bypass via POST direto.
+        fretes_divergentes = [
+            f for f in fretes_ativos if f.status_conferencia == 'DIVERGENTE'
         ]
-        subs_em_tratativa = [
-            s for s in subs_ativos
-            if getattr(s, 'requer_aprovacao', False)
+        fretes_em_tratativa = [
+            f for f in fretes_ativos
+            if getattr(f, 'requer_aprovacao', False)
         ]
-        subs_pendentes = [
-            s for s in subs_ativos
-            if s.status_conferencia not in ('APROVADO', 'DIVERGENTE')
-            and not getattr(s, 'requer_aprovacao', False)
+        fretes_pendentes = [
+            f for f in fretes_ativos
+            if f.status_conferencia not in ('APROVADO', 'DIVERGENTE')
+            and not getattr(f, 'requer_aprovacao', False)
         ]
-        if subs_divergentes:
+        if fretes_divergentes:
             flash(
                 f'Fatura nao pode ser conferida: '
-                f'{len(subs_divergentes)} subcontrato(s) DIVERGENTE. '
+                f'{len(fretes_divergentes)} frete(s) DIVERGENTE. '
                 f'Resolva em Aprovacoes antes de aprovar.',
                 'danger',
             )
             return redirect(
                 url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura_id)
             )
-        if subs_em_tratativa:
+        if fretes_em_tratativa:
             flash(
                 f'Fatura nao pode ser conferida: '
-                f'{len(subs_em_tratativa)} subcontrato(s) com tratativa pendente '
-                f'(D4). Resolva em Aprovacoes Subcontrato antes de aprovar.',
+                f'{len(fretes_em_tratativa)} frete(s) com tratativa pendente '
+                f'(D4). Resolva em Aprovacoes antes de aprovar.',
                 'danger',
             )
             return redirect(
                 url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura_id)
             )
-        if subs_pendentes:
+        if fretes_pendentes:
             flash(
                 f'Fatura nao pode ser conferida: '
-                f'{len(subs_pendentes)} subcontrato(s) sem conferencia individual. '
-                f'Confira cada subcontrato antes de aprovar a fatura.',
+                f'{len(fretes_pendentes)} frete(s) sem conferencia individual. '
+                f'Confira cada frete antes de aprovar a fatura.',
                 'danger',
             )
             return redirect(
@@ -2248,11 +2249,8 @@ def register_fatura_routes(bp):
                 # IMPORTANTE: iterar CarviaFrete (nao Sub) porque valor_pago e
                 # preenchido no form /carvia/fretes/<id>/editar. Sync frete→sub
                 # garante paridade, mas Frete e a fonte canonica.
+                # fretes_ativos ja foi carregado acima para os gates — reusar.
                 from app.carvia.models import CarviaCustoEntrega
-                fretes_ativos = CarviaFrete.query.filter(
-                    CarviaFrete.fatura_transportadora_id == fatura_id,
-                    CarviaFrete.status != 'CANCELADO',
-                ).all()
                 soma_pago_fretes = sum(
                     float(f.valor_pago or 0) for f in fretes_ativos
                 )
@@ -2302,10 +2300,11 @@ def register_fatura_routes(bp):
             fatura.conferido_em = agora_utc_naive()
             fatura.observacoes_conferencia = observacoes or None
 
-            # Marcar subcontratos como conferidos (FATURADO -> CONFERIDO)
-            for sub in subs_ativos:
-                if sub.status == 'FATURADO':
-                    sub.status = 'CONFERIDO'
+            # Marcar fretes como conferidos (FATURADO -> CONFERIDO)
+            # Phase C: iteramos fretes_ativos (ja carregado acima) em vez de subs
+            for frete in fretes_ativos:
+                if frete.status == 'FATURADO':
+                    frete.status = 'CONFERIDO'
 
             db.session.commit()
             flash(
