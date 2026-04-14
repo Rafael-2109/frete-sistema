@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}Conferir Fatura Subcontrato - {{ fatura.numero_fatura }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabecalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-check-double"></i> Conferir Fatura Subcontrato - {{ fatura.numero_fatura }}</h2>
+        <a href="{{ url_for('carvia.listar_faturas_transportadora') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar as Faturas
+        </a>
+    </div>
+
+    {% set carvia_active = 'faturas_transportadora' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.listar_faturas_transportadora') }}">Faturas Subcontrato</a></li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura.id) }}">{{ fatura.numero_fatura }}</a>
+            </li>
+            <li class="breadcrumb-item active">Conferir</li>
+        </ol>
+    </nav>
+
+    <!-- Informacoes da Fatura -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Informacoes da Fatura</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Numero:</strong><br>
+                    {{ fatura.numero_fatura }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Transportadora:</strong><br>
+                    {{ fatura.transportadora.razao_social if fatura.transportadora else 'N/A' }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Valor Fatura:</strong><br>
+                    <span class="h5 text-primary">{{ (fatura.valor_total)|moeda_carteira }}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Status:</strong><br>
+                    {% if fatura.status_conferencia == 'CONFERIDO' %}
+                    <span class="badge bg-success">CONFERIDO</span>
+                    {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
+                    <span class="badge bg-warning text-dark">EM CONFERENCIA</span>
+                    {% elif fatura.status_conferencia == 'DIVERGENTE' %}
+                    <span class="badge bg-danger">DIVERGENTE</span>
+                    {% else %}
+                    <span class="badge bg-secondary">PENDENTE</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analise de Valores -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-calculator"></i> Analise de Valores</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <h6>Valor da Fatura</h6>
+                    <h4 class="text-primary">{{ (analise_valores.valor_fatura)|moeda_carteira }}</h4>
+                </div>
+                <div class="col-md-3">
+                    <h6>Valor Cotado</h6>
+                    <h4 class="text-secondary">{{ (analise_valores.valor_cotado)|moeda_carteira }}</h4>
+                </div>
+                <div class="col-md-3">
+                    <h6>Total CTe</h6>
+                    <h4 class="text-secondary">{{ (analise_valores.valor_total_cte)|moeda_carteira }}</h4>
+                </div>
+                <div class="col-md-3">
+                    <h6>Total Considerado</h6>
+                    <h4 class="text-warning">{{ (analise_valores.valor_total_considerado)|moeda_carteira }}</h4>
+                </div>
+                <div class="col-md-3">
+                    <h6>Total Pago <small>(Prioridade)</small></h6>
+                    <h4 class="text-success">{{ (analise_valores.valor_total_pago)|moeda_carteira }}</h4>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Diferenca Fatura vs Considerado:</h6>
+                    {% if analise_valores.fatura_dentro_tolerancia %}
+                    <span class="badge bg-success badge-lg">
+                        {{ (analise_valores.diferenca_fatura_considerado)|moeda_carteira }} (Dentro da tolerancia &le; R$ 1,00)
+                    </span>
+                    {% else %}
+                    <span class="badge bg-danger badge-lg">
+                        {{ (analise_valores.diferenca_fatura_considerado)|moeda_carteira }} (Acima da tolerancia &gt; R$ 1,00)
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <strong>Diferenca Considerado vs Pago:</strong><br>
+                    <span class="h5">{{ (analise_valores.diferenca_considerado_pago)|moeda_carteira }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status dos Documentos -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-list-check"></i> Status dos Documentos</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Numero/Descricao</th>
+                            <th class="text-end">Valor Cotado</th>
+                            <th class="text-end">Valor CTe</th>
+                            <th class="text-end">Valor Considerado</th>
+                            <th class="text-end">Valor Pago</th>
+                            <th class="text-center">Status</th>
+                            <th>Cliente/Obs</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doc in documentos_status %}
+                        <tr>
+                            <td>
+                                {% if doc.tipo == 'CTe' %}
+                                <span class="badge bg-primary">CTe</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Despesa</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ doc.numero }}</strong>
+                                {% if doc.tipo == 'Despesa' and doc.descricao %}
+                                <br><small class="text-muted">{{ doc.descricao }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ (doc.valor_cotado)|moeda_carteira }}</td>
+                            <td class="text-end">{{ (doc.valor_cte)|moeda_carteira }}</td>
+                            <td class="text-end">{{ (doc.valor_considerado)|moeda_carteira }}</td>
+                            <td class="text-end">
+                                <strong>{{ (doc.valor_pago)|moeda_carteira }}</strong>
+                            </td>
+                            <td class="text-center">
+                                {% if doc.status == 'LANÇADO' %}
+                                <span class="badge bg-success">LANCADO</span>
+                                {% elif doc.status == 'APROVADO' %}
+                                <span class="badge bg-success">APROVADO</span>
+                                {% elif doc.status == 'EM_TRATATIVA' %}
+                                <span class="badge bg-warning text-dark" title="Divergencia — resolver em Aprovacoes">
+                                    EM TRATATIVA
+                                </span>
+                                {% elif doc.status == 'REJEITADO' %}
+                                <span class="badge bg-danger" title="Subcontrato rejeitado — requer acao corretiva">
+                                    REJEITADO
+                                </span>
+                                {% else %}
+                                <span class="badge bg-danger">PENDENTE</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if doc.tipo == 'CTe' %}
+                                {{ doc.cliente }}
+                                {% else %}
+                                <small class="text-muted">Custo de Entrega</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="bg-light">
+                        <tr>
+                            <th colspan="2">TOTAIS:</th>
+                            <th class="text-end">{{ (analise_valores.valor_cotado)|moeda_carteira }}</th>
+                            <th class="text-end">{{ (analise_valores.valor_total_cte)|moeda_carteira }}</th>
+                            <th class="text-end">{{ (analise_valores.valor_total_considerado)|moeda_carteira }}</th>
+                            <th class="text-end"><strong>{{ (analise_valores.valor_total_pago)|moeda_carteira }}</strong></th>
+                            <th colspan="2"></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validacoes -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Validacoes para Aprovacao</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>1. Status dos Documentos:</h6>
+                    {% if todos_aprovados %}
+                    <span class="badge bg-success">✅ Todos os documentos estao APROVADOS/LANCADOS</span>
+                    {% elif tem_sub_em_tratativa and tem_sub_rejeitado %}
+                    <span class="badge bg-danger">
+                        ❌ Ha subcontratos EM TRATATIVA e REJEITADOS &mdash;
+                        <a href="{{ url_for('carvia.listar_aprovacoes_subcontrato') }}" class="text-white">
+                            <u>resolver em Aprovacoes</u>
+                        </a>
+                    </span>
+                    {% elif tem_sub_em_tratativa %}
+                    <span class="badge bg-warning text-dark">
+                        ⚠️ Ha subcontratos EM TRATATIVA &mdash;
+                        <a href="{{ url_for('carvia.listar_aprovacoes_subcontrato') }}" class="text-dark">
+                            <u>resolver em Aprovacoes</u>
+                        </a>
+                    </span>
+                    {% elif tem_sub_rejeitado %}
+                    <span class="badge bg-danger">
+                        ❌ Ha subcontratos REJEITADOS &mdash; requer acao corretiva antes de conferir
+                    </span>
+                    {% else %}
+                    <span class="badge bg-danger">❌ Ha documentos PENDENTES</span>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <h6>2. Tolerancia de Valores:</h6>
+                    {% if analise_valores.fatura_dentro_tolerancia %}
+                    <span class="badge bg-success">✅ Diferenca dentro da tolerancia (&le; R$ 1,00)</span>
+                    {% else %}
+                    <span class="badge bg-danger">❌ Diferenca acima da tolerancia (&gt; R$ 1,00)</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario de Aprovacao -->
+    {% if pode_aprovar and fatura.status_conferencia != 'CONFERIDO' %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-check-circle"></i> Aprovar Conferencia da Fatura</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('carvia.aprovar_conferencia_fatura_transportadora', fatura_id=fatura.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="valor_final">Valor Final da Fatura:</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                {# Valor default com VIRGULA decimal — o JS oninput restringe
+                                   a digitos + virgula, logo renderizar com ponto quebra ao editar. #}
+                                <input type="text" class="form-control" id="valor_final" name="valor_final"
+                                    value="{{ '%.2f'|format(analise_valores.valor_total_pago)|replace('.', ',') }}" required>
+                            </div>
+                            <small class="form-text text-muted">
+                                Sugerido: {{ (analise_valores.valor_total_pago)|moeda_carteira }} (Total Pago)
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="observacoes">Observacoes da Conferencia:</label>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                                placeholder="Observacoes sobre a conferencia (opcional)"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning mt-3">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Atencao:</h6>
+                    <p class="mb-0">
+                        Ao aprovar a conferencia:
+                        <br>&bull; A fatura sera marcada como CONFERIDA
+                        <br>&bull; Todos os subcontratos FATURADO serao marcados como CONFERIDO
+                        <br>&bull; A fatura ficara BLOQUEADA para edicao ate ser reaberta
+                        <br>&bull; O valor da fatura sera atualizado conforme informado
+                    </p>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-lg"
+                    onclick="return confirm('Confirma a aprovacao da conferencia desta fatura?')">
+                    <i class="fas fa-check-double"></i> Aprovar Conferencia
+                </button>
+            </form>
+        </div>
+    </div>
+    {% elif fatura.status_conferencia == 'CONFERIDO' %}
+    <!-- Fatura ja conferida - opcao para reabrir -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-lock"></i> Fatura Conferida</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-success">
+                <h6><i class="fas fa-check-circle"></i> Esta fatura ja foi conferida!</h6>
+                <p class="mb-0">
+                    Conferida por: <strong>{{ fatura.conferido_por or '-' }}</strong><br>
+                    Data: {{ fatura.conferido_em|formatar_data_hora_brasil if fatura.conferido_em else '-' }}<br>
+                    {% if fatura.observacoes_conferencia %}
+                    Observacoes:
+                    <pre class="mb-0 mt-1" style="white-space: pre-wrap; font-family: inherit;">{{ fatura.observacoes_conferencia }}</pre>
+                    {% endif %}
+                </p>
+            </div>
+
+            <!-- Form para reabrir -->
+            <form method="POST" action="{{ url_for('carvia.reabrir_fatura_transportadora', fatura_id=fatura.id) }}"
+                style="display: block;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <div class="form-group mb-3">
+                    <label for="motivo_reabertura">Motivo da Reabertura:</label>
+                    <input type="text" class="form-control" id="motivo_reabertura" name="motivo_reabertura"
+                        placeholder="Informe o motivo para reabrir a fatura" required>
+                </div>
+                <button type="submit" class="btn btn-warning"
+                    onclick="return confirm('Confirma a reabertura desta fatura? Isso liberara todos os subcontratos para nova conferencia.')">
+                    <i class="fas fa-unlock"></i> Reabrir Fatura
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <!-- Nao pode aprovar -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-times-circle"></i> Nao Pode Aprovar</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-danger mb-0">
+                <h6>Esta fatura nao pode ser aprovada pelos seguintes motivos:</h6>
+                <ul class="mb-0">
+                    {% if not todos_aprovados %}
+                    <li>Ha documentos com status PENDENTE, EM TRATATIVA ou REJEITADO</li>
+                    {% endif %}
+                    {% if not analise_valores.fatura_dentro_tolerancia %}
+                    <li>Diferenca entre valor da fatura e valor considerado acima da tolerancia de R$ 1,00</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Formatar valor monetario — apenas digitos e virgula (paridade Nacom)
+    (function () {
+        var input = document.getElementById('valor_final');
+        if (!input) return;
+        input.addEventListener('input', function (e) {
+            e.target.value = e.target.value.replace(/[^\d,]/g, '');
+        });
+    })();
+</script>
+{% endblock %}

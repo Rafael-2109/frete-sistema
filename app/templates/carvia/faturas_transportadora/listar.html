@@ -207,7 +207,7 @@
 
                                     {% if f.status_conferencia in ('PENDENTE', 'EM_CONFERENCIA') %}
                                     <!-- Conferir -->
-                                    <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}"
+                                    <a href="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=f.id) }}"
                                         class="btn btn-sm btn-outline-success mb-1" title="Conferir fatura">
                                         <i class="fas fa-check-double"></i> Conferir
                                     </a>
@@ -233,22 +233,16 @@
                                     <span class="badge bg-success mb-1">
                                         <i class="fas fa-lock"></i> CONFERIDA
                                     </span>
-                                    <!-- Reabrir -->
-                                    <form method="POST"
-                                          action="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=f.id) }}"
-                                          style="display: inline-block;">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <input type="hidden" name="status" value="PENDENTE">
-                                        <button type="submit" class="btn btn-sm btn-outline-warning mb-1"
-                                                title="Reabrir fatura"
-                                                onclick="return confirm('Deseja reabrir esta fatura?')">
-                                            <i class="fas fa-unlock"></i> Reabrir
-                                        </button>
-                                    </form>
+                                    <!-- Reabrir — abre tela de conferir para preencher motivo -->
+                                    <a href="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=f.id) }}"
+                                        class="btn btn-sm btn-outline-warning mb-1"
+                                        title="Reabrir fatura (informe motivo na tela)">
+                                        <i class="fas fa-unlock"></i> Reabrir
+                                    </a>
 
                                     {% elif f.status_conferencia == 'DIVERGENTE' %}
-                                    <!-- Divergente — ir ao detalhe para resolver -->
-                                    <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=f.id) }}"
+                                    <!-- Divergente — ir para tela de conferir para resolver -->
+                                    <a href="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=f.id) }}"
                                         class="btn btn-sm btn-outline-danger mb-1" title="Resolver divergencia">
                                         <i class="fas fa-exclamation-triangle"></i> Resolver
                                     </a>

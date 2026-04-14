@@ -1761,7 +1761,16 @@ def register_fatura_routes(bp):
     @bp.route('/faturas-transportadora/<int:fatura_id>') # type: ignore
     @login_required
     def detalhe_fatura_transportadora(fatura_id): # type: ignore
-        """Detalhe de uma fatura de transportadora"""
+        """Tela de VISUALIZAR uma fatura de transportadora.
+
+        Paridade Nacom: equivalente a `fretes.visualizar_fatura` —
+        mostra dados basicos, resumo, tabelas de subcontratos e custos
+        de entrega, e informacoes de conferencia (quando CONFERIDO).
+
+        Endpoint name mantido como `detalhe_fatura_transportadora` para
+        preservar compatibilidade com ~15 templates que usam
+        `url_for('carvia.detalhe_fatura_transportadora', ...)`.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -1777,33 +1786,14 @@ def register_fatura_routes(bp):
             CarviaSubcontrato.fatura_transportadora_id == fatura_id
         ).order_by(CarviaSubcontrato.cte_data_emissao.desc().nullslast()).all()
 
-        # Totais para conferencia — Full mirror Nacom (fretes/conferir_fatura.html)
-        # Subs CANCELADO excluidos (consistente com ConferenciaService.resumo_conferencia_fatura)
+        # Totais do card "Resumo" (card de 4 stats — paridade Nacom)
+        # Subs CANCELADO excluidos (consistente com conferencia)
         subs_ativos = [s for s in subcontratos if s.status != 'CANCELADO']
-        valor_cotado_total = sum(float(s.valor_cotado or 0) for s in subs_ativos)
-        valor_pago_total = sum(float(s.valor_pago or 0) for s in subs_ativos)
-
-        # Resumo de conferencia individual (ja exclui CANCELADO internamente)
-        from app.carvia.services.documentos.conferencia_service import ConferenciaService
-        conferencia_resumo = ConferenciaService().resumo_conferencia_fatura(fatura_id)
-
-        # Reutilizar valores ja calculados pelo service
-        soma_considerado = conferencia_resumo.get('soma_considerado', 0.0) or 0.0
-        soma_custos_entrega = conferencia_resumo.get('soma_custos_entrega', 0.0) or 0.0
-        valor_conferido_total = conferencia_resumo.get(
-            'valor_conferido_total', soma_considerado + soma_custos_entrega
-        ) or 0.0
-        valor_cte_total = conferencia_resumo.get('soma_cte_valor', 0.0) or 0.0
-
-        # Metricas para card "Analise de Valores"
-        # Gate 2 agora considera subs + custos de entrega vinculados diretamente a FT
-        # (padrao DespesaExtra.fatura_frete_id do Nacom).
-        valor_fatura = float(fatura.valor_total or 0)
-        diferenca_fatura_considerado = round(
-            abs(valor_fatura - float(valor_conferido_total)), 2
+        total_subcontratos = len(subs_ativos)
+        valor_total_subcontratos = sum(
+            float(s.valor_pago or s.valor_considerado or s.valor_cotado or 0)
+            for s in subs_ativos
         )
-        diferenca_considerado_pago = round(float(valor_conferido_total) - valor_pago_total, 2)
-        fatura_dentro_tolerancia = diferenca_fatura_considerado <= 1.00
 
         # Cross-links: itens, NFs, faturas cliente
         from app.carvia.models import (
@@ -1852,6 +1842,16 @@ def register_fatura_routes(bp):
             CarviaCustoEntrega.fatura_transportadora_id == fatura_id
         ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
 
+        # Totais do card "Resumo" — custos de entrega
+        custos_entrega_ativos = [
+            ce for ce in custos_entrega_ft if ce.status != 'CANCELADO'
+        ]
+        total_custos_entrega = len(custos_entrega_ativos)
+        valor_total_custos_entrega = sum(
+            float(ce.valor or 0) for ce in custos_entrega_ativos
+        )
+        total_calculado = valor_total_subcontratos + valor_total_custos_entrega
+
         # CTes complementares via operacoes (caminho fiscal do CTe Comp — cobra cliente)
         ctes_complementares_ft = []
         if op_ids:
@@ -1860,19 +1860,14 @@ def register_fatura_routes(bp):
             ).order_by(CarviaCteComplementar.criado_em.desc()).all()
 
         return render_template(
-            'carvia/faturas_transportadora/detalhe.html',
+            'carvia/faturas_transportadora/visualizar.html',
             fatura=fatura,
             subcontratos=subcontratos,
-            valor_cotado_total=valor_cotado_total,
-            valor_cte_total=valor_cte_total,
-            valor_pago_total=valor_pago_total,
-            soma_considerado=soma_considerado,
-            soma_custos_entrega=soma_custos_entrega,
-            valor_conferido_total=valor_conferido_total,
-            diferenca_fatura_considerado=diferenca_fatura_considerado,
-            diferenca_considerado_pago=diferenca_considerado_pago,
-            fatura_dentro_tolerancia=fatura_dentro_tolerancia,
-            conferencia_resumo=conferencia_resumo,
+            total_subcontratos=total_subcontratos,
+            valor_total_subcontratos=valor_total_subcontratos,
+            total_custos_entrega=total_custos_entrega,
+            valor_total_custos_entrega=valor_total_custos_entrega,
+            total_calculado=total_calculado,
             itens=itens,
             nfs=nfs,
             faturas_cliente=faturas_cliente,
@@ -1917,10 +1912,16 @@ def register_fatura_routes(bp):
 
         return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>/conferencia', methods=['POST']) # type: ignore
+    @bp.route('/faturas-transportadora/<int:fatura_id>/conferir') # type: ignore
     @login_required
     def conferir_fatura_transportadora(fatura_id): # type: ignore
-        """Atualiza status de conferencia de uma fatura de transportadora"""
+        """Tela de CONFERIR fatura de transportadora (paridade Nacom).
+
+        GET. Equivalente a `fretes.conferir_fatura` — monta analise de
+        valores, tabela unificada de documentos (subs + CEs) e flags
+        de validacao. O POST de aprovacao vai em
+        `aprovar_conferencia_fatura_transportadora`.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -1930,92 +1931,427 @@ def register_fatura_routes(bp):
             flash('Fatura nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_faturas_transportadora'))
 
-        novo_status = request.form.get('status')
-        if novo_status not in ('PENDENTE', 'EM_CONFERENCIA', 'CONFERIDO', 'DIVERGENTE'):
-            flash('Status invalido.', 'warning')
-            return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+        # Subcontratos ativos (exclui CANCELADO) — consistente com ConferenciaService
+        subcontratos = CarviaSubcontrato.query.filter(
+            CarviaSubcontrato.fatura_transportadora_id == fatura_id,
+            CarviaSubcontrato.status != 'CANCELADO',
+        ).all()
+
+        # Custos de entrega ativos (padrao DespesaExtra.fatura_frete_id do Nacom)
+        from app.carvia.models import CarviaCustoEntrega
+        custos_entrega = CarviaCustoEntrega.query.filter(
+            CarviaCustoEntrega.fatura_transportadora_id == fatura_id,
+            CarviaCustoEntrega.status != 'CANCELADO',
+        ).all()
+
+        # Monta tabela unificada "Status dos Documentos" — paridade
+        # Nacom `conferir_fatura`. CarviaSubcontrato e o equivalente de
+        # Frete (Q6 do GATE: "campos de CTe viram property de Frete").
+        documentos_status = []
+        valor_total_cotado = 0.0
+        valor_total_cte = 0.0
+        valor_total_considerado = 0.0
+        valor_total_pago = 0.0
+
+        # 1) Subcontratos (equivalente dos Fretes Nacom)
+        for sub in subcontratos:
+            # Status bloqueante: sub com status_conferencia DIVERGENTE fica em
+            # "EM_TRATATIVA" (paridade FRETE_STATUS_BLOQUEANTES do Nacom).
+            # CarVia registra tratativa via AprovacaoSubcontratoService (D4)
+            # quando diferenca excede tolerancia — enquanto pendente de
+            # decisao do gestor, o sub fica em requer_aprovacao=True.
+            # status_conferencia e a FONTE DE VERDADE da conferencia
+            # individual — status_conferencia=APROVADO e a UNICA forma
+            # valida de um sub passar o Gate 1 do POST. Nao usar
+            # sub.status=='CONFERIDO' como sinonimo de APROVADO (dual-axis
+            # mismatch que permitia UI dizer "APROVADO" enquanto o POST
+            # bloqueava silenciosamente).
+            if sub.status_conferencia == 'DIVERGENTE':
+                status_doc = 'EM_TRATATIVA'
+            elif getattr(sub, 'requer_aprovacao', False):
+                status_doc = 'EM_TRATATIVA'
+            elif sub.status_conferencia == 'APROVADO':
+                # Se tem CTe emitido E pago, mostra como LANCADO (paridade
+                # Nacom: valor_pago existe apenas apos o ciclo completo)
+                if sub.cte_numero and sub.cte_valor and sub.valor_pago:
+                    status_doc = 'LANÇADO'
+                else:
+                    status_doc = 'APROVADO'
+            else:
+                status_doc = 'PENDENTE'
+
+            cliente = (
+                sub.operacao.nome_cliente
+                if sub.operacao and sub.operacao.nome_cliente
+                else '-'
+            )
+            documentos_status.append({
+                'tipo': 'CTe',
+                'numero': sub.cte_numero or f'Sub #{sub.id}',
+                'descricao': '',
+                'valor_cotado': float(sub.valor_cotado or 0),
+                'valor_cte': float(sub.cte_valor or 0),
+                'valor_considerado': float(sub.valor_considerado or 0),
+                'valor_pago': float(sub.valor_pago or 0),
+                'status': status_doc,
+                'cliente': cliente,
+                'sub_id': sub.id,
+            })
+
+            valor_total_cotado += float(sub.valor_cotado or 0)
+            valor_total_cte += float(sub.cte_valor or 0)
+            valor_total_considerado += float(sub.valor_considerado or 0)
+            valor_total_pago += float(sub.valor_pago or 0)
+
+        # 2) Custos de Entrega (equivalente das Despesas Extras Nacom)
+        for ce in custos_entrega:
+            # CE vinculada a FT e sempre "LANÇADA" na conferencia
+            # (espelha a regra Nacom: DespesaExtra com numero_documento +
+            # valor + fatura_frete_id != NULL).
+            if ce.numero_custo and ce.valor and ce.fatura_transportadora_id:
+                status_doc = 'LANÇADO'
+            else:
+                status_doc = 'PENDENTE'
+
+            documentos_status.append({
+                'tipo': 'Despesa',
+                'numero': ce.numero_custo or f'CE #{ce.id}',
+                'descricao': ce.tipo_custo or 'Custo de Entrega',
+                'valor_cotado': float(ce.valor or 0),
+                'valor_cte': float(ce.valor or 0),
+                'valor_considerado': float(ce.valor or 0),
+                'valor_pago': float(ce.valor or 0),
+                'status': status_doc,
+                'cliente': 'Custo de Entrega',
+                'ce_id': ce.id,
+            })
+
+            valor_total_cotado += float(ce.valor or 0)
+            valor_total_cte += float(ce.valor or 0)
+            valor_total_considerado += float(ce.valor or 0)
+            valor_total_pago += float(ce.valor or 0)
+
+        # Flags de bloqueio para UI (paridade Nacom)
+        tem_sub_em_tratativa = any(
+            doc['status'] == 'EM_TRATATIVA' for doc in documentos_status
+        )
+        tem_sub_rejeitado = any(
+            doc['status'] == 'REJEITADO' for doc in documentos_status
+        )
+
+        # todos_aprovados: true se nao ha pendentes/tratativas/rejeitados
+        if len(documentos_status) == 0:
+            # Fatura vazia: considerar aprovada (mesmo comportamento Nacom)
+            todos_aprovados = True
+        else:
+            todos_aprovados = all(
+                doc['status'] in ('APROVADO', 'LANÇADO')
+                for doc in documentos_status
+            )
+
+        # Gate 2: tolerancia de R$ 1,00 entre valor_total_fatura e considerado
+        valor_fatura = float(fatura.valor_total or 0)
+        diferenca_fatura_considerado = abs(valor_fatura - valor_total_considerado)
+        fatura_dentro_tolerancia = diferenca_fatura_considerado <= 1.00
+
+        analise_valores = {
+            'valor_fatura': valor_fatura,
+            'valor_cotado': valor_total_cotado,
+            'valor_total_cte': valor_total_cte,
+            'valor_total_considerado': valor_total_considerado,
+            'valor_total_pago': valor_total_pago,
+            'diferenca_fatura_considerado': diferenca_fatura_considerado,
+            'fatura_dentro_tolerancia': fatura_dentro_tolerancia,
+            'diferenca_considerado_pago': abs(
+                valor_total_considerado - valor_total_pago
+            ),
+        }
+
+        pode_aprovar = todos_aprovados and fatura_dentro_tolerancia
+
+        return render_template(
+            'carvia/faturas_transportadora/conferir.html',
+            fatura=fatura,
+            documentos_status=documentos_status,
+            analise_valores=analise_valores,
+            todos_aprovados=todos_aprovados,
+            tem_sub_em_tratativa=tem_sub_em_tratativa,
+            tem_sub_rejeitado=tem_sub_rejeitado,
+            pode_aprovar=pode_aprovar,
+        )
+
+    @bp.route(
+        '/faturas-transportadora/<int:fatura_id>/aprovar-conferencia',
+        methods=['POST'],
+    ) # type: ignore
+    @login_required
+    def aprovar_conferencia_fatura_transportadora(fatura_id): # type: ignore
+        """Aprova a conferencia de uma fatura de transportadora.
+
+        Paridade Nacom: equivalente a `fretes.aprovar_conferencia_fatura`.
+        Recebe `valor_final` e `observacoes_conferencia` do form.
+        Defense in depth: re-valida Gate 1 e Gate 2 server-side.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_transportadora'))
+
+        from app.utils.timezone import agora_utc_naive
+
+        # Subs ativos (exclui CANCELADO) — usa backref existente em
+        # CarviaSubcontrato.fatura_transportadora (backref='subcontratos')
+        subs_ativos = [
+            s for s in fatura.subcontratos if s.status != 'CANCELADO'
+        ]
+
+        # Gate 1: todos subs APROVADO (defense in depth).
+        # 3 checks: DIVERGENTE (sub reprovado), requer_aprovacao (tratativa
+        # D4 pendente no AprovacaoSubcontratoService) e ausencia de
+        # conferencia individual. Espelha classificacao de status_doc na
+        # rota GET /conferir para evitar bypass via POST direto.
+        subs_divergentes = [
+            s for s in subs_ativos if s.status_conferencia == 'DIVERGENTE'
+        ]
+        subs_em_tratativa = [
+            s for s in subs_ativos
+            if getattr(s, 'requer_aprovacao', False)
+        ]
+        subs_pendentes = [
+            s for s in subs_ativos
+            if s.status_conferencia not in ('APROVADO', 'DIVERGENTE')
+            and not getattr(s, 'requer_aprovacao', False)
+        ]
+        if subs_divergentes:
+            flash(
+                f'Fatura nao pode ser conferida: '
+                f'{len(subs_divergentes)} subcontrato(s) DIVERGENTE. '
+                f'Resolva em Aprovacoes antes de aprovar.',
+                'danger',
+            )
+            return redirect(
+                url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura_id)
+            )
+        if subs_em_tratativa:
+            flash(
+                f'Fatura nao pode ser conferida: '
+                f'{len(subs_em_tratativa)} subcontrato(s) com tratativa pendente '
+                f'(D4). Resolva em Aprovacoes Subcontrato antes de aprovar.',
+                'danger',
+            )
+            return redirect(
+                url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura_id)
+            )
+        if subs_pendentes:
+            flash(
+                f'Fatura nao pode ser conferida: '
+                f'{len(subs_pendentes)} subcontrato(s) sem conferencia individual. '
+                f'Confira cada subcontrato antes de aprovar a fatura.',
+                'danger',
+            )
+            return redirect(
+                url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura_id)
+            )
+
+        try:
+            valor_final_str = request.form.get('valor_final', '').strip()
+            observacoes = request.form.get('observacoes', '').strip()
+
+            # Converte valor final (paridade Nacom: troca virgula por ponto).
+            # O JS do template ja restringe a digitos e virgula antes do POST.
+            if valor_final_str:
+                try:
+                    valor_final_float = float(
+                        valor_final_str.replace(',', '.')
+                    )
+                except ValueError:
+                    flash('Valor final invalido.', 'danger')
+                    return redirect(
+                        url_for(
+                            'carvia.conferir_fatura_transportadora',
+                            fatura_id=fatura_id,
+                        )
+                    )
+            else:
+                # Se nao informado, usa soma dos valores pagos dos subs + CEs
+                from app.carvia.models import CarviaCustoEntrega
+                soma_subs = sum(
+                    float(s.valor_pago or 0) for s in subs_ativos
+                )
+                soma_ces = db.session.query(
+                    func.coalesce(func.sum(CarviaCustoEntrega.valor), 0)
+                ).filter(
+                    CarviaCustoEntrega.fatura_transportadora_id == fatura_id,
+                    CarviaCustoEntrega.status != 'CANCELADO',
+                ).scalar() or 0
+                valor_final_float = float(soma_subs) + float(soma_ces)
+
+            # Gate 2: tolerancia de R$ 1,00 sobre o valor final informado
+            # (se usuario ajustou valor_final, a comparacao e contra esse)
+            from app.carvia.services.documentos.conferencia_service import (
+                ConferenciaService,
+            )
+            resumo = ConferenciaService().resumo_conferencia_fatura(fatura_id)
+            soma_considerado = float(resumo.get('soma_considerado', 0) or 0)
+            soma_custos_entrega = float(
+                resumo.get('soma_custos_entrega', 0) or 0
+            )
+            valor_conferido_total = float(
+                resumo.get(
+                    'valor_conferido_total',
+                    soma_considerado + soma_custos_entrega,
+                ) or 0
+            )
+            diferenca = abs(valor_final_float - valor_conferido_total)
+            if diferenca > 1.00:
+                flash(
+                    f'Diferenca de R$ {diferenca:.2f} entre valor final '
+                    f'(R$ {valor_final_float:.2f}) e soma conferida '
+                    f'(R$ {valor_conferido_total:.2f}). Tolerancia: R$ 1,00.',
+                    'danger',
+                )
+                return redirect(
+                    url_for(
+                        'carvia.conferir_fatura_transportadora',
+                        fatura_id=fatura_id,
+                    )
+                )
+
+            # Atualiza fatura
+            fatura.valor_total = valor_final_float
+            fatura.status_conferencia = 'CONFERIDO'
+            fatura.conferido_por = current_user.email
+            fatura.conferido_em = agora_utc_naive()
+            fatura.observacoes_conferencia = observacoes or None
+
+            # Marcar subcontratos como conferidos (FATURADO -> CONFERIDO)
+            for sub in subs_ativos:
+                if sub.status == 'FATURADO':
+                    sub.status = 'CONFERIDO'
+
+            db.session.commit()
+            flash(
+                f'Fatura {fatura.numero_fatura} conferida com sucesso! '
+                f'Valor atualizado para R$ {valor_final_float:.2f}.',
+                'success',
+            )
+            return redirect(
+                url_for(
+                    'carvia.detalhe_fatura_transportadora',
+                    fatura_id=fatura_id,
+                )
+            )
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(
+                f'Erro ao aprovar conferencia fatura transportadora {fatura_id}'
+            )
+            flash(f'Erro ao conferir fatura: {e}', 'danger')
+            return redirect(
+                url_for(
+                    'carvia.conferir_fatura_transportadora', fatura_id=fatura_id
+                )
+            )
+
+    @bp.route(
+        '/faturas-transportadora/<int:fatura_id>/reabrir', methods=['POST'],
+    ) # type: ignore
+    @login_required
+    def reabrir_fatura_transportadora(fatura_id): # type: ignore
+        """Reabre uma fatura conferida (paridade Nacom).
+
+        Recebe `motivo_reabertura` obrigatorio e prepend ao historico de
+        `observacoes_conferencia`. Subs CONFERIDO voltam para FATURADO.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_transportadora'))
+
+        if fatura.status_conferencia != 'CONFERIDO':
+            flash(
+                'Apenas faturas CONFERIDAS podem ser reabertas.', 'warning'
+            )
+            return redirect(url_for('carvia.listar_faturas_transportadora'))
+
+        if fatura.status_pagamento == 'PAGO':
+            flash(
+                'Fatura ja paga. Desconcilie via Extrato Bancario antes '
+                'de reabrir a conferencia.',
+                'warning',
+            )
+            return redirect(
+                url_for(
+                    'carvia.conferir_fatura_transportadora', fatura_id=fatura_id
+                )
+            )
+
+        motivo = request.form.get('motivo_reabertura', '').strip()
+        if not motivo:
+            flash('Informe o motivo da reabertura.', 'warning')
+            return redirect(
+                url_for(
+                    'carvia.conferir_fatura_transportadora',
+                    fatura_id=fatura_id,
+                )
+            )
 
         try:
             from app.utils.timezone import agora_utc_naive
 
-            if novo_status == 'CONFERIDO':
-                # Subs ativos (exclui CANCELADO) — espelhado em
-                # ConferenciaService.resumo_conferencia_fatura para manter
-                # template e rota consistentes.
-                subs_ativos = [s for s in fatura.subcontratos if s.status != 'CANCELADO']
+            # Historico: prepend com timestamp + usuario + motivo.
+            # Paridade Nacom (fretes/routes.py:2398): SEM .strip() no fim —
+            # preserva separador \n\n entre entradas historicas para o
+            # render <pre style="white-space: pre-wrap"> do template.
+            agora_str = agora_utc_naive().strftime('%d/%m/%Y %H:%M')
+            obs_anterior = fatura.observacoes_conferencia or ''
+            fatura.observacoes_conferencia = (
+                f'REABERTA EM {agora_str} por {current_user.email} '
+                f'- {motivo}\n\n{obs_anterior}'
+            )
+            fatura.status_conferencia = 'PENDENTE'
+            fatura.conferido_por = None
+            fatura.conferido_em = None
 
-                # Gate 1: todos subcontratos ativos devem ter conferencia individual APROVADO.
-                # Inclui subs em COTADO/CONFIRMADO (edge case de anexacao atipica) —
-                # defesa em profundidade para impedir bypass do gate via status fora do
-                # fluxo normal (FATURADO → CONFERIDO).
-                subs_pendentes = [
-                    s for s in subs_ativos
-                    if s.status_conferencia != 'APROVADO'
-                    and s.status_conferencia != 'DIVERGENTE'
-                ]
-                subs_divergentes = [
-                    s for s in subs_ativos
-                    if s.status_conferencia == 'DIVERGENTE'
-                ]
-                if subs_divergentes:
-                    flash(
-                        f'{len(subs_divergentes)} subcontrato(s) com status DIVERGENTE. '
-                        f'Resolva antes de conferir a fatura.',
-                        'warning',
-                    )
-                    return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
-                if subs_pendentes:
-                    flash(
-                        f'{len(subs_pendentes)} subcontrato(s) ainda nao conferidos individualmente. '
-                        f'Confira cada subcontrato antes de aprovar a fatura.',
-                        'warning',
-                    )
-                    return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+            # Libera subs conferidos (CONFERIDO -> FATURADO)
+            subs_ativos = CarviaSubcontrato.query.filter(
+                CarviaSubcontrato.fatura_transportadora_id == fatura_id,
+                CarviaSubcontrato.status != 'CANCELADO',
+            ).all()
+            for sub in subs_ativos:
+                if sub.status == 'CONFERIDO':
+                    sub.status = 'FATURADO'
 
-                # Gate 2 (W4 parte 2): valor da fatura precisa bater com soma dos valores conferidos
-                # Tolerancia: R$ 1,00 (espelhando app/fretes/routes.py:2196)
-                # NULL tratado como 0, CANCELADO excluido (ver subs_ativos acima)
-                # INCLUI tambem CarviaCustoEntrega vinculados diretamente a esta FT
-                # via fatura_transportadora_id (padrao DespesaExtra.fatura_frete_id).
-                #
-                # Single source of truth: reusa resumo_conferencia_fatura para
-                # manter Gate 2 e detalhe.html lendo o mesmo calculo.
-                from app.carvia.services.documentos.conferencia_service import ConferenciaService
-                resumo = ConferenciaService().resumo_conferencia_fatura(fatura_id)
-                soma_considerado = float(resumo.get('soma_considerado', 0) or 0)
-                soma_custos_entrega = float(resumo.get('soma_custos_entrega', 0) or 0)
-                valor_conferido_total = float(
-                    resumo.get('valor_conferido_total', soma_considerado + soma_custos_entrega) or 0
-                )
-                valor_fatura = float(fatura.valor_total or 0)
-                diferenca = abs(valor_fatura - valor_conferido_total)
-                if diferenca > 1.00:
-                    flash(
-                        f'Diferenca de R$ {diferenca:.2f} entre valor da fatura '
-                        f'(R$ {valor_fatura:.2f}) e soma conferida '
-                        f'(R$ {valor_conferido_total:.2f}: subs R$ {soma_considerado:.2f} '
-                        f'+ custos entrega R$ {soma_custos_entrega:.2f}). '
-                        f'Tolerancia: R$ 1,00. Ajuste valores antes de conferir.',
-                        'warning',
-                    )
-                    return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
-
-            fatura.status_conferencia = novo_status
-            # GAP-32: Registrar autor/timestamp para TODOS os status de conferencia
-            fatura.conferido_por = current_user.email
-            fatura.conferido_em = agora_utc_naive()
-            if novo_status == 'CONFERIDO':
-                # Marcar subcontratos como conferidos
-                for sub in fatura.subcontratos:
-                    if sub.status == 'FATURADO':
-                        sub.status = 'CONFERIDO'
             db.session.commit()
-            flash(f'Status de conferencia atualizado para {novo_status}.', 'success')
+            flash(
+                f'Fatura {fatura.numero_fatura} reaberta com sucesso! '
+                f'Subcontratos liberados para nova conferencia.',
+                'success',
+            )
+            return redirect(
+                url_for('carvia.listar_faturas_transportadora')
+            )
+
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro: {e}', 'danger')
-
-        return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+            logger.exception(
+                f'Erro ao reabrir fatura transportadora {fatura_id}'
+            )
+            flash(f'Erro ao reabrir fatura: {e}', 'danger')
+            return redirect(
+                url_for(
+                    'carvia.conferir_fatura_transportadora', fatura_id=fatura_id
+                )
+            )
 
     # ==================== VINCULAR/DESVINCULAR OPERACAO ↔ FATURA CLIENTE ====================
 

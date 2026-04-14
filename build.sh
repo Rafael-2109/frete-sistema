@@ -71,6 +71,14 @@ echo "Migration CarVia: auditoria de conferencia em Fatura Cliente (idempotente)
 python scripts/migrations/carvia_fatura_cliente_auditoria.py \
     || echo "⚠️ Migration carvia_fatura_cliente_auditoria falhou, continuando deploy..."
 
+# 8. Migration CarVia: observacoes_conferencia em Fatura Transportadora (paridade Nacom)
+# Adiciona coluna TEXT para observacoes preenchidas no form "Aprovar Conferencia"
+# e historico de reaberturas. Espelha FaturaFrete.observacoes_conferencia do Nacom.
+# Idempotente via ADD COLUMN IF NOT EXISTS.
+echo "Migration CarVia: observacoes_conferencia em Fatura Transportadora (idempotente)..."
+python scripts/migrations/add_observacoes_conferencia_fatura_transportadora.py \
+    || echo "⚠️ Migration add_observacoes_conferencia_fatura_transportadora falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

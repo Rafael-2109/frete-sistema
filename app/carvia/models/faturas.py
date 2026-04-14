@@ -297,6 +297,10 @@ class CarviaFaturaTransportadora(db.Model):
     status_conferencia = db.Column(db.String(20), default='PENDENTE')
     conferido_por = db.Column(db.String(100))
     conferido_em = db.Column(db.DateTime)
+    # Observacoes da conferencia — preenchido no form "Aprovar Conferencia"
+    # (paridade Nacom: FaturaFrete.observacoes_conferencia). Historico de
+    # reaberturas eh prefixado com "REABERTA EM {data} por {user} - {motivo}".
+    observacoes_conferencia = db.Column(db.Text)
 
     # Status de pagamento (independente de status_conferencia)
     # PENDENTE, PAGO
