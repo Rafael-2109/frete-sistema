@@ -1,10 +1,10 @@
-"""Rotas de Aprovacao de Subcontratos CarVia.
+"""Rotas de Aprovacao de CarviaFrete.
 
 Fila de tratativas pendentes + tela de processamento. Espelha o padrao
 Nacom `app/fretes/routes.py:3127-3225` (listar_aprovacoes / processar_aprovacao),
-mas com toda logica delegada ao `AprovacaoSubcontratoService`.
+com toda logica delegada ao `AprovacaoFreteService`.
 
-Ref: .claude/plans/wobbly-tumbling-treasure.md
+Ref: docs/superpowers/plans/2026-04-14-carvia-frete-conferencia-migration.md
 """
 
 import logging
@@ -14,13 +14,13 @@ from flask_login import login_required, current_user
 
 from app import db
 from app.carvia.models import (
-    CarviaAprovacaoSubcontrato,
-    CarviaSubcontrato,
+    CarviaAprovacaoFrete,
+    CarviaFrete,
     CarviaOperacao,
     CarviaFaturaTransportadora,
 )
-from app.carvia.services.documentos.aprovacao_subcontrato_service import (
-    AprovacaoSubcontratoService,
+from app.carvia.services.documentos.aprovacao_frete_service import (
+    AprovacaoFreteService,
     TOLERANCIA_APROVACAO,
 )
 
@@ -32,6 +32,7 @@ def register_aprovacao_routes(bp):
     # ==================================================================
     # Fila de aprovacoes pendentes
     # ==================================================================
+    # URL preservada: /subcontratos/aprovacoes (nao quebrar bookmarks)
     @bp.route('/subcontratos/aprovacoes')  # type: ignore
     @login_required
     def listar_aprovacoes_subcontrato():  # type: ignore
@@ -40,32 +41,34 @@ def register_aprovacao_routes(bp):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        # Filtros (padrao Nacom listar_aprovacoes)
         filtro_transportadora = (request.args.get('transportadora') or '').strip()
         filtro_cte_numero = (request.args.get('cte_numero') or '').strip()
         filtro_nf_numero = (request.args.get('nf_numero') or '').strip()
 
-        svc = AprovacaoSubcontratoService()
+        svc = AprovacaoFreteService()
         pendentes_raw = svc.listar_pendentes(
             transportadora=filtro_transportadora or None,
             cte_numero=filtro_cte_numero or None,
             nf_numero=filtro_nf_numero or None,
         )
 
-        # Monta linhas enriquecidas para a tela
         linhas = []
-        for aprovacao, sub in pendentes_raw:
+        for aprovacao, frete in pendentes_raw:
             operacao = (
-                db.session.get(CarviaOperacao, sub.operacao_id)
-                if sub.operacao_id else None
+                db.session.get(CarviaOperacao, frete.operacao_id)
+                if frete.operacao_id else None
             )
+            # cte_numero via primeiro subcontrato do frete (UI only)
+            primary_sub = frete.subcontratos.first()
+            sub_cte_numero = primary_sub.cte_numero if primary_sub else None
             linhas.append({
                 'aprovacao': aprovacao,
-                'sub': sub,
+                'frete': frete,
+                'sub_cte_numero': sub_cte_numero,
                 'operacao': operacao,
                 'transportadora_nome': (
-                    sub.transportadora.razao_social
-                    if sub.transportadora else '-'
+                    frete.transportadora.razao_social
+                    if frete.transportadora else '-'
                 ),
             })
 
@@ -87,36 +90,36 @@ def register_aprovacao_routes(bp):
     @bp.route('/subcontratos/aprovacoes/<int:aprovacao_id>')  # type: ignore
     @login_required
     def processar_aprovacao_subcontrato(aprovacao_id):  # type: ignore
-        """Tela de processamento de uma aprovacao."""
+        """Tela de processamento de uma aprovacao (opera em Frete)."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        aprovacao = db.session.get(CarviaAprovacaoSubcontrato, aprovacao_id)
+        aprovacao = db.session.get(CarviaAprovacaoFrete, aprovacao_id)
         if not aprovacao:
             flash('Aprovacao nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_aprovacoes_subcontrato'))
 
-        sub = db.session.get(CarviaSubcontrato, aprovacao.subcontrato_id)
-        if not sub:
-            flash('Subcontrato nao encontrado.', 'warning')
+        frete = db.session.get(CarviaFrete, aprovacao.frete_id)
+        if not frete:
+            flash('Frete nao encontrado.', 'warning')
             return redirect(url_for('carvia.listar_aprovacoes_subcontrato'))
 
         operacao = (
-            db.session.get(CarviaOperacao, sub.operacao_id)
-            if sub.operacao_id else None
+            db.session.get(CarviaOperacao, frete.operacao_id)
+            if frete.operacao_id else None
         )
         fatura = (
-            db.session.get(CarviaFaturaTransportadora, sub.fatura_transportadora_id)
-            if sub.fatura_transportadora_id else None
+            db.session.get(CarviaFaturaTransportadora, frete.fatura_transportadora_id)
+            if frete.fatura_transportadora_id else None
         )
 
         # Calculo dos 2 casos Nacom (A: considerado vs cotado, B: pago vs cotado)
-        valor_cotado = float(sub.valor_cotado or 0)
+        valor_cotado = float(frete.valor_cotado or 0)
         valor_considerado = (
-            float(sub.valor_considerado) if sub.valor_considerado is not None else None
+            float(frete.valor_considerado) if frete.valor_considerado is not None else None
         )
-        valor_pago = float(sub.valor_pago) if sub.valor_pago is not None else None
+        valor_pago = float(frete.valor_pago) if frete.valor_pago is not None else None
 
         caso_a = None
         if valor_considerado is not None:
@@ -141,7 +144,6 @@ def register_aprovacao_routes(bp):
             }
 
         # Diferenca pago vs considerado (base para CC)
-        # CONVENCAO CORRIGIDA:
         # pago > considerado -> DEBITO (transp nos deve)
         # pago < considerado -> CREDITO (devemos a transp)
         diff_pago_considerado = None
@@ -163,7 +165,7 @@ def register_aprovacao_routes(bp):
         return render_template(
             'carvia/aprovacoes/processar.html',
             aprovacao=aprovacao,
-            sub=sub,
+            frete=frete,
             operacao=operacao,
             fatura=fatura,
             caso_a=caso_a,
@@ -183,9 +185,7 @@ def register_aprovacao_routes(bp):
     def aprovar_subcontrato(aprovacao_id):  # type: ignore
         """Aprova tratativa.
 
-        Validacao inline (nao usa @require_carvia_aprovador para permitir
-        flash customizado antes do redirect). Regra identica ao decorator:
-        sistema_carvia=True OR perfil in ('financeiro', 'administrador').
+        Validacao inline: sistema_carvia=True OR perfil in ('financeiro', 'administrador').
         """
         tem_carvia = getattr(current_user, 'sistema_carvia', False)
         if not (tem_carvia or current_user.perfil in ('financeiro', 'administrador')):
@@ -208,7 +208,7 @@ def register_aprovacao_routes(bp):
                 )
             )
 
-        svc = AprovacaoSubcontratoService()
+        svc = AprovacaoFreteService()
         resultado = svc.aprovar(
             aprovacao_id=aprovacao_id,
             lancar_diferenca=lancar_diferenca,
@@ -218,8 +218,6 @@ def register_aprovacao_routes(bp):
 
         if resultado.get('sucesso'):
             msg = 'Tratativa aprovada.'
-            if resultado.get('cc_id'):
-                msg += f' Movimentacao CC #{resultado["cc_id"]} criada.'
             flash(msg, 'success')
         else:
             flash(f'Erro ao aprovar: {resultado.get("erro")}', 'danger')
@@ -251,7 +249,7 @@ def register_aprovacao_routes(bp):
                 )
             )
 
-        svc = AprovacaoSubcontratoService()
+        svc = AprovacaoFreteService()
         resultado = svc.rejeitar(
             aprovacao_id=aprovacao_id,
             observacoes=observacoes,
@@ -259,7 +257,7 @@ def register_aprovacao_routes(bp):
         )
 
         if resultado.get('sucesso'):
-            flash('Tratativa rejeitada. Subcontrato marcado como DIVERGENTE.', 'info')
+            flash('Tratativa rejeitada. Frete marcado como DIVERGENTE.', 'info')
         else:
             flash(f'Erro ao rejeitar: {resultado.get("erro")}', 'danger')
 
@@ -268,14 +266,16 @@ def register_aprovacao_routes(bp):
     # ==================================================================
     # Solicitar aprovacao manual (POST)
     # ==================================================================
+    # URL mantem /subcontratos/<sub_id>/... mas resolve frete via sub.frete_id
     @bp.route(
         '/subcontratos/<int:sub_id>/solicitar-aprovacao',
         methods=['POST'],
     )  # type: ignore
     @login_required
     def solicitar_aprovacao_subcontrato_manual(sub_id):  # type: ignore
-        """Permite ao operador abrir tratativa manualmente (sem divergencia
-        automaticamente detectada)."""
+        """Abre tratativa manualmente — resolve frete_id via sub."""
+        from app.carvia.models import CarviaSubcontrato
+
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
 
@@ -285,9 +285,20 @@ def register_aprovacao_routes(bp):
                 {'sucesso': False, 'erro': 'Motivo e obrigatorio'}
             ), 400
 
-        svc = AprovacaoSubcontratoService()
+        sub = db.session.get(CarviaSubcontrato, sub_id)
+        if not sub:
+            return jsonify(
+                {'sucesso': False, 'erro': 'Subcontrato nao encontrado'}
+            ), 404
+
+        if not sub.frete_id:
+            return jsonify(
+                {'sucesso': False, 'erro': 'Subcontrato nao tem frete vinculado'}
+            ), 400
+
+        svc = AprovacaoFreteService()
         resultado = svc.solicitar_aprovacao(
-            sub_id=sub_id,
+            frete_id=sub.frete_id,
             motivo=f'[Manual] {motivo}',
             usuario=current_user.email,
         )
