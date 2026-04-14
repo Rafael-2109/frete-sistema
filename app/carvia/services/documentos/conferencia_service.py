@@ -347,59 +347,56 @@ class ConferenciaService:
             return {'sucesso': False, 'erro': str(e)}
 
     def _verificar_fatura_completa(self, fatura_id: int, usuario: str):
-        """
-        Verifica se todos os subcontratos de uma fatura foram conferidos
-        e atualiza o status_conferencia da fatura.
+        """Verifica se todos fretes da fatura foram conferidos.
+
+        Paridade Nacom: itera CarviaFrete (nao Sub).
 
         Returns:
             Tuple (fatura_atualizada: bool, novo_status: str)
         """
-        from app.carvia.models import CarviaFaturaTransportadora, CarviaSubcontrato
+        from app.carvia.models import CarviaFaturaTransportadora, CarviaFrete
         from app.utils.timezone import agora_utc_naive
 
         fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
         if not fatura:
             return False, None
 
-        subs = CarviaSubcontrato.query.filter(
-            CarviaSubcontrato.fatura_transportadora_id == fatura_id,
+        fretes = CarviaFrete.query.filter(
+            CarviaFrete.fatura_transportadora_id == fatura_id,
+            CarviaFrete.status != 'CANCELADO',
         ).all()
 
-        if not subs:
+        if not fretes:
             return False, fatura.status_conferencia
 
         contagem = {'APROVADO': 0, 'DIVERGENTE': 0, 'PENDENTE': 0}
-        for s in subs:
-            sc = s.status_conferencia or 'PENDENTE'
+        for f in fretes:
+            sc = f.status_conferencia or 'PENDENTE'
             contagem[sc] = contagem.get(sc, 0) + 1
 
-        total = len(subs)
+        total = len(fretes)
         status_anterior = fatura.status_conferencia
 
         if contagem['APROVADO'] == total:
-            # Todos aprovados → fatura CONFERIDO + subs CONFERIDO
             fatura.status_conferencia = 'CONFERIDO'
             fatura.conferido_por = usuario
             fatura.conferido_em = agora_utc_naive()
-            for s in subs:
-                if s.status == 'FATURADO':
-                    s.status = 'CONFERIDO'
+            for f in fretes:
+                if f.status == 'FATURADO':
+                    f.status = 'CONFERIDO'
         elif contagem['DIVERGENTE'] > 0:
             fatura.status_conferencia = 'DIVERGENTE'
             fatura.conferido_por = usuario
             fatura.conferido_em = agora_utc_naive()
-        elif contagem['APROVADO'] > 0 or contagem['DIVERGENTE'] > 0:
-            # Mix de aprovados e pendentes
+        elif contagem['APROVADO'] > 0:
             fatura.status_conferencia = 'EM_CONFERENCIA'
-        # Se todos pendentes, manter status atual
 
         novo_status = fatura.status_conferencia
         atualizado = novo_status != status_anterior
 
         if atualizado:
             logger.info(
-                f"Fatura transportadora #{fatura_id}: conferencia "
-                f"{status_anterior} -> {novo_status} | "
+                f"Fatura #{fatura_id}: {status_anterior} → {novo_status} | "
                 f"aprovados={contagem['APROVADO']}/{total} "
                 f"divergentes={contagem['DIVERGENTE']}/{total}"
             )
