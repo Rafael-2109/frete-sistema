@@ -446,7 +446,6 @@ class AdminService:
             CarviaFaturaTransportadoraItem,
             CarviaCustoEntrega,
             CarviaFrete,
-            CarviaContaCorrenteTransportadora,
             CarviaConciliacao,
         )
 

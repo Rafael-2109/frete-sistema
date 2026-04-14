@@ -166,26 +166,33 @@ NUNCA mover status para tras (ex: CONFIRMADO → COTADO). Cancelar e criar novo.
 
 | Dominio | Artefatos | Precificacao | Conferencia | Gate |
 |---------|-----------|--------------|-------------|------|
-| **Compra** (custo) | `Sub` → `FaturaTransportadora` | Tabela Nacom | Automatica via `ConferenciaService` com 2 eixos de status | Gate 1: todos subs APROVADO. Gate 2: soma_considerado vs valor_total (tolerancia R$ 1,00) |
+| **Compra** (custo) | `Frete` → `FaturaTransportadora` | Tabela Nacom | Automatica via `ConferenciaService` operando no Frete | Gate 1: todos fretes APROVADO. Gate 2: soma_considerado vs valor_total (tolerancia R$ 1,00) |
 | **Venda** (receita) | `Op` → `FaturaCliente` | Tabela CarVia | Manual gerencial binaria (Refator 2.1) | Nenhum gate automatico — decisao humana registrada com auditoria |
 
 **Os dominios NAO tem relacao de bloqueio**. Fatura cliente pode ser emitida com subs
 em qualquer status de conferencia. Pagamento (`status=PAGA`) e INDEPENDENTE da conferencia
 gerencial (`status_conferencia=CONFERIDO`).
 
-**Conferencia individual de subcontrato** (`status_conferencia`, eixo independente de `status`):
+**Conferencia de CarviaFrete** (Phase C 2026-04-14 — Frete = unidade de analise).
+Os campos de conferencia (`status_conferencia`, `conferido_por/em`, `valor_considerado`,
+`valor_pago`, `detalhes_conferencia`, `requer_aprovacao`) sao colunas de `CarviaFrete`
+(NAO mais de `CarviaSubcontrato` — ver migration `carvia_drop_sub_conferencia_fields`).
+
 ```
-Sub.status_conferencia:  PENDENTE → APROVADO | DIVERGENTE
-Fatura.status_conferencia cascade:
+Frete.status_conferencia:  PENDENTE → APROVADO | DIVERGENTE
+Fatura.status_conferencia cascade (consolida fretes):
   Todos APROVADO → CONFERIDO (auto)
   Algum DIVERGENTE → DIVERGENTE
   Mix → EM_CONFERENCIA
 ```
 Fatura Transportadora so aceita CONFERIDO manual se:
-1. TODOS subs tem `status_conferencia=APROVADO` (Gate 1)
-2. `abs(fatura.valor_total - sum(sub.valor_considerado)) <= R$ 1,00` (Gate 2 — W4 parte 2, espelhando Fretes)
+1. TODOS fretes tem `status_conferencia=APROVADO` (Gate 1)
+2. `abs(fatura.valor_total - sum(frete.valor_considerado)) <= R$ 1,00` (Gate 2 — paridade Nacom)
 
 Service: `ConferenciaService` em `app/carvia/services/documentos/conferencia_service.py`.
+Tratativas: `AprovacaoFreteService` (ex-AprovacaoSubcontratoService) — ver
+`app/carvia/services/documentos/aprovacao_frete_service.py`. Tabela satelite:
+`carvia_aprovacoes_frete` (ex-`carvia_aprovacoes_subcontrato`) com FK `frete_id`.
 API conferencia subcontrato: `POST /carvia/api/conferencia-subcontrato/<id>/calcular` e `.../registrar`.
 API conferencia fatura: `POST /carvia/faturas-transportadora/<id>/conferencia` com gate de valor.
 
@@ -212,7 +219,7 @@ Faturas CarVia: ao vincular, status muda para FATURADO. NUNCA desvincular operac
 `status='PENDENTE', fatura_transportadora_id IS NULL`. Ao vincular via `CustoEntregaFaturaService.vincular()`:
 `fatura_transportadora_id=ft.id`, `status='VINCULADO_FT'`. Se FT ja esta PAGA, auto-propaga `status='PAGO'`.
 Ao desvincular (se FT nao CONFERIDA): `fatura_transportadora_id=NULL`, `status='PENDENTE'`.
-**Gate 2 da conferencia FT** inclui CEs: `abs(ft.valor_total - (sum(sub.valor_considerado) + sum(ce.valor))) <= R$ 1,00`.
+**Gate 2 da conferencia FT** inclui CEs: `abs(ft.valor_total - (sum(frete.valor_considerado) + sum(ce.valor))) <= R$ 1,00`.
 
 ### R6: Classificacao de CTe por CNPJ emitente
 Na importacao, CTes sao classificados automaticamente:

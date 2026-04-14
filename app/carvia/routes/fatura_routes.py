@@ -1792,10 +1792,16 @@ def register_fatura_routes(bp):
         # Subs CANCELADO excluidos (consistente com conferencia)
         subs_ativos = [s for s in subcontratos if s.status != 'CANCELADO']
         total_subcontratos = len(subs_ativos)
-        # Hierarquia sem valor_pago: CTe nao eh a unidade paga.
+        # Phase 14 (2026-04-14): `sub.valor_considerado` removido; fonte
+        # canonica agora eh `sub.frete.valor_considerado`. Fallback para
+        # `sub.valor_acertado`/`sub.valor_cotado` (campos de CTe legados,
+        # nao removidos) quando o sub nao tem frete vinculado.
+        def _valor_base_sub(s):
+            if s.frete is not None and s.frete.valor_considerado is not None:
+                return float(s.frete.valor_considerado)
+            return float(s.valor_acertado or s.valor_cotado or 0)
         valor_total_subcontratos = sum(
-            float(s.valor_considerado or s.valor_cotado or 0)
-            for s in subs_ativos
+            _valor_base_sub(s) for s in subs_ativos
         )
 
         # Cross-links: itens, NFs, faturas cliente
@@ -1993,30 +1999,21 @@ def register_fatura_routes(bp):
 
         # 1) Fretes (equivalente ao loop de Frete Nacom)
         for frete in fretes:
-            # Resolve subcontratos do frete para status_conferencia + cte_numero
-            # + cliente. Multi-leg: 1 Frete pode ter N subs (back_populates).
+            # Phase 14 (2026-04-14): conferencia consolidada no Frete.
+            # Os gates de bloqueio leem status_conferencia/requer_aprovacao
+            # DIRETO do frete (fonte canonica). Nao iteramos mais subs para
+            # isso — Sub tornou-se "documento CTe puro".
+            #
+            # Subs do frete sao resolvidos APENAS para exibicao:
+            # cte_numero, cliente (via operacao) e indicador multi-leg.
             subs_do_frete = list(frete.subcontratos.all())
             n_ctes = len(subs_do_frete)
             primary_sub = subs_do_frete[0] if subs_do_frete else None
 
-            # Status bloqueante: se QUALQUER sub do frete esta em tratativa
-            # ou divergente, bloqueia o frete inteiro (paridade
-            # FRETE_STATUS_BLOQUEANTES do Nacom). status_conferencia e a
-            # FONTE DE VERDADE (ver comentario linha 2002-2007 original).
-            tem_divergente = any(
-                s.status_conferencia == 'DIVERGENTE' for s in subs_do_frete
-            )
-            tem_tratativa = any(
-                getattr(s, 'requer_aprovacao', False) for s in subs_do_frete
-            )
-            todos_sub_aprovados = (
-                len(subs_do_frete) > 0
-                and all(s.status_conferencia == 'APROVADO' for s in subs_do_frete)
-            )
-
-            if tem_divergente or tem_tratativa:
+            # Status doc derivado diretamente do Frete (paridade Nacom)
+            if frete.status_conferencia == 'DIVERGENTE' or frete.requer_aprovacao:
                 status_doc = 'EM_TRATATIVA'
-            elif todos_sub_aprovados:
+            elif frete.status_conferencia == 'APROVADO':
                 # Paridade Nacom linha 2101: exige numero_cte + valor_cte +
                 # valor_pago para status_doc='LANÇADO'. Sem valor_pago, nao
                 # pode ser LANÇADO — fica APROVADO (nao passa Gate).
