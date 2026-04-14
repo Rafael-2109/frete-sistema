@@ -404,48 +404,31 @@ class ConferenciaService:
         return atualizado, novo_status
 
     def resumo_conferencia_fatura(self, fatura_id: int) -> Dict:
-        """
-        Retorna resumo da conferencia de uma fatura.
+        """Retorna resumo da conferencia de uma fatura.
 
-        IMPORTANTE: espelha exatamente o calculo do gate de conferencia
-        em fatura_routes.py:conferir_fatura_transportadora (Gate 1 + Gate 2).
-        Para manter consistencia entre UI (template usando este resumo)
-        e o backend:
-        - Subs CANCELADO sao EXCLUIDOS do total e soma (nao contam)
-        - valor_considerado NULL e tratado como 0 (nao pulado)
-
-        Gate 2 agora considera tambem CarviaCustoEntrega vinculados diretamente
-        a esta FT via fatura_transportadora_id (padrao DespesaExtra.fatura_frete_id).
-        Campo novo 'valor_conferido_total' = soma_considerado + soma_custos_entrega.
+        Paridade Nacom: itera CarviaFrete (unidade de analise).
 
         Returns:
             Dict com total, aprovados, divergentes, pendentes,
-            soma_cte_valor, soma_considerado (subs), soma_custos_entrega,
-            valor_conferido_total, diferenca (subs), percentual_conferido
+            soma_cte_valor, soma_considerado, soma_valor_pago,
+            soma_custos_entrega, valor_conferido_total, valor_pago_total.
         """
-        from app.carvia.models import CarviaSubcontrato, CarviaCustoEntrega
+        from app.carvia.models import CarviaFrete, CarviaCustoEntrega
 
-        subs_raw = CarviaSubcontrato.query.filter(
-            CarviaSubcontrato.fatura_transportadora_id == fatura_id,
+        fretes = CarviaFrete.query.filter(
+            CarviaFrete.fatura_transportadora_id == fatura_id,
+            CarviaFrete.status != 'CANCELADO',
         ).all()
 
-        # Excluir subs CANCELADO — consistente com Gate 1 da rota que
-        # filtra `status in ('FATURADO', 'CONFERIDO')`
-        subs = [s for s in subs_raw if s.status != 'CANCELADO']
-
-        total = len(subs)
-        aprovados = sum(1 for s in subs if s.status_conferencia == 'APROVADO')
-        divergentes = sum(1 for s in subs if s.status_conferencia == 'DIVERGENTE')
+        total = len(fretes)
+        aprovados = sum(1 for f in fretes if f.status_conferencia == 'APROVADO')
+        divergentes = sum(1 for f in fretes if f.status_conferencia == 'DIVERGENTE')
         pendentes = total - aprovados - divergentes
 
-        soma_cte_valor = sum(float(s.cte_valor or 0) for s in subs)
-        # Gate 2 da rota trata NULL como 0 — espelhar aqui sem filtrar
-        soma_considerado = sum(float(s.valor_considerado or 0) for s in subs)
-        # Paridade Nacom: somar valor_pago dos subs (pode ser NULL)
-        soma_valor_pago = sum(float(s.valor_pago or 0) for s in subs)
+        soma_cte_valor = sum(float(f.valor_cte or 0) for f in fretes)
+        soma_considerado = sum(float(f.valor_considerado or 0) for f in fretes)
+        soma_valor_pago = sum(float(f.valor_pago or 0) for f in fretes)
 
-        # Custos de entrega vinculados diretamente a esta FT (nova FK)
-        # Espelha FaturaFrete.valor_total_despesas_extras() do Nacom
         ces = CarviaCustoEntrega.query.filter(
             CarviaCustoEntrega.fatura_transportadora_id == fatura_id,
             CarviaCustoEntrega.status != 'CANCELADO',
@@ -453,8 +436,6 @@ class ConferenciaService:
         soma_custos_entrega = sum(float(ce.valor or 0) for ce in ces)
         total_ces = len(ces)
         valor_conferido_total = soma_considerado + soma_custos_entrega
-        # valor_pago_total: paralelo ao Nacom — soma de valor_pago dos subs + CEs
-        # (CEs nao tem distincao pago/considerado, entra como e)
         valor_pago_total = soma_valor_pago + soma_custos_entrega
 
         return {
