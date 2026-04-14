@@ -301,15 +301,16 @@
                             </td>
                             <td><strong>{{ (sub.valor_cotado or 0)|moeda_carteira }}</strong></td>
                             <td><strong>{{ (sub.cte_valor or 0)|moeda_carteira }}</strong></td>
-                            <td id="sub-valor-considerado-{{ sub.id }}"><strong>{{ (sub.valor_considerado or 0)|moeda_carteira }}</strong></td>
+                            <td id="sub-valor-considerado-{{ sub.id }}"><strong>{{ ((sub.frete.valor_considerado if sub.frete else None) or 0)|moeda_carteira }}</strong></td>
                             <td><strong class="text-success">{{ (valor_conciliado_por_sub.get(sub.id, 0) if valor_conciliado_por_sub else 0)|moeda_carteira }}</strong></td>
                             <td>
                                 <span class="badge carvia-badge-{{ sub.status|lower }}">{{ sub.status }}</span>
                             </td>
                             <td id="sub-conf-badge-{{ sub.id }}">
-                                {% if sub.status_conferencia == 'APROVADO' %}
+                                {% set frete_sc = sub.frete.status_conferencia if sub.frete else 'PENDENTE' %}
+                                {% if frete_sc == 'APROVADO' %}
                                 <span class="badge bg-success">APROVADO</span>
-                                {% elif sub.status_conferencia == 'DIVERGENTE' %}
+                                {% elif frete_sc == 'DIVERGENTE' %}
                                 <span class="badge bg-danger">DIVERGENTE</span>
                                 {% else %}
                                 <span class="badge bg-secondary">PENDENTE</span>

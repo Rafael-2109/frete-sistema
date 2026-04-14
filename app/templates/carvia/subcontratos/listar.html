@@ -153,7 +153,7 @@
                                     <i class="fas fa-exclamation-circle"></i> s/ fatura
                                 </span>
                                 {% endif %}
-                                {% if sub.requer_aprovacao %}
+                                {% if sub.frete and sub.frete.requer_aprovacao %}
                                 <br><span class="badge bg-warning text-dark mt-1" title="Aguardando aprovacao de tratativa">
                                     <i class="fas fa-clipboard-check"></i> EM TRATATIVA
                                 </span>

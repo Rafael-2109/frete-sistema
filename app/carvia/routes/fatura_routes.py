@@ -1682,13 +1682,14 @@ def register_fatura_routes(bp):
             resultado = []
             for sub in subcontratos:
                 operacao = sub.operacao if hasattr(sub, 'operacao') else None
-                # Valor previsto segue a mesma hierarquia da listagem e do card
-                # Analise de Valores:
-                # valor_considerado > valor_acertado > valor_cotado.
-                # Mantem consistencia com fatura_routes.py:subq_subs. O campo
-                # sub.valor_pago foi desassociado (CTe nao eh a unidade paga).
+                # Phase C (2026-04-14): valor_considerado migrou para CarviaFrete.
+                # Leitura via sub.frete. Hierarquia preservada:
+                # frete.valor_considerado > sub.valor_acertado > sub.valor_cotado.
+                valor_considerado = (
+                    sub.frete.valor_considerado if sub.frete else None
+                )
                 valor_previsto = (
-                    sub.valor_considerado
+                    valor_considerado
                     or sub.valor_acertado
                     or sub.valor_cotado
                     or 0
@@ -1703,9 +1704,8 @@ def register_fatura_routes(bp):
                     ),
                     'valor_cotado': float(sub.valor_cotado or 0),
                     'valor_acertado': float(sub.valor_acertado or 0) if sub.valor_acertado else None,
-                    'valor_considerado': float(sub.valor_considerado or 0) if sub.valor_considerado else None,
-                    # valor_final mantido por compat com JS (detalhe.js:293); agora
-                    # reflete a hierarquia de 3 niveis (sem valor_pago).
+                    'valor_considerado': float(valor_considerado or 0) if valor_considerado else None,
+                    # valor_final mantido por compat com JS (detalhe.js:293)
                     'valor_final': float(valor_previsto),
                 })
 

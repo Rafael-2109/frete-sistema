@@ -853,25 +853,26 @@ def register_operacao_routes(bp):
 
         try:
             sub.status = 'CANCELADO'
-            sub.requer_aprovacao = False
 
-            # Hook: cancelar movimentacoes CC ativas + rejeitar aprovacoes pendentes
-            from app.carvia.services.financeiro.conta_corrente_service import (
-                ContaCorrenteService,
-            )
-            from app.carvia.services.documentos.aprovacao_subcontrato_service import (
-                AprovacaoSubcontratoService,
-            )
-            ContaCorrenteService.cancelar_movimentacoes(
-                sub_id=sub.id,
-                motivo='Sub cancelado',
-                usuario=current_user.email,
-            )
-            AprovacaoSubcontratoService().rejeitar_pendentes_de_sub(
-                sub_id=sub.id,
-                motivo='Sub cancelado',
-                usuario=current_user.email,
-            )
+            # Phase C (2026-04-14): CC e aprovacoes operam em Frete.
+            # Resolvemos frete_id via sub.frete_id se existir.
+            if sub.frete_id:
+                from app.carvia.services.financeiro.conta_corrente_service import (
+                    ContaCorrenteService,
+                )
+                from app.carvia.services.documentos.aprovacao_frete_service import (
+                    AprovacaoFreteService,
+                )
+                ContaCorrenteService.cancelar_movimentacoes(
+                    frete_id=sub.frete_id,
+                    motivo='Sub cancelado',
+                    usuario=current_user.email,
+                )
+                AprovacaoFreteService().rejeitar_pendentes_de_frete(
+                    frete_id=sub.frete_id,
+                    motivo='Sub cancelado',
+                    usuario=current_user.email,
+                )
 
             # GAP-03: Downgrade operacao se nao ha mais subs ativos
             operacao = db.session.get(CarviaOperacao, operacao_id)

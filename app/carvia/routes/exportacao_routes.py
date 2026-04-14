@@ -576,9 +576,13 @@ def register_exportacao_routes(bp):
         data = []
         for sub in items:
             op = sub_op_map.get(sub.operacao_id)
-            # Valor Final alinhado com listagem + card Analise (hierarquia de 3 niveis)
+            # Phase C (2026-04-14): valor_considerado migrou para CarviaFrete.
+            # Leitura via sub.frete.
+            valor_considerado = (
+                sub.frete.valor_considerado if sub.frete else None
+            )
             valor_final_hierarquico = (
-                sub.valor_considerado
+                valor_considerado
                 or sub.valor_acertado
                 or sub.valor_cotado
                 or 0
@@ -596,7 +600,7 @@ def register_exportacao_routes(bp):
                 'Valor CTe': float(sub.cte_valor or 0),
                 'Valor Cotado': float(sub.valor_cotado or 0),
                 'Valor Acertado': float(sub.valor_acertado or 0) if sub.valor_acertado else '',
-                'Valor Considerado': float(sub.valor_considerado or 0) if sub.valor_considerado else '',
+                'Valor Considerado': float(valor_considerado or 0) if valor_considerado else '',
                 'Valor Conciliado': float(valor_conciliado) if valor_conciliado else '',
                 'Valor Final': float(valor_final_hierarquico),
                 'Status': sub.status or '',

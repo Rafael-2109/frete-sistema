@@ -75,6 +75,8 @@ class ConferenciaService:
         if not uf_destino:
             return {'sucesso': False, 'erro': 'UF destino nao informada'}
 
+        # Phase C (2026-04-14): status_conferencia/valor_considerado lidos
+        # via sub.frete (campos migrados para CarviaFrete)
         subcontrato_info = {
             'id': sub.id,
             'cte_numero': sub.cte_numero,
@@ -83,8 +85,13 @@ class ConferenciaService:
             'valor_acertado': float(sub.valor_acertado) if sub.valor_acertado else None,
             'valor_final': float(sub.valor_final) if sub.valor_final else None,
             'status': sub.status,
-            'status_conferencia': sub.status_conferencia,
-            'valor_considerado': float(sub.valor_considerado) if sub.valor_considerado else None,
+            'status_conferencia': (
+                sub.frete.status_conferencia if sub.frete else 'PENDENTE'
+            ),
+            'valor_considerado': (
+                float(sub.frete.valor_considerado)
+                if sub.frete and sub.frete.valor_considerado else None
+            ),
         }
 
         operacao_info = {
