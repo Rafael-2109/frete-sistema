@@ -159,10 +159,11 @@ Gerenciado via `sudo crontab -u rafaelnascimento -l`. Logs em `/tmp/claude-cron-
 | Campo | Valor |
 |-------|-------|
 | Cron | `3 11 * * *` (diario 11:03 BRT) |
-| Comando | `claude -p "$(cat .claude/atualizacoes/dominios/dominio-8-improvement-dialogue.md)" --model opus --permission-mode bypassPermissions` |
-| Log | `/tmp/claude-cron-d8-YYYY-MM-DD.log` |
+| Comando | `/home/rafaelnascimento/projetos/frete_sistema/scripts/maintenance/run_d8_cron.sh` |
+| Wrapper | `scripts/maintenance/run_d8_cron.sh` — source `.profile` (CRON_API_KEY), cd no projeto, valida CLI, log em `/tmp/claude-cron-d8-YYYY-MM-DD.log` |
+| Log | `/tmp/claude-cron-d8-YYYY-MM-DD.log` (auto pelo wrapper) |
 | Workflow | `feature-dev` para implementacoes |
-| Branch | `improvement/D8-{DATA}` |
+| Branch | `main` (commit direto, sem branch dedicada — preferencia usuario 2026-04-14) |
 
 ### RemoteTriggers (DESABILITADOS)
 
@@ -185,3 +186,4 @@ Gerenciar: https://claude.ai/code/scheduled
 | 28/03/2026 | v2 | Orquestrador Paralelo — 6 dominios, 3 estagios, RemoteTrigger desabilitado |
 | 28/03/2026 | v3 | Agent Intelligence Report — D7 adicionado (bridge Agent SDK <-> Claude Code), Estagio 2 de 2→3 agentes |
 | 31/03/2026 | v4 | Improvement Dialogue — D8 adicionado + migracao de OpenClaw/RemoteTrigger para crontab local (WSL2) |
+| 14/04/2026 | v5 | D8 fix cronico — wrapper `run_d8_cron.sh` (CRON_API_KEY via .profile), commit D8 direto em main (sem branch dedicada), PASSO 5 reordenado (relatorio antes de commit), push automatico |
