@@ -80,9 +80,9 @@ from app.carvia.models.comissao import (  # noqa: F401
     CarviaComissaoFechamento, CarviaComissaoFechamentoCte,
 )
 
-# Aprovacao de Subcontratos (tratativa)
+# Aprovacao de Fretes (tratativa)
 from app.carvia.models.aprovacao import (  # noqa: F401
-    CarviaAprovacaoSubcontrato, STATUS_APROVACAO,
+    CarviaAprovacaoFrete, STATUS_APROVACAO,
 )
 
 # Conta Corrente Transportadoras
@@ -122,8 +122,8 @@ __all__ = [
     'CarviaFrete', 'CarviaEmissaoCte',
     # Comissao
     'CarviaComissaoFechamento', 'CarviaComissaoFechamentoCte',
-    # Aprovacao Subcontratos
-    'CarviaAprovacaoSubcontrato', 'STATUS_APROVACAO',
+    # Aprovacao Fretes
+    'CarviaAprovacaoFrete', 'STATUS_APROVACAO',
     # Conta Corrente
     'CarviaContaCorrenteTransportadora', 'TIPOS_MOVIMENTACAO_CC', 'STATUS_CC',
 ]
