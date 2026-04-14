@@ -174,17 +174,17 @@ class ContaCorrenteService:
     # Cancelamento (estorno)
     # =================================================================
     @staticmethod
-    def cancelar_movimentacoes(sub_id: int, motivo: str, usuario: str) -> int:
-        """Marca todas as mov ATIVA do sub como DESCONSIDERADO.
+    def cancelar_movimentacoes(frete_id: int, motivo: str, usuario: str) -> int:
+        """Marca todas as mov ATIVA do frete como DESCONSIDERADO.
 
-        Usado em hooks de cancelamento (sub.status='CANCELADO',
-        desanexar_subcontrato_fatura_transportadora). NAO commita — chamador
-        deve commitar. Retorna qtd de registros alterados.
+        Usado em hooks de cancelamento (frete.status='CANCELADO',
+        desanexar aprovacoes de fatura). NAO commita — chamador deve commitar.
+        Retorna qtd de registros alterados.
         """
         from app.carvia.models import CarviaContaCorrenteTransportadora
 
         movs = CarviaContaCorrenteTransportadora.query.filter_by(
-            subcontrato_id=sub_id, status='ATIVO'
+            frete_id=frete_id, status='ATIVO'
         ).all()
 
         if not movs:
@@ -198,7 +198,7 @@ class ContaCorrenteService:
             ).strip()
 
         logger.info(
-            f'{len(movs)} mov CC desconsideradas | sub={sub_id} | '
+            f'{len(movs)} mov CC desconsideradas | frete={frete_id} | '
             f'usuario={usuario} | motivo={motivo}'
         )
         return len(movs)
