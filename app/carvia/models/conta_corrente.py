@@ -11,7 +11,7 @@ diferenca esta dentro da tolerancia automatica (regra R$ 5).
 
 Inspirado em app/fretes/models.py:ContaCorrenteTransportadora (Nacom), com
 as seguintes diferencas:
-- FK direta para `subcontrato_id` (no Nacom e `frete_id`)
+- FK direta para `frete_id` (paridade Nacom — subcontrato_id foi removido em 2026-04-14)
 - FK adicional `fatura_transportadora_id` para lookup direto sem JOIN
 - Logica centralizada em ContaCorrenteService (no Nacom esta inline em routes)
 
@@ -44,14 +44,6 @@ class CarviaContaCorrenteTransportadora(db.Model):
         nullable=False,
         index=True,
     )
-    # DEPRECATED: manter ate drop migration final.
-    # Fonte canonica agora e frete_id (paridade Nacom).
-    subcontrato_id = db.Column(
-        db.Integer,
-        db.ForeignKey('carvia_subcontratos.id'),
-        nullable=True,  # afrouxado para permitir novos registros sem sub
-        index=True,
-    )
     frete_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_fretes.id'),
@@ -81,22 +73,12 @@ class CarviaContaCorrenteTransportadora(db.Model):
     # Compensacao (ainda nao implementado, mas estrutura espelha Nacom)
     compensado_em = db.Column(db.DateTime, nullable=True)
     compensado_por = db.Column(db.String(100), nullable=True)
-    compensacao_subcontrato_id = db.Column(
-        db.Integer,
-        db.ForeignKey('carvia_subcontratos.id'),
-        nullable=True,
-    )
-
     # Auditoria
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive, index=True)
     criado_por = db.Column(db.String(100), nullable=False)
 
     # Relacionamentos
     transportadora = db.relationship('Transportadora', lazy='joined')
-    subcontrato = db.relationship(
-        'CarviaSubcontrato',
-        foreign_keys=[subcontrato_id],
-    )
     frete = db.relationship('CarviaFrete', foreign_keys=[frete_id])
     fatura_transportadora = db.relationship(
         'CarviaFaturaTransportadora',
@@ -110,6 +92,6 @@ class CarviaContaCorrenteTransportadora(db.Model):
     def __repr__(self):
         return (
             f'<CarviaContaCorrenteTransportadora {self.id} '
-            f'transp={self.transportadora_id} sub={self.subcontrato_id} '
+            f'transp={self.transportadora_id} frete={self.frete_id} '
             f'tipo={self.tipo_movimentacao} valor={self.valor_diferenca}>'
         )

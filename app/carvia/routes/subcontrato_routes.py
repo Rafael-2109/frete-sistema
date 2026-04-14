@@ -374,13 +374,9 @@ def register_subcontrato_routes(bp):
                 or db.session.query(CarviaConciliacao.id)
                     .filter_by(tipo_documento='subcontrato', documento_id=sub.id)
                     .first() is not None
-                # Mov CC com fatura_transportadora_id NOT NULL = vinculada a
-                # fatura que pode estar conciliada — bloqueia a UI tambem
-                or db.session.query(CarviaContaCorrenteTransportadora.id)
-                    .filter(
-                        CarviaContaCorrenteTransportadora.subcontrato_id == sub.id,
-                        CarviaContaCorrenteTransportadora.fatura_transportadora_id.isnot(None),
-                    ).first() is not None
+                # Phase 14 (2026-04-14): CC.subcontrato_id removido do modelo.
+                # Registros CC agora vinculam por frete_id (Phase 5+).
+                # Guard removido — nenhum novo CC aponta para sub por sub_id.
             )
             pode_excluir_orfao = not tem_vinculos
 

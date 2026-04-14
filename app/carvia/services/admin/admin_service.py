@@ -536,38 +536,22 @@ class AdminService:
                 ),
             }
 
-        # Caso borda: sub esta sem fatura, mas tem mov CC com
-        # fatura_transportadora_id != NULL (vinculacao historica a fatura
-        # que pode ainda estar conciliada). Bloqueia para nao quebrar
-        # historico financeiro de fatura concilada com extrato.
-        cc_com_fatura = CarviaContaCorrenteTransportadora.query.filter(
-            CarviaContaCorrenteTransportadora.subcontrato_id == sub_id,
-            CarviaContaCorrenteTransportadora.fatura_transportadora_id.isnot(None),
-        ).count()
-        if cc_com_fatura > 0:
-            return {
-                'sucesso': False,
-                'mensagem': (
-                    f'Subcontrato #{sub_id} tem {cc_com_fatura} movimentacao(oes) '
-                    f'de conta corrente vinculadas a Fatura Transportadora (que '
-                    f'pode estar conciliada com extrato). Resolva o historico '
-                    f'financeiro antes de excluir.'
-                ),
-            }
+        # Phase 14 (2026-04-14): subcontrato_id e compensacao_subcontrato_id foram
+        # removidos de CarviaContaCorrenteTransportadora. Registros CC de subs legados
+        # (pre-Phase 5) foram migrados para frete_id ou deletados nas phases anteriores.
+        # Novos registros CC nunca usaram subcontrato_id (fonte canonica: frete_id).
+        # Guard de CC-com-fatura e limpeza de movs/compensacoes via sub_id deixaram
+        # de ser necessarios — nenhum registro CC atual aponta para sub por sub_id.
 
         # ============================================================
         # SNAPSHOT — antes de qualquer mutacao
         # ============================================================
         snapshot = self.serializar_entidade(sub)
 
-        movs_cc = CarviaContaCorrenteTransportadora.query.filter_by(
-            subcontrato_id=sub_id
-        ).all()
-
-        # Caso borda: OUTRO sub foi compensado POR este sub
-        compensacoes_apontando = CarviaContaCorrenteTransportadora.query.filter_by(
-            compensacao_subcontrato_id=sub_id
-        ).all()
+        # Listas vazias: pos-Phase 14, nao ha mais CC apontando por subcontrato_id
+        movs_cc = []
+        compensacoes_apontando = []
+        compensacoes_revertidas = 0
 
         relacionados = self.serializar_relacionados(sub, {
             'movimentacoes_cc': movs_cc,
@@ -583,31 +567,6 @@ class AdminService:
         # CarviaConciliacao residual + recalculo de status_conciliacao das
         # CarviaExtratoLinha afetadas. Reusa o helper canonico do AdminService.
         self._limpar_movimentacao_financeira('subcontrato', sub_id)
-
-        # ============================================================
-        # LIMPEZA DE FKS TECNICAS (FK NOT NULL exige antes do delete)
-        # ============================================================
-        # 1. Reverter CC compensada POR este sub
-        compensacoes_revertidas = 0
-        for cc in compensacoes_apontando:
-            if cc.status == 'COMPENSADO':
-                cc.status = 'ATIVO'
-                cc.compensado_em = None
-                cc.compensado_por = None
-                cc.compensacao_subcontrato_id = None
-                cc.observacoes = (
-                    (cc.observacoes or '') +
-                    f'\n[AUTO {agora_utc_naive().isoformat()}] Compensacao revertida: '
-                    f'sub compensador #{sub_id} sera excluido (orfao legado). '
-                    f'Motivo: {motivo}'
-                ).strip()
-                compensacoes_revertidas += 1
-
-        # 2. DELETE movimentacoes CC deste sub (legado — FK subcontrato_id
-        # afrouxada para nullable pos-Phase 5, mas registros legados ainda
-        # apontam via subcontrato_id)
-        for mov in movs_cc:
-            db.session.delete(mov)
 
         # Phase C: campos de conferencia (valor_pago, requer_aprovacao, etc.)
         # migrados para CarviaFrete. Sub orfao nao tem esses campos a resetar.

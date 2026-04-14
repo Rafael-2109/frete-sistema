@@ -642,21 +642,10 @@ class CarviaSubcontrato(db.Model):
     # PENDENTE, COTADO, CONFIRMADO, FATURADO, CONFERIDO, CANCELADO
     status = db.Column(db.String(20), nullable=False, default='PENDENTE')
 
-    # Conferencia individual (CTe vs TabelaFrete)
-    valor_considerado = db.Column(db.Numeric(15, 2), nullable=True)
-    status_conferencia = db.Column(db.String(20), nullable=False, default='PENDENTE')
-    conferido_por = db.Column(db.String(100), nullable=True)
-    conferido_em = db.Column(db.DateTime, nullable=True)
-    detalhes_conferencia = db.Column(db.JSON, nullable=True)
-
-    # Pagamento (manual, igual padrao Nacom Frete.valor_pago)
-    # Independente do pagamento da fatura (status_pagamento da FT) — granularidade por sub
-    valor_pago = db.Column(db.Numeric(15, 2), nullable=True)
-    valor_pago_em = db.Column(db.DateTime, nullable=True)
-    valor_pago_por = db.Column(db.String(100), nullable=True)
-
-    # Flag de tratativa: True quando existe CarviaAprovacaoSubcontrato PENDENTE
-    requer_aprovacao = db.Column(db.Boolean, nullable=False, default=False)
+    # NOTA: campos de conferencia migrados para CarviaFrete em 2026-04-14
+    # (ver docs/superpowers/plans/2026-04-14-carvia-frete-conferencia-migration.md)
+    # Removidos: valor_considerado, status_conferencia, conferido_por, conferido_em,
+    # detalhes_conferencia, valor_pago, valor_pago_em, valor_pago_por, requer_aprovacao.
 
     # Auditoria
     observacoes = db.Column(db.Text)
