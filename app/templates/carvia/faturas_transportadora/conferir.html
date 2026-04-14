@@ -86,8 +86,8 @@
                     <h4 class="text-warning">{{ (analise_valores.valor_total_considerado)|moeda_carteira }}</h4>
                 </div>
                 <div class="col-md-3">
-                    <h6>Total Pago <small>(Prioridade)</small></h6>
-                    <h4 class="text-success">{{ (analise_valores.valor_total_pago)|moeda_carteira }}</h4>
+                    <h6>Total Conciliado <small>(Extrato)</small></h6>
+                    <h4 class="text-info">{{ (analise_valores.valor_total_conciliado)|moeda_carteira }}</h4>
                 </div>
             </div>
 
@@ -107,8 +107,8 @@
                     {% endif %}
                 </div>
                 <div class="col-md-6">
-                    <strong>Diferenca Considerado vs Pago:</strong><br>
-                    <span class="h5">{{ (analise_valores.diferenca_considerado_pago)|moeda_carteira }}</span>
+                    <strong>Diferenca Considerado vs Conciliado:</strong><br>
+                    <span class="h5">{{ (analise_valores.diferenca_considerado_conciliado)|moeda_carteira }}</span>
                 </div>
             </div>
         </div>
@@ -129,7 +129,7 @@
                             <th class="text-end">Valor Cotado</th>
                             <th class="text-end">Valor CTe</th>
                             <th class="text-end">Valor Considerado</th>
-                            <th class="text-end">Valor Pago</th>
+                            <th class="text-end">Valor Conciliado</th>
                             <th class="text-center">Status</th>
                             <th>Cliente/Obs</th>
                         </tr>
@@ -154,7 +154,7 @@
                             <td class="text-end">{{ (doc.valor_cte)|moeda_carteira }}</td>
                             <td class="text-end">{{ (doc.valor_considerado)|moeda_carteira }}</td>
                             <td class="text-end">
-                                <strong>{{ (doc.valor_pago)|moeda_carteira }}</strong>
+                                <strong>{{ (doc.valor_conciliado)|moeda_carteira }}</strong>
                             </td>
                             <td class="text-center">
                                 {% if doc.status == 'LANÇADO' %}
@@ -189,7 +189,7 @@
                             <th class="text-end">{{ (analise_valores.valor_cotado)|moeda_carteira }}</th>
                             <th class="text-end">{{ (analise_valores.valor_total_cte)|moeda_carteira }}</th>
                             <th class="text-end">{{ (analise_valores.valor_total_considerado)|moeda_carteira }}</th>
-                            <th class="text-end"><strong>{{ (analise_valores.valor_total_pago)|moeda_carteira }}</strong></th>
+                            <th class="text-end"><strong>{{ (analise_valores.valor_total_conciliado)|moeda_carteira }}</strong></th>
                             <th colspan="2"></th>
                         </tr>
                     </tfoot>
@@ -262,10 +262,10 @@
                                 {# Valor default com VIRGULA decimal — o JS oninput restringe
                                    a digitos + virgula, logo renderizar com ponto quebra ao editar. #}
                                 <input type="text" class="form-control" id="valor_final" name="valor_final"
-                                    value="{{ '%.2f'|format(analise_valores.valor_total_pago)|replace('.', ',') }}" required>
+                                    value="{{ '%.2f'|format(analise_valores.valor_total_considerado)|replace('.', ',') }}" required>
                             </div>
                             <small class="form-text text-muted">
-                                Sugerido: {{ (analise_valores.valor_total_pago)|moeda_carteira }} (Total Pago)
+                                Sugerido: {{ (analise_valores.valor_total_considerado)|moeda_carteira }} (Total Considerado)
                             </small>
                         </div>
                     </div>

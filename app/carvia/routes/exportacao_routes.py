@@ -481,10 +481,10 @@ def register_exportacao_routes(bp):
 
         sortable_columns = {
             'seq': CarviaSubcontrato.numero_sequencial_transportadora,
-            # Hierarquia alinhada com listagem (fatura_routes.py:1241) e card
-            # Analise de Valores: valor_pago > valor_considerado > valor_acertado > valor_cotado.
+            # Hierarquia alinhada com listagem e card Analise de Valores:
+            # valor_considerado > valor_acertado > valor_cotado (CTe nao eh a
+            # unidade paga — o conceito "Valor Pago" foi desassociado do sub).
             'valor_final': func.coalesce(
-                CarviaSubcontrato.valor_pago,
                 CarviaSubcontrato.valor_considerado,
                 CarviaSubcontrato.valor_acertado,
                 CarviaSubcontrato.valor_cotado,
@@ -537,17 +537,53 @@ def register_exportacao_routes(bp):
             ).group_by(CarviaCteComplementar.operacao_id).all():
                 comps_por_op[op_id] = cnt
 
+        # Valor Conciliado: pre-calcula rateio por fatura transportadora
+        # (uma chamada ao helper por fatura, reusa entre subs).
+        from app.carvia.services.financeiro.rateio_conciliacao_helper import (
+            ratear_conciliacao_fatura,
+        )
+        from app.carvia.models import CarviaFaturaTransportadora
+        fatura_ids = list({s.fatura_transportadora_id for s in items if s.fatura_transportadora_id})
+        valor_conciliado_por_sub_id = {}
+        if fatura_ids:
+            faturas_map = {
+                f.id: f for f in CarviaFaturaTransportadora.query.filter(
+                    CarviaFaturaTransportadora.id.in_(fatura_ids)
+                ).all()
+            }
+            # Subs e CEs de todas as faturas impactadas (batch unico)
+            subs_por_fatura = defaultdict(list)
+            for s in CarviaSubcontrato.query.filter(
+                CarviaSubcontrato.fatura_transportadora_id.in_(fatura_ids),
+                CarviaSubcontrato.status != 'CANCELADO',
+            ).all():
+                subs_por_fatura[s.fatura_transportadora_id].append(s)
+            ces_por_fatura = defaultdict(list)
+            for c in CarviaCustoEntrega.query.filter(
+                CarviaCustoEntrega.fatura_transportadora_id.in_(fatura_ids),
+                CarviaCustoEntrega.status != 'CANCELADO',
+            ).all():
+                ces_por_fatura[c.fatura_transportadora_id].append(c)
+            for fid, fatura in faturas_map.items():
+                rateio = ratear_conciliacao_fatura(
+                    fatura,
+                    subs_por_fatura.get(fid, []),
+                    ces_por_fatura.get(fid, []),
+                )
+                for sub_id, v in rateio['por_sub'].items():
+                    valor_conciliado_por_sub_id[sub_id] = float(v)
+
         data = []
         for sub in items:
             op = sub_op_map.get(sub.operacao_id)
-            # Valor Final alinhado com listagem + card Analise (hierarquia de 4 niveis)
+            # Valor Final alinhado com listagem + card Analise (hierarquia de 3 niveis)
             valor_final_hierarquico = (
-                sub.valor_pago
-                or sub.valor_considerado
+                sub.valor_considerado
                 or sub.valor_acertado
                 or sub.valor_cotado
                 or 0
             )
+            valor_conciliado = valor_conciliado_por_sub_id.get(sub.id, 0)
             data.append({
                 'ID': sub.id,
                 'Operacao ID': sub.operacao_id,
@@ -561,7 +597,7 @@ def register_exportacao_routes(bp):
                 'Valor Cotado': float(sub.valor_cotado or 0),
                 'Valor Acertado': float(sub.valor_acertado or 0) if sub.valor_acertado else '',
                 'Valor Considerado': float(sub.valor_considerado or 0) if sub.valor_considerado else '',
-                'Valor Pago': float(sub.valor_pago or 0) if sub.valor_pago else '',
+                'Valor Conciliado': float(valor_conciliado) if valor_conciliado else '',
                 'Valor Final': float(valor_final_hierarquico),
                 'Status': sub.status or '',
                 'Qtd Custos Entrega': custos_por_op.get(sub.operacao_id, 0),
