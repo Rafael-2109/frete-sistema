@@ -102,8 +102,8 @@
                             <strong>{{ sub.valor_cotado|valor_br if sub.valor_cotado else '-' }}</strong>
                         </div>
                         <div class="col-4">
-                            <small class="text-muted d-block">Valor Considerado</small>
-                            <strong>{{ sub.valor_considerado|valor_br if sub.valor_considerado else '-' }}</strong>
+                            <small class="text-muted d-block">Valor Considerado (via Frete)</small>
+                            <strong>{{ sub.frete.valor_considerado|valor_br if sub.frete and sub.frete.valor_considerado else '-' }}</strong>
                         </div>
                         <div class="col-4">
                             <small class="text-muted d-block">
@@ -508,10 +508,8 @@
     impacto_cascade=[
         'Desconciliacao do extrato bancario (CarviaConciliacao + recalculo de status_conciliacao)',
         'Limpeza de CarviaContaMovimentacao(tipo_doc=subcontrato) historica',
-        'Hard delete de movimentacoes de conta corrente do sub (FK NOT NULL)',
-        'Hard delete de aprovacoes de tratativa pendentes',
+        'Hard delete de movimentacoes de conta corrente do sub (legado pre-Phase C)',
         'Reversao de compensacoes apontando para este sub (voltam a ATIVO)',
-        'Reset de valor_pago/valor_pago_em/valor_pago_por/requer_aprovacao',
         'Snapshot completo registrado em CarviaAdminAudit',
     ],
     bloqueios=[]
