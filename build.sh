@@ -64,50 +64,6 @@ echo "Backfill icms_aliquota CarVia (idempotente)..."
 python scripts/migrations/add_icms_aliquota_carvia_operacoes.py \
     || echo "⚠️ Backfill icms_aliquota falhou, continuando deploy..."
 
-# 7. Migration CarVia: auditoria de conferencia em Fatura Cliente (Refator 2.1)
-# Adiciona status_conferencia, conferido_por, conferido_em, observacoes_conferencia
-# + indice parcial. Idempotente via ADD COLUMN IF NOT EXISTS.
-echo "Migration CarVia: auditoria de conferencia em Fatura Cliente (idempotente)..."
-python scripts/migrations/carvia_fatura_cliente_auditoria.py \
-    || echo "⚠️ Migration carvia_fatura_cliente_auditoria falhou, continuando deploy..."
-
-# 8. Migration CarVia: observacoes_conferencia em Fatura Transportadora (paridade Nacom)
-# Adiciona coluna TEXT para observacoes preenchidas no form "Aprovar Conferencia"
-# e historico de reaberturas. Espelha FaturaFrete.observacoes_conferencia do Nacom.
-# Idempotente via ADD COLUMN IF NOT EXISTS.
-echo "Migration CarVia: observacoes_conferencia em Fatura Transportadora (idempotente)..."
-python scripts/migrations/add_observacoes_conferencia_fatura_transportadora.py \
-    || echo "⚠️ Migration add_observacoes_conferencia_fatura_transportadora falhou, continuando deploy..."
-
-# 9. Migration Supply Chain: adiciona usuario_id + atualiza trigger audit_supply_chain
-# Adiciona coluna usuario_id INTEGER (nullable), indice parcial, e recria
-# audit_supply_chain_trigger() com:
-#   - Leitura de app.current_user_id (cast INTEGER seguro via BEGIN/EXCEPTION)
-#   - TRIM defensivo em app.current_user (elimina trailing spaces)
-#   - INSERT com usuario_id
-# Idempotente via ADD COLUMN IF NOT EXISTS e CREATE OR REPLACE FUNCTION.
-# Backward compatible: app antigo continua funcionando (coluna nullable, cast fallback).
-echo "Migration Supply Chain: usuario_id + trigger atualizado (idempotente)..."
-python scripts/migrations/add_usuario_id_evento_supply_chain.py \
-    || echo "⚠️ Migration add_usuario_id_evento_supply_chain falhou, continuando deploy..."
-
-# 10. Backfill Supply Chain: TRIM em registrado_por historico
-# Corrige eventos antigos onde usuarios.nome tinha trailing spaces.
-# Idempotente: WHERE registrado_por != TRIM(registrado_por).
-# Custo: ~0.1s apos primeira execucao (WHERE vazio).
-echo "Backfill Supply Chain: trim registrado_por (idempotente)..."
-python scripts/migrations/backfill_trim_registrado_por.py \
-    || echo "⚠️ Backfill trim registrado_por falhou, continuando deploy..."
-
-# 11. Backfill Supply Chain: session_id proxy para eventos USUARIO historicos
-# Eventos origem=USUARIO historicos tem session_id NULL por design antigo.
-# Cria session_id proxy temporal: USUARIO_YYYYMMDDHHMI_<nome_normalizado>
-# Permite correlacao cross-entidade de operacoes manuais para ML.
-# Idempotente: WHERE session_id IS NULL AND origem='USUARIO'.
-# Custo: ~30s apenas na primeira execucao (28K rows), depois ~0.1s.
-echo "Backfill Supply Chain: session_id proxy USUARIO (idempotente)..."
-python scripts/migrations/backfill_session_id_usuario.py \
-    || echo "⚠️ Backfill session_id proxy USUARIO falhou, continuando deploy..."
 
 echo "Build concluído com sucesso!"
 
