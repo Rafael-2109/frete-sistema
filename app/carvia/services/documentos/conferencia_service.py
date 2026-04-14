@@ -233,6 +233,9 @@ class ConferenciaService:
         esta dentro da tolerancia — se nao estiver, abre tratativa mesmo com
         intencao de APROVAR (evita lancamentos em CC sem aprovacao explicita).
 
+        NOTA (2026-04-14): este service sera refatorado na Phase 8 deste plano
+        para operar em CarviaFrete. Esta reversao e temporaria.
+
         Args:
             subcontrato_id: ID do CarviaSubcontrato
             valor_considerado: Valor registrado pelo conferente
@@ -452,6 +455,8 @@ class ConferenciaService:
         soma_cte_valor = sum(float(s.cte_valor or 0) for s in subs)
         # Gate 2 da rota trata NULL como 0 — espelhar aqui sem filtrar
         soma_considerado = sum(float(s.valor_considerado or 0) for s in subs)
+        # Paridade Nacom: somar valor_pago dos subs (pode ser NULL)
+        soma_valor_pago = sum(float(s.valor_pago or 0) for s in subs)
 
         # Custos de entrega vinculados diretamente a esta FT (nova FK)
         # Espelha FaturaFrete.valor_total_despesas_extras() do Nacom
@@ -462,6 +467,9 @@ class ConferenciaService:
         soma_custos_entrega = sum(float(ce.valor or 0) for ce in ces)
         total_ces = len(ces)
         valor_conferido_total = soma_considerado + soma_custos_entrega
+        # valor_pago_total: paralelo ao Nacom — soma de valor_pago dos subs + CEs
+        # (CEs nao tem distincao pago/considerado, entra como e)
+        valor_pago_total = soma_valor_pago + soma_custos_entrega
 
         return {
             'total': total,
@@ -470,9 +478,11 @@ class ConferenciaService:
             'pendentes': pendentes,
             'soma_cte_valor': round(soma_cte_valor, 2),
             'soma_considerado': round(soma_considerado, 2),
+            'soma_valor_pago': round(soma_valor_pago, 2),
             'soma_custos_entrega': round(soma_custos_entrega, 2),
             'total_ces': total_ces,
             'valor_conferido_total': round(valor_conferido_total, 2),
+            'valor_pago_total': round(valor_pago_total, 2),
             'diferenca': round(soma_cte_valor - soma_considerado, 2) if total else None,
             'percentual_conferido': round((aprovados + divergentes) / total * 100) if total else 0,
         }
