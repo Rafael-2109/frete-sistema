@@ -20,6 +20,52 @@ from app.carvia.models import (
 logger = logging.getLogger(__name__)
 
 
+def _build_cte_por_frete(frete_ids):
+    """Retorna dict {frete_id: {'label': str, 'tipo': 'OPERACAO'|'SUBCONTRATO'|None}}.
+
+    Resolve o "CTRC" de um CarviaFrete (que nao tem campo proprio) via 2 queries:
+    1. CarviaOperacao.ctrc_numero (preferido — CTRC da venda CarVia)
+    2. CarviaOperacao.cte_numero  (ex: CTe-042)
+    3. CarviaSubcontrato.cte_numero (CTe do subcontrato — compra)
+    4. None → template mostra "Pendente"
+
+    Reusado em: listar_fretes_carvia, lancar_cte_carvia, nf_routes.detalhe_nf.
+    Evita N+1 do padrao `frete.subcontratos.first()` no template (relationship
+    e lazy='dynamic'). Inclui ORDER BY determinista e filtra subs CANCELADO.
+    """
+    cte_por_frete = {fid: {'label': None, 'tipo': None} for fid in frete_ids}
+    if not frete_ids:
+        return cte_por_frete
+
+    # CTRC/CTe via operacao (venda)
+    op_results = db.session.query(
+        CarviaFrete.id, CarviaOperacao.ctrc_numero, CarviaOperacao.cte_numero,
+    ).join(
+        CarviaOperacao, CarviaFrete.operacao_id == CarviaOperacao.id,
+    ).filter(CarviaFrete.id.in_(frete_ids)).all()
+    for fid, ctrc, cte_num in op_results:
+        if ctrc:
+            cte_por_frete[fid] = {'label': ctrc, 'tipo': 'OPERACAO'}
+        elif cte_num:
+            cte_por_frete[fid] = {'label': cte_num, 'tipo': 'OPERACAO'}
+
+    # CTe via subcontrato (compra) — preenche apenas fretes sem label ainda.
+    # Order determinista por sub.id asc + filtro CANCELADO (consistente com
+    # `subs_ativos` em detalhe_fatura_transportadora).
+    sub_results = db.session.query(
+        CarviaSubcontrato.frete_id, CarviaSubcontrato.cte_numero,
+    ).filter(
+        CarviaSubcontrato.frete_id.in_(frete_ids),
+        CarviaSubcontrato.cte_numero.isnot(None),
+        CarviaSubcontrato.status != 'CANCELADO',
+    ).order_by(CarviaSubcontrato.id.asc()).all()
+    for fid, cte_num in sub_results:
+        if fid in cte_por_frete and not cte_por_frete[fid]['label']:
+            cte_por_frete[fid] = {'label': cte_num, 'tipo': 'SUBCONTRATO'}
+
+    return cte_por_frete
+
+
 def register_frete_routes(bp):
 
     # ------------------------------------------------------------------
@@ -51,12 +97,37 @@ def register_frete_routes(bp):
         query = CarviaFrete.query
 
         if filtro_id:
-            # Busca por CTRC (ilike) ou, se for numero puro, tambem por id (backcompat)
-            conditions = [CarviaFrete.ctrc_numero.ilike(f'%{filtro_id}%')]
+            # CarviaFrete nao tem `ctrc_numero` proprio — o CTe real esta em
+            # CarviaSubcontrato.cte_numero (compra) e CarviaOperacao.ctrc_numero/cte_numero (venda).
+            # Filtra via EXISTS nesses dois + id numerico direto (backcompat).
+            # Filtra subcontratos CANCELADO (consistente com a agregacao usada
+            # na coluna CTRC — ver _build_cte_por_frete).
+            like = f'%{filtro_id}%'
+            conditions = []
             try:
                 conditions.append(CarviaFrete.id == int(filtro_id))
             except ValueError:
                 pass
+            conditions.append(
+                db.exists().where(
+                    db.and_(
+                        CarviaSubcontrato.frete_id == CarviaFrete.id,
+                        CarviaSubcontrato.cte_numero.ilike(like),
+                        CarviaSubcontrato.status != 'CANCELADO',
+                    )
+                )
+            )
+            conditions.append(
+                db.exists().where(
+                    db.and_(
+                        CarviaOperacao.id == CarviaFrete.operacao_id,
+                        db.or_(
+                            CarviaOperacao.ctrc_numero.ilike(like),
+                            CarviaOperacao.cte_numero.ilike(like),
+                        ),
+                    )
+                )
+            )
             query = query.filter(db.or_(*conditions))
         if filtro_embarque:
             from app.embarques.models import Embarque
@@ -100,10 +171,14 @@ def register_frete_routes(bp):
             page=page, per_page=per_page, error_out=False
         )
 
+        # Agregacao CTe por frete (evita N+1 do template)
+        cte_por_frete = _build_cte_por_frete([f.id for f in paginacao.items])
+
         return render_template(
             'carvia/fretes/listar.html',
             fretes=paginacao.items,
             paginacao=paginacao,
+            cte_por_frete=cte_por_frete,
             filtro_id=filtro_id,
             filtro_embarque=filtro_embarque,
             filtro_emitente=filtro_emitente,
@@ -176,6 +251,14 @@ def register_frete_routes(bp):
                 )
             ).scalar() or False
 
+        # Despesas Extras (CarviaCustoEntrega) — xerox DespesaExtra Nacom
+        # Mostra CEs vinculados ao frete (excluindo CANCELADOS)
+        from app.carvia.models import CarviaCustoEntrega
+        despesas_extras = CarviaCustoEntrega.query.filter(
+            CarviaCustoEntrega.frete_id == frete.id,
+            CarviaCustoEntrega.status != 'CANCELADO',
+        ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+
         return render_template(
             'carvia/fretes/detalhe.html',
             frete=frete,
@@ -187,6 +270,7 @@ def register_frete_routes(bp):
             cotacao_venda=cotacao_venda,
             cotacao_qtd_motos=cotacao_qtd_motos,
             frete_eh_moto=frete_eh_moto,
+            despesas_extras=despesas_extras,
         )
 
     # ------------------------------------------------------------------
@@ -590,6 +674,10 @@ def register_frete_routes(bp):
                         grupo_svc.obter_transportadoras_grupo(frete.transportadora_id)
                     )
 
+        # Agregacao CTe por frete (evita N+1 no template que antes chamava
+        # `frete.subcontratos.first()` em loop — lazy='dynamic')
+        cte_por_frete = _build_cte_por_frete([f.id for f in fretes_encontrados])
+
         return render_template(
             'carvia/fretes/lancar_cte.html',
             faturas=faturas,
@@ -598,6 +686,7 @@ def register_frete_routes(bp):
             tipo=tipo,
             fretes_encontrados=fretes_encontrados,
             grupo_ids_por_transp=grupo_ids_por_transp,
+            cte_por_frete=cte_por_frete,
         )
 
     # ------------------------------------------------------------------

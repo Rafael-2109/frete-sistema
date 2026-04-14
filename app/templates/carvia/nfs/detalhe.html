@@ -269,8 +269,17 @@
                         {% for frete in fretes_nf %}
                         <tr>
                             <td>
+                                {% set cte_info = cte_por_frete.get(frete.id, {}) %}
                                 <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}" class="text-decoration-none">
-                                    <strong>{{ frete.ctrc_numero or 'Sem CTRC' }}</strong>
+                                    {% if cte_info.label %}
+                                    <strong>{{ cte_info.label }}</strong>
+                                    {% if cte_info.tipo == 'SUBCONTRATO' %}
+                                    <br><small class="text-muted"><i class="fas fa-handshake"></i> Sub</small>
+                                    {% endif %}
+                                    {% else %}
+                                    <em class="text-muted">Pendente</em>
+                                    <br><small class="text-muted">#{{ frete.id }}</small>
+                                    {% endif %}
                                 </a>
                             </td>
                             <td><span class="badge carvia-badge-{{ frete.status|lower }}">{{ frete.status }}</span></td>

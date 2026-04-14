@@ -466,6 +466,11 @@ def register_nf_routes(bp):
         tem_frete = bool(fretes_nf)
         tem_cte = bool(operacoes)
 
+        # Agregacao CTe por frete (evita N+1 no template que antes chamava
+        # `frete.subcontratos.first()` em loop — lazy='dynamic')
+        from app.carvia.routes.frete_routes import _build_cte_por_frete
+        cte_por_frete = _build_cte_por_frete([f.id for f in fretes_nf])
+
         # Ultimos fretes para mesmo destino (referencia de precos)
         ultimos_fretes = {'moto': [], 'geral': []}
         nf_eh_moto = bool(resultado_cubagem and resultado_cubagem.get('itens'))
@@ -541,6 +546,7 @@ def register_nf_routes(bp):
             cotacao_id_nf=cotacao_id_nf,
             fat_cliente_paga=fat_cliente_paga,
             tomador_label=tomador_label_val,
+            cte_por_frete=cte_por_frete,
         )
 
     # ==================== CRIAR CTE VIA NF ====================

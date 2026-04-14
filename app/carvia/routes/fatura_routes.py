@@ -17,6 +17,9 @@ from app.carvia.models import (
     CarviaOperacao, CarviaOperacaoNf, CarviaNf, CarviaSubcontrato,
     CarviaCteComplementar, CarviaFrete,
 )
+from app.carvia.services.financeiro.rateio_conciliacao_helper import (
+    ratear_conciliacao_fatura,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1271,17 +1274,16 @@ def register_fatura_routes(bp):
         direction = request.args.get('direction', 'desc')
 
         # Subquery: contar e somar valor dos subcontratos por fatura
-        # Hierarquia alinhada com tela de conferencia (full mirror Nacom):
-        # valor_pago > valor_considerado > valor_acertado > valor_cotado.
-        # Ex: se operador ja preencheu valor_pago, soma reflete o pago; senao
-        # cai no considerado (conferencia feita); senao acertado (negociado);
-        # senao cotado (teorico). Isso evita divergencia entre listagem e detalhe.
+        # Hierarquia alinhada com tela de conferencia:
+        # valor_considerado > valor_acertado > valor_cotado.
+        # O conceito "Valor Pago" do sub foi desassociado (CTe nao eh a unidade
+        # paga — o que eh pago e a fatura/frete). O campo real de pagamento
+        # esta em `CarviaFrete.valor_pago` (padrao Nacom Frete.valor_pago).
         subq_subs = db.session.query(
             CarviaSubcontrato.fatura_transportadora_id,
             func.count(CarviaSubcontrato.id).label('qtd_subs'),
             func.sum(
                 func.coalesce(
-                    CarviaSubcontrato.valor_pago,
                     CarviaSubcontrato.valor_considerado,
                     CarviaSubcontrato.valor_acertado,
                     CarviaSubcontrato.valor_cotado,
@@ -1679,13 +1681,12 @@ def register_fatura_routes(bp):
             for sub in subcontratos:
                 operacao = sub.operacao if hasattr(sub, 'operacao') else None
                 # Valor previsto segue a mesma hierarquia da listagem e do card
-                # Analise de Valores (full mirror Nacom):
-                # valor_pago > valor_considerado > valor_acertado > valor_cotado.
-                # Mantem consistencia com fatura_routes.py:1241 e evita operador
-                # ver numero diferente no modal Anexar vs na listagem.
+                # Analise de Valores:
+                # valor_considerado > valor_acertado > valor_cotado.
+                # Mantem consistencia com fatura_routes.py:subq_subs. O campo
+                # sub.valor_pago foi desassociado (CTe nao eh a unidade paga).
                 valor_previsto = (
-                    sub.valor_pago
-                    or sub.valor_considerado
+                    sub.valor_considerado
                     or sub.valor_acertado
                     or sub.valor_cotado
                     or 0
@@ -1701,9 +1702,8 @@ def register_fatura_routes(bp):
                     'valor_cotado': float(sub.valor_cotado or 0),
                     'valor_acertado': float(sub.valor_acertado or 0) if sub.valor_acertado else None,
                     'valor_considerado': float(sub.valor_considerado or 0) if sub.valor_considerado else None,
-                    'valor_pago': float(sub.valor_pago or 0) if sub.valor_pago else None,
                     # valor_final mantido por compat com JS (detalhe.js:293); agora
-                    # reflete a hierarquia de 4 niveis, nao mais a property legada.
+                    # reflete a hierarquia de 3 niveis (sem valor_pago).
                     'valor_final': float(valor_previsto),
                 })
 
@@ -1786,12 +1786,13 @@ def register_fatura_routes(bp):
             CarviaSubcontrato.fatura_transportadora_id == fatura_id
         ).order_by(CarviaSubcontrato.cte_data_emissao.desc().nullslast()).all()
 
-        # Totais do card "Resumo" (card de 4 stats — paridade Nacom)
+        # Totais do card "Resumo" (card de stats — paridade Nacom)
         # Subs CANCELADO excluidos (consistente com conferencia)
         subs_ativos = [s for s in subcontratos if s.status != 'CANCELADO']
         total_subcontratos = len(subs_ativos)
+        # Hierarquia sem valor_pago: CTe nao eh a unidade paga.
         valor_total_subcontratos = sum(
-            float(s.valor_pago or s.valor_considerado or s.valor_cotado or 0)
+            float(s.valor_considerado or s.valor_cotado or 0)
             for s in subs_ativos
         )
 
@@ -1803,6 +1804,17 @@ def register_fatura_routes(bp):
         itens = CarviaFaturaTransportadoraItem.query.filter_by(
             fatura_transportadora_id=fatura_id
         ).all()
+
+        # Agregacao NFs por subcontrato — alimenta coluna "NFs" no card
+        # "Subcontratos Vinculados" (elimina card duplicado "Itens de Detalhe").
+        # Estrutura: {sub_id: [item, item, ...]}  (mesmos objetos do `itens`)
+        nfs_por_subcontrato = {}
+        itens_sem_sub_list = []
+        for _it in itens:
+            if _it.subcontrato_id:
+                nfs_por_subcontrato.setdefault(_it.subcontrato_id, []).append(_it)
+            else:
+                itens_sem_sub_list.append(_it)
 
         # NFs via subcontratos -> operacoes
         op_ids = list({s.operacao_id for s in subcontratos if s.operacao_id})
@@ -1859,6 +1871,21 @@ def register_fatura_routes(bp):
                 CarviaCteComplementar.operacao_id.in_(op_ids)
             ).order_by(CarviaCteComplementar.criado_em.desc()).all()
 
+        # Rateio de "Valor Conciliado" proporcional ao valor_considerado de cada
+        # sub/CE. Usa fatura.total_conciliado (SUM de CarviaConciliacao.valor_alocado
+        # mantido pelo CarviaConciliacaoService). Quando fatura nao esta conciliada,
+        # todos os valores rateados ficam 0.
+        rateio_conc = ratear_conciliacao_fatura(
+            fatura, subs_ativos, custos_entrega_ativos,
+        )
+        valor_conciliado_por_sub = {
+            sid: float(v) for sid, v in rateio_conc['por_sub'].items()
+        }
+        valor_conciliado_por_ce = {
+            cid: float(v) for cid, v in rateio_conc['por_ce'].items()
+        }
+        valor_total_conciliado = float(rateio_conc['total'])
+
         return render_template(
             'carvia/faturas_transportadora/visualizar.html',
             fatura=fatura,
@@ -1868,7 +1895,12 @@ def register_fatura_routes(bp):
             total_custos_entrega=total_custos_entrega,
             valor_total_custos_entrega=valor_total_custos_entrega,
             total_calculado=total_calculado,
+            valor_total_conciliado=valor_total_conciliado,
+            valor_conciliado_por_sub=valor_conciliado_por_sub,
+            valor_conciliado_por_ce=valor_conciliado_por_ce,
             itens=itens,
+            nfs_por_subcontrato=nfs_por_subcontrato,
+            itens_sem_sub_list=itens_sem_sub_list,
             nfs=nfs,
             faturas_cliente=faturas_cliente,
             operacoes=operacoes,
@@ -1944,6 +1976,14 @@ def register_fatura_routes(bp):
             CarviaCustoEntrega.status != 'CANCELADO',
         ).all()
 
+        # Rateio de "Valor Conciliado" proporcional ao valor_considerado/valor
+        # de cada sub/CE. fatura.total_conciliado eh a fonte (mantida pelo
+        # CarviaConciliacaoService).
+        rateio_conc = ratear_conciliacao_fatura(
+            fatura, subcontratos, custos_entrega,
+        )
+        valor_total_conciliado = float(rateio_conc['total'])
+
         # Monta tabela unificada "Status dos Documentos" — paridade
         # Nacom `conferir_fatura`. CarviaSubcontrato e o equivalente de
         # Frete (Q6 do GATE: "campos de CTe viram property de Frete").
@@ -1951,7 +1991,6 @@ def register_fatura_routes(bp):
         valor_total_cotado = 0.0
         valor_total_cte = 0.0
         valor_total_considerado = 0.0
-        valor_total_pago = 0.0
 
         # 1) Subcontratos (equivalente dos Fretes Nacom)
         for sub in subcontratos:
@@ -1971,9 +2010,9 @@ def register_fatura_routes(bp):
             elif getattr(sub, 'requer_aprovacao', False):
                 status_doc = 'EM_TRATATIVA'
             elif sub.status_conferencia == 'APROVADO':
-                # Se tem CTe emitido E pago, mostra como LANCADO (paridade
-                # Nacom: valor_pago existe apenas apos o ciclo completo)
-                if sub.cte_numero and sub.cte_valor and sub.valor_pago:
+                # Se tem CTe emitido, mostra como LANCADO (paridade Nacom:
+                # ciclo completo ja registrado no SSW).
+                if sub.cte_numero and sub.cte_valor:
                     status_doc = 'LANÇADO'
                 else:
                     status_doc = 'APROVADO'
@@ -1992,7 +2031,7 @@ def register_fatura_routes(bp):
                 'valor_cotado': float(sub.valor_cotado or 0),
                 'valor_cte': float(sub.cte_valor or 0),
                 'valor_considerado': float(sub.valor_considerado or 0),
-                'valor_pago': float(sub.valor_pago or 0),
+                'valor_conciliado': float(rateio_conc['por_sub'].get(sub.id, 0)),
                 'status': status_doc,
                 'cliente': cliente,
                 'sub_id': sub.id,
@@ -2001,7 +2040,6 @@ def register_fatura_routes(bp):
             valor_total_cotado += float(sub.valor_cotado or 0)
             valor_total_cte += float(sub.cte_valor or 0)
             valor_total_considerado += float(sub.valor_considerado or 0)
-            valor_total_pago += float(sub.valor_pago or 0)
 
         # 2) Custos de Entrega (equivalente das Despesas Extras Nacom)
         for ce in custos_entrega:
@@ -2020,7 +2058,7 @@ def register_fatura_routes(bp):
                 'valor_cotado': float(ce.valor or 0),
                 'valor_cte': float(ce.valor or 0),
                 'valor_considerado': float(ce.valor or 0),
-                'valor_pago': float(ce.valor or 0),
+                'valor_conciliado': float(rateio_conc['por_ce'].get(ce.id, 0)),
                 'status': status_doc,
                 'cliente': 'Custo de Entrega',
                 'ce_id': ce.id,
@@ -2029,7 +2067,6 @@ def register_fatura_routes(bp):
             valor_total_cotado += float(ce.valor or 0)
             valor_total_cte += float(ce.valor or 0)
             valor_total_considerado += float(ce.valor or 0)
-            valor_total_pago += float(ce.valor or 0)
 
         # Flags de bloqueio para UI (paridade Nacom)
         tem_sub_em_tratativa = any(
@@ -2059,11 +2096,11 @@ def register_fatura_routes(bp):
             'valor_cotado': valor_total_cotado,
             'valor_total_cte': valor_total_cte,
             'valor_total_considerado': valor_total_considerado,
-            'valor_total_pago': valor_total_pago,
+            'valor_total_conciliado': valor_total_conciliado,
             'diferenca_fatura_considerado': diferenca_fatura_considerado,
             'fatura_dentro_tolerancia': fatura_dentro_tolerancia,
-            'diferenca_considerado_pago': abs(
-                valor_total_considerado - valor_total_pago
+            'diferenca_considerado_conciliado': abs(
+                valor_total_considerado - valor_total_conciliado
             ),
         }
 
@@ -2074,6 +2111,7 @@ def register_fatura_routes(bp):
             fatura=fatura,
             documentos_status=documentos_status,
             analise_valores=analise_valores,
+            valor_total_conciliado=valor_total_conciliado,
             todos_aprovados=todos_aprovados,
             tem_sub_em_tratativa=tem_sub_em_tratativa,
             tem_sub_rejeitado=tem_sub_rejeitado,
@@ -2177,10 +2215,12 @@ def register_fatura_routes(bp):
                         )
                     )
             else:
-                # Se nao informado, usa soma dos valores pagos dos subs + CEs
+                # Se nao informado, usa soma dos valores_considerados dos subs + CEs.
+                # Substitui o fallback anterior (sum(s.valor_pago)) que ficava 0
+                # quando o W4 nao era preenchido — CTe nao eh a unidade paga.
                 from app.carvia.models import CarviaCustoEntrega
                 soma_subs = sum(
-                    float(s.valor_pago or 0) for s in subs_ativos
+                    float(s.valor_considerado or 0) for s in subs_ativos
                 )
                 soma_ces = db.session.query(
                     func.coalesce(func.sum(CarviaCustoEntrega.valor), 0)
