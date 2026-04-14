@@ -64,6 +64,27 @@ echo "Backfill icms_aliquota CarVia (idempotente)..."
 python scripts/migrations/add_icms_aliquota_carvia_operacoes.py \
     || echo "⚠️ Backfill icms_aliquota falhou, continuando deploy..."
 
+# 7. Migration CarVia Escopo C (2026-04-14): conferencia migra de Sub para Frete.
+# Ordem obrigatoria: add fields -> rename aprovacoes -> cc frete_id -> drop sub fields.
+# Todas idempotentes (IF EXISTS / IF NOT EXISTS + guards).
+# Ref: docs/superpowers/plans/2026-04-14-carvia-frete-conferencia-migration.md
+
+echo "Migration CarVia 1/4: campos conferencia em carvia_fretes..."
+python scripts/migrations/carvia_frete_conferencia_fields.py \
+    || echo "⚠️ Migration carvia_frete_conferencia_fields falhou, continuando deploy..."
+
+echo "Migration CarVia 2/4: rename aprovacoes subcontrato -> frete..."
+python scripts/migrations/carvia_aprovacoes_rename_frete.py \
+    || echo "⚠️ Migration carvia_aprovacoes_rename_frete falhou, continuando deploy..."
+
+echo "Migration CarVia 3/4: frete_id em conta_corrente..."
+python scripts/migrations/carvia_cc_frete_id.py \
+    || echo "⚠️ Migration carvia_cc_frete_id falhou, continuando deploy..."
+
+echo "Migration CarVia 4/4: drop campos conferencia obsoletos de Sub..."
+python scripts/migrations/carvia_drop_sub_conferencia_fields.py \
+    || echo "⚠️ Migration carvia_drop_sub_conferencia_fields falhou, continuando deploy..."
+
 
 echo "Build concluído com sucesso!"
 

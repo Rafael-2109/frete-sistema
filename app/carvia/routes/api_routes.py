@@ -892,10 +892,22 @@ def register_api_routes(bp):
             return jsonify({'erro': 'status deve ser APROVADO ou DIVERGENTE'}), 400
 
         try:
+            # Phase C (2026-04-14): ConferenciaService.registrar_conferencia
+            # agora opera em Frete. Resolvemos frete_id via sub.frete_id.
+            from app.carvia.models import CarviaSubcontrato
+            sub = db.session.get(CarviaSubcontrato, sub_id)
+            if not sub:
+                return jsonify({'sucesso': False, 'erro': 'Subcontrato nao encontrado'}), 404
+            if not sub.frete_id:
+                return jsonify({
+                    'sucesso': False,
+                    'erro': 'Subcontrato sem frete vinculado — conferencia nao disponivel',
+                }), 400
+
             from app.carvia.services.documentos.conferencia_service import ConferenciaService
             service = ConferenciaService()
             resultado = service.registrar_conferencia(
-                subcontrato_id=sub_id,
+                frete_id=sub.frete_id,
                 valor_considerado=valor_considerado,
                 status=status,
                 usuario=current_user.email,

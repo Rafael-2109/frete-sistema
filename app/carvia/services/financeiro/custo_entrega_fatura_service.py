@@ -237,10 +237,15 @@ class CustoEntregaFaturaService:
         # em duas queries agregadas (evita N+1 — antes era 1 query por fatura).
         fatura_ids = [f.id for f in faturas]
 
+        # Phase C (2026-04-14): valor_considerado migrou para CarviaFrete.
+        # LEFT JOIN CarviaFrete via sub.frete_id para somar via frete.
+        from app.carvia.models import CarviaFrete
         subs_agg = dict(
             db.session.query(
                 CarviaSubcontrato.fatura_transportadora_id,
-                sqlfunc.coalesce(sqlfunc.sum(CarviaSubcontrato.valor_considerado), 0),
+                sqlfunc.coalesce(sqlfunc.sum(CarviaFrete.valor_considerado), 0),
+            ).outerjoin(
+                CarviaFrete, CarviaSubcontrato.frete_id == CarviaFrete.id,
             ).filter(
                 CarviaSubcontrato.fatura_transportadora_id.in_(fatura_ids),
                 CarviaSubcontrato.status != 'CANCELADO',

@@ -25,11 +25,14 @@ BEGIN
   END IF;
 END $$;
 
--- 4. Index
+-- 4. Afrouxar subcontrato_id NOT NULL (modelo Python ja afrouxado em Phase 5).
+-- Necessario porque codigo novo nao passa subcontrato_id em INSERTs.
+ALTER TABLE carvia_conta_corrente_transportadoras
+  ALTER COLUMN subcontrato_id DROP NOT NULL;
+
+-- 5. Index
 CREATE INDEX IF NOT EXISTS idx_carvia_cc_frete_id
   ON carvia_conta_corrente_transportadoras (frete_id);
 
--- 5. Drop subcontrato_id (apos codigo migrado)
--- Comentado: executar MANUALMENTE apos deploy do codigo
--- ALTER TABLE carvia_conta_corrente_transportadoras
---   DROP COLUMN IF EXISTS subcontrato_id;
+-- 6. DROP subcontrato_id + compensacao_subcontrato_id sera feito pela
+-- migration Phase 14 (carvia_drop_sub_conferencia_fields).

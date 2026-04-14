@@ -14,21 +14,39 @@ from sqlalchemy import text
 
 
 def run_migration():
-    from app.carvia.models import CarviaFrete, CarviaSubcontrato
-
     print("=" * 70)
     print("MIGRATION: CarviaFrete ganha campos de conferencia")
     print("=" * 70)
 
-    # ANTES
-    total_fretes = CarviaFrete.query.count()
-    total_subs = CarviaSubcontrato.query.count()
-    subs_aprovados = CarviaSubcontrato.query.filter_by(
-        status_conferencia='APROVADO'
-    ).count()
-    subs_divergentes = CarviaSubcontrato.query.filter_by(
-        status_conferencia='DIVERGENTE'
-    ).count()
+    # ANTES — raw SQL para sobreviver ao drop de campos do modelo (Phase 14)
+    total_fretes = db.session.execute(text(
+        "SELECT COUNT(*) FROM carvia_fretes"
+    )).scalar() or 0
+    total_subs = db.session.execute(text(
+        "SELECT COUNT(*) FROM carvia_subcontratos"
+    )).scalar() or 0
+    # Query sub.status_conferencia so funciona se coluna ainda existe.
+    # Usar information_schema para detectar.
+    campo_existe = db.session.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'carvia_subcontratos'
+              AND column_name = 'status_conferencia'
+        )
+    """)).scalar()
+    if campo_existe:
+        subs_aprovados = db.session.execute(text(
+            "SELECT COUNT(*) FROM carvia_subcontratos "
+            "WHERE status_conferencia = 'APROVADO'"
+        )).scalar() or 0
+        subs_divergentes = db.session.execute(text(
+            "SELECT COUNT(*) FROM carvia_subcontratos "
+            "WHERE status_conferencia = 'DIVERGENTE'"
+        )).scalar() or 0
+    else:
+        subs_aprovados = 0
+        subs_divergentes = 0
+        print("  (campo sub.status_conferencia ja removido — skip counts)")
 
     print(f"Total fretes: {total_fretes}")
     print(f"Total subs: {total_subs}")
@@ -127,13 +145,15 @@ def run_migration():
     db.session.commit()
     print()
 
-    # DEPOIS
-    fretes_aprovados = CarviaFrete.query.filter_by(
-        status_conferencia='APROVADO'
-    ).count()
-    fretes_divergentes = CarviaFrete.query.filter_by(
-        status_conferencia='DIVERGENTE'
-    ).count()
+    # DEPOIS — raw SQL para nao depender do ORM durante migration
+    fretes_aprovados = db.session.execute(text(
+        "SELECT COUNT(*) FROM carvia_fretes "
+        "WHERE status_conferencia = 'APROVADO'"
+    )).scalar() or 0
+    fretes_divergentes = db.session.execute(text(
+        "SELECT COUNT(*) FROM carvia_fretes "
+        "WHERE status_conferencia = 'DIVERGENTE'"
+    )).scalar() or 0
     print("=" * 70)
     print("RESULTADO")
     print("=" * 70)

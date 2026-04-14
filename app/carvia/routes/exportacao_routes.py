@@ -481,11 +481,9 @@ def register_exportacao_routes(bp):
 
         sortable_columns = {
             'seq': CarviaSubcontrato.numero_sequencial_transportadora,
-            # Hierarquia alinhada com listagem e card Analise de Valores:
-            # valor_considerado > valor_acertado > valor_cotado (CTe nao eh a
-            # unidade paga — o conceito "Valor Pago" foi desassociado do sub).
+            # Phase C (2026-04-14): valor_considerado migrou para CarviaFrete.
+            # Fallback: acertado > cotado quando sem frete vinculado (legado).
             'valor_final': func.coalesce(
-                CarviaSubcontrato.valor_considerado,
                 CarviaSubcontrato.valor_acertado,
                 CarviaSubcontrato.valor_cotado,
             ),

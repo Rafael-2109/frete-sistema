@@ -233,21 +233,34 @@ class AprovacaoFreteService:
                 frete.conferido_em = agora_utc_naive()
 
                 # Opt-in: lancar em CC se usuario marcou checkbox
+                # Savepoint para isolar falha do CC sem envenenar a transacao
+                # principal (commit dos status do frete + aprovacao).
                 if lancar_diferenca:
                     from app.carvia.services.financeiro.conta_corrente_service import (
                         ContaCorrenteService,
                     )
-                    cc_result = ContaCorrenteService.lancar_movimentacao(
-                        frete_id=frete.id,
-                        descricao=f'Aprovacao #{aprovacao.id}: {aprovacao.motivo_solicitacao[:100]}',
-                        usuario=usuario,
-                        fatura_transportadora_id=frete.fatura_transportadora_id,
-                        observacoes=observacoes,
-                    )
-                    if not cc_result.get('sucesso'):
+                    savepoint = db.session.begin_nested()
+                    try:
+                        cc_result = ContaCorrenteService.lancar_movimentacao(
+                            frete_id=frete.id,
+                            descricao=f'Aprovacao #{aprovacao.id}: {aprovacao.motivo_solicitacao[:100]}',
+                            usuario=usuario,
+                            fatura_transportadora_id=frete.fatura_transportadora_id,
+                            observacoes=observacoes,
+                        )
+                        if cc_result.get('sucesso'):
+                            savepoint.commit()
+                        else:
+                            savepoint.rollback()
+                            logger.warning(
+                                f"Lancamento CC falhou para aprovacao {aprovacao_id}: "
+                                f"{cc_result.get('erro')}"
+                            )
+                    except Exception as cc_exc:
+                        savepoint.rollback()
                         logger.warning(
-                            f"Lancamento CC falhou para aprovacao {aprovacao_id}: "
-                            f"{cc_result.get('erro')}"
+                            f"Excecao no lancamento CC para aprovacao {aprovacao_id}: "
+                            f"{cc_exc}"
                         )
 
             db.session.commit()

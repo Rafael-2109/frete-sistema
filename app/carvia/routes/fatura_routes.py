@@ -1274,22 +1274,22 @@ def register_fatura_routes(bp):
         direction = request.args.get('direction', 'desc')
 
         # Subquery: contar e somar valor dos subcontratos por fatura
-        # Hierarquia alinhada com tela de conferencia:
-        # valor_considerado > valor_acertado > valor_cotado.
-        # O conceito "Valor Pago" do sub foi desassociado (CTe nao eh a unidade
-        # paga — o que eh pago e a fatura/frete). O campo real de pagamento
-        # esta em `CarviaFrete.valor_pago` (padrao Nacom Frete.valor_pago).
+        # Phase C (2026-04-14): valor_considerado migrou para CarviaFrete.
+        # Hierarquia: frete.valor_considerado > sub.valor_acertado > sub.valor_cotado.
+        # LEFT JOIN CarviaFrete via sub.frete_id (pode ser NULL para legados).
         subq_subs = db.session.query(
             CarviaSubcontrato.fatura_transportadora_id,
             func.count(CarviaSubcontrato.id).label('qtd_subs'),
             func.sum(
                 func.coalesce(
-                    CarviaSubcontrato.valor_considerado,
+                    CarviaFrete.valor_considerado,
                     CarviaSubcontrato.valor_acertado,
                     CarviaSubcontrato.valor_cotado,
                     0,
                 )
             ).label('valor_subs'),
+        ).outerjoin(
+            CarviaFrete, CarviaSubcontrato.frete_id == CarviaFrete.id,
         ).filter(
             CarviaSubcontrato.fatura_transportadora_id.isnot(None)
         ).group_by(CarviaSubcontrato.fatura_transportadora_id).subquery()
@@ -2395,7 +2395,7 @@ def register_fatura_routes(bp):
             fatura.conferido_por = None
             fatura.conferido_em = None
 
-            # Libera subs conferidos (CONFERIDO -> FATURADO)
+            # Libera subs conferidos (CONFERIDO -> FATURADO) — legado
             subs_ativos = CarviaSubcontrato.query.filter(
                 CarviaSubcontrato.fatura_transportadora_id == fatura_id,
                 CarviaSubcontrato.status != 'CANCELADO',
@@ -2403,6 +2403,21 @@ def register_fatura_routes(bp):
             for sub in subs_ativos:
                 if sub.status == 'CONFERIDO':
                     sub.status = 'FATURADO'
+
+            # Phase C (2026-04-14): fretes tambem vao CONFERIDO em aprovar_conferencia.
+            # Reverter para permitir reconferencia apos reabrir.
+            fretes_ativos = CarviaFrete.query.filter(
+                CarviaFrete.fatura_transportadora_id == fatura_id,
+                CarviaFrete.status != 'CANCELADO',
+            ).all()
+            for frete in fretes_ativos:
+                if frete.status == 'CONFERIDO':
+                    frete.status = 'FATURADO'
+                # Resetar conferencia individual tambem
+                if frete.status_conferencia == 'APROVADO':
+                    frete.status_conferencia = 'PENDENTE'
+                    frete.conferido_por = None
+                    frete.conferido_em = None
 
             db.session.commit()
             flash(

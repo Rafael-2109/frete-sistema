@@ -18,9 +18,21 @@ def run_migration():
     print("MIGRATION: Rename aprovacoes_subcontrato → aprovacoes_frete")
     print("=" * 70)
 
+    # Idempotency guard: skip se tabela ja foi renomeada
+    tabela_existe = db.session.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_name = 'carvia_aprovacoes_subcontrato'
+        )
+    """)).scalar()
+    if not tabela_existe:
+        print("Migration ja aplicada (tabela carvia_aprovacoes_subcontrato nao existe).")
+        print("Saltando.")
+        return 0
+
     total = db.session.execute(text(
         "SELECT COUNT(*) FROM carvia_aprovacoes_subcontrato"
-    )).scalar()
+    )).scalar() or 0
     print(f"Total aprovacoes: {total}")
     print()
 

@@ -253,6 +253,7 @@ class ConferenciaService:
         """
         from app.carvia.models import CarviaFrete
         from app.utils.timezone import agora_utc_naive
+        from app.utils.json_helpers import sanitize_for_json
 
         if status not in ('APROVADO', 'DIVERGENTE'):
             return {'sucesso': False, 'erro': 'Status deve ser APROVADO ou DIVERGENTE'}
@@ -272,11 +273,13 @@ class ConferenciaService:
                 try:
                     resultado = self.calcular_opcoes_conferencia(primary_sub.id)
                     if resultado.get('sucesso'):
-                        snapshot = {
+                        # CalculadoraFrete retorna Decimals em detalhes —
+                        # sanitize antes de gravar no JSON column (regra CLAUDE.md)
+                        snapshot = sanitize_for_json({
                             'opcoes': resultado.get('opcoes', []),
                             'operacao_info': resultado.get('operacao_info'),
                             'conferido_em': str(agora_utc_naive()),
-                        }
+                        })
                 except Exception as e:
                     logger.warning(f"Erro ao gerar snapshot frete {frete_id}: {e}")
 
@@ -379,7 +382,16 @@ class ConferenciaService:
         contagem = {'APROVADO': 0, 'DIVERGENTE': 0, 'PENDENTE': 0}
         for f in fretes:
             sc = f.status_conferencia or 'PENDENTE'
-            contagem[sc] = contagem.get(sc, 0) + 1
+            if sc in contagem:
+                contagem[sc] += 1
+            else:
+                # Valor desconhecido: tratar como PENDENTE para evitar
+                # promocao silenciosa da fatura a CONFERIDO
+                logger.warning(
+                    f"Frete {f.id}: status_conferencia desconhecido '{sc}', "
+                    f"tratando como PENDENTE"
+                )
+                contagem['PENDENTE'] += 1
 
         total = len(fretes)
         status_anterior = fatura.status_conferencia

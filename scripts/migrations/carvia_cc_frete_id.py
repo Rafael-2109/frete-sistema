@@ -23,14 +23,14 @@ def run_migration():
     print(f"Total movimentacoes CC: {total}")
     print()
 
-    print("Step 1: ADD COLUMN frete_id")
+    print("Step 1: ADD COLUMN frete_id (idempotent)")
     db.session.execute(text("""
         ALTER TABLE carvia_conta_corrente_transportadoras
           ADD COLUMN IF NOT EXISTS frete_id INTEGER REFERENCES carvia_fretes(id)
     """))
     db.session.commit()
 
-    print("Step 2: Backfill")
+    print("Step 2: Backfill frete_id via sub")
     result = db.session.execute(text("""
         UPDATE carvia_conta_corrente_transportadoras cc
         SET frete_id = s.frete_id
@@ -39,16 +39,24 @@ def run_migration():
           AND cc.frete_id IS NULL
           AND s.frete_id IS NOT NULL
     """))
-    print(f"  Backfill: {result.rowcount}")
+    print(f"  Backfill: {result.rowcount} linhas")
     db.session.commit()
 
     orfaos = db.session.execute(text(
         "SELECT COUNT(*) FROM carvia_conta_corrente_transportadoras WHERE frete_id IS NULL"
     )).scalar() or 0
     if orfaos > 0:
-        print(f"AVISO: {orfaos} movimentacoes sem frete_id")
+        print(f"AVISO: {orfaos} movimentacoes sem frete_id (legado pre-CarviaFrete).")
+        print("  Nao bloqueante: listar_extrato usa OUTER JOIN.")
 
-    print("Step 3: Index")
+    print("Step 3: Afrouxar subcontrato_id NOT NULL (model ja afrouxado em Phase 5)")
+    db.session.execute(text("""
+        ALTER TABLE carvia_conta_corrente_transportadoras
+          ALTER COLUMN subcontrato_id DROP NOT NULL
+    """))
+    db.session.commit()
+
+    print("Step 4: Index (idempotent)")
     db.session.execute(text("""
         CREATE INDEX IF NOT EXISTS idx_carvia_cc_frete_id
           ON carvia_conta_corrente_transportadoras (frete_id)
@@ -56,8 +64,8 @@ def run_migration():
     db.session.commit()
 
     print()
-    print("RESULTADO: frete_id adicionado. DROP subcontrato_id deve ser feito")
-    print("manualmente apos deploy do codigo migrado (Phase 14).")
+    print("RESULTADO: frete_id adicionado + subcontrato_id afrouxado.")
+    print("DROP subcontrato_id sera feito pela migration Phase 14.")
 
 
 if __name__ == '__main__':
