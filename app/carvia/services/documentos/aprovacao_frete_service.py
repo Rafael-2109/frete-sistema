@@ -1,27 +1,20 @@
-"""AprovacaoSubcontratoService — fluxo de tratativa de subcontratos.
+"""AprovacaoFreteService — fluxo de tratativa de divergencia em CarviaFrete.
 
 Porta para o CarVia o conceito de "Em Tratativa" do modulo Nacom
-(`app/fretes/`). Quando a divergencia entre `valor_considerado` ou
-`valor_pago` e `valor_cotado` ultrapassa a tolerancia hardcoded, uma
-solicitacao de aprovacao e criada na tabela satelite
-`carvia_aprovacoes_subcontrato`.
+(`app/fretes/`). Quando a divergencia ultrapassa a tolerancia, uma
+solicitacao de aprovacao e criada em `carvia_aprovacoes_frete`.
 
-Diferencas em relacao ao Nacom:
-1. Logica centralizada aqui (Nacom tem inline em `routes.py:editar_frete`)
-2. Snapshot dos 3 valores no momento da solicitacao
-3. Idempotente: solicitacao PENDENTE existente nao cria duplicata
-4. Aprovacao usa `with_for_update()` para evitar race condition
-5. Status do `sub.status_conferencia` permanece PENDENTE durante tratativa
-   (e definido APROVADO ou DIVERGENTE so apos a decisao do aprovador)
+Paridade Nacom Frete.requer_aprovacao_por_valor (app/fretes/models.py:145-174):
+- Regra A: |valor_considerado - valor_cotado| > R$5
+- Regra B: |valor_pago - valor_cotado| > R$5
+- Regra C: |valor_pago - valor_considerado| > R$5  (a mais importante)
 
-Ref:
-- .claude/plans/wobbly-tumbling-treasure.md (D4 — substituir totalmente)
-- /tmp/subagent-findings/aprovacao_fretes_nacom.md
+Ref: docs/superpowers/plans/2026-04-14-carvia-frete-conferencia-migration.md
 """
 
 import logging
 from decimal import Decimal
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from app import db
 from app.utils.timezone import agora_utc_naive
@@ -29,49 +22,46 @@ from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 
-# Tolerancia hardcoded igual Nacom (app/fretes/routes.py:887, 898)
 TOLERANCIA_APROVACAO = Decimal('5.00')
 
 
-class AprovacaoSubcontratoService:
-    """Servico de gerenciamento de tratativas de subcontratos."""
+class AprovacaoFreteService:
+    """Servico de gerenciamento de tratativas de CarviaFrete."""
 
     # =================================================================
     # Verificacao automatica e solicitacao
     # =================================================================
     def verificar_e_solicitar_se_necessario(
-        self, sub_id: int, usuario: str
+        self, frete_id: int, usuario: str
     ) -> Dict:
-        """Avalia se sub requer tratativa e cria solicitacao se sim.
+        """Avalia se frete requer tratativa e cria solicitacao se sim.
 
         Aplicado quando:
-        - Conferente registra DIVERGENTE no `ConferenciaService`
-        - Operador atualiza `valor_pago` via endpoint `registrar-pagamento`
+        - Conferente registra conferencia via ConferenciaService
+        - Operador atualiza valor_pago via form editar_frete_carvia
 
-        Regras (espelho do Nacom `app/fretes/routes.py:882-914`):
-        - Regra A: `abs(valor_considerado - valor_cotado) > TOLERANCIA`
-        - Regra B: `abs(valor_pago - valor_cotado) > TOLERANCIA`
-
-        Se nenhuma regra dispara: retorna sucesso sem criar solicitacao
-        (diff dentro da tolerancia — pode ser lancada em CC sem aprovacao).
+        Regras (espelho do Nacom):
+        - Regra A: |valor_considerado - valor_cotado| > TOLERANCIA
+        - Regra B: |valor_pago - valor_cotado| > TOLERANCIA
+        - Regra C: |valor_pago - valor_considerado| > TOLERANCIA
         """
-        from app.carvia.models import CarviaSubcontrato
+        from app.carvia.models import CarviaFrete
 
-        sub = db.session.get(CarviaSubcontrato, sub_id)
-        if not sub:
-            return {'sucesso': False, 'erro': 'Subcontrato nao encontrado'}
+        frete = db.session.get(CarviaFrete, frete_id)
+        if not frete:
+            return {'sucesso': False, 'erro': 'Frete nao encontrado'}
 
-        if sub.status == 'CANCELADO':
-            return {'sucesso': False, 'erro': 'Subcontrato cancelado — sem tratativa'}
+        if frete.status == 'CANCELADO':
+            return {'sucesso': False, 'erro': 'Frete cancelado — sem tratativa'}
 
-        valor_cotado = Decimal(str(sub.valor_cotado or 0))
+        valor_cotado = Decimal(str(frete.valor_cotado or 0))
         valor_considerado = (
-            Decimal(str(sub.valor_considerado))
-            if sub.valor_considerado is not None
-            else None
+            Decimal(str(frete.valor_considerado))
+            if frete.valor_considerado is not None else None
         )
         valor_pago = (
-            Decimal(str(sub.valor_pago)) if sub.valor_pago is not None else None
+            Decimal(str(frete.valor_pago))
+            if frete.valor_pago is not None else None
         )
 
         motivos = []
@@ -95,6 +85,22 @@ class AprovacaoSubcontratoService:
                 )
                 diff_relevante = max(diff_relevante, diff_b)
 
+        # Regra C: pago vs considerado (paridade Nacom)
+        if valor_considerado is not None and valor_pago is not None:
+            diff_c = abs(valor_pago - valor_considerado)
+            if diff_c > TOLERANCIA_APROVACAO:
+                if valor_pago > valor_considerado:
+                    motivos.append(
+                        f'Valor Pago (R$ {valor_pago:.2f}) superior ao '
+                        f'Considerado (R$ {valor_considerado:.2f}) em R$ {diff_c:.2f}'
+                    )
+                else:
+                    motivos.append(
+                        f'Valor Considerado (R$ {valor_considerado:.2f}) superior ao '
+                        f'Pago (R$ {valor_pago:.2f}) em R$ {diff_c:.2f}'
+                    )
+                diff_relevante = max(diff_relevante, diff_c)
+
         if not motivos:
             return {
                 'sucesso': True,
@@ -102,9 +108,8 @@ class AprovacaoSubcontratoService:
                 'motivo': 'dentro da tolerancia',
             }
 
-        # Solicitar aprovacao (idempotente)
         return self.solicitar_aprovacao(
-            sub_id=sub_id,
+            frete_id=frete_id,
             motivo=' | '.join(motivos),
             usuario=usuario,
             valor_cotado=valor_cotado,
@@ -113,9 +118,12 @@ class AprovacaoSubcontratoService:
             diferenca=diff_relevante,
         )
 
+    # =================================================================
+    # Solicitacao (idempotente)
+    # =================================================================
     def solicitar_aprovacao(
         self,
-        sub_id: int,
+        frete_id: int,
         motivo: str,
         usuario: str,
         valor_cotado: Optional[Decimal] = None,
@@ -123,99 +131,69 @@ class AprovacaoSubcontratoService:
         valor_pago: Optional[Decimal] = None,
         diferenca: Optional[Decimal] = None,
     ) -> Dict:
-        """Cria solicitacao de aprovacao PENDENTE (idempotente).
+        """Cria aprovacao PENDENTE. Idempotente — se ja existe, retorna."""
+        from app.carvia.models import CarviaAprovacaoFrete, CarviaFrete
 
-        Se ja existe PENDENTE para este sub, retorna ela sem criar duplicata.
-        Aprovacoes finalizadas (APROVADO/REJEITADO) anteriores nao bloqueiam
-        nova solicitacao — historico completo e preservado.
-        """
-        from app.carvia.models import CarviaAprovacaoSubcontrato, CarviaSubcontrato
+        frete = db.session.get(CarviaFrete, frete_id)
+        if not frete:
+            return {'sucesso': False, 'erro': 'Frete nao encontrado'}
 
-        sub = db.session.get(CarviaSubcontrato, sub_id)
-        if not sub:
-            return {'sucesso': False, 'erro': 'Subcontrato nao encontrado'}
+        # Snapshot atual se nao fornecido
+        if valor_cotado is None and frete.valor_cotado is not None:
+            valor_cotado = Decimal(str(frete.valor_cotado))
+        if valor_considerado is None and frete.valor_considerado is not None:
+            valor_considerado = Decimal(str(frete.valor_considerado))
+        if valor_pago is None and frete.valor_pago is not None:
+            valor_pago = Decimal(str(frete.valor_pago))
 
-        # Snapshot atual se nao fornecido (computado ANTES da verificacao
-        # de idempotencia para permitir atualizacao de snaps stale)
-        if valor_cotado is None and sub.valor_cotado is not None:
-            valor_cotado = Decimal(str(sub.valor_cotado))
-        if valor_considerado is None and sub.valor_considerado is not None:
-            valor_considerado = Decimal(str(sub.valor_considerado))
-        if valor_pago is None and sub.valor_pago is not None:
-            valor_pago = Decimal(str(sub.valor_pago))
-
-        # Idempotencia: PENDENTE existente?
-        existente = CarviaAprovacaoSubcontrato.query.filter_by(
-            subcontrato_id=sub_id,
+        # Idempotencia
+        existente = CarviaAprovacaoFrete.query.filter_by(
+            frete_id=frete_id,
             status='PENDENTE',
-        ).first()
-        if existente:
-            # Atualiza snapshots se os valores mudaram desde a solicitacao
-            # original (ex: operador corrigiu valor_pago apos criar tratativa).
-            # Evita que aprovador veja dados desatualizados na tela.
-            snaps_atualizados = False
-            if valor_cotado is not None and existente.valor_cotado_snap != valor_cotado:
-                existente.valor_cotado_snap = valor_cotado
-                snaps_atualizados = True
-            if valor_considerado is not None and existente.valor_considerado_snap != valor_considerado:
-                existente.valor_considerado_snap = valor_considerado
-                snaps_atualizados = True
-            if valor_pago is not None and existente.valor_pago_snap != valor_pago:
-                existente.valor_pago_snap = valor_pago
-                snaps_atualizados = True
-            if diferenca is not None and existente.diferenca_snap != diferenca:
-                existente.diferenca_snap = diferenca
-                snaps_atualizados = True
-            if motivo and existente.motivo_solicitacao != motivo:
-                existente.motivo_solicitacao = motivo
-                snaps_atualizados = True
+        ).with_for_update().first()
 
+        if existente:
             logger.info(
-                f'Solicitacao PENDENTE ja existe para sub {sub_id} '
-                f'(aprovacao_id={existente.id}) — idempotente '
-                f'(snaps_atualizados={snaps_atualizados})'
+                f"Aprovacao PENDENTE ja existe | frete={frete_id} | "
+                f"aprovacao={existente.id}"
             )
             return {
                 'sucesso': True,
                 'tratativa_aberta': True,
                 'aprovacao_id': existente.id,
-                'criada': False,
-                'snaps_atualizados': snaps_atualizados,
+                'motivo': 'Aprovacao PENDENTE ja existente',
             }
 
-        try:
-            aprovacao = CarviaAprovacaoSubcontrato(
-                subcontrato_id=sub_id,
-                status='PENDENTE',
-                solicitado_por=usuario,
-                solicitado_em=agora_utc_naive(),
-                motivo_solicitacao=motivo,
-                valor_cotado_snap=valor_cotado,
-                valor_considerado_snap=valor_considerado,
-                valor_pago_snap=valor_pago,
-                diferenca_snap=diferenca,
-            )
-            db.session.add(aprovacao)
-            sub.requer_aprovacao = True
-            db.session.flush()  # popula aprovacao.id sem commit
+        aprovacao = CarviaAprovacaoFrete(
+            frete_id=frete_id,
+            status='PENDENTE',
+            solicitado_por=usuario,
+            solicitado_em=agora_utc_naive(),
+            motivo_solicitacao=motivo,
+            valor_cotado_snap=valor_cotado,
+            valor_considerado_snap=valor_considerado,
+            valor_pago_snap=valor_pago,
+            diferenca_snap=diferenca,
+        )
+        db.session.add(aprovacao)
+        db.session.flush()
 
-            logger.info(
-                f'Solicitacao de aprovacao criada | sub={sub_id} | '
-                f'aprovacao={aprovacao.id} | usuario={usuario}'
-            )
-            return {
-                'sucesso': True,
-                'tratativa_aberta': True,
-                'aprovacao_id': aprovacao.id,
-                'criada': True,
-            }
+        frete.requer_aprovacao = True
 
-        except Exception as e:
-            logger.exception(f'Erro ao criar solicitacao para sub {sub_id}: {e}')
-            return {'sucesso': False, 'erro': str(e)}
+        logger.info(
+            f"Aprovacao criada | frete={frete_id} | aprovacao={aprovacao.id} | "
+            f"diff={diferenca}"
+        )
+
+        return {
+            'sucesso': True,
+            'tratativa_aberta': True,
+            'aprovacao_id': aprovacao.id,
+            'motivo': motivo,
+        }
 
     # =================================================================
-    # Decisoes do aprovador
+    # Decisao: APROVAR
     # =================================================================
     def aprovar(
         self,
@@ -224,320 +202,212 @@ class AprovacaoSubcontratoService:
         observacoes: str,
         usuario: str,
     ) -> Dict:
-        """Aprova a tratativa.
+        """Processa decisao APROVADO em uma aprovacao PENDENTE."""
+        from app.carvia.models import CarviaAprovacaoFrete, CarviaFrete
 
-        Acoes:
-        1. Lock pessimista (with_for_update) para evitar race condition
-        2. Valida que aprovacao ainda esta PENDENTE
-        3. Marca aprovacao como APROVADO + grava aprovador + observacoes
-        4. sub.status_conferencia = 'APROVADO'
-        5. sub.requer_aprovacao = False
-        6. Se lancar_diferenca: chama ContaCorrenteService.lancar_movimentacao
-        7. Cascata: reverifica fatura completa via ConferenciaService
+        aprovacao = CarviaAprovacaoFrete.query.filter_by(
+            id=aprovacao_id
+        ).with_for_update().first()
 
-        Tudo em uma transacao atomica.
-        """
-        from app.carvia.models import (
-            CarviaAprovacaoSubcontrato,
-            CarviaSubcontrato,
-            CarviaFaturaTransportadora,
-        )
+        if not aprovacao:
+            return {'sucesso': False, 'erro': 'Aprovacao nao encontrada'}
+
+        if aprovacao.status != 'PENDENTE':
+            return {
+                'sucesso': False,
+                'erro': f'Aprovacao ja finalizada (status={aprovacao.status})',
+            }
 
         try:
-            # Lock pessimista
-            aprovacao = (
-                db.session.query(CarviaAprovacaoSubcontrato)
-                .filter(CarviaAprovacaoSubcontrato.id == aprovacao_id)
-                .with_for_update()
-                .first()
-            )
-            if not aprovacao:
-                return {'sucesso': False, 'erro': 'Aprovacao nao encontrada'}
-
-            if aprovacao.status != 'PENDENTE':
-                return {
-                    'sucesso': False,
-                    'erro': f'Aprovacao ja processada (status={aprovacao.status})',
-                }
-
-            sub = db.session.get(CarviaSubcontrato, aprovacao.subcontrato_id)
-            if not sub:
-                return {'sucesso': False, 'erro': 'Subcontrato nao encontrado'}
-
-            # Gate adicional: se fatura ja CONFERIDO, nao permitir lancar CC
-            fatura = None
-            if sub.fatura_transportadora_id:
-                fatura = db.session.get(
-                    CarviaFaturaTransportadora, sub.fatura_transportadora_id
-                )
-            if (
-                lancar_diferenca
-                and fatura is not None
-                and fatura.status_conferencia == 'CONFERIDO'
-            ):
-                return {
-                    'sucesso': False,
-                    'erro': (
-                        'Nao e possivel lancar diferenca em CC: fatura ja CONFERIDO. '
-                        'Reabra a fatura primeiro.'
-                    ),
-                }
-
-            # Atualiza aprovacao
             aprovacao.status = 'APROVADO'
             aprovacao.aprovador = usuario
             aprovacao.aprovado_em = agora_utc_naive()
             aprovacao.observacoes_aprovacao = observacoes
-            aprovacao.lancar_diferenca = bool(lancar_diferenca)
+            aprovacao.lancar_diferenca = lancar_diferenca
 
-            # Atualiza sub
-            sub.status_conferencia = 'APROVADO'
-            sub.requer_aprovacao = False
-            sub.conferido_por = usuario
-            sub.conferido_em = agora_utc_naive()
+            frete = db.session.get(CarviaFrete, aprovacao.frete_id)
+            if frete:
+                frete.status_conferencia = 'APROVADO'
+                frete.requer_aprovacao = False
+                frete.conferido_por = usuario
+                frete.conferido_em = agora_utc_naive()
 
-            # Lanca CC se opt-in
-            cc_id = None
-            if lancar_diferenca:
-                from app.carvia.services.financeiro.conta_corrente_service import (
-                    ContaCorrenteService,
-                )
-                cc_resultado = ContaCorrenteService.lancar_movimentacao(
-                    sub_id=sub.id,
-                    descricao=f'Diferenca aprovada (aprovacao #{aprovacao.id})',
-                    usuario=usuario,
-                    fatura_transportadora_id=sub.fatura_transportadora_id,
-                    observacoes=observacoes,
-                )
-                if not cc_resultado.get('sucesso'):
-                    # Falha ao lancar CC -> aborta a aprovacao inteira
-                    # (aprovador marcou "lancar diferenca" mas o sub nao atende
-                    # pre-requisitos como valor_pago/valor_considerado preenchidos).
-                    db.session.rollback()
-                    return {
-                        'sucesso': False,
-                        'erro': (
-                            f'Aprovacao cancelada: falha ao lancar CC — '
-                            f'{cc_resultado.get("erro")}. '
-                            f'Verifique se valor_pago e valor_considerado estao '
-                            f'preenchidos antes de marcar "lancar diferenca".'
-                        ),
-                    }
-                cc_id = cc_resultado.get('movimentacao_id')
-
-            # Cascata fatura (delega para ConferenciaService — ele ja tem essa logica)
-            fatura_atualizada = None
-            if sub.fatura_transportadora_id:
-                from app.carvia.services.documentos.conferencia_service import (
-                    ConferenciaService,
-                )
-                conf_svc = ConferenciaService()
-                _, fatura_atualizada = conf_svc._verificar_fatura_completa(
-                    sub.fatura_transportadora_id, usuario
-                )
+                # Opt-in: lancar em CC se usuario marcou checkbox
+                if lancar_diferenca:
+                    from app.carvia.services.financeiro.conta_corrente_service import (
+                        ContaCorrenteService,
+                    )
+                    cc_result = ContaCorrenteService.lancar_movimentacao(
+                        frete_id=frete.id,
+                        descricao=f'Aprovacao #{aprovacao.id}: {aprovacao.motivo_solicitacao[:100]}',
+                        usuario=usuario,
+                        fatura_transportadora_id=frete.fatura_transportadora_id,
+                        observacoes=observacoes,
+                    )
+                    if not cc_result.get('sucesso'):
+                        logger.warning(
+                            f"Lancamento CC falhou para aprovacao {aprovacao_id}: "
+                            f"{cc_result.get('erro')}"
+                        )
 
             db.session.commit()
 
             logger.info(
-                f'Aprovacao APROVADA | aprovacao={aprovacao_id} | sub={sub.id} | '
-                f'lancar_diferenca={lancar_diferenca} | cc_id={cc_id} | '
-                f'usuario={usuario}'
+                f"Aprovacao APROVADO | aprovacao={aprovacao_id} | "
+                f"frete={aprovacao.frete_id} | lancar_diff={lancar_diferenca}"
             )
+
             return {
                 'sucesso': True,
-                'aprovacao_id': aprovacao_id,
-                'cc_id': cc_id,
-                'fatura_status': fatura_atualizada,
+                'decisao': 'APROVADO',
+                'frete_status': frete.status_conferencia if frete else None,
             }
 
         except Exception as e:
             db.session.rollback()
-            logger.exception(f'Erro ao aprovar aprovacao {aprovacao_id}: {e}')
+            logger.error(f"Erro ao aprovar {aprovacao_id}: {e}")
             return {'sucesso': False, 'erro': str(e)}
 
+    # =================================================================
+    # Decisao: REJEITAR
+    # =================================================================
     def rejeitar(
-        self, aprovacao_id: int, observacoes: str, usuario: str
+        self,
+        aprovacao_id: int,
+        observacoes: str,
+        usuario: str,
     ) -> Dict:
-        """Rejeita a tratativa.
+        """Processa decisao REJEITADO em uma aprovacao PENDENTE."""
+        from app.carvia.models import CarviaAprovacaoFrete, CarviaFrete
 
-        Acoes:
-        1. Lock pessimista
-        2. Valida PENDENTE
-        3. aprovacao.status = 'REJEITADO'
-        4. sub.status_conferencia = 'DIVERGENTE' (final, sem CC)
-        5. sub.requer_aprovacao = False
-        6. Cascata fatura
-        """
-        from app.carvia.models import (
-            CarviaAprovacaoSubcontrato,
-            CarviaSubcontrato,
-        )
+        aprovacao = CarviaAprovacaoFrete.query.filter_by(
+            id=aprovacao_id
+        ).with_for_update().first()
+
+        if not aprovacao:
+            return {'sucesso': False, 'erro': 'Aprovacao nao encontrada'}
+
+        if aprovacao.status != 'PENDENTE':
+            return {
+                'sucesso': False,
+                'erro': f'Aprovacao ja finalizada (status={aprovacao.status})',
+            }
 
         try:
-            aprovacao = (
-                db.session.query(CarviaAprovacaoSubcontrato)
-                .filter(CarviaAprovacaoSubcontrato.id == aprovacao_id)
-                .with_for_update()
-                .first()
-            )
-            if not aprovacao:
-                return {'sucesso': False, 'erro': 'Aprovacao nao encontrada'}
-
-            if aprovacao.status != 'PENDENTE':
-                return {
-                    'sucesso': False,
-                    'erro': f'Aprovacao ja processada (status={aprovacao.status})',
-                }
-
-            sub = db.session.get(CarviaSubcontrato, aprovacao.subcontrato_id)
-            if not sub:
-                return {'sucesso': False, 'erro': 'Subcontrato nao encontrado'}
-
             aprovacao.status = 'REJEITADO'
             aprovacao.aprovador = usuario
             aprovacao.aprovado_em = agora_utc_naive()
             aprovacao.observacoes_aprovacao = observacoes
             aprovacao.lancar_diferenca = False
 
-            sub.status_conferencia = 'DIVERGENTE'
-            sub.requer_aprovacao = False
-            sub.conferido_por = usuario
-            sub.conferido_em = agora_utc_naive()
-
-            # Cascata fatura
-            fatura_atualizada = None
-            if sub.fatura_transportadora_id:
-                from app.carvia.services.documentos.conferencia_service import (
-                    ConferenciaService,
-                )
-                conf_svc = ConferenciaService()
-                _, fatura_atualizada = conf_svc._verificar_fatura_completa(
-                    sub.fatura_transportadora_id, usuario
-                )
+            frete = db.session.get(CarviaFrete, aprovacao.frete_id)
+            if frete:
+                frete.status_conferencia = 'DIVERGENTE'
+                frete.requer_aprovacao = False
+                frete.conferido_por = usuario
+                frete.conferido_em = agora_utc_naive()
 
             db.session.commit()
 
             logger.info(
-                f'Aprovacao REJEITADA | aprovacao={aprovacao_id} | sub={sub.id} | '
-                f'usuario={usuario}'
+                f"Aprovacao REJEITADO | aprovacao={aprovacao_id} | "
+                f"frete={aprovacao.frete_id}"
             )
+
             return {
                 'sucesso': True,
-                'aprovacao_id': aprovacao_id,
-                'fatura_status': fatura_atualizada,
+                'decisao': 'REJEITADO',
+                'frete_status': frete.status_conferencia if frete else None,
             }
 
         except Exception as e:
             db.session.rollback()
-            logger.exception(f'Erro ao rejeitar aprovacao {aprovacao_id}: {e}')
+            logger.error(f"Erro ao rejeitar {aprovacao_id}: {e}")
             return {'sucesso': False, 'erro': str(e)}
 
     # =================================================================
-    # Listagem (fila de pendentes)
+    # Listagem de PENDENTES
     # =================================================================
     def listar_pendentes(
         self,
         transportadora: Optional[str] = None,
         cte_numero: Optional[str] = None,
         nf_numero: Optional[str] = None,
-    ):
-        """Retorna queryset de aprovacoes PENDENTE com sub joined.
+    ) -> List:
+        """Lista tratativas PENDENTE com filtros opcionais.
 
-        Usado pela rota `/carvia/subcontratos/aprovacoes`. Aceita filtros
-        opcionais (espelha padrao Nacom `listar_aprovacoes`): busca parcial
-        `ilike` por razao social da transportadora, numero do CTe sub ou
-        numero da NF (via operacao -> junction -> NF).
+        Retorna lista de tuplas (aprovacao, frete) para uso em templates.
         """
-        from app.carvia.models import (
-            CarviaAprovacaoSubcontrato,
-            CarviaSubcontrato,
-            CarviaOperacao,
-            CarviaOperacaoNf,
-            CarviaNf,
-        )
-        from app.transportadoras.models import Transportadora
+        from app.carvia.models import CarviaAprovacaoFrete, CarviaFrete
 
         query = (
-            db.session.query(CarviaAprovacaoSubcontrato, CarviaSubcontrato)
-            .join(
-                CarviaSubcontrato,
-                CarviaSubcontrato.id == CarviaAprovacaoSubcontrato.subcontrato_id,
-            )
-            .filter(CarviaAprovacaoSubcontrato.status == 'PENDENTE')
+            db.session.query(CarviaAprovacaoFrete, CarviaFrete)
+            .join(CarviaFrete, CarviaAprovacaoFrete.frete_id == CarviaFrete.id)
+            .filter(CarviaAprovacaoFrete.status == 'PENDENTE')
         )
 
         if transportadora:
+            from app.transportadoras.models import Transportadora
             query = query.join(
                 Transportadora,
-                Transportadora.id == CarviaSubcontrato.transportadora_id,
-            ).filter(
-                Transportadora.razao_social.ilike(f'%{transportadora}%')
-            )
+                CarviaFrete.transportadora_id == Transportadora.id,
+            ).filter(Transportadora.razao_social.ilike(f'%{transportadora}%'))
 
+        # cte_numero e nf_numero dependem de joins com Sub (que carrega CTe).
+        # Mantido opcional — se necessario, iterar frete.subcontratos.
         if cte_numero:
-            query = query.filter(
-                CarviaSubcontrato.cte_numero.ilike(f'%{cte_numero}%')
-            )
+            from app.carvia.models import CarviaSubcontrato
+            query = query.join(
+                CarviaSubcontrato,
+                CarviaSubcontrato.frete_id == CarviaFrete.id,
+            ).filter(CarviaSubcontrato.cte_numero.ilike(f'%{cte_numero}%'))
 
         if nf_numero:
-            # Navegar sub -> operacao -> CarviaOperacaoNf -> CarviaNf
-            # (sub pode ter multiplas NFs via operacao — distinct evita duplicatas)
-            query = (
-                query.join(
-                    CarviaOperacao,
-                    CarviaOperacao.id == CarviaSubcontrato.operacao_id,
-                )
-                .join(
-                    CarviaOperacaoNf,
-                    CarviaOperacaoNf.operacao_id == CarviaOperacao.id,
-                )
-                .join(
-                    CarviaNf,
-                    CarviaNf.id == CarviaOperacaoNf.nf_id,
-                )
-                .filter(CarviaNf.numero_nf.ilike(f'%{nf_numero}%'))
-                .distinct()
-            )
+            query = query.filter(CarviaFrete.numeros_nfs.ilike(f'%{nf_numero}%'))
 
-        return (
-            query.order_by(CarviaAprovacaoSubcontrato.solicitado_em.desc())
-            .all()
-        )
-
-    def contar_pendentes(self) -> int:
-        """Conta total de aprovacoes PENDENTE — usado para badge no menu."""
-        from app.carvia.models import CarviaAprovacaoSubcontrato
-
-        return CarviaAprovacaoSubcontrato.query.filter_by(status='PENDENTE').count()
-
-    # =================================================================
-    # Cancelamento automatico (chamado por hooks)
-    # =================================================================
-    def rejeitar_pendentes_de_sub(self, sub_id: int, motivo: str, usuario: str) -> int:
-        """Rejeita silenciosamente todas as aprovacoes PENDENTE de um sub.
-
-        Usado em hooks de cancelamento (sub.status='CANCELADO',
-        desanexar_subcontrato_fatura_transportadora). NAO commita —
-        chamador deve commitar.
-        """
-        from app.carvia.models import CarviaAprovacaoSubcontrato
-
-        pendentes = CarviaAprovacaoSubcontrato.query.filter_by(
-            subcontrato_id=sub_id, status='PENDENTE'
+        return query.order_by(
+            CarviaAprovacaoFrete.solicitado_em.desc()
         ).all()
 
-        if not pendentes:
-            return 0
+    # =================================================================
+    # Contagem PENDENTE (para badge em menu)
+    # =================================================================
+    def contar_pendentes(self) -> int:
+        """Retorna quantidade de tratativas PENDENTE."""
+        from app.carvia.models import CarviaAprovacaoFrete
+        return CarviaAprovacaoFrete.query.filter_by(status='PENDENTE').count()
 
+    # =================================================================
+    # Rejeicao em lote (hook de desanexar sub/cancelar)
+    # =================================================================
+    def rejeitar_pendentes_de_frete(
+        self, frete_id: int, motivo: str, usuario: str
+    ) -> int:
+        """Rejeita silenciosamente todas aprovacoes PENDENTE de um frete.
+
+        Usado em hooks de cancelamento (frete.status='CANCELADO',
+        desanexar subcontrato). NAO commita — chamador deve commitar.
+        Retorna qtd de rejeicoes aplicadas.
+        """
+        from app.carvia.models import CarviaAprovacaoFrete, CarviaFrete
+
+        pendentes = CarviaAprovacaoFrete.query.filter_by(
+            frete_id=frete_id,
+            status='PENDENTE',
+        ).all()
+
+        count = 0
         for ap in pendentes:
             ap.status = 'REJEITADO'
             ap.aprovador = usuario
             ap.aprovado_em = agora_utc_naive()
-            ap.observacoes_aprovacao = f'[AUTO] {motivo}'
+            ap.observacoes_aprovacao = f'Auto-rejeitado: {motivo}'
             ap.lancar_diferenca = False
+            count += 1
 
-        logger.info(
-            f'{len(pendentes)} aprovacao(oes) PENDENTE rejeitadas auto | '
-            f'sub={sub_id} | motivo={motivo}'
-        )
-        return len(pendentes)
+        if count > 0:
+            frete = db.session.get(CarviaFrete, frete_id)
+            if frete:
+                frete.requer_aprovacao = False
+
+        return count
