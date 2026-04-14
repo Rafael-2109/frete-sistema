@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}Criar Despesa Extra - Frete #{{ frete.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-plus"></i> Criar Despesa Extra
+                <small class="text-muted">Frete #{{ frete.id }}</small>
+            </h1>
+        </div>
+    </div>
+
+    {% set carvia_active = 'custos_entrega' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}">Nova Despesa Extra</a></li>
+            <li class="breadcrumb-item active">Criar Despesa</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Formulario -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle"></i> Dados da Despesa Extra
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle"></i> Fluxo Simplificado</h6>
+                        <p class="mb-0">
+                            Preencha apenas os <strong>dados basicos</strong> da despesa.
+                            O <strong>documento</strong> e <strong>vencimento</strong> serao definidos quando vincular a uma fatura.
+                        </p>
+                    </div>
+
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        {{ form.hidden_tag() }}
+
+                        <!-- Tipo de Despesa -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    {{ form.tipo_despesa.label(class="form-label") }}
+                                    {{ form.tipo_despesa(class="form-control") }}
+                                    {% if form.tipo_despesa.errors %}
+                                    {% for error in form.tipo_despesa.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Valor -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-dollar-sign"></i> Valor da Despesa
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.valor_despesa.label(class="form-label") }}
+                                    <div class="input-group">
+                                        <span class="input-group-text">R$</span>
+                                        {{ form.valor_despesa(class="form-control valor-monetario", placeholder="0,00") }}
+                                    </div>
+                                    {% if form.valor_despesa.errors %}
+                                    {% for error in form.valor_despesa.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                    {% endif %}
+                                    <small class="text-muted">Valor estimado (pode ser ajustado na fatura)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="alert alert-secondary small">
+                                    <i class="fas fa-info-circle"></i>
+                                    <strong>Documento e Vencimento:</strong><br>
+                                    Serao preenchidos automaticamente quando voce vincular esta despesa a uma fatura.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Transportadora do Pagamento -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-truck"></i> Transportadora do Pagamento
+                        </h6>
+                        <div class="form-group">
+                            {{ form.transportadora_id.label(class="form-label") }}
+                            {{ form.transportadora_id(class="form-select") }}
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Se nao informado, a despesa sera paga a transportadora do frete
+                                (<strong>{{ frete.transportadora.razao_social if frete.transportadora else '-' }}</strong>).
+                                Use este campo apenas quando a despesa deve ser paga a outro transportador.
+                            </small>
+                        </div>
+
+                        <!-- Anexos -->
+                        <div class="form-group mt-4">
+                            {{ form.anexos.label(class="form-label") }}
+                            {{ form.anexos(class="form-control", multiple=True) }}
+                            {% if form.anexos.errors %}
+                            {% for error in form.anexos.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                            {% endif %}
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Anexe comprovantes, fotos, PDFs ou emails (.msg/.eml). Voce pode selecionar multiplos arquivos.
+                            </small>
+                        </div>
+
+                        <!-- Observacoes -->
+                        <div class="form-group">
+                            {{ form.observacoes.label(class="form-label") }}
+                            {{ form.observacoes(class="form-control", rows="3") }}
+                            <small class="text-muted">Observacoes adicionais sobre a despesa</small>
+                        </div>
+
+                        <!-- Botoes -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-arrow-right"></i> Continuar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informacoes do frete -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Resumo do Frete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Emitente:</strong> {{ frete.nome_emitente[:35] if frete.nome_emitente else '-' }}{% if frete.nome_emitente and frete.nome_emitente|length > 35 %}...{% endif %}</p>
+                    <p><strong>CNPJ:</strong> {{ frete.cnpj_emitente }}</p>
+                    <p><strong>Destino:</strong> {{ frete.nome_destino[:30] if frete.nome_destino else '-' }}</p>
+                    <p><strong>Cidade/UF:</strong> {{ frete.cidade_destino }}/{{ frete.uf_destino }}</p>
+                    <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social if frete.transportadora else '-' }}</p>
+                    <p><strong>Valor Cotado:</strong> {{ (frete.valor_cotado or 0)|moeda_carteira }}</p>
+                    <p><strong>Status:</strong>
+                        <span class="badge carvia-badge-{{ frete.status|lower }}">{{ frete.status }}</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- NFs do frete -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-list"></i> NFs no Frete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if frete.numeros_nfs %}
+                    {% set nfs_list = frete.numeros_nfs.split(',') %}
+                    {% for nf in nfs_list %}
+                    {% if nf.strip() %}
+                    <span class="badge bg-primary me-1 mb-1">{{ nf.strip() }}</span>
+                    {% endif %}
+                    {% endfor %}
+                    {% else %}
+                    <span class="text-muted">Nenhuma NF informada</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Proximas etapas (xerox Nacom) -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Proximas Etapas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <small>
+                        <strong>Apos preencher os dados:</strong><br>
+                        1. <strong>Vinculacao:</strong> Abra a despesa via CarviaFrete<br>
+                        2. <strong>Fatura:</strong> Clique em "Vincular" na coluna Fatura<br>
+                        3. <strong>Documento:</strong> Informe numero CTe/NFS/Recibo<br>
+                        4. <strong>Vencimento:</strong> Copiado automaticamente da fatura
+                    </small>
+                    <div class="alert alert-info small mt-2 mb-0">
+                        <i class="fas fa-lightbulb"></i>
+                        <strong>Dica:</strong> Documento e vencimento so sao preenchidos APOS vincular uma fatura.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.valor-monetario').forEach(function(input) {
+    input.addEventListener('blur', function(e) {
+        let value = e.target.value.trim();
+        if (!value) return;
+        value = value.replace(/[^\d.,]/g, '');
+        let numero;
+        if (value.includes(',')) {
+            numero = parseFloat(value.replace(/\./g, '').replace(',', '.'));
+        } else if (value.includes('.')) {
+            const partes = value.split('.');
+            if (partes[partes.length - 1].length <= 2) {
+                numero = parseFloat(value);
+            } else {
+                numero = parseFloat(value.replace(/\./g, ''));
+            }
+        } else {
+            numero = parseFloat(value);
+        }
+        if (!isNaN(numero)) {
+            e.target.value = numero.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+    });
+    input.addEventListener('input', function(e) {
+        e.target.value = e.target.value.replace(/[^\d.,]/g, '');
+    });
+});
+</script>
+{% endblock %}

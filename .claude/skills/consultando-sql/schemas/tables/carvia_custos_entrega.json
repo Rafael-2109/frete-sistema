@@ -15,8 +15,7 @@
     {
       "name": "operacao_id",
       "type": "integer",
-      "description": "FK → carvia_operacoes.id",
-      "nullable": false
+      "description": "FK → carvia_operacoes.id (nullable — fluxo COMPRA nao exige operacao de venda)"
     },
     {
       "name": "cte_complementar_id",
@@ -53,6 +52,21 @@
     {
       "name": "fornecedor_cnpj",
       "type": "varchar(20)"
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(20)",
+      "description": "CTE, NFS, RECIBO, BOLETO, OUTROS, PENDENTE_DOCUMENTO (xerox DespesaExtra.tipo_documento)"
+    },
+    {
+      "name": "numero_documento",
+      "type": "varchar(50)",
+      "description": "Sentinel 'PENDENTE_FATURA' enquanto nao vinculado a FT (xerox DespesaExtra.numero_documento)"
+    },
+    {
+      "name": "transportadora_id",
+      "type": "integer",
+      "description": "FK → transportadoras.id — override opcional para transportadora do pagamento (xerox DespesaExtra.transportadora_id)"
     },
     {
       "name": "status",
@@ -135,6 +149,10 @@
     {
       "column": "fatura_transportadora_id",
       "references": "carvia_faturas_transportadora.id"
+    },
+    {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
     }
   ],
   "indices": [
@@ -191,6 +209,13 @@
       "name": "ix_carvia_custos_entrega_subcontrato_id",
       "columns": [
         "subcontrato_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_transportadora_id",
+      "columns": [
+        "transportadora_id"
       ],
       "unique": false
     }

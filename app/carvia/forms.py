@@ -5,8 +5,9 @@ Formularios WTForms do Modulo CarVia
 import re
 
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileAllowed, MultipleFileField
 from wtforms import (
-    StringField, DecimalField, IntegerField, SelectField,
+    StringField, DecimalField, IntegerField, SelectField, SubmitField,
     TextAreaField, DateField, HiddenField
 )
 from wtforms.validators import DataRequired, Optional, Length, NumberRange, ValidationError
@@ -195,3 +196,118 @@ class CubagemForm(FlaskForm):
         validators=[Optional(), NumberRange(min=1)],
         default=1
     )
+
+
+# =============================================================================
+# DESPESAS EXTRAS (xerox DespesaExtra / DespesaExtraCompletoForm Nacom)
+# =============================================================================
+# Paridade com app/fretes/forms.py:89-187. Sem setor_responsavel e
+# motivo_despesa (decisao: problema do cliente). Sem emails_anexados separado
+# — CarVia usa CarviaCustoEntregaAnexo que ja aceita .msg/.eml com metadata.
+
+class CarviaDespesaExtraForm(FlaskForm):
+    """Formulario SIMPLIFICADO para despesas extras CarVia (xerox DespesaExtraForm).
+
+    Usado em: /carvia/despesas-extras/criar/<frete_id> e
+    /carvia/fretes/<frete_id>/despesas-extras/nova. Sem documento/vencimento
+    (preenchidos ao vincular fatura).
+    """
+    tipo_despesa = SelectField(
+        'Tipo de Despesa',
+        choices=[],  # Populado na view com CarviaCustoEntrega.TIPOS_CUSTO
+        validators=[DataRequired()],
+    )
+
+    valor_despesa = StringField(
+        'Valor da Despesa',
+        validators=[DataRequired()],
+        description='Use virgula como separador decimal (ex: 1.234,56)',
+    )
+
+    def validate_valor_despesa(self, field):
+        if field.data:
+            from app.utils.valores_brasileiros import validar_valor_brasileiro
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
+
+    transportadora_id = SelectField(
+        'Transportadora do Pagamento',
+        choices=[],
+        coerce=lambda x: int(x) if x and x != '' else None,
+        validators=[Optional()],
+    )
+
+    anexos = MultipleFileField(
+        'Anexar Comprovantes/Emails',
+        validators=[
+            FileAllowed(
+                ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'msg', 'eml'],
+                'Formatos aceitos: PDF, imagem, DOC, XLS, MSG, EML'
+            )
+        ],
+    )
+
+    observacoes = TextAreaField('Observacoes')
+
+    submit = SubmitField('Continuar')
+
+
+class CarviaDespesaExtraCompletoForm(FlaskForm):
+    """Formulario COMPLETO para despesas extras CarVia (xerox DespesaExtraCompletoForm).
+
+    Usado em: /carvia/despesas-extras/<id>/vincular-fatura e
+    /carvia/despesas-extras/<id>/editar-documento. Inclui tipo_documento,
+    numero_documento e data_vencimento.
+    """
+    tipo_despesa = SelectField(
+        'Tipo de Despesa',
+        choices=[],
+        validators=[DataRequired()],
+    )
+
+    tipo_documento = SelectField(
+        'Tipo do Documento',
+        choices=[
+            ('CTE', 'CTe'),
+            ('NFS', 'Nota Fiscal de Servico'),
+            ('RECIBO', 'Recibo'),
+            ('BOLETO', 'Boleto'),
+            ('OUTROS', 'Outros'),
+        ],
+        validators=[DataRequired()],
+    )
+
+    numero_documento = StringField(
+        'Numero do Documento',
+        validators=[DataRequired(), Length(max=50)],
+    )
+
+    valor_despesa = StringField(
+        'Valor da Despesa',
+        validators=[DataRequired()],
+        description='Use virgula como separador decimal (ex: 1.234,56)',
+    )
+
+    def validate_valor_despesa(self, field):
+        if field.data:
+            from app.utils.valores_brasileiros import validar_valor_brasileiro
+            is_valid, error_msg = validar_valor_brasileiro(field.data)
+            if not is_valid:
+                raise ValidationError(error_msg)
+
+    vencimento_despesa = DateField(
+        'Vencimento da Despesa',
+        validators=[Optional()],
+    )
+
+    transportadora_id = SelectField(
+        'Transportadora do Pagamento',
+        choices=[],
+        coerce=lambda x: int(x) if x and x != '' else None,
+        validators=[Optional()],
+    )
+
+    observacoes = TextAreaField('Observacoes')
+
+    submit = SubmitField('Adicionar Despesa')

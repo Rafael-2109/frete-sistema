@@ -13,6 +13,7 @@
     {% include 'carvia/_quick_nav.html' %}
 
     <!-- Info da operacao (read-only) -->
+    {% if custo.operacao_id and custo.operacao %}
     <div class="card mb-3">
         <div class="card-header">
             <h6 class="mb-0"><i class="fas fa-link"></i> Operacao Vinculada</h6>
@@ -42,6 +43,23 @@
             </div>
         </div>
     </div>
+    {% elif custo.frete_id %}
+    {# Fluxo compra (xerox DespesaExtra) — sem operacao de venda #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-truck"></i> Frete Vinculado (Fluxo de Compra)</h6>
+        </div>
+        <div class="card-body py-2">
+            <a href="{{ url_for('carvia.detalhe_frete_carvia', id=custo.frete_id) }}" class="text-decoration-none">
+                <strong>Frete #{{ custo.frete_id }}</strong>
+            </a>
+            {% if custo.frete %}
+            — {{ custo.frete.nome_emitente or custo.frete.cnpj_emitente }}
+            → {{ custo.frete.cidade_destino }}/{{ custo.frete.uf_destino }}
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     <div class="row justify-content-center">
         <div class="col-md-8">

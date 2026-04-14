@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Vincular Despesa a Fatura{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-link"></i> Vincular Despesa a Fatura
+                <small class="text-muted">Despesa {{ custo.numero_custo }}</small>
+            </h1>
+        </div>
+    </div>
+
+    {% set carvia_active = 'custos_entrega' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.gerenciar_custos_entrega') }}">Gerenciar Despesas</a></li>
+            <li class="breadcrumb-item active">Vincular a Fatura</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Formulario principal -->
+        <div class="col-md-8">
+            <!-- Dados da despesa existente -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Dados da Despesa Extra
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Numero:</strong> {{ custo.numero_custo }}</p>
+                            <p><strong>Tipo:</strong> {{ custo.tipo_custo }}</p>
+                            <p><strong>Status:</strong>
+                                <span class="badge carvia-badge-{{ custo.status|lower }}">{{ custo.status_descricao }}</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Documento Atual:</strong> {{ custo.tipo_documento or '-' }}</p>
+                            <p><strong>Numero Doc.:</strong> {{ custo.numero_documento or '-' }}</p>
+                            <p><strong>Valor Atual:</strong> {{ (custo.valor or 0)|moeda_carteira }}</p>
+                            <p><strong>Vencimento Atual:</strong> {{ custo.data_vencimento | formatar_data_segura if custo.data_vencimento else 'N/A' }}</p>
+                        </div>
+                    </div>
+
+                    {% if custo.observacoes %}
+                    <div class="mt-3">
+                        <p><strong>Observacoes:</strong> {{ custo.observacoes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Formulario de vinculacao -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-file-invoice"></i> Vincular a Fatura
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+                        <!-- Selecao da fatura -->
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-file-invoice"></i> Selecione a Fatura
+                            </label>
+                            {% if faturas_disponiveis %}
+                                <select name="fatura_id" class="form-control" required>
+                                    <option value="">Selecione uma fatura...</option>
+                                    {% for fatura in faturas_disponiveis %}
+                                        <option value="{{ fatura.id }}">
+                                            {{ fatura.numero_fatura }} -
+                                            {{ fatura.transportadora.razao_social[:30] if fatura.transportadora else '-' }} -
+                                            {{ (fatura.valor_total or 0)|moeda_carteira }}
+                                            {% if fatura.vencimento %} - Venc: {{ fatura.vencimento | formatar_data_segura }}{% endif %}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">
+                                    Faturas transportadora nao conferidas e nao pagas
+                                </small>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <strong>Nenhuma fatura disponivel.</strong>
+                                    <br>
+                                    <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" target="_blank">Criar nova fatura</a>
+                                </div>
+                                <input type="hidden" name="fatura_id" value="">
+                            {% endif %}
+                        </div>
+
+                        <!-- Ajustes do documento de cobranca -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-edit"></i> Ajustar Dados da Cobranca
+                        </h6>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Tipo do Documento de Cobranca</label>
+                                    <select name="tipo_documento_cobranca" class="form-control" required>
+                                        <option value="CTE" {% if custo.tipo_documento in ('CTE', 'CTe') %}selected{% endif %}>CTe (Complementar)</option>
+                                        <option value="NFS" {% if custo.tipo_documento == 'NFS' %}selected{% endif %}>Nota Fiscal de Servico</option>
+                                        <option value="RECIBO" {% if custo.tipo_documento == 'RECIBO' %}selected{% endif %}>Recibo</option>
+                                        <option value="BOLETO" {% if custo.tipo_documento == 'BOLETO' %}selected{% endif %}>Boleto</option>
+                                        <option value="OUTROS" {% if custo.tipo_documento == 'OUTROS' %}selected{% endif %}>Outros</option>
+                                    </select>
+                                    <small class="text-muted">
+                                        Tipo do documento que a transportadora emitiu para esta despesa
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Valor de Cobranca</label>
+                                    <input type="text"
+                                           name="valor_cobranca"
+                                           class="form-control money-input"
+                                           value="{{ '%.2f'|format(custo.valor or 0) }}"
+                                           placeholder="Ex: 150,00">
+                                    <small class="text-muted">Deixe em branco para manter o valor atual</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Numero do CTe/Documento</label>
+                                    <input type="text"
+                                           name="numero_cte_documento"
+                                           class="form-control"
+                                           value="{{ custo.numero_documento if custo.numero_documento and custo.numero_documento != 'PENDENTE_FATURA' else '' }}"
+                                           placeholder="Ex: 123456789">
+                                    <small class="text-muted">Preencha o numero do documento de cobranca</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Alerta importante -->
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle"></i> Importante: Vencimento sera copiado da fatura</h6>
+                            <p class="mb-0">Quando voce vincular a despesa a uma fatura, o <strong>vencimento da fatura sera copiado automaticamente</strong> para a despesa, substituindo o vencimento atual.</p>
+                        </div>
+
+                        <!-- Botoes -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('carvia.gerenciar_custos_entrega') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            {% if faturas_disponiveis %}
+                                <button type="submit" class="btn btn-success btn-lg">
+                                    <i class="fas fa-link"></i> Vincular a Fatura
+                                </button>
+                            {% else %}
+                                <a href="{{ url_for('carvia.nova_fatura_transportadora') }}" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Criar Nova Fatura
+                                </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informacoes laterais -->
+        <div class="col-md-4">
+            <!-- Dados do frete -->
+            {% if frete %}
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-truck"></i> Dados do Frete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Frete:</strong>
+                        <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}">#{{ frete.id }}</a>
+                    </p>
+                    <p><strong>Emitente:</strong> {{ frete.nome_emitente[:30] if frete.nome_emitente else '-' }}</p>
+                    <p><strong>Destino:</strong> {{ frete.nome_destino[:30] if frete.nome_destino else '-' }}</p>
+                    <p><strong>Transportadora:</strong> {{ frete.transportadora.razao_social[:25] if frete.transportadora else '-' }}</p>
+                    <p><strong>Valor Cotado:</strong> {{ (frete.valor_cotado or 0)|moeda_carteira }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Faturas disponiveis -->
+            {% if faturas_disponiveis %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-list"></i> Faturas Disponiveis
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Fatura</th>
+                                    <th>Valor</th>
+                                    <th>Vencimento</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fatura in faturas_disponiveis %}
+                                <tr>
+                                    <td>{{ fatura.numero_fatura }}</td>
+                                    <td>{{ (fatura.valor_total or 0)|moeda_carteira }}</td>
+                                    <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Explicacoes -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-question-circle"></i> Como funciona
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <small>
+                        <div class="mb-3">
+                            <strong>Vinculacao:</strong><br>
+                            &bull; Escolha a fatura correspondente<br>
+                            &bull; Ajuste tipo de documento se necessario<br>
+                            &bull; Confirme ou ajuste o valor da cobranca
+                        </div>
+
+                        <div class="mb-3">
+                            <strong>Vencimento:</strong><br>
+                            &bull; O vencimento da <strong>fatura</strong> sera copiado para a despesa<br>
+                            &bull; Isso garante que os prazos fiquem alinhados
+                        </div>
+
+                        <div class="alert alert-info small">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Importante:</strong> Apos vincular, a despesa ira para o status VINCULADO_FT.
+                        </div>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Frete CarVia {{ frete.ctrc_numero or ('#' ~ frete.id) }}{% endblock %}
+{# CarviaFrete nao tem `ctrc_numero` proprio — resolve via operacao (venda) → subcontrato (compra) #}
+{% set _frete_label = (operacao.ctrc_numero if operacao and operacao.ctrc_numero else (operacao.cte_numero if operacao and operacao.cte_numero else (subcontrato.cte_numero if subcontrato and subcontrato.cte_numero else None))) %}
+
+{% block title %}Frete CarVia {{ _frete_label or ('#' ~ frete.id) }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -11,7 +14,7 @@
     <div class="row">
         <div class="col-12">
             <h1 class="h3 mb-2">
-                <i class="fas fa-file-invoice"></i> Frete CarVia {{ frete.ctrc_numero or '(sem CTRC)' }}
+                <i class="fas fa-file-invoice"></i> Frete CarVia {{ _frete_label or '(sem CTe)' }}
                 <span class="badge carvia-badge-{{ frete.status|lower }} ms-2">{{ frete.status }}</span>
             </h1>
             <p class="text-muted mb-4">
@@ -48,6 +51,13 @@
             <span class="btn btn-outline-secondary disabled">
                 <i class="fas fa-history"></i> Backfill (sem embarque)
             </span>
+            {% endif %}
+
+            {% if not fatura_transportadora or fatura_transportadora.status_conferencia != 'CONFERIDO' %}
+            <a href="{{ url_for('carvia.nova_despesa_do_frete_carvia', frete_id=frete.id) }}"
+               class="btn btn-warning">
+                <i class="fas fa-plus"></i> Nova Despesa Extra
+            </a>
             {% endif %}
 
             {% if not frete.fatura_cliente_id and not frete.fatura_transportadora_id and frete.status != 'CANCELADO' %}
@@ -624,6 +634,23 @@
                         <small class="text-muted ms-1">
                             <span class="badge carvia-badge-{{ fatura_transportadora.status_conferencia|lower }}">{{ fatura_transportadora.status_conferencia }}</span>
                         </small>
+                        <div class="mt-1">
+                            {% if fatura_transportadora.conciliado %}
+                            <span class="badge carvia-badge-conciliado">
+                                <i class="fas fa-check-double"></i>
+                                Conciliado ({{ fatura_transportadora.total_conciliado|valor_br }})
+                            </span>
+                            {% elif fatura_transportadora.total_conciliado and fatura_transportadora.total_conciliado > 0 %}
+                            <span class="badge carvia-badge-parcial">
+                                <i class="fas fa-exchange-alt"></i>
+                                Parcial ({{ fatura_transportadora.total_conciliado|valor_br }})
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary">
+                                <i class="fas fa-clock"></i> Conciliacao Pendente
+                            </span>
+                            {% endif %}
+                        </div>
                         {% else %}
                         <span class="text-muted">Nao vinculada</span>
                         {% endif %}
@@ -706,6 +733,184 @@
                     {{ frete.observacoes }}
                 </div>
             </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ================================================================ #}
+    {# 8. DESPESAS EXTRAS (xerox visualizar_frete.html:594-819)         #}
+    {# ================================================================ #}
+    {% if despesas_extras %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle"></i> Despesas Extras
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Transportadora</th>
+                                    <th>Documento</th>
+                                    <th>Fatura</th>
+                                    <th>CTe Vinculado</th>
+                                    <th>Valor</th>
+                                    <th>Status</th>
+                                    <th>Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for despesa in despesas_extras %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ despesa.tipo_custo }}</strong>
+                                        {% if despesa.descricao %}
+                                        <br><small class="text-muted">{{ despesa.descricao[:30] }}{% if despesa.descricao|length > 30 %}...{% endif %}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if despesa.usa_transportadora_alternativa %}
+                                            <span class="badge bg-info" title="Transportadora diferente do frete original">
+                                                <i class="fas fa-exchange-alt"></i>
+                                                {{ despesa.transportadora.razao_social[:20] }}{% if despesa.transportadora.razao_social|length > 20 %}...{% endif %}
+                                            </span>
+                                        {% elif frete.transportadora %}
+                                            <span class="text-muted small" title="Usa transportadora do frete">
+                                                <i class="fas fa-truck"></i>
+                                                {{ frete.transportadora.razao_social[:15] }}{% if frete.transportadora.razao_social|length > 15 %}...{% endif %}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if despesa.tipo_documento in ('CTE', 'CTe') %}bg-primary{% else %}bg-secondary{% endif %}">
+                                            {{ despesa.tipo_documento or 'PENDENTE' }}
+                                        </span><br>
+                                        {% if despesa.numero_documento in (None, 'PENDENTE_FATURA', 'PENDENTE_DOCUMENTO') %}
+                                        <small class="text-warning"><i class="fas fa-clock"></i> Pendente</small>
+                                        {% else %}
+                                        <small>{{ despesa.numero_documento }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if despesa.fatura_transportadora %}
+                                        <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=despesa.fatura_transportadora.id) }}"
+                                            class="badge bg-primary text-decoration-none"
+                                            title="Ver fatura {{ despesa.fatura_transportadora.numero_fatura }}">
+                                            <i class="fas fa-file-invoice"></i> {{ despesa.fatura_transportadora.numero_fatura[:10] }}{% if despesa.fatura_transportadora.numero_fatura|length > 10 %}...{% endif %}
+                                        </a>
+                                        {% else %}
+                                        <a href="{{ url_for('carvia.vincular_despesa_fatura_carvia', custo_id=despesa.id) }}"
+                                            class="btn btn-sm btn-outline-warning"
+                                            title="Vincular a uma fatura">
+                                            <i class="fas fa-link"></i> Vincular
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if despesa.cte_complementar %}
+                                        <span class="badge bg-info">{{ despesa.cte_complementar.numero_comp }}</span>
+                                        <br><small class="text-muted">Complementar</small>
+                                        {% elif despesa.tipo_documento in ('CTE', 'CTe') %}
+                                        <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Pendente</span>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><strong>{{ (despesa.valor or 0)|moeda_carteira }}</strong></td>
+                                    <td>
+                                        <span class="badge carvia-badge-{{ despesa.status|lower }}">
+                                            {{ despesa.status_descricao if despesa.status_descricao else despesa.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group-vertical" role="group">
+                                            {# Vincular/desvincular CTe Comp (rastreabilidade cobranca cliente) #}
+                                            {% if despesa.tipo_documento in ('CTE', 'CTe') %}
+                                                {% if despesa.cte_complementar %}
+                                                <form method="POST" action="{{ url_for('carvia.desvincular_cte_comp_despesa_carvia', custo_id=despesa.id) }}" style="display: inline-block;">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning mb-1"
+                                                        onclick="return confirm('Desvincular CTe Complementar desta despesa?')"
+                                                        title="Desvincular CTe Complementar">
+                                                        <i class="fas fa-unlink"></i>
+                                                    </button>
+                                                </form>
+                                                {% else %}
+                                                <a href="{{ url_for('carvia.vincular_cte_comp_despesa_carvia', custo_id=despesa.id) }}"
+                                                    class="btn btn-sm btn-outline-info mb-1"
+                                                    title="Vincular CTe Complementar existente">
+                                                    <i class="fas fa-link"></i> CTe Comp.
+                                                </a>
+                                                {% endif %}
+                                            {% endif %}
+
+                                            {# Editar documento (so se tem fatura) #}
+                                            {% if despesa.fatura_transportadora_id %}
+                                            <a href="{{ url_for('carvia.editar_documento_despesa_carvia', custo_id=despesa.id) }}"
+                                                class="btn btn-sm btn-outline-primary mb-1"
+                                                title="Editar tipo/numero do documento">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            {% endif %}
+
+                                            {# Anexos (link para detalhe CE que tem AJAX) #}
+                                            <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=despesa.id) }}"
+                                                class="btn btn-sm btn-outline-secondary mb-1"
+                                                title="Ver anexos e detalhes">
+                                                <i class="fas fa-paperclip"></i>
+                                            </a>
+
+                                            {# Excluir (bloqueado se PAGO ou fatura conferida) #}
+                                            {% if despesa.status not in ('PAGO', 'CANCELADO') %}
+                                            <form method="POST"
+                                                action="{{ url_for('carvia.excluir_despesa_extra_carvia', custo_id=despesa.id) }}"
+                                                style="display: inline-block;"
+                                                onsubmit="return confirm('Confirma a exclusao desta despesa extra {{ despesa.tipo_custo }}?')">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                    title="Excluir despesa extra">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="fw-bold">
+                                    <td colspan="5">Total Despesas Extras:</td>
+                                    <td>{{ (despesas_extras|sum(attribute='valor')|moeda_carteira) }}</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ================================================================ #}
+    {# 9. CONCILIACOES BANCARIAS (via fatura transportadora pai)       #}
+    {# ================================================================ #}
+    {% if fatura_transportadora %}
+    <div class="row mb-4">
+        <div class="col-12">
+            {% set conc_tipo_documento = 'fatura_transportadora' %}
+            {% set conc_documento_id = fatura_transportadora.id %}
+            {% set conc_total_conciliado = fatura_transportadora.total_conciliado %}
+            {% set conc_conciliado = fatura_transportadora.conciliado %}
+            {% include 'carvia/_conciliacoes_documento.html' %}
         </div>
     </div>
     {% endif %}

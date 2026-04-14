@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Vincular CTe Complementar - Despesa Extra{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-link"></i> Vincular CTe Complementar
+                <small class="text-muted">Despesa {{ custo.numero_custo }}</small>
+            </h1>
+        </div>
+    </div>
+
+    {% set carvia_active = 'custos_entrega' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}">Despesa {{ custo.numero_custo }}</a></li>
+            <li class="breadcrumb-item active">Vincular CTe Complementar</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Dados da Despesa
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Numero:</strong> {{ custo.numero_custo }}</p>
+                            <p><strong>Tipo:</strong> {{ custo.tipo_custo }}</p>
+                            <p><strong>Valor:</strong> {{ (custo.valor or 0)|moeda_carteira }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Status:</strong>
+                                <span class="badge carvia-badge-{{ custo.status|lower }}">{{ custo.status_descricao }}</span>
+                            </p>
+                            <p><strong>CTe Comp. atual:</strong>
+                                {% if custo.cte_complementar %}
+                                    {{ custo.cte_complementar.numero_comp }}
+                                {% else %}
+                                    <span class="text-muted">Nenhum</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-list"></i> CTes Complementares Disponiveis
+                        ({{ ctes_disponiveis|length }})
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if ctes_disponiveis %}
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>Numero</th>
+                                        <th>CTRC</th>
+                                        <th>Operacao</th>
+                                        <th>Cliente</th>
+                                        <th>Valor</th>
+                                        <th>Emissao</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cte in ctes_disponiveis %}
+                                    <tr>
+                                        <td>
+                                            <input type="radio" name="cte_complementar_id"
+                                                   value="{{ cte.id }}" required>
+                                        </td>
+                                        <td><strong>{{ cte.numero_comp }}</strong></td>
+                                        <td>{{ cte.ctrc_numero or '-' }}</td>
+                                        <td>
+                                            {% if cte.operacao %}
+                                                {{ cte.operacao.cte_numero or ('Op #' ~ cte.operacao_id) }}
+                                            {% else %}-{% endif %}
+                                        </td>
+                                        <td>{{ (cte.nome_cliente or '-')[:25] }}</td>
+                                        <td>{{ (cte.cte_valor or 0)|moeda_carteira }}</td>
+                                        <td>{{ cte.cte_data_emissao | formatar_data_segura if cte.cte_data_emissao else '-' }}</td>
+                                        <td><span class="badge carvia-badge-{{ cte.status|lower }}">{{ cte.status }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-3">
+                            {% if custo.frete_id %}
+                            <a href="{{ url_for('carvia.detalhe_frete_carvia', id=custo.frete_id) }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            {% else %}
+                            <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=custo.id) }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-link"></i> Vincular CTe Complementar
+                            </button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Nenhum CTe Complementar disponivel{% if custo.operacao_id %} para esta operacao{% endif %}.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

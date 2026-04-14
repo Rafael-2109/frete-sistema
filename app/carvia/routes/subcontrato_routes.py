@@ -302,6 +302,42 @@ def register_subcontrato_routes(bp):
                 CarviaCteComplementar.operacao_id == operacao.id
             ).order_by(CarviaCteComplementar.criado_em.desc()).all()
 
+        # Despesas Extras (xerox DespesaExtra Nacom) — via CarviaFrete do sub
+        # Mostra CEs vinculados ao frete do subcontrato (fluxo compra).
+        despesas_extras = []
+        if sub.frete_id:
+            despesas_extras = CarviaCustoEntrega.query.filter(
+                CarviaCustoEntrega.frete_id == sub.frete_id,
+                CarviaCustoEntrega.status != 'CANCELADO',
+            ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
+
+        # Valor Conciliado: rateio proporcional do total_conciliado da fatura
+        # transportadora pai, baseado no valor_considerado de cada sub/CE.
+        # Substitui o antigo "Valor Pago" (W4 manual do sub, que ficava NULL).
+        valor_conciliado_sub = None
+        fatura_transportadora = None
+        if sub.fatura_transportadora_id:
+            from app.carvia.models import CarviaFaturaTransportadora
+            from app.carvia.services.financeiro.rateio_conciliacao_helper import (
+                ratear_conciliacao_fatura,
+            )
+            fatura_transportadora = db.session.get(
+                CarviaFaturaTransportadora, sub.fatura_transportadora_id,
+            )
+            if fatura_transportadora:
+                subs_fatura = CarviaSubcontrato.query.filter(
+                    CarviaSubcontrato.fatura_transportadora_id == sub.fatura_transportadora_id,
+                    CarviaSubcontrato.status != 'CANCELADO',
+                ).all()
+                ces_fatura = CarviaCustoEntrega.query.filter(
+                    CarviaCustoEntrega.fatura_transportadora_id == sub.fatura_transportadora_id,
+                    CarviaCustoEntrega.status != 'CANCELADO',
+                ).all()
+                rateio = ratear_conciliacao_fatura(
+                    fatura_transportadora, subs_fatura, ces_fatura,
+                )
+                valor_conciliado_sub = float(rateio['por_sub'].get(sub.id, 0))
+
         # Operacoes disponiveis para re-vinculacao (modal "Alterar CTe CarVia")
         operacoes_disponiveis = []
         if sub.status not in ('FATURADO', 'CANCELADO', 'CONFERIDO'):
@@ -358,6 +394,9 @@ def register_subcontrato_routes(bp):
             custos_entrega=custos_entrega,
             ctes_complementares=ctes_complementares,
             pode_excluir_orfao=pode_excluir_orfao,
+            despesas_extras=despesas_extras,
+            valor_conciliado_sub=valor_conciliado_sub,
+            fatura_transportadora=fatura_transportadora,
         )
 
     @bp.route('/subcontratos/<int:sub_id>/vincular-operacao', methods=['POST']) # type: ignore

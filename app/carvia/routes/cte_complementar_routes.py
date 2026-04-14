@@ -219,10 +219,17 @@ def register_cte_complementar_routes(bp):
             CarviaCustoEntrega.cte_complementar_id == cte_comp_id
         ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
 
+        # Despesas Extras (xerox Nacom) — reusa `custos_vinculados` que ja
+        # filtra por cte_complementar_id. Card readonly no template.
+        despesas_extras = [
+            c for c in custos_vinculados if c.status != 'CANCELADO'
+        ]
+
         return render_template(
             'carvia/ctes_complementares/detalhe.html',
             cte_comp=cte_comp,
             custos_vinculados=custos_vinculados,
+            despesas_extras=despesas_extras,
         )
 
     @bp.route('/ctes-complementares/<int:cte_comp_id>/editar', methods=['GET', 'POST']) # type: ignore

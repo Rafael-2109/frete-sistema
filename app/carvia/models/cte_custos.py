@@ -126,10 +126,13 @@ class CarviaCustoEntrega(db.Model):
     numero_custo = db.Column(db.String(20), nullable=False, index=True)
 
     # Vinculos
+    # operacao_id NULLABLE para suportar fluxo de COMPRA (xerox DespesaExtra):
+    # - Fluxo VENDA legado: exige operacao (criacao via /custos-entrega/criar)
+    # - Fluxo COMPRA xerox: cria direto do CarviaFrete, sem operacao de venda
     operacao_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_operacoes.id'),
-        nullable=False,
+        nullable=True,
         index=True
     )
     cte_complementar_id = db.Column(
@@ -149,6 +152,25 @@ class CarviaCustoEntrega(db.Model):
     # Terceiro responsavel (quem CarVia pagou - opcional)
     fornecedor_nome = db.Column(db.String(255))
     fornecedor_cnpj = db.Column(db.String(20))
+
+    # ================================================
+    # DOCUMENTO DA DESPESA (xerox DespesaExtra Nacom)
+    # ================================================
+    # Sentinel 'PENDENTE_DOCUMENTO' / 'PENDENTE_FATURA' enquanto nao vinculado a FT
+    tipo_documento = db.Column(db.String(20), nullable=True, default='PENDENTE_DOCUMENTO')
+    numero_documento = db.Column(db.String(50), nullable=True, default='PENDENTE_FATURA')
+
+    # ================================================
+    # TRANSPORTADORA DO PAGAMENTO (override opcional — xerox DespesaExtra)
+    # ================================================
+    # Se NULL → usar transportadora do frete (comportamento padrao)
+    # Se preenchido → usar esta transportadora (ex: devolucao coletada por outro)
+    transportadora_id = db.Column(
+        db.Integer,
+        db.ForeignKey('transportadoras.id'),
+        nullable=True,
+        index=True
+    )
 
     # Status: PENDENTE | PAGO | CANCELADO
     status = db.Column(db.String(20), nullable=False, default='PENDENTE', index=True)
@@ -214,6 +236,10 @@ class CarviaCustoEntrega(db.Model):
         backref=db.backref('custos_entrega', lazy='dynamic'),
         foreign_keys=[fatura_transportadora_id]
     )
+    transportadora = db.relationship(
+        'Transportadora',
+        foreign_keys=[transportadora_id],
+    )
 
     @property
     def pode_vincular_fatura(self):
@@ -223,6 +249,41 @@ class CarviaCustoEntrega(db.Model):
         CE deve estar PENDENTE e sem FT vinculada.
         """
         return self.status == 'PENDENTE' and self.fatura_transportadora_id is None
+
+    @property
+    def transportadora_efetiva(self):
+        """Retorna a transportadora que deve receber pela despesa.
+
+        Xerox de DespesaExtra.transportadora_efetiva: se transportadora_id
+        estiver preenchido, usa essa; caso contrario, usa a transportadora
+        do frete (comportamento padrao).
+        """
+        if self.transportadora_id:
+            return self.transportadora
+        if self.frete:
+            return self.frete.transportadora
+        return None
+
+    @property
+    def usa_transportadora_alternativa(self):
+        """Indica se a despesa usa transportadora diferente do frete.
+
+        Xerox de DespesaExtra.usa_transportadora_alternativa.
+        """
+        if not self.frete or self.transportadora_id is None:
+            return False
+        return self.transportadora_id != self.frete.transportadora_id
+
+    @property
+    def status_descricao(self):
+        """Retorna descricao amigavel do status (xerox DespesaExtra)."""
+        descricoes = {
+            'PENDENTE': 'Pendente',
+            'VINCULADO_FT': 'Vinculada a Fatura',
+            'PAGO': 'Paga',
+            'CANCELADO': 'Cancelada',
+        }
+        return descricoes.get(self.status, self.status)
 
     @staticmethod
     def gerar_numero_custo():

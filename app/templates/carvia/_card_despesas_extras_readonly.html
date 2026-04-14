@@ -1,0 +1,93 @@
+{#
+  Card "Despesas Extras Vinculadas" — somente leitura (xerox visualizar_fatura.html Nacom).
+
+  Uso: {% include 'carvia/_card_despesas_extras_readonly.html' %}
+
+  Contexto esperado:
+    despesas_extras: lista de CarviaCustoEntrega (nao-cancelados) para exibir
+
+  Acao unica: "Ver Frete" (link para detalhe_frete_carvia).
+  Sem botoes de acao (edit/delete/vincular) — essas operacoes sao feitas pelo CarviaFrete.
+#}
+{% if despesas_extras %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-exclamation-circle"></i> Despesas Extras Vinculadas ({{ despesas_extras|length }})
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th class="col-id">ID</th>
+                        <th class="col-nowrap">Tipo</th>
+                        <th class="col-id">Frete</th>
+                        <th class="col-nome">Cliente</th>
+                        <th class="col-pedido">NFs Relacionadas</th>
+                        <th class="col-pedido">Documento</th>
+                        <th class="col-valor">Valor</th>
+                        <th class="col-data">Vencimento</th>
+                        <th class="col-acoes">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ce in despesas_extras %}
+                    <tr>
+                        <td><strong>#{{ ce.id }}</strong></td>
+                        <td><span class="badge bg-info">{{ ce.tipo_custo }}</span></td>
+                        <td>
+                            {% if ce.frete_id %}
+                            <a href="{{ url_for('carvia.detalhe_frete_carvia', id=ce.frete_id) }}">
+                                Frete #{{ ce.frete_id }}
+                            </a>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td title="{{ ce.frete.nome_destino if ce.frete else (ce.operacao.nome_cliente if ce.operacao else '') }}">
+                            {% if ce.frete and ce.frete.nome_destino %}
+                                {{ ce.frete.nome_destino[:25] }}{% if ce.frete.nome_destino|length > 25 %}...{% endif %}
+                            {% elif ce.operacao and ce.operacao.nome_cliente %}
+                                {{ ce.operacao.nome_cliente[:25] }}{% if ce.operacao.nome_cliente|length > 25 %}...{% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ce.frete and ce.frete.numeros_nfs %}
+                            <span class="badge bg-secondary" title="NFs do frete relacionado">
+                                {{ ce.frete.quantidade_nfs or 0 }} NF(s)
+                            </span>
+                            <br><small class="text-muted">
+                                {{ ce.frete.numeros_nfs[:30] }}{% if ce.frete.numeros_nfs|length > 30 %}...{% endif %}
+                            </small>
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ ce.numero_documento or ce.numero_custo or 'Pendente' }}</td>
+                        <td><strong>{{ (ce.valor or 0)|moeda_carteira }}</strong></td>
+                        <td>{{ ce.data_vencimento | formatar_data_segura if ce.data_vencimento else 'N/A' }}</td>
+                        <td>
+                            {% if ce.frete_id %}
+                            <a href="{{ url_for('carvia.detalhe_frete_carvia', id=ce.frete_id) }}"
+                                class="btn btn-sm btn-outline-primary" title="Ver Frete">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            {% else %}
+                            <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
+                                class="btn btn-sm btn-outline-primary" title="Ver Despesa">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}

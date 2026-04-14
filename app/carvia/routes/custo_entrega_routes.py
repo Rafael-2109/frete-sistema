@@ -882,6 +882,16 @@ def register_custo_entrega_routes(bp):
             flash('Custo cancelado nao pode gerar CTe Complementar.', 'warning')
             return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
 
+        # Guard fluxo compra (xerox DespesaExtra): CEs sem operacao_id nao
+        # representam uma venda CarVia e nao podem ser convertidos em CTe Comp.
+        if not custo.operacao_id:
+            flash(
+                'Este custo e do fluxo de compra (sem CTe CarVia de venda). '
+                'Nao e possivel emitir CTe Complementar para o cliente.',
+                'warning',
+            )
+            return redirect(url_for('carvia.detalhe_custo_entrega', custo_id=custo_id))
+
         # Verificar emissao em andamento
         emissao_ativa = CarviaEmissaoCteComplementar.query.filter(
             CarviaEmissaoCteComplementar.custo_entrega_id == custo_id,
@@ -1415,3 +1425,692 @@ def register_custo_entrega_routes(bp):
                 f'Erro ao vincular CEs a FT #{fatura_id}: {e}'
             )
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    # =====================================================================
+    # DESPESAS EXTRAS (xerox DespesaExtra Nacom)
+    # =====================================================================
+    # Fluxo de COMPRA: cria despesa extra vinculada ao CarviaFrete, similar
+    # ao fluxo do modulo fretes (Nacom). 2 fluxos de criacao:
+    #   1. Via busca por NF: /carvia/despesas-extras/nova
+    #   2. Via botao do frete: /carvia/fretes/<id>/despesas-extras/nova
+    # Paridade com app/fretes/routes.py linhas 2832-3175, 4246-4398, 4632-4670.
+
+    def _popular_choices_despesa_form(form, frete):
+        """Popula choices dinamicos dos forms CarviaDespesaExtra.
+
+        - tipo_despesa: reusa CarviaCustoEntrega.TIPOS_CUSTO
+        - transportadora_id: inclui opcao default "usar do frete"
+        """
+        from app.transportadoras.models import Transportadora
+        form.tipo_despesa.choices = [(t, t) for t in CarviaCustoEntrega.TIPOS_CUSTO]
+        transportadoras_ativas = (
+            Transportadora.query
+            .order_by(Transportadora.razao_social)
+            .all()
+        )
+        label_default = (
+            f'-- Usar transportadora do frete '
+            f'({frete.transportadora.razao_social}) --'
+        ) if frete and frete.transportadora else '-- Usar transportadora do frete --'
+        form.transportadora_id.choices = [('', label_default)] + [
+            (str(t.id), t.razao_social) for t in transportadoras_ativas
+        ]
+
+    def _converter_valor_br(valor_str):
+        """Converte valor formato brasileiro para float."""
+        from app.utils.valores_brasileiros import converter_valor_brasileiro
+        return converter_valor_brasileiro(valor_str)
+
+    # -----------------------------------------------------------------
+    # Fluxo 1 — Etapa 1: Buscar frete por NF
+    # -----------------------------------------------------------------
+    @bp.route('/despesas-extras/nova', methods=['GET', 'POST'])  # type: ignore
+    @login_required
+    def nova_despesa_extra_por_nf_carvia():  # type: ignore
+        """Busca CarviaFrete por numero de NF para criar despesa extra.
+
+        Xerox de fretes.nova_despesa_extra_por_nf.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.models import CarviaFrete
+
+        if request.method == 'POST':
+            numero_nf = (request.form.get('numero_nf') or '').strip()
+
+            if not numero_nf:
+                flash('Digite o numero da NF!', 'warning')
+                return render_template('carvia/custos_entrega/nova_por_nf.html')
+
+            # Busca CarviaFrete contendo a NF em `numeros_nfs` (CSV)
+            fretes_encontrados = CarviaFrete.query.filter(
+                CarviaFrete.numeros_nfs.contains(numero_nf)
+            ).order_by(CarviaFrete.criado_em.desc()).all()
+
+            if not fretes_encontrados:
+                flash(
+                    f'Nenhum frete encontrado com a NF {numero_nf}!',
+                    'warning',
+                )
+                return render_template('carvia/custos_entrega/nova_por_nf.html')
+
+            return render_template(
+                'carvia/custos_entrega/selecionar_frete.html',
+                fretes=fretes_encontrados,
+                numero_nf=numero_nf,
+            )
+
+        return render_template('carvia/custos_entrega/nova_por_nf.html')
+
+    # -----------------------------------------------------------------
+    # Fluxo 1 — Etapa 2: Criar despesa para frete selecionado
+    # -----------------------------------------------------------------
+    @bp.route(
+        '/despesas-extras/criar/<int:frete_id>',
+        methods=['GET', 'POST'],
+    )  # type: ignore
+    @login_required
+    def criar_despesa_por_frete_carvia(frete_id):  # type: ignore
+        """Criar despesa extra para CarviaFrete selecionado (fluxo NF).
+
+        Xerox de fretes.criar_despesa_extra_frete.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.models import CarviaFrete
+        from app.carvia.forms import CarviaDespesaExtraForm
+
+        frete = db.session.get(CarviaFrete, frete_id)
+        if not frete:
+            flash('Frete CarVia nao encontrado.', 'warning')
+            return redirect(url_for('carvia.nova_despesa_extra_por_nf_carvia'))
+
+        form = CarviaDespesaExtraForm()
+        _popular_choices_despesa_form(form, frete)
+
+        if form.validate_on_submit():
+            try:
+                custo = CarviaCustoEntrega(
+                    numero_custo=CarviaCustoEntrega.gerar_numero_custo(),
+                    operacao_id=None,  # fluxo COMPRA: sem operacao venda
+                    frete_id=frete_id,
+                    fatura_transportadora_id=None,
+                    transportadora_id=(
+                        form.transportadora_id.data
+                        if form.transportadora_id.data else None
+                    ),
+                    tipo_custo=form.tipo_despesa.data,
+                    tipo_documento='PENDENTE_DOCUMENTO',
+                    numero_documento='PENDENTE_FATURA',
+                    valor=_converter_valor_br(form.valor_despesa.data),
+                    data_custo=date.today(),
+                    data_vencimento=None,
+                    status='PENDENTE',
+                    observacoes=form.observacoes.data or None,
+                    criado_por=current_user.email,
+                )
+                db.session.add(custo)
+                db.session.flush()
+
+                # Processar anexos (comprovantes/emails)
+                _processar_anexos_despesa(custo, form.anexos.data)
+
+                db.session.commit()
+
+                flash(
+                    f'Despesa extra {custo.numero_custo} criada com sucesso!',
+                    'success',
+                )
+                return redirect(url_for(
+                    'carvia.detalhe_frete_carvia', id=frete_id
+                ))
+
+            except ValueError as ve:
+                db.session.rollback()
+                flash(f'Dados invalidos: {ve}', 'warning')
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f'Erro ao criar despesa extra: {e}')
+                flash(f'Erro ao criar despesa extra: {e}', 'danger')
+
+        return render_template(
+            'carvia/custos_entrega/criar_por_frete.html',
+            form=form,
+            frete=frete,
+        )
+
+    # -----------------------------------------------------------------
+    # Fluxo 2: Criar despesa diretamente do CarviaFrete (botao)
+    # -----------------------------------------------------------------
+    @bp.route(
+        '/fretes/<int:frete_id>/despesas-extras/nova',
+        methods=['GET', 'POST'],
+    )  # type: ignore
+    @login_required
+    def nova_despesa_do_frete_carvia(frete_id):  # type: ignore
+        """Criar despesa extra direto do CarviaFrete (fluxo botao).
+
+        Xerox de fretes.nova_despesa_extra.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.models import CarviaFrete
+        from app.carvia.forms import CarviaDespesaExtraForm
+
+        frete = db.session.get(CarviaFrete, frete_id)
+        if not frete:
+            flash('Frete CarVia nao encontrado.', 'warning')
+            return redirect(url_for('carvia.listar_fretes_carvia'))
+
+        form = CarviaDespesaExtraForm()
+        _popular_choices_despesa_form(form, frete)
+
+        if form.validate_on_submit():
+            try:
+                custo = CarviaCustoEntrega(
+                    numero_custo=CarviaCustoEntrega.gerar_numero_custo(),
+                    operacao_id=None,
+                    frete_id=frete_id,
+                    fatura_transportadora_id=None,
+                    transportadora_id=(
+                        form.transportadora_id.data
+                        if form.transportadora_id.data else None
+                    ),
+                    tipo_custo=form.tipo_despesa.data,
+                    tipo_documento='PENDENTE_DOCUMENTO',
+                    numero_documento='PENDENTE_FATURA',
+                    valor=_converter_valor_br(form.valor_despesa.data),
+                    data_custo=date.today(),
+                    data_vencimento=None,
+                    status='PENDENTE',
+                    observacoes=form.observacoes.data or None,
+                    criado_por=current_user.email,
+                )
+                db.session.add(custo)
+                db.session.flush()
+                _processar_anexos_despesa(custo, form.anexos.data)
+                db.session.commit()
+
+                flash(
+                    'Despesa extra criada! Para vincula-la a uma fatura, '
+                    'use "Gerenciar Despesas Extras".',
+                    'success',
+                )
+                return redirect(url_for(
+                    'carvia.detalhe_frete_carvia', id=frete_id
+                ))
+
+            except ValueError as ve:
+                db.session.rollback()
+                flash(f'Dados invalidos: {ve}', 'warning')
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f'Erro ao criar despesa extra: {e}')
+                flash(f'Erro ao criar despesa extra: {e}', 'danger')
+
+        return render_template(
+            'carvia/custos_entrega/nova_do_frete.html',
+            form=form,
+            frete=frete,
+        )
+
+    # -----------------------------------------------------------------
+    # Editar documento (so apos vincular fatura)
+    # -----------------------------------------------------------------
+    @bp.route(
+        '/despesas-extras/<int:custo_id>/editar-documento',
+        methods=['GET', 'POST'],
+    )  # type: ignore
+    @login_required
+    def editar_documento_despesa_carvia(custo_id):  # type: ignore
+        """Editar tipo_documento e numero_documento apos vincular fatura.
+
+        Xerox de fretes.editar_documento_despesa.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            flash('Despesa extra nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        # Valida que a despesa tem fatura vinculada
+        if not custo.fatura_transportadora_id:
+            flash(
+                'Para preencher o numero do documento, a fatura deve estar '
+                'vinculada primeiro!',
+                'warning',
+            )
+            if custo.frete_id:
+                return redirect(url_for(
+                    'carvia.detalhe_frete_carvia', id=custo.frete_id
+                ))
+            return redirect(url_for(
+                'carvia.detalhe_custo_entrega', custo_id=custo_id
+            ))
+
+        if request.method == 'POST':
+            numero_documento = (
+                request.form.get('numero_documento') or ''
+            ).strip()
+            tipo_documento = request.form.get('tipo_documento', '').strip()
+
+            if not numero_documento:
+                flash('Numero do documento e obrigatorio!', 'warning')
+            elif numero_documento == 'PENDENTE_FATURA':
+                flash('Este numero nao e permitido!', 'warning')
+            else:
+                try:
+                    custo.numero_documento = numero_documento
+                    custo.tipo_documento = tipo_documento
+                    db.session.commit()
+                    flash('Documento atualizado com sucesso!', 'success')
+                    if custo.frete_id:
+                        return redirect(url_for(
+                            'carvia.detalhe_frete_carvia', id=custo.frete_id
+                        ))
+                    return redirect(url_for(
+                        'carvia.detalhe_custo_entrega', custo_id=custo_id
+                    ))
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'Erro ao atualizar documento: {e}', 'danger')
+
+        return render_template(
+            'carvia/custos_entrega/editar_documento.html',
+            custo=custo,
+            fatura=custo.fatura_transportadora,
+        )
+
+    # -----------------------------------------------------------------
+    # Excluir despesa extra (xerox Nacom)
+    # -----------------------------------------------------------------
+    @bp.route(
+        '/despesas-extras/<int:custo_id>/excluir',
+        methods=['POST'],
+    )  # type: ignore
+    @login_required
+    def excluir_despesa_extra_carvia(custo_id):  # type: ignore
+        """Excluir despesa extra (bloqueia se PAGO ou fatura conferida).
+
+        Xerox de fretes.excluir_despesa_extra.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            flash('Despesa extra nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        frete_id = custo.frete_id
+
+        # Gates
+        if custo.status == 'PAGO':
+            flash(
+                'Nao e possivel excluir despesa extra com status PAGO!',
+                'danger',
+            )
+            if frete_id:
+                return redirect(url_for(
+                    'carvia.detalhe_frete_carvia', id=frete_id
+                ))
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        if custo.fatura_transportadora_id and custo.fatura_transportadora:
+            if custo.fatura_transportadora.status_conferencia == 'CONFERIDO':
+                flash(
+                    'Nao e possivel excluir despesa de fatura CONFERIDA!',
+                    'danger',
+                )
+                if frete_id:
+                    return redirect(url_for(
+                        'carvia.detalhe_frete_carvia', id=frete_id
+                    ))
+                return redirect(url_for('carvia.listar_custos_entrega'))
+
+        try:
+            tipo = custo.tipo_custo
+            numero_custo = custo.numero_custo
+            valor = float(custo.valor or 0)
+
+            db.session.delete(custo)
+            db.session.commit()
+
+            flash(
+                f'Despesa extra {numero_custo} excluida com sucesso! '
+                f'Tipo: {tipo} | Valor: R$ {valor:.2f}',
+                'success',
+            )
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f'Erro ao excluir despesa extra #{custo_id}: {e}')
+            flash(f'Erro ao excluir despesa extra: {e}', 'danger')
+
+        if frete_id:
+            return redirect(url_for(
+                'carvia.detalhe_frete_carvia', id=frete_id
+            ))
+        return redirect(url_for('carvia.listar_custos_entrega'))
+
+    # -----------------------------------------------------------------
+    # Vincular/desvincular CTe Complementar (rastreabilidade da cobranca)
+    # -----------------------------------------------------------------
+    @bp.route(
+        '/despesas-extras/<int:custo_id>/vincular-cte-comp',
+        methods=['GET', 'POST'],
+    )  # type: ignore
+    @login_required
+    def vincular_cte_comp_despesa_carvia(custo_id):  # type: ignore
+        """Vincular CarviaCteComplementar existente a despesa extra.
+
+        Xerox de fretes.vincular_cte_despesa — rastrea cobranca ao cliente.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            flash('Despesa extra nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        if request.method == 'POST':
+            cte_comp_id_str = (
+                request.form.get('cte_complementar_id') or ''
+            ).strip()
+            if not cte_comp_id_str:
+                flash('Selecione um CTe Complementar!', 'warning')
+                return redirect(url_for(
+                    'carvia.vincular_cte_comp_despesa_carvia',
+                    custo_id=custo_id,
+                ))
+
+            try:
+                cte_comp = db.session.get(
+                    CarviaCteComplementar, int(cte_comp_id_str)
+                )
+                if not cte_comp:
+                    flash('CTe Complementar nao encontrado.', 'warning')
+                else:
+                    custo.cte_complementar_id = cte_comp.id
+                    db.session.commit()
+                    flash(
+                        f'CTe Complementar {cte_comp.numero_comp} '
+                        f'vinculado com sucesso!',
+                        'success',
+                    )
+                    if custo.frete_id:
+                        return redirect(url_for(
+                            'carvia.detalhe_frete_carvia', id=custo.frete_id
+                        ))
+                    return redirect(url_for(
+                        'carvia.detalhe_custo_entrega', custo_id=custo_id
+                    ))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Erro ao vincular CTe Comp.: {e}', 'danger')
+
+        # GET: listar CTes Complementares disponiveis
+        # Prioriza CTes da mesma operacao (se existir) e do mesmo frete
+        query = CarviaCteComplementar.query.filter(
+            CarviaCteComplementar.status != 'CANCELADO',
+        )
+        if custo.operacao_id:
+            query = query.filter(
+                CarviaCteComplementar.operacao_id == custo.operacao_id
+            )
+        ctes_disponiveis = query.order_by(
+            CarviaCteComplementar.criado_em.desc()
+        ).all()
+
+        return render_template(
+            'carvia/custos_entrega/vincular_cte_complementar.html',
+            custo=custo,
+            ctes_disponiveis=ctes_disponiveis,
+        )
+
+    @bp.route(
+        '/despesas-extras/<int:custo_id>/desvincular-cte-comp',
+        methods=['POST'],
+    )  # type: ignore
+    @login_required
+    def desvincular_cte_comp_despesa_carvia(custo_id):  # type: ignore
+        """Desvincula CarviaCteComplementar de uma despesa extra."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            flash('Despesa extra nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        try:
+            custo.cte_complementar_id = None
+            db.session.commit()
+            flash('CTe Complementar desvinculado.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao desvincular CTe Comp.: {e}', 'danger')
+
+        if custo.frete_id:
+            return redirect(url_for(
+                'carvia.detalhe_frete_carvia', id=custo.frete_id
+            ))
+        return redirect(url_for(
+            'carvia.detalhe_custo_entrega', custo_id=custo_id
+        ))
+
+    # -----------------------------------------------------------------
+    # Vincular fatura (xerox Nacom — rota paralela a vincular_fatura_custo_entrega)
+    # -----------------------------------------------------------------
+    @bp.route(
+        '/despesas-extras/<int:custo_id>/vincular-fatura',
+        methods=['GET', 'POST'],
+    )  # type: ignore
+    @login_required
+    def vincular_despesa_fatura_carvia(custo_id):  # type: ignore
+        """Vincular despesa extra a fatura transportadora (xerox Nacom).
+
+        Form POST recebe: fatura_id, tipo_documento_cobranca, valor_cobranca,
+        numero_cte_documento. Atualiza CE + chama CustoEntregaFaturaService.
+
+        Xerox de fretes.vincular_despesa_fatura.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.models import (
+            CarviaCustoEntrega, CarviaFaturaTransportadora, CarviaFrete,
+        )
+        from app.carvia.services.financeiro.custo_entrega_fatura_service import (
+            CustoEntregaFaturaService,
+        )
+
+        custo = db.session.get(CarviaCustoEntrega, custo_id)
+        if not custo:
+            flash('Despesa extra nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_custos_entrega'))
+
+        frete = (
+            db.session.get(CarviaFrete, custo.frete_id)
+            if custo.frete_id else None
+        )
+
+        # Faturas disponiveis = nao CONFERIDAS e nao PAGAS
+        faturas_disponiveis = CarviaFaturaTransportadora.query.filter(
+            CarviaFaturaTransportadora.status_conferencia != 'CONFERIDO',
+            CarviaFaturaTransportadora.status_pagamento != 'PAGO',
+        ).order_by(CarviaFaturaTransportadora.criado_em.desc()).all()
+
+        if request.method == 'POST':
+            fatura_id_str = (request.form.get('fatura_id') or '').strip()
+            tipo_documento_cobranca = request.form.get('tipo_documento_cobranca')
+            valor_cobranca_str = request.form.get('valor_cobranca')
+            numero_cte_documento = (
+                request.form.get('numero_cte_documento') or ''
+            ).strip()
+
+            if not fatura_id_str:
+                flash('Selecione uma fatura!', 'warning')
+                return render_template(
+                    'carvia/custos_entrega/vincular_despesa_fatura.html',
+                    custo=custo,
+                    frete=frete,
+                    faturas_disponiveis=faturas_disponiveis,
+                )
+
+            try:
+                fatura = db.session.get(
+                    CarviaFaturaTransportadora, int(fatura_id_str)
+                )
+                if not fatura:
+                    flash('Fatura nao encontrada!', 'warning')
+                    return render_template(
+                        'carvia/custos_entrega/vincular_despesa_fatura.html',
+                        custo=custo,
+                        frete=frete,
+                        faturas_disponiveis=faturas_disponiveis,
+                    )
+
+                valor_cobranca_float = (
+                    _converter_valor_br(valor_cobranca_str)
+                    if valor_cobranca_str else float(custo.valor or 0)
+                )
+
+                # Atualiza dados do CE antes de vincular via service
+                custo.tipo_documento = tipo_documento_cobranca
+                custo.valor = valor_cobranca_float
+                custo.numero_documento = (
+                    numero_cte_documento if numero_cte_documento
+                    else 'PENDENTE_FATURA'
+                )
+                if fatura.vencimento:
+                    custo.data_vencimento = fatura.vencimento
+
+                # Vincula via service (valida regras de integridade)
+                CustoEntregaFaturaService.vincular(
+                    custo.id, fatura.id, current_user.email,
+                )
+
+                db.session.commit()
+                flash(
+                    f'Despesa extra vinculada a fatura {fatura.numero_fatura}!',
+                    'success',
+                )
+
+                if custo.frete_id:
+                    return redirect(url_for(
+                        'carvia.detalhe_frete_carvia', id=custo.frete_id
+                    ))
+                return redirect(url_for(
+                    'carvia.detalhe_custo_entrega', custo_id=custo_id
+                ))
+
+            except ValueError as ve:
+                db.session.rollback()
+                flash(f'{ve}', 'warning')
+            except Exception as e:
+                db.session.rollback()
+                logger.exception(
+                    f'Erro ao vincular despesa extra #{custo_id} a fatura: {e}'
+                )
+                flash(f'Erro ao vincular: {e}', 'danger')
+
+        return render_template(
+            'carvia/custos_entrega/vincular_despesa_fatura.html',
+            custo=custo,
+            frete=frete,
+            faturas_disponiveis=faturas_disponiveis,
+        )
+
+    # -----------------------------------------------------------------
+    # Helper: processar anexos
+    # -----------------------------------------------------------------
+    def _processar_anexos_despesa(custo, arquivos):
+        """Processa upload de anexos (comprovantes/emails) para um CE.
+
+        Reusa sistema existente de CarviaCustoEntregaAnexo + S3.
+        Chama `storage.save_file(file, folder=...)` (mesmo padrao do
+        `upload_anexo_custo_entrega` linha 752). O storage gera nome
+        automatico com timestamp+uuid e retorna o caminho final, que e
+        persistido em `CarviaCustoEntregaAnexo.caminho_s3`.
+        """
+        if not arquivos:
+            return
+
+        from app.utils.file_storage import get_file_storage
+
+        storage = get_file_storage()
+        for arquivo in arquivos:
+            if not arquivo or not arquivo.filename:
+                continue
+            if not _allowed_file(arquivo.filename):
+                continue
+
+            try:
+                arquivo.seek(0)
+                caminho_s3 = storage.save_file(
+                    arquivo,
+                    folder=f'carvia/custos-entrega/anexos',
+                )
+                if not caminho_s3:
+                    logger.warning(
+                        f'storage.save_file retornou None para {arquivo.filename}'
+                    )
+                    continue
+
+                # Extrair metadados de email se aplicavel
+                email_metadata = {}
+                ext = (
+                    arquivo.filename.rsplit('.', 1)[1].lower()
+                    if '.' in arquivo.filename else ''
+                )
+                if ext in ('msg', 'eml'):
+                    try:
+                        from app.utils.email_handler import EmailHandler
+                        email_handler = EmailHandler()
+                        arquivo.seek(0)
+                        if ext == 'msg':
+                            email_metadata = (
+                                email_handler.processar_email_msg(arquivo) or {}
+                            )
+                        else:
+                            email_metadata = (
+                                email_handler.processar_email_eml(arquivo) or {}
+                            )
+                    except Exception as e_email:
+                        logger.warning(
+                            f"Nao foi possivel extrair metadados do email: {e_email}"
+                        )
+
+                anexo = CarviaCustoEntregaAnexo(
+                    custo_entrega_id=custo.id,
+                    nome_original=arquivo.filename,
+                    nome_arquivo=os.path.basename(caminho_s3),
+                    caminho_s3=caminho_s3,
+                    content_type=getattr(arquivo, 'content_type', None),
+                    criado_por=current_user.email,
+                    ativo=True,
+                    email_remetente=email_metadata.get('remetente'),
+                    email_assunto=email_metadata.get('assunto'),
+                    email_data_envio=email_metadata.get('data_envio'),
+                    email_conteudo_preview=(email_metadata.get('conteudo_preview') or '')[:500] or None,
+                )
+                db.session.add(anexo)
+            except Exception as e:
+                logger.error(
+                    f'Erro ao salvar anexo {arquivo.filename} para CE '
+                    f'#{custo.id}: {e}'
+                )

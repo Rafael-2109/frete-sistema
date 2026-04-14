@@ -106,8 +106,22 @@
                             <strong>{{ sub.valor_considerado|valor_br if sub.valor_considerado else '-' }}</strong>
                         </div>
                         <div class="col-4">
-                            <small class="text-muted d-block">Valor Pago</small>
-                            <strong class="text-primary">{{ sub.valor_pago|valor_br if sub.valor_pago else '-' }}</strong>
+                            <small class="text-muted d-block">
+                                Valor Conciliado
+                                {% if fatura_transportadora %}
+                                <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_transportadora.id) }}"
+                                   class="text-decoration-none"
+                                   title="Ver fatura {{ fatura_transportadora.numero_fatura }}">
+                                    <i class="fas fa-external-link-alt small"></i>
+                                </a>
+                                {% endif %}
+                            </small>
+                            <strong class="text-info">{{ valor_conciliado_sub|valor_br if valor_conciliado_sub else '-' }}</strong>
+                            {% if fatura_transportadora and fatura_transportadora.conciliado %}
+                            <br><span class="badge carvia-badge-conciliado small"><i class="fas fa-check-double"></i> Fatura Conciliada</span>
+                            {% elif fatura_transportadora and valor_conciliado_sub and valor_conciliado_sub > 0 %}
+                            <br><span class="badge carvia-badge-parcial small"><i class="fas fa-exchange-alt"></i> Parcial</span>
+                            {% endif %}
                         </div>
                     </div>
                     {% if sub.observacoes %}
@@ -413,6 +427,9 @@
         {% endif %}
     </div>
     {% endif %}
+
+    {# Card "Despesas Extras Vinculadas" — xerox readonly Nacom #}
+    {% include 'carvia/_card_despesas_extras_readonly.html' %}
 </div>
 
 <!-- Modal Unificado: Cotacao -->

@@ -46,10 +46,20 @@
                         </div>
                         <div class="col-6">
                             <small class="text-muted d-block">CTe do Frete</small>
+                            {% if custo.operacao_id and custo.operacao %}
                             <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=custo.operacao_id) }}"
                                class="text-decoration-none">
-                                {{ carvia_ref(custo.operacao.cte_numero if custo.operacao else None, custo.operacao.ctrc_numero if custo.operacao else None, fallback='-') }}
+                                {{ carvia_ref(custo.operacao.cte_numero, custo.operacao.ctrc_numero, fallback='-') }}
                             </a>
+                            {% elif custo.frete_id %}
+                            {# Fluxo compra (xerox DespesaExtra) — sem operacao de venda #}
+                            <a href="{{ url_for('carvia.detalhe_frete_carvia', id=custo.frete_id) }}"
+                               class="text-decoration-none">
+                                <i class="fas fa-truck"></i> Frete #{{ custo.frete_id }}
+                            </a>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
                         </div>
                         <div class="col-6">
                             <small class="text-muted d-block">CTe Complementar</small>
