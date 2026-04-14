@@ -4,7 +4,7 @@ Hook de validacao de estrutura .claude/
 Roda no SessionStart para detectar problemas automaticamente.
 
 Verifica:
-1. Todas as skills tem SKILL.md
+1. Todas as skills tem SKILL.md (exceto DATA_ONLY_DIRS)
 2. Nenhum __pycache__ dentro de skills
 3. References INDEX.md existe
 4. Paths no CLAUDE.md sao validos
@@ -17,17 +17,30 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS_DIR = os.path.join(BASE_DIR, 'skills')
 REFS_DIR = os.path.join(BASE_DIR, 'references')
 
+# Data-only folders dentro de .claude/skills/ que NAO sao skills invocaveis.
+# Contem apenas schemas/scripts/dados reutilizados por outras ferramentas.
+# NAO devem ter SKILL.md — o agente web descobre skills via .claude/skills/*/SKILL.md
+# (setting_sources='project' em client.py:988). Criar SKILL.md aqui reintroduz
+# a skill no discovery, revertendo decisoes de remocao.
+DATA_ONLY_DIRS = {
+    # schemas + scripts SQL (SKILL.md removido no commit ab38769d, 2026-03-17)
+    # Funcionalidade migrou para MCP tool consultar_sql.
+    'consultando-sql',
+}
+
 warnings = []
 errors = []
 
 
 def check_skills_have_skillmd():
-    """Verifica se todas as skills tem SKILL.md"""
+    """Verifica se todas as skills tem SKILL.md (ignora DATA_ONLY_DIRS)"""
     if not os.path.isdir(SKILLS_DIR):
         return
     for skill_name in sorted(os.listdir(SKILLS_DIR)):
         skill_dir = os.path.join(SKILLS_DIR, skill_name)
         if not os.path.isdir(skill_dir):
+            continue
+        if skill_name in DATA_ONLY_DIRS:
             continue
         skill_md = os.path.join(skill_dir, 'SKILL.md')
         if not os.path.isfile(skill_md):
