@@ -87,7 +87,8 @@ class Pedido(db.Model):
     def status_calculado(self):
         """
         Calcula o status do pedido baseado no estado atual:
-        - CARVIA: Item CarVia (cotacao ou pedido) — detectado por prefixo separacao_lote_id
+        - CARVIA_EMBARCADO / CARVIA_COTADO: CarVia em embarque ativo (via ultimo_embarque injetado pela lista)
+        - CARVIA: Item CarVia aberto (nao vinculado a embarque ativo nem com status persistido)
         - NF no CD: Flag nf_cd é True (NF voltou para o CD)
         - FATURADO: Tem NF preenchida e não está no CD
         - COTADO: Tem cotação_id mas não está embarcado
@@ -100,6 +101,14 @@ class Pedido(db.Model):
                 return 'FATURADO'
             if status_view in ('EMBARCADO',):
                 return 'EMBARCADO'
+            # CarVia em embarque ativo — atributo injetado por
+            # ListaPedidosService.enriquecer_pedidos (lista_service.py:691).
+            # Em telas que nao chamam enriquecer_pedidos, cai no fallback 'CARVIA'.
+            ultimo_embarque = getattr(self, 'ultimo_embarque', None)
+            if ultimo_embarque is not None:
+                if getattr(ultimo_embarque, 'data_embarque', None):
+                    return 'CARVIA_EMBARCADO'
+                return 'CARVIA_COTADO'
             return 'CARVIA'
 
         # Nacom: flags concretas têm prioridade (NF existe de fato)

@@ -268,8 +268,8 @@
             {% for p in pedidos %}
               <tr class="
                 {% if p.status_calculado == 'FATURADO' %}table-success
-                {% elif p.status_calculado == 'EMBARCADO' %}table-primary  
-                {% elif p.status_calculado == 'COTADO' %}table-warning
+                {% elif p.status_calculado in ['EMBARCADO', 'CARVIA_EMBARCADO'] %}table-primary
+                {% elif p.status_calculado in ['COTADO', 'CARVIA_COTADO'] %}table-warning
                 {% else %}table-light
                 {% endif %}
               ">
@@ -279,7 +279,7 @@
                     name="separacao_lote_ids" 
                     value="{{ p.separacao_lote_id }}"
                     data-num-pedido="{{ p.num_pedido }}"
-                    {% if p.status_calculado not in ['ABERTO', 'COTADO', 'NF no CD', 'FATURADO', 'CARVIA'] %}disabled title="Pedido já processado"{% endif %}>
+                    {% if p.status_calculado not in ['ABERTO', 'COTADO', 'NF no CD', 'FATURADO', 'CARVIA', 'CARVIA_COTADO', 'CARVIA_EMBARCADO'] %}disabled title="Pedido já processado"{% endif %}>
                 </td>
                 
                 <!-- ✨ COLUNA: Status + Embarque -->
@@ -289,9 +289,9 @@
                       <i class="fas fa-undo"></i> NF no CD
                     {% elif p.status_calculado == 'FATURADO' %}
                       Faturado
-                    {% elif p.status_calculado == 'EMBARCADO' %}
+                    {% elif p.status_calculado in ['EMBARCADO', 'CARVIA_EMBARCADO'] %}
                       <i class="fas fa-truck"></i> Embarcado
-                    {% elif p.status_calculado == 'COTADO' %}
+                    {% elif p.status_calculado in ['COTADO', 'CARVIA_COTADO'] %}
                       Cotado
                     {% elif p.status_calculado == 'CARVIA' %}
                       Aberto
