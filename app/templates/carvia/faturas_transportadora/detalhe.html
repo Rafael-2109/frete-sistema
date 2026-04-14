@@ -115,6 +115,12 @@
                             <td>
                                 {% if fatura.status_pagamento == 'PAGO' %}
                                 <span class="badge bg-success">PAGO</span>
+                                {% if fatura.pago_em %}
+                                <small class="text-muted d-block">
+                                    {{ fatura.pago_em|formatar_data_hora_brasil }}
+                                    {% if fatura.pago_por %} por {{ fatura.pago_por }}{% endif %}
+                                </small>
+                                {% endif %}
                                 {% else %}
                                 <span class="badge bg-secondary">PENDENTE</span>
                                 {% endif %}
@@ -196,9 +202,12 @@
                 <i class="fas fa-exclamation-triangle"></i>
                 <strong>Diferenca de {{ diferenca_fatura_considerado|valor_br }}</strong>
                 entre valor da fatura ({{ fatura.valor_total|valor_br }})
-                e soma conferida ({{ soma_considerado|valor_br }}).
+                e soma conferida ({{ valor_conferido_total|valor_br }}{% if soma_custos_entrega and soma_custos_entrega > 0 %}
+                = subs {{ soma_considerado|valor_br }} + CEs {{ soma_custos_entrega|valor_br }}{% endif %}).
                 Tolerancia: R$ 1,00.
-                Ajuste <em>valor_considerado</em> dos subcontratos antes de conferir.
+                Ajuste <em>valor_considerado</em> dos subcontratos{% if soma_custos_entrega and soma_custos_entrega > 0 %}
+                ou revise os custos de entrega vinculados{% endif %}
+                antes de conferir.
             </div>
             {% else %}
             <div class="alert alert-success mb-3">
@@ -277,10 +286,16 @@
                     </div>
                 </div>
                 <div class="col-md col-sm-4">
-                    <div class="card bg-light h-100">
+                    <div class="card bg-light h-100"
+                         title="Soma de valor_considerado dos subcontratos + CarviaCustoEntrega vinculados (padrao DespesaExtra.fatura_frete_id do Nacom)">
                         <div class="card-body py-2">
-                            <small class="text-muted d-block">Total Considerado</small>
-                            <strong class="text-warning h5 d-block mb-0">{{ soma_considerado|valor_br }}</strong>
+                            <small class="text-muted d-block">Total Conferido</small>
+                            <strong class="text-warning h5 d-block mb-0">{{ valor_conferido_total|valor_br }}</strong>
+                            {% if soma_custos_entrega and soma_custos_entrega > 0 %}
+                            <small class="text-muted d-block">
+                                Subs {{ soma_considerado|valor_br }} + CEs {{ soma_custos_entrega|valor_br }}
+                            </small>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -705,6 +720,66 @@
     </div>
 </div>
 
+<!-- Modal Vincular Custos de Entrega (reverso: padrao DespesaExtra Nacom pela tela da fatura) -->
+<div class="modal fade" id="modalVincularCE" tabindex="-1" aria-labelledby="modalVincularCELabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVincularCELabel">
+                    <i class="fas fa-money-bill-wave"></i> Vincular Custos de Entrega
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="vce-loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="text-muted mt-2">Buscando custos de entrega disponiveis...</p>
+                </div>
+                <div id="vce-vazio" class="text-center py-4 d-none">
+                    <i class="fas fa-info-circle text-muted fa-2x mb-2"></i>
+                    <p class="text-muted">
+                        Nenhum custo de entrega PENDENTE disponivel para esta transportadora.
+                    </p>
+                    <small class="text-muted">CEs sao elegiveis quando: status=PENDENTE, sem fatura vinculada, e com frete de subcontrato da mesma transportadora.</small>
+                </div>
+                <div id="vce-tabela" class="d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span id="vce-qtd" class="text-muted"></span>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-select-all-vce">
+                            Selecionar Todos
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="30"><input type="checkbox" id="check-all-vce"></th>
+                                    <th>Numero</th>
+                                    <th>Tipo</th>
+                                    <th>Operacao</th>
+                                    <th>Cliente</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vce-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="vce-erro" class="alert alert-danger d-none mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btn-confirmar-vincular-ce" disabled>
+                    <i class="fas fa-link"></i> Vincular Selecionados
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Confirmar Valor -->
 <div class="modal fade" id="modalConfirmarValor" tabindex="-1" aria-labelledby="modalConfirmarValorLabel" aria-hidden="true">
     <div class="modal-dialog modal-sm">
@@ -879,9 +954,16 @@
     <div class="row g-4 mt-0">
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h5 class="mb-0"><i class="fas fa-money-bill-wave"></i> Custos de Entrega ({{ custos_entrega|length }})</h5>
-                    <span class="badge bg-info text-dark">Total: {{ soma_custos_entrega|valor_br }}</span>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge bg-info text-dark">Total: {{ soma_custos_entrega|valor_br }}</span>
+                        {% if fatura.pode_editar()[0] %}
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-abrir-modal-vincular-ce" title="Vincular Custo de Entrega existente">
+                            <i class="fas fa-plus"></i> Vincular CE
+                        </button>
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     {% if custos_entrega %}

@@ -1304,3 +1304,114 @@ def register_custo_entrega_routes(bp):
                 f'Erro ao buscar FTs disponiveis para CE #{custo_id}: {e}'
             )
             return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # Vincular multiplos CEs a uma FT (reverso — pela tela da FT)
+    # ===================================================================
+
+    @bp.route('/api/faturas-transportadora/<int:fatura_id>/custos-entrega-disponiveis') # type: ignore
+    @login_required
+    def api_custos_entrega_disponiveis_para_ft(fatura_id): # type: ignore
+        """Retorna JSON com CarviaCustoEntrega elegiveis para vincular a esta FT.
+
+        Usado pelo modal 'Vincular CE' na tela de detalhe da fatura
+        transportadora. Filtra por transportadora da FT (navegacao CE ->
+        CarviaFrete -> CarviaSubcontrato -> transportadora_id).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaFaturaTransportadora
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        pode, razao = fatura.pode_editar()
+        if not pode:
+            return jsonify({'sucesso': False, 'erro': razao}), 400
+
+        try:
+            from app.carvia.services.financeiro.custo_entrega_fatura_service import (
+                CustoEntregaFaturaService,
+            )
+            custos = CustoEntregaFaturaService.ces_disponiveis_para_fatura(fatura_id)
+            return jsonify({'sucesso': True, 'custos': custos})
+        except Exception as e:
+            logger.error(
+                f'Erro ao buscar CEs disponiveis para FT #{fatura_id}: {e}'
+            )
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route(
+        '/faturas-transportadora/<int:fatura_id>/vincular-custos-entrega',
+        methods=['POST'],
+    ) # type: ignore
+    @login_required
+    def vincular_custos_entrega_fatura(fatura_id): # type: ignore
+        """Vincula uma lista de CEs a uma CarviaFaturaTransportadora.
+
+        Recebe JSON `{custo_ids: [1, 2, 3]}`. Executa vinculacao em loop
+        via `CustoEntregaFaturaService.vincular()`. Se qualquer CE falhar,
+        faz rollback de toda a transacao e reporta o primeiro erro.
+        Espelha o padrao de `anexar_subcontratos_fatura_transportadora`.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        from app.carvia.models import CarviaFaturaTransportadora
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+
+        pode, razao = fatura.pode_editar()
+        if not pode:
+            return jsonify({'sucesso': False, 'erro': razao}), 400
+
+        payload = request.get_json(silent=True) or {}
+        custo_ids = payload.get('custo_ids') or []
+        if not isinstance(custo_ids, list) or not custo_ids:
+            return jsonify(
+                {'sucesso': False, 'erro': 'Lista de custo_ids obrigatoria'}
+            ), 400
+
+        try:
+            from app.carvia.services.financeiro.custo_entrega_fatura_service import (
+                CustoEntregaFaturaService,
+            )
+            vinculados = []
+            for custo_id in custo_ids:
+                try:
+                    custo_id_int = int(custo_id)
+                except (ValueError, TypeError):
+                    db.session.rollback()
+                    return jsonify({
+                        'sucesso': False,
+                        'erro': f'ID invalido: {custo_id}',
+                    }), 400
+
+                resultado = CustoEntregaFaturaService.vincular(
+                    custo_id_int, fatura_id, current_user.email,
+                )
+                vinculados.append(resultado['ce_numero'])
+
+            db.session.commit()
+            logger.info(
+                "FT #%d: %d CEs vinculados por %s (%s)",
+                fatura_id, len(vinculados), current_user.email, vinculados,
+            )
+            return jsonify({
+                'sucesso': True,
+                'vinculados': vinculados,
+                'total': len(vinculados),
+            })
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'sucesso': False, 'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(
+                f'Erro ao vincular CEs a FT #{fatura_id}: {e}'
+            )
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500

@@ -435,24 +435,72 @@ class AprovacaoSubcontratoService:
     # =================================================================
     # Listagem (fila de pendentes)
     # =================================================================
-    def listar_pendentes(self):
+    def listar_pendentes(
+        self,
+        transportadora: Optional[str] = None,
+        cte_numero: Optional[str] = None,
+        nf_numero: Optional[str] = None,
+    ):
         """Retorna queryset de aprovacoes PENDENTE com sub joined.
 
-        Usado pela rota `/carvia/subcontratos/aprovacoes`.
+        Usado pela rota `/carvia/subcontratos/aprovacoes`. Aceita filtros
+        opcionais (espelha padrao Nacom `listar_aprovacoes`): busca parcial
+        `ilike` por razao social da transportadora, numero do CTe sub ou
+        numero da NF (via operacao -> junction -> NF).
         """
         from app.carvia.models import (
             CarviaAprovacaoSubcontrato,
             CarviaSubcontrato,
+            CarviaOperacao,
+            CarviaOperacaoNf,
+            CarviaNf,
         )
+        from app.transportadoras.models import Transportadora
 
-        return (
+        query = (
             db.session.query(CarviaAprovacaoSubcontrato, CarviaSubcontrato)
             .join(
                 CarviaSubcontrato,
                 CarviaSubcontrato.id == CarviaAprovacaoSubcontrato.subcontrato_id,
             )
             .filter(CarviaAprovacaoSubcontrato.status == 'PENDENTE')
-            .order_by(CarviaAprovacaoSubcontrato.solicitado_em.desc())
+        )
+
+        if transportadora:
+            query = query.join(
+                Transportadora,
+                Transportadora.id == CarviaSubcontrato.transportadora_id,
+            ).filter(
+                Transportadora.razao_social.ilike(f'%{transportadora}%')
+            )
+
+        if cte_numero:
+            query = query.filter(
+                CarviaSubcontrato.cte_numero.ilike(f'%{cte_numero}%')
+            )
+
+        if nf_numero:
+            # Navegar sub -> operacao -> CarviaOperacaoNf -> CarviaNf
+            # (sub pode ter multiplas NFs via operacao — distinct evita duplicatas)
+            query = (
+                query.join(
+                    CarviaOperacao,
+                    CarviaOperacao.id == CarviaSubcontrato.operacao_id,
+                )
+                .join(
+                    CarviaOperacaoNf,
+                    CarviaOperacaoNf.operacao_id == CarviaOperacao.id,
+                )
+                .join(
+                    CarviaNf,
+                    CarviaNf.id == CarviaOperacaoNf.nf_id,
+                )
+                .filter(CarviaNf.numero_nf.ilike(f'%{nf_numero}%'))
+                .distinct()
+            )
+
+        return (
+            query.order_by(CarviaAprovacaoSubcontrato.solicitado_em.desc())
             .all()
         )
 

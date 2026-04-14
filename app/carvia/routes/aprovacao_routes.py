@@ -35,13 +35,22 @@ def register_aprovacao_routes(bp):
     @bp.route('/subcontratos/aprovacoes')  # type: ignore
     @login_required
     def listar_aprovacoes_subcontrato():  # type: ignore
-        """Fila de tratativas PENDENTE."""
+        """Fila de tratativas PENDENTE — com filtros opcionais ilike."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
+        # Filtros (padrao Nacom listar_aprovacoes)
+        filtro_transportadora = (request.args.get('transportadora') or '').strip()
+        filtro_cte_numero = (request.args.get('cte_numero') or '').strip()
+        filtro_nf_numero = (request.args.get('nf_numero') or '').strip()
+
         svc = AprovacaoSubcontratoService()
-        pendentes_raw = svc.listar_pendentes()
+        pendentes_raw = svc.listar_pendentes(
+            transportadora=filtro_transportadora or None,
+            cte_numero=filtro_cte_numero or None,
+            nf_numero=filtro_nf_numero or None,
+        )
 
         # Monta linhas enriquecidas para a tela
         linhas = []
@@ -65,6 +74,11 @@ def register_aprovacao_routes(bp):
             linhas=linhas,
             total=len(linhas),
             tolerancia=TOLERANCIA_APROVACAO,
+            filtros={
+                'transportadora': filtro_transportadora,
+                'cte_numero': filtro_cte_numero,
+                'nf_numero': filtro_nf_numero,
+            },
         )
 
     # ==================================================================

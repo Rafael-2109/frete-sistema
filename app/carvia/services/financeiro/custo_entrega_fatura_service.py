@@ -286,3 +286,99 @@ class CustoEntregaFaturaService:
                 'cabe_ce': diferenca >= valor_ce - 0.01,
             })
         return resultado
+
+    @staticmethod
+    def ces_disponiveis_para_fatura(fatura_id):
+        """Retorna CarviaCustoEntrega elegiveis para vincular a esta FT.
+
+        Inverso de `faturas_disponiveis(ce_id)` — usado pela tela de detalhe
+        da FT para oferecer vinculacao reversa (padrao DespesaExtra do Nacom
+        adaptado: Nacom so permite vincular pelo lado da despesa, CarVia
+        permite pelos dois lados).
+
+        Filtros:
+        - CE com `status='PENDENTE'` e `fatura_transportadora_id IS NULL`
+        - CE cujo `frete_id` aponta para um frete que tem subcontrato(s) da
+          mesma transportadora da FT (navegacao ce.frete_id -> CarviaSubcontrato
+          -> transportadora_id). CEs sem frete_id sao excluidos por seguranca
+          (nao da para garantir que pertencem a essa transportadora).
+        - FT deve estar editavel (senao retorna lista vazia — defesa em
+          profundidade; a rota tambem valida `pode_editar()`).
+
+        Args:
+            fatura_id: ID da CarviaFaturaTransportadora
+
+        Returns:
+            list[dict] com id, numero_custo, tipo_custo, valor,
+                      operacao_cte_numero, operacao_cliente, fornecedor_nome,
+                      data_custo
+        """
+        from app.carvia.models import (
+            CarviaCustoEntrega, CarviaFaturaTransportadora,
+            CarviaSubcontrato, CarviaOperacao,
+        )
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            return []
+
+        pode_editar, _ = fatura.pode_editar()
+        if not pode_editar:
+            return []
+
+        if not fatura.transportadora_id:
+            return []
+
+        # Buscar CEs PENDENTE sem FT cujo frete_id aponta para um frete
+        # que possui subcontrato da mesma transportadora da FT.
+        # JOIN CE -> CarviaSubcontrato (via frete_id) para filtrar por
+        # transportadora_id, com distinct para evitar duplicatas quando
+        # o frete tem multiplos subs.
+        ces = (
+            db.session.query(CarviaCustoEntrega)
+            .join(
+                CarviaSubcontrato,
+                CarviaSubcontrato.frete_id == CarviaCustoEntrega.frete_id,
+            )
+            .filter(
+                CarviaCustoEntrega.status == 'PENDENTE',
+                CarviaCustoEntrega.fatura_transportadora_id.is_(None),
+                CarviaCustoEntrega.frete_id.isnot(None),
+                CarviaSubcontrato.transportadora_id == fatura.transportadora_id,
+            )
+            .distinct()
+            .order_by(CarviaCustoEntrega.criado_em.desc())
+            .all()
+        )
+
+        if not ces:
+            return []
+
+        # Carregar operacoes em lote para evitar N+1
+        op_ids = list({ce.operacao_id for ce in ces if ce.operacao_id})
+        operacoes_map = {}
+        if op_ids:
+            ops = CarviaOperacao.query.filter(CarviaOperacao.id.in_(op_ids)).all()
+            operacoes_map = {op.id: op for op in ops}
+
+        resultado = []
+        for ce in ces:
+            op = operacoes_map.get(ce.operacao_id) if ce.operacao_id else None
+            resultado.append({
+                'id': ce.id,
+                'numero_custo': ce.numero_custo,
+                'tipo_custo': ce.tipo_custo,
+                'valor': float(ce.valor or 0),
+                'operacao_id': ce.operacao_id,
+                'operacao_cte_numero': op.cte_numero if op else '-',
+                'operacao_cliente': op.nome_cliente if op else '-',
+                'operacao_destino': (
+                    f'{op.cidade_destino}/{op.uf_destino}'
+                    if op and op.cidade_destino else '-'
+                ),
+                'fornecedor_nome': ce.fornecedor_nome or '-',
+                'data_custo': (
+                    ce.data_custo.strftime('%d/%m/%Y') if ce.data_custo else '-'
+                ),
+            })
+        return resultado
