@@ -15,26 +15,26 @@
     {% set carvia_active = 'aprovacoes_subcontrato' %}
     {% include 'carvia/_quick_nav.html' %}
 
-    <!-- Info do subcontrato -->
+    <!-- Info do frete -->
     <div class="card mb-3">
         <div class="card-header">
-            <h5 class="mb-0"><i class="fas fa-handshake"></i> Subcontrato</h5>
+            <h5 class="mb-0"><i class="fas fa-handshake"></i> Frete</h5>
         </div>
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-3">
-                    <small class="text-muted d-block">CTe Numero</small>
+                    <small class="text-muted d-block">Frete</small>
                     <strong>
-                        <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.id) }}" class="text-decoration-none">
-                            {{ sub.cte_numero or ('Sub #' ~ sub.id) }}
+                        <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}" class="text-decoration-none">
+                            Frete #{{ frete.id }}
                         </a>
                     </strong>
                 </div>
                 <div class="col-md-3">
                     <small class="text-muted d-block">Transportadora</small>
-                    <strong>{{ sub.transportadora.razao_social if sub.transportadora else '-' }}</strong>
-                    {% if sub.transportadora and sub.transportadora.cnpj %}
-                    <br><small class="text-muted">{{ sub.transportadora.cnpj }}</small>
+                    <strong>{{ frete.transportadora.razao_social if frete.transportadora else '-' }}</strong>
+                    {% if frete.transportadora and frete.transportadora.cnpj %}
+                    <br><small class="text-muted">{{ frete.transportadora.cnpj }}</small>
                     {% endif %}
                 </div>
                 {% if operacao %}
