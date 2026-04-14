@@ -1,19 +1,19 @@
-"""Modelo de Aprovacao de Subcontratos CarVia.
+"""Modelo de Aprovacao de CarviaFrete.
 
-Tabela satelite de carvia_subcontratos que registra o historico de tratativas
+Tabela satelite de carvia_fretes que registra o historico de tratativas
 de aprovacao quando a divergencia entre valor_considerado/valor_pago e o
 valor_cotado ultrapassa a tolerancia (R$ 5,00 — TOLERANCIA_APROVACAO em
-AprovacaoSubcontratoService).
+AprovacaoFreteService).
 
-Inspirado em app/fretes/models.py:AprovacaoFrete (Nacom), com as seguintes
+Paridade app/fretes/models.py:AprovacaoFrete (Nacom), com as seguintes
 diferencas:
 - Snapshot dos 3 valores no momento da solicitacao (auditoria forte)
-- 1:N (e nao 1:0..1) — sub pode ter multiplas aprovacoes ao longo do tempo
+- 1:N (e nao 1:0..1) — frete pode ter multiplas aprovacoes ao longo do tempo
   (ex: PENDENTE -> REJEITADO -> nova solicitacao apos correcao do valor_pago)
-- Status do sub.status_conferencia permanece PENDENTE durante a tratativa
+- Status do frete.status_conferencia permanece PENDENTE durante a tratativa
   (e definido APROVADO ou DIVERGENTE so apos o aprovador decidir)
 
-Ref: .claude/plans/wobbly-tumbling-treasure.md (D4 — substituir totalmente)
+Ref: docs/superpowers/plans/2026-04-14-carvia-frete-conferencia-migration.md
 """
 
 from app import db
@@ -23,15 +23,15 @@ from app.utils.timezone import agora_utc_naive
 STATUS_APROVACAO = ('PENDENTE', 'APROVADO', 'REJEITADO')
 
 
-class CarviaAprovacaoSubcontrato(db.Model):
-    """Tratativa de aprovacao de divergencia em CarviaSubcontrato."""
+class CarviaAprovacaoFrete(db.Model):
+    """Tratativa de aprovacao de divergencia em CarviaFrete."""
 
-    __tablename__ = 'carvia_aprovacoes_subcontrato'
+    __tablename__ = 'carvia_aprovacoes_frete'
 
     id = db.Column(db.Integer, primary_key=True)
-    subcontrato_id = db.Column(
+    frete_id = db.Column(
         db.Integer,
-        db.ForeignKey('carvia_subcontratos.id'),
+        db.ForeignKey('carvia_fretes.id'),
         nullable=False,
         index=True,
     )
@@ -69,6 +69,6 @@ class CarviaAprovacaoSubcontrato(db.Model):
 
     def __repr__(self):
         return (
-            f'<CarviaAprovacaoSubcontrato {self.id} '
-            f'sub={self.subcontrato_id} status={self.status}>'
+            f'<CarviaAprovacaoFrete {self.id} '
+            f'frete={self.frete_id} status={self.status}>'
         )
