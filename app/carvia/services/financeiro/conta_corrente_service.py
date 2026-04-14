@@ -351,27 +351,30 @@ class ContaCorrenteService:
     ) -> List[Dict]:
         """Lista movimentacoes de uma transportadora com filtros.
 
+        Paridade Nacom: usa CarviaFrete como unidade de analise. CarviaSubcontrato
+        e join opcional apenas para exibir cte_numero na UI.
+
         status: 'ATIVO' | 'COMPENSADO' | 'DESCONSIDERADO' | None (todos)
         """
         from app.carvia.models import (
             CarviaContaCorrenteTransportadora,
-            CarviaSubcontrato,
+            CarviaFrete,
             CarviaOperacao,
         )
 
         query = (
             db.session.query(
                 CarviaContaCorrenteTransportadora,
-                CarviaSubcontrato,
+                CarviaFrete,
                 CarviaOperacao,
             )
-            .join(
-                CarviaSubcontrato,
-                CarviaSubcontrato.id == CarviaContaCorrenteTransportadora.subcontrato_id,
+            .outerjoin(
+                CarviaFrete,
+                CarviaFrete.id == CarviaContaCorrenteTransportadora.frete_id,
             )
             .outerjoin(
                 CarviaOperacao,
-                CarviaOperacao.id == CarviaSubcontrato.operacao_id,
+                CarviaOperacao.id == CarviaFrete.operacao_id,
             )
             .filter(
                 CarviaContaCorrenteTransportadora.transportadora_id == transportadora_id
@@ -393,7 +396,13 @@ class ContaCorrenteService:
         query = query.order_by(CarviaContaCorrenteTransportadora.criado_em.desc())
 
         resultados = []
-        for mov, sub, op in query.all():
+        for mov, frete, op in query.all():
+            # Obter primeiro sub do frete apenas para exibir cte_numero (UI)
+            primary_sub_cte_numero = None
+            if frete is not None:
+                primary_sub = frete.subcontratos.first()
+                if primary_sub:
+                    primary_sub_cte_numero = primary_sub.cte_numero
             resultados.append({
                 'mov_id': mov.id,
                 'criado_em': mov.criado_em,
@@ -404,11 +413,11 @@ class ContaCorrenteService:
                 'descricao': mov.descricao,
                 'observacoes': mov.observacoes,
                 'status': mov.status,
-                'sub_id': sub.id if sub else None,
-                'sub_cte_numero': sub.cte_numero if sub else None,
-                'sub_valor_cotado': float(sub.valor_cotado or 0) if sub else None,
-                'sub_valor_considerado': float(sub.valor_considerado or 0) if sub else None,
-                'sub_valor_pago': float(sub.valor_pago or 0) if sub else None,
+                'frete_id': frete.id if frete else None,
+                'frete_cte_numero': primary_sub_cte_numero,
+                'frete_valor_cotado': float(frete.valor_cotado or 0) if frete else None,
+                'frete_valor_considerado': float(frete.valor_considerado or 0) if frete else None,
+                'frete_valor_pago': float(frete.valor_pago or 0) if frete else None,
                 'op_id': op.id if op else None,
                 'op_cte_numero': op.cte_numero if op else None,
                 'op_cidade_destino': op.cidade_destino if op else None,
@@ -460,7 +469,7 @@ class ContaCorrenteService:
 
         # Cabecalho da tabela
         cab = [
-            'Data', 'Sub', 'CTe', 'Operacao', 'Destino',
+            'Data', 'Frete', 'CTe', 'Operacao', 'Destino',
             'Tipo', 'Diferenca', 'Debito', 'Credito', 'Status',
         ]
         for col_idx, valor in enumerate(cab, start=1):
@@ -474,8 +483,8 @@ class ContaCorrenteService:
         total_credito = 0.0
         for idx, m in enumerate(movs, start=5):
             ws.cell(row=idx, column=1, value=m['criado_em'].strftime('%d/%m/%Y') if m['criado_em'] else '')
-            ws.cell(row=idx, column=2, value=f"Sub #{m['sub_id']}" if m['sub_id'] else '-')
-            ws.cell(row=idx, column=3, value=m['sub_cte_numero'] or '-')
+            ws.cell(row=idx, column=2, value=f"Frete #{m['frete_id']}" if m['frete_id'] else '-')
+            ws.cell(row=idx, column=3, value=m['frete_cte_numero'] or '-')
             ws.cell(row=idx, column=4, value=m['op_cte_numero'] or '-')
             ws.cell(row=idx, column=5, value=(
                 f"{m['op_cidade_destino']}/{m['op_uf_destino']}"
