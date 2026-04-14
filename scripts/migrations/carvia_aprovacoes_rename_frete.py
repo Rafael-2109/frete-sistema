@@ -46,7 +46,7 @@ def run_migration():
 
     orfaos = db.session.execute(text(
         "SELECT COUNT(*) FROM carvia_aprovacoes_subcontrato WHERE frete_id IS NULL"
-    )).scalar()
+    )).scalar() or 0
     if orfaos > 0:
         print(f"ERRO: {orfaos} aprovacoes orfas — investigar manualmente")
         print("Abortar migration.")
