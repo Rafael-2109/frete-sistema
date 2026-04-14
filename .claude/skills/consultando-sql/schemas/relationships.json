@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 263,
+  "total_relationships": 268,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -243,6 +243,12 @@
       "to_column": "id"
     },
     {
+      "from_table": "carvia_custos_entrega",
+      "from_column": "fatura_transportadora_id",
+      "to_table": "carvia_faturas_transportadora",
+      "to_column": "id"
+    },
+    {
       "from_table": "carvia_emissao_cte",
       "from_column": "nf_id",
       "to_table": "carvia_nfs",
@@ -432,6 +438,30 @@
       "from_table": "carvia_precos_categoria_moto",
       "from_column": "categoria_moto_id",
       "to_table": "carvia_categorias_moto",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_previnculos_extrato_cotacao",
+      "from_column": "extrato_linha_id",
+      "to_table": "carvia_extrato_linhas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_previnculos_extrato_cotacao",
+      "from_column": "cotacao_id",
+      "to_table": "carvia_cotacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_previnculos_extrato_cotacao",
+      "from_column": "conciliacao_id",
+      "to_table": "carvia_conciliacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_previnculos_extrato_cotacao",
+      "from_column": "fatura_cliente_id",
+      "to_table": "carvia_faturas_cliente",
       "to_column": "id"
     },
     {

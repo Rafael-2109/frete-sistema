@@ -58,8 +58,7 @@
       "name": "status",
       "type": "varchar(20)",
       "nullable": false,
-      "default": "PENDENTE",
-      "description": "PENDENTE | VINCULADO_FT | PAGO | CANCELADO — VINCULADO_FT significa CE vinculado a CarviaFaturaTransportadora, aguardando pagamento via propagacao automatica da FT"
+      "default": "PENDENTE"
     },
     {
       "name": "pago_por",
@@ -77,12 +76,12 @@
     {
       "name": "subcontrato_id",
       "type": "integer",
-      "description": "FK → carvia_subcontratos.id (LEGADO — sera removido em migration destructive; substituido por fatura_transportadora_id direto)"
+      "description": "FK → carvia_subcontratos.id"
     },
     {
       "name": "fatura_transportadora_id",
       "type": "integer",
-      "description": "FK → carvia_faturas_transportadora.id (ON DELETE SET NULL). CE vinculado diretamente a FT. Padrao DespesaExtra.fatura_frete_id do Nacom. Quando preenchido, CE sera pago via propagacao automatica da FT."
+      "description": "FK → carvia_faturas_transportadora.id"
     },
     {
       "name": "total_conciliado",
@@ -135,11 +134,31 @@
     },
     {
       "column": "fatura_transportadora_id",
-      "references": "carvia_faturas_transportadora.id",
-      "on_delete": "SET NULL"
+      "references": "carvia_faturas_transportadora.id"
     }
   ],
   "indices": [
+    {
+      "name": "ix_carvia_custos_entrega_cte_complementar_id",
+      "columns": [
+        "cte_complementar_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_fatura_transportadora_id",
+      "columns": [
+        "fatura_transportadora_id"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_carvia_custos_entrega_operacao_id",
       "columns": [
@@ -155,9 +174,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_subcontrato_id",
+      "name": "ix_carvia_custos_entrega_numero_custo",
       "columns": [
-        "subcontrato_id"
+        "numero_custo"
       ],
       "unique": false
     },
@@ -169,30 +188,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_numero_custo",
+      "name": "ix_carvia_custos_entrega_subcontrato_id",
       "columns": [
-        "numero_custo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_cte_complementar_id",
-      "columns": [
-        "cte_complementar_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_fatura_transportadora_id",
-      "columns": [
-        "fatura_transportadora_id"
+        "subcontrato_id"
       ],
       "unique": false
     }

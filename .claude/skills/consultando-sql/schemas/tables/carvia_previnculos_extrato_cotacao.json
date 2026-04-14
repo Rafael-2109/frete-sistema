@@ -1,0 +1,146 @@
+{
+  "name": "carvia_previnculos_extrato_cotacao",
+  "description": "Tabela carvia_previnculos_extrato_cotacao",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "extrato_linha_id",
+      "type": "integer",
+      "description": "FK → carvia_extrato_linhas.id",
+      "nullable": false
+    },
+    {
+      "name": "cotacao_id",
+      "type": "integer",
+      "description": "FK → carvia_cotacoes.id",
+      "nullable": false
+    },
+    {
+      "name": "valor_alocado",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "ATIVO"
+    },
+    {
+      "name": "conciliacao_id",
+      "type": "integer",
+      "description": "FK → carvia_conciliacoes.id"
+    },
+    {
+      "name": "fatura_cliente_id",
+      "type": "integer",
+      "description": "FK → carvia_faturas_cliente.id"
+    },
+    {
+      "name": "resolvido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "resolvido_automatico",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "cancelado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "motivo_cancelamento",
+      "type": "text"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "extrato_linha_id",
+      "references": "carvia_extrato_linhas.id"
+    },
+    {
+      "column": "cotacao_id",
+      "references": "carvia_cotacoes.id"
+    },
+    {
+      "column": "conciliacao_id",
+      "references": "carvia_conciliacoes.id"
+    },
+    {
+      "column": "fatura_cliente_id",
+      "references": "carvia_faturas_cliente.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_previnculos_extrato_cotacao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_previnculo_resolvido",
+      "columns": [
+        "status",
+        "resolvido_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_previnculo_ativo",
+      "columns": [
+        "cotacao_id",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_previnculos_extrato_cotacao_cotacao_id",
+      "columns": [
+        "cotacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_previnculos_extrato_cotacao_extrato_linha_id",
+      "columns": [
+        "extrato_linha_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_previnculo_linha_cotacao_ativo",
+      "columns": [
+        "extrato_linha_id",
+        "cotacao_id"
+      ],
+      "unique": true
+    }
+  ]
+}

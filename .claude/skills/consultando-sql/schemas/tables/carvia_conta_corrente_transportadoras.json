@@ -106,13 +106,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_subcontrato_id",
-      "columns": [
-        "subcontrato_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_conta_corrente_transportadoras_transportadora_id",
       "columns": [
         "transportadora_id"
@@ -137,6 +130,13 @@
       "name": "ix_carvia_conta_corrente_transportadoras_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_subcontrato_id",
+      "columns": [
+        "subcontrato_id"
       ],
       "unique": false
     }

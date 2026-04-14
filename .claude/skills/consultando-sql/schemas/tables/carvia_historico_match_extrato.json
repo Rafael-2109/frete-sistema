@@ -1,0 +1,79 @@
+{
+  "name": "carvia_historico_match_extrato",
+  "description": "Tabela carvia_historico_match_extrato",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "descricao_linha_raw",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "descricao_tokens",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_pagador",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "fatura_cliente"
+    },
+    {
+      "name": "conciliacao_id",
+      "type": "integer"
+    },
+    {
+      "name": "registrado_em",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_histmatch_tokens_tipo",
+      "columns": [
+        "descricao_tokens",
+        "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_historico_match_extrato_cnpj_pagador",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_histmatch_conciliacao_id",
+      "columns": [
+        "conciliacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_histmatch_cnpj",
+      "columns": [
+        "cnpj_pagador"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_historico_match_extrato_descricao_tokens",
+      "columns": [
+        "descricao_tokens"
+      ],
+      "unique": false
+    }
+  ]
+}

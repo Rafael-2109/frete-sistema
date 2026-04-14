@@ -235,9 +235,23 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
+      "columns": [
+        "entrega_monitorada_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_numero_nfd",
       "columns": [
         "numero_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -250,31 +264,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_origem_registro",
       "columns": [
         "origem_registro"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_cnpj_status",
-      "columns": [
-        "cnpj_emitente",
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nfd_data_registro",
-      "columns": [
-        "data_registro"
       ],
       "unique": false
     },
@@ -293,9 +285,9 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_nf_venda",
+      "name": "idx_nfd_data_registro",
       "columns": [
-        "numero_nf_venda"
+        "data_registro"
       ],
       "unique": false
     },
@@ -305,6 +297,13 @@
         "odoo_dfe_id"
       ],
       "unique": true
+    },
+    {
+      "name": "idx_nfd_nf_venda",
+      "columns": [
+        "numero_nf_venda"
+      ],
+      "unique": false
     },
     {
       "name": "idx_nfd_odoo_dfe",
@@ -364,6 +363,14 @@
       "unique": false
     },
     {
+      "name": "idx_nfd_cnpj_status",
+      "columns": [
+        "cnpj_emitente",
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_ativo",
       "columns": [
         "ativo"
@@ -374,13 +381,6 @@
       "name": "ix_nf_devolucao_e_pallet_devolucao",
       "columns": [
         "e_pallet_devolucao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_entrega_monitorada_id",
-      "columns": [
-        "entrega_monitorada_id"
       ],
       "unique": false
     },

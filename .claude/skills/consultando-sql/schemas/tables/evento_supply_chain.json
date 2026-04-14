@@ -77,6 +77,10 @@
     {
       "name": "registrado_por",
       "type": "varchar(100)"
+    },
+    {
+      "name": "usuario_id",
+      "type": "integer"
     }
   ]
 }

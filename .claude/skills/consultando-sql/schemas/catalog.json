@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 177,
+  "total_tabelas": 179,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -502,6 +502,15 @@
       ]
     },
     {
+      "name": "carvia_historico_match_extrato",
+      "description": "Tabela carvia_historico_match_extrato",
+      "key_fields": [
+        "descricao_linha_raw",
+        "descricao_tokens",
+        "cnpj_pagador"
+      ]
+    },
+    {
       "name": "carvia_modelos_moto",
       "description": "Tabela carvia_modelos_moto",
       "key_fields": [
@@ -579,6 +588,15 @@
         "tabela_frete_id",
         "categoria_moto_id",
         "valor_unitario"
+      ]
+    },
+    {
+      "name": "carvia_previnculos_extrato_cotacao",
+      "description": "Tabela carvia_previnculos_extrato_cotacao",
+      "key_fields": [
+        "extrato_linha_id",
+        "cotacao_id",
+        "valor_alocado"
       ]
     },
     {

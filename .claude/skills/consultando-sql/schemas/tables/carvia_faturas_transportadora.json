@@ -54,6 +54,10 @@
       "type": "timestamp"
     },
     {
+      "name": "observacoes_conferencia",
+      "type": "text"
+    },
+    {
       "name": "status_pagamento",
       "type": "varchar(20)",
       "default": "PENDENTE"
