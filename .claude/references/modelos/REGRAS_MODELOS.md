@@ -206,7 +206,7 @@ Tipos: ENTRADA, SAIDA, AJUSTE, COMPRA
 
 > Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/programacao_producao.json`
 
-### ContatoAgendamento (app/cadastros/models.py)
+### ContatoAgendamento (app/cadastros_agendamento/models.py)
 
 > Campos completos: ver schema em `.claude/skills/consultando-sql/schemas/tables/contato_agendamento.json`
 
