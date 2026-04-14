@@ -44,6 +44,7 @@ class IdentificadorDocumento:
             r'ATACADAO\s*S\.?A\.?',
             r'A\s*T\s*A\s*C\s*A\s*D\s*A\s*O',  # Texto espaçado (formato matricial)
             r'CCPMERM01',  # Código do sistema Atacadão (Proposta)
+            r'CCPMERM02',  # Código do sistema Atacadão (Pedido tabular — layout V2)
             r'Proposta\s+de\s+Compra',  # Header proposta Atacadão
         ],
         'TENDA': [
@@ -75,11 +76,12 @@ class IdentificadorDocumento:
         'PEDIDO': {
             'textos': [
                 r'PEDIDO\s+DE\s+COMPRA',
+                r'Pedido\s+de\s+Compra',  # Header CCPMERM02 Atacadão (case sensitive, minusculo)
                 r'P\s*E\s*D\s*I\s*D\s*O\s+D\s*E\s+C\s*O\s*M\s*P\s*R\s*A',  # Texto espaçado
                 r'P\s+E\s+D\s+I\s+D\s+O',  # Apenas PEDIDO muito espaçado
                 r'Pedido\s+EDI',  # "Pedido EDI" sem número
                 r'Numero:\s*\d+',  # Campo Numero: XXXX (específico do Atacadão PEDIDO)
-                r'Local\s+de\s+Entrega:',  # Campo que só existe em PEDIDO
+                r'Local\s+de\s*Entrega:',  # Campo que só existe em PEDIDO (cobre 'de Entrega' e 'deEntrega' do CCPMERM02)
                 r'M\s*E\s*R\s*C\s*A\s*D\s*O\s*R\s*I\s*A',  # Header da tabela de produtos
                 r'ORDEM\s+DE\s+COMPRA',
                 r'Pedidos/Lotes\s+De\s+Compra',  # Header específico do Assaí (ALTA CONFIANÇA)
@@ -89,7 +91,7 @@ class IdentificadorDocumento:
                 r'Cond\.\s*Pagto:',  # Condição de Pagamento (Assaí)
                 r'Data\s+Pedido:',  # Campo Data Pedido (Assaí)
             ],
-            'peso': [1.0, 1.0, 0.9, 0.8, 0.9, 0.7, 0.6, 0.8, 1.0, 1.0, 1.0, 0.8, 0.8, 0.8]
+            'peso': [1.0, 1.0, 1.0, 0.9, 0.8, 0.9, 0.7, 0.6, 0.8, 1.0, 1.0, 1.0, 0.8, 0.8, 0.8]
         }
     }
 

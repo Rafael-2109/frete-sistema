@@ -97,8 +97,20 @@ class PedidoProcessor:
                     result['errors'].append("Não foi possível identificar o tipo do documento (Proposta/Pedido)")
                     return result
 
-            # Obtém extrator apropriado
-            extractor_class = self.EXTRACTORS.get(formato.lower())
+            # Deteccao de sub-formato CCPMERM02 (Atacadao tabular).
+            # Override direto do extractor_class antes do lookup em EXTRACTORS.
+            # Condicao isolada por formato=='atacadao_pedido' — outros formatos
+            # nao sao afetados. Import local evita carregar V2 quando nao e necessario.
+            extractor_class = None
+            if (formato == 'atacadao_pedido'
+                    and self.identificacao
+                    and 'CCPMERM02' in (self.identificacao.texto_extraido or '')):
+                from .atacadao_pedido_v2 import AtacadaoPedidoV2Extractor
+                extractor_class = AtacadaoPedidoV2Extractor
+
+            # Obtém extrator apropriado (fallback padrao via EXTRACTORS)
+            if extractor_class is None:
+                extractor_class = self.EXTRACTORS.get(formato.lower())
             if not extractor_class:
                 # Tenta fallback para formato sem tipo
                 formato_base = formato.split('_')[0] if '_' in formato else formato
