@@ -28,6 +28,7 @@
 | **Protocolo de memoria do agente** | [MEMORY_PROTOCOL.md](MEMORY_PROTOCOL.md) |
 | **Framework aristotelico (analise/planejamento)** | [FRAMEWORK_ARISTOTELICO.md](FRAMEWORK_ARISTOTELICO.md) |
 | **Regras output agente (I1, I5, I6)** | [REGRAS_OUTPUT.md](REGRAS_OUTPUT.md) |
+| **Padroes backend (helpers compartilhados — `sanitize_for_json`, etc.)** | [PADROES_BACKEND.md](PADROES_BACKEND.md) |
 | **Best Practices Anthropic 2026 (caching, structured output, pgvector)** | [BEST_PRACTICES_2026.md](BEST_PRACTICES_2026.md) |
 | **Estudo System Prompts 2026 (pesquisa + pre-mortem + red team + gaps)** | [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md) |
 | **Quality Review do system_prompt.md v4.2.0 (score 4.39/5 + findings Q1-Q8)** | [STUDY_PROMPT_ENGINEERING_2026_QUALITY_REVIEW.md](STUDY_PROMPT_ENGINEERING_2026_QUALITY_REVIEW.md) |
