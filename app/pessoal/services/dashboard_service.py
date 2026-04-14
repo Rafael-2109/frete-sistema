@@ -1,7 +1,7 @@
 """Service do dashboard pessoal — queries de agregacao on-the-fly."""
 from datetime import date
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from app import db
 from app.pessoal.models import PessoalTransacao, PessoalOrcamento, PessoalCategoria
@@ -311,9 +311,11 @@ def evolucao_por_categoria(ano_ref, mes_ref, meses=6, categoria_ids=None, top_n=
     else:
         # Top N por gasto total no periodo (excluindo grupos fora do orcamento)
         ids_validos = set(
-            db.session.query(PessoalCategoria.id).filter(
-                ~PessoalCategoria.grupo.in_(GRUPOS_EXCLUIDOS),
-            ).scalars().all()
+            db.session.scalars(
+                select(PessoalCategoria.id).where(
+                    ~PessoalCategoria.grupo.in_(GRUPOS_EXCLUIDOS),
+                )
+            ).all()
         )
         top = sorted(
             ((cid, t) for cid, t in totais_cat.items() if cid in ids_validos),

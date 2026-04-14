@@ -87,7 +87,9 @@
       <div class="card h-100">
         <div class="card-header"><i class="fas fa-chart-bar"></i> Gastos por Categoria</div>
         <div class="card-body">
-          <canvas id="chartCategorias" height="300"></canvas>
+          <div class="chart-container" style="position:relative;height:340px;width:100%">
+            <canvas id="chartCategorias"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -108,7 +110,9 @@
           </div>
         </div>
         <div class="card-body">
-          <canvas id="chartTendencia" height="300"></canvas>
+          <div class="chart-container" style="position:relative;height:340px;width:100%">
+            <canvas id="chartTendencia"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -172,7 +176,9 @@
       </div>
     </div>
     <div class="card-body">
-      <canvas id="chartEvolucaoCategorias" height="120"></canvas>
+      <div class="chart-container" style="position:relative;height:360px;width:100%">
+        <canvas id="chartEvolucaoCategorias"></canvas>
+      </div>
     </div>
   </div>
 
@@ -205,7 +211,9 @@
           </div>
         </div>
       </div>
-      <canvas id="chartComparativoAnual" height="110"></canvas>
+      <div class="chart-container" style="position:relative;height:360px;width:100%">
+        <canvas id="chartComparativoAnual"></canvas>
+      </div>
     </div>
   </div>
 </div>
@@ -231,6 +239,16 @@ const PALETA_CORES = [
   '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac',
   '#2e86ab', '#a23b72', '#f18f01', '#c73e1d', '#3b1f2b',
 ];
+
+// Listener global de erro AJAX — torna falhas visiveis em vez de silenciosas
+$(document).ajaxError(function(_event, xhr, settings) {
+  if (!settings.url || !settings.url.includes('/api/dashboard/')) return;
+  console.error('[Dashboard] AJAX error:', settings.url, xhr.status, xhr.responseText);
+  if (typeof toastr !== 'undefined') {
+    const trecho = (settings.url.split('/api/dashboard/')[1] || '').split('?')[0];
+    toastr.error(`Falha em /${trecho} (HTTP ${xhr.status || 'sem resposta'})`, 'Dashboard');
+  }
+});
 
 // Inicializar
 $('#seletorMes').val(mesAtual);
