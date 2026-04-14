@@ -299,15 +299,16 @@ class CarviaClienteService:
         if not endereco:
             return False, 'Endereco nao encontrado.'
 
-        # Verificar se esta em uso por cotacoes
+        # Verificar se esta em uso por cotacoes ATIVAS (ignora CANCELADO/RECUSADO — "lixo")
         em_uso = CarviaCotacao.query.filter(
             db.or_(
                 CarviaCotacao.endereco_origem_id == endereco_id,
                 CarviaCotacao.endereco_destino_id == endereco_id,
-            )
+            ),
+            CarviaCotacao.status.notin_(['CANCELADO', 'RECUSADO']),
         ).count()
         if em_uso:
-            return False, f'Endereco em uso por {em_uso} cotacao(oes). Nao e possivel remover.'
+            return False, f'Endereco em uso por {em_uso} cotacao(oes) ativa(s). Nao e possivel remover.'
 
         db.session.delete(endereco)
         db.session.flush()
