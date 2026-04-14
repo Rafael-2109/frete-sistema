@@ -1061,46 +1061,23 @@ class FaturamentoService:
                 'erros_sincronizacao': []
             }
             
-            # 🚀 SINCRONIZAÇÃO 1: Entregas por NF — enfileirada em RQ (O4, 2026-04-14)
-            # Substitui loop sincrono que bloqueava o Step 1 do scheduler.
-            # Nao aumenta carga no Odoo (sincronizar_entrega_por_nf so mexe em SQL local).
+            # 🚀 SINCRONIZAÇÃO 1: Entregas por NF (todas as NFs novas/atualizadas)
+            # ROLLBACK O4 (2026-04-14): async via RQ causou duplicacao de EntregaMonitorada
+            # (2 workers RQ paralelos na fila 'default' pegavam o mesmo lote e inseriam
+            # concorrentemente sem UniqueConstraint em numero_nf).
+            # Voltamos ao loop sincrono ate aplicar fix com UNIQUE + ON CONFLICT.
             try:
-                from app.portal.workers import enqueue_job
-                from app.faturamento.jobs.sincronizar_entregas_job import (
-                    sincronizar_entregas_batch,
-                    QUEUE_NAME as ENTREGAS_QUEUE,
-                    JOB_TIMEOUT as ENTREGAS_TIMEOUT,
-                )
+                from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
 
                 nfs_para_sincronizar = list(set(nfs_novas + nfs_atualizadas))
-                if nfs_para_sincronizar:
+                logger.info(f"🔄 Sincronizando entregas para {len(nfs_para_sincronizar)} NFs...")
+
+                for numero_nf in nfs_para_sincronizar:
                     try:
-                        job = enqueue_job(
-                            sincronizar_entregas_batch,
-                            nfs_para_sincronizar,
-                            queue_name=ENTREGAS_QUEUE,
-                            timeout=ENTREGAS_TIMEOUT,
-                        )
-                        logger.info(
-                            f"🔄 Enfileirado job {job.id} para sincronizar entregas de "
-                            f"{len(nfs_para_sincronizar)} NFs (fila: {ENTREGAS_QUEUE})"
-                        )
-                        stats_sincronizacao['entregas_sincronizadas'] = len(nfs_para_sincronizar)
-                        stats_sincronizacao['entregas_job_id'] = job.id
+                        sincronizar_entrega_por_nf(numero_nf)
+                        stats_sincronizacao['entregas_sincronizadas'] += 1
                     except Exception as e:
-                        # Fallback: se Redis/RQ indisponivel, executa inline como antes
-                        logger.warning(
-                            f"⚠️ Falha ao enfileirar entregas ({e}). Executando inline como fallback."
-                        )
-                        from app.utils.sincronizar_entregas import sincronizar_entrega_por_nf
-                        for numero_nf in nfs_para_sincronizar:
-                            try:
-                                sincronizar_entrega_por_nf(numero_nf)
-                                stats_sincronizacao['entregas_sincronizadas'] += 1
-                            except Exception as e2:
-                                stats_sincronizacao['erros_sincronizacao'].append(
-                                    f"Entrega NF {numero_nf}: {e2}"
-                                )
+                        stats_sincronizacao['erros_sincronizacao'].append(f"Entrega NF {numero_nf}: {e}")
 
             except ImportError as e:
                 stats_sincronizacao['erros_sincronizacao'].append(f"Módulo entregas não disponível: {e}")
