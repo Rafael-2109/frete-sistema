@@ -2,10 +2,6 @@
 
 {% block title %}Dashboard Pessoal{% endblock %}
 
-{% block extra_css %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-{% endblock %}
-
 {% block content %}
 <div class="container-fluid mt-4">
   <!-- Header -->
@@ -98,7 +94,19 @@
     <!-- Tendencia Mensal (linha) -->
     <div class="col-lg-5">
       <div class="card h-100">
-        <div class="card-header"><i class="fas fa-chart-line"></i> Tendencia Mensal</div>
+        <div class="card-header d-flex justify-content-between align-items-center gap-2">
+          <span><i class="fas fa-chart-line"></i> Tendencia Mensal</span>
+          <div class="d-flex align-items-center gap-2">
+            <select id="seletorMesesHistorico" class="form-select form-select-sm" style="width:auto">
+              <option value="6" selected>6 meses</option>
+              <option value="12">12 meses</option>
+              <option value="24">24 meses</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm" id="btnExportarHistorico" title="Exportar historico CSV">
+              <i class="fas fa-download"></i>
+            </button>
+          </div>
+        </div>
         <div class="card-body">
           <canvas id="chartTendencia" height="300"></canvas>
         </div>
@@ -129,20 +137,104 @@
       </div>
     </div>
   </div>
+
+  <!-- Evolucao por Categoria -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span><i class="fas fa-chart-area"></i> Evolucao por Categoria</span>
+      <div class="d-flex align-items-center gap-2">
+        <small class="text-muted" id="evolucaoInfo">Top 5 por gasto total</small>
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary btn-sm dropdown-toggle"
+                  type="button" id="btnSelecionarCategorias"
+                  data-bs-toggle="dropdown" data-bs-auto-close="outside">
+            <i class="fas fa-filter"></i> Selecionar
+          </button>
+          <div class="dropdown-menu dropdown-menu-end p-2" style="max-height:400px;overflow-y:auto;min-width:300px">
+            <div class="d-flex gap-2 mb-2 border-bottom pb-2">
+              <button class="btn btn-outline-primary btn-sm flex-fill" id="btnEvolucaoTop5">
+                Top 5 automatico
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnEvolucaoLimpar">
+                Limpar
+              </button>
+            </div>
+            <div id="listaCategoriasCheckbox">
+              <div class="text-center text-muted small py-2">Carregando...</div>
+            </div>
+            <div class="border-top pt-2 mt-2">
+              <button class="btn btn-primary btn-sm w-100" id="btnEvolucaoAplicar">
+                Aplicar selecao
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <canvas id="chartEvolucaoCategorias" height="120"></canvas>
+    </div>
+  </div>
+
+  <!-- Comparativo Anual -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span><i class="fas fa-chart-column"></i> Comparativo Anual</span>
+      <small class="text-muted" id="comparativoInfo"></small>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <div class="border rounded p-2">
+            <div class="text-muted small">Despesas</div>
+            <div class="d-flex justify-content-between align-items-baseline">
+              <span id="comparativoDespesasAtual" class="fw-bold">-</span>
+              <small class="text-muted">vs <span id="comparativoDespesasAnterior">-</span></small>
+              <span id="comparativoDespesasDelta" class="small"></span>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="border rounded p-2">
+            <div class="text-muted small">Receitas</div>
+            <div class="d-flex justify-content-between align-items-baseline">
+              <span id="comparativoReceitasAtual" class="fw-bold text-success">-</span>
+              <small class="text-muted">vs <span id="comparativoReceitasAnterior">-</span></small>
+              <span id="comparativoReceitasDelta" class="small"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <canvas id="chartComparativoAnual" height="110"></canvas>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 const csrfToken = '{{ csrf_token() }}';
 const hoje = new Date();
 let mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+let mesesHistorico = 6;
+let categoriasSelecionadas = [];  // ids selecionados no card "Evolucao por Categoria"
 
 let chartCategorias = null;
 let chartTendencia = null;
+let chartEvolucaoCat = null;
+let chartComparativoAnual = null;
+
+// Paleta de cores para series da evolucao por categoria
+const PALETA_CORES = [
+  '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
+  '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac',
+  '#2e86ab', '#a23b72', '#f18f01', '#c73e1d', '#3b1f2b',
+];
 
 // Inicializar
 $('#seletorMes').val(mesAtual);
+carregarCategoriasDisponiveis();
 carregarTudo();
 
 // Navegacao
@@ -167,6 +259,17 @@ $('#btnMesProximo').on('click', function() {
   carregarTudo();
 });
 
+$('#seletorMesesHistorico').on('change', function() {
+  mesesHistorico = parseInt($(this).val(), 10);
+  carregarTendencia();
+  carregarEvolucaoCategorias();
+});
+
+$('#btnExportarHistorico').on('click', function() {
+  const url = `{{ url_for('pessoal.pessoal_dashboard.api_exportar_historico') }}?mes=${mesAtual}&meses=${mesesHistorico}`;
+  window.location.href = url;
+});
+
 function fmt(v) {
   if (v === null || v === undefined) return '-';
   return 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -177,10 +280,23 @@ function fmtNum(v) {
   return v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
+// Escape HTML para strings controladas pelo usuario (categoria.nome, grupo, icone)
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function carregarTudo() {
   carregarResumo();
   carregarCategorias();
   carregarTendencia();
+  carregarEvolucaoCategorias();
+  carregarComparativoAnual();
 }
 
 function carregarResumo() {
@@ -283,8 +399,8 @@ function carregarCategorias() {
       }
 
       return `<tr>
-        <td><i class="fas ${c.icone} me-1"></i> ${c.categoria}</td>
-        <td class="text-muted small">${c.grupo}</td>
+        <td><i class="fas ${esc(c.icone)} me-1"></i> ${esc(c.categoria)}</td>
+        <td class="text-muted small">${esc(c.grupo)}</td>
         <td class="text-end">${fmtNum(c.gasto)}</td>
         <td class="text-end">${c.limite !== null ? fmtNum(c.limite) : '<span class="text-muted">-</span>'}</td>
         <td class="text-end ${saldo !== null && saldo < 0 ? 'text-danger' : ''}">${saldo !== null ? fmtNum(saldo) : '<span class="text-muted">-</span>'}</td>
@@ -297,7 +413,7 @@ function carregarCategorias() {
 }
 
 function carregarTendencia() {
-  $.get(`{{ url_for('pessoal.pessoal_dashboard.api_tendencia') }}?meses=6`, function(r) {
+  $.get(`{{ url_for('pessoal.pessoal_dashboard.api_tendencia') }}?mes=${mesAtual}&meses=${mesesHistorico}`, function(r) {
     if (!r.sucesso) return;
 
     if (chartTendencia) chartTendencia.destroy();
@@ -363,6 +479,212 @@ function carregarTendencia() {
       }
     });
   });
+}
+
+// ==========================================================================
+// EVOLUCAO POR CATEGORIA
+// ==========================================================================
+function carregarCategoriasDisponiveis() {
+  $.get('{{ url_for("pessoal.pessoal_dashboard.api_categorias_lista") }}', function(r) {
+    if (!r.sucesso) return;
+
+    // Renderiza checkboxes agrupados por grupo (com escape XSS)
+    let grupoAnterior = '';
+    const html = r.categorias.map(c => {
+      const cabecalho = c.grupo !== grupoAnterior
+        ? `<div class="text-uppercase small fw-bold text-muted mt-2 mb-1">${esc(c.grupo)}</div>`
+        : '';
+      grupoAnterior = c.grupo;
+      const catId = parseInt(c.id, 10);  // garantir numerico
+      return cabecalho + `
+        <div class="form-check">
+          <input class="form-check-input categoria-checkbox" type="checkbox"
+                 value="${catId}" id="catChk${catId}">
+          <label class="form-check-label small" for="catChk${catId}">
+            <i class="fas ${esc(c.icone)} me-1 text-muted"></i>${esc(c.nome)}
+          </label>
+        </div>`;
+    }).join('');
+    $('#listaCategoriasCheckbox').html(html || '<div class="text-muted small p-2">Nenhuma categoria.</div>');
+  });
+}
+
+function carregarEvolucaoCategorias() {
+  const params = new URLSearchParams({
+    mes: mesAtual,
+    meses: mesesHistorico,
+  });
+  if (categoriasSelecionadas.length > 0) {
+    params.append('categorias', categoriasSelecionadas.join(','));
+  }
+
+  $.get(`{{ url_for('pessoal.pessoal_dashboard.api_evolucao_categorias') }}?${params.toString()}`, function(r) {
+    if (!r.sucesso) return;
+
+    if (chartEvolucaoCat) chartEvolucaoCat.destroy();
+
+    const labels = r.meses.map(m => m.mes_label);
+    const datasets = r.series.map((s, idx) => ({
+      label: s.categoria,
+      data: s.valores,
+      borderColor: PALETA_CORES[idx % PALETA_CORES.length],
+      backgroundColor: PALETA_CORES[idx % PALETA_CORES.length] + '20',
+      fill: false,
+      tension: 0.3,
+      pointRadius: 3,
+    }));
+
+    // Atualiza info text
+    if (categoriasSelecionadas.length > 0) {
+      $('#evolucaoInfo').text(`${r.series.length} categoria(s) selecionada(s)`);
+    } else {
+      $('#evolucaoInfo').text('Top 5 por gasto total');
+    }
+
+    const ctx = document.getElementById('chartEvolucaoCategorias').getContext('2d');
+    chartEvolucaoCat = new Chart(ctx, {
+      type: 'line',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return ctx.dataset.label + ': R$ ' + ctx.raw.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(v) { return 'R$ ' + (v/1000).toFixed(1) + 'k'; }
+            }
+          }
+        }
+      }
+    });
+  });
+}
+
+// Handlers do multi-select de categorias
+$('#btnEvolucaoTop5').on('click', function() {
+  $('.categoria-checkbox').prop('checked', false);
+  categoriasSelecionadas = [];
+  carregarEvolucaoCategorias();
+});
+
+$('#btnEvolucaoLimpar').on('click', function() {
+  $('.categoria-checkbox').prop('checked', false);
+});
+
+$('#btnEvolucaoAplicar').on('click', function() {
+  categoriasSelecionadas = $('.categoria-checkbox:checked').map(function() {
+    return parseInt(this.value, 10);
+  }).get();
+  carregarEvolucaoCategorias();
+});
+
+// ==========================================================================
+// COMPARATIVO ANUAL
+// ==========================================================================
+function carregarComparativoAnual() {
+  $.get(`{{ url_for('pessoal.pessoal_dashboard.api_comparativo_anual') }}?mes=${mesAtual}`, function(r) {
+    if (!r.sucesso) return;
+
+    $('#comparativoInfo').text(`${r.ano_atual} vs ${r.ano_anterior}`);
+
+    // KPIs
+    const t = r.totais;
+    $('#comparativoDespesasAtual').text(fmt(t.despesas_atual));
+    $('#comparativoDespesasAnterior').text(fmt(t.despesas_anterior));
+    $('#comparativoReceitasAtual').text(fmt(t.receitas_atual));
+    $('#comparativoReceitasAnterior').text(fmt(t.receitas_anterior));
+
+    renderDelta('#comparativoDespesasDelta', t.delta_despesas_pct, true);
+    renderDelta('#comparativoReceitasDelta', t.delta_receitas_pct, false);
+
+    if (chartComparativoAnual) chartComparativoAnual.destroy();
+
+    const ctx = document.getElementById('chartComparativoAnual').getContext('2d');
+    chartComparativoAnual = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: r.meses,
+        datasets: [
+          {
+            label: `Despesas ${r.ano_anterior}`,
+            data: r.despesas_anterior,
+            backgroundColor: 'rgba(255, 99, 132, 0.3)',
+            borderColor: 'rgba(255, 99, 132, 0.6)',
+            borderWidth: 1,
+          },
+          {
+            label: `Despesas ${r.ano_atual}`,
+            data: r.despesas_atual,
+            backgroundColor: 'rgba(255, 99, 132, 0.9)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 1,
+          },
+          {
+            label: `Receitas ${r.ano_anterior}`,
+            data: r.receitas_anterior,
+            backgroundColor: 'rgba(75, 192, 192, 0.3)',
+            borderColor: 'rgba(75, 192, 192, 0.6)',
+            borderWidth: 1,
+          },
+          {
+            label: `Receitas ${r.ano_atual}`,
+            data: r.receitas_atual,
+            backgroundColor: 'rgba(75, 192, 192, 0.9)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return ctx.dataset.label + ': R$ ' + ctx.raw.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(v) { return 'R$ ' + (v/1000).toFixed(0) + 'k'; }
+            }
+          }
+        }
+      }
+    });
+  });
+}
+
+function renderDelta(selector, pct, subirERuim) {
+  if (pct === null || pct === undefined) {
+    $(selector).html('');
+    return;
+  }
+  const sinal = pct > 0 ? '+' : '';
+  // subirERuim=true: vermelho se subiu (despesas), verde se desceu
+  // subirERuim=false: verde se subiu (receitas), vermelho se desceu
+  let cls = 'text-muted';
+  if (pct > 0) cls = subirERuim ? 'text-danger' : 'text-success';
+  else if (pct < 0) cls = subirERuim ? 'text-success' : 'text-danger';
+  $(selector).html(`<span class="${cls}">${sinal}${pct}%</span>`);
 }
 </script>
 {% endblock %}
