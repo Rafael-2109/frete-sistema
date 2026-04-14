@@ -10,8 +10,59 @@ import tempfile
 
 # Configuracao de uploads
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'agente_files')
-ALLOWED_EXTENSIONS = {'pdf', 'xlsx', 'xls', 'csv', 'png', 'jpg', 'jpeg', 'gif'}
+
+# Whitelist de extensoes aceitas no upload
+# Expandido em 2026-04-14 (Fase A quick wins): +word, +texto, +bancarios, +webp
+ALLOWED_EXTENSIONS = {
+    # Documentos (processados como document block nativo Claude ou via skill)
+    'pdf', 'docx', 'doc', 'rtf',
+    # Planilhas / dados tabulares
+    'xlsx', 'xls', 'csv',
+    # Imagens (Vision API nativo)
+    'png', 'jpg', 'jpeg', 'gif', 'webp',
+    # Texto / dados estruturados
+    'txt', 'md', 'json', 'xml', 'log',
+    # Bancarios (CNAB remessa/retorno e OFX — reusam parsers app/financeiro)
+    'rem', 'ret', 'cnab', 'ofx',
+}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Quota por sessao — Fase D (2026-04-14): evita disco encher com uploads abandonados
+# Maximo de arquivos simultaneos e soma total de tamanho por sessao
+MAX_FILES_PER_SESSION = int(os.getenv("AGENTE_MAX_FILES_PER_SESSION", "20"))
+MAX_TOTAL_SIZE_PER_SESSION = int(
+    os.getenv("AGENTE_MAX_TOTAL_SIZE_PER_SESSION", str(50 * 1024 * 1024))
+)  # 50MB default
+
+# Extensoes de texto puro — pulam validacao de magic bytes pois nao tem
+# signature confiavel (qualquer conteudo textual e valido).
+TEXT_EXTENSIONS = {
+    'txt', 'md', 'json', 'xml', 'log', 'csv',
+    'rem', 'ret', 'cnab', 'ofx',
+}
+
+# Magic bytes (header) para validar que a extensao nao foi spoofada.
+# Ex: arquivo .exe renomeado para .pdf e rejeitado pois nao comeca com b"%PDF-".
+# NOTE: docx/xlsx/pptx compartilham signature ZIP (b"PK\x03\x04") — a validacao
+# combina extensao + signature (nao confunde porque o whitelist ja filtrou ext).
+MIME_SIGNATURES = {
+    # PDF
+    'pdf': (b'%PDF-',),
+    # Imagens
+    'png': (b'\x89PNG\r\n\x1a\n',),
+    'jpg': (b'\xff\xd8\xff\xe0', b'\xff\xd8\xff\xe1', b'\xff\xd8\xff\xdb', b'\xff\xd8\xff\xee'),
+    'jpeg': (b'\xff\xd8\xff\xe0', b'\xff\xd8\xff\xe1', b'\xff\xd8\xff\xdb', b'\xff\xd8\xff\xee'),
+    'gif': (b'GIF87a', b'GIF89a'),
+    'webp': (b'RIFF',),  # WebP e container RIFF — 1a validacao suficiente aqui
+    # OOXML (Office novo) — base ZIP
+    'docx': (b'PK\x03\x04',),
+    'xlsx': (b'PK\x03\x04',),
+    # Legacy Office 97-2003 (OLE Compound File)
+    'doc': (b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1',),
+    'xls': (b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1',),
+    # RTF
+    'rtf': (b'{\\rtf',),
+}
 
 # FEAT-030: Configuracao de heartbeat
 HEARTBEAT_INTERVAL_SECONDS = 10  # Envia heartbeat a cada 10s (reduzido de 20s)

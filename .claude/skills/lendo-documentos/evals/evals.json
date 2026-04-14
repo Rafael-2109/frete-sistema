@@ -1,0 +1,63 @@
+[
+  {
+    "id": "eval-1-docx-basico",
+    "prompt": "O usuario enviou um documento Word em .claude/skills/lendo-documentos/evals/fixtures/contrato_exemplo.docx (use caminho absoluto). Leia o arquivo e me diga: quantos paragraphs tem, quantas tabelas, quem e o autor e qual o titulo.",
+    "expected_output": "O arquivo tem N paragraphs e M tabelas. Autor: [autor]. Titulo: [titulo]. [resumo dos paragraphs principais]",
+    "expectations": [
+      "Executou o script ler_doc.py com o caminho correto",
+      "Identificou paragraphs e tables corretamente",
+      "Extraiu metadata (autor, titulo) do core_properties",
+      "NAO tentou ler com Read tool diretamente"
+    ],
+    "_fixture_status": "fixture pendente — criar arquivo .docx de exemplo antes de rodar este eval"
+  },
+  {
+    "id": "eval-2-cnab-retorno-bmp",
+    "prompt": "Tenho um arquivo de retorno CNAB em .claude/skills/lendo-documentos/evals/fixtures/retorno_bmp_274.ret (use caminho absoluto). Analisa e me diz: quantos titulos liquidaram, qual o valor total, e se houve rejeicoes.",
+    "expected_output": "X titulos liquidaram (codigo 06/07/08), Y rejeitados (codigo 03/26). Valor total liquidado: R$ Z. Banco: BMP Money Plus (274).",
+    "expectations": [
+      "Executou ler_doc.py com --tipo cnab ou auto (.ret)",
+      "Filtrou detalhes por codigo_ocorrencia (liquidacao vs rejeicao)",
+      "Somou valor_pago de liquidacoes corretamente",
+      "Reportou nome do banco do header",
+      "Usou valores EXATOS (sem arredondar) — R1 da skill"
+    ],
+    "_fixture_status": "fixture pendente — criar retorno CNAB BMP 274 de exemplo"
+  },
+  {
+    "id": "eval-3-ofx-extrato",
+    "prompt": "Analisa esse extrato bancario OFX em .claude/skills/lendo-documentos/evals/fixtures/extrato_sicoob.ofx (use caminho absoluto). Quantas transacoes tem, qual periodo cobre, e qual o total de debitos vs creditos?",
+    "expected_output": "X transacoes no periodo DATA_INICIO a DATA_FIM. Debitos (DEBIT): R$ Y total. Creditos (CREDIT): R$ Z total. Saldo liquido: R$ W.",
+    "expectations": [
+      "Executou ler_doc.py com --tipo ofx ou auto (.ofx)",
+      "Extraiu dtstart e dtend do header",
+      "Separou transacoes por trntype (DEBIT/CREDIT)",
+      "Somou valores corretamente (trnamt negativo = debito)",
+      "Reportou acctid"
+    ],
+    "_fixture_status": "fixture pendente — criar OFX Sicoob de exemplo"
+  },
+  {
+    "id": "eval-4-rem-estrutural",
+    "prompt": "Esse arquivo de remessa em .claude/skills/lendo-documentos/evals/fixtures/remessa_exemplo.rem tem quantos registros de detalhe? (use caminho absoluto)",
+    "expected_output": "N registros de detalhe (tipo 1), alem do header (tipo 0) e trailer (tipo 9). Parser estrutural — valores de campo nao sao extraidos porque layout varia por banco.",
+    "expectations": [
+      "Executou ler_doc.py com --tipo rem ou auto (.rem)",
+      "Contou detalhes corretamente (excluindo header e trailer)",
+      "AVISOU o usuario que .rem nao extrai campos (limitacao conhecida)",
+      "NAO inventou campos ou valores — R5 da skill"
+    ],
+    "_fixture_status": "fixture pendente — criar remessa CNAB400 de exemplo"
+  },
+  {
+    "id": "eval-5-tipo-nao-suportado",
+    "prompt": "Tenta ler esse arquivo em /tmp/nao_existe/arquivo.xyz",
+    "expected_output": "Arquivo nao encontrado OU extensao .xyz nao suportada. Formatos suportados: .docx, .ret, .rem, .cnab, .ofx. Para Excel/CSV use lendo-arquivos; PDF e imagens sao processados nativamente.",
+    "expectations": [
+      "Executou ler_doc.py e recebeu erro",
+      "Reportou ao usuario que extensao/arquivo nao e suportado",
+      "Sugeriu a skill correta para o tipo (lendo-arquivos, etc.)",
+      "NAO tentou workaround improvisado"
+    ]
+  }
+]

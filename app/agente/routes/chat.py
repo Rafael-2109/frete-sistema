@@ -9,7 +9,7 @@ Contem o pipeline completo de chat:
   - _stream_chat_response (SSE generator)
   - _save_messages_to_db (persistencia)
   - _record_routing_resolution (KG routing)
-  - _image_to_base64 (Vision API)
+  - _file_to_content_block (Vision API image + document block PDF)
   - api_interrupt (POST /api/interrupt)
   - api_user_answer (POST /api/user-answer)
 """
@@ -137,43 +137,86 @@ def api_chat():
             f"Plan: {plan_mode}{files_info}{debug_info}"
         )
 
-        # FEAT-032: Processar arquivos - separar imagens (Vision) dos outros (contexto texto)
-        image_files = []
-        other_files = []
+        # FEAT-032 / Fase B (2026-04-14): Processar arquivos
+        # - Imagens → image block (Vision API nativa)
+        # - PDF → document block nativo Claude (SDK 0.1.55+, flag AGENTE_PDF_STRATEGY)
+        # - Outros (Excel, CSV, Word, bancarios, texto) → contexto textual (metadata)
+        document_files = []  # content blocks: image + document (serao enviados ao Claude)
+        other_files = []     # metadata-only (agente pode invocar skill para ler)
         enriched_message = message
 
         if files:
+            # Excecao documentada: imports cross-module (deferred, sem risco circular)
+            from app.agente.config.feature_flags import AGENTE_PDF_STRATEGY
+            from app.agente.routes.files import _resolve_file_path
+
             for f in files:
                 file_type = f.get('type', 'file')
-                if file_type == 'image':
-                    # Converter imagem para base64 (Vision API)
-                    # Excecao documentada: import cross-module (deferred, sem risco circular)
-                    from app.agente.routes.files import _resolve_file_path
-                    file_path = _resolve_file_path(f.get('url', ''))
-                    if file_path and os.path.exists(file_path):
-                        image_data = _image_to_base64(file_path)
-                        if image_data:
-                            image_files.append(image_data)
-                            logger.info(f"[AGENTE] Imagem preparada para Vision: {f.get('name')}")
-                        else:
-                            # Fallback: se falhar conversão, adiciona como contexto texto
-                            other_files.append(f)
-                    else:
-                        logger.warning(f"[AGENTE] Arquivo de imagem não encontrado: {f.get('url')}")
-                        other_files.append(f)
+                is_image = file_type == 'image'
+                is_pdf = file_type == 'pdf'
+
+                # Imagens e PDFs (em strategy native/hybrid) viram content blocks
+                should_block = is_image or (
+                    is_pdf and AGENTE_PDF_STRATEGY in ('native', 'hybrid')
+                )
+
+                if not should_block:
+                    other_files.append(f)
+                    continue
+
+                file_path = _resolve_file_path(f.get('url', ''))
+                if not file_path or not os.path.exists(file_path):
+                    logger.warning(
+                        f"[AGENTE] Arquivo nao encontrado: {f.get('url')}"
+                    )
+                    other_files.append(f)
+                    continue
+
+                # Hybrid: PDF >4MB cai para metadata (economia de tokens)
+                # Cast defensivo: size pode vir como str, None ou ausente
+                try:
+                    file_size = int(f.get('size') or 0)
+                except (TypeError, ValueError):
+                    file_size = 0
+                if (
+                    is_pdf
+                    and AGENTE_PDF_STRATEGY == 'hybrid'
+                    and file_size > 4 * 1024 * 1024
+                ):
+                    logger.info(
+                        f"[AGENTE] PDF >4MB em modo hybrid, "
+                        f"usando metadata: {f.get('name')}"
+                    )
+                    other_files.append(f)
+                    continue
+
+                block = _file_to_content_block(file_path)
+                if block:
+                    document_files.append(block)
+                    label = 'image block' if is_image else 'document block (PDF)'
+                    logger.info(
+                        f"[AGENTE] {label} preparado: {f.get('name')}"
+                    )
                 else:
+                    # Fallback: conversao falhou → vira metadata
                     other_files.append(f)
 
-            # Contexto textual apenas para arquivos não-imagem
+            # Contexto textual para arquivos que nao viraram content block
             if other_files:
                 files_context = "\n\n[Arquivos anexados pelo usuário:]\n"
                 for f in other_files:
-                    files_context += f"- {f.get('name', 'arquivo')} ({f.get('type', 'file')}, {f.get('size', 0)} bytes)\n"
+                    files_context += (
+                        f"- {f.get('name', 'arquivo')} "
+                        f"({f.get('type', 'file')}, {f.get('size', 0)} bytes)\n"
+                    )
                     files_context += f"  URL: {f.get('url', 'N/A')}\n"
                 enriched_message = message + files_context
 
-            if image_files:
-                logger.info(f"[AGENTE] {len(image_files)} imagem(ns) preparada(s) para Vision API")
+            if document_files:
+                logger.info(
+                    f"[AGENTE] {len(document_files)} content block(s) "
+                    f"preparado(s) (image + document)"
+                )
 
         return Response(
             stream_with_context(_stream_chat_response(
@@ -185,7 +228,7 @@ def api_chat():
                 model=model,
                 effort_level=effort_level,
                 plan_mode=plan_mode,
-                image_files=image_files,  # FEAT-032: Imagens para Vision API
+                document_files=document_files,  # FEAT-032 / Fase B: content blocks (image + document)
                 debug_mode=debug_mode,
                 output_format=output_format,
             )),
@@ -227,7 +270,7 @@ async def _async_stream_sdk_client(
     model: str,
     effort_level: str = "off",
     plan_mode: bool = False,
-    image_files: list = None,
+    document_files: list = None,
     app=None,
     debug_mode: bool = False,
     output_format: dict = None,
@@ -318,7 +361,7 @@ async def _async_stream_sdk_client(
     logger.info(
         f"[AGENTE] query()+resume: session={our_session_id[:8]}... "
         f"resume={'sim' if sdk_session_id_for_resume else 'não'} "
-        f"images={len(image_files) if image_files else 0}"
+        f"blocks={len(document_files) if document_files else 0}"
     )
 
     # =================================================================
@@ -348,7 +391,7 @@ async def _async_stream_sdk_client(
             effort_level=effort_level,
             plan_mode=plan_mode,
             user_id=user_id,
-            image_files=image_files,
+            document_files=document_files,
             sdk_session_id=sdk_session_id_for_resume,
             can_use_tool=can_use_tool,
             our_session_id=our_session_id,
@@ -390,7 +433,7 @@ def _stream_chat_response(
     model: str = None,
     effort_level: str = "off",
     plan_mode: bool = False,
-    image_files: List[dict] = None,
+    document_files: List[dict] = None,
     debug_mode: bool = False,
     output_format: dict = None,
 ) -> Generator[str, None, None]:
@@ -404,7 +447,7 @@ def _stream_chat_response(
     - Acumula texto para salvar resposta completa
 
     FEAT-032: Suporte a Vision API
-    - image_files: Lista de imagens em formato base64 para Vision
+    - document_files: Lista de imagens em formato base64 para Vision
 
     Args:
         message: Mensagem enriquecida (com arquivos não-imagem)
@@ -415,7 +458,7 @@ def _stream_chat_response(
         model: Modelo a usar
         effort_level: Nível de esforço (off/low/medium/high/max)
         plan_mode: Modo somente-leitura
-        image_files: Lista de dicts com imagens em base64 para Vision API
+        document_files: Lista de dicts com imagens em base64 para Vision API
         debug_mode: Admin debug mode (desbloqueia tabelas/memorias cross-user)
 
     Yields:
@@ -693,7 +736,7 @@ def _stream_chat_response(
                 model=model,
                 effort_level=effort_level,
                 plan_mode=plan_mode,
-                image_files=image_files,
+                document_files=document_files,
                 app=app,
                 debug_mode=debug_mode,
                 output_format=output_format,
@@ -1182,48 +1225,97 @@ def _record_routing_resolution(user_id: int, question_text: str, answer_text: st
         logger.debug(f"[ROUTING_RESOLUTION] Failed: {e}")
 
 
-def _image_to_base64(file_path: str) -> Optional[dict]:
+def _file_to_content_block(file_path: str) -> Optional[dict]:
     """
-    Converte imagem para formato Vision API do Claude.
+    Converte arquivo em content block apropriado para a API do Claude.
+
+    Fase B (2026-04-14): generalizada de `_image_to_base64` para suportar PDF.
+
+    - Imagens (png/jpg/jpeg/gif/webp) → block {"type": "image", ...} (Vision API).
+    - PDF → block {"type": "document", ...} (document block nativo, SDK 0.1.55+).
+    - Demais extensoes → None (caller trata como metadata textual).
 
     Args:
-        file_path: Caminho absoluto da imagem
+        file_path: Caminho absoluto do arquivo
 
     Returns:
-        Dict com formato Vision Block ou None se erro
+        Dict content block (image|document) ou None se tipo nao suportado
     """
     import base64
 
     ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else ''
-    media_types = {
+
+    image_media_types = {
         'png': 'image/png',
         'jpg': 'image/jpeg',
         'jpeg': 'image/jpeg',
         'gif': 'image/gif',
-        'webp': 'image/webp'
+        'webp': 'image/webp',
     }
 
-    if ext not in media_types:
-        logger.warning(f"[AGENTE] Formato de imagem não suportado para Vision: {ext}")
-        return None
-
-    try:
-        with open(file_path, 'rb') as f:
-            image_data = base64.b64encode(f.read()).decode('utf-8')
-
-        logger.info(f"[AGENTE] Imagem convertida para base64: {os.path.basename(file_path)} ({len(image_data)} chars)")
-
-        return {
-            'type': 'image',
-            'source': {
-                'type': 'base64',
-                'media_type': media_types[ext],
-                'data': image_data
+    # Imagens: image block (Vision API)
+    if ext in image_media_types:
+        try:
+            with open(file_path, 'rb') as f:
+                encoded = base64.b64encode(f.read()).decode('utf-8')
+            logger.info(
+                f"[AGENTE] Imagem → image block: "
+                f"{os.path.basename(file_path)} ({len(encoded)} chars base64)"
+            )
+            return {
+                'type': 'image',
+                'source': {
+                    'type': 'base64',
+                    'media_type': image_media_types[ext],
+                    'data': encoded,
+                },
             }
-        }
-    except Exception as e:
-        logger.error(f"[AGENTE] Erro ao converter imagem para base64: {e}")
-        return None
+        except Exception as e:
+            logger.error(f"[AGENTE] Erro ao converter imagem: {e}")
+            return None
+
+    # PDF: document block nativo (Claude SDK 0.1.55+)
+    # Limite: ~7MB de arquivo = ~9.3MB base64 — cabe no max_buffer_size=10MB do SDK
+    # (sdk/client.py:561). PDF maior cai para skill lendo-documentos ou metadata.
+    _MAX_PDF_NATIVE_SIZE = 7 * 1024 * 1024
+    if ext == 'pdf':
+        try:
+            try:
+                pdf_size = os.path.getsize(file_path)
+            except OSError as ose:
+                logger.error(f"[AGENTE] Erro ao obter tamanho do PDF: {ose}")
+                return None
+            if pdf_size > _MAX_PDF_NATIVE_SIZE:
+                logger.warning(
+                    f"[AGENTE] PDF {os.path.basename(file_path)} "
+                    f"({pdf_size / 1024 / 1024:.1f}MB) excede limite "
+                    f"{_MAX_PDF_NATIVE_SIZE / 1024 / 1024:.0f}MB para "
+                    f"document block nativo (SDK buffer). "
+                    f"Use AGENT_PDF_STRATEGY=extract ou PDF menor."
+                )
+                return None
+            with open(file_path, 'rb') as f:
+                encoded = base64.b64encode(f.read()).decode('utf-8')
+            logger.info(
+                f"[AGENTE] PDF → document block: "
+                f"{os.path.basename(file_path)} ({len(encoded)} chars base64)"
+            )
+            return {
+                'type': 'document',
+                'source': {
+                    'type': 'base64',
+                    'media_type': 'application/pdf',
+                    'data': encoded,
+                },
+            }
+        except Exception as e:
+            logger.error(f"[AGENTE] Erro ao converter PDF: {e}")
+            return None
+
+    logger.warning(
+        f"[AGENTE] _file_to_content_block: extensao sem suporte: .{ext}"
+    )
+    return None
 
 
 # =============================================================================

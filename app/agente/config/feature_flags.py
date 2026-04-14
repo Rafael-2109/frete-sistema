@@ -287,6 +287,31 @@ USE_SESSION_SEMANTIC_SEARCH = USE_SESSION_TURN_EMBEDDING
 # Ver: app/embeddings/config.py linha 106
 
 # ====================================================================
+# File Attachments (Fase B — 2026-04-14)
+# ====================================================================
+
+# PDF strategy: native | extract | hybrid
+# - native (default): PDF vira document block nativo do Claude (SDK 0.1.55+).
+#   OCR, tabelas e layout sao preservados. Maior custo de tokens por pagina.
+# - extract: PDF e extraido localmente via pdfplumber → texto plano injetado
+#   no prompt. Menor custo, sem OCR, perde layout complexo.
+# - hybrid: native para PDFs pequenos (<= 4MB), extract para grandes (> 4MB).
+#   Otimiza custo sem perder qualidade nos documentos mais comuns.
+# Rollback instantaneo via env var — nao precisa redeploy.
+# Env var: AGENT_PDF_STRATEGY (segue convencao AGENT_* do resto do arquivo).
+_VALID_PDF_STRATEGIES = {'native', 'extract', 'hybrid'}
+AGENTE_PDF_STRATEGY = os.getenv("AGENT_PDF_STRATEGY", "native").lower()
+if AGENTE_PDF_STRATEGY not in _VALID_PDF_STRATEGIES:
+    import logging as _feature_flags_logging
+    _feature_flags_logging.getLogger('sistema_fretes').warning(
+        f"[FEATURE_FLAGS] AGENT_PDF_STRATEGY invalido: "
+        f"{AGENTE_PDF_STRATEGY!r}. Usando 'native'. "
+        f"Validos: {sorted(_VALID_PDF_STRATEGIES)}"
+    )
+    AGENTE_PDF_STRATEGY = 'native'
+
+
+# ====================================================================
 # Teams Bot
 # ====================================================================
 

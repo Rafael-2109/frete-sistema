@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 04/04/2026
+**Ultima Atualizacao**: 14/04/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -17,6 +17,7 @@
 | COTACAO DE FRETE | "qual preco", "quanto custa frete", "tabelas para", "cotacao" | -> `cotando-frete` |
 | VISAO 360 PRODUTO | "resumo do produto", "producao vs programado", "visao completa do produto" | -> `visao-produto` |
 | EXPORTAR/IMPORTAR DADOS | Gerar Excel, CSV, processar planilha | -> `exportando-arquivos` / `lendo-arquivos` |
+| LER DOCUMENTOS (Word, bancarios, OFX) | Analisar `.docx`, `.ret`, `.rem`, `.cnab`, `.ofx` | -> `lendo-documentos` |
 | SAUDE DO BANCO | "health check", "indices nao usados", "queries lentas", "cache hit rate", "vacuum" | -> `diagnosticando-banco` |
 | SSW consulta (sistema transportadora) | "como fazer no SSW", "opcao NNN", "passo a passo", "MDF-e", "CTe no SSW", "CarVia faz X?" | -> `acessando-ssw` |
 | SSW escrita (cadastrar/criar no SSW) | "cadastre unidade CGR", "cadastrar cidades MS", "criar unidade parceira no SSW" | -> `operando-ssw` |
@@ -116,7 +117,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (30 total)
+## Skills — Inventario Completo (31 total)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 
@@ -149,6 +150,6 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 `consultando-sentry` (MCP-first, 20 tools, Seer AI)
 
 ### Utilitarios (compartilhados)
-`exportando-arquivos`, `lendo-arquivos`, `consultando-sql`, `cotando-frete`,
-`visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`, `monitorando-entregas`,
-`diagnosticando-banco`
+`exportando-arquivos`, `lendo-arquivos`, `lendo-documentos`, `consultando-sql`,
+`cotando-frete`, `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`,
+`monitorando-entregas`, `diagnosticando-banco`

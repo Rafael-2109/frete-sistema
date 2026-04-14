@@ -136,12 +136,18 @@ def api_get_session_messages(session_id: str):
 @login_required
 def api_delete_session(session_db_id: int):
     """
-    Exclui uma sessão.
+    Exclui uma sessão e remove arquivos do disco.
 
     DELETE /agente/api/sessions/123  (ID do banco, não session_id)
+
+    Fase A (2026-04-14): apos deletar a sessao, remove a pasta de uploads em
+    /tmp/agente_files/{user_id}/{session_id}/ para evitar arquivos orfaos.
     """
     try:
+        import os
+        import shutil
         from app.agente.models import AgentSession
+        from app.agente.routes._constants import UPLOAD_FOLDER
 
         session = AgentSession.query.filter_by(
             id=session_db_id,
@@ -154,8 +160,30 @@ def api_delete_session(session_db_id: int):
                 'error': 'Sessão não encontrada'
             }), 404
 
+        # Captura antes do delete para usar no cleanup de disco apos commit
+        session_id_str = session.session_id
+        user_id = current_user.id
+
         db.session.delete(session)
         db.session.commit()
+
+        # Cleanup de arquivos no disco (nao fatal se falhar)
+        try:
+            files_folder = os.path.join(
+                UPLOAD_FOLDER,
+                str(user_id),
+                session_id_str or 'default',
+            )
+            if os.path.exists(files_folder):
+                shutil.rmtree(files_folder, ignore_errors=True)
+                logger.info(
+                    f"[AGENTE] Cleanup disco: {files_folder} removido "
+                    f"(sessao {session_id_str})"
+                )
+        except Exception as cleanup_err:
+            logger.warning(
+                f"[AGENTE] Cleanup de arquivos falhou (nao fatal): {cleanup_err}"
+            )
 
         return jsonify({
             'success': True,

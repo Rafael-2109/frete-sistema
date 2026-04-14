@@ -305,11 +305,11 @@
         <!-- Input com Textarea e Botão Stop -->
         <div class="chat-input">
             <form id="chat-form">
-                <!-- FEAT-028: Input file oculto -->
-                <input type="file" id="file-input" multiple accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.gif" style="display: none;">
+                <!-- FEAT-028: Input file oculto — Fase A 2026-04-14: expandido para Word, texto, bancarios -->
+                <input type="file" id="file-input" multiple accept=".pdf,.docx,.doc,.rtf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.gif,.webp,.txt,.md,.json,.xml,.log,.rem,.ret,.cnab,.ofx" style="display: none;">
 
                 <!-- FEAT-028: Botão Anexar -->
-                <button type="button" class="btn-attach" onclick="document.getElementById('file-input').click()" title="Anexar arquivo (PDF, Excel, CSV, Imagens)">
+                <button type="button" class="btn-attach" onclick="document.getElementById('file-input').click()" title="Anexar arquivo (PDF, Word, Excel, CSV, Imagens, Texto, Bancarios .rem/.ret/.ofx)">
                     <i class="fas fa-paperclip"></i>
                 </button>
 

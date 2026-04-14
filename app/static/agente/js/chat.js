@@ -2655,10 +2655,14 @@ async function uploadFile(file) {
  */
 function getFileType(filename) {
     const ext = filename.split('.').pop().toLowerCase();
-    if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) return 'image';
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'image';
     if (ext === 'pdf') return 'pdf';
     if (['xlsx', 'xls'].includes(ext)) return 'excel';
     if (ext === 'csv') return 'csv';
+    if (['docx', 'doc', 'rtf'].includes(ext)) return 'word';
+    if (['txt', 'md', 'json', 'xml', 'log'].includes(ext)) return 'text';
+    if (['rem', 'ret', 'cnab'].includes(ext)) return 'bank_cnab';
+    if (ext === 'ofx') return 'bank_ofx';
     return 'file';
 }
 
@@ -2671,6 +2675,10 @@ function getFileIcon(type) {
         'excel': 'fa-file-excel',
         'csv': 'fa-file-csv',
         'image': 'fa-file-image',
+        'word': 'fa-file-word',
+        'text': 'fa-file-alt',
+        'bank_cnab': 'fa-university',
+        'bank_ofx': 'fa-money-check-alt',
         'file': 'fa-file'
     };
     return icons[type] || 'fa-file';

@@ -21,8 +21,12 @@ allowed-tools: Read, Bash, Glob, Grep
 Skill para **leitura de arquivos** enviados pelo usuario via upload.
 
 > **ESCOPO:** Esta skill processa Excel (.xlsx, .xls) e CSV.
-> Para CRIAR/EXPORTAR arquivos para download, use `exportando-arquivos`.
-> Para consultas Odoo (NF, PO, SO, titulos), use `rastreando-odoo`.
+>
+> **Outros formatos** (2026-04-14):
+> - **Word (.docx), CNAB (.ret/.rem/.cnab), OFX** → usar `lendo-documentos`
+> - **PDF, imagens** → processados nativamente pelo Claude (sem skill, Fase B)
+> - **Criar/exportar** arquivos para download → `exportando-arquivos`
+> - **Consultas Odoo** (NF, PO, SO, titulos) → `rastreando-odoo`
 
 ## Regras de Fidelidade (OBRIGATORIAS)
 

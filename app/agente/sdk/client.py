@@ -854,7 +854,7 @@ Nunca invente informações."""
         effort_level: str = "off",
         plan_mode: bool = False,
         user_id: int = None,
-        image_files: Optional[List[dict]] = None,
+        document_files: Optional[List[dict]] = None,
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
         our_session_id: Optional[str] = None,
@@ -874,7 +874,7 @@ Nunca invente informações."""
             effort_level: Nível de esforço do thinking ("off"|"low"|"medium"|"high"|"max")
             plan_mode: Ativar modo somente-leitura
             user_id: ID do usuário (para Memory Tool)
-            image_files: Lista de imagens em formato Vision API
+            document_files: Lista de content blocks (image + document) para Vision/PDF nativo
             sdk_session_id: Session ID do SDK para resume (do DB)
             can_use_tool: Callback de permissão
             our_session_id: Nosso UUID de sessão (usado pelo path persistente como pool key)
@@ -896,7 +896,7 @@ Nunca invente informações."""
             effort_level=effort_level,
             plan_mode=plan_mode,
             user_id=user_id,
-            image_files=image_files,
+            document_files=document_files,
             sdk_session_id=sdk_session_id,
             can_use_tool=can_use_tool,
             our_session_id=our_session_id,
@@ -1280,7 +1280,7 @@ Nunca invente informações."""
         effort_level: str = "off",
         plan_mode: bool = False,
         user_id: int = None,
-        image_files: Optional[List[dict]] = None,
+        document_files: Optional[List[dict]] = None,
         sdk_session_id: Optional[str] = None,
         can_use_tool: Optional[Callable] = None,
         our_session_id: Optional[str] = None,
@@ -1307,7 +1307,7 @@ Nunca invente informações."""
             effort_level: Nível de esforço do thinking ("off"|"low"|"medium"|"high"|"max")
             plan_mode: Ativar modo somente-leitura
             user_id: ID do usuário (para Memory Tool)
-            image_files: Lista de imagens em formato Vision API
+            document_files: Lista de content blocks (image + document) para Vision/PDF nativo
             sdk_session_id: SDK session ID para resume (na primeira conexão)
             can_use_tool: Callback de permissão
             our_session_id: Nosso UUID de sessão (chave do pool)
@@ -1488,12 +1488,12 @@ Nunca invente informações."""
                     )
 
             # ─── Preparar prompt para query() ───
-            if image_files:
-                # Imagens requerem AsyncIterable (Vision API)
-                async def _image_prompt():
-                    content_blocks = list(image_files) + [{"type": "text", "text": prompt}]
+            if document_files:
+                # Content blocks (image + document) requerem AsyncIterable
+                async def _content_prompt():
+                    content_blocks = list(document_files) + [{"type": "text", "text": prompt}]
                     yield {"type": "user", "message": {"role": "user", "content": content_blocks}}
-                query_prompt = _image_prompt()
+                query_prompt = _content_prompt()
             else:
                 # Texto puro: string é suficiente
                 query_prompt = prompt
@@ -1508,7 +1508,7 @@ Nunca invente informações."""
                     f"session={pool_key[:8]}... | "
                     f"model={current_model} | "
                     f"reuse={'yes' if (existing and existing.connected) else 'new'} | "
-                    f"images={len(image_files) if image_files else 0}"
+                    f"blocks={len(document_files) if document_files else 0}"
                 )
 
                 # Enviar prompt

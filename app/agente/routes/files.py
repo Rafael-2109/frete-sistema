@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import uuid
 import shutil
 from typing import Optional
@@ -11,7 +12,15 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 
 from app.agente.routes import agente_bp
-from app.agente.routes._constants import UPLOAD_FOLDER, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from app.agente.routes._constants import (
+    UPLOAD_FOLDER,
+    ALLOWED_EXTENSIONS,
+    MAX_FILE_SIZE,
+    MIME_SIGNATURES,
+    TEXT_EXTENSIONS,
+    MAX_FILES_PER_SESSION,
+    MAX_TOTAL_SIZE_PER_SESSION,
+)
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -22,9 +31,81 @@ def _allowed_file(filename: str) -> bool:
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+# Session ID sanitizacao — Fase D (2026-04-14) previne path traversal
+# Aceita: letras, digitos, hifen, underscore. Max 64 chars.
+# 'default' e literal permitido para uploads sem sessao explicita.
+_SESSION_ID_RE = re.compile(r'^[a-zA-Z0-9\-_]{1,64}$')
+
+
+def _sanitize_session_id(session_id) -> str:
+    """
+    Sanitiza session_id para prevenir path traversal em os.path.join.
+
+    Retorna 'default' (com warning) se o valor for invalido.
+    Valores legitimos sao UUIDs ou strings tipo UUID.
+
+    Caller DEVE usar o retorno desta funcao (nao o valor original) em
+    qualquer os.path.join / os.makedirs / shutil.rmtree subsequente.
+    """
+    sid = (str(session_id) if session_id is not None else 'default').strip()
+    if sid == 'default' or _SESSION_ID_RE.match(sid):
+        return sid
+    logger.warning(
+        f"[AGENTE] session_id invalido rejeitado (path traversal?): "
+        f"{sid[:100]!r} → usando 'default'"
+    )
+    return 'default'
+
+
+def _validate_magic_bytes(file, ext: str) -> tuple:
+    """
+    Valida que os primeiros bytes do arquivo correspondem a extensao declarada.
+
+    Anti-spoofing: rejeita .exe renomeado para .pdf, p.ex. Arquivos de texto
+    puro (TEXT_EXTENSIONS) pulam a validacao pois nao tem signature confiavel.
+
+    Args:
+        file: file-like object (request.files['file'])
+        ext: extensao em lowercase (sem o ponto)
+
+    Returns:
+        (valido: bool, mensagem_erro: str). Quando valido, mensagem e vazia.
+    """
+    # Texto puro nao tem signature — confia na extensao apos o whitelist filter
+    if ext in TEXT_EXTENSIONS:
+        return True, ""
+
+    expected_sigs = MIME_SIGNATURES.get(ext)
+    if not expected_sigs:
+        # Extensao sem signature conhecida — aceita (fallback permissivo)
+        return True, ""
+
+    # Le primeiros 16 bytes (suficiente para todas as signatures)
+    file.seek(0)
+    header = file.read(16)
+    file.seek(0)
+
+    if not header:
+        return False, "arquivo vazio"
+
+    for sig in expected_sigs:
+        if header.startswith(sig):
+            return True, ""
+
+    return False, (
+        f"conteudo nao corresponde a extensao .{ext} (possivel spoofing)"
+    )
+
+
 def _get_session_folder(session_id: str) -> str:
-    """Retorna o caminho da pasta da sessão, criando se necessário."""
-    folder = os.path.join(UPLOAD_FOLDER, str(current_user.id), session_id or 'default')
+    """
+    Retorna o caminho da pasta da sessao, criando se necessario.
+
+    session_id e sanitizado como defesa em profundidade (callers ja
+    deveriam ter chamado _sanitize_session_id antes de usar o valor).
+    """
+    safe_sid = _sanitize_session_id(session_id)
+    folder = os.path.join(UPLOAD_FOLDER, str(current_user.id), safe_sid)
     os.makedirs(folder, exist_ok=True)
     return folder
 
@@ -32,7 +113,7 @@ def _get_session_folder(session_id: str) -> str:
 def _get_file_type(filename: str) -> str:
     """Retorna o tipo do arquivo baseado na extensão."""
     ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-    if ext in ('png', 'jpg', 'jpeg', 'gif'):
+    if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
         return 'image'
     elif ext == 'pdf':
         return 'pdf'
@@ -40,6 +121,14 @@ def _get_file_type(filename: str) -> str:
         return 'excel'
     elif ext == 'csv':
         return 'csv'
+    elif ext in ('docx', 'doc', 'rtf'):
+        return 'word'
+    elif ext in ('txt', 'md', 'json', 'xml', 'log'):
+        return 'text'
+    elif ext in ('rem', 'ret', 'cnab'):
+        return 'bank_cnab'
+    elif ext == 'ofx':
+        return 'bank_ofx'
     return 'file'
 
 
@@ -50,6 +139,10 @@ def _get_mimetype(filename: str) -> str:
         # Excel - CRÍTICO para abrir corretamente
         'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'xls': 'application/vnd.ms-excel',
+        # Word
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'doc': 'application/msword',
+        'rtf': 'application/rtf',
         # PDF - CRÍTICO para abrir corretamente
         'pdf': 'application/pdf',
         # CSV
@@ -59,19 +152,37 @@ def _get_mimetype(filename: str) -> str:
         'jpg': 'image/jpeg',
         'jpeg': 'image/jpeg',
         'gif': 'image/gif',
+        'webp': 'image/webp',
+        # Texto
+        'txt': 'text/plain; charset=utf-8',
+        'md': 'text/markdown; charset=utf-8',
+        'json': 'application/json',
+        'xml': 'application/xml',
+        'log': 'text/plain; charset=utf-8',
+        # Bancarios (CNAB / OFX) — texto plano com estrutura posicional/SGML
+        'rem': 'text/plain; charset=utf-8',
+        'ret': 'text/plain; charset=utf-8',
+        'cnab': 'text/plain; charset=utf-8',
+        'ofx': 'application/x-ofx',
     }
     return mimetypes.get(ext, 'application/octet-stream')
 
 
 def _resolve_file_path(url: str) -> Optional[str]:
     """
-    Resolve URL de arquivo para caminho local.
+    Resolve URL de arquivo para caminho local com validacao anti-traversal.
+
+    Fase D (2026-04-14):
+    - Sanitiza session_id (rejeita chars invalidos)
+    - Aplica secure_filename ao nome do arquivo
+    - Valida realpath dentro de UPLOAD_FOLDER (defesa contra symlink attack)
 
     Args:
         url: URL do arquivo (ex: /agente/api/files/session/uuid_file.png)
 
     Returns:
-        Caminho absoluto do arquivo ou None se não encontrado
+        Caminho absoluto do arquivo (dentro de UPLOAD_FOLDER) ou None se
+        nao encontrado / invalido / tentativa de traversal.
     """
     if not url:
         return None
@@ -83,21 +194,38 @@ def _resolve_file_path(url: str) -> Optional[str]:
 
     try:
         # Formato: ['', 'agente', 'api', 'files', 'session_id', 'filename']
-        session_id = parts[-2]
-        filename = parts[-1]
+        session_id = _sanitize_session_id(parts[-2])
+        filename = secure_filename(parts[-1])
+        if not filename:
+            return None
+
+        upload_root = os.path.realpath(UPLOAD_FOLDER)
+
+        def _within_upload(path: str) -> Optional[str]:
+            """Retorna realpath se estiver dentro de upload_root, senao None."""
+            real = os.path.realpath(path)
+            if real == upload_root or real.startswith(upload_root + os.sep):
+                return real
+            logger.warning(
+                f"[AGENTE] Path traversal rejeitado: "
+                f"{path!r} -> {real!r} fora de {upload_root!r}"
+            )
+            return None
 
         # Tentar caminho com user_id primeiro
         if hasattr(current_user, 'id'):
-            user_folder = os.path.join(UPLOAD_FOLDER, str(current_user.id), session_id)
-            user_path = os.path.join(user_folder, filename)
-            if os.path.exists(user_path):
-                return user_path
+            user_path = os.path.join(
+                UPLOAD_FOLDER, str(current_user.id), session_id, filename
+            )
+            safe = _within_upload(user_path)
+            if safe and os.path.exists(safe):
+                return safe
 
-        # Fallback: caminho sem user_id
-        fallback_folder = os.path.join(UPLOAD_FOLDER, session_id)
-        fallback_path = os.path.join(fallback_folder, filename)
-        if os.path.exists(fallback_path):
-            return fallback_path
+        # Fallback: caminho sem user_id (arquivos gerados por skills)
+        fallback_path = os.path.join(UPLOAD_FOLDER, session_id, filename)
+        safe_fb = _within_upload(fallback_path)
+        if safe_fb and os.path.exists(safe_fb):
+            return safe_fb
 
         return None
     except Exception as e:
@@ -140,8 +268,63 @@ def api_upload_file():
                 'error': f'Arquivo muito grande. Máximo: {MAX_FILE_SIZE // (1024*1024)}MB'
             }), 400
 
-        session_id = request.form.get('session_id', 'default')
+        # Anti-spoofing: valida magic bytes contra extensao declarada
+        _safe_fname = file.filename or ''
+        ext_for_magic = (
+            _safe_fname.rsplit('.', 1)[1].lower()
+            if '.' in _safe_fname else ''
+        )
+        valido_mb, erro_mb = _validate_magic_bytes(file, ext_for_magic)
+        if not valido_mb:
+            logger.warning(
+                f"[AGENTE] Upload rejeitado (magic bytes): "
+                f"{_safe_fname} — {erro_mb}"
+            )
+            return jsonify({
+                'success': False,
+                'error': f'Arquivo invalido: {erro_mb}'
+            }), 400
+
+        session_id = _sanitize_session_id(
+            request.form.get('session_id', 'default')
+        )
         folder = _get_session_folder(session_id)
+
+        # Quota check (Fase D): max arquivos e soma total por sessao
+        try:
+            existing = [
+                f for f in os.listdir(folder)
+                if os.path.isfile(os.path.join(folder, f))
+            ] if os.path.exists(folder) else []
+
+            if len(existing) >= MAX_FILES_PER_SESSION:
+                return jsonify({
+                    'success': False,
+                    'error': (
+                        f'Limite de {MAX_FILES_PER_SESSION} arquivos por sessao '
+                        f'atingido. Remova algum antes de enviar outro.'
+                    )
+                }), 413
+
+            existing_total = sum(
+                os.path.getsize(os.path.join(folder, f)) for f in existing
+            )
+            if existing_total + file_size > MAX_TOTAL_SIZE_PER_SESSION:
+                usado_mb = existing_total / (1024 * 1024)
+                novo_mb = file_size / (1024 * 1024)
+                limite_mb = MAX_TOTAL_SIZE_PER_SESSION / (1024 * 1024)
+                return jsonify({
+                    'success': False,
+                    'error': (
+                        f'Quota da sessao excedida: '
+                        f'{usado_mb:.1f}MB usados + {novo_mb:.1f}MB novo '
+                        f'> {limite_mb:.0f}MB limite'
+                    )
+                }), 413
+        except OSError as quota_err:
+            logger.warning(
+                f"[AGENTE] Check de quota falhou (nao fatal): {quota_err}"
+            )
 
         original_name = secure_filename(file.filename)
         file_id = str(uuid.uuid4())[:8]
@@ -183,7 +366,13 @@ def api_download_file(session_id: str, filename: str):
     2. /tmp/agente_files/{session_id}/ (arquivos gerados por skills CLI)
     """
     try:
+        session_id = _sanitize_session_id(session_id)
         safe_filename = secure_filename(filename)
+        if not safe_filename:
+            return jsonify({
+                'success': False,
+                'error': 'Nome de arquivo invalido'
+            }), 400
         logger.info(f"[AGENTE] Download solicitado: session={session_id}, file={safe_filename}")
 
         # Tentar caminho com user_id primeiro (uploads do chat)
@@ -193,7 +382,7 @@ def api_download_file(session_id: str, filename: str):
 
         # Fallback: caminho sem user_id (arquivos gerados por skills/scripts CLI)
         if not os.path.exists(file_path):
-            fallback_folder = os.path.join(UPLOAD_FOLDER, session_id or 'default')
+            fallback_folder = os.path.join(UPLOAD_FOLDER, session_id)
             fallback_path = os.path.join(fallback_folder, safe_filename)
             logger.debug(f"[AGENTE] Tentando path 2 (fallback): {fallback_path}")
             if os.path.exists(fallback_path):
@@ -245,27 +434,60 @@ def api_download_file(session_id: str, filename: str):
 @agente_bp.route('/api/files', methods=['GET'])
 @login_required
 def api_list_files():
-    """Lista arquivos da sessão."""
+    """
+    Lista arquivos da sessao + metadata de quota.
+
+    Fase D (2026-04-14): retorna tambem `quota` com uso atual e limites,
+    permitindo UI mostrar "X de Y arquivos, Z de W MB usados".
+    """
     try:
-        session_id = request.args.get('session_id', 'default')
+        session_id = _sanitize_session_id(
+            request.args.get('session_id', 'default')
+        )
         folder = _get_session_folder(session_id)
 
         files = []
+        total_size = 0
         if os.path.exists(folder):
             for filename in os.listdir(folder):
                 file_path = os.path.join(folder, filename)
                 if os.path.isfile(file_path):
+                    size = os.path.getsize(file_path)
+                    total_size += size
+                    # Extrai original_name apenas se prefixo for UUID 8-char hex
+                    # (mesma logica de api_download_file; antes extraia
+                    # incorretamente para arquivos com '_' no nome original)
+                    original_name = filename
+                    if '_' in filename:
+                        prefix = filename.split('_')[0]
+                        if len(prefix) == 8 and all(
+                            c in '0123456789abcdef'
+                            for c in prefix.lower()
+                        ):
+                            original_name = filename.split('_', 1)[1]
                     files.append({
                         'name': filename,
-                        'original_name': filename.split('_', 1)[1] if '_' in filename else filename,
-                        'size': os.path.getsize(file_path),
+                        'original_name': original_name,
+                        'size': size,
                         'type': _get_file_type(filename),
-                        'url': f'/agente/api/files/{session_id}/{filename}'
+                        'url': f'/agente/api/files/{session_id}/{filename}',
                     })
 
+        limite_bytes = MAX_TOTAL_SIZE_PER_SESSION or 1
         return jsonify({
             'success': True,
-            'files': files
+            'files': files,
+            'quota': {
+                'files_count': len(files),
+                'files_limit': MAX_FILES_PER_SESSION,
+                'total_bytes': total_size,
+                'total_mb': round(total_size / (1024 * 1024), 2),
+                'limit_bytes': MAX_TOTAL_SIZE_PER_SESSION,
+                'limit_mb': MAX_TOTAL_SIZE_PER_SESSION // (1024 * 1024),
+                'usage_percent': round(
+                    (total_size / limite_bytes) * 100, 1
+                ),
+            },
         })
 
     except Exception as e:
@@ -281,8 +503,15 @@ def api_list_files():
 def api_delete_file(session_id: str, filename: str):
     """Remove arquivo da sessão."""
     try:
+        session_id = _sanitize_session_id(session_id)
+        safe_filename = secure_filename(filename)
+        if not safe_filename:
+            return jsonify({
+                'success': False,
+                'error': 'Nome de arquivo invalido'
+            }), 400
         folder = _get_session_folder(session_id)
-        file_path = os.path.join(folder, secure_filename(filename))
+        file_path = os.path.join(folder, safe_filename)
 
         if not os.path.exists(file_path):
             return jsonify({
@@ -313,7 +542,7 @@ def api_cleanup_files():
     """Limpa todos os arquivos da sessão."""
     try:
         data = request.get_json() or {}
-        session_id = data.get('session_id', 'default')
+        session_id = _sanitize_session_id(data.get('session_id', 'default'))
         folder = _get_session_folder(session_id)
 
         if os.path.exists(folder):
