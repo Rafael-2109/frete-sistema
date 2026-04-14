@@ -33,11 +33,12 @@ from app.carvia.models.faturas import (  # noqa: F401
     CarviaFaturaTransportadoraItem, CarviaFaturaTransportadora,
 )
 
-# Financeiro (Despesa, Receita, Movimentacao, Extrato, Conciliacao, PreVinculo)
+# Financeiro (Despesa, Receita, Movimentacao, Extrato, Conciliacao, PreVinculo, HistoricoMatch)
 from app.carvia.models.financeiro import (  # noqa: F401
     CarviaDespesa, CarviaReceita, CarviaContaMovimentacao,
     CarviaExtratoLinha, CarviaConciliacao,
     CarviaPreVinculoExtratoCotacao,
+    CarviaHistoricoMatchExtrato,
 )
 
 # CTe Complementar + Custos Entrega
@@ -101,6 +102,7 @@ __all__ = [
     'CarviaDespesa', 'CarviaReceita', 'CarviaContaMovimentacao',
     'CarviaExtratoLinha', 'CarviaConciliacao',
     'CarviaPreVinculoExtratoCotacao',
+    'CarviaHistoricoMatchExtrato',
     # CTe/Custos
     'CarviaCteComplementar', 'CarviaCustoEntrega', 'CarviaCustoEntregaAnexo',
     'CarviaEmissaoCteComplementar',

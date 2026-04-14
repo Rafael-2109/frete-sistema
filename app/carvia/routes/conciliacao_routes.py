@@ -258,10 +258,15 @@ def register_conciliacao_routes(bp):
         if linha_id:
             from app.carvia.models import CarviaExtratoLinha
             from app.carvia.services.financeiro.carvia_sugestao_service import pontuar_documentos
+            from app.carvia.services.financeiro.carvia_historico_match_service import (
+                CarviaHistoricoMatchService,
+            )
 
             linha = db.session.get(CarviaExtratoLinha, linha_id)
             if linha:
-                docs = pontuar_documentos(linha, docs)
+                # R17: boost por historico aprendido
+                cnpjs_hist = CarviaHistoricoMatchService.cnpjs_aprendidos(linha)
+                docs = pontuar_documentos(linha, docs, cnpjs_historico=cnpjs_hist)
 
         return jsonify({'documentos': docs})
 
@@ -374,9 +379,13 @@ def register_conciliacao_routes(bp):
         tipo_match = 'receber' if linha.tipo == 'CREDITO' else 'pagar'
         docs = CarviaConciliacaoService.obter_documentos_elegiveis(tipo_match)
 
-        # Scoring sugestivo
+        # Scoring sugestivo (com boost R17 por historico aprendido)
         from app.carvia.services.financeiro.carvia_sugestao_service import pontuar_documentos
-        docs = pontuar_documentos(linha, docs)
+        from app.carvia.services.financeiro.carvia_historico_match_service import (
+            CarviaHistoricoMatchService,
+        )
+        cnpjs_hist = CarviaHistoricoMatchService.cnpjs_aprendidos(linha)
+        docs = pontuar_documentos(linha, docs, cnpjs_historico=cnpjs_hist)
 
         # Conciliacoes existentes desta linha
         conciliacoes_existentes = []

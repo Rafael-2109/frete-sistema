@@ -416,6 +416,31 @@ class CarviaConciliacaoService:
                 usuario=usuario,
             )
 
+        # R17: hook de aprendizado (nao-bloqueante) — registra padroes
+        # (descricao_tokens, cnpj_pagador) para boost futuro em pontuar_documentos.
+        # Qualquer erro aqui e logado mas NAO aborta a conciliacao.
+        try:
+            from app.carvia.services.financeiro.carvia_historico_match_service import (
+                CarviaHistoricoMatchService,
+            )
+            for idx, doc_info in enumerate(documentos):
+                conc_id = (
+                    conciliacoes_criadas[idx].id
+                    if idx < len(conciliacoes_criadas)
+                    else None
+                )
+                CarviaHistoricoMatchService.registrar_aprendizado(
+                    linha,
+                    doc_info['tipo_documento'],
+                    int(doc_info['documento_id']),
+                    conciliacao_id=conc_id,
+                )
+        except Exception as e:
+            logger.warning(
+                'registrar_aprendizado hook falhou em conciliar(linha=%s): %s',
+                extrato_linha_id, e,
+            )
+
         logger.info(
             f"Conciliacao: linha {extrato_linha_id} vinculada a "
             f"{len(documentos)} documentos por {usuario}"

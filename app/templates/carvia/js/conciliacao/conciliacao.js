@@ -20,10 +20,11 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
     };
+    // FIX M9: nunca retorna input raw. Fallback para string vazia quando
+    // nao e CNPJ valido — evita XSS via interpolacao direta em innerHTML.
     const formatCNPJ = c => {
-        if (!c || c.length < 14) return c || '';
-        const d = c.replace(/\D/g, '');
-        if (d.length !== 14) return c;
+        const d = String(c || '').replace(/\D/g, '');
+        if (d.length !== 14) return '';
         return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
     };
 
@@ -329,6 +330,16 @@
             } else if (d.score_label === 'MEDIO') {
                 const det = d.score_detalhes || {};
                 scoreBadge = `<span class="badge carvia-badge-score-medio ms-1" style="font-size:0.6rem" title="Val:${pct(det.valor)} Dt:${pct(det.data)} Nm:${pct(det.nome)}">&#9733;&#9733;</span>`;
+            }
+
+            // R17: badge extra quando houve boost por historico aprendido.
+            // FIX M10: parseInt garante numero (vs || 0 que deixa string passar).
+            if (d.score_historico) {
+                const nHist = parseInt(d.score_historico_ocorrencias, 10) || 0;
+                const preBoost = d.score_pre_boost !== undefined
+                    ? ` (score antes do boost: ${pct(d.score_pre_boost)})`
+                    : '';
+                scoreBadge += ` <span class="badge bg-info ms-1" style="font-size:0.55rem" title="Padrao aprendido: ${nHist} conciliacao(oes) anterior(es) com este CNPJ${preBoost}"><i class="fas fa-history"></i> ${nHist}x</span>`;
             }
 
             div.innerHTML = `

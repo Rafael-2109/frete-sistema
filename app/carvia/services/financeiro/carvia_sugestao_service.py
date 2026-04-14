@@ -13,6 +13,12 @@ em relacao a uma linha do extrato bancario.
 
 Thresholds calibrados via analise de 71 conciliacoes existentes
 (scripts/analise_padroes_conciliacao.py, 2026-04-03).
+
+R17 (historico aprendido): quando `cnpjs_historico` e fornecido
+(dict {cnpj: ocorrencias}), `pontuar_documentos` aplica boost
+multiplicativo 1.4x no score dos documentos cujo cnpj_cliente aparece
+no dict. Preserva calibracao dos 3 sinais — apenas potencializa docs
+que ja foram conciliados antes para a mesma descricao de extrato.
 """
 
 import re
@@ -40,22 +46,31 @@ _STOPWORDS = frozenset({
 })
 
 
-def pontuar_documentos(linha, docs):
+def pontuar_documentos(linha, docs, cnpjs_historico=None):
     """Pontua cada documento elegivel em relacao a uma linha do extrato.
 
     Args:
         linha: CarviaExtratoLinha (objeto SQLAlchemy)
         docs: list[dict] — retorno de obter_documentos_elegiveis()
+        cnpjs_historico: dict[str, int]|None — {cnpj: ocorrencias} vindo de
+            CarviaHistoricoMatchService.cnpjs_aprendidos(linha). Quando um
+            doc tem cnpj_cliente presente no dict, aplica boost 1.4x no
+            score final (cap em 1.0). Parametro opcional — callsites que
+            nao informam mantem comportamento original pre-R17.
 
     Returns:
         list[dict] — mesma lista com campos adicionais:
             score (float 0-1), score_label (str|None),
-            score_detalhes (dict com valor/data/nome)
+            score_detalhes (dict com valor/data/nome),
+            score_historico (bool), score_historico_ocorrencias (int),
+            score_pre_boost (float, apenas se boost aplicado)
         Ordenada por score descrescente.
     """
     valor_extrato = abs(float(linha.valor or 0))
     data_extrato = linha.data  # date ou None
     texto_extrato = linha.razao_social or linha.descricao or linha.memo or ''
+
+    cnpjs_historico = cnpjs_historico or {}
 
     for doc in docs:
         sv = _score_valor(valor_extrato, float(doc.get('saldo', 0)))
@@ -68,7 +83,32 @@ def pontuar_documentos(linha, docs):
             + sn * PESOS['nome']
         )
 
-        # Label
+        # R17: boost por historico aprendido (padrao descricao+CNPJ)
+        cnpj_doc = (doc.get('cnpj_cliente') or '').strip()
+        ocorrencias_hist = cnpjs_historico.get(cnpj_doc, 0) if cnpj_doc else 0
+        if ocorrencias_hist > 0:
+            score_pre_boost = score
+            # FIX M1: floor 0.30 garante que docs com CNPJ aprendido mas com
+            # score base < 0.30 (sem match de valor/data/nome — PIX generico,
+            # descricao pobre, valor parcial fora da margem) ainda atinjam
+            # pelo menos BAIXO (>= 0.30 apos boost), ganhando a primeira
+            # estrela visual. Sem floor, 0 * 1.4 = 0 e o historico seria
+            # completamente inutil exatamente quando mais importa.
+            # - score base 0.0 → max(0, 0.30)*1.4 = 0.42 → BAIXO
+            # - score base 0.3 → max(0.3, 0.30)*1.4 = 0.42 → BAIXO (igual)
+            # - score base 0.57 → max(0.57, 0.30)*1.4 = 0.798 → MEDIO
+            # - score base 0.65 → max(0.65, 0.30)*1.4 = 0.91 → ALTO
+            # Floor nao altera scores ja >= 0.30 (preserva calibracao).
+            base_boost = max(score, 0.30)
+            score = min(1.0, base_boost * 1.4)
+            doc['score_historico'] = True
+            doc['score_historico_ocorrencias'] = ocorrencias_hist
+            doc['score_pre_boost'] = round(score_pre_boost, 4)
+        else:
+            doc['score_historico'] = False
+            doc['score_historico_ocorrencias'] = 0
+
+        # Label (thresholds aplicados APOS boost — boost pode mudar tier)
         if score >= 0.80:
             label = 'ALTO'
         elif score >= 0.55:

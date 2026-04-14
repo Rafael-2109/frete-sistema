@@ -55,6 +55,7 @@
                 <div class="small text-muted" style="font-size:0.68rem">
                     <span class="badge carvia-badge-score-alto" style="font-size:0.55rem">&#9733;&#9733;&#9733;</span> Valor+Data+Nome
                     <span class="badge carvia-badge-score-medio ms-1" style="font-size:0.55rem">&#9733;&#9733;</span> Parcial
+                    <span class="badge bg-info ms-1" style="font-size:0.55rem"><i class="fas fa-history"></i></span> Padrao aprendido (boost 1.4x)
                     &mdash; sugestivo, nao impeditivo
                 </div>
                 <div>
@@ -72,13 +73,34 @@
 (function() {
     let linhaAtual = null;
 
+    // FIX M9: nunca retorna input raw. Fallback para string vazia quando
+    // nao e CNPJ valido — evita XSS via interpolacao direta em innerHTML
+    // quando o backend envia CNPJ malformado (ex: CarviaNf.cnpj_destinatario
+    // vem de XML NF-e que pode ter qualquer conteudo).
     const formatCNPJ = c => {
-        if (!c || c.length < 14) return c || '';
-        const d = c.replace(/\D/g, '');
-        if (d.length !== 14) return c;
+        const d = String(c || '').replace(/\D/g, '');
+        if (d.length !== 14) return '';
         return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
     };
 
+    // FIX M7 (espelho de FIX C3 de _modal_previncular_extrato.html):
+    // escape HTML para prevenir XSS ao interpolar conteudo de API.
+    // Campos como doc.nome, doc.numero, doc.remetente_nome e listas de CTe/NF
+    // vem de fontes externas (OFX bancario, XMLs NF-e, PDFs) e podem conter
+    // caracteres especiais ou scripts. textContent ja escapa, mas .innerHTML
+    // nao — por isso precisamos de escapeHtml explicito.
+    const escapeHtml = (s) => {
+        if (s == null) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
+
+    // FIX M7: interpola somente conteudo escapado via escapeHtml().
+    // formatCNPJ retorna apenas digitos+pontuacao fixa — seguro sem escape.
     function buildEnrichedHTML(doc) {
         let html = '';
         if (doc.tipo_documento === 'fatura_cliente') {
@@ -89,10 +111,12 @@
                 const destEmph = ['100_DESTINATARIO', '50_50'].includes(resp) ? 'carvia-tomador-emphasis' : '';
                 html += `<span style="font-size:0.72rem">`;
                 if (doc.remetente_nome) {
-                    html += `<span class="${remEmph}">Rem: ${doc.remetente_nome}</span>`;
+                    html += `<span class="${remEmph}">Rem: ${escapeHtml(doc.remetente_nome)}</span>`;
                 }
                 if (doc.destinatarios && doc.destinatarios.length) {
-                    const destLabel = doc.destinatarios[0].nome || formatCNPJ(doc.destinatarios[0].cnpj);
+                    const destLabel = doc.destinatarios[0].nome
+                        ? escapeHtml(doc.destinatarios[0].nome)
+                        : formatCNPJ(doc.destinatarios[0].cnpj);
                     html += `${doc.remetente_nome ? ' &middot; ' : ''}<span class="${destEmph}">Dest: ${destLabel}</span>`;
                     if (doc.destinatarios.length > 1) {
                         html += ` <small class="text-muted">(+${doc.destinatarios.length - 1})</small>`;
@@ -103,12 +127,12 @@
             // Badges CTe + NF
             if (doc.cte_numeros && doc.cte_numeros.length) {
                 doc.cte_numeros.forEach(n => {
-                    html += `<span class="badge bg-secondary me-1" style="font-size:0.58rem">${n}</span>`;
+                    html += `<span class="badge bg-secondary me-1" style="font-size:0.58rem">${escapeHtml(n)}</span>`;
                 });
             }
             if (doc.nf_numeros && doc.nf_numeros.length) {
                 doc.nf_numeros.slice(0, 5).forEach(n => {
-                    html += `<span class="badge bg-info me-1" style="font-size:0.58rem">NF ${n}</span>`;
+                    html += `<span class="badge bg-info me-1" style="font-size:0.58rem">NF ${escapeHtml(n)}</span>`;
                 });
                 if (doc.nf_numeros.length > 5) {
                     html += `<small class="text-muted">+${doc.nf_numeros.length - 5} NFs</small>`;
@@ -116,7 +140,9 @@
             }
             // Condicoes comerciais
             if (doc.condicao_pagamento || doc.responsavel_frete_label) {
-                html += `<small class="text-info ms-1">${doc.condicao_pagamento || ''}${doc.condicao_pagamento && doc.responsavel_frete_label ? ' | ' : ''}${doc.responsavel_frete_label || ''}</small>`;
+                const cond = escapeHtml(doc.condicao_pagamento || '');
+                const resplabel = escapeHtml(doc.responsavel_frete_label || '');
+                html += `<small class="text-info ms-1">${cond}${doc.condicao_pagamento && doc.responsavel_frete_label ? ' | ' : ''}${resplabel}</small>`;
             }
         } else if (doc.tipo_documento === 'fatura_transportadora') {
             if (doc.cnpj_transportadora) {
@@ -124,12 +150,14 @@
             }
             if (doc.cte_numeros && doc.cte_numeros.length) {
                 doc.cte_numeros.forEach(n => {
-                    html += `<span class="badge bg-secondary me-1" style="font-size:0.58rem">${n}</span>`;
+                    html += `<span class="badge bg-secondary me-1" style="font-size:0.58rem">${escapeHtml(n)}</span>`;
                 });
             }
         } else {
             // Despesa, custo_entrega, receita — data/vencimento
-            html += `<small class="text-muted">${doc.data || ''}${doc.vencimento ? ' &middot; Venc: ' + doc.vencimento : ''}</small>`;
+            const dt = escapeHtml(doc.data || '');
+            const venc = escapeHtml(doc.vencimento || '');
+            html += `<small class="text-muted">${dt}${venc ? ' &middot; Venc: ' + venc : ''}</small>`;
         }
         return html;
     }
@@ -205,23 +233,39 @@
                     scoreBadge = `<span class="badge bg-secondary" style="font-size:0.6rem">&#9733;</span>`;
                 }
 
-                // Linha principal
+                // R17: badge extra quando houve boost por historico aprendido.
+                // FIX M10: parseInt garante numero — `|| 0` sozinho nao
+                // coerce string para int (ex: "3<script>" || 0 sobreviveria).
+                if (doc.score_historico) {
+                    const n = parseInt(doc.score_historico_ocorrencias, 10) || 0;
+                    const pre = doc.score_pre_boost !== undefined ? ` (score antes do boost: ${pct(doc.score_pre_boost)})` : '';
+                    scoreBadge += ` <span class="badge bg-info" style="font-size:0.55rem" title="Padrao aprendido: ${n} conciliacao(oes) anterior(es) com este CNPJ${pre}"><i class="fas fa-history"></i> ${n}x</span>`;
+                }
+
+                // Linha principal — FIX M7: escape em campos de texto externos
+                const tipoSafe = escapeHtml(doc.tipo_documento);
+                const numeroSafe = escapeHtml(doc.numero);
+                const nomeSafe = escapeHtml(doc.nome);
+                const saldoNum = parseFloat(doc.saldo || 0);
+                const valorTotalNum = parseFloat(doc.valor_total || 0);
+                const docIdNum = parseInt(doc.id, 10) || 0;
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><input type="checkbox" class="form-check-input conc-inline-check"
-                         data-tipo="${doc.tipo_documento}" data-id="${doc.id}" data-saldo="${doc.saldo}"></td>
-                    <td><small>${doc.numero}</small></td>
-                    <td><small>${doc.nome}</small></td>
+                         data-tipo="${tipoSafe}" data-id="${docIdNum}" data-saldo="${saldoNum}"></td>
+                    <td><small>${numeroSafe}</small></td>
+                    <td><small>${nomeSafe}</small></td>
                     <td class="text-end carvia-conciliacao-valor">
-                        ${parseFloat(doc.valor_total).toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                        ${valorTotalNum.toLocaleString('pt-BR', {minimumFractionDigits:2})}
                     </td>
                     <td class="text-end carvia-conciliacao-valor">
-                        ${parseFloat(doc.saldo).toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                        ${saldoNum.toLocaleString('pt-BR', {minimumFractionDigits:2})}
                     </td>
                     <td class="text-center">${scoreBadge}</td>
                     <td>
                         <input type="number" class="form-control form-control-sm conc-inline-valor"
-                               step="0.01" min="0.01" max="${doc.saldo}" value="${doc.saldo}"
+                               step="0.01" min="0.01" max="${saldoNum}" value="${saldoNum}"
                                disabled style="width:100px">
                     </td>
                 `;

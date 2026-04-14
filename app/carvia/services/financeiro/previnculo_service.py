@@ -208,6 +208,9 @@ class CarviaPreVinculoService:
         from app.carvia.services.financeiro.carvia_sugestao_service import (
             pontuar_documentos,
         )
+        from app.carvia.services.financeiro.carvia_historico_match_service import (
+            CarviaHistoricoMatchService,
+        )
 
         cotacao = db.session.get(CarviaCotacao, cotacao_id)
         if not cotacao:
@@ -243,8 +246,10 @@ class CarviaPreVinculoService:
 
         # Construir doc "fake" da cotacao para reutilizar pontuar_documentos
         nome_doc = ''
+        cnpj_doc = ''
         if cotacao.cliente:
             nome_doc = cotacao.cliente.nome_comercial or ''
+            cnpj_doc = (cotacao.cliente.cnpj or '').strip()
 
         data_cotacao_br = (
             cotacao.data_cotacao.strftime('%d/%m/%Y')
@@ -254,6 +259,10 @@ class CarviaPreVinculoService:
             cotacao.data_expedicao.strftime('%d/%m/%Y')
             if cotacao.data_expedicao else ''
         )
+
+        # FIX M2: uma unica query batch em vez de N queries (uma por linha).
+        # Para 50 linhas candidatas, colapsa 50 round-trips em 1.
+        cnpjs_por_linha = CarviaHistoricoMatchService.cnpjs_aprendidos_batch(linhas)
 
         resultado = []
         for linha in linhas:
@@ -266,8 +275,11 @@ class CarviaPreVinculoService:
                 'data': data_cotacao_br,
                 'vencimento': data_expedicao_br,
                 'nome': nome_doc,
+                # R17: cnpj_cliente permite boost por historico aprendido
+                'cnpj_cliente': cnpj_doc,
             }
-            pontuar_documentos(linha, [doc_temp])
+            cnpjs_hist = cnpjs_por_linha.get(linha.id, {})
+            pontuar_documentos(linha, [doc_temp], cnpjs_historico=cnpjs_hist)
 
             resultado.append({
                 'id': linha.id,

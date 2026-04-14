@@ -427,3 +427,77 @@ class CarviaPreVinculoExtratoCotacao(db.Model):
             f'<CarviaPreVinculoExtratoCotacao linha={self.extrato_linha_id} '
             f'cotacao={self.cotacao_id} {self.status} R${self.valor_alocado}>'
         )
+
+
+class CarviaHistoricoMatchExtrato(db.Model):
+    """Log append-only de eventos de match aprendidos (descricao+CNPJ pagador).
+
+    R17: A cada CarviaConciliacao criada para fatura_cliente, o hook em
+    CarviaConciliacaoService.conciliar() grava UMA linha com os tokens
+    normalizados da descricao da linha de cima do extrato + CNPJ do pagador
+    da fatura. Sem UPSERT — cada conciliacao vira um evento novo.
+
+    1 descricao pode fazer match com N CNPJs legitimamente (ex: "PIX RECEBIDO"
+    pode vir de varios pagadores). Nao ha UNIQUE constraint. Contagem de
+    ocorrencias via COUNT(*) GROUP BY cnpj_pagador na consulta.
+
+    Usada por pontuar_documentos() em carvia_sugestao_service.py para aplicar
+    boost multiplicativo 1.4x no score quando o doc sugerido tem o mesmo
+    cnpj_cliente de um padrao aprendido.
+
+    Escopo atual: fatura_cliente apenas (CREDITO/recebimento). Campo
+    `tipo_documento` preparado para extensao futura (fatura_transportadora,
+    despesa, custo_entrega, receita).
+    """
+    __tablename__ = 'carvia_historico_match_extrato'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Snapshot raw da descricao da linha de cima (auditoria)
+    descricao_linha_raw = db.Column(db.String(500), nullable=False)
+
+    # Tokens normalizados ordenados — chave de match exato
+    descricao_tokens = db.Column(db.String(500), nullable=False, index=True)
+
+    # CNPJ do pagador (CarviaFaturaCliente.cnpj_cliente no escopo atual)
+    cnpj_pagador = db.Column(db.String(20), nullable=False, index=True)
+
+    # Preparado para extensao futura (transportadora, despesa, etc.)
+    tipo_documento = db.Column(
+        db.String(30), nullable=False, default='fatura_cliente',
+    )
+
+    # Ponteiro solto para auditoria (nao e FK formal — padrao de CarviaConciliacao)
+    conciliacao_id = db.Column(db.Integer, nullable=True)
+
+    registrado_em = db.Column(
+        db.DateTime, nullable=False, default=agora_utc_naive,
+    )
+
+    __table_args__ = (
+        # SEM UniqueConstraint: append-only, 1 descricao pode ter N CNPJs
+        # Indice composto para consulta principal (WHERE tokens=X AND tipo=Y
+        # GROUP BY cnpj_pagador). Cobre tambem queries so por tokens via
+        # prefix rule do PostgreSQL (FIX M4: standalone removido).
+        db.Index(
+            'ix_carvia_histmatch_tokens_tipo',
+            'descricao_tokens', 'tipo_documento',
+        ),
+        # FIX m5: sync com o DDL da migration — mantem db.create_all()
+        # funcional em ambientes novos (ex: testes, dev setup sem migration).
+        db.Index(
+            'ix_carvia_histmatch_cnpj',
+            'cnpj_pagador',
+        ),
+        db.Index(
+            'ix_carvia_histmatch_conciliacao_id',
+            'conciliacao_id',
+            postgresql_where=db.text('conciliacao_id IS NOT NULL'),
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<CarviaHistoricoMatchExtrato tokens={self.descricao_tokens[:30]!r} '
+            f'cnpj={self.cnpj_pagador} tipo={self.tipo_documento}>'
+        )

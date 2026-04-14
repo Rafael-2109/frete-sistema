@@ -401,6 +401,52 @@ cadeia ambigua), a criacao da fatura segue normal. Botao manual cobre.
 **Templates**: `_modal_previncular_extrato.html`, `_previnculos_cotacao.html`,
 includes em `cotacoes/detalhe.html`.
 
+### R17: Historico de Match Extrato <-> Pagador (append-only)
+
+Conciliacoes `fatura_cliente` sao material de aprendizado: a cada conciliacao
+criada, o hook em `CarviaConciliacaoService.conciliar()` grava UM EVENTO novo
+em `CarviaHistoricoMatchExtrato` com a chave `(descricao_tokens, cnpj_pagador)`
+onde:
+- `descricao_tokens` = tokens normalizados da **linha de cima** do extrato
+  (`CarviaExtratoLinha.descricao`) via `_normalizar()` do sugestao_service
+- `cnpj_pagador` = `CarviaFaturaCliente.cnpj_cliente` (pagador efetivo da fatura)
+
+**Tabela e append-only (sem UNIQUE)**: 1 descricao pode fazer match com N
+CNPJs (e vice-versa). Contagem de ocorrencias e via `COUNT(*) GROUP BY
+cnpj_pagador` na consulta. Sem UniqueViolation por design.
+
+**Boost no scoring**: `pontuar_documentos()` aceita parametro opcional
+`cnpjs_historico` (dict `{cnpj: ocorrencias}`). Quando um doc sugerido tem
+`cnpj_cliente` presente no dict, o score recebe boost multiplicativo
+`score = min(1.0, score * 1.4)`. Preserva calibracao dos 3 sinais originais
+(valor 50% / data 30% / nome 20%) — so potencializa docs que ja foram
+conciliados antes para a mesma descricao de extrato.
+
+**Escopo atual**: apenas `fatura_cliente` (CREDITO/recebimento). Modelo tem
+campo `tipo_documento` preparado para extensao futura (fatura_transportadora,
+despesa, custo_entrega, receita).
+
+**Hook nao-bloqueante**: `registrar_aprendizado()` e chamado dentro de
+try/except em `conciliar()` — qualquer erro (tabela ausente, cnpj vazio,
+tokens vazios) apenas loga warning e segue. Desconciliar NAO remove eventos
+(historico e cumulativo, append-only).
+
+**Callsites que aplicam boost**:
+- `conciliacao_routes.py::api_documentos_elegiveis` (tela dual-panel)
+- `conciliacao_routes.py::api_matches_linha` (modal inline Extrato Bancario)
+- `previnculo_service.py::listar_candidatos_extrato` (pre-vinculo cotacao,
+  com `cnpj_cliente` preenchido via `cotacao.cliente.cnpj`)
+
+**Fora do escopo**: `api_matches_por_documento` (fluxo inverso doc→linhas)
+usa scoring inline proprio e NAO foi modificado — requer refator separado.
+
+**Service**: `app/carvia/services/financeiro/carvia_historico_match_service.py`
+**Model**: `CarviaHistoricoMatchExtrato` (pacote `models/financeiro.py`)
+**Tabela**: `carvia_historico_match_extrato` (append-only log, sem UNIQUE)
+**Migration**: `scripts/migrations/add_carvia_historico_match_extrato.{py,sql}`
+**Template**: badge `<i class="fas fa-history">` adicionado em
+`_modal_conciliar_inline.html` quando `doc.score_historico=true`
+
 ---
 
 ## Modelos
@@ -429,6 +475,7 @@ includes em `cotacoes/detalhe.html`.
 | CarviaExtratoLinha | `carvia_extrato_linhas` | Linhas importadas do extrato bancario OFX. `fitid` UNIQUE. `tipo`: CREDITO/DEBITO. `status_conciliacao`: PENDENTE/CONCILIADO/PARCIAL. `total_conciliado` + `saldo_a_conciliar` (@property). Campos enriquecimento CSV: `razao_social`, `observacao` |
 | CarviaConciliacao | `carvia_conciliacoes` | Junction N:N extrato↔documento. UNIQUE(extrato_linha_id, tipo_documento, documento_id). `tipo_documento`: fatura_cliente/fatura_transportadora/despesa/custo_entrega/receita. `valor_alocado` sempre positivo |
 | CarviaPreVinculoExtratoCotacao | `carvia_previnculos_extrato_cotacao` | **Pre-vinculo soft** entre linha de extrato (CREDITO, PENDENTE/PARCIAL) e cotacao (APROVADO). Nao eh conciliacao financeira — linha continua PENDENTE. Resolvido automaticamente quando fatura cliente chega via cadeia `FaturaItem.nf_id -> NF.numero_nf -> PedidoItem.numero_nf (string) -> Pedido.cotacao_id` (ver R16). Status: `ATIVO -> RESOLVIDO` (auto trigger em fatura_routes.py) OU `ATIVO -> CANCELADO` (soft cancel manual com motivo). UNIQUE PARCIAL `(extrato_linha_id, cotacao_id) WHERE status='ATIVO'`. FKs: `conciliacao_id` (SET NULL) e `fatura_cliente_id` (SET NULL) preenchidos pos-resolucao para audit trail. Service: `app/carvia/services/financeiro/previnculo_service.py`. Pacote: `app/carvia/models/financeiro.py` |
+| CarviaHistoricoMatchExtrato | `carvia_historico_match_extrato` | **Log append-only** de eventos de match aprendidos (descricao+CNPJ pagador). Ver R17. Cada conciliacao `fatura_cliente` gera UMA linha. **Sem UNIQUE**: 1 descricao pode ter N CNPJs. Campos: `descricao_linha_raw` (snapshot audit), `descricao_tokens` (chave normalizada via `_normalizar` do sugestao_service), `cnpj_pagador` (`CarviaFaturaCliente.cnpj_cliente`), `tipo_documento` (default `fatura_cliente`), `conciliacao_id` (ponteiro solto), `registrado_em`. Ocorrencias via `COUNT(*) GROUP BY cnpj_pagador`. Boost 1.4x aplicado em `pontuar_documentos()` quando `doc.cnpj_cliente` aparece nos CNPJs aprendidos. Service: `app/carvia/services/financeiro/carvia_historico_match_service.py`. Pacote: `app/carvia/models/financeiro.py` |
 | CarviaCategoriaMoto | `carvia_categorias_moto` | Categorias/tipos de moto para precificacao por unidade. `nome` UNIQUE (ex: "Leve", "Pesada", "Scooter"). `ordem` para UI. Soft-delete via `ativo`. Relationships: `modelos` (CarviaModeloMoto), `precos` (CarviaPrecoCategoriaMoto). CRUD em `/carvia/configuracoes/categorias-moto` |
 | CarviaModeloMoto | `carvia_modelos_moto` | Modelos de moto para calculo automatico de peso cubado. `nome` UNIQUE. `regex_pattern` para match automatico. Dimensoes (comprimento, largura, altura) + `cubagem_minima`. **`categoria_moto_id`** FK nullable para CarviaCategoriaMoto. CRUD inline em `/carvia/configuracoes/modelos-moto` |
 | CarviaPrecoCategoriaMoto | `carvia_precos_categoria_moto` | Preco fixo por unidade para combinacao tabela_frete × categoria_moto. `valor_unitario` NUMERIC(15,2). UNIQUE(tabela_frete_id, categoria_moto_id). Soft-delete via `ativo`. Relationship `tabela_frete` (CarviaTabelaFrete backref `precos_categoria_moto`). CRUD via API em tabelas de frete |

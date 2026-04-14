@@ -86,6 +86,7 @@
                 <div class="small text-muted" style="font-size:0.68rem">
                     <span class="badge carvia-badge-score-alto" class="carvia-badge-xs">&#9733;&#9733;&#9733;</span> Valor+Data+Nome
                     <span class="badge carvia-badge-score-medio ms-1" class="carvia-badge-xs">&#9733;&#9733;</span> Parcial
+                    <span class="badge bg-info ms-1" style="font-size:0.55rem"><i class="fas fa-history"></i></span> Padrao aprendido (boost 1.4x)
                     &mdash; scoring sugestivo
                 </div>
                 <div>
@@ -180,6 +181,7 @@
 
                 wrapper.classList.remove('d-none');
 
+                const pct = v => Math.round((v || 0) * 100) + '%';
                 linhas.forEach(ln => {
                     // Score badge
                     let scoreBadge = '';
@@ -189,6 +191,16 @@
                         scoreBadge = '<span class="badge carvia-badge-score-medio" class="carvia-badge-sm">&#9733;&#9733;</span>';
                     } else if (ln.score_label === 'BAIXO') {
                         scoreBadge = '<span class="badge bg-secondary" class="carvia-badge-sm">&#9733;</span>';
+                    }
+
+                    // R17: badge extra quando houve boost por historico aprendido.
+                    // FIX M10: parseInt garante numero (vs `|| 0` que deixa string passar).
+                    if (ln.score_historico) {
+                        const n = parseInt(ln.score_historico_ocorrencias, 10) || 0;
+                        const pre = ln.score_pre_boost !== undefined
+                            ? ` (score antes do boost: ${pct(ln.score_pre_boost)})`
+                            : '';
+                        scoreBadge += ` <span class="badge bg-info" style="font-size:0.55rem" title="Padrao aprendido: ${n} conciliacao(oes) anterior(es) com este CNPJ${pre}"><i class="fas fa-history"></i> ${n}x</span>`;
                     }
 
                     // FIX C3: escapar campos vindos do OFX para prevenir XSS
