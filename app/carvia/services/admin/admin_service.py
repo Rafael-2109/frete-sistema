@@ -431,13 +431,13 @@ class AdminService:
         Tabelas com FK direta para carvia_subcontratos.id que precisam sair
         ANTES do delete (FK NOT NULL ou sem ON DELETE CASCADE):
 
-          a. CarviaContaCorrenteTransportadora (subcontrato_id NOT NULL)
-             — DELETE registros + reverter compensacoes apontando via
-             compensacao_subcontrato_id (caso borda)
-          b. CarviaAprovacaoSubcontrato (subcontrato_id NOT NULL)
-             — DELETE registros (tratativas de aprovacao pendentes)
-          c. valor_pago/valor_pago_em/valor_pago_por/requer_aprovacao
-             — reset visivel no snapshot (estado pos-reversao)
+          a. CarviaContaCorrenteTransportadora (subcontrato_id legado,
+             nullable pos-Phase 5) — DELETE registros + reverter compensacoes
+             apontando via compensacao_subcontrato_id (caso borda)
+
+        Nota (Phase C 2026-04-14): CarviaAprovacaoFrete agora aponta para
+        CarviaFrete.id, nao mais para CarviaSubcontrato.id. Subs orfaos
+        legados (sem frete_id) nao tem aprovacoes apontando.
 
         Auditoria: CarviaAdminAudit com snapshot + dados_relacionados.
         """
@@ -447,7 +447,6 @@ class AdminService:
             CarviaCustoEntrega,
             CarviaFrete,
             CarviaContaCorrenteTransportadora,
-            CarviaAprovacaoSubcontrato,
             CarviaConciliacao,
         )
 
@@ -564,9 +563,6 @@ class AdminService:
         movs_cc = CarviaContaCorrenteTransportadora.query.filter_by(
             subcontrato_id=sub_id
         ).all()
-        aprovacoes = CarviaAprovacaoSubcontrato.query.filter_by(
-            subcontrato_id=sub_id
-        ).all()
 
         # Caso borda: OUTRO sub foi compensado POR este sub
         compensacoes_apontando = CarviaContaCorrenteTransportadora.query.filter_by(
@@ -575,7 +571,6 @@ class AdminService:
 
         relacionados = self.serializar_relacionados(sub, {
             'movimentacoes_cc': movs_cc,
-            'aprovacoes': aprovacoes,
             'compensacoes_apontando': compensacoes_apontando,
         })
 
@@ -608,19 +603,14 @@ class AdminService:
                 ).strip()
                 compensacoes_revertidas += 1
 
-        # 2. DELETE movimentacoes CC deste sub (FK subcontrato_id NOT NULL)
+        # 2. DELETE movimentacoes CC deste sub (legado — FK subcontrato_id
+        # afrouxada para nullable pos-Phase 5, mas registros legados ainda
+        # apontam via subcontrato_id)
         for mov in movs_cc:
             db.session.delete(mov)
 
-        # 3. DELETE aprovacoes deste sub (FK subcontrato_id NOT NULL)
-        for aprov in aprovacoes:
-            db.session.delete(aprov)
-
-        # 4. Reset pagamento no proprio sub (visibilidade no audit)
-        sub.valor_pago = None
-        sub.valor_pago_em = None
-        sub.valor_pago_por = None
-        sub.requer_aprovacao = False
+        # Phase C: campos de conferencia (valor_pago, requer_aprovacao, etc.)
+        # migrados para CarviaFrete. Sub orfao nao tem esses campos a resetar.
 
         # ============================================================
         # DELETE do sub
@@ -639,7 +629,6 @@ class AdminService:
                 'origem': 'orfao_legado_pre_carviafrete',
                 'desconciliacao_extrato': 'limpar_movimentacao_financeira(subcontrato)',
                 'movs_cc_deletadas': len(movs_cc),
-                'aprovacoes_deletadas': len(aprovacoes),
                 'compensacoes_revertidas': compensacoes_revertidas,
                 'cte_numero': snapshot.get('cte_numero'),
                 'valor_cotado': snapshot.get('valor_cotado'),
@@ -650,8 +639,8 @@ class AdminService:
         logger.info(
             f"[ADMIN] Subcontrato orfao #{sub_id} ({snapshot.get('cte_numero')}) "
             f"excluido por {executado_por}. CC deletadas: {len(movs_cc)}, "
-            f"aprovacoes: {len(aprovacoes)}, compensacoes revertidas: "
-            f"{compensacoes_revertidas}. Audit #{audit.id}"
+            f"compensacoes revertidas: {compensacoes_revertidas}. "
+            f"Audit #{audit.id}"
         )
 
         return {
