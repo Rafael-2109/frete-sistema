@@ -529,29 +529,70 @@ def register_conciliacao_routes(bp):
             return jsonify({
                 'documento': doc_info,
                 'linhas': [],
+                'total_pendentes': 0,
                 'mensagem': 'Documento ja totalmente conciliado.',
             })
 
-        # Margem de busca: valor +-30% para pegar candidatas
-        margem = 0.30
-        valor_min = valor_doc * (1 - margem)
-        valor_max = valor_doc * (1 + margem)
+        # CNPJ do documento para boost historico R17 (graceful se ausente).
+        # Aplica para: fatura_cliente (cnpj_cliente), fatura_transportadora
+        # (transportadora.cnpj), custo_entrega (fornecedor_cnpj).
+        # NAO aplica: despesa/receita (sem CNPJ de contraparte no modelo).
+        cnpj_doc = ''
+        if tipo_doc == 'fatura_cliente':
+            cnpj_doc = (doc.cnpj_cliente or '').strip()
+        elif tipo_doc == 'fatura_transportadora':
+            if doc.transportadora and getattr(doc.transportadora, 'cnpj', None):
+                cnpj_doc = (doc.transportadora.cnpj or '').strip()
+        elif tipo_doc == 'custo_entrega':
+            cnpj_doc = (getattr(doc, 'fornecedor_cnpj', None) or '').strip()
 
-        # W10 Nivel 2 (Sprint 4): incluir TODAS as linhas como candidatas
-        # (OFX/CSV/MANUAL). Linhas MANUAL tambem podem servir de match
-        # — sao pagamentos com rastreabilidade via conta_origem.
-        linhas_candidatas = CarviaExtratoLinha.query.filter(
+        # REFATOR R17 (fix bug modal vazio): trazer TODAS as linhas
+        # PENDENTE/PARCIAL da direcao correta. Filtro de valor (era +-30%)
+        # foi REMOVIDO — agora o valor entra no scoring, nao como criterio
+        # de exclusao. Usuario precisa ver pagamentos parciais e depositos
+        # agregados, que ficavam de fora.
+        base_query = CarviaExtratoLinha.query.filter(
             CarviaExtratoLinha.tipo == direcao,
             CarviaExtratoLinha.status_conciliacao.in_(['PENDENTE', 'PARCIAL']),
-            db.func.abs(CarviaExtratoLinha.valor).between(valor_min, valor_max),
-        ).order_by(CarviaExtratoLinha.data.desc()).limit(20).all()
+        )
 
-        # Construir resposta com scoring simplificado
+        # Total real para contador UI (antes do limit)
+        total_pendentes = base_query.count()
+
+        # Ceiling generoso — 99% dos casos tem <100 linhas pendentes.
+        # 200 da folga sem estourar DOM render.
+        LIMIT_CEILING = 200
+        linhas_candidatas = base_query.order_by(
+            CarviaExtratoLinha.data.desc()
+        ).limit(LIMIT_CEILING).all()
+
+        # R17: historico aprendido por linha (batch — evita N+1 queries).
+        # Se a tabela carvia_historico_match_extrato nao existir (migration
+        # nao rodada), retorna dict vazio graciosamente.
+        from app.carvia.services.financeiro.carvia_historico_match_service import (
+            CarviaHistoricoMatchService,
+        )
+        hist_por_linha = CarviaHistoricoMatchService.cnpjs_aprendidos_batch(
+            linhas_candidatas
+        )
+
+        # Construir resposta com scoring simplificado + boost historico
         linhas_result = []
         for ln in linhas_candidatas:
-            # Score por proximidade de valor
-            diff_pct = abs(abs(float(ln.valor)) - valor_doc) / valor_doc if valor_doc else 1
-            score_valor = max(0, 1 - diff_pct * 5)  # 0% diff=1.0, 20% diff=0.0
+            # Score por cobertura (trata pagamentos parciais de forma justa):
+            #   - Linha <= doc: pontua pela PROPORCAO coberta (R$3k/R$10k = 0.30)
+            #     Linhas parciais NAO sao penalizadas por serem menores —
+            #     sao ordenadas pela capacidade de contribuir ao saldo.
+            #   - Linha > doc: penaliza o EXCESSO (50% excesso = score 0.5).
+            #     Depositos muito maiores que o doc sao menos prováveis.
+            valor_linha = abs(float(ln.valor))
+            if valor_doc <= 0:
+                score_valor = 0.0
+            elif valor_linha <= valor_doc:
+                score_valor = valor_linha / valor_doc
+            else:
+                excesso_pct = (valor_linha - valor_doc) / valor_doc
+                score_valor = max(0, 1 - excesso_pct)
 
             # Score por proximidade de data (se temos vencimento)
             score_data = 0.3  # neutro
@@ -565,6 +606,15 @@ def register_conciliacao_routes(bp):
                     pass
 
             score = score_valor * 0.60 + score_data * 0.40
+
+            # R17: boost 1.4x se CNPJ do doc aparece no historico aprendido
+            # da linha (mesma estrategia aplicada em pontuar_documentos).
+            score_historico = False
+            if cnpj_doc:
+                hist = hist_por_linha.get(ln.id, {})
+                if cnpj_doc in hist:
+                    score = min(1.0, score * 1.4)
+                    score_historico = True
 
             if score >= 0.80:
                 label = 'ALTO'
@@ -586,14 +636,17 @@ def register_conciliacao_routes(bp):
                 'conta_origem': ln.conta_origem or '',
                 'score': round(score, 2),
                 'score_label': label,
+                'score_historico': score_historico,
             })
 
-        # Ordenar por score desc
+        # Ordenar por score desc — desempate natural vem da query
+        # (ja ordenada por data desc no SQL). Top matches no topo.
         linhas_result.sort(key=lambda x: x['score'], reverse=True)
 
         return jsonify({
             'documento': doc_info,
             'linhas': linhas_result,
+            'total_pendentes': total_pendentes,
         })
 
     # ===================================================================

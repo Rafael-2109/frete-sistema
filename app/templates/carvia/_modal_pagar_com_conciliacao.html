@@ -43,7 +43,10 @@
                 </div>
 
                 {# Linhas de extrato candidatas #}
-                <h6 class="mb-2"><i class="fas fa-university"></i> Linhas de extrato correspondentes</h6>
+                <h6 class="mb-2">
+                    <i class="fas fa-university"></i> Linhas de extrato pendentes
+                    <small class="text-muted ms-2" id="pcTotalPendentes" style="font-weight:400"></small>
+                </h6>
 
                 <div id="pcLoading" class="text-center py-3">
                     <div class="spinner-border spinner-border-sm"></div>
@@ -51,7 +54,7 @@
                 </div>
 
                 <div id="pcLinhasContainer" class="d-none">
-                    <div class="table-responsive" style="max-height:220px; overflow-y:auto">
+                    <div class="table-responsive" style="max-height:400px; overflow-y:auto">
                         <table class="table table-sm carvia-table mb-0">
                             <thead>
                                 <tr>

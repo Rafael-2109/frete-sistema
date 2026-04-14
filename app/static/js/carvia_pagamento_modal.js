@@ -68,6 +68,10 @@
         el('pcSemLinhas').classList.add('d-none');
         el('pcDataPagamento').value = new Date().toISOString().slice(0, 10);
 
+        // Limpar contador de linhas pendentes
+        var contadorReset = el('pcTotalPendentes');
+        if (contadorReset) { contadorReset.textContent = ''; }
+
         // Reset bloco manual
         el('pcToggleManual').checked = false;
         el('pcBlocoManual').classList.add('d-none');
@@ -111,6 +115,14 @@
                 origemBadge = '<span class="badge bg-primary" style="font-size:0.6rem">OFX</span>';
             }
 
+            // Badge historico R17 — CNPJ ja conciliado antes com essa descricao
+            var historicoBadge = '';
+            if (ln.score_historico) {
+                historicoBadge = '<span class="badge bg-warning text-dark ms-1" style="font-size:0.55rem"'
+                    + ' title="CNPJ ja conciliado antes com esta descricao (boost R17)">'
+                    + '<i class="fas fa-history"></i></span>';
+            }
+
             var contaOrigemTxt = ln.conta_origem ? (' — ' + ln.conta_origem) : '';
             var descricao = (ln.razao_social || ln.descricao || '-') + contaOrigemTxt;
             var descricaoSafe = escapeHtml(descricao);
@@ -128,7 +140,7 @@
                     '<div class="text-truncate">' + descricaoSafe + '</div>' +
                     obsHtml +
                 '</td>' +
-                '<td>' + origemBadge + '</td>' +
+                '<td>' + origemBadge + historicoBadge + '</td>' +
                 '<td class="text-end">R$ ' + Math.abs(ln.valor).toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
                 '<td class="text-end">R$ ' + parseFloat(ln.saldo_a_conciliar).toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
                 '<td>' + scoreBadge + '</td>';
@@ -334,6 +346,22 @@
                 }
 
                 var linhas = data.linhas || [];
+                var total = data.total_pendentes || 0;
+
+                // Contador de linhas pendentes (total real vs exibidas)
+                var contador = el('pcTotalPendentes');
+                if (contador) {
+                    if (total > linhas.length) {
+                        contador.textContent = '(mostrando ' + linhas.length
+                            + ' de ' + total + ' pendentes — top matches no topo)';
+                    } else if (total > 0) {
+                        contador.textContent = '(' + total + ' pendente'
+                            + (total === 1 ? '' : 's') + ')';
+                    } else {
+                        contador.textContent = '';
+                    }
+                }
+
                 if (linhas.length === 0) {
                     el('pcSemLinhas').classList.remove('d-none');
                     return;
