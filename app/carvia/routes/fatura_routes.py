@@ -1603,7 +1603,7 @@ def register_fatura_routes(bp):
             # foi auto-criado via processar_cte_subcontrato sem confirmacao manual)
             sub.fatura_transportadora_id = None
             sub.status = 'CONFIRMADO'
-            sub.requer_aprovacao = False
+            # Phase C: sub.requer_aprovacao removido — flag agora e frete.requer_aprovacao
 
             # Hook: cancelar movimentacoes CC ativas + rejeitar aprovacoes pendentes
             # (a diferenca considerado-pago nao se aplica mais sem fatura vinculada)

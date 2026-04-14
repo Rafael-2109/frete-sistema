@@ -27,11 +27,11 @@ def inject_carvia_aprovacoes_pendentes():
     if not (current_user.is_authenticated and getattr(current_user, 'sistema_carvia', False)):
         return {'carvia_aprovacoes_pendentes': 0}
     try:
-        from app.carvia.services.documentos.aprovacao_subcontrato_service import (
-            AprovacaoSubcontratoService,
+        from app.carvia.services.documentos.aprovacao_frete_service import (
+            AprovacaoFreteService,
         )
         return {
-            'carvia_aprovacoes_pendentes': AprovacaoSubcontratoService().contar_pendentes()
+            'carvia_aprovacoes_pendentes': AprovacaoFreteService().contar_pendentes()
         }
     except Exception:
         return {'carvia_aprovacoes_pendentes': 0}
