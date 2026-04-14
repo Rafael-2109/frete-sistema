@@ -677,15 +677,6 @@ class CarviaSubcontrato(db.Model):
         foreign_keys=[frete_id],
         back_populates='subcontratos',
     )
-    # 1:N com aprovacoes (historico de tratativas)
-    aprovacoes = db.relationship(
-        'CarviaAprovacaoSubcontrato',
-        backref='subcontrato',
-        foreign_keys='CarviaAprovacaoSubcontrato.subcontrato_id',
-        order_by='CarviaAprovacaoSubcontrato.solicitado_em.desc()',
-        lazy='dynamic',
-    )
-
     @staticmethod
     def gerar_numero_sub():
         """Gera proximo numero sequencial Sub-###."""

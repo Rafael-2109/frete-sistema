@@ -156,6 +156,14 @@ class CarviaFrete(db.Model):
         foreign_keys='CarviaCteComplementar.frete_id',
         lazy='dynamic',
     )
+    # 1:N com aprovacoes (historico de tratativas — paridade Nacom)
+    aprovacoes = db.relationship(
+        'CarviaAprovacaoFrete',
+        backref='frete',
+        foreign_keys='CarviaAprovacaoFrete.frete_id',
+        order_by='CarviaAprovacaoFrete.solicitado_em.desc()',
+        lazy='dynamic',
+    )
 
     __table_args__ = (
         # Partial unique index: dedup apenas para fretes COM embarque.
