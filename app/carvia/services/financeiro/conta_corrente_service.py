@@ -83,34 +83,37 @@ class ContaCorrenteService:
     # =================================================================
     @staticmethod
     def lancar_movimentacao(
-        sub_id: int,
+        frete_id: int,
         descricao: str,
         usuario: str,
         fatura_transportadora_id: Optional[int] = None,
         observacoes: Optional[str] = None,
     ) -> Dict:
-        """Cria uma movimentacao na CC com base na diferenca atual do sub.
+        """Cria uma movimentacao na CC com base na diferenca do frete.
 
         Calcula tipo (DEBITO/CREDITO) pelo sinal de
         `valor_pago - valor_considerado`. NAO commita — chamador deve commitar.
+
+        Args:
+            frete_id: ID do CarviaFrete (paridade Nacom Frete.id)
         """
         from app.carvia.models import (
             CarviaContaCorrenteTransportadora,
-            CarviaSubcontrato,
+            CarviaFrete,
         )
 
-        sub = db.session.get(CarviaSubcontrato, sub_id)
-        if not sub:
-            return {'sucesso': False, 'erro': 'Subcontrato nao encontrado'}
+        frete = db.session.get(CarviaFrete, frete_id)
+        if not frete:
+            return {'sucesso': False, 'erro': 'Frete nao encontrado'}
 
-        if sub.valor_pago is None or sub.valor_considerado is None:
+        if frete.valor_pago is None or frete.valor_considerado is None:
             return {
                 'sucesso': False,
-                'erro': 'Sub precisa ter valor_pago e valor_considerado para gerar CC',
+                'erro': 'Frete precisa ter valor_pago e valor_considerado para gerar CC',
             }
 
-        valor_pago = Decimal(str(sub.valor_pago))
-        valor_considerado = Decimal(str(sub.valor_considerado))
+        valor_pago = Decimal(str(frete.valor_pago))
+        valor_considerado = Decimal(str(frete.valor_considerado))
         diff_assinada = valor_pago - valor_considerado
         diff_abs = abs(diff_assinada)
 
@@ -133,10 +136,11 @@ class ContaCorrenteService:
 
         try:
             mov = CarviaContaCorrenteTransportadora(
-                transportadora_id=sub.transportadora_id,
-                subcontrato_id=sub.id,
+                transportadora_id=frete.transportadora_id,
+                frete_id=frete.id,
+                subcontrato_id=None,  # deprecated — fonte e frete_id
                 fatura_transportadora_id=(
-                    fatura_transportadora_id or sub.fatura_transportadora_id
+                    fatura_transportadora_id or frete.fatura_transportadora_id
                 ),
                 tipo_movimentacao=tipo,
                 valor_diferenca=diff_abs,
@@ -149,10 +153,10 @@ class ContaCorrenteService:
                 criado_por=usuario,
             )
             db.session.add(mov)
-            db.session.flush()  # popula mov.id
+            db.session.flush()
 
             logger.info(
-                f'CC mov criada | sub={sub_id} | tipo={tipo} | '
+                f'CC mov criada | frete={frete_id} | tipo={tipo} | '
                 f'valor={diff_abs} | mov_id={mov.id}'
             )
             return {
@@ -163,7 +167,7 @@ class ContaCorrenteService:
             }
 
         except Exception as e:
-            logger.exception(f'Erro ao criar mov CC para sub {sub_id}: {e}')
+            logger.exception(f'Erro ao criar mov CC para frete {frete_id}: {e}')
             return {'sucesso': False, 'erro': str(e)}
 
     # =================================================================
