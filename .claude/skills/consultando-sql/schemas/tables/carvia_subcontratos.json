@@ -80,46 +80,6 @@
       "default": "PENDENTE"
     },
     {
-      "name": "valor_considerado",
-      "type": "numeric(15,2)"
-    },
-    {
-      "name": "status_conferencia",
-      "type": "varchar(20)",
-      "nullable": false,
-      "default": "PENDENTE"
-    },
-    {
-      "name": "conferido_por",
-      "type": "varchar(100)"
-    },
-    {
-      "name": "conferido_em",
-      "type": "timestamp"
-    },
-    {
-      "name": "detalhes_conferencia",
-      "type": "json"
-    },
-    {
-      "name": "valor_pago",
-      "type": "numeric(15,2)"
-    },
-    {
-      "name": "valor_pago_em",
-      "type": "timestamp"
-    },
-    {
-      "name": "valor_pago_por",
-      "type": "varchar(100)"
-    },
-    {
-      "name": "requer_aprovacao",
-      "type": "boolean",
-      "nullable": false,
-      "default": false
-    },
-    {
       "name": "observacoes",
       "type": "text"
     },
@@ -177,16 +137,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_subcontratos_operacao_id",
+      "name": "ix_carvia_subcontratos_transportadora_id",
       "columns": [
-        "operacao_id"
+        "transportadora_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_subcontratos_transportadora_id",
+      "name": "ix_carvia_subcontratos_operacao_id",
       "columns": [
-        "transportadora_id"
+        "operacao_id"
       ],
       "unique": false
     },

@@ -74,14 +74,6 @@
   ],
   "indices": [
     {
-      "name": "idx_tabela_rede_produto",
-      "columns": [
-        "rede",
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_tabela_rede_precos_rede",
       "columns": [
         "rede"
@@ -100,6 +92,14 @@
       "columns": [
         "rede",
         "regiao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_tabela_rede_produto",
+      "columns": [
+        "rede",
+        "cod_produto"
       ],
       "unique": false
     },

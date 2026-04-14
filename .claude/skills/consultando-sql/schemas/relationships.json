@@ -87,9 +87,9 @@
       "to_column": "id"
     },
     {
-      "from_table": "carvia_aprovacoes_subcontrato",
-      "from_column": "subcontrato_id",
-      "to_table": "carvia_subcontratos",
+      "from_table": "carvia_aprovacoes_frete",
+      "from_column": "frete_id",
+      "to_table": "carvia_fretes",
       "to_column": "id"
     },
     {
@@ -130,20 +130,14 @@
     },
     {
       "from_table": "carvia_conta_corrente_transportadoras",
-      "from_column": "subcontrato_id",
-      "to_table": "carvia_subcontratos",
+      "from_column": "frete_id",
+      "to_table": "carvia_fretes",
       "to_column": "id"
     },
     {
       "from_table": "carvia_conta_corrente_transportadoras",
       "from_column": "fatura_transportadora_id",
       "to_table": "carvia_faturas_transportadora",
-      "to_column": "id"
-    },
-    {
-      "from_table": "carvia_conta_corrente_transportadoras",
-      "from_column": "compensacao_subcontrato_id",
-      "to_table": "carvia_subcontratos",
       "to_column": "id"
     },
     {
@@ -228,6 +222,12 @@
       "from_table": "carvia_custos_entrega",
       "from_column": "cte_complementar_id",
       "to_table": "carvia_cte_complementares",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_custos_entrega",
+      "from_column": "transportadora_id",
+      "to_table": "transportadoras",
       "to_column": "id"
     },
     {

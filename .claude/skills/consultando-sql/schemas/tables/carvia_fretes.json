@@ -196,6 +196,30 @@
       "default": "PENDENTE"
     },
     {
+      "name": "status_conferencia",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "conferido_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "conferido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "detalhes_conferencia",
+      "type": "json"
+    },
+    {
+      "name": "requer_aprovacao",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"
@@ -258,16 +282,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_fretes_status",
+      "name": "ix_carvia_fretes_cnpj_destino",
       "columns": [
-        "status"
+        "cnpj_destino"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_fretes_cnpj_destino",
+      "name": "ix_carvia_fretes_status",
       "columns": [
-        "cnpj_destino"
+        "status"
       ],
       "unique": false
     },
@@ -282,6 +306,13 @@
       "name": "ix_carvia_fretes_subcontrato_id",
       "columns": [
         "subcontrato_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_fretes_status_conferencia",
+      "columns": [
+        "status_conferencia"
       ],
       "unique": false
     },

@@ -87,16 +87,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_comissao_fechamento_ctes_fechamento_id",
+      "name": "ix_carvia_comissao_fechamento_ctes_operacao_id",
       "columns": [
-        "fechamento_id"
+        "operacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_comissao_fechamento_ctes_operacao_id",
+      "name": "ix_carvia_comissao_fechamento_ctes_fechamento_id",
       "columns": [
-        "operacao_id"
+        "fechamento_id"
       ],
       "unique": false
     }

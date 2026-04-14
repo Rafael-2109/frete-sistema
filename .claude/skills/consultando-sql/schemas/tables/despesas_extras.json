@@ -158,9 +158,9 @@
   ],
   "indices": [
     {
-      "name": "ix_despesas_extras_odoo_dfe_id",
+      "name": "ix_despesas_extras_chave_cte",
       "columns": [
-        "odoo_dfe_id"
+        "chave_cte"
       ],
       "unique": false
     },
@@ -172,16 +172,9 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_chave_cte",
+      "name": "ix_despesas_extras_odoo_dfe_id",
       "columns": [
-        "chave_cte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_despesas_extras_despesa_cte_id",
-      "columns": [
-        "despesa_cte_id"
+        "odoo_dfe_id"
       ],
       "unique": false
     },
@@ -189,6 +182,13 @@
       "name": "ix_despesas_extras_nfd_id",
       "columns": [
         "nfd_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_despesa_cte_id",
+      "columns": [
+        "despesa_cte_id"
       ],
       "unique": false
     },

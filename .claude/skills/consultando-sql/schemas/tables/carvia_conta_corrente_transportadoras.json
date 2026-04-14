@@ -14,10 +14,9 @@
       "nullable": false
     },
     {
-      "name": "subcontrato_id",
+      "name": "frete_id",
       "type": "integer",
-      "description": "FK → carvia_subcontratos.id",
-      "nullable": false
+      "description": "FK → carvia_fretes.id"
     },
     {
       "name": "fatura_transportadora_id",
@@ -70,11 +69,6 @@
       "type": "varchar(100)"
     },
     {
-      "name": "compensacao_subcontrato_id",
-      "type": "integer",
-      "description": "FK → carvia_subcontratos.id"
-    },
-    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
@@ -92,26 +86,15 @@
       "references": "transportadoras.id"
     },
     {
-      "column": "subcontrato_id",
-      "references": "carvia_subcontratos.id"
+      "column": "frete_id",
+      "references": "carvia_fretes.id"
     },
     {
       "column": "fatura_transportadora_id",
       "references": "carvia_faturas_transportadora.id"
-    },
-    {
-      "column": "compensacao_subcontrato_id",
-      "references": "carvia_subcontratos.id"
     }
   ],
   "indices": [
-    {
-      "name": "ix_carvia_conta_corrente_transportadoras_subcontrato_id",
-      "columns": [
-        "subcontrato_id"
-      ],
-      "unique": false
-    },
     {
       "name": "ix_carvia_conta_corrente_transportadoras_transportadora_id",
       "columns": [
@@ -127,16 +110,23 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
+      "name": "ix_carvia_conta_corrente_transportadoras_status",
       "columns": [
-        "criado_em"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_status",
+      "name": "ix_carvia_conta_corrente_transportadoras_frete_id",
       "columns": [
-        "status"
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
+      "columns": [
+        "criado_em"
       ],
       "unique": false
     }

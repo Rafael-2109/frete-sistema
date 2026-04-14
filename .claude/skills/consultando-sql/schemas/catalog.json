@@ -250,10 +250,10 @@
       ]
     },
     {
-      "name": "carvia_aprovacoes_subcontrato",
-      "description": "Tabela carvia_aprovacoes_subcontrato",
+      "name": "carvia_aprovacoes_frete",
+      "description": "Tabela carvia_aprovacoes_frete",
       "key_fields": [
-        "subcontrato_id",
+        "frete_id",
         "status",
         "solicitado_por"
       ]
@@ -335,7 +335,7 @@
       "description": "Tabela carvia_conta_corrente_transportadoras",
       "key_fields": [
         "transportadora_id",
-        "subcontrato_id",
+        "frete_id",
         "fatura_transportadora_id"
       ]
     },
@@ -865,8 +865,8 @@
       "description": "Monitoramento de entregas com status e ocorrencias. Atraso: status_finalizacao IS NULL AND data_entrega_prevista < CURRENT_DATE. Em transito: data_embarque IS NOT NULL AND status_finalizacao IS NULL AND nf_cd=False. Lead time: data_hora_entrega_realizada - data_embarque. Taxa sucesso: COUNT(entregue=True)/COUNT(*). Campos: numero_nf, cnpj_cliente, transportadora, uf, municipio, valor_nf, separacao_lote_id.",
       "key_fields": [
         "numero_nf",
-        "cliente",
-        "transportadora"
+        "origem",
+        "cliente"
       ]
     },
     {

@@ -190,30 +190,9 @@
   ],
   "indices": [
     {
-      "name": "idx_pedido_chave_acesso",
-      "columns": [
-        "nf_chave_acesso"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_status_odoo",
-      "columns": [
-        "status_odoo"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pedido_compras_num_requisicao",
       "columns": [
         "num_requisicao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pedido_dfe",
-      "columns": [
-        "dfe_id"
       ],
       "unique": false
     },
@@ -254,9 +233,9 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_nf_chave_acesso",
+      "name": "idx_pedido_dfe",
       "columns": [
-        "nf_chave_acesso"
+        "dfe_id"
       ],
       "unique": false
     },
@@ -275,9 +254,30 @@
       "unique": false
     },
     {
+      "name": "idx_pedido_chave_acesso",
+      "columns": [
+        "nf_chave_acesso"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pedido_compras_company_id",
       "columns": [
         "company_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_nf_chave_acesso",
+      "columns": [
+        "nf_chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_status_odoo",
+      "columns": [
+        "status_odoo"
       ],
       "unique": false
     }

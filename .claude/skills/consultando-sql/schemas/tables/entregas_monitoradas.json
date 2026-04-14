@@ -13,6 +13,12 @@
       "nullable": false
     },
     {
+      "name": "origem",
+      "type": "varchar(10)",
+      "nullable": false,
+      "default": "NACOM"
+    },
+    {
       "name": "cliente",
       "type": "varchar(255)",
       "nullable": false
@@ -154,20 +160,6 @@
   ],
   "indices": [
     {
-      "name": "idx_em_entregue",
-      "columns": [
-        "entregue"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_transportadora",
-      "columns": [
-        "transportadora"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_em_reagendar",
       "columns": [
         "reagendar"
@@ -175,16 +167,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_embarque",
+      "name": "ix_entregas_monitoradas_origem",
       "columns": [
-        "data_embarque"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
-      "columns": [
-        "separacao_lote_id"
+        "origem"
       ],
       "unique": false
     },
@@ -196,6 +181,27 @@
       "unique": false
     },
     {
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_embarque",
+      "columns": [
+        "data_embarque"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_entregas_monitoradas_numero_nf",
       "columns": [
         "numero_nf"
@@ -203,9 +209,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_faturamento",
+      "name": "idx_em_entregue",
       "columns": [
-        "data_faturamento"
+        "entregue"
       ],
       "unique": false
     },
@@ -217,9 +223,16 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "name": "idx_em_data_faturamento",
       "columns": [
-        "cnpj_cliente"
+        "data_faturamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_transportadora",
+      "columns": [
+        "transportadora"
       ],
       "unique": false
     },
