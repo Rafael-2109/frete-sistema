@@ -190,9 +190,30 @@
   ],
   "indices": [
     {
+      "name": "idx_pedido_chave_acesso",
+      "columns": [
+        "nf_chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_status_odoo",
+      "columns": [
+        "status_odoo"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_pedido_compras_num_requisicao",
       "columns": [
         "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pedido_dfe",
+      "columns": [
+        "dfe_id"
       ],
       "unique": false
     },
@@ -211,9 +232,10 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_status_odoo",
+      "name": "idx_pedido_empresa",
       "columns": [
-        "status_odoo"
+        "company_id",
+        "num_pedido"
       ],
       "unique": false
     },
@@ -232,9 +254,9 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_cod_produto",
+      "name": "ix_pedido_compras_nf_chave_acesso",
       "columns": [
-        "cod_produto"
+        "nf_chave_acesso"
       ],
       "unique": false
     },
@@ -246,24 +268,9 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_nf_chave_acesso",
+      "name": "ix_pedido_compras_cod_produto",
       "columns": [
-        "nf_chave_acesso"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pedido_empresa",
-      "columns": [
-        "company_id",
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pedido_dfe",
-      "columns": [
-        "dfe_id"
+        "cod_produto"
       ],
       "unique": false
     },
@@ -271,13 +278,6 @@
       "name": "ix_pedido_compras_company_id",
       "columns": [
         "company_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pedido_chave_acesso",
-      "columns": [
-        "nf_chave_acesso"
       ],
       "unique": false
     }

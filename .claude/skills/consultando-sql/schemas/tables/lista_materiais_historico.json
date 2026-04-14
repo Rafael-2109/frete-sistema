@@ -78,23 +78,9 @@
   ],
   "indices": [
     {
-      "name": "ix_lista_materiais_historico_operacao",
-      "columns": [
-        "operacao"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_lista_materiais_historico_alterado_em",
       "columns": [
         "alterado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lista_materiais_historico_lista_materiais_id",
-      "columns": [
-        "lista_materiais_id"
       ],
       "unique": false
     },
@@ -114,6 +100,20 @@
       "unique": false
     },
     {
+      "name": "ix_lista_materiais_historico_alterado_por",
+      "columns": [
+        "alterado_por"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_operacao",
+      "columns": [
+        "operacao"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_historico_operacao_data",
       "columns": [
         "operacao",
@@ -122,9 +122,9 @@
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_alterado_por",
+      "name": "ix_lista_materiais_historico_lista_materiais_id",
       "columns": [
-        "alterado_por"
+        "lista_materiais_id"
       ],
       "unique": false
     },

@@ -362,38 +362,10 @@
   ],
   "indices": [
     {
-      "name": "ix_carteira_principal_odoo_write_date",
-      "columns": [
-        "odoo_write_date"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_num_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_carteira_status_data",
       "columns": [
         "status_pedido",
         "data_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_data_pedido",
-      "columns": [
-        "data_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_cnpj_cpf",
-      "columns": [
-        "cnpj_cpf"
       ],
       "unique": false
     },
@@ -405,10 +377,16 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_ativo_saldo",
+      "name": "ix_carteira_principal_data_pedido",
       "columns": [
-        "num_pedido",
-        "cod_produto"
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_vendedor",
+      "columns": [
+        "vendedor"
       ],
       "unique": false
     },
@@ -420,9 +398,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_vendedor",
+      "name": "ix_carteira_principal_cod_produto",
       "columns": [
-        "vendedor"
+        "cod_produto"
       ],
       "unique": false
     },
@@ -435,10 +413,9 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_cliente_vendedor",
+      "name": "ix_carteira_principal_num_pedido",
       "columns": [
-        "cnpj_cpf",
-        "vendedor"
+        "num_pedido"
       ],
       "unique": false
     },
@@ -450,9 +427,32 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_cod_produto",
+      "name": "idx_carteira_cliente_vendedor",
       "columns": [
+        "cnpj_cpf",
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_odoo_write_date",
+      "columns": [
+        "odoo_write_date"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_ativo_saldo",
+      "columns": [
+        "num_pedido",
         "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cnpj_cpf",
+      "columns": [
+        "cnpj_cpf"
       ],
       "unique": false
     }

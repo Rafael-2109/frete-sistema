@@ -15,7 +15,7 @@
     {
       "name": "operacao_id",
       "type": "integer",
-      "description": "FK → carvia_operacoes.id (nullable — fluxo COMPRA nao exige operacao de venda)"
+      "description": "FK → carvia_operacoes.id"
     },
     {
       "name": "cte_complementar_id",
@@ -56,17 +56,17 @@
     {
       "name": "tipo_documento",
       "type": "varchar(20)",
-      "description": "CTE, NFS, RECIBO, BOLETO, OUTROS, PENDENTE_DOCUMENTO (xerox DespesaExtra.tipo_documento)"
+      "default": "PENDENTE_DOCUMENTO"
     },
     {
       "name": "numero_documento",
       "type": "varchar(50)",
-      "description": "Sentinel 'PENDENTE_FATURA' enquanto nao vinculado a FT (xerox DespesaExtra.numero_documento)"
+      "default": "PENDENTE_FATURA"
     },
     {
       "name": "transportadora_id",
       "type": "integer",
-      "description": "FK → transportadoras.id — override opcional para transportadora do pagamento (xerox DespesaExtra.transportadora_id)"
+      "description": "FK → transportadoras.id"
     },
     {
       "name": "status",
@@ -139,6 +139,10 @@
       "references": "carvia_cte_complementares.id"
     },
     {
+      "column": "transportadora_id",
+      "references": "transportadoras.id"
+    },
+    {
       "column": "frete_id",
       "references": "carvia_fretes.id"
     },
@@ -149,52 +153,13 @@
     {
       "column": "fatura_transportadora_id",
       "references": "carvia_faturas_transportadora.id"
-    },
-    {
-      "column": "transportadora_id",
-      "references": "transportadoras.id"
     }
   ],
   "indices": [
     {
-      "name": "ix_carvia_custos_entrega_cte_complementar_id",
-      "columns": [
-        "cte_complementar_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_fatura_transportadora_id",
-      "columns": [
-        "fatura_transportadora_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_operacao_id",
-      "columns": [
-        "operacao_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_custos_entrega_status",
       "columns": [
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_numero_custo",
-      "columns": [
-        "numero_custo"
       ],
       "unique": false
     },
@@ -213,9 +178,44 @@
       "unique": false
     },
     {
+      "name": "ix_carvia_custos_entrega_fatura_transportadora_id",
+      "columns": [
+        "fatura_transportadora_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_custos_entrega_transportadora_id",
       "columns": [
         "transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_cte_complementar_id",
+      "columns": [
+        "cte_complementar_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_operacao_id",
+      "columns": [
+        "operacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_numero_custo",
+      "columns": [
+        "numero_custo"
       ],
       "unique": false
     }

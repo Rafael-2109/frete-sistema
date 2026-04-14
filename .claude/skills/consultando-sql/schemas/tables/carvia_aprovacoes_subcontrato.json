@@ -81,16 +81,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_aprovacoes_subcontrato_status",
+      "name": "ix_carvia_aprovacoes_subcontrato_subcontrato_id",
       "columns": [
-        "status"
+        "subcontrato_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_aprovacoes_subcontrato_subcontrato_id",
+      "name": "ix_carvia_aprovacoes_subcontrato_status",
       "columns": [
-        "subcontrato_id"
+        "status"
       ],
       "unique": false
     }
