@@ -219,20 +219,21 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
             # Snapshot de campos necessarios (emissao pode detachar)
             ctrc_numero_local = emissao.ctrc_numero
             filial_local = emissao.filial_ssw or 'CAR'
-            operacao_id_local = emissao.operacao_id
-            ctrc_completo_ssw = None
+            operacao_id_pos_import = None
             try:
                 # Libera conexao antes do Playwright (opcao 101)
                 _liberar_conexao_antes_playwright()
 
+                # Consulta 101 pelo CTRC capturado no 004 — apenas para
+                # baixar XML/DACTE. A CORRECAO do ctrc_numero e feita
+                # depois por `verificar_ctrc_operacao_job` que pesquisa
+                # por --cte (nCT do XML) — fonte autoritativa do SSW.
                 resultado_consulta = _executar_consulta_101(
                     ctrc_numero_local, filial=filial_local
                 )
                 if resultado_consulta.get('sucesso'):
                     resultado_cte['xml'] = resultado_consulta.get('xml')
                     resultado_cte['dacte'] = resultado_consulta.get('dacte')
-                    dados_101 = resultado_consulta.get('dados', {})
-                    ctrc_completo_ssw = dados_101.get('ctrc_completo')
 
                 # Re-conecta e re-busca emissao antes de importar
                 from app.utils.database_helpers import ensure_connection
@@ -241,21 +242,11 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
 
                 SswEmissaoService.importar_resultado_cte(emissao, resultado_cte)
 
-                # Corrigir ctrc_numero na operacao com o CTRC real do SSW
-                if emissao.operacao_id and ctrc_completo_ssw:
-                    from app.carvia.models import CarviaOperacao
-                    operacao = db.session.get(
-                        CarviaOperacao, emissao.operacao_id
-                    )
-                    if operacao:
-                        ctrc_formatado = _formatar_ctrc_ssw(ctrc_completo_ssw)
-                        operacao.ctrc_numero = ctrc_formatado
-                        logger.info(
-                            "CTRC corrigido: op=%s, ctrc=%s (SSW: %s)",
-                            operacao.id, ctrc_formatado, ctrc_completo_ssw
-                        )
-
                 db.session.commit()
+
+                # Capturar operacao_id APOS commit para enfileirar job
+                # de verificacao CTRC (pos fase C).
+                operacao_id_pos_import = emissao.operacao_id
             except Exception as e:
                 logger.warning("Falha ao importar XML (nao-bloqueante): %s", e)
                 # Garantir sessao limpa mesmo se commit acima falhar
@@ -340,6 +331,35 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
                 status='SUCESSO',
                 etapa=None,
             )
+
+            # Enfileirar verificacao CTRC via SSW (opcao 101 --cte).
+            # Pesquisa o nCT real do XML e atualiza `operacao.ctrc_numero`
+            # + `emissao.ctrc_numero` com o CTRC real do SSW. Nao-bloqueante:
+            # falha aqui nao afeta o SUCESSO do CTe (admin edit cobre).
+            op_id_verificar = operacao_id_pos_import or emissao.operacao_id
+            if op_id_verificar:
+                try:
+                    from app.portal.workers import enqueue_job
+                    from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                        verificar_ctrc_operacao_job,
+                    )
+                    enqueue_job(
+                        verificar_ctrc_operacao_job,
+                        op_id_verificar,
+                        queue_name='default',
+                        timeout='10m',
+                    )
+                    logger.info(
+                        "Emissao %s: job verificar_ctrc_operacao "
+                        "enfileirado (op=%s)",
+                        emissao_id, op_id_verificar,
+                    )
+                except Exception as e_job:
+                    logger.warning(
+                        "Falha ao enfileirar verificar_ctrc_operacao_job "
+                        "para op %s: %s",
+                        op_id_verificar, e_job,
+                    )
 
             logger.info(
                 "Emissao %s concluida: CTe=%s, Fatura=%s",
@@ -464,19 +484,6 @@ def _executar_script_fatura(args):
 
     from gerar_fatura_ssw_437 import gerar_fatura
     return asyncio.run(gerar_fatura(args))
-
-
-def _formatar_ctrc_ssw(ctrc_completo):
-    """Converte formato SSW para formato sistema.
-
-    Ex: 'CAR000113-9' → 'CAR-113-9'
-        'CAR000110-4' → 'CAR-110-4'
-    """
-    import re
-    m = re.match(r'^([A-Z]{2,4})0*(\d+)-(\d)$', ctrc_completo)
-    if m:
-        return f'{m.group(1)}-{m.group(2)}-{m.group(3)}'
-    return ctrc_completo
 
 
 def _sanitize_resultado(resultado):

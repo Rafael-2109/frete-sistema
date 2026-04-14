@@ -146,6 +146,73 @@ def register_admin_routes(bp):
         return redirect(url_for('carvia.detalhe_operacao', operacao_id=id))
 
     # ------------------------------------------------------------------ #
+    #  Edicao Manual de CTRC (admin-only, escape hatch)
+    # ------------------------------------------------------------------ #
+
+    @bp.route(
+        '/admin/<tipo>/<int:id>/editar-ctrc',
+        methods=['POST'],
+    )
+    @login_required
+    @require_admin
+    def admin_editar_ctrc(tipo, id):
+        """Edicao manual de `ctrc_numero` (AJAX/JSON).
+
+        Tipos aceitos: 'operacao' | 'cte-complementar'.
+
+        Body JSON: {novo_ctrc: str, motivo: str}
+        Tambem aceita form-urlencoded (fallback).
+        """
+        from app.carvia.services.admin.admin_service import AdminService
+
+        if tipo not in ('operacao', 'cte-complementar'):
+            return jsonify({
+                'sucesso': False,
+                'mensagem': (
+                    f'Tipo invalido: {tipo}. '
+                    "Aceitos: 'operacao', 'cte-complementar'."
+                ),
+            }), 400
+
+        # Aceita JSON ou form-urlencoded
+        payload = request.get_json(silent=True) or request.form
+        novo_ctrc = (payload.get('novo_ctrc') or '').strip()
+        motivo = (payload.get('motivo') or '').strip()
+
+        if not motivo or len(motivo) < 10:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Motivo obrigatorio (minimo 10 caracteres).',
+            }), 400
+
+        service = AdminService()
+        try:
+            resultado = service.editar_ctrc_manual(
+                entidade_tipo=tipo,
+                entidade_id=id,
+                novo_ctrc=novo_ctrc,
+                motivo=motivo,
+                executado_por=current_user.email,
+            )
+        except Exception as e:
+            logger.exception(
+                "admin_editar_ctrc: erro ao editar CTRC %s id=%s",
+                tipo, id,
+            )
+            try:
+                from app import db as _db
+                _db.session.rollback()
+            except Exception:
+                pass
+            return jsonify({
+                'sucesso': False,
+                'mensagem': f'Erro interno: {e}',
+            }), 500
+
+        status_code = 200 if resultado.get('sucesso') else 400
+        return jsonify(resultado), status_code
+
+    # ------------------------------------------------------------------ #
     #  Conversao de Tipo (Fase 5)
     # ------------------------------------------------------------------ #
 

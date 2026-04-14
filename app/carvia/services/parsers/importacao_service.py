@@ -1358,6 +1358,46 @@ class ImportacaoService:
                         e_imp,
                     )
 
+            # Enfileirar verificacao de CTRC para CarviaOperacao via opcao
+            # 101 --cte (nCT do XML). Corrige `ctrc_numero` deduzido
+            # CAR-{nCT}-{cDV} do parser para o CTRC real do SSW.
+            # Nao-bloqueante: erro aqui nao afeta a importacao.
+            if operacoes_criadas:
+                try:
+                    from app.portal.workers import enqueue_job
+                    from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                        verificar_ctrc_operacao_job,
+                    )
+                    for _op in operacoes_criadas:
+                        _op_id = getattr(_op, 'id', None)
+                        if not _op_id:
+                            continue
+                        try:
+                            enqueue_job(
+                                verificar_ctrc_operacao_job,
+                                _op_id,
+                                queue_name='default',
+                                timeout='10m',
+                            )
+                            logger.info(
+                                "CarviaOperacao id=%s: job "
+                                "verificar_ctrc_operacao enfileirado "
+                                "(pos-commit importacao)",
+                                _op_id,
+                            )
+                        except Exception as e_job:
+                            logger.warning(
+                                "Falha ao enfileirar "
+                                "verificar_ctrc_operacao_job para op "
+                                "id=%s: %s",
+                                _op_id, e_job,
+                            )
+                except ImportError as e_imp:
+                    logger.warning(
+                        "Falha ao importar verificar_ctrc_operacao_job: %s",
+                        e_imp,
+                    )
+
             return {
                 'sucesso': True,
                 'nfs_criadas': len(nfs_criadas),

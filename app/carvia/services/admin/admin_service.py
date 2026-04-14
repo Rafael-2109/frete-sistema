@@ -14,6 +14,7 @@ Cada metodo segue o padrao:
 """
 
 import logging
+import re
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -21,6 +22,18 @@ from app import db
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
+
+# Regex de formato CTRC aceito na edicao manual.
+# Ex: CAR-113-9 | MTZ-12-0 | SP-4-1
+# Prefixo 2-4 letras (filial), numero e digito verificador (0-9).
+_CTRC_REGEX = re.compile(r'^[A-Z]{2,4}-\d+-\d$')
+
+# Mapeamento entidade_tipo URL → (model name, campo label) para
+# edicao de ctrc_numero. Nao generico — apenas tipos com ctrc_numero.
+_CTRC_ENTIDADES = {
+    'operacao': ('CarviaOperacao', 'CTe CarVia'),
+    'cte-complementar': ('CarviaCteComplementar', 'CTe Complementar'),
+}
 
 
 class AdminService:
@@ -650,6 +663,139 @@ class AdminService:
     #  (ex: operacao_routes.editar_cte_valor) que respeitam os metodos
     #  pode_* do model.
     # ------------------------------------------------------------------ #
+
+    # ------------------------------------------------------------------ #
+    #  Edicao Manual de CTRC (admin-only, escape hatch)
+    # ------------------------------------------------------------------ #
+
+    def editar_ctrc_manual(self, entidade_tipo, entidade_id, novo_ctrc,
+                           motivo, executado_por):
+        """Edita manualmente `ctrc_numero` de uma entidade com auditoria.
+
+        Escape hatch admin-only para corrigir CTRC quando o worker de
+        verificacao SSW nao consegue resolver (SSW fora, regex 101 falha,
+        ou CTe cancelado no SSW). NAO toca em `cte_chave_acesso`
+        (UNIQUE — risco alto) nem outros campos.
+
+        Args:
+            entidade_tipo: 'operacao' | 'cte-complementar'
+            entidade_id: ID da entidade
+            novo_ctrc: novo valor no formato `CAR-113-9` (regex validado)
+            motivo: justificativa obrigatoria (armazenada na auditoria)
+            executado_por: email/identificador do admin
+
+        Returns:
+            dict {sucesso: bool, mensagem, ctrc_anterior, ctrc_novo,
+                  auditoria_id}
+        """
+        # Validacao de entrada
+        if not novo_ctrc or not isinstance(novo_ctrc, str):
+            return {
+                'sucesso': False,
+                'mensagem': 'CTRC novo e obrigatorio.',
+            }
+        novo_ctrc = novo_ctrc.strip().upper()
+        if not _CTRC_REGEX.match(novo_ctrc):
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    'Formato CTRC invalido. Use o padrao '
+                    "'FILIAL-NUMERO-DV' (ex: CAR-113-9)."
+                ),
+            }
+
+        if not motivo or not motivo.strip():
+            return {
+                'sucesso': False,
+                'mensagem': 'Motivo da edicao e obrigatorio.',
+            }
+        motivo = motivo.strip()
+
+        cfg = _CTRC_ENTIDADES.get(entidade_tipo)
+        if not cfg:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'Tipo invalido: {entidade_tipo}. '
+                    f'Aceitos: {list(_CTRC_ENTIDADES.keys())}.'
+                ),
+            }
+
+        import app.carvia.models as models
+        model_class = getattr(models, cfg[0], None)
+        if not model_class:
+            return {
+                'sucesso': False,
+                'mensagem': f'Model {cfg[0]} nao encontrado.',
+            }
+
+        entity = db.session.get(model_class, entidade_id)
+        if not entity:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'{cfg[1]} id={entidade_id} nao encontrado.'
+                ),
+            }
+
+        ctrc_anterior = getattr(entity, 'ctrc_numero', None)
+
+        if ctrc_anterior == novo_ctrc:
+            return {
+                'sucesso': False,
+                'mensagem': (
+                    f'CTRC novo ({novo_ctrc}) igual ao atual '
+                    f'({ctrc_anterior}). Nada a alterar.'
+                ),
+            }
+
+        # Snapshot antes da mudanca (auditoria)
+        snapshot = AdminService.serializar_entidade(entity)
+        detalhes = {
+            'campo': 'ctrc_numero',
+            'valor_anterior': ctrc_anterior,
+            'valor_novo': novo_ctrc,
+            'entidade_tipo': entidade_tipo,
+            'entidade_label': cfg[1],
+        }
+
+        # Aplicar mudanca
+        entity.ctrc_numero = novo_ctrc
+        if hasattr(entity, 'atualizado_em'):
+            entity.atualizado_em = agora_utc_naive()
+
+        # Registrar auditoria (acao FIELD_EDIT, mesma do padrao R14)
+        audit = AdminService.registrar_auditoria(
+            acao='FIELD_EDIT',
+            entidade_tipo=entidade_tipo,
+            entidade_id=entidade_id,
+            dados_snapshot=snapshot,
+            motivo=motivo,
+            executado_por=executado_por,
+            dados_relacionados=None,
+            detalhes=detalhes,
+        )
+
+        db.session.commit()
+
+        logger.info(
+            "CTRC editado manualmente: %s id=%s, %s -> %s (por=%s, "
+            "motivo=%s, audit=%s)",
+            cfg[1], entidade_id, ctrc_anterior, novo_ctrc,
+            executado_por, motivo[:80], audit.id,
+        )
+
+        return {
+            'sucesso': True,
+            'mensagem': (
+                f'CTRC de {cfg[1]} id={entidade_id} atualizado: '
+                f'{ctrc_anterior} -> {novo_ctrc}.'
+            ),
+            'ctrc_anterior': ctrc_anterior,
+            'ctrc_novo': novo_ctrc,
+            'auditoria_id': audit.id,
+        }
+
 
     # ------------------------------------------------------------------ #
     #  Re-link NF ↔ CTe (Fase 6.1)

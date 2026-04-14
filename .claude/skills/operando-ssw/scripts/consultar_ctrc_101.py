@@ -2,28 +2,34 @@
 """
 consultar_ctrc_101.py — Consulta CTRC no SSW (opcao 101) + baixa DACTE/XML.
 
-Pesquisa por CTRC (--ctrc) ou por numero da NF (--nf). Obrigatorio um dos dois.
+Pesquisa por CTRC (--ctrc), numero da NF (--nf) ou numero do CTe (--cte).
+Obrigatorio um dos tres.
 
 Fluxo:
   1. Login SSW
   2. Trocar filial (default: CAR)
   3. Abrir opcao 101
-  4. Preencher campo de pesquisa (t_nro_ctrc ou t_nro_nf)
-  5. Pesquisar via ajaxEnvia('P1', 1)
+  4. Preencher campo de pesquisa (t_nro_ctrc, t_nro_nf ou t_nro_cte)
+  5. Pesquisar via ajaxEnvia('P1', 1) / ('P2', 1) / ('P3', 1)
   6. Capturar dados do CTRC (CT-e, status, remetente, destinatario, etc.)
   7. [--baixar-xml] Baixar XML do CT-e (ZIP → extrai XML)
   8. [--baixar-dacte] Baixar DACTE em PDF
 
-Campos mapeados (2026-03-27):
+Campos mapeados (2026-04-14):
   t_nro_ctrc          -> Numero do CTRC sem DV (ex: 94)
   t_nro_nf            -> Numero da NF (ex: 35714, maxlength=10)
-  ajaxEnvia('P1', 1)  -> Pesquisar
+  t_nro_cte           -> Numero do CTe/nCT SEFAZ (ex: 161, maxlength=10)
+  ajaxEnvia('P1', 1)  -> Pesquisar por CTRC
+  ajaxEnvia('P2', 1)  -> Pesquisar por NF
+  ajaxEnvia('P3', 1)  -> Pesquisar por NR (nao usado aqui)
+  ajaxEnvia('P4', 1)  -> Pesquisar por CT-e/NFS-e (t_nro_cte)
   ajaxEnvia('XML', 0) -> Baixar XML (retorna form com abrir() para ZIP)
   link_imp_dacte      -> Baixar DACTE (retorna form com abrir() para PDF)
 
 Uso:
     python consultar_ctrc_101.py --ctrc 94 --baixar-xml --baixar-dacte
     python consultar_ctrc_101.py --nf 35714 --baixar-xml --baixar-dacte
+    python consultar_ctrc_101.py --cte 161 --baixar-xml --baixar-dacte
     python consultar_ctrc_101.py --ctrc 94 --filial CAR --output-dir /tmp/cte
 
 Retorno: JSON {"sucesso": bool, "ctrc": "...", "cte": "...", "dados": {...}, ...}
@@ -64,12 +70,18 @@ async def consultar_ctrc(args):
 
     ctrc = str(args.ctrc).strip() if args.ctrc else None
     nf = str(args.nf).strip() if args.nf else None
+    cte = str(args.cte).strip() if getattr(args, "cte", None) else None
 
-    if not ctrc and not nf:
-        return gerar_saida(False, erro="Informe --ctrc ou --nf")
+    if not ctrc and not nf and not cte:
+        return gerar_saida(False, erro="Informe --ctrc, --nf ou --cte")
 
     # Label para screenshots e mensagens
-    search_label = f"ctrc_{ctrc}" if ctrc else f"nf_{nf}"
+    if ctrc:
+        search_label = f"ctrc_{ctrc}"
+    elif nf:
+        search_label = f"nf_{nf}"
+    else:
+        search_label = f"cte_{cte}"
     filial = (args.filial or "CAR").upper().strip()
     output_dir = args.output_dir or "/tmp/ssw_operacoes/consulta_101"
     os.makedirs(output_dir, exist_ok=True)
@@ -120,8 +132,10 @@ async def consultar_ctrc(args):
             # ── 5. Preencher campo de pesquisa ──
             if ctrc:
                 field_id, field_value = "t_nro_ctrc", ctrc
-            else:
+            elif nf:
                 field_id, field_value = "t_nro_nf", nf
+            else:
+                field_id, field_value = "t_nro_cte", cte
 
             fill_result = await popup.evaluate(f"""() => {{
                 const el = document.getElementById('{field_id}');
@@ -136,9 +150,13 @@ async def consultar_ctrc(args):
 
             # ── 6. Pesquisar ──
             # Mapa de acoes por campo (descoberto via inspect tela 101)
+            # Nao e sequencial: ordem DOM 1-13 mapeia para
+            # P1, P2, P3, P8, P4, P9, P10, P5, P6, VLR_FRT, PROT, P, BAR.
+            # Portanto CTRC=P1, NF=P2, NR=P3, CT-e=P4 (nao P3!).
             field_actions = {
                 "t_nro_ctrc": "ajaxEnvia('P1', 1)",
                 "t_nro_nf": "ajaxEnvia('P2', 1)",
+                "t_nro_cte": "ajaxEnvia('P4', 1)",
             }
             action = field_actions.get(field_id, "ajaxEnvia('P1', 1)")
 
@@ -151,7 +169,7 @@ async def consultar_ctrc(args):
                 await popup.evaluate(action)
                 await asyncio.sleep(8)
             else:
-                # NF/outros: chamar sem override (override interfere na validacao)
+                # NF/CTe: chamar sem override (override interfere na validacao)
                 # Aplicar override APOS o ajaxEnvia disparar (antes da response)
                 await popup.evaluate(action)
                 await asyncio.sleep(0.5)
@@ -324,7 +342,7 @@ async def consultar_ctrc(args):
                         var el = document.getElementById('{field_id}');
                         if (el) el.value = '{field_value}';
                     }}""")
-                    await popup.evaluate("ajaxEnvia('P1', 1)")
+                    await popup.evaluate(action)
                     await asyncio.sleep(8)
                     try:
                         await popup.evaluate(CREATE_NEW_DOC_OVERRIDE)
@@ -394,24 +412,43 @@ async def consultar_ctrc(args):
                                 dados["dacte_erro"] = str(e)
 
             # ── Resultado ──
-            # Extrair CTRC do resultado (util quando pesquisa por NF)
-            ctrc_encontrado = ctrc or dados.get("ctrc_completo", "")
+            # Extrair CTRC do resultado (util quando pesquisa por NF ou CTe).
+            # Ao pesquisar por CTRC, `ctrc_completo` e o retorno autoritativo
+            # do SSW — preferir sobre o parametro passado.
+            ctrc_completo_ssw = dados.get("ctrc_completo", "") or ""
+            if nf or cte:
+                ctrc_encontrado = ctrc_completo_ssw
+            else:
+                ctrc_encontrado = ctrc_completo_ssw or ctrc or ""
             cte_numero = xml_cte or (
                 dados.get("cte", "").split()[-1] if dados.get("cte") else None
             )
 
+            if ctrc:
+                entrada_label = f"CTRC {ctrc}"
+            elif nf:
+                entrada_label = f"NF {nf}"
+            else:
+                entrada_label = f"CT-e {cte}"
+
             return gerar_saida(
                 True,
                 ctrc=ctrc_encontrado,
+                ctrc_parametro=ctrc,
                 nf_pesquisada=nf,
+                cte_pesquisado=cte,
                 cte=cte_numero,
                 chave_cte=xml_chave,
                 dados=dados,
                 xml=xml_path,
                 dacte=dacte_path,
                 screenshot=screenshot_path,
-                mensagem=f"{'NF ' + nf if nf else 'CTRC ' + (ctrc or '')} consultado. "
-                + (f"CTRC: {ctrc_encontrado}. " if nf and ctrc_encontrado else "")
+                mensagem=f"{entrada_label} consultado. "
+                + (
+                    f"CTRC: {ctrc_encontrado}. "
+                    if (nf or cte) and ctrc_encontrado
+                    else ""
+                )
                 + (f"XML: {xml_path}. " if xml_path else "")
                 + (f"DACTE: {dacte_path}." if dacte_path else ""),
             )
@@ -439,6 +476,10 @@ def main():
     search.add_argument(
         "--nf",
         help="Numero da NF (ex: 35714, max 10 digitos)",
+    )
+    search.add_argument(
+        "--cte",
+        help="Numero do CTe/nCT SEFAZ (ex: 161, max 10 digitos)",
     )
     parser.add_argument(
         "--filial",

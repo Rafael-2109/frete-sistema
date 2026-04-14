@@ -12,7 +12,18 @@
                 <span class="badge carvia-badge-{{ cte_comp.status|lower }}">{{ cte_comp.status }}</span>
             </h2>
             {% if cte_comp.ctrc_numero %}
-            <p class="text-muted mb-0 small"><strong>CTRC SSW</strong> {{ cte_comp.ctrc_numero }}</p>
+            <p class="text-muted mb-0 small">
+                <strong>CTRC SSW</strong> <span id="carvia-ctecomp-ctrc-label">{{ cte_comp.ctrc_numero }}</span>
+                {% if current_user.perfil == 'administrador' %}
+                <button type="button"
+                        class="btn btn-link btn-sm p-0 ms-1 text-warning"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalEditarCtrcCteComp"
+                        title="Editar CTRC (admin)">
+                    <i class="fas fa-edit"></i>
+                </button>
+                {% endif %}
+            </p>
             {% endif %}
             <p class="text-muted mb-0">
                 Criado em {{ cte_comp.criado_em|formatar_data_hora_brasil if cte_comp.criado_em else '-' }}
@@ -165,4 +176,109 @@
 </div>
 
 {# modal_admin_excluir removido (Sprint 0) #}
+
+{% if current_user.perfil == 'administrador' %}
+<!-- Modal: Editar CTRC manualmente (admin-only) -->
+<div class="modal fade" id="modalEditarCtrcCteComp" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-edit text-warning"></i> Editar CTRC (admin)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEditarCtrcCteComp">
+                <div class="modal-body">
+                    <div class="alert alert-warning small">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Edite apenas quando o worker de verificacao SSW nao conseguir
+                        resolver. Toda alteracao gera registro em <strong>CarviaAdminAudit</strong>.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">CTRC atual</label>
+                        <div class="fw-bold">{{ cte_comp.ctrc_numero or '(vazio)' }}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="inputNovoCtrcCteComp" class="form-label">Novo CTRC</label>
+                        <input type="text"
+                               class="form-control font-monospace"
+                               id="inputNovoCtrcCteComp"
+                               name="novo_ctrc"
+                               value="{{ cte_comp.ctrc_numero or '' }}"
+                               placeholder="CAR-2037-1"
+                               pattern="^[A-Z]{2,4}-\d+-\d$"
+                               required>
+                        <div class="form-text small">Formato: <code>FILIAL-NUMERO-DV</code> (ex: CAR-2037-1)</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="motivoCtrcCteComp" class="form-label">Motivo <span class="text-danger">*</span></label>
+                        <textarea class="form-control"
+                                  id="motivoCtrcCteComp"
+                                  name="motivo"
+                                  rows="3"
+                                  minlength="10"
+                                  placeholder="Explique por que o CTRC precisa ser editado manualmente (min 10 caracteres)"
+                                  required></textarea>
+                    </div>
+                    <div id="feedbackCtrcCteComp"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-save"></i> Salvar CTRC
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var form = document.getElementById('formEditarCtrcCteComp');
+    if (!form) return;
+    form.addEventListener('submit', function(evt) {
+        evt.preventDefault();
+        var feedback = document.getElementById('feedbackCtrcCteComp');
+        feedback.innerHTML = '';
+        var btn = form.querySelector('button[type=submit]');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+
+        var csrfMeta = document.querySelector('meta[name=csrf-token]');
+        var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+        var novoCtrc = document.getElementById('inputNovoCtrcCteComp').value.trim().toUpperCase();
+        var motivo = document.getElementById('motivoCtrcCteComp').value.trim();
+
+        fetch('{{ url_for("carvia.admin_editar_ctrc", tipo="cte-complementar", id=cte_comp.id) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({novo_ctrc: novoCtrc, motivo: motivo})
+        })
+        .then(function(r) { return r.json().then(function(d) { return {status: r.status, data: d}; }); })
+        .then(function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Salvar CTRC';
+            if (resp.status === 200 && resp.data.sucesso) {
+                feedback.innerHTML = '<div class="alert alert-success small mt-2">' +
+                    (resp.data.mensagem || 'CTRC atualizado.') + ' Recarregando...</div>';
+                setTimeout(function() { window.location.reload(); }, 900);
+            } else {
+                feedback.innerHTML = '<div class="alert alert-danger small mt-2">' +
+                    (resp.data.mensagem || 'Erro ao salvar.') + '</div>';
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Salvar CTRC';
+            feedback.innerHTML = '<div class="alert alert-danger small mt-2">Erro de rede: ' + err + '</div>';
+        });
+    });
+})();
+</script>
+{% endif %}
+
 {% endblock %}
