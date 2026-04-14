@@ -132,11 +132,12 @@
                             <th class="text-end">Valor Pago</th>
                             <th class="text-center">Status</th>
                             <th>Cliente/Obs</th>
+                            <th class="text-center">Acao</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for doc in documentos_status %}
-                        <tr>
+                        <tr id="doc-row-frete-{{ doc.frete_id or doc.ce_id }}">
                             <td>
                                 {% if doc.tipo == 'CTe' %}
                                 <span class="badge bg-primary">CTe</span>
@@ -152,11 +153,11 @@
                             </td>
                             <td class="text-end">{{ (doc.valor_cotado)|moeda_carteira }}</td>
                             <td class="text-end">{{ (doc.valor_cte)|moeda_carteira }}</td>
-                            <td class="text-end">{{ (doc.valor_considerado)|moeda_carteira }}</td>
+                            <td class="text-end" id="frete-considerado-{{ doc.frete_id }}">{{ (doc.valor_considerado)|moeda_carteira }}</td>
                             <td class="text-end">
-                                <strong>{{ (doc.valor_pago)|moeda_carteira }}</strong>
+                                <strong id="frete-pago-{{ doc.frete_id }}">{{ (doc.valor_pago)|moeda_carteira }}</strong>
                             </td>
-                            <td class="text-center">
+                            <td class="text-center" id="frete-status-{{ doc.frete_id }}">
                                 {% if doc.status == 'LANÇADO' %}
                                 <span class="badge bg-success">LANCADO</span>
                                 {% elif doc.status == 'APROVADO' %}
@@ -180,6 +181,23 @@
                                 <small class="text-muted">Custo de Entrega</small>
                                 {% endif %}
                             </td>
+                            <td class="text-center">
+                                {% if doc.tipo == 'CTe' and doc.frete_id and fatura.status_conferencia != 'CONFERIDO' %}
+                                    {% if doc.status in ('PENDENTE', 'EM_TRATATIVA') %}
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                            onclick="abrirConferenciaFrete({{ doc.frete_id }})"
+                                            title="Conferir este frete — aprovar ou enviar para tratativa">
+                                        <i class="fas fa-gavel"></i> Conferir
+                                    </button>
+                                    {% elif doc.status == 'APROVADO' %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                            onclick="abrirConferenciaFrete({{ doc.frete_id }})"
+                                            title="Reconferir (fatura ainda nao conferida)">
+                                        <i class="fas fa-redo"></i> Reconferir
+                                    </button>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -190,7 +208,7 @@
                             <th class="text-end">{{ (analise_valores.valor_total_cte)|moeda_carteira }}</th>
                             <th class="text-end">{{ (analise_valores.valor_total_considerado)|moeda_carteira }}</th>
                             <th class="text-end"><strong>{{ (analise_valores.valor_total_pago)|moeda_carteira }}</strong></th>
-                            <th colspan="2"></th>
+                            <th colspan="3"></th>
                         </tr>
                     </tfoot>
                 </table>
@@ -353,6 +371,118 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Modal Conferencia Frete (Phase C) -->
+<div class="modal fade" id="modalConferenciaFrete" tabindex="-1" aria-labelledby="modalConferenciaFreteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalConferenciaFreteLabel">
+          <i class="fas fa-gavel"></i> Conferir Frete
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="conf-frete-loading" class="text-center py-4">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-2 mb-0">Calculando opcoes de frete...</p>
+        </div>
+        <div id="conf-frete-erro" class="alert alert-danger d-none"></div>
+        <div id="conf-frete-conteudo" class="d-none">
+          <!-- Dados atuais do frete -->
+          <div class="card mb-3">
+            <div class="card-header bg-light"><strong>Valores Atuais</strong></div>
+            <div class="card-body">
+              <div class="row text-center">
+                <div class="col">
+                  <small class="text-muted d-block">Cotado</small>
+                  <strong id="conf-frete-cotado">-</strong>
+                </div>
+                <div class="col">
+                  <small class="text-muted d-block">CTe</small>
+                  <strong id="conf-frete-cte">-</strong>
+                </div>
+                <div class="col">
+                  <small class="text-muted d-block">Considerado atual</small>
+                  <strong id="conf-frete-considerado-atual">-</strong>
+                </div>
+                <div class="col">
+                  <small class="text-muted d-block">Pago atual</small>
+                  <strong id="conf-frete-pago-atual">-</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Opcoes calculadas (tabelas de frete) -->
+          <div class="card mb-3">
+            <div class="card-header bg-light">
+              <strong>Opcoes de Tabelas de Frete</strong>
+              <small class="text-muted ms-2">clique em uma opcao para usar como Considerado</small>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-secondary">
+                  <tr>
+                    <th>Tabela</th>
+                    <th>Transportadora</th>
+                    <th class="text-end">Valor Calculado</th>
+                    <th class="text-center">Acao</th>
+                  </tr>
+                </thead>
+                <tbody id="conf-frete-opcoes"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Formulario de decisao -->
+          <form id="form-conf-frete">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Valor Considerado <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text">R$</span>
+                  <input type="text" class="form-control" id="conf-frete-valor-considerado" required
+                         placeholder="0,00" inputmode="decimal">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Valor Pago (opcional)</label>
+                <div class="input-group">
+                  <span class="input-group-text">R$</span>
+                  <input type="text" class="form-control" id="conf-frete-valor-pago"
+                         placeholder="0,00" inputmode="decimal">
+                </div>
+              </div>
+            </div>
+            <div class="mb-3 mt-3">
+              <label class="form-label">Observacoes</label>
+              <textarea class="form-control" id="conf-frete-observacoes" rows="2"
+                        placeholder="Observacoes sobre a conferencia (opcional)"></textarea>
+            </div>
+            <div class="alert alert-info small mb-0">
+              <i class="fas fa-info-circle"></i>
+              <strong>APROVAR</strong>: dentro da tolerancia (R$ 5,00) = aprovado direto.
+              Acima da tolerancia = abre tratativa para aprovacao gerencial.
+              <br>
+              <strong>MARCAR DIVERGENTE</strong>: sempre envia para tratativa em
+              <a href="{{ url_for('carvia.listar_aprovacoes_subcontrato') }}" target="_blank">Aprovacoes</a>.
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-warning" id="btn-conf-frete-divergente" disabled>
+          <i class="fas fa-exclamation-triangle"></i> Marcar DIVERGENTE
+        </button>
+        <button type="button" class="btn btn-success" id="btn-conf-frete-aprovar" disabled>
+          <i class="fas fa-check"></i> APROVAR
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -365,5 +495,169 @@
             e.target.value = e.target.value.replace(/[^\d,]/g, '');
         });
     })();
+
+    // ------------------------------------------------------------------
+    // Modal Conferencia Frete (Phase C 2026-04-14)
+    // ------------------------------------------------------------------
+    let confFreteId = null;
+
+    function formatarMoeda(v) {
+        if (v === null || v === undefined) return '-';
+        return 'R$ ' + Number(v).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
+    function parseValorBR(s) {
+        if (!s) return null;
+        return parseFloat(String(s).replace(/\./g, '').replace(',', '.'));
+    }
+
+    function abrirConferenciaFrete(freteId) {
+        confFreteId = freteId;
+        document.getElementById('conf-frete-loading').classList.remove('d-none');
+        document.getElementById('conf-frete-erro').classList.add('d-none');
+        document.getElementById('conf-frete-conteudo').classList.add('d-none');
+        document.getElementById('btn-conf-frete-aprovar').disabled = true;
+        document.getElementById('btn-conf-frete-divergente').disabled = true;
+
+        const modal = new bootstrap.Modal(document.getElementById('modalConferenciaFrete'));
+        modal.show();
+
+        fetch(`/carvia/api/conferencia-frete/${freteId}/calcular`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('conf-frete-loading').classList.add('d-none');
+            if (!data.sucesso) {
+                document.getElementById('conf-frete-erro').textContent = data.erro || 'Erro ao calcular';
+                document.getElementById('conf-frete-erro').classList.remove('d-none');
+                return;
+            }
+            document.getElementById('conf-frete-conteudo').classList.remove('d-none');
+
+            // Popula valores atuais
+            const info = data.frete_info || {};
+            document.getElementById('conf-frete-cotado').textContent = formatarMoeda(info.valor_cotado);
+            document.getElementById('conf-frete-cte').textContent = formatarMoeda(info.valor_cte);
+            document.getElementById('conf-frete-considerado-atual').textContent = formatarMoeda(info.valor_considerado);
+            document.getElementById('conf-frete-pago-atual').textContent = formatarMoeda(info.valor_pago);
+
+            // Pre-popula form com valores atuais (ou CTe como default para considerado)
+            const considInicial = info.valor_considerado !== null && info.valor_considerado !== undefined
+                ? info.valor_considerado : info.valor_cte;
+            const pagoInicial = info.valor_pago !== null && info.valor_pago !== undefined
+                ? info.valor_pago : info.valor_cte;
+            document.getElementById('conf-frete-valor-considerado').value =
+                considInicial ? Number(considInicial).toFixed(2).replace('.', ',') : '';
+            document.getElementById('conf-frete-valor-pago').value =
+                pagoInicial ? Number(pagoInicial).toFixed(2).replace('.', ',') : '';
+
+            // Popula opcoes de tabela de frete
+            const tbody = document.getElementById('conf-frete-opcoes');
+            tbody.innerHTML = '';
+            (data.opcoes || []).forEach(op => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><small>${op.tabela_nome || '-'}</small></td>
+                    <td><small>${op.transportadora_nome || '-'}</small></td>
+                    <td class="text-end"><strong>${formatarMoeda(op.valor_frete)}</strong></td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                onclick="document.getElementById('conf-frete-valor-considerado').value='${Number(op.valor_frete).toFixed(2).replace('.', ',')}'">
+                            Usar
+                        </button>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+            if ((data.opcoes || []).length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted"><small>Nenhuma opcao de tabela encontrada</small></td></tr>';
+            }
+
+            document.getElementById('btn-conf-frete-aprovar').disabled = false;
+            document.getElementById('btn-conf-frete-divergente').disabled = false;
+        })
+        .catch(err => {
+            document.getElementById('conf-frete-loading').classList.add('d-none');
+            document.getElementById('conf-frete-erro').textContent = 'Erro de conexao: ' + err.message;
+            document.getElementById('conf-frete-erro').classList.remove('d-none');
+        });
+    }
+
+    function registrarConferenciaFrete(statusDecisao) {
+        if (!confFreteId) return;
+        const valorConsiderado = parseValorBR(document.getElementById('conf-frete-valor-considerado').value);
+        const valorPagoRaw = document.getElementById('conf-frete-valor-pago').value;
+        const valorPago = valorPagoRaw ? parseValorBR(valorPagoRaw) : null;
+        const observacoes = document.getElementById('conf-frete-observacoes').value.trim();
+
+        if (valorConsiderado === null || isNaN(valorConsiderado)) {
+            alert('Valor considerado e obrigatorio.');
+            return;
+        }
+
+        document.getElementById('btn-conf-frete-aprovar').disabled = true;
+        document.getElementById('btn-conf-frete-divergente').disabled = true;
+
+        fetch(`/carvia/api/conferencia-frete/${confFreteId}/registrar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+            body: JSON.stringify({
+                valor_considerado: valorConsiderado,
+                valor_pago: valorPago,
+                status: statusDecisao,
+                observacoes: observacoes || null,
+            }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.sucesso) {
+                alert('Erro: ' + (data.erro || 'Falha ao registrar conferencia'));
+                document.getElementById('btn-conf-frete-aprovar').disabled = false;
+                document.getElementById('btn-conf-frete-divergente').disabled = false;
+                return;
+            }
+            let msg = 'Conferencia registrada. ';
+            if (data.tratativa_aberta) {
+                msg += `Tratativa #${data.aprovacao_id} aberta — resolver em Aprovacoes.`;
+            } else {
+                msg += `Status final: ${data.status_conferencia}.`;
+            }
+            alert(msg);
+            // Recarrega a pagina para refletir novo estado (gates, totais, etc)
+            window.location.reload();
+        })
+        .catch(err => {
+            alert('Erro de conexao: ' + err.message);
+            document.getElementById('btn-conf-frete-aprovar').disabled = false;
+            document.getElementById('btn-conf-frete-divergente').disabled = false;
+        });
+    }
+
+    document.getElementById('btn-conf-frete-aprovar')?.addEventListener('click', function() {
+        if (!confirm('Confirmar APROVACAO deste frete? Se acima da tolerancia (R$ 5,00), sera aberta tratativa automatica.')) return;
+        registrarConferenciaFrete('APROVADO');
+    });
+    document.getElementById('btn-conf-frete-divergente')?.addEventListener('click', function() {
+        if (!confirm('Marcar como DIVERGENTE? Isso abrira tratativa de aprovacao.')) return;
+        registrarConferenciaFrete('DIVERGENTE');
+    });
+
+    document.getElementById('modalConferenciaFrete')?.addEventListener('hidden.bs.modal', function() {
+        confFreteId = null;
+        document.getElementById('conf-frete-valor-considerado').value = '';
+        document.getElementById('conf-frete-valor-pago').value = '';
+        document.getElementById('conf-frete-observacoes').value = '';
+    });
+
+    // Formatacao BR dos inputs monetarios do modal
+    ['conf-frete-valor-considerado', 'conf-frete-valor-pago'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', function(e) {
+                e.target.value = e.target.value.replace(/[^\d,]/g, '');
+            });
+        }
+    });
 </script>
 {% endblock %}

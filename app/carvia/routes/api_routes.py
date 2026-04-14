@@ -865,6 +865,107 @@ def register_api_routes(bp):
             logger.error(f"Erro ao calcular conferencia sub {sub_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
+    # ------------------------------------------------------------------
+    # Phase C (2026-04-14): endpoints frete-based (paralelo aos sub-based).
+    # Nova tela /conferir itera fretes diretamente — estas rotas sao a
+    # interface canonica daqui para frente.
+    # ------------------------------------------------------------------
+    @bp.route('/api/conferencia-frete/<int:frete_id>/calcular', methods=['POST'])
+    @login_required
+    def api_calcular_conferencia_frete(frete_id):
+        """Calcula opcoes de frete para conferencia de um CarviaFrete."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.models import CarviaFrete
+            from app.carvia.services.documentos.conferencia_service import ConferenciaService
+
+            frete = db.session.get(CarviaFrete, frete_id)
+            if not frete:
+                return jsonify({'sucesso': False, 'erro': 'Frete nao encontrado'}), 404
+
+            # Reusa o motor de calculo existente (sub-based) usando o primary sub
+            primary_sub = frete.subcontratos.first()
+            if not primary_sub:
+                return jsonify({
+                    'sucesso': False,
+                    'erro': 'Frete sem subcontrato — nao e possivel calcular opcoes',
+                }), 400
+
+            service = ConferenciaService()
+            resultado = service.calcular_opcoes_conferencia(primary_sub.id)
+            # Enriquecer com valores atuais do frete (fonte canonica pos-Phase C)
+            if resultado.get('sucesso'):
+                resultado['frete_info'] = {
+                    'id': frete.id,
+                    'status_conferencia': frete.status_conferencia,
+                    'valor_cotado': float(frete.valor_cotado or 0),
+                    'valor_cte': float(frete.valor_cte or 0),
+                    'valor_considerado': (
+                        float(frete.valor_considerado)
+                        if frete.valor_considerado is not None else None
+                    ),
+                    'valor_pago': (
+                        float(frete.valor_pago)
+                        if frete.valor_pago is not None else None
+                    ),
+                    'requer_aprovacao': frete.requer_aprovacao,
+                }
+            return jsonify(resultado)
+        except Exception as e:
+            logger.error(f"Erro ao calcular conferencia frete {frete_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route('/api/conferencia-frete/<int:frete_id>/registrar', methods=['POST'])
+    @login_required
+    def api_registrar_conferencia_frete(frete_id):
+        """Registra conferencia de um CarviaFrete (APROVADO/DIVERGENTE).
+
+        Opera direto em Frete (paridade Nacom). Se DIVERGENTE acima da
+        tolerancia, ConferenciaService abre tratativa via AprovacaoFreteService.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json() or {}
+        valor_considerado = data.get('valor_considerado')
+        valor_pago = data.get('valor_pago')
+        status = (data.get('status') or '').strip().upper()
+        observacoes = (data.get('observacoes') or '').strip() or None
+
+        if valor_considerado is None:
+            return jsonify({'erro': 'valor_considerado e obrigatorio'}), 400
+        try:
+            valor_considerado = float(valor_considerado)
+        except (ValueError, TypeError):
+            return jsonify({'erro': 'valor_considerado deve ser numerico'}), 400
+
+        if valor_pago is not None:
+            try:
+                valor_pago = float(valor_pago)
+            except (ValueError, TypeError):
+                return jsonify({'erro': 'valor_pago deve ser numerico'}), 400
+
+        if status not in ('APROVADO', 'DIVERGENTE'):
+            return jsonify({'erro': 'status deve ser APROVADO ou DIVERGENTE'}), 400
+
+        try:
+            from app.carvia.services.documentos.conferencia_service import ConferenciaService
+            service = ConferenciaService()
+            resultado = service.registrar_conferencia(
+                frete_id=frete_id,
+                valor_considerado=valor_considerado,
+                status=status,
+                usuario=current_user.email,
+                observacoes=observacoes,
+                valor_pago=valor_pago,
+            )
+            return jsonify(resultado)
+        except Exception as e:
+            logger.error(f"Erro ao registrar conferencia frete {frete_id}: {e}")
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
     @bp.route('/api/conferencia-subcontrato/<int:sub_id>/registrar', methods=['POST'])
     @login_required
     def api_registrar_conferencia(sub_id):
