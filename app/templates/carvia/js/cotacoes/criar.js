@@ -275,8 +275,11 @@ function iniciarSetupNF() {
             }
 
             // Se step 1 presente, popular select de clientes existentes
+            // (listar TODOS ativos — NAO filtrar pelo nome do emitente da NF,
+            // porque o "cliente" CarVia e um apelido comercial proprio, nao
+            // a razao social do remetente)
             if (_wizSteps.includes(1)) {
-                popularWizClientesExistentes(nf.nome_emitente || '');
+                popularWizClientesExistentes('');
                 // Reset: mostrar campo de nome (modo "criar novo")
                 _wizClienteExistenteId = null;
                 document.getElementById('wizBlocoNomeNovo').classList.remove('d-none');
@@ -865,8 +868,11 @@ document.getElementById('formCotacao').addEventListener('submit', async function
             }
 
             // Se step 1 presente, popular select de clientes existentes
+            // (listar TODOS ativos — NAO filtrar pelo nome do emitente da NF,
+            // porque o "cliente" CarVia e um apelido comercial proprio, nao
+            // a razao social do remetente). Mesma regra do fluxo iniciarSetupNF.
             if (_wizSteps.includes(1)) {
-                popularWizClientesExistentes(nf.nome_emitente || '');
+                popularWizClientesExistentes('');
                 _wizClienteExistenteId = null;
                 document.getElementById('wizBlocoNomeNovo').classList.remove('d-none');
                 document.getElementById('wizClienteExistente').value = '';
