@@ -44,27 +44,29 @@ class ContaCorrenteService:
     # Logica de quando lancar (espelha Frete.deve_lancar_conta_corrente)
     # =================================================================
     @staticmethod
-    def deve_lancar(sub) -> tuple:
-        """Avalia se sub deve lancar movimentacao na CC automaticamente.
+    def deve_lancar(frete) -> tuple:
+        """Avalia se frete deve lancar movimentacao na CC automaticamente.
 
-        Regras (espelham Nacom `Frete.deve_lancar_conta_corrente`,
-        models.py:168-189):
-        - Sem `valor_pago` ou sem `valor_considerado`: nao lanca (sem dados)
+        Regras (espelho Nacom `Frete.deve_lancar_conta_corrente`):
+        - Sem `valor_pago` ou sem `valor_considerado`: nao lanca
         - diff dentro da tolerancia (R$ 5,00): lanca direto
         - diff > tolerancia: requer aprovacao explicita (lancar_diferenca=True)
+
+        Args:
+            frete: CarviaFrete (unidade de analise — paridade Nacom)
 
         Returns:
             (bool, str) — pode lancar, motivo
         """
-        from app.carvia.services.documentos.aprovacao_subcontrato_service import (
+        from app.carvia.services.documentos.aprovacao_frete_service import (
             TOLERANCIA_APROVACAO,
         )
 
-        if sub.valor_pago is None or sub.valor_considerado is None:
+        if frete.valor_pago is None or frete.valor_considerado is None:
             return False, 'valor_pago ou valor_considerado nao informado'
 
-        valor_pago = Decimal(str(sub.valor_pago))
-        valor_considerado = Decimal(str(sub.valor_considerado))
+        valor_pago = Decimal(str(frete.valor_pago))
+        valor_considerado = Decimal(str(frete.valor_considerado))
         diff = abs(valor_pago - valor_considerado)
 
         if diff == 0:
