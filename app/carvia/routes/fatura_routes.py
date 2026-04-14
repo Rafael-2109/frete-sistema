@@ -1607,22 +1607,24 @@ def register_fatura_routes(bp):
 
             # Hook: cancelar movimentacoes CC ativas + rejeitar aprovacoes pendentes
             # (a diferenca considerado-pago nao se aplica mais sem fatura vinculada)
+            # Phase C: CC e aprovacoes operam em Frete — resolvemos frete via sub.frete_id
             from app.carvia.services.financeiro.conta_corrente_service import (
                 ContaCorrenteService,
             )
-            from app.carvia.services.documentos.aprovacao_subcontrato_service import (
-                AprovacaoSubcontratoService,
+            from app.carvia.services.documentos.aprovacao_frete_service import (
+                AprovacaoFreteService,
             )
-            ContaCorrenteService.cancelar_movimentacoes(
-                sub_id=sub.id,
-                motivo=f'Desanexado da fatura #{fatura_id}',
-                usuario=current_user.email,
-            )
-            AprovacaoSubcontratoService().rejeitar_pendentes_de_sub(
-                sub_id=sub.id,
-                motivo=f'Desanexado da fatura #{fatura_id}',
-                usuario=current_user.email,
-            )
+            if sub.frete_id:
+                ContaCorrenteService.cancelar_movimentacoes(
+                    frete_id=sub.frete_id,
+                    motivo=f'Desanexado da fatura #{fatura_id}',
+                    usuario=current_user.email,
+                )
+                AprovacaoFreteService().rejeitar_pendentes_de_frete(
+                    frete_id=sub.frete_id,
+                    motivo=f'Desanexado da fatura #{fatura_id}',
+                    usuario=current_user.email,
+                )
             # Propagar para CarviaFrete via frete_id (novo) ou subcontrato_id (deprecated)
             if sub.frete_id:
                 frete_vinc = db.session.get(CarviaFrete, sub.frete_id)
@@ -1963,10 +1965,15 @@ def register_fatura_routes(bp):
             flash('Fatura nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_faturas_transportadora'))
 
-        # Subcontratos ativos (exclui CANCELADO) — consistente com ConferenciaService
-        subcontratos = CarviaSubcontrato.query.filter(
-            CarviaSubcontrato.fatura_transportadora_id == fatura_id,
-            CarviaSubcontrato.status != 'CANCELADO',
+        # Fretes ativos vinculados (exclui CANCELADO) — paridade Nacom
+        # `conferir_fatura` que itera Frete.query.filter(fatura_frete_id=X).
+        # CarviaFrete e "o eixo central" (ver documentos.py:587): tem os 4
+        # valores (cotado, cte, considerado, pago) preenchidos no form
+        # `/carvia/fretes/<id>/editar`. Iterar Frete garante que lemos os
+        # mesmos campos que o form escreve.
+        fretes = CarviaFrete.query.filter(
+            CarviaFrete.fatura_transportadora_id == fatura_id,
+            CarviaFrete.status != 'CANCELADO',
         ).all()
 
         # Custos de entrega ativos (padrao DespesaExtra.fatura_frete_id do Nacom)
@@ -1976,72 +1983,89 @@ def register_fatura_routes(bp):
             CarviaCustoEntrega.status != 'CANCELADO',
         ).all()
 
-        # Rateio de "Valor Conciliado" proporcional ao valor_considerado/valor
-        # de cada sub/CE. fatura.total_conciliado eh a fonte (mantida pelo
-        # CarviaConciliacaoService).
-        rateio_conc = ratear_conciliacao_fatura(
-            fatura, subcontratos, custos_entrega,
-        )
-        valor_total_conciliado = float(rateio_conc['total'])
-
         # Monta tabela unificada "Status dos Documentos" — paridade
-        # Nacom `conferir_fatura`. CarviaSubcontrato e o equivalente de
-        # Frete (Q6 do GATE: "campos de CTe viram property de Frete").
+        # Nacom `conferir_fatura` (fretes/routes.py:2083-2177).
         documentos_status = []
         valor_total_cotado = 0.0
         valor_total_cte = 0.0
         valor_total_considerado = 0.0
+        valor_total_pago = 0.0
 
-        # 1) Subcontratos (equivalente dos Fretes Nacom)
-        for sub in subcontratos:
-            # Status bloqueante: sub com status_conferencia DIVERGENTE fica em
-            # "EM_TRATATIVA" (paridade FRETE_STATUS_BLOQUEANTES do Nacom).
-            # CarVia registra tratativa via AprovacaoSubcontratoService (D4)
-            # quando diferenca excede tolerancia — enquanto pendente de
-            # decisao do gestor, o sub fica em requer_aprovacao=True.
-            # status_conferencia e a FONTE DE VERDADE da conferencia
-            # individual — status_conferencia=APROVADO e a UNICA forma
-            # valida de um sub passar o Gate 1 do POST. Nao usar
-            # sub.status=='CONFERIDO' como sinonimo de APROVADO (dual-axis
-            # mismatch que permitia UI dizer "APROVADO" enquanto o POST
-            # bloqueava silenciosamente).
-            if sub.status_conferencia == 'DIVERGENTE':
+        # 1) Fretes (equivalente ao loop de Frete Nacom)
+        for frete in fretes:
+            # Resolve subcontratos do frete para status_conferencia + cte_numero
+            # + cliente. Multi-leg: 1 Frete pode ter N subs (back_populates).
+            subs_do_frete = list(frete.subcontratos.all())
+            n_ctes = len(subs_do_frete)
+            primary_sub = subs_do_frete[0] if subs_do_frete else None
+
+            # Status bloqueante: se QUALQUER sub do frete esta em tratativa
+            # ou divergente, bloqueia o frete inteiro (paridade
+            # FRETE_STATUS_BLOQUEANTES do Nacom). status_conferencia e a
+            # FONTE DE VERDADE (ver comentario linha 2002-2007 original).
+            tem_divergente = any(
+                s.status_conferencia == 'DIVERGENTE' for s in subs_do_frete
+            )
+            tem_tratativa = any(
+                getattr(s, 'requer_aprovacao', False) for s in subs_do_frete
+            )
+            todos_sub_aprovados = (
+                len(subs_do_frete) > 0
+                and all(s.status_conferencia == 'APROVADO' for s in subs_do_frete)
+            )
+
+            if tem_divergente or tem_tratativa:
                 status_doc = 'EM_TRATATIVA'
-            elif getattr(sub, 'requer_aprovacao', False):
-                status_doc = 'EM_TRATATIVA'
-            elif sub.status_conferencia == 'APROVADO':
-                # Se tem CTe emitido, mostra como LANCADO (paridade Nacom:
-                # ciclo completo ja registrado no SSW).
-                if sub.cte_numero and sub.cte_valor:
+            elif todos_sub_aprovados:
+                # Paridade Nacom linha 2101: exige numero_cte + valor_cte +
+                # valor_pago para status_doc='LANÇADO'. Sem valor_pago, nao
+                # pode ser LANÇADO — fica APROVADO (nao passa Gate).
+                if frete.valor_cte and frete.valor_pago:
                     status_doc = 'LANÇADO'
                 else:
                     status_doc = 'APROVADO'
             else:
                 status_doc = 'PENDENTE'
 
-            cliente = (
-                sub.operacao.nome_cliente
-                if sub.operacao and sub.operacao.nome_cliente
-                else '-'
-            )
+            # Numero do CTe: primary sub ou fallback. Multi-leg: anota "(N CTes)".
+            if primary_sub and primary_sub.cte_numero:
+                numero_display = primary_sub.cte_numero
+            elif primary_sub:
+                numero_display = f'Sub #{primary_sub.id}'
+            else:
+                numero_display = f'Frete #{frete.id}'
+            if n_ctes > 1:
+                numero_display = f'{numero_display} ({n_ctes} CTes)'
+
+            # Cliente: primary sub → operacao → cliente, ou fallback para destino do frete
+            cliente = '-'
+            if primary_sub and primary_sub.operacao and primary_sub.operacao.nome_cliente:
+                cliente = primary_sub.operacao.nome_cliente
+            elif frete.nome_destino:
+                cliente = frete.nome_destino
+
             documentos_status.append({
                 'tipo': 'CTe',
-                'numero': sub.cte_numero or f'Sub #{sub.id}',
+                'numero': numero_display,
                 'descricao': '',
-                'valor_cotado': float(sub.valor_cotado or 0),
-                'valor_cte': float(sub.cte_valor or 0),
-                'valor_considerado': float(sub.valor_considerado or 0),
-                'valor_conciliado': float(rateio_conc['por_sub'].get(sub.id, 0)),
+                'valor_cotado': float(frete.valor_cotado or 0),
+                'valor_cte': float(frete.valor_cte or 0),
+                'valor_considerado': float(frete.valor_considerado or 0),
+                'valor_pago': float(frete.valor_pago or 0),
                 'status': status_doc,
                 'cliente': cliente,
-                'sub_id': sub.id,
+                'frete_id': frete.id,
+                'sub_id': primary_sub.id if primary_sub else None,
             })
 
-            valor_total_cotado += float(sub.valor_cotado or 0)
-            valor_total_cte += float(sub.cte_valor or 0)
-            valor_total_considerado += float(sub.valor_considerado or 0)
+            valor_total_cotado += float(frete.valor_cotado or 0)
+            valor_total_cte += float(frete.valor_cte or 0)
+            valor_total_considerado += float(frete.valor_considerado or 0)
+            valor_total_pago += float(frete.valor_pago or 0)
 
-        # 2) Custos de Entrega (equivalente das Despesas Extras Nacom)
+        # 2) Custos de Entrega (equivalente das Despesas Extras Nacom).
+        # Paridade Nacom linhas 2132-2177: CE entra nos totais cotado/cte/
+        # considerado/pago com mesmo valor (sem distincao — CE e um unico valor).
         for ce in custos_entrega:
             # CE vinculada a FT e sempre "LANÇADA" na conferencia
             # (espelha a regra Nacom: DespesaExtra com numero_documento +
@@ -2058,7 +2082,7 @@ def register_fatura_routes(bp):
                 'valor_cotado': float(ce.valor or 0),
                 'valor_cte': float(ce.valor or 0),
                 'valor_considerado': float(ce.valor or 0),
-                'valor_conciliado': float(rateio_conc['por_ce'].get(ce.id, 0)),
+                'valor_pago': float(ce.valor or 0),
                 'status': status_doc,
                 'cliente': 'Custo de Entrega',
                 'ce_id': ce.id,
@@ -2067,6 +2091,7 @@ def register_fatura_routes(bp):
             valor_total_cotado += float(ce.valor or 0)
             valor_total_cte += float(ce.valor or 0)
             valor_total_considerado += float(ce.valor or 0)
+            valor_total_pago += float(ce.valor or 0)
 
         # Flags de bloqueio para UI (paridade Nacom)
         tem_sub_em_tratativa = any(
@@ -2087,20 +2112,22 @@ def register_fatura_routes(bp):
             )
 
         # Gate 2: tolerancia de R$ 1,00 entre valor_total_fatura e considerado
+        # (criterio identico ao Nacom fretes/routes.py:2231).
         valor_fatura = float(fatura.valor_total or 0)
         diferenca_fatura_considerado = abs(valor_fatura - valor_total_considerado)
         fatura_dentro_tolerancia = diferenca_fatura_considerado <= 1.00
 
+        # Paridade Nacom fretes/routes.py:2243-2253
         analise_valores = {
             'valor_fatura': valor_fatura,
             'valor_cotado': valor_total_cotado,
             'valor_total_cte': valor_total_cte,
             'valor_total_considerado': valor_total_considerado,
-            'valor_total_conciliado': valor_total_conciliado,
+            'valor_total_pago': valor_total_pago,
             'diferenca_fatura_considerado': diferenca_fatura_considerado,
             'fatura_dentro_tolerancia': fatura_dentro_tolerancia,
-            'diferenca_considerado_conciliado': abs(
-                valor_total_considerado - valor_total_conciliado
+            'diferenca_considerado_pago': abs(
+                valor_total_considerado - valor_total_pago
             ),
         }
 
@@ -2111,7 +2138,6 @@ def register_fatura_routes(bp):
             fatura=fatura,
             documentos_status=documentos_status,
             analise_valores=analise_valores,
-            valor_total_conciliado=valor_total_conciliado,
             todos_aprovados=todos_aprovados,
             tem_sub_em_tratativa=tem_sub_em_tratativa,
             tem_sub_rejeitado=tem_sub_rejeitado,
@@ -2215,12 +2241,20 @@ def register_fatura_routes(bp):
                         )
                     )
             else:
-                # Se nao informado, usa soma dos valores_considerados dos subs + CEs.
-                # Substitui o fallback anterior (sum(s.valor_pago)) que ficava 0
-                # quando o W4 nao era preenchido — CTe nao eh a unidade paga.
+                # Se nao informado, usa soma dos valor_pago dos Fretes + CEs.
+                # Paridade Nacom fretes/routes.py:2327:
+                #   valor_final_float = sum(f.valor_pago or 0 for f in fretes)
+                #                       + sum(d.valor_despesa for d in despesas_extras)
+                # IMPORTANTE: iterar CarviaFrete (nao Sub) porque valor_pago e
+                # preenchido no form /carvia/fretes/<id>/editar. Sync frete→sub
+                # garante paridade, mas Frete e a fonte canonica.
                 from app.carvia.models import CarviaCustoEntrega
-                soma_subs = sum(
-                    float(s.valor_considerado or 0) for s in subs_ativos
+                fretes_ativos = CarviaFrete.query.filter(
+                    CarviaFrete.fatura_transportadora_id == fatura_id,
+                    CarviaFrete.status != 'CANCELADO',
+                ).all()
+                soma_pago_fretes = sum(
+                    float(f.valor_pago or 0) for f in fretes_ativos
                 )
                 soma_ces = db.session.query(
                     func.coalesce(func.sum(CarviaCustoEntrega.valor), 0)
@@ -2228,7 +2262,7 @@ def register_fatura_routes(bp):
                     CarviaCustoEntrega.fatura_transportadora_id == fatura_id,
                     CarviaCustoEntrega.status != 'CANCELADO',
                 ).scalar() or 0
-                valor_final_float = float(soma_subs) + float(soma_ces)
+                valor_final_float = float(soma_pago_fretes) + float(soma_ces)
 
             # Gate 2: tolerancia de R$ 1,00 sobre o valor final informado
             # (se usuario ajustou valor_final, a comparacao e contra esse)
