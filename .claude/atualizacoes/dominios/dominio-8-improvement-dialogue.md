@@ -10,12 +10,18 @@ DATA: usar output de `date +%Y-%m-%d`
 
 - Modelo: Opus (obrigatorio)
 - Workflow: feature-dev para CADA implementacao
-- Branch: `improvement/D8-{DATA}` (uma por execucao)
+- **Branch: `main` — commitar DIRETO em main, NAO criar branch dedicada** (preferencia do usuario 2026-04-14)
 - PODE auto-implementar: qualquer arquivo EXCETO models.py, routes.py, client.py
 - APENAS propor (sem modificar): models.py, routes.py, client.py — escrever plano em implementation_notes
 - Gerar relatorio em `.claude/atualizacoes/improvement-dialogue/dialogue-{DATA}.md`
 - Atualizar `.claude/atualizacoes/improvement-dialogue/historico.md`
 - Escrever status JSON em `/tmp/manutencao-{DATA}/dominio-8-status.json`
+
+**PERMISSOES CRITICAS** (NAO CAIR EM /tmp):
+- Voce TEM permissao de Write/Edit em `.claude/atualizacoes/**` — garantido por `.claude/settings.json` (`Write()` + `Edit()` allows explicitos).
+- Voce TEM permissao de Write/Edit em `.claude/commands/**` e todo o repo quando executando em `--permission-mode bypassPermissions`.
+- NUNCA use `/tmp/` como fallback para relatorio/historico. Se Write falhar, **reportar erro e parar** — nao gerar fallback silencioso.
+- Warnings do SessionStart (`validar-estrutura.py`) sobre skills/__pycache__ sao apenas informativos. Nao restringem writes.
 
 ---
 
@@ -114,9 +120,10 @@ Para cada sugestao, decidir UMA das opcoes:
 
 CRITICO: Para cada sugestao que requer implementacao (opcao B):
 
-1. Criar branch se ainda nao existe:
+1. Garantir que esta em `main` atualizado (commit direto, sem branch dedicada):
 ```bash
-git checkout -b improvement/D8-{DATA} 2>/dev/null || git checkout improvement/D8-{DATA}
+git checkout main
+git pull --rebase origin main
 ```
 
 2. Invocar o workflow feature-dev com prompt estruturado:
@@ -170,23 +177,13 @@ IMPORTANTE: Substituir `VALOR_DA_CRON_API_KEY_OBTIDO_ANTERIORMENTE` pelo valor R
 
 ---
 
-## PASSO 5: COMMIT E RELATORIO
+## PASSO 5: RELATORIO, COMMIT E PUSH
 
-### 5.1 Commitar mudancas (se houver)
+CRITICO: **ordem correta** — primeiro gerar os arquivos (relatorio + historico), depois commitar tudo junto, depois pushar. Commit em `main` direto, sem branch dedicada.
 
-```bash
-git add -A
-git commit -m "improvement(D8): melhorias do dialogo Agent SDK {DATA}
+### 5.1 Gerar relatorio
 
-Sugestoes avaliadas: N
-Implementadas: X
-Rejeitadas: Y
-Propostas: Z" || true
-```
-
-### 5.2 Gerar relatorio
-
-Escrever `.claude/atualizacoes/improvement-dialogue/dialogue-{DATA}.md`:
+Escrever `.claude/atualizacoes/improvement-dialogue/dialogue-{DATA}.md` (use Write tool, NUNCA caia em /tmp):
 
 ```markdown
 ---
@@ -218,9 +215,41 @@ proposed: Z
 - Propostas para revisao humana: Z
 ```
 
-### 5.3 Atualizar historico
+### 5.2 Atualizar historico
 
-Adicionar entrada em `.claude/atualizacoes/improvement-dialogue/historico.md`.
+Adicionar entrada em `.claude/atualizacoes/improvement-dialogue/historico.md` (Edit tool):
+1. Nova linha na tabela indice com formato: `| N | {DATA} | {avaliadas} | {implementadas} | {rejeitadas} | {propostas} | {status} |`
+2. Nova secao `## {DATA}` com detalhes (uma por sugestao)
+
+### 5.3 Commit em main (direto, sem branch)
+
+**CRITICO:** listar arquivos explicitamente em `git add` — nao usar `-A` para evitar pegar WIP nao relacionado.
+
+```bash
+# Garantir main atualizado
+git checkout main
+git pull --rebase origin main
+
+# Adicionar APENAS os arquivos modificados nesta execucao
+git add .claude/atualizacoes/improvement-dialogue/dialogue-{DATA}.md \
+        .claude/atualizacoes/improvement-dialogue/historico.md \
+        <outros arquivos alterados pelas implementacoes>
+
+git commit -m "improvement(D8): melhorias do dialogo Agent SDK {DATA}
+
+Sugestoes avaliadas: N
+Implementadas: X
+Rejeitadas: Y
+Propostas: Z" || true
+```
+
+### 5.4 Push para origin/main
+
+```bash
+git push origin main
+```
+
+Se push falhar (conflito com semanal ou outro commit), registrar em `erros` do status.json e **nao abortar** — o commit local ja esta feito e sera pushed manualmente.
 
 ---
 
@@ -238,7 +267,9 @@ AO CONCLUIR, escrever `/tmp/manutencao-{DATA}/dominio-8-status.json`:
   "rejected": 0,
   "proposed": 0,
   "persisted_to_db": true,
-  "branch": "improvement/D8-{DATA}",
+  "branch": "main",
+  "pushed_to_origin": true,
+  "commit_sha": "abc1234",
   "relatorio": ".claude/atualizacoes/improvement-dialogue/dialogue-{DATA}.md",
   "resumo": "Descricao curta do que foi feito",
   "erros": []
@@ -246,7 +277,7 @@ AO CONCLUIR, escrever `/tmp/manutencao-{DATA}/dominio-8-status.json`:
 ```
 
 Status:
-- **OK**: sugestoes avaliadas, respostas persistidas, relatorio gerado
-- **PARCIAL**: sugestoes avaliadas, mas persistencia no banco falhou
+- **OK**: sugestoes avaliadas, respostas persistidas, relatorio gerado, commit em main pushed
+- **PARCIAL**: sugestoes avaliadas, mas persistencia no banco falhou OU push falhou
 - **SKIP**: nenhuma sugestao pendente
-- **FAILED**: erro critico no acesso ao Render Postgres
+- **FAILED**: erro critico no acesso ao Render Postgres ou falha em escrever `.claude/atualizacoes/`
