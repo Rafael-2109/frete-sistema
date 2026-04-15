@@ -13,6 +13,23 @@
     {% if request.args.get('status') %}
       <input type="hidden" name="status" value="{{ request.args.get('status') }}">
     {% endif %}
+    <!-- Filtro de escopo: persiste em todas as acoes (navbar, paginacao, ordenacao, Ver Todas, Limpar) -->
+    <div class="col-12 mb-2">
+      <label class="form-label fw-bold mb-1 d-block">Escopo</label>
+      <div class="btn-group" role="group" aria-label="Filtro de origem">
+        <input type="radio" class="btn-check" name="origem" id="origem-geral" value=""
+               {{ 'checked' if not request.args.get('origem') }} autocomplete="off">
+        <label class="btn btn-outline-secondary px-4" for="origem-geral">GERAL</label>
+
+        <input type="radio" class="btn-check" name="origem" id="origem-nacom" value="NACOM"
+               {{ 'checked' if request.args.get('origem') == 'NACOM' }} autocomplete="off">
+        <label class="btn btn-outline-primary px-4" for="origem-nacom">NACOM</label>
+
+        <input type="radio" class="btn-check" name="origem" id="origem-carvia" value="CARVIA"
+               {{ 'checked' if request.args.get('origem') == 'CARVIA' }} autocomplete="off">
+        <label class="btn btn-outline-warning px-4" for="origem-carvia">CARVIA</label>
+      </div>
+    </div>
     <div class="col-md-2">
       <label class="form-label">Nota Fiscal</label>
       <input type="text" name="numero_nf" class="form-control" placeholder="Nota Fiscal" 
@@ -30,14 +47,6 @@
       <label class="form-label">Cliente</label>
       <input type="text" name="cliente" class="form-control" placeholder="Cliente"
              value="{{ request.args.get('cliente', '') }}">
-    </div>
-    <div class="col-md-1">
-      <label class="form-label">Origem</label>
-      <select name="origem" class="form-select">
-        <option value="">Todas</option>
-        <option value="NACOM" {% if request.args.get('origem') == 'NACOM' %}selected{% endif %}>Nacom</option>
-        <option value="CARVIA" {% if request.args.get('origem') == 'CARVIA' %}selected{% endif %}>CarVia</option>
-      </select>
     </div>
     <div class="col-md-2">
       <label class="form-label">CNPJ</label>
@@ -1034,7 +1043,42 @@ document.addEventListener('DOMContentLoaded', function() {
     // Atualiza o href do link
     link.href = linkUrl.toString();
   });
-  
+
+  // ===========================
+  // AUTO-SUBMIT DO TOGGLE DE ESCOPO (ORIGEM)
+  // ===========================
+  // Quando usuario troca GERAL/NACOM/CARVIA, submete o form preservando
+  // todos os outros filtros (cliente, UF, datas, status via hidden, etc.)
+  document.querySelectorAll('input.btn-check[name="origem"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      const form = document.getElementById('form-filtros');
+      if (form) form.submit();
+    });
+  });
+
+  // ===========================
+  // PERSISTENCIA DO ESCOPO EM TODOS OS LINKS DE FILTRO
+  // ===========================
+  // Reescreve o href de TODOS os links da pagina que apontam para a rota
+  // atual (/monitoramento/listar_entregas), injetando o valor atual de origem.
+  // Cobre: dropdowns Status Entrega, Agendamento, Status Especiais, Ver Todas,
+  // Limpar (navbar) e o botao Limpar dentro do form de filtros.
+  // Links para OUTRAS rotas (Rastreamento GPS, Exportar Excel, Sendas) sao
+  // ignorados pelo filtro de pathname.
+  const currentOrigem = new URLSearchParams(window.location.search).get('origem');
+  if (currentOrigem) {
+    document.querySelectorAll('a[href]').forEach(link => {
+      const hrefAttr = link.getAttribute('href') || '';
+      if (!hrefAttr || hrefAttr.startsWith('#') || hrefAttr.startsWith('javascript:')) return;
+      try {
+        const linkUrl = new URL(link.href, window.location.origin);
+        if (linkUrl.pathname !== window.location.pathname) return;
+        linkUrl.searchParams.set('origem', currentOrigem);
+        link.href = linkUrl.toString();
+      } catch (e) { /* ignora URLs invalidas */ }
+    });
+  }
+
   const stickyPagination = document.getElementById('sticky-pagination');
   
   if (stickyPagination) {
