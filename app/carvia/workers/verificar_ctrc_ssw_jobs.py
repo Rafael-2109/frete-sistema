@@ -1,7 +1,7 @@
 """
-Jobs RQ: Verificacao de CTRC via SSW (opcao 101).
+Jobs RQ: Verificacao de CTRC e download de DACTE via SSW (opcao 101).
 
-Dois jobs independentes:
+Tres jobs independentes:
 
 1. `verificar_ctrc_cte_comp_job(cte_comp_id)` — CTe Complementar.
    Disparado quando o usuario marca um CTe Comp. com "Verificar SSW" no
@@ -9,12 +9,19 @@ Dois jobs independentes:
    corrige se divergir.
 
 2. `verificar_ctrc_operacao_job(operacao_id)` — CTe CarVia (Operacao).
-   Disparado apos emissao automatica (worker `ssw_cte_jobs`) ou apos
-   importacao manual de XML em `/carvia/importar`. Consulta opcao 101
+   Disparado apos emissao automatica (worker `ssw_cte_jobs`), apos
+   importacao manual de XML em `/carvia/importar`, ou sob demanda via
+   botao "Atualizar CTRC" na tela de detalhe. Consulta opcao 101
    pesquisando pelo **numero do CTe** (t_nro_cte / ajaxEnvia P3) para
    obter o CTRC real do SSW — nao depende do `nCT`+`cDV` deduzido do XML.
 
-Ambos aplicam o padrao R15 (SSL drop resilience) — ver
+3. `baixar_pdf_ssw_operacao_job(operacao_id)` — DACTE PDF sob demanda.
+   Disparado pelo botao "PDF SSW" na tela de detalhe quando
+   `cte_pdf_path` esta vazio. Consulta 101 com `--baixar-dacte`, faz
+   upload para S3 em `carvia/ctes_pdf/` e atualiza `CarviaOperacao.cte_pdf_path`.
+   NAO mexe em `cte_xml_path` (escopo limitado — decisao 2026-04-15).
+
+Todos aplicam o padrao R15 (SSL drop resilience) — ver
 `app/carvia/CLAUDE.md` e `app/carvia/SSW_INTEGRATION.md`. Tipico:
 ~60-120s por CTRC (Playwright headless).
 
@@ -147,6 +154,31 @@ def _consultar_101_por_cte(cte_numero, filial='CAR'):
         baixar_xml=False,
         baixar_dacte=False,
         output_dir='/tmp/ssw_operacoes/verificar_ctrc_op',
+    )
+    return asyncio.run(consultar_ctrc(args_101))
+
+
+def _consultar_101_por_cte_com_dacte(cte_numero, filial='CAR', operacao_id=None):
+    """Como _consultar_101_por_cte mas com baixar_dacte=True.
+
+    output_dir inclui operacao_id para evitar colisao entre jobs paralelos
+    que rodem na mesma operacao. Nao baixa XML (escopo limitado ao PDF —
+    decisao 2026-04-15).
+    """
+    if SSW_SCRIPTS not in sys.path:
+        sys.path.insert(0, SSW_SCRIPTS)
+
+    from consultar_ctrc_101 import consultar_ctrc  # type: ignore
+
+    output_dir = f'/tmp/ssw_operacoes/baixar_pdf_op/{operacao_id or "sem_id"}'
+    args_101 = argparse.Namespace(
+        ctrc=None,
+        nf=None,
+        cte=str(cte_numero),
+        filial=filial,
+        baixar_xml=False,
+        baixar_dacte=True,
+        output_dir=output_dir,
     )
     return asyncio.run(consultar_ctrc(args_101))
 
@@ -406,5 +438,160 @@ def verificar_ctrc_operacao_job(operacao_id: int) -> dict:
             'status': 'CORRIGIDO',
             'ctrc_anterior': ctrc_anterior_local,
             'ctrc_novo': ctrc_novo,
+            'cte_numero': cte_numero_str,
+        }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Job: Baixar DACTE PDF do SSW (opcao 101 --cte --baixar-dacte)
+# ────────────────────────────────────────────────────────────────────────────
+
+def baixar_pdf_ssw_operacao_job(operacao_id: int) -> dict:
+    """Job RQ: baixa DACTE PDF do SSW (101 --cte --baixar-dacte),
+    faz upload para S3 em carvia/ctes_pdf/ e atualiza
+    `CarviaOperacao.cte_pdf_path`.
+
+    NAO mexe em `cte_xml_path` (escopo limitado ao PDF — decisao 2026-04-15).
+
+    Fluxo:
+      1. Carrega operacao -> snapshot (cte_numero)
+      2. Se nao tem cte_numero -> SKIPPED
+      3. R15: commit + close + dispose (libera conexao pool)
+      4. asyncio.run(consultar_ctrc(--cte=cte_numero, baixar_dacte=True))
+      5. Le bytes do DACTE local e faz upload S3 (padrao BytesIO)
+      6. Re-get operacao + atualiza `cte_pdf_path` (retry SSL/DBAPI)
+
+    Args:
+        operacao_id: ID da CarviaOperacao
+
+    Returns:
+        dict com {status, cte_pdf_path, motivo/erro}
+        status: 'SUCESSO' | 'SKIPPED' | 'ERRO'
+    """
+    from app import create_app, db
+    from app.carvia.models import CarviaOperacao
+    from io import BytesIO
+
+    app = create_app()
+    with app.app_context():
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            logger.warning(
+                "baixar_pdf_ssw_operacao_job: Operacao %s nao encontrada",
+                operacao_id,
+            )
+            return {
+                'status': 'SKIPPED',
+                'motivo': 'Operacao nao encontrada',
+            }
+
+        # Snapshot ORM em variaveis locais (objeto stale durante Playwright)
+        cte_numero_local = operacao.cte_numero
+
+        if not cte_numero_local:
+            logger.info(
+                "baixar_pdf_ssw_operacao_job: Operacao %s sem cte_numero "
+                "(nada a baixar)",
+                operacao_id,
+            )
+            return {
+                'status': 'SKIPPED',
+                'motivo': 'Operacao sem cte_numero',
+            }
+
+        # cte_numero pode vir como "000000161" ou "161" — normalizar
+        try:
+            cte_numero_str = str(int(str(cte_numero_local).strip()))
+        except (ValueError, TypeError):
+            cte_numero_str = str(cte_numero_local).strip()
+
+        # R15: libera conexao antes do Playwright (60-120s+)
+        _liberar_conexao_antes_playwright()
+
+        try:
+            resultado = _consultar_101_por_cte_com_dacte(
+                cte_numero_str, filial='CAR', operacao_id=operacao_id,
+            )
+        except Exception as e:
+            logger.exception(
+                "baixar_pdf_ssw_operacao_job: erro ao consultar SSW "
+                "opcao 101 --cte %s --baixar-dacte (op=%s)",
+                cte_numero_str, operacao_id,
+            )
+            return {
+                'status': 'ERRO',
+                'erro': str(e),
+            }
+
+        if not resultado.get('sucesso'):
+            erro_msg = resultado.get('erro', 'Falha na consulta 101')
+            logger.warning(
+                "baixar_pdf_ssw_operacao_job: 101 nao encontrou CTe %s "
+                "(op=%s): %s",
+                cte_numero_str, operacao_id, erro_msg,
+            )
+            return {
+                'status': 'ERRO',
+                'erro': erro_msg,
+            }
+
+        dacte_path_local = resultado.get('dacte')
+        if not dacte_path_local or not os.path.exists(dacte_path_local):
+            logger.warning(
+                "baixar_pdf_ssw_operacao_job: SSW nao retornou DACTE "
+                "(op=%s, cte=%s, dacte=%r)",
+                operacao_id, cte_numero_str, dacte_path_local,
+            )
+            return {
+                'status': 'ERRO',
+                'erro': 'SSW nao retornou DACTE (dados.dacte=None)',
+            }
+
+        # Upload para S3 — padrao cte_complementar_persistencia
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            with open(dacte_path_local, 'rb') as f:
+                dacte_bytes = f.read()
+
+            buf = BytesIO(dacte_bytes)
+            buf.name = f'{cte_numero_str}-dacte.pdf'
+            dacte_s3_path = storage.save_file(
+                buf, folder='carvia/ctes_pdf', filename=buf.name,
+            )
+        except Exception as e:
+            logger.exception(
+                "baixar_pdf_ssw_operacao_job: upload S3 falhou (op=%s)",
+                operacao_id,
+            )
+            return {
+                'status': 'ERRO',
+                'erro': f'Upload S3 falhou: {e}',
+            }
+
+        if not dacte_s3_path:
+            return {
+                'status': 'ERRO',
+                'erro': 'Upload S3 falhou (save_file retornou vazio)',
+            }
+
+        # Persiste com retry SSL/DBAPI
+        def _aplicar_pdf_path():
+            op = db.session.get(CarviaOperacao, operacao_id)
+            if not op:
+                raise ValueError(
+                    f'Operacao {operacao_id} desapareceu pos-Playwright'
+                )
+            op.cte_pdf_path = dacte_s3_path
+
+        _commit_com_retry(_aplicar_pdf_path)
+
+        logger.info(
+            "baixar_pdf_ssw_operacao_job: op %s -> cte_pdf_path=%s",
+            operacao_id, dacte_s3_path,
+        )
+        return {
+            'status': 'SUCESSO',
+            'cte_pdf_path': dacte_s3_path,
             'cte_numero': cte_numero_str,
         }

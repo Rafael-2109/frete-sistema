@@ -42,11 +42,20 @@
                     })">
                 <i class="fas fa-calculator"></i> Cotar
             </button>
-            {% if operacao.cte_pdf_path %}
+            {% if operacao.cte_pdf_path or operacao.cte_numero %}
             <button type="button" class="btn btn-outline-secondary btn-sm"
-                    onclick="window.open('/carvia/api/operacao/{{ operacao.id }}/pdf-original', '_blank')"
-                    title="PDF original importado">
-                <i class="fas fa-file-pdf"></i> Original
+                    id="btn-pdf-ssw-{{ operacao.id }}"
+                    onclick="abrirOuBaixarPdfSsw({{ operacao.id }}, {{ 'true' if operacao.cte_pdf_path else 'false' }})"
+                    title="{% if operacao.cte_pdf_path %}Abrir DACTE PDF (S3){% else %}Buscar DACTE no SSW (opcao 101){% endif %}">
+                <i class="fas fa-file-pdf"></i> PDF SSW
+            </button>
+            {% endif %}
+            {% if operacao.cte_numero and operacao.status != 'CANCELADO' %}
+            <button type="button" class="btn btn-outline-warning btn-sm"
+                    id="btn-atualizar-ctrc-{{ operacao.id }}"
+                    onclick="atualizarCtrcSsw({{ operacao.id }})"
+                    title="Re-consultar CTRC no SSW (opcao 101)">
+                <i class="fas fa-sync"></i> Atualizar CTRC
             </button>
             {% endif %}
             {% if operacao.cte_xml_path or operacao.cte_chave_acesso %}
@@ -848,6 +857,85 @@ function downloadCteXml(operacaoId) {
             }
         })
         .catch(() => alert('Erro de conexao ao baixar arquivo'));
+}
+
+// ─── PDF SSW (unificado: abre direto se ja tem cte_pdf_path, senao busca no SSW) ───
+function abrirOuBaixarPdfSsw(id, temPath) {
+    if (temPath) {
+        window.open('/carvia/api/operacao/' + id + '/pdf-original', '_blank');
+        return;
+    }
+    if (!confirm('PDF ainda nao foi baixado do SSW. Deseja buscar agora? (leva ~30-45s)')) {
+        return;
+    }
+    var btn = document.getElementById('btn-pdf-ssw-' + id);
+    var labelOriginal = '<i class="fas fa-file-pdf"></i> PDF SSW';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+    }
+    var csrf = document.querySelector('meta[name="csrf-token"]')?.content
+            || document.querySelector('input[name="csrf_token"]')?.value || '';
+    fetch('/carvia/api/operacao/' + id + '/baixar-pdf-ssw', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrf,
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.sucesso) {
+            alert(data.mensagem);
+            // NAO reabilita o botao — mantem desabilitado ate o reload para
+            // evitar que o usuario clique de novo e enfileire job duplicado.
+            if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW...'; }
+            setTimeout(function() { window.location.reload(); }, 45000);
+        } else {
+            alert('Erro: ' + (data.erro || 'Falha desconhecida'));
+            if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+        }
+    })
+    .catch(function(e) {
+        alert('Erro de rede: ' + e);
+        if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+    });
+}
+
+// ─── Atualizar CTRC — re-consulta SSW opcao 101 ───
+function atualizarCtrcSsw(id) {
+    if (!confirm('Re-consultar CTRC no SSW? (leva ~20-30s)')) return;
+    var btn = document.getElementById('btn-atualizar-ctrc-' + id);
+    var labelOriginal = '<i class="fas fa-sync"></i> Atualizar CTRC';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
+    }
+    var csrf = document.querySelector('meta[name="csrf-token"]')?.content
+            || document.querySelector('input[name="csrf_token"]')?.value || '';
+    fetch('/carvia/api/operacao/' + id + '/atualizar-ctrc', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrf,
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.sucesso) {
+            alert(data.mensagem);
+            // NAO reabilita — mantem desabilitado ate reload.
+            if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW...'; }
+            setTimeout(function() { window.location.reload(); }, 30000);
+        } else {
+            alert('Erro: ' + (data.erro || 'Falha desconhecida'));
+            if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+        }
+    })
+    .catch(function(e) {
+        alert('Erro de rede: ' + e);
+        if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+    });
 }
 
 function formatBRL(valor) {

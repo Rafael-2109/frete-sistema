@@ -846,6 +846,101 @@ def register_api_routes(bp):
         return jsonify({'erro': 'Arquivo nao encontrado'}), 404
 
     # ------------------------------------------------------------------
+    # SSW — Re-buscar CTRC e re-baixar DACTE para CarviaOperacao
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/operacao/<int:operacao_id>/atualizar-ctrc', methods=['POST'])
+    @login_required
+    def api_atualizar_ctrc_operacao(operacao_id):
+        """Enfileira job RQ para re-consultar CTRC via SSW opcao 101.
+
+        Usa o worker `verificar_ctrc_operacao_job` que ja existe — roda
+        `consultar_ctrc_101.py --cte {n}` e atualiza `CarviaOperacao.ctrc_numero`
+        se divergir. Job assincrono (fila `default`, timeout 10m).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.models import CarviaOperacao
+
+            op = db.session.get(CarviaOperacao, operacao_id)
+            if not op:
+                return jsonify({'erro': 'Operacao nao encontrada'}), 404
+            if op.status == 'CANCELADO':
+                return jsonify({'erro': 'Operacao cancelada'}), 422
+            if not op.cte_numero:
+                return jsonify({
+                    'erro': 'Operacao sem cte_numero — nao e possivel buscar no SSW'
+                }), 422
+
+            from app.portal.workers import enqueue_job
+            from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                verificar_ctrc_operacao_job,
+            )
+            job = enqueue_job(
+                verificar_ctrc_operacao_job, operacao_id,
+                queue_name='default', timeout='10m',
+            )
+            return jsonify({
+                'sucesso': True,
+                'job_id': job.id,
+                'mensagem': (
+                    'Atualizacao do CTRC enfileirada. '
+                    'Atualize a pagina em alguns segundos.'
+                ),
+            }), 202
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f'Erro ao enfileirar atualizar-ctrc op={operacao_id}: {e}')
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/api/operacao/<int:operacao_id>/baixar-pdf-ssw', methods=['POST'])
+    @login_required
+    def api_baixar_pdf_ssw_operacao(operacao_id):
+        """Enfileira job RQ para re-baixar DACTE PDF via SSW opcao 101.
+
+        Usa o worker `baixar_pdf_ssw_operacao_job` — roda
+        `consultar_ctrc_101.py --cte {n} --baixar-dacte`, faz upload para S3
+        em `carvia/ctes_pdf/` e atualiza `CarviaOperacao.cte_pdf_path`.
+        Job assincrono (fila `default`, timeout 10m). NAO mexe em XML.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.models import CarviaOperacao
+
+            op = db.session.get(CarviaOperacao, operacao_id)
+            if not op:
+                return jsonify({'erro': 'Operacao nao encontrada'}), 404
+            if not op.cte_numero:
+                return jsonify({
+                    'erro': 'Operacao sem cte_numero — nao e possivel buscar no SSW'
+                }), 422
+
+            from app.portal.workers import enqueue_job
+            from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                baixar_pdf_ssw_operacao_job,
+            )
+            job = enqueue_job(
+                baixar_pdf_ssw_operacao_job, operacao_id,
+                queue_name='default', timeout='10m',
+            )
+            return jsonify({
+                'sucesso': True,
+                'job_id': job.id,
+                'mensagem': (
+                    'Download do PDF SSW enfileirado. '
+                    'Atualize a pagina em ~30 segundos.'
+                ),
+            }), 202
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f'Erro ao enfileirar baixar-pdf-ssw op={operacao_id}: {e}')
+            return jsonify({'erro': str(e)}), 500
+
+    # ------------------------------------------------------------------
     # Conferencia de CTe Subcontratado
     # ------------------------------------------------------------------
 
