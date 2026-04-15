@@ -10,6 +10,15 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 4 | 2026-04-07 | 4 | 2 | 1 | 1 | PARCIAL (permissoes + sem CRON_API_KEY) |
 | 5 | 2026-04-10 | 4 | 0 | 1 | 1 | OK (re-avaliacao + persistencia das 4 pendentes) |
 | 6 | 2026-04-14 | 3 | 2 | 1 | 0 | PARCIAL (persistencia DB + relatorio/historico manual) |
+| 7 | 2026-04-15 | 3 | 0 | 3 | 0 | OK |
+
+## 2026-04-15
+- 3 sugestoes avaliadas, todas rejeitadas (ja implementadas em 2026-04-14)
+- IMP-2026-04-14-001: .rem como CNAB — ja em system_prompt.md:30
+- IMP-2026-04-14-002: routing .rem para lendo-documentos — ja em lendo-arquivos/SKILL.md:26-27
+- IMP-2026-04-14-003: verificar separacao antes de pedir data — ja como regra I4 (system_prompt.md:377-385)
+- Persistencia DB OK (IDs 31-33)
+- Observacao: sugestoes geradas ANTES das correcoes do D8 de 14/04, por isso ja estavam resolvidas
 
 ## 2026-04-14
 - **Commit em main** (novo fluxo sem branch dedicada — preferencia do usuario 2026-04-14)
