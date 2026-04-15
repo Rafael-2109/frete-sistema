@@ -34,14 +34,7 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-warning">
-                        <h6><i class="fas fa-exclamation-triangle"></i> Fluxo Simplificado</h6>
-                        <p class="mb-0">
-                            Preencha apenas os <strong>dados essenciais</strong>.
-                            Documento e vencimento serao definidos quando vincular a uma fatura.
-                        </p>
-                    </div>
-
+                    {% set pode_emitir = frete.operacao_id and frete.operacao and frete.operacao.ctrc_numero %}
                     <form method="POST" enctype="multipart/form-data">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         {{ form.hidden_tag() }}
@@ -61,9 +54,9 @@
                             </div>
                         </div>
 
-                        <!-- Valor -->
+                        <!-- Valor + Data do Custo -->
                         <h6 class="border-bottom pb-2 mb-3 mt-4">
-                            <i class="fas fa-dollar-sign"></i> Valor da Despesa
+                            <i class="fas fa-dollar-sign"></i> Valor e Data
                         </h6>
                         <div class="row">
                             <div class="col-md-6">
@@ -78,31 +71,86 @@
                                     <div class="text-danger small">{{ error }}</div>
                                     {% endfor %}
                                     {% endif %}
-                                    <small class="text-muted">Valor estimado (pode ser ajustado na fatura)</small>
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="alert alert-secondary small">
-                                    <i class="fas fa-info-circle"></i>
-                                    <strong>Documento e Vencimento:</strong><br>
-                                    Serao preenchidos automaticamente quando voce vincular esta despesa a uma fatura.
+                                <div class="form-group">
+                                    {{ form.data_custo.label(class="form-label") }}
+                                    {{ form.data_custo(class="form-control", type="date") }}
+                                    {% if form.data_custo.errors %}
+                                    {% for error in form.data_custo.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                    {% endif %}
+                                    <small class="text-muted">A data de vencimento sera igual a data do custo.</small>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Transportadora -->
+                        <!-- Beneficiario -->
                         <h6 class="border-bottom pb-2 mb-3 mt-4">
-                            <i class="fas fa-truck"></i> Transportadora do Pagamento
+                            <i class="fas fa-user-tag"></i> Beneficiario
                         </h6>
-                        <div class="form-group">
+                        <div class="form-group mb-3">
+                            <div class="btn-group" role="group" aria-label="Tipo de beneficiario">
+                                {% for subfield in form.tipo_beneficiario %}
+                                <input type="radio" class="btn-check benef-radio"
+                                       name="{{ subfield.name }}"
+                                       id="{{ subfield.id }}"
+                                       value="{{ subfield.data }}"
+                                       data-benef-target="{{ subfield.data }}"
+                                       autocomplete="off"
+                                       {% if subfield.checked %}checked{% endif %}>
+                                <label class="btn btn-outline-primary" for="{{ subfield.id }}">
+                                    {{ subfield.label.text }}
+                                </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.tipo_beneficiario.errors %}
+                            {% for error in form.tipo_beneficiario.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <!-- Benef: Transportadora Subcontratada -->
+                        <div id="benef-TRANSPORTADORA" class="benef-panel">
                             {{ form.transportadora_id.label(class="form-label") }}
                             {{ form.transportadora_id(class="form-select") }}
                             <small class="text-muted">
                                 <i class="fas fa-info-circle"></i>
-                                Se nao informado, a despesa sera paga a transportadora do frete
+                                Se nao informado, o pagamento segue para a transportadora do frete
                                 (<strong>{{ frete.transportadora.razao_social if frete.transportadora else '-' }}</strong>).
-                                Use este campo apenas quando a despesa deve ser paga a outro transportador.
                             </small>
+                        </div>
+
+                        <!-- Benef: Destinatario (read-only do frete) -->
+                        <div id="benef-DESTINATARIO" class="benef-panel" style="display:none">
+                            <div class="row">
+                                <div class="col-md-7">
+                                    <label class="form-label">Nome do Destinatario</label>
+                                    <input type="text" class="form-control" value="{{ frete.nome_destino or '-' }}" disabled>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">CNPJ</label>
+                                    <input type="text" class="form-control" value="{{ frete.cnpj_destino or '-' }}" disabled>
+                                </div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">
+                                <i class="fas fa-info-circle"></i>
+                                Os dados acima sao do destinatario do frete e serao gravados como beneficiario da despesa.
+                            </small>
+                        </div>
+
+                        <!-- Benef: Outros (texto livre) -->
+                        <div id="benef-OUTROS" class="benef-panel" style="display:none">
+                            {{ form.beneficiario_nome.label(class="form-label") }}
+                            {{ form.beneficiario_nome(class="form-control", placeholder="Nome do beneficiario (terceiro)") }}
+                            {% if form.beneficiario_nome.errors %}
+                            {% for error in form.beneficiario_nome.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                            {% endif %}
                         </div>
 
                         <!-- Anexos -->
@@ -122,14 +170,32 @@
                             <small class="text-muted">Observacoes adicionais sobre a despesa</small>
                         </div>
 
-                        <!-- Botoes -->
-                        <div class="d-flex justify-content-between mt-4">
-                            <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}" class="btn btn-secondary">
-                                <i class="fas fa-times"></i> Cancelar
-                            </a>
-                            <button type="submit" class="btn btn-success btn-lg">
-                                <i class="fas fa-plus"></i> Adicionar Despesa
-                            </button>
+                        <!-- Area "Continuar" com 2 acoes -->
+                        <div class="border rounded p-3 mt-4 bg-body-tertiary">
+                            <h6 class="mb-3"><i class="fas fa-check-circle"></i> Continuar</h6>
+                            <div class="d-flex gap-2 justify-content-end flex-wrap">
+                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </a>
+                                <button type="submit" name="acao" value="emitir_ssw"
+                                        class="btn btn-primary"
+                                        {% if not pode_emitir %}disabled
+                                            title="Requer CTe CarVia com CTRC SSW vinculado ao frete"
+                                        {% else %}
+                                            title="Cria a despesa e enfileira a emissao do CTe Complementar no SSW"
+                                        {% endif %}>
+                                    <i class="fas fa-paper-plane"></i> Emitir CTe Compl. SSW
+                                </button>
+                                <button type="submit" name="acao" value="sem_emissao" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Adicionar Despesa
+                                </button>
+                            </div>
+                            {% if not pode_emitir %}
+                            <small class="text-muted d-block mt-2">
+                                <i class="fas fa-info-circle"></i>
+                                Emissao de CTe Compl. SSW indisponivel: o frete ainda nao tem CTe CarVia com CTRC emitido.
+                            </small>
+                            {% endif %}
                         </div>
                     </form>
                 </div>
@@ -220,5 +286,26 @@ document.querySelectorAll('.valor-monetario').forEach(function(input) {
         e.target.value = e.target.value.replace(/[^\d.,]/g, '');
     });
 });
+
+// Toggle dos paineis de Beneficiario
+(function() {
+    const radios = document.querySelectorAll('.benef-radio');
+    const panels = {
+        'TRANSPORTADORA': document.getElementById('benef-TRANSPORTADORA'),
+        'DESTINATARIO': document.getElementById('benef-DESTINATARIO'),
+        'OUTROS': document.getElementById('benef-OUTROS'),
+    };
+    function mostrar(tipo) {
+        Object.keys(panels).forEach(function(k) {
+            if (panels[k]) panels[k].style.display = (k === tipo) ? 'block' : 'none';
+        });
+    }
+    radios.forEach(function(r) {
+        r.addEventListener('change', function() {
+            if (r.checked) mostrar(r.value);
+        });
+        if (r.checked) mostrar(r.value);
+    });
+})();
 </script>
 {% endblock %}

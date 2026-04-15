@@ -126,9 +126,11 @@ class CarviaCustoEntrega(db.Model):
     numero_custo = db.Column(db.String(20), nullable=False, index=True)
 
     # Vinculos
-    # operacao_id NULLABLE para suportar fluxo de COMPRA (xerox DespesaExtra):
-    # - Fluxo VENDA legado: exige operacao (criacao via /custos-entrega/criar)
-    # - Fluxo COMPRA xerox: cria direto do CarviaFrete, sem operacao de venda
+    # operacao_id NULLABLE:
+    # - Preenchido automaticamente a partir de CarviaFrete.operacao_id quando o
+    #   frete tem CTe CarVia vinculado (fluxo venda → elegivel para CTe Compl. SSW 222).
+    # - None quando o frete nao tem CTe CarVia (fluxo compra puro).
+    # Exigido pelo helper _executar_gerar_cte_complementar em custo_entrega_routes.py.
     operacao_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_operacoes.id'),

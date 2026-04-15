@@ -8,7 +8,7 @@ from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, MultipleFileField
 from wtforms import (
     StringField, DecimalField, IntegerField, SelectField, SubmitField,
-    TextAreaField, DateField, HiddenField
+    TextAreaField, DateField, HiddenField, RadioField
 )
 from wtforms.validators import DataRequired, Optional, Length, NumberRange, ValidationError
 
@@ -231,11 +231,35 @@ class CarviaDespesaExtraForm(FlaskForm):
             if not is_valid:
                 raise ValidationError(error_msg)
 
+    # Beneficiario — substitui "Transportadora do Pagamento".
+    # 3 modos: TRANSPORTADORA (select), DESTINATARIO (read-only do frete), OUTROS (nome livre).
+    tipo_beneficiario = RadioField(
+        'Beneficiario',
+        choices=[
+            ('TRANSPORTADORA', 'Transportadora Subcontratada'),
+            ('DESTINATARIO', 'Destinatario'),
+            ('OUTROS', 'Outros'),
+        ],
+        default='TRANSPORTADORA',
+        validators=[DataRequired()],
+    )
+
     transportadora_id = SelectField(
-        'Transportadora do Pagamento',
+        'Transportadora Subcontratada',
         choices=[],
         coerce=lambda x: int(x) if x and x != '' else None,
         validators=[Optional()],
+    )
+
+    beneficiario_nome = StringField(
+        'Nome do Beneficiario',
+        validators=[Optional(), Length(max=255)],
+    )
+
+    data_custo = DateField(
+        'Data do Custo',
+        validators=[DataRequired()],
+        description='A data de vencimento sera igual a data do custo.',
     )
 
     anexos = MultipleFileField(
@@ -250,7 +274,10 @@ class CarviaDespesaExtraForm(FlaskForm):
 
     observacoes = TextAreaField('Observacoes')
 
-    submit = SubmitField('Continuar')
+    def validate_beneficiario_nome(self, field):
+        """Exige nome apenas quando tipo_beneficiario=OUTROS."""
+        if self.tipo_beneficiario.data == 'OUTROS' and not (field.data or '').strip():
+            raise ValidationError('Informe o nome do beneficiario.')
 
 
 class CarviaDespesaExtraCompletoForm(FlaskForm):

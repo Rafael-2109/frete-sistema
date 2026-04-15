@@ -10,8 +10,8 @@
                class="btn btn-outline-success btn-sm" title="Exportar Excel">
                 <i class="fas fa-file-excel"></i> Excel
             </a>
-            <a href="{{ url_for('carvia.criar_custo_entrega') }}" class="btn btn-success btn-sm">
-                <i class="fas fa-plus"></i> Novo Custo
+            <a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}" class="btn btn-success btn-sm">
+                <i class="fas fa-plus"></i> Nova Despesa Extra
             </a>
             <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left"></i> Dashboard
@@ -122,7 +122,7 @@
                             </td>
                             <td><span class="badge bg-secondary">{{ c.tipo_custo }}</span></td>
                             <td>
-                                {% set desc = c.descricao or '-' %}
+                                {% set desc = c.descricao or c.observacoes or '-' %}
                                 {% if desc|length > 50 %}
                                 <span title="{{ desc }}" style="cursor: help;">{{ desc[:50] }}…</span>
                                 {% else %}{{ desc }}{% endif %}
@@ -183,8 +183,8 @@
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-money-bill-wave fa-3x mb-3 d-block opacity-50"></i>
                 <p>Nenhum custo de entrega encontrado.</p>
-                <a href="{{ url_for('carvia.criar_custo_entrega') }}" class="btn btn-success btn-sm">
-                    <i class="fas fa-plus"></i> Novo Custo
+                <a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}" class="btn btn-success btn-sm">
+                    <i class="fas fa-plus"></i> Nova Despesa Extra
                 </a>
             </div>
             {% endif %}
