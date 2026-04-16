@@ -12,10 +12,10 @@ import os
 # ====================================================================
 
 # Extended context window (1M tokens)
-# Opus 4.6 e Sonnet 4.6: 1M tokens NATIVO (sem beta header necessário)
+# Opus 4.7/4.6 e Sonnet 4.6: 1M tokens NATIVO (sem beta header necessário)
+# Opus 4.7: 1M ao preço padrão $5/$25 per MTok, sem long-context premium
 # Sonnet 4.5/4.0: precisam de beta header "context-1m-2025-08-07"
 # Flag mantida apenas para documentação — modelos atuais usam 1M automaticamente
-# Acima de 200K tokens: input 2x, output 1.5x mais caro
 USE_EXTENDED_CONTEXT = os.getenv("AGENT_EXTENDED_CONTEXT", "false").lower() == "true"
 
 # Controle de budget por request (disponivel desde SDK v0.1.6)

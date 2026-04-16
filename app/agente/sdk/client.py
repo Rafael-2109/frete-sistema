@@ -1096,8 +1096,10 @@ Nunca invente informações."""
         # Adaptive Thinking via campo nativo `effort` do ClaudeAgentOptions
         # SDK 0.1.36+: `effort` é campo typed no dataclass (Literal["low"|"medium"|"high"|"max"])
         # Substitui o workaround anterior via extra_args["effort"] → --effort CLI flag.
-        # Opus 4.6: suporta todos os níveis (low/medium/high/max)
-        # Sonnet 4.6/Haiku: suportam low/medium/high (max → fallback para high no CLI)
+        # Opus tier (4.5, 4.6, 4.7): suporta todos os níveis (low/medium/high/max)
+        # Sonnet 4.6/Haiku 4.5: suportam low/medium/high (max → fallback para high no CLI)
+        # Opus 4.7: introduz `xhigh` (entre high e max, ideal para coding/agentic) —
+        # ainda nao exposto no Literal type do SDK 0.1.60; passar via extra_args se necessario.
         if effort_level and effort_level != "off":
             options_dict["effort"] = effort_level
             logger.info(f"[AGENT_CLIENT] Effort level: {effort_level}")
@@ -1145,13 +1147,14 @@ Nunca invente informações."""
             logger.info(f"[AGENT_CLIENT] Budget control nativo: max ${MAX_BUDGET_USD}/request")
 
         # Extended Context (1M tokens)
-        # Opus 4.6 e Sonnet 4.6: 1M tokens NATIVO — sem beta header necessário.
+        # Opus 4.7/4.6 e Sonnet 4.6: 1M tokens NATIVO — sem beta header necessário.
+        # Opus 4.7 mantém 1M context window ao mesmo preço padrão (sem long-context premium).
         # Flag mantida apenas para log/documentação. Modelos atuais usam 1M automaticamente.
         if USE_EXTENDED_CONTEXT:
             current_model = str(options_dict.get("model", self.settings.model)).lower()
             logger.info(
                 f"[AGENT_CLIENT] Extended Context: modelo '{current_model}' — "
-                f"1M tokens nativo (Opus 4.6/Sonnet 4.6), sem beta header"
+                f"1M tokens nativo (Opus 4.7/4.6, Sonnet 4.6), sem beta header"
             )
 
         # Context Clearing automático
