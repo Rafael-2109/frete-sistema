@@ -405,10 +405,10 @@ def processar_importacao_movimentacoes():
                 arquivo.save(temp_file.name)
                 
                 if arquivo.filename.lower().endswith('.xlsx'):
-                    df = pd.read_excel(temp_file.name)
+                    df = pd.read_excel(temp_file.name, dtype={'cod_produto': str})
                 else:
-                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
-                
+                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';', dtype={'cod_produto': str})
+
                 os.unlink(temp_file.name)
         except Exception as e:
             flash(f'Erro ao processar arquivo: {str(e)}', 'error')

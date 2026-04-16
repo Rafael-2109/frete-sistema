@@ -341,7 +341,7 @@ def importar_xlsx():
             return jsonify({'success': False, 'message': 'Apenas arquivos .xlsx são permitidos'}), 400
 
         # Ler Excel
-        df = pd.read_excel(arquivo)
+        df = pd.read_excel(arquivo, dtype={'cod_produto': str})
 
         # Validar colunas obrigatórias
         colunas_obrigatorias = ['cod_produto', 'linha_producao', 'qtd_unidade_por_caixa', 'capacidade_unidade_minuto']

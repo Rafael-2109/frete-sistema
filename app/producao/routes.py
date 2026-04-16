@@ -318,10 +318,10 @@ def processar_importacao_palletizacao():
                 arquivo.save(temp_file.name)
                 
                 if arquivo.filename.lower().endswith('.xlsx'):
-                    df = pd.read_excel(temp_file.name)
+                    df = pd.read_excel(temp_file.name, dtype={'Cód.Produto': str, 'CODIGO_EAN': str, 'EAN': str, 'ean': str, 'codigo_ean': str, 'GTIN': str})
                 else:
-                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
-                
+                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';', dtype={'Cód.Produto': str, 'CODIGO_EAN': str, 'EAN': str, 'ean': str, 'codigo_ean': str, 'GTIN': str})
+
                 os.unlink(temp_file.name)
         except Exception as e:
             flash(f'Erro ao processar arquivo: {str(e)}', 'error')
@@ -545,10 +545,10 @@ def processar_importacao_programacao():
                 arquivo.save(temp_file.name)
                 
                 if arquivo.filename.lower().endswith('.xlsx'):
-                    df = pd.read_excel(temp_file.name)
+                    df = pd.read_excel(temp_file.name, dtype={'CÓDIGO': str})
                 else:
-                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';')
-                
+                    df = pd.read_csv(temp_file.name, encoding='utf-8', sep=';', dtype={'CÓDIGO': str})
+
                 os.unlink(temp_file.name)
         except Exception as e:
             flash(f'Erro ao processar arquivo: {str(e)}', 'error')

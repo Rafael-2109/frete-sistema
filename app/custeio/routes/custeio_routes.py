@@ -1457,7 +1457,7 @@ def register_custeio_routes(bp):
                 return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
 
             arquivo = request.files['arquivo']
-            df = pd.read_excel(arquivo)
+            df = pd.read_excel(arquivo, dtype={'Codigo': str})
 
             colunas_obrigatorias = ['Codigo', 'Custo Producao']
             colunas_faltando = [c for c in colunas_obrigatorias if c not in df.columns]
@@ -2518,7 +2518,7 @@ def register_custeio_routes(bp):
                 return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
 
             arquivo = request.files['arquivo']
-            df = pd.read_excel(arquivo)
+            df = pd.read_excel(arquivo, dtype={'Codigo': str})
 
             if 'Codigo' not in df.columns or 'Custo Considerado' not in df.columns:
                 return jsonify({'erro': 'Colunas Codigo e Custo Considerado sao obrigatorias'}), 400
@@ -3000,7 +3000,7 @@ def register_custeio_routes(bp):
                 return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
 
             arquivo = request.files['arquivo']
-            df = pd.read_excel(arquivo)
+            df = pd.read_excel(arquivo, dtype={'Cod Produto': str})
 
             colunas_obrigatorias = ['Tipo Regra', 'Comissao %']
             for col in colunas_obrigatorias:

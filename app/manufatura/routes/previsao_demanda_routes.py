@@ -433,8 +433,8 @@ def register_previsao_demanda_routes(bp):
             if not arquivo.filename.endswith(('.xlsx', '.xls')):
                 return jsonify({'erro': 'Arquivo deve ser Excel (.xlsx ou .xls)'}), 400
 
-            # Ler Excel
-            df = pd.read_excel(arquivo)
+            # Ler Excel (dtype=str para cod_produto evita float suffix ".0")
+            df = pd.read_excel(arquivo, dtype={'cod_produto': str, 'Código Produto': str})
 
             # Mapeamento de colunas: aceita formato exportado (amigável) ou técnico
             mapeamento_colunas = {
