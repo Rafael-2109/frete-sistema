@@ -542,6 +542,10 @@ class SQLSafetyValidator:
                 if part and not part.startswith('SELECT') and not part.startswith('('):
                     concerns.append(f"Parte {i+1} do UNION nao e SELECT valido")
                     return False, concerns
+                # Detectar LIMIT sem parenteses antes de UNION (causa syntax error)
+                if i < len(parts) - 1 and re.search(r'\bLIMIT\s+\d+\s*$', part.strip()):
+                    concerns.append(f"LIMIT sem parenteses antes de UNION na parte {i+1} — use (SELECT ... LIMIT N) UNION ALL (...)")
+                    return False, concerns
 
         return True, concerns
 
@@ -593,6 +597,8 @@ REGRAS OBRIGATORIAS:
 12. Para "faturamento": filtrar status_nf = 'Lancado' AND revertida = False (tabela faturamento_produto)
 13. Para "contas a receber vencidas": filtrar vencimento < CURRENT_DATE AND parcela_paga = False (tabela contas_a_receber)
 14. Responda APENAS com a query SQL, sem explicacoes, sem markdown, sem ```
+15. Para UNION/UNION ALL: TODOS os SELECT devem ter EXATAMENTE o mesmo numero e ordem de colunas com tipos compativeis. NUNCA misturar colunas diferentes entre os SELECTs.
+16. Para UNION/UNION ALL com LIMIT em sub-SELECTs individuais: SEMPRE usar parenteses: (SELECT ... LIMIT N) UNION ALL (SELECT ... LIMIT N). NUNCA colocar LIMIT entre SELECTs sem parenteses.
 
 PERGUNTA: {question}
 
@@ -693,6 +699,12 @@ VERIFIQUE COM RIGOR (todos os itens sao obrigatorios):
 8. Tem LIMIT? (maximo 500)
 
 9. A SQL e segura? (apenas SELECT, sem funcoes perigosas)
+
+10. VALIDACAO UNION (CRITICO): Se a SQL contem UNION ou UNION ALL:
+   a) Todos os SELECTs DEVEM ter o mesmo numero de colunas — conte e corrija se divergir.
+   b) LIMIT entre SELECTs do UNION DEVE estar entre parenteses: (SELECT ... LIMIT N) UNION ALL (SELECT ... LIMIT N).
+   c) Um LIMIT unico no final de todo o UNION e valido sem parenteses.
+   d) Se nao for possivel alinhar as colunas, reescreva como queries separadas ou use apenas a tabela mais relevante.
 
 REGRA DE FALLBACK: Se a SQL tem campos que NAO existem no schema e voce NAO consegue
 determinar o campo correto, retorne approved=false com improved_sql=null e reason

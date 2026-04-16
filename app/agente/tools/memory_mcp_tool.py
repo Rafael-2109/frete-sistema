@@ -265,6 +265,13 @@ def _execute_with_context(func):
     """
     Executa função dentro de Flask app context (se necessário).
 
+    Se a sessão SQLAlchemy está em estado inválido (transação abortada),
+    faz rollback antes de executar para evitar o erro
+    "Can't reconnect until invalid transaction is rolled back".
+    Isso pode ocorrer no Teams (thread com app context reutilizado) quando
+    uma tool call anterior falhou sem rollback — a sessão fica em estado
+    abortado e bloqueia todas as queries subsequentes (cascata HX→HW).
+
     Args:
         func: Callable que precisa de app context
 
@@ -273,7 +280,17 @@ def _execute_with_context(func):
     """
     ctx = _get_app_context()
     if ctx is None:
-        # Já dentro de app context
+        # Já dentro de app context — verificar se sessão precisa de rollback
+        try:
+            from app import db
+            if db.session.is_active is False:
+                logger.warning(
+                    "[MEMORY_MCP] Sessão em estado inválido detectada antes de "
+                    "executar tool — fazendo rollback preventivo"
+                )
+                db.session.rollback()
+        except Exception:
+            pass
         return func()
     else:
         with ctx:
@@ -1814,6 +1831,11 @@ try:
         except Exception as e:
             error_msg = f"Erro ao salvar {path}: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @enhanced_tool(
@@ -1949,6 +1971,11 @@ try:
         except Exception as e:
             error_msg = f"Erro ao atualizar {path}: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @enhanced_tool(
@@ -2056,6 +2083,11 @@ try:
         except Exception as e:
             error_msg = f"Erro ao deletar {path}: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @enhanced_tool(
@@ -2166,6 +2198,11 @@ try:
         except Exception as e:
             error_msg = f"Erro ao limpar memórias: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @enhanced_tool(
@@ -2508,6 +2545,11 @@ try:
         except Exception as e:
             error_msg = f"Erro ao restaurar versão: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @enhanced_tool(
@@ -2600,6 +2642,11 @@ try:
         except Exception as e:
             error_msg = f"Erro ao resolver pendência: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @enhanced_tool(
@@ -2754,6 +2801,11 @@ try:
         except Exception as e:
             error_msg = f"Erro ao registrar pitfall: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     @enhanced_tool(
@@ -3071,6 +3123,11 @@ try:
         except Exception as e:
             error_msg = f"Erro ao registrar improvement: {str(e)}"
             logger.error(f"[MEMORY_MCP] {error_msg}")
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
             return {"content": [{"type": "text", "text": error_msg}], "is_error": True}
 
     # Criar MCP server in-process
