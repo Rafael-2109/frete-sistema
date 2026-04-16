@@ -9,8 +9,8 @@ from app.producao.models import CadastroPalletizacao
 from app.localidades.models import CadastroRota, CadastroSubRota
 from app.utils.text_utils import truncar_observacao
 from app.utils.timezone import agora_utc_naive
+from app.utils.string_utils import remover_acentos
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -167,22 +167,28 @@ def buscar_rota_por_uf(cod_uf):
 
 def buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade):
     """
-    Busca sub-rota baseada no cod_uf + nome_cidade
-    Usa ILIKE para busca com acentos
+    Busca sub-rota baseada no cod_uf + nome_cidade.
+    Usa remover_acentos() em ambos os lados para garantir match
+    mesmo quando nome_cidade vem normalizado (UPPER sem acento)
+    e cadastro_sub_rota armazena nome canônico com acento.
     """
     if not cod_uf or not nome_cidade:
         return None
     try:
-        # Normalizar nome da cidade (remover acentos e espaços extras)
-        nome_normalizado = re.sub(r'[^\w\s]', '', nome_cidade.strip().upper())
-        
-        sub_rota = CadastroSubRota.query.filter(
+        nome_normalizado = remover_acentos(nome_cidade)
+
+        # Carrega candidatos por UF (tipicamente ~20-50 registros)
+        # e compara em Python com ambos os lados normalizados
+        subrotas = CadastroSubRota.query.filter(
             CadastroSubRota.cod_uf == cod_uf,
-            CadastroSubRota.nome_cidade.ilike(f'%{nome_normalizado}%'),
             CadastroSubRota.ativa == True
-        ).first()
-        
-        return sub_rota.sub_rota if sub_rota else None  # Corrigido: usar .sub_rota em vez de .nome
+        ).all()
+
+        for sr in subrotas:
+            sr_nome = remover_acentos(sr.nome_cidade) if sr.nome_cidade else ''
+            if nome_normalizado in sr_nome or sr_nome in nome_normalizado:
+                return sr.sub_rota
+        return None
     except Exception as e:
         logger.debug(f"Erro ao buscar sub-rota para {nome_cidade}/{cod_uf}: {e}")
         return None

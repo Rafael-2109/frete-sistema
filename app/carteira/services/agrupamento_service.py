@@ -15,8 +15,8 @@ from app.carteira.models import CarteiraPrincipal, SaldoStandby
 from app.separacao.models import Separacao
 from app.producao.models import CadastroPalletizacao
 from app.localidades.models import CadastroRota, CadastroSubRota
+from app.utils.string_utils import remover_acentos
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -184,8 +184,8 @@ class AgrupamentoService:
     def _carregar_subrotas_batch(self, ufs):
         """
         Carrega todas as subrotas ativas em 1 query.
-        Retorna dict {cod_uf: [(nome_upper, sub_rota)]} para lookup via substring.
-        Equivalente ao ILIKE %nome% usado na busca individual.
+        Retorna dict {cod_uf: [(nome_normalizado, sub_rota)]} para lookup via substring.
+        Usa remover_acentos() para normalizar nomes e garantir match accent-safe.
         """
         if not ufs:
             return {}
@@ -197,18 +197,18 @@ class AgrupamentoService:
 
             lookup = defaultdict(list)
             for sr in subrotas:
-                nome_upper = sr.nome_cidade.strip().upper() if sr.nome_cidade else ''
-                lookup[sr.cod_uf].append((nome_upper, sr.sub_rota))
+                nome_normalizado = remover_acentos(sr.nome_cidade) if sr.nome_cidade else ''
+                lookup[sr.cod_uf].append((nome_normalizado, sr.sub_rota))
             return dict(lookup)
         except Exception as e:
             logger.warning(f"Erro ao carregar subrotas em batch: {e}")
             return {}
 
     def _buscar_subrota_em_memoria(self, subrotas_lookup, cod_uf, nome_cidade):
-        """Busca subrota em memoria, equivalente a ILIKE %normalizado%"""
+        """Busca subrota em memoria com normalizacao accent-safe"""
         if not cod_uf or not nome_cidade:
             return None
-        nome_normalizado = re.sub(r'[^\w\s]', '', nome_cidade.strip().upper())
+        nome_normalizado = remover_acentos(nome_cidade)
         candidates = subrotas_lookup.get(cod_uf, [])
         for sr_nome, sr_valor in candidates:
             if nome_normalizado in sr_nome:
