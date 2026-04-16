@@ -102,6 +102,12 @@ python scripts/migrations/backfill_entrega_monitorada_carvia.py \
     || echo "⚠️ Backfill entrega monitorada CarVia falhou, continuando deploy..."
 
 
+# 10. Migration Remessa VORTX (2026-04-16): flag usuario + tabela cache + sequence.
+# Idempotente (IF NOT EXISTS). CRITICO: sem esta migration, /auth/login retorna 500.
+echo "Migration: remessa VORTX (flag usuario + tabela cache + sequence)..."
+python scripts/migrations/adicionar_remessa_vortx.py \
+    || echo "⚠️ Migration adicionar_remessa_vortx falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
