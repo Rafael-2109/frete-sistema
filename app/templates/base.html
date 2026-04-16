@@ -321,6 +321,15 @@
               {% endif %}
 
               {# ================================================================= #}
+              {# REMESSAS VORTX                                                    #}
+              {# ================================================================= #}
+              {% if current_user.pode_gerar_remessa_vortx() %}
+              <li><a class="dropdown-item" href="{{ url_for('financeiro.remessa_vortx_historico') }}">
+                  <i class="fas fa-file-invoice-dollar text-success"></i> Remessas VORTX
+                </a></li>
+              {% endif %}
+
+              {# ================================================================= #}
               {# CARVIA — Frete Subcontratado                                      #}
               {# ================================================================= #}
               {% if current_user.sistema_carvia %}

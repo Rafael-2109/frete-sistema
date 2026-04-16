@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Remessa VORTX - Titulos Pendentes{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4><i class="fas fa-file-invoice-dollar text-success"></i> Titulos Pendentes - Remessa VORTX</h4>
+        <a href="{{ url_for('financeiro.remessa_vortx_historico') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-history"></i> Historico
+        </a>
+    </div>
+
+    {# Seletor de empresa #}
+    <div class="btn-group mb-3" role="group">
+        {% for cid, cname in company_names.items() %}
+        <a href="{{ url_for('financeiro.remessa_vortx_titulos', company_id=cid) }}"
+           class="btn {% if company_id == cid %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            {{ cname }}
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if erro %}
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-circle me-2"></i> {{ erro }}
+    </div>
+    {% endif %}
+
+    {% if titulos %}
+    <form method="post" action="{{ url_for('financeiro.remessa_vortx_gerar') }}" id="formGerar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="company_id" value="{{ company_id }}">
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAll">
+                    <i class="fas fa-check-double"></i> Selecionar Todos
+                </button>
+                <span class="ms-2 text-muted" id="contadorSelecionados">0 selecionado(s)</span>
+            </div>
+            <button type="submit" class="btn btn-success" id="btnGerar" disabled>
+                <i class="fas fa-cogs"></i> Gerar Remessa VORTX
+            </button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width: 40px;">
+                            <input type="checkbox" id="checkAll" class="form-check-input">
+                        </th>
+                        <th>ID</th>
+                        <th>NF / Parcela</th>
+                        <th>Vencimento</th>
+                        <th class="text-end">Valor (R$)</th>
+                        <th>Nosso Nr Atual</th>
+                        <th>Cliente</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in titulos %}
+                    <tr>
+                        <td class="text-center">
+                            <input type="checkbox" name="move_line_ids" value="{{ t.id }}"
+                                   class="form-check-input titulo-check">
+                        </td>
+                        <td>{{ t.id }}</td>
+                        <td>{{ t.name or '-' }}</td>
+                        <td>
+                            {% if t.date_maturity %}
+                            {{ t.date_maturity[8:10] }}/{{ t.date_maturity[5:7] }}/{{ t.date_maturity[:4] }}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="text-end">{{ "%.2f"|format(t.debit or 0) }}</td>
+                        <td>
+                            {% if t.l10n_br_cobranca_nossonumero %}
+                            <code>{{ t.l10n_br_cobranca_nossonumero }}</code>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if t.partner_id %}
+                            {{ t.partner_id[1] if t.partner_id is iterable and t.partner_id|length > 1 else t.partner_id }}
+                            {% else %}-{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </form>
+    {% elif not erro %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        Nenhum titulo pendente de remessa encontrado para esta empresa.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const checkAll = document.getElementById('checkAll');
+    const btnSelectAll = document.getElementById('btnSelectAll');
+    const btnGerar = document.getElementById('btnGerar');
+    const contador = document.getElementById('contadorSelecionados');
+
+    function getChecks() {
+        return document.querySelectorAll('.titulo-check');
+    }
+
+    function atualizarContador() {
+        const checks = getChecks();
+        const selecionados = document.querySelectorAll('.titulo-check:checked').length;
+        if (contador) contador.textContent = selecionados + ' selecionado(s)';
+        if (btnGerar) btnGerar.disabled = selecionados === 0;
+        if (checkAll) checkAll.checked = selecionados > 0 && selecionados === checks.length;
+    }
+
+    if (checkAll) {
+        checkAll.addEventListener('change', function() {
+            getChecks().forEach(function(cb) { cb.checked = checkAll.checked; });
+            atualizarContador();
+        });
+    }
+
+    if (btnSelectAll) {
+        btnSelectAll.addEventListener('click', function() {
+            const checks = getChecks();
+            const allChecked = document.querySelectorAll('.titulo-check:checked').length === checks.length;
+            checks.forEach(function(cb) { cb.checked = !allChecked; });
+            atualizarContador();
+        });
+    }
+
+    document.querySelectorAll('.titulo-check').forEach(function(cb) {
+        cb.addEventListener('change', atualizarContador);
+    });
+
+    var formGerar = document.getElementById('formGerar');
+    if (formGerar) {
+        formGerar.addEventListener('submit', function(e) {
+            var selecionados = document.querySelectorAll('.titulo-check:checked').length;
+            if (selecionados === 0) {
+                e.preventDefault();
+                alert('Selecione pelo menos um titulo.');
+                return;
+            }
+            if (!confirm('Gerar remessa VORTX com ' + selecionados + ' titulo(s)?')) {
+                e.preventDefault();
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}
