@@ -25,6 +25,8 @@ logger = logging.getLogger('sistema_fretes')
 # AgentDefinition.model aceita Literal["sonnet", "opus", "haiku", "inherit"] | None.
 _MODEL_MAP: Dict[str, str] = {
     "opus": "opus",
+    "opus-4-7": "opus",
+    "opus_4_7": "opus",
     "opus-4-6": "opus",
     "opus_4_6": "opus",
     "sonnet": "sonnet",

@@ -28,7 +28,9 @@ class AgentSettings:
     """
 
     # Modelo e API
-    model: str = "claude-opus-4-6"
+    # Opus 4.7 (16/04/2026): mesmo preco que 4.6 ($5/$25 per MTok), 128K max output,
+    # 1M context window nativo, adaptive thinking. Override via env AGENT_MODEL.
+    model: str = "claude-opus-4-7"
     api_key: Optional[str] = None
 
     # Tools do SDK (ferramentas padrão permitidas)
@@ -74,9 +76,12 @@ class AgentSettings:
 
     # Preços por modelo (por 1M tokens) — [input, output]
     # Ref: https://www.anthropic.com/pricing
+    # Nota: Opus 4.7 usa novo tokenizer (~0-35% mais tokens por texto vs 4.6) —
+    # custo/USD/request pode subir mesmo com preço/token idêntico. Monitorar.
     MODEL_PRICING: dict = field(default_factory=lambda: {
-        'claude-opus-4-6': (5.00, 25.00),
-        'claude-opus-4-5-20251101': (5.00, 25.00),     # Legacy: sessões existentes
+        'claude-opus-4-7': (5.00, 25.00),              # Default atual
+        'claude-opus-4-6': (5.00, 25.00),              # Legacy: sessões existentes
+        'claude-opus-4-5-20251101': (5.00, 25.00),     # Legacy: sessões antigas
         'claude-sonnet-4-6': (3.00, 15.00),
         'claude-haiku-4-5-20251001': (0.25, 1.25),
     })
@@ -120,10 +125,10 @@ class AgentSettings:
             Custo em USD
         """
         model_id = model or self.model
-        # Fallback para Opus se modelo desconhecido
+        # Fallback para Opus 4.7 se modelo desconhecido
         input_price, output_price = self.MODEL_PRICING.get(
             model_id,
-            self.MODEL_PRICING.get('claude-opus-4-6', (5.00, 25.00)),
+            self.MODEL_PRICING.get('claude-opus-4-7', (5.00, 25.00)),
         )
         input_cost = (input_tokens / 1_000_000) * input_price
         output_cost = (output_tokens / 1_000_000) * output_price

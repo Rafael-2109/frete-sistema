@@ -315,11 +315,14 @@ if AGENTE_PDF_STRATEGY not in _VALID_PDF_STRATEGIES:
 # Teams Bot
 # ====================================================================
 
-# Modelo padrao para o bot do Teams (Sonnet para velocidade)
-# Opus 4.6: ~91s por resposta com tools, custo $5/$25 per 1M tokens
-# Sonnet 4.5: ~15-25s por resposta com tools, custo $3/$15 per 1M tokens
-# Para usar Opus no Teams: TEAMS_DEFAULT_MODEL=claude-opus-4-6
-TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-6")
+# Modelo padrao para o bot do Teams.
+# Opus 4.7 (16/04/2026): mesmo preco que 4.6 ($5/$25 per 1M tokens), novo tokenizer
+#   (0-35% mais tokens por texto), stricter effort calibration, comportamento mais
+#   literal, tende a spawnar menos subagentes e usar menos tools por default.
+# Opus 4.6 (legado): ~91s por resposta com tools.
+# Sonnet 4.6: ~15-25s por resposta com tools, custo $3/$15 per 1M tokens.
+# Rollback instantaneo: TEAMS_DEFAULT_MODEL=claude-opus-4-6
+TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-7")
 
 # Modo assincrono para o bot do Teams
 # Quando true: retorna task_id imediatamente, processa em daemon thread, Azure Function faz polling

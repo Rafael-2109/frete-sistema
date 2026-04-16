@@ -189,9 +189,16 @@ const MODEL_INFO = {
         speed: '⚡⚡',
         cost: '$$'
     },
-    'claude-opus-4-6': {
+    'claude-opus-4-7': {
         name: 'Opus',
         description: 'Mais potente. Para análises complexas e planejamento.',
+        speed: '⚡',
+        cost: '$$$'
+    },
+    // Legado: sessoes antigas reportam 4.6 — manter entrada para display correto
+    'claude-opus-4-6': {
+        name: 'Opus (legado)',
+        description: 'Versao anterior. Mesmo preco do 4.7.',
         speed: '⚡',
         cost: '$$$'
     }

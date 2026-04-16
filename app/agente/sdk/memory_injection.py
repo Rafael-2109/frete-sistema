@@ -603,7 +603,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
     Args:
         user_id: ID do usuário no banco
         prompt: Prompt do usuário (para seleção semântica)
-        model_name: Nome do modelo (para budget adaptativo, ex: "claude-opus-4-6")
+        model_name: Nome do modelo (para budget adaptativo, ex: "claude-opus-4-7")
 
     Returns:
         Tupla (texto XML formatado ou None, lista de IDs de memórias injetadas)

@@ -157,7 +157,7 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `POST_SESSION_EXTRACTION_MIN_MESSAGES` | 3 | Threshold minimo de msgs para extract |
 | `USE_SESSION_TURN_EMBEDDING` | true | Embedding inline de turnos |
 | `USE_DEBUG_MODE` | true | Features admin (target_user_id) |
-| `TEAMS_DEFAULT_MODEL` | claude-opus-4-6 | Modelo default do Teams bot |
+| `TEAMS_DEFAULT_MODEL` | claude-opus-4-7 | Modelo default do Teams bot (rollback: claude-opus-4-6) |
 | `TEAMS_ASYNC_MODE` | true | Modo async do Teams |
 | `TEAMS_PROGRESSIVE_STREAMING` | true | Streaming progressivo Teams |
 

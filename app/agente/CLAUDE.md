@@ -391,13 +391,30 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 ---
 
-## SDK 0.1.55 (atualizado 2026-04-11)
+## SDK 0.1.60 (atualizado 2026-04-16)
 
-**Versao**: `claude-agent-sdk==0.1.55`
+**Versao**: `claude-agent-sdk==0.1.60`
+**Modelo default**: `claude-opus-4-7` (migrado de 4.6 em 2026-04-16)
 
-### Features adotadas (0.1.54–0.1.55):
+### Migracao Opus 4.6 → 4.7 (2026-04-16)
+- `config/settings.py:31`: default `model="claude-opus-4-7"` (mesmo preco $5/$25 per MTok, adaptive thinking, 1M context, 128K max output).
+- `config/settings.py:MODEL_PRICING`: adicionado `'claude-opus-4-7': (5.00, 25.00)`; 4.6 e 4.5 mantidos como legado.
+- `config/feature_flags.py:322`: `TEAMS_DEFAULT_MODEL` default `claude-opus-4-7`.
+- **Rollback instantaneo** via env vars: `AGENT_MODEL=claude-opus-4-6` + `TEAMS_DEFAULT_MODEL=claude-opus-4-6`.
+- **Breaking changes aplicaveis**: thinking `{"type": "enabled"}` removido (nao usavamos — ja usavamos `effort` nativo); `temperature/top_p/top_k` removidos (nao usados em Opus — Sonnet/Haiku em services nao sao afetados); prefill de assistant removido (nao usado); thinking `display: "omitted"` default (risco UX — CLI 2.1.111 pode exibir normalmente via `effort`; monitorar eventos `thinking` na pipeline SSE).
+- **Comportamento**: tokenizer novo (~0-35% mais tokens por texto), respostas calibradas pela complexidade, mais literal, tom mais direto, spawna menos subagentes por default, usa menos tools por default (steerable via `effort=high` ou prompt).
+- **Features novas disponiveis nao adotadas**: `xhigh` effort level (SDK 0.1.60 nao expõe no Literal type — via `extra_args` se necessario), `task_budget` beta (`task-budgets-2026-03-13` — campo ja existe em `ClaudeAgentOptions`), alta resolucao de imagem (2576px automatico, irrelevante para screenshots Playwright ja comprimidos).
+
+### Features adotadas (0.1.56–0.1.60):
+- **`list_subagents()`/`get_subagent_messages()`** (0.1.60): Helpers para inspecionar cadeias de mensagens de subagentes spawnados. Exportados no top-level. **NAO adotado ainda** — candidato a endpoint admin de debug.
+- **Distributed tracing W3C** (0.1.60): `TRACEPARENT`/`TRACESTATE` propagados para subprocess CLI quando span OpenTelemetry ativo. **NAO adotado** (projeto nao usa OTEL).
+- **Cascading `delete_session()`** (0.1.60): Agora remove diretorios de transcript de subagentes irmaos. **NAO aplicavel** (projeto nao usa `delete_session()` do SDK, usa fluxo DB proprio).
+- **`setting_sources=[]` fix** (0.1.60): Lista vazia passada nao e mais silenciosamente descartada — desabilita todos os settings do filesystem corretamente. Adotado automaticamente via upgrade.
+- **CLI empacotado 2.1.111** (0.1.60): Base para comportamento Opus 4.7 + correcoes diversas.
+- **`thinking={"type": "adaptive"}` mapping fix** (0.1.57): Comportamento alinhado com TS SDK. **Critico para Opus 4.7** (que depende de adaptive thinking). Adotado automaticamente.
+- **`exclude_dynamic_sections` em `SystemPromptPreset`** (0.1.57): Move secoes dinamicas per-user para fora do system prompt → cross-user cache hits. **NAO adotado** — arquitetura atual usa string direta com hook `session_context` (`USE_PROMPT_CACHE_OPTIMIZATION`), ja otimizada. Mudaria o fluxo.
+- **`"auto"` em `PermissionMode`** (0.1.57): **NAO adotado** — projeto usa `can_use_tool` callback customizado em `permissions.py`.
 - **`maxResultSizeChars` MCP fix** (0.1.55): Resultados MCP grandes nao sao mais truncados silenciosamente. CLI 2.1.91.
-- **0.1.54**: Changelog pendente de documentacao — verificar release notes se necessario.
 
 ### Features adotadas (0.1.51–0.1.53):
 - **`typing.Annotated` em MCP tools** (0.1.52): Descriptions por parametro no JSON Schema. `_mcp_enhanced.py:_python_type_to_json_schema()` processa `Annotated[str, "desc"]` → `{"type": "string", "description": "desc"}`. Aplicado em 34 tools (7 MCP servers). Modelo recebe instrucoes por parametro em vez de adivinhar pelo nome.
