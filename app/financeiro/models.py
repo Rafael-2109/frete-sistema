@@ -2722,3 +2722,106 @@ class CnabRetornoItem(db.Model):
 # =============================================================================
 # FIM CNAB400
 # =============================================================================
+
+
+# =============================================================================
+# REMESSA VORTX — Cache de estado para injecao no Odoo
+# =============================================================================
+
+class RemessaVortxCache(db.Model):
+    """
+    Cache local para state machine de injecao de remessa VORTX no Odoo.
+
+    Etapas do fluxo:
+        CNAB_GERADO -> ESCRITURAL_OK -> REMESSA_OK -> TITULOS_OK -> CONCLUIDO
+    Falhas possiveis:
+        FALHA_ESCRITURAL, FALHA_REMESSA, FALHA_TITULOS
+
+    Cada registro representa uma remessa CNAB 400 gerada localmente
+    e em processo de injecao no Odoo via XML-RPC (sujeito a 502/timeouts).
+    """
+    __tablename__ = 'remessa_vortx_cache'
+
+    ETAPAS_VALIDAS = [
+        'CNAB_GERADO', 'ESCRITURAL_OK', 'REMESSA_OK', 'TITULOS_OK', 'CONCLUIDO',
+        'FALHA_ESCRITURAL', 'FALHA_REMESSA', 'FALHA_TITULOS',
+    ]
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # State machine
+    etapa = db.Column(db.String(30), nullable=False, default='CNAB_GERADO', index=True)
+    tentativas = db.Column(db.Integer, nullable=False, default=0)
+    ultimo_erro = db.Column(db.Text, nullable=True)
+
+    # Odoo IDs
+    odoo_escritural_id = db.Column(db.Integer, nullable=True)
+    odoo_remessa_id = db.Column(db.Integer, nullable=True)
+
+    # Move line tracking (db.Text + JSON helpers — project convention A8)
+    move_line_ids_marcados = db.Column(db.Text, nullable=True)
+    move_line_ids_pendentes = db.Column(db.Text, nullable=True)
+    mapa_nn_move_line = db.Column(db.Text, nullable=True)
+
+    # Business data
+    company_id_odoo = db.Column(db.Integer, nullable=False, index=True)
+    tipo_cobranca_id_odoo = db.Column(db.Integer, nullable=True)
+    nome_arquivo = db.Column(db.String(200), nullable=False)
+    qtd_boletos = db.Column(db.Integer, nullable=False, default=0)
+    valor_total = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    nosso_numero_inicial = db.Column(db.BigInteger, nullable=True)
+    nosso_numero_final = db.Column(db.BigInteger, nullable=True)
+    arquivo_cnab = db.Column(db.LargeBinary, nullable=True)
+
+    # Audit
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    concluido_em = db.Column(db.DateTime, nullable=True)
+    atualizado_em = db.Column(db.DateTime, nullable=True, default=agora_utc_naive, onupdate=agora_utc_naive)
+
+    # Relationships
+    criado_por = db.relationship('Usuario', foreign_keys=[criado_por_id], lazy='select')
+
+    # ========== JSON helpers (Text fields) ==========
+
+    def set_move_line_ids_marcados(self, data):
+        self.move_line_ids_marcados = json.dumps(data) if data is not None else None
+
+    def get_move_line_ids_marcados(self):
+        if self.move_line_ids_marcados:
+            return json.loads(self.move_line_ids_marcados)
+        return []
+
+    def set_move_line_ids_pendentes(self, data):
+        self.move_line_ids_pendentes = json.dumps(data) if data is not None else None
+
+    def get_move_line_ids_pendentes(self):
+        if self.move_line_ids_pendentes:
+            return json.loads(self.move_line_ids_pendentes)
+        return []
+
+    def set_mapa_nn_move_line(self, data):
+        self.mapa_nn_move_line = json.dumps(data) if data is not None else None
+
+    def get_mapa_nn_move_line(self):
+        if self.mapa_nn_move_line:
+            return json.loads(self.mapa_nn_move_line)
+        return {}
+
+    # ========== Properties ==========
+
+    @property
+    def is_falha(self):
+        return self.etapa.startswith('FALHA_') if self.etapa else False
+
+    @property
+    def is_concluido(self):
+        return self.etapa == 'CONCLUIDO'
+
+    @property
+    def pode_retomar(self):
+        """Remessa em estado de falha pode ser retomada."""
+        return self.is_falha
+
+    def __repr__(self):
+        return f'<RemessaVortxCache id={self.id} etapa={self.etapa} arquivo={self.nome_arquivo}>'

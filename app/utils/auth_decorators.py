@@ -89,6 +89,10 @@ def require_carvia():
     """Decorador para acesso ao sistema CarVia (frete subcontratado)"""
     return require_permission('pode_acessar_carvia')
 
+def require_remessa_vortx():
+    """Decorador para acesso a geracao de remessa VORTX"""
+    return require_permission('pode_gerar_remessa_vortx')
+
 
 def require_carvia_aprovador():
     """Decorador para aprovar tratativas de subcontratos CarVia.

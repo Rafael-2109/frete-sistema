@@ -26,6 +26,7 @@ class Usuario(db.Model, UserMixin):
     sistema_carvia = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao sistema CarVia (frete subcontratado)
     sistema_seguranca = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao modulo de seguranca
     acesso_comissao_carvia = db.Column(db.Boolean, default=False, nullable=False)  # Acesso a comissoes CarVia
+    sistema_remessa_vortx = db.Column(db.Boolean, default=False, nullable=False)  # Acesso a geracao de remessa VORTX
 
     # Dados de controle
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
@@ -156,6 +157,10 @@ class Usuario(db.Model, UserMixin):
         return self.sistema_carvia and (
             self.acesso_comissao_carvia or self.perfil == 'administrador'
         )
+
+    def pode_gerar_remessa_vortx(self):
+        """Verifica se pode gerar remessa VORTX (flag dedicada ou admin)"""
+        return self.sistema_remessa_vortx or self.perfil == 'administrador'
 
     def __repr__(self):
         return f'<Usuario {self.email}>'
