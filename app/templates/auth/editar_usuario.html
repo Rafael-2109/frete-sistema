@@ -161,6 +161,11 @@
                                     {{ form.acesso_comissao_carvia.label(class="form-check-label", for="acessoComissaoCarvia") }}
                                     <small class="text-muted d-block">Permissão adicional para acessar comissões dentro do CarVia</small>
                                 </div>
+                                <div class="form-check mt-2">
+                                    {{ form.sistema_remessa_vortx(class="form-check-input", id="sistemaRemessaVortx") }}
+                                    {{ form.sistema_remessa_vortx.label(class="form-check-label", for="sistemaRemessaVortx") }}
+                                    <small class="text-muted d-block">Gerar remessas CNAB VORTX (banco 310) e injetar no Odoo</small>
+                                </div>
                             </div>
                         </div>
                     </div>
