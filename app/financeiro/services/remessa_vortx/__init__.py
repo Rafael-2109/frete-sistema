@@ -1,0 +1,1 @@
+from app.financeiro.services.remessa_vortx.dac_calculator import calcular_dac_nosso_numero
