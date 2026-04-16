@@ -452,7 +452,7 @@ class RecebimentoFisicoService:
                     odoo_product_name=lote_data.get('product_name'),
                     odoo_move_line_id=lote_data.get('move_line_id'),
                     odoo_move_id=lote_data.get('move_id'),
-                    lote_nome=lote_data['lote_nome'],
+                    lote_nome=(lote_data['lote_nome'] or '').strip(),
                     quantidade=lote_data['quantidade'],
                     data_validade=lote_data.get('data_validade'),
                     produto_tracking=lote_data.get('tracking', 'lot'),

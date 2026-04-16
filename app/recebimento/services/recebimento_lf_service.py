@@ -735,7 +735,7 @@ class RecebimentoLfService:
 
                             # Usar dados do batch
                             if lot_id in lots_data:
-                                lot_name = lots_data[lot_id].get('name', lot_name)
+                                lot_name = (lots_data[lot_id].get('name', lot_name) or '').strip()
                                 data_validade = lots_data[lot_id].get('expiration_date')
 
                         if pid not in lotes_por_produto:
@@ -842,7 +842,7 @@ class RecebimentoLfService:
                     odoo_dfe_line_id=lote_data.get('dfe_line_id'),
                     cfop=lote_data.get('cfop', ''),
                     tipo='manual',
-                    lote_nome=lote_data.get('lote_nome', ''),
+                    lote_nome=(lote_data.get('lote_nome', '') or '').strip(),
                     quantidade=lote_data['quantidade'],
                     data_validade=self._parse_data(lote_data.get('data_validade')),
                     produto_tracking=lote_data.get('produto_tracking', 'lot'),
@@ -858,7 +858,7 @@ class RecebimentoLfService:
                     odoo_dfe_line_id=lote_data.get('dfe_line_id'),
                     cfop=lote_data.get('cfop', '5902'),
                     tipo='auto',
-                    lote_nome=lote_data.get('lote_nome', ''),
+                    lote_nome=(lote_data.get('lote_nome', '') or '').strip(),
                     quantidade=lote_data['quantidade'],
                     data_validade=self._parse_data(lote_data.get('data_validade')),
                     produto_tracking=lote_data.get('produto_tracking', 'lot'),

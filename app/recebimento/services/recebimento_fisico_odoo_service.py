@@ -344,7 +344,7 @@ class RecebimentoFisicoOdooService:
 
             # Verificar se lote ja existe no Odoo
             lote_existente = odoo.search('stock.lot', [
-                ['name', '=', lote.lote_nome],
+                ['name', '=', (lote.lote_nome or '').strip()],
                 ['product_id', '=', product_id],
                 ['company_id', '=', company_id],
             ])
@@ -361,7 +361,7 @@ class RecebimentoFisicoOdooService:
             else:
                 # Criar stock.lot manualmente COM expiration_date
                 lot_id = odoo.create('stock.lot', {
-                    'name': lote.lote_nome,
+                    'name': (lote.lote_nome or '').strip(),
                     'product_id': product_id,
                     'company_id': company_id,
                     'expiration_date': exp_date_str,

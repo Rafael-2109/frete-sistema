@@ -2358,7 +2358,7 @@ class RecebimentoLfOdooService:
             lot_id = lote_info.odoo_lot_id
             if not lot_id and lote_info.lote_nome:
                 lot_search = odoo.search('stock.lot', [
-                    ['name', '=', lote_info.lote_nome],
+                    ['name', '=', (lote_info.lote_nome or '').strip()],
                     ['product_id', '=', pid],
                     ['company_id', '=', self.COMPANY_FB],
                 ])
@@ -2376,7 +2376,7 @@ class RecebimentoLfOdooService:
             if lot_id:
                 write_data['lot_id'] = lot_id
             elif lote_info.lote_nome:
-                write_data['lot_name'] = lote_info.lote_nome
+                write_data['lot_name'] = (lote_info.lote_nome or '').strip()
 
             odoo.write('stock.move.line', first_line['id'], write_data)
             logger.debug(f"    Move line {first_line['id']}: qty={lote_info.quantidade}, lot={lot_id or lote_info.lote_nome}")
@@ -3471,7 +3471,7 @@ class RecebimentoLfOdooService:
                 if lot_id_cd:
                     write_data['lot_id'] = lot_id_cd
                 elif lote_info.lote_nome:
-                    write_data['lot_name'] = lote_info.lote_nome
+                    write_data['lot_name'] = (lote_info.lote_nome or '').strip()
 
                 if i == 0 and existing_lines:
                     # Primeira entrada: atualizar line existente
@@ -3818,7 +3818,7 @@ class RecebimentoLfOdooService:
 
         # Buscar lote existente no CD
         lot_existente = odoo.search('stock.lot', [
-            ['name', '=', lote_info.lote_nome],
+            ['name', '=', (lote_info.lote_nome or '').strip()],
             ['product_id', '=', product_id],
             ['company_id', '=', self.COMPANY_CD],
         ])
@@ -3837,7 +3837,7 @@ class RecebimentoLfOdooService:
         else:
             # Criar lote no CD
             lot_vals = {
-                'name': lote_info.lote_nome,
+                'name': (lote_info.lote_nome or '').strip(),
                 'product_id': product_id,
                 'company_id': self.COMPANY_CD,
             }
@@ -4127,7 +4127,7 @@ class RecebimentoLfOdooService:
 
             # Verificar se lote ja existe no Odoo
             lote_existente = odoo.search('stock.lot', [
-                ['name', '=', lote.lote_nome],
+                ['name', '=', (lote.lote_nome or '').strip()],
                 ['product_id', '=', product_id],
                 ['company_id', '=', company_id],
             ])
@@ -4140,7 +4140,7 @@ class RecebimentoLfOdooService:
                 logger.debug(f"    stock.lot {lot_id} atualizado com validade={exp_date_str}")
             else:
                 lot_id = odoo.create('stock.lot', {
-                    'name': lote.lote_nome,
+                    'name': (lote.lote_nome or '').strip(),
                     'product_id': product_id,
                     'company_id': company_id,
                     'expiration_date': exp_date_str,

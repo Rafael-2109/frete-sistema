@@ -785,7 +785,7 @@ function salvarRecebimentoLf() {
             const dfeLineId = parseInt(card.dataset.dfeLineId);
             const qtdNf = parseFloat(card.dataset.qtdNf);
             const productName = card.querySelector('strong').textContent;
-            const loteNome = card.dataset.loteNome || '';
+            const loteNome = (card.dataset.loteNome || '').trim();
             const dataValidade = card.dataset.dataValidade || null;
 
             lotesAuto.push({

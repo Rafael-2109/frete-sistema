@@ -311,16 +311,6 @@
               {% endif %}
 
               {# ================================================================= #}
-              {# MATCH EXTRATOS BANCARIOS                                          #}
-              {# ================================================================= #}
-              {% if current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item" href="{{ url_for('financeiro.extrato_itens') }}">
-                  <i class="fas fa-exchange-alt text-info"></i> Extratos
-                </a></li>
-              {% endif %}
-
-              {# ================================================================= #}
               {# REMESSAS VORTX                                                    #}
               {# ================================================================= #}
               {% if current_user.pode_gerar_remessa_vortx() %}
