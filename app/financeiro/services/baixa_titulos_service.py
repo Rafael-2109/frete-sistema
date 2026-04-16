@@ -841,6 +841,33 @@ class BaixaTitulosService:
                     logger.error(f"[ANO_2000] Erro ao despublicar fatura {move_id}: {e}")
                     return False
 
+            # PASSO 1.5: Re-ler títulos 2000 com valores ATUAIS (pós-draft)
+            # button_draft pode fazer o Odoo recalcular descontos, alterando os debits.
+            # Usar valores cacheados pré-draft causa desbalanço (PYTHON-FLASK-J0/HZ).
+            titulos_2000_atuais = self.connection.search_read(
+                'account.move.line',
+                [
+                    ['move_id', '=', move_id],
+                    ['date_maturity', '=', '2000-01-01'],
+                ],
+                fields=['id', 'debit', 'credit'],
+                limit=20
+            )
+
+            if titulos_2000_atuais:
+                desconto_total_atualizado = sum(
+                    t['debit'] for t in titulos_2000_atuais if t['debit'] > 0
+                )
+                if desconto_total_atualizado != desconto_total:
+                    logger.info(
+                        f"[ANO_2000] Desconto recalculado pós-draft: "
+                        f"R$ {desconto_total:.2f} → R$ {desconto_total_atualizado:.2f} "
+                        f"(diff: {desconto_total_atualizado - desconto_total:.2f})"
+                    )
+                    desconto_total = desconto_total_atualizado
+                # Usar os IDs atuais (podem ter mudado após draft)
+                titulos_2000 = titulos_2000_atuais
+
             # PASSO 2: Zerar títulos ano 2000
             for t in titulos_2000:
                 try:
@@ -969,16 +996,82 @@ class BaixaTitulosService:
             )
 
             if diferenca > 0.01:
-                logger.error(
-                    f"[ANO_2000] Fatura {move_id} desbalanceada após correção! "
-                    f"Débito: {total_debito:.2f}, Crédito: {total_credito:.2f}"
-                )
-                # Tentar republicar mesmo assim para não deixar em draft
-                try:
-                    self.connection.execute_kw('account.move', 'action_post', [[move_id]])
-                except Exception:
-                    pass
-                return False
+                # PASSO 4.5: Tentar rebalancear ajustando a última parcela válida
+                # Causa comum: button_draft recalcula descontos com valores ligeiramente
+                # diferentes dos cacheados pré-draft (PYTHON-FLASK-J0/HZ)
+                if parcelas_validas and diferenca < 50:  # safety: só corrige diffs pequenos
+                    ultima_parcela_id = parcelas_validas[-1]['id']
+                    # Re-ler debit atual da parcela (pode ter mudado)
+                    parcela_atual = self.connection.search_read(
+                        'account.move.line',
+                        [['id', '=', ultima_parcela_id]],
+                        fields=['debit', 'credit'],
+                        limit=1
+                    )
+                    if parcela_atual and parcela_atual[0]['debit'] > 0:
+                        ajuste = round(total_credito - total_debito, 2)  # positivo se credito > debito
+                        novo_debit_ajustado = round(parcela_atual[0]['debit'] + ajuste, 2)
+                        try:
+                            self.connection.execute_kw(
+                                'account.move.line', 'write',
+                                [[ultima_parcela_id], {'debit': novo_debit_ajustado}]
+                            )
+                            logger.info(
+                                f"[ANO_2000] Rebalanceamento: parcela {ultima_parcela_id} "
+                                f"debit {parcela_atual[0]['debit']:.2f} → {novo_debit_ajustado:.2f} "
+                                f"(ajuste: {ajuste:+.2f})"
+                            )
+                            # Re-verificar
+                            lines2 = self.connection.search_read(
+                                'account.move.line',
+                                [['move_id', '=', move_id]],
+                                fields=['debit', 'credit'],
+                                limit=200
+                            )
+                            total_debito2 = sum(l['debit'] for l in lines2)
+                            total_credito2 = sum(l['credit'] for l in lines2)
+                            diferenca2 = abs(total_debito2 - total_credito2)
+                            if diferenca2 <= 0.01:
+                                logger.info(
+                                    f"[ANO_2000] Rebalanceamento OK: "
+                                    f"Débito: {total_debito2:.2f}, Crédito: {total_credito2:.2f}"
+                                )
+                            else:
+                                logger.error(
+                                    f"[ANO_2000] Rebalanceamento insuficiente: "
+                                    f"Débito: {total_debito2:.2f}, Crédito: {total_credito2:.2f}, "
+                                    f"Diferença: {diferenca2:.2f}"
+                                )
+                                try:
+                                    self.connection.execute_kw(
+                                        'account.move', 'action_post', [[move_id]]
+                                    )
+                                except Exception:
+                                    pass
+                                return False
+                        except Exception as e:
+                            logger.error(
+                                f"[ANO_2000] Erro no rebalanceamento parcela {ultima_parcela_id}: {e}"
+                            )
+                            try:
+                                self.connection.execute_kw(
+                                    'account.move', 'action_post', [[move_id]]
+                                )
+                            except Exception:
+                                pass
+                            return False
+                else:
+                    logger.error(
+                        f"[ANO_2000] Fatura {move_id} desbalanceada após correção! "
+                        f"Débito: {total_debito:.2f}, Crédito: {total_credito:.2f}. "
+                        f"Diferença {diferenca:.2f} muito grande para rebalancear automaticamente."
+                    )
+                    # Tentar republicar mesmo assim para não deixar em draft
+                    try:
+                        self.connection.execute_kw('account.move', 'action_post', [[move_id]])
+                    except Exception:
+                        pass
+                    return False
 
             # PASSO 5: Republicar fatura
             try:
