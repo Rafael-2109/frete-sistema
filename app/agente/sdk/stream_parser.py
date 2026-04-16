@@ -60,6 +60,11 @@ class _StreamParseState:
     tool_calls: List[ToolCall] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
+    # G2 (2026-04-15): Cache tokens capturados do ResultMessage.usage para
+    # instrumentar cache hit rate. Separados de input_tokens porque
+    # prompt caching tem pricing diferente (read ~0.1x, creation ~1.25x).
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
     last_message_id: Optional[str] = None
     done_emitted: bool = False
     result_session_id: Optional[str] = None

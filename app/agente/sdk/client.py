@@ -764,14 +764,21 @@ Nunca invente informações."""
                 state.full_text = message.result
 
             # Capturar usage do ResultMessage (única fonte confiável)
+            # G2 (2026-04-15): Extrair tambem cache_read_input_tokens e
+            # cache_creation_input_tokens para instrumentar cache hit rate.
+            # Campos oficiais do Anthropic API conforme prompt-caching docs.
             if message.usage:
                 usage = message.usage
                 if isinstance(usage, dict):
                     state.input_tokens = usage.get('input_tokens', state.input_tokens)
                     state.output_tokens = usage.get('output_tokens', state.output_tokens)
+                    state.cache_read_tokens = usage.get('cache_read_input_tokens', 0) or 0
+                    state.cache_creation_tokens = usage.get('cache_creation_input_tokens', 0) or 0
                 else:
                     state.input_tokens = getattr(usage, 'input_tokens', state.input_tokens) or state.input_tokens
                     state.output_tokens = getattr(usage, 'output_tokens', state.output_tokens) or state.output_tokens
+                    state.cache_read_tokens = getattr(usage, 'cache_read_input_tokens', 0) or 0
+                    state.cache_creation_tokens = getattr(usage, 'cache_creation_input_tokens', 0) or 0
 
             logger.info(
                 f"[AGENT_SDK] ResultMessage | "
@@ -828,6 +835,10 @@ Nunca invente informações."""
                         'text': state.full_text,
                         'input_tokens': state.input_tokens,
                         'output_tokens': state.output_tokens,
+                        # G2 (2026-04-15): cache tokens propagados ate chat.js
+                        # para medicao de cache hit rate no dashboard
+                        'cache_read_tokens': state.cache_read_tokens,
+                        'cache_creation_tokens': state.cache_creation_tokens,
                         'total_cost_usd': getattr(message, 'total_cost_usd', 0) or 0,
                         'session_id': state.result_session_id,
                         'tool_calls': len(state.tool_calls),

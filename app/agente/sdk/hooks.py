@@ -50,6 +50,7 @@ def build_hooks(
 
     from .stream_parser import _classify_tool_error
     from .memory_injection import _load_user_memories_for_context
+    from ._sanitization import xml_escape
 
     async def _keep_stream_open(hook_input: PreToolUseHookInput, signal, context: HookContext):
         """Hook OBRIGATÓRIO: mantém stream aberto para can_use_tool funcionar.
@@ -648,10 +649,13 @@ def build_hooks(
                     except ImportError:
                         pass
 
+                    # G1 (2026-04-15): xml_escape em user_name para defense
+                    # in depth. user_id e int (safe), data_hora vem de
+                    # strftime (safe), pessoal_grant e literal controlado.
                     session_context = (
                         "<session_context>"
                         f"\n  <data_atual>{data_hora}</data_atual>"
-                        f"\n  <usuario>{user_name} (ID: {user_id})</usuario>"
+                        f"\n  <usuario>{xml_escape(user_name)} (ID: {user_id})</usuario>"
                         f"{pessoal_grant}"
                         "\n</session_context>\n"
                     )

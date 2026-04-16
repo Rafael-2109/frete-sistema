@@ -11,6 +11,7 @@ Extraído de client.py em 2026-04-04.
 import logging
 from typing import Optional
 from app.utils.timezone import agora_utc_naive
+from ._sanitization import xml_escape, sanitize_memory_content
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -87,7 +88,8 @@ def _build_session_window(user_id: int) -> Optional[str]:
                 alertas = summary.get('alertas', [])
                 data = sess.updated_at.strftime('%d/%m') if sess.updated_at else '?'
 
-                compact = f'<session date="{data}">{resumo}'
+                # G4: resumo e texto simples do summary JSONB — xml_escape
+                compact = f'<session date="{data}">{xml_escape(resumo)}'
                 if alertas:
                     compact += f' alertas={len(alertas)}'
                 compact += '</session>'
@@ -119,7 +121,8 @@ def _build_session_window(user_id: int) -> Optional[str]:
                              '3) Se pode resolver agora: resolva e chame resolve_pendencia. '
                              '4) Se nao pode resolver: pergunte ao usuario como proceder.</instruction>')
                 for p in unique_pend:
-                    parts.append(f'  <item>{p}</item>')
+                    # G4: p e texto simples de summary JSONB — xml_escape
+                    parts.append(f'  <item>{xml_escape(p)}</item>')
                 parts.append('</pendencias_acumuladas>')
 
         parts.append('</recent_sessions>')
@@ -416,12 +419,14 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
             if len(presc) > 350:
                 presc = presc[:347] + '...'
 
+            # G4: campos extraidos de memorias podem vir com tags/entities
+            # no conteudo — escapar antes de interpolar no wrapper XML.
             d_parts = [f'  <directive id="{mem.id}">']
             if titulo:
-                d_parts.append(f'    <titulo>{titulo}</titulo>')
+                d_parts.append(f'    <titulo>{xml_escape(titulo)}</titulo>')
             if when_text:
-                d_parts.append(f'    <when>{when_text}</when>')
-            d_parts.append(f'    <do>{presc}</do>')
+                d_parts.append(f'    <when>{xml_escape(when_text)}</when>')
+            d_parts.append(f'    <do>{xml_escape(presc)}</do>')
             d_parts.append('  </directive>')
             directives.append('\n'.join(d_parts))
 
@@ -534,12 +539,17 @@ def _build_routing_context(user_id: int) -> Optional[str]:
 
                 if len(title) > 80:
                     title = title[:77] + '...'
+                # G4: title/prescricao extraidos de AgentMemory.content —
+                # escapar antes de interpolar no XML de active_traps.
                 if prescricao:
                     if len(prescricao) > 200:
                         prescricao = prescricao[:197] + '...'
-                    parts.append(f'    - {title}\n      DO: {prescricao}')
+                    parts.append(
+                        f'    - {xml_escape(title)}'
+                        f'\n      DO: {xml_escape(prescricao)}'
+                    )
                 else:
-                    parts.append(f'    - {title}')
+                    parts.append(f'    - {xml_escape(title)}')
             parts.append('  </active_traps>')
 
         parts.append('</routing_context>')
@@ -933,7 +943,12 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                         f"[MEMORY_INJECT] user.xml pointer aplicado: "
                         f"user_id={user_id} orig={original_len} new={len(content)}"
                     )
-                mem_text = f'<memory path="{mem.path}">\n{content}\n</memory>\n'
+                # G4: neutralizar tags de controle injetadas em memoria
+                # (preserva XML legitimo tipo <resumo>, <contextualizacao>)
+                content = sanitize_memory_content(
+                    content, source=f"mem_id={mem.id} path={mem.path}"
+                )
+                mem_text = f'<memory path="{xml_escape(mem.path)}">\n{content}\n</memory>\n'
                 tier1_texts.append((mem, mem_text))
                 tier1_chars += len(mem_text)
 
@@ -947,7 +962,15 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 # Truncar perfis longos a 400 chars para não sobrecarregar
                 if len(content) > 400:
                     content = content[:400] + "..."
-                mem_text = f'<memory path="{mem.path}" tier="routing">\n{content}\n</memory>\n'
+                # G4: sanitizar tags de controle (perfil empresa user_id=0
+                # e shared entre sessoes — vetor critico de RAG injection)
+                content = sanitize_memory_content(
+                    content, source=f"mem_id={mem.id} tier=routing path={mem.path}"
+                )
+                mem_text = (
+                    f'<memory path="{xml_escape(mem.path)}" tier="routing">\n'
+                    f'{content}\n</memory>\n'
+                )
                 tier15_texts.append((mem, mem_text))
                 tier15_chars += len(mem_text)
 
@@ -958,7 +981,14 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 content = (mem.content or "").strip()
                 if not content:
                     continue
-                mem_text = f'<memory path="{mem.path}" tier="heuristica">\n{content}\n</memory>\n'
+                # G4: mesma logica tier1.5 — heuristicas empresa sao shared
+                content = sanitize_memory_content(
+                    content, source=f"mem_id={mem.id} tier=heuristica path={mem.path}"
+                )
+                mem_text = (
+                    f'<memory path="{xml_escape(mem.path)}" tier="heuristica">\n'
+                    f'{content}\n</memory>\n'
+                )
                 tier16_texts.append((mem, mem_text))
                 tier16_chars += len(mem_text)
 
@@ -971,7 +1001,11 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 content = (mem.content or "").strip()
                 if not content:
                     continue
-                mem_text = f'<memory path="{mem.path}">\n{content}\n</memory>\n'
+                # G4: sanitizar antes de envolver em wrapper <memory>
+                content = sanitize_memory_content(
+                    content, source=f"mem_id={mem.id} tier=2 path={mem.path}"
+                )
+                mem_text = f'<memory path="{xml_escape(mem.path)}">\n{content}\n</memory>\n'
                 # Usar composite score original do PASS 1 (inclui similarity)
                 # Fallback: decay + importance (sem similarity) para memórias de fallback
                 if mem.id in _pass1_scores:

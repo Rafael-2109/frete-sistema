@@ -24,7 +24,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CostEntry:
-    """Entrada de custo individual."""
+    """Entrada de custo individual.
+
+    G2 (2026-04-15): cache_read_tokens e cache_creation_tokens adicionados
+    para instrumentar cache hit rate. Vindos de ResultMessage.usage
+    (cache_read_input_tokens / cache_creation_input_tokens).
+    """
 
     message_id: str
     timestamp: datetime
@@ -34,6 +39,8 @@ class CostEntry:
     tool_name: Optional[str] = None
     session_id: Optional[str] = None
     user_id: Optional[int] = None
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -41,6 +48,8 @@ class CostEntry:
             'timestamp': self.timestamp.isoformat(),
             'input_tokens': self.input_tokens,
             'output_tokens': self.output_tokens,
+            'cache_read_tokens': self.cache_read_tokens,
+            'cache_creation_tokens': self.cache_creation_tokens,
             'cost_usd': self.cost_usd,
             'tool_name': self.tool_name,
             'session_id': self.session_id,
@@ -50,22 +59,67 @@ class CostEntry:
 
 @dataclass
 class CostSummary:
-    """Resumo de custos."""
+    """Resumo de custos.
+
+    G2 (2026-04-15): agrega cache tokens para calculo de cache hit rate.
+    Hit rate = cache_read / (input + cache_read). Quanto mais proximo de
+    1.0, mais efetivo esta o prompt caching. Meta: ~0.4-0.6 apos estabilizar.
+    """
 
     total_requests: int = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
+    total_cache_read_tokens: int = 0
+    total_cache_creation_tokens: int = 0
     total_cost_usd: float = 0.0
     period_start: Optional[datetime] = None
     period_end: Optional[datetime] = None
     by_tool: Dict[str, float] = field(default_factory=dict)
     by_user: Dict[int, float] = field(default_factory=dict)
 
+    @property
+    def cache_hit_rate(self) -> float:
+        """Cache hit rate = cache_read / (input_tokens + cache_read_tokens).
+
+        input_tokens no Anthropic API e o "uncached remainder" — tokens
+        que pagaram preco cheio. cache_read_tokens e o que foi servido do
+        cache (~0.1x do preco). A soma dos dois e o total de prompt tokens
+        processados. Hit rate 0 = nenhum cache; hit rate 1 = tudo cache.
+        """
+        denominator = self.total_input_tokens + self.total_cache_read_tokens
+        if denominator == 0:
+            return 0.0
+        return round(self.total_cache_read_tokens / denominator, 4)
+
+    @property
+    def estimated_savings_usd(self) -> float:
+        """Economia estimada assumindo pricing Anthropic padrao.
+
+        cache_read custa ~10% do input normal.
+        cache_creation custa ~125% do input normal (premium de write).
+        Economia bruta = cache_read_tokens * (input_price - 0.1 * input_price)
+                       - cache_creation_tokens * (1.25 * input_price - input_price)
+                       = (cache_read * 0.9 - cache_creation * 0.25) * input_price
+
+        Usa $5/1M input (Opus) como baseline. Estimativa — nao tem breakdown
+        por modelo em memoria.
+        """
+        opus_input_per_mil = 5.00 / 1_000_000
+        gross = (
+            self.total_cache_read_tokens * 0.9
+            - self.total_cache_creation_tokens * 0.25
+        )
+        return round(gross * opus_input_per_mil, 4)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'total_requests': self.total_requests,
             'total_input_tokens': self.total_input_tokens,
             'total_output_tokens': self.total_output_tokens,
+            'total_cache_read_tokens': self.total_cache_read_tokens,
+            'total_cache_creation_tokens': self.total_cache_creation_tokens,
+            'cache_hit_rate': self.cache_hit_rate,
+            'estimated_savings_usd': self.estimated_savings_usd,
             'total_cost_usd': round(self.total_cost_usd, 4),
             'period_start': self.period_start.isoformat() if self.period_start else None,
             'period_end': self.period_end.isoformat() if self.period_end else None,
@@ -124,6 +178,8 @@ class CostTracker:
         session_id: str = None,
         user_id: int = None,
         tool_name: str = None,
+        cache_read_tokens: int = 0,
+        cache_creation_tokens: int = 0,
     ) -> Optional[CostEntry]:
         """
         Registra custo de uma requisição.
@@ -131,13 +187,19 @@ class CostTracker:
         Deduplica por message_id para evitar contagem dupla
         em casos de retry ou streaming.
 
+        G2 (2026-04-15): cache_read_tokens e cache_creation_tokens sao
+        opcionais (default 0) para backward compat com callers legacy
+        (subagent cost hook, etc).
+
         Args:
             message_id: ID único da mensagem (do response Anthropic)
-            input_tokens: Tokens de entrada
+            input_tokens: Tokens de entrada (uncached remainder)
             output_tokens: Tokens de saída
             session_id: ID da sessão
             user_id: ID do usuário
             tool_name: Nome da ferramenta (se aplicável)
+            cache_read_tokens: Tokens servidos do prompt cache (pago ~0.1x)
+            cache_creation_tokens: Tokens escritos no prompt cache (pago ~1.25x)
 
         Returns:
             CostEntry se registrado, None se duplicado
@@ -149,7 +211,9 @@ class CostTracker:
 
         self._seen_message_ids.add(message_id)
 
-        # Calcula custo
+        # Calcula custo (nota: calculate_cost nao considera cache pricing;
+        # para G2 usamos o valor que o SDK ja retorna via total_cost_usd
+        # quando disponivel, este valor pode ser aproximado)
         cost_usd = self.settings.calculate_cost(input_tokens, output_tokens)
 
         # Cria entrada
@@ -162,6 +226,8 @@ class CostTracker:
             tool_name=tool_name,
             session_id=session_id,
             user_id=user_id,
+            cache_read_tokens=cache_read_tokens,
+            cache_creation_tokens=cache_creation_tokens,
         )
 
         self._entries.append(entry)
@@ -174,10 +240,20 @@ class CostTracker:
         if user_id:
             self._user_costs[user_id] += cost_usd
 
+        # Log enriquecido com cache info quando disponivel
+        cache_info = ""
+        if cache_read_tokens or cache_creation_tokens:
+            total_prompt = input_tokens + cache_read_tokens
+            hit_rate = cache_read_tokens / total_prompt if total_prompt > 0 else 0
+            cache_info = (
+                f" | cache_read={cache_read_tokens} cache_write={cache_creation_tokens} "
+                f"hit_rate={hit_rate:.2f}"
+            )
+
         logger.info(
             f"[COST_TRACKER] Registrado: ${cost_usd:.4f} "
             f"(in={input_tokens}, out={output_tokens}) "
-            f"session={session_id}"
+            f"session={session_id}{cache_info}"
         )
 
         return entry
@@ -235,11 +311,13 @@ class CostTracker:
         if until:
             filtered = [e for e in filtered if e.timestamp <= until]
 
-        # Agrega
+        # Agrega (G2: cache tokens incluidos)
         summary = CostSummary(
             total_requests=len(filtered),
             total_input_tokens=sum(e.input_tokens for e in filtered),
             total_output_tokens=sum(e.output_tokens for e in filtered),
+            total_cache_read_tokens=sum(e.cache_read_tokens for e in filtered),
+            total_cache_creation_tokens=sum(e.cache_creation_tokens for e in filtered),
             total_cost_usd=sum(e.cost_usd for e in filtered),
         )
 

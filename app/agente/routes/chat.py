@@ -42,6 +42,7 @@ from app.agente.routes._helpers import (
     _calculate_cost,
     _track_memory_effectiveness,
 )
+from app.agente.sdk._sanitization import sanitize_user_input
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -91,6 +92,19 @@ def api_chat():
             }), 400
 
         message = data['message'].strip()
+
+        # G6 (2026-04-15): Layer 1 defense-in-depth sanitizacao de input
+        # cru. Bloqueia DoS por payload gigante e neutraliza tags de
+        # controle no texto (system/instructions/tool/claude/etc) antes
+        # de qualquer processamento downstream. Nao bloqueia conteudo
+        # normal — apenas escape + log para auditoria.
+        message, suspicious_tags_count, reject_reason = sanitize_user_input(message)
+        if reject_reason:
+            return jsonify({
+                'success': False,
+                'error': reject_reason,
+            }), 400
+
         session_id = data.get('session_id')  # Nosso session_id (não do SDK)
         model = data.get('model')
         effort_level = data.get('effort_level', 'off')
@@ -131,10 +145,11 @@ def api_chat():
         # Log
         files_info = f" | Arquivos: {len(files)}" if files else ""
         debug_info = " | DEBUG MODE" if debug_mode else ""
+        sanitize_info = f" | SANITIZED({suspicious_tags_count})" if suspicious_tags_count else ""
         logger.info(
             f"[AGENTE] {user_name} (ID:{user_id}): '{message[:100]}' | "
             f"Modelo: {model or 'default'} | Effort: {effort_level} | "
-            f"Plan: {plan_mode}{files_info}{debug_info}"
+            f"Plan: {plan_mode}{files_info}{debug_info}{sanitize_info}"
         )
 
         # FEAT-032 / Fase B (2026-04-14): Processar arquivos
@@ -478,6 +493,10 @@ def _stream_chat_response(
         'tool_errors': [],
         'input_tokens': 0,
         'output_tokens': 0,
+        # G2 (2026-04-15): cache tokens inicializados em 0 para backward
+        # safety — se o done event nao chegar, o record_cost nao quebra.
+        'cache_read_tokens': 0,
+        'cache_creation_tokens': 0,
         'sdk_session_id': None,
         'our_session_id': session_id,
         'session_expired': False,
@@ -671,6 +690,9 @@ def _stream_chat_response(
                     message_id = event.metadata.get('message_id', '') or str(agora_utc_naive().timestamp())
                     response_state['input_tokens'] = event.content.get('input_tokens', 0)
                     response_state['output_tokens'] = event.content.get('output_tokens', 0)
+                    # G2 (2026-04-15): cache tokens para instrumentacao
+                    response_state['cache_read_tokens'] = event.content.get('cache_read_tokens', 0)
+                    response_state['cache_creation_tokens'] = event.content.get('cache_creation_tokens', 0)
                     cost_usd = event.content.get('total_cost_usd', 0)
 
                     # Salvar custo do SDK no response_state para uso em _save_messages_to_db
@@ -695,13 +717,18 @@ def _stream_chat_response(
                             output_tokens=response_state['output_tokens'],
                             session_id=response_state['sdk_session_id'],
                             user_id=user_id,
+                            cache_read_tokens=response_state['cache_read_tokens'],
+                            cache_creation_tokens=response_state['cache_creation_tokens'],
                         )
 
                     # Evento done (inclui structured_output se output_format ativo)
+                    # G2: cache tokens propagados para frontend/telemetria
                     done_payload = {
                         'session_id': response_state['our_session_id'],
                         'input_tokens': response_state['input_tokens'],
                         'output_tokens': response_state['output_tokens'],
+                        'cache_read_tokens': response_state['cache_read_tokens'],
+                        'cache_creation_tokens': response_state['cache_creation_tokens'],
                         'cost_usd': cost_usd,
                     }
                     structured = event.content.get('structured_output')

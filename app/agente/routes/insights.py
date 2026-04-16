@@ -130,6 +130,114 @@ def api_insights_memory():
         }), 500
 
 
+@agente_bp.route('/api/insights/cache-performance', methods=['GET'])
+@login_required
+def api_insights_cache_performance():
+    """
+    G9 (2026-04-15): Cache hit rate e economia estimada.
+
+    Le do cost_tracker em memoria (runtime-only — nao persistido em DB).
+    Cobertura temporal limitada a CostTracker.clear_old_entries (7 dias
+    default). Para analise historica longa, sera necessaria migration
+    DB futura (fora do escopo G2/G9 atual).
+
+    GET /agente/api/insights/cache-performance?days=1&user_id=123
+
+    Params:
+        days: janela de dias (default 1, max 7 — limite do tracker)
+        user_id: filtrar por usuario (opcional)
+
+    Response:
+        {
+          "success": true,
+          "data": {
+            "period": {"days": 1, "start": "...", "end": "..."},
+            "totals": {
+              "input_tokens": 12345,
+              "output_tokens": 2345,
+              "cache_read_tokens": 9876,
+              "cache_creation_tokens": 1234,
+              "cost_usd": 0.1234
+            },
+            "cache_hit_rate": 0.44,
+            "estimated_savings_usd": 0.0389,
+            "verdict": "good|weak|cold",
+            "by_user": {...},
+            "by_tool": {...}
+          }
+        }
+    """
+    from app.agente.config.feature_flags import USE_AGENT_INSIGHTS
+
+    if not USE_AGENT_INSIGHTS:
+        return jsonify({'error': 'Insights desabilitado'}), 404
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    try:
+        from datetime import timedelta
+        from app.utils.timezone import agora_utc_naive
+        from app.agente.sdk.cost_tracker import get_cost_tracker
+
+        days = request.args.get('days', 1, type=int)
+        days = min(max(days, 1), 7)  # tracker mantem ~7 dias por default
+        user_id = request.args.get('user_id', None, type=int)
+
+        since = agora_utc_naive() - timedelta(days=days)
+
+        tracker = get_cost_tracker()
+        summary = tracker.get_summary(user_id=user_id, since=since)
+        data = summary.to_dict()
+
+        # Verdict textual para o dashboard — threshold empirico
+        hit_rate = data.get('cache_hit_rate', 0)
+        if data.get('total_requests', 0) == 0:
+            verdict = 'sem_dados'
+        elif hit_rate >= 0.40:
+            verdict = 'bom'  # >=40% ja economiza significativamente
+        elif hit_rate >= 0.15:
+            verdict = 'fraco'  # cache existe mas subutilizado
+        else:
+            verdict = 'frio'  # cache nao esta funcionando (ou prompts voláteis)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'period': {
+                    'days': days,
+                    'start': data.get('period_start'),
+                    'end': data.get('period_end'),
+                },
+                'totals': {
+                    'requests': data.get('total_requests', 0),
+                    'input_tokens': data.get('total_input_tokens', 0),
+                    'output_tokens': data.get('total_output_tokens', 0),
+                    'cache_read_tokens': data.get('total_cache_read_tokens', 0),
+                    'cache_creation_tokens': data.get('total_cache_creation_tokens', 0),
+                    'cost_usd': data.get('total_cost_usd', 0),
+                },
+                'cache_hit_rate': hit_rate,
+                'estimated_savings_usd': data.get('estimated_savings_usd', 0),
+                'verdict': verdict,
+                'by_user': data.get('by_user', {}),
+                'by_tool': data.get('by_tool', {}),
+                'note': (
+                    'Metricas runtime-only (cost_tracker em memoria). '
+                    'Cobertura limitada a ~7 dias. Historico longo '
+                    'requer migration DB futura.'
+                ),
+            },
+        })
+
+    except Exception as e:
+        logger.error(f"[AGENTE] Erro em cache-performance: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500
+
+
 @agente_bp.route('/api/insights/routing', methods=['GET'])
 @login_required
 def api_insights_routing():
