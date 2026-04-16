@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 179,
+  "total_tabelas": 180,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1611,6 +1611,15 @@
         "rede",
         "tipo_documento",
         "numero_documento"
+      ]
+    },
+    {
+      "name": "remessa_vortx_cache",
+      "description": "Cache local para state machine de injecao de remessa VORTX no Odoo.",
+      "key_fields": [
+        "etapa",
+        "tentativas",
+        "ultimo_erro"
       ]
     },
     {

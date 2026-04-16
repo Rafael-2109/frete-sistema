@@ -172,13 +172,6 @@
       "unique": false
     },
     {
-      "name": "ix_despesas_extras_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_despesas_extras_nfd_id",
       "columns": [
         "nfd_id"
@@ -203,6 +196,13 @@
       "name": "ix_despesas_extras_fatura_frete_id",
       "columns": [
         "fatura_frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_despesas_extras_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
       ],
       "unique": false
     }

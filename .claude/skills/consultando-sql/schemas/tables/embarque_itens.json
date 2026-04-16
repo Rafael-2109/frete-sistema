@@ -235,13 +235,6 @@
       "unique": false
     },
     {
-      "name": "idx_ei_uf_destino",
-      "columns": [
-        "uf_destino"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_ei_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
@@ -252,6 +245,13 @@
       "name": "idx_ei_nota_fiscal",
       "columns": [
         "nota_fiscal"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ei_uf_destino",
+      "columns": [
+        "uf_destino"
       ],
       "unique": false
     },

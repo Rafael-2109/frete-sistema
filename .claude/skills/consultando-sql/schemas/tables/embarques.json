@@ -296,6 +296,13 @@
       "unique": false
     },
     {
+      "name": "idx_emb_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_emb_tipo_carga",
       "columns": [
         "tipo_carga"
@@ -306,13 +313,6 @@
       "name": "idx_emb_data_embarque",
       "columns": [
         "data_embarque"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_emb_status",
-      "columns": [
-        "status"
       ],
       "unique": false
     }

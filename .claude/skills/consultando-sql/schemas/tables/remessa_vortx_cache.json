@@ -1,0 +1,127 @@
+{
+  "name": "remessa_vortx_cache",
+  "description": "Cache local para state machine de injecao de remessa VORTX no Odoo.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "etapa",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "CNAB_GERADO"
+    },
+    {
+      "name": "tentativas",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "ultimo_erro",
+      "type": "text"
+    },
+    {
+      "name": "odoo_escritural_id",
+      "type": "integer"
+    },
+    {
+      "name": "odoo_remessa_id",
+      "type": "integer"
+    },
+    {
+      "name": "move_line_ids_marcados",
+      "type": "text"
+    },
+    {
+      "name": "move_line_ids_pendentes",
+      "type": "text"
+    },
+    {
+      "name": "mapa_nn_move_line",
+      "type": "text"
+    },
+    {
+      "name": "company_id_odoo",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "tipo_cobranca_id_odoo",
+      "type": "integer"
+    },
+    {
+      "name": "nome_arquivo",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "qtd_boletos",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "nosso_numero_inicial",
+      "type": "bigint"
+    },
+    {
+      "name": "nosso_numero_final",
+      "type": "bigint"
+    },
+    {
+      "name": "arquivo_cnab",
+      "type": "bytea"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "concluido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_remessa_vortx_cache_etapa",
+      "columns": [
+        "etapa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_remessa_vortx_cache_company_id_odoo",
+      "columns": [
+        "company_id_odoo"
+      ],
+      "unique": false
+    }
+  ]
+}
