@@ -1,3 +1,6 @@
 from app.financeiro.services.remessa_vortx.dac_calculator import calcular_dac_nosso_numero
 from app.financeiro.services.remessa_vortx.cnab_generator import CnabVortxGenerator
 from app.financeiro.services.remessa_vortx.nosso_numero_service import alocar_nossos_numeros
+from app.financeiro.services.remessa_vortx.odoo_injector import (
+    OdooInjector, buscar_titulos_pendentes, buscar_dados_sacado,
+)
