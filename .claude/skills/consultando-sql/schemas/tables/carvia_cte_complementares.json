@@ -128,13 +128,6 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_numero_comp",
-      "columns": [
-        "numero_comp"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_cte_complementares_cte_numero",
       "columns": [
         "cte_numero"
@@ -145,6 +138,13 @@
       "name": "ix_carvia_cte_complementares_operacao_id",
       "columns": [
         "operacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cte_complementares_numero_comp",
+      "columns": [
+        "numero_comp"
       ],
       "unique": false
     },
