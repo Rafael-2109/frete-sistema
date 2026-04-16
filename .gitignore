@@ -126,3 +126,6 @@ coordination/orchestration/*
 *.sqlite-journal
 *.sqlite-wal
 app/mcp_sistema/.env.production
+
+# Git worktrees (isolated workspaces)
+.worktrees/

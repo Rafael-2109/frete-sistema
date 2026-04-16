@@ -64,6 +64,7 @@ Se a resposta esta no reference -> NAO usar skill.
    |-- Pipeline completo       -> ver odoo/PIPELINE_RECEBIMENTO.md
 
 2. FINANCEIRO?
+   |-- Baseline de extratos pendentes (formato travado 4 abas)     -> gerando-baseline-conciliacao
    |-- Criar pagamento / reconciliar extrato com cliente/fornecedor -> executando-odoo-financeiro
    |-- Transferencia interna entre bancos NACOM GOYA               -> conciliando-transferencias-internas
    |-- Exportar razao geral                                        -> razao-geral-odoo
@@ -89,6 +90,8 @@ Se a resposta esta no reference -> NAO usar skill.
 | conciliando vs validacao-nf-po | Fase 3 (split/consolidar) -> conciliando. Fase 2 (match) -> validacao |
 | integracao vs descobrindo | CRIAR novo service -> integracao. EXPLORAR modelo -> descobrindo |
 | executando-odoo-financeiro vs conciliando-transferencias-internas | Extrato de cliente/fornecedor (CNPJ terceiro) -> executando-odoo-financeiro. Extrato NACOM GOYA/61.724.241 (propria empresa) com par espelhado em outro journal -> conciliando-transferencias-internas. Sinal: "is_internal_transfer", "NACOM GOYA no extrato", "transferencia entre bancos proprios" -> conciliando-transferencias-internas |
+| gerando-baseline-conciliacao vs executando-odoo-financeiro | **Relatorio agregado** de pendentes por Mes x Journal (4 abas travadas) -> gerando-baseline-conciliacao. **Operacao** sobre linha individual (criar pagamento, reconciliar 1 extrato) -> executando-odoo-financeiro. Sinal: "atualizar baseline", "foto das conciliacoes", "extratos pendentes por mes" -> gerando-baseline-conciliacao. "reconcilie stmt X" -> executando-odoo-financeiro |
+| gerando-baseline-conciliacao vs razao-geral-odoo | **Extratos pendentes** de conciliacao (account.bank.statement.line is_reconciled=False) -> gerando-baseline-conciliacao. **Razao geral contabil** (account.move.line com saldo acumulado) -> razao-geral-odoo. Sinal: "baseline", "pendentes" -> baseline. "razao geral", "balancete" -> razao |
 | Nao sei qual skill Odoo usar | -> Subagente `especialista-odoo` (orquestra todas) |
 | Teams tasks vs diagnostico agente | **TeamsTask** (status task, stale cleanup) → `consultando-sql` direto. **Sessoes/memorias Teams** (filtro `--channel teams`, flags) → `gerindo-agente`. **Teams SSO** (config, webhook) → dev manual |
 | cotando-frete vs acessando-ssw | **Nacom** (industria, contrata frete) -> cotando-frete. **CarVia** (transportadora, vende frete) -> acessando-ssw. Sinal: "no SSW", "opcao NNN", "CarVia" -> SSW. Sem qualificador -> Nacom. Sinais adicionais CarVia: "parametros de frete" (opcao 062), "resultado CTRC" (opcao 101), "formacao de preco" (opcao 062/004) |
@@ -129,7 +132,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
 ### Skills Odoo (Claude Code)
 `rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
 `integracao-odoo`, `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`,
-`conciliando-transferencias-internas`
+`conciliando-transferencias-internas`, `gerando-baseline-conciliacao`
 
 ### Skills Dev (Claude Code)
 `frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`

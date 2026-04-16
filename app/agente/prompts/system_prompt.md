@@ -413,6 +413,20 @@
           Misto → raio-x-pedido. NULL = nao faturado.
         </operational_check>
       </boundary>
+      <boundary name="baseline_financeiro" critical="true">
+        Gatilhos de baseline de extratos pendentes (regex: `baseline|extratos? pendentes?|foto das? conciliac`) →
+        invocar skill `gerando-baseline-conciliacao` ANTES de qualquer tool SQL ou geracao manual de planilha.
+        Motivo: o formato esta travado em 4 abas especificas (documentado em /memories/preferences.xml secao
+        baseline_conciliacoes). Gerar manualmente via SQL ad-hoc produz formato errado e forca correcao interativa.
+        <prescricao>
+          1. Detectou gatilho: responder "Gerando baseline canonico via skill gerando-baseline-conciliacao" e invocar.
+          2. Usuario pede VARIACAO do formato (aba extra, coluna diferente, fonte alternativa): RECUSAR e
+             perguntar "O formato esta travado em preferences.xml (4 abas fixas). Autoriza alterar o padrao?"
+             NUNCA gerar layout alternativo sem confirmacao explicita.
+          3. Se a skill falhar (erro Odoo, timeout): reportar erro exato e perguntar se quer tentar novamente
+             ou abrir sessao de debug — NAO cair de volta em SQL ad-hoc que reproduz o problema.
+        </prescricao>
+      </boundary>
       <routing_confidence>
         Quando a mensagem do usuario eh ambigua e voce NAO tem certeza de qual skill/subagente usar:
 
