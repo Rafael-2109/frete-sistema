@@ -262,13 +262,21 @@ def register_cotacao_routes(bp):
                     except Exception:
                         pass
 
+                # FIX CR3: Detectar multi-NF vinda de string_agg (Parte 2B).
+                # Pedidos com 2+ NFs retornam "NF1, NF2" via string_agg. Tratamos
+                # como provisorio e deixamos o FIX CR2 (auto-expand apos commit)
+                # criar um EmbarqueItem real por NF individual.
+                _nf_raw = (pedido.nf or '').strip()
+                _eh_multi_nf = ',' in _nf_raw
+                _nota_fiscal_unica = _nf_raw if _nf_raw and not _eh_multi_nf else None
+
                 embarque_item = EmbarqueItem(
                     embarque_id=embarque.id,
                     separacao_lote_id=pedido.separacao_lote_id,
                     cnpj_cliente=pedido.cnpj_cpf,
                     cliente=pedido.raz_social_red,
                     pedido=pedido.num_pedido,
-                    nota_fiscal=pedido.nf or None,
+                    nota_fiscal=_nota_fiscal_unica,
                     protocolo_agendamento='',
                     data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
                     peso=pedido.peso_total or 0,
@@ -278,7 +286,7 @@ def register_cotacao_routes(bp):
                     uf_destino=uf_cv,
                     cidade_destino=cidade_cv,
                     volumes=carvia_volumes,
-                    provisorio=not pedido.nf,
+                    provisorio=(_nota_fiscal_unica is None),
                     carvia_cotacao_id=carvia_cot_id,
                 )
                 # DIRETA: dados da tabela ficam no Embarque (campos vazio no item)
@@ -288,6 +296,16 @@ def register_cotacao_routes(bp):
 
             # Commit antes de atualizar separações (Embarque e itens já criados)
             db.session.commit()
+
+            # FIX CR2: Auto-expandir provisorios CarVia cuja cotacao ja tem NFs.
+            # Metodo extraido em EmbarqueCarViaService.auto_expandir_provisorios().
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    EmbarqueCarViaService,
+                )
+                EmbarqueCarViaService.auto_expandir_provisorios(embarque)
+            except Exception as e_cr2:
+                print(f"[DEBUG] ⚠️ CR2 auto-expand (manual): {e_cr2}")
 
             # Atualiza separacoes — apenas Nacom (CarVia nao tem Separacao)
             for pedido in pedidos_nacom:

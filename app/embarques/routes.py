@@ -268,6 +268,13 @@ def visualizar_embarque(id):
                     if old_nf and not new_nf:
                         itens_nf_removida.add(item_existente.id)
                     item_existente.nota_fiscal = new_nf
+                    # FIX CR4: Se item CarVia provisorio recebe NF via form manual,
+                    # promover para provisorio=False. Caso contrario, CarviaFreteService
+                    # (que filtra provisorio==False) ignora o item e o frete nao e gerado.
+                    _lote_item = str(item_existente.separacao_lote_id or '')
+                    if _lote_item.startswith('CARVIA-') and new_nf and item_existente.provisorio:
+                        item_existente.provisorio = False
+                        print(f"[DEBUG] CR4: EmbarqueItem CarVia {item_existente.id} promovido a nao-provisorio (NF={new_nf} via form)")
                     item_existente.volumes = int(item_form.volumes.data or 0)
                     item_existente.protocolo_agendamento = item_form.protocolo_agendamento.data.strip() if item_form.protocolo_agendamento.data else None
                     item_existente.data_agenda = item_form.data_agenda.data.strip() if item_form.data_agenda.data else None

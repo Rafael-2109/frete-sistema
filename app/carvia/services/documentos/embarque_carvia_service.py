@@ -257,6 +257,24 @@ class EmbarqueCarViaService:
                     embarque_id=embarque_id,
                     usuario='sistema',
                 )
+                # FIX CR1: sincronizar EntregaMonitorada (data_embarque + transportadora)
+                # apos frete gerado. Sem isso, NF anexada pos-portaria fica com
+                # monitoramento vazio (portaria executa uma unica vez e ja passou).
+                # NOTA: sincronizar_entrega_carvia_por_nf faz db.session.commit()
+                # interno — isso e DELIBERADO. Neste ponto novo_item + frete ja
+                # foram flushed, e os callers (pedido_routes/cotacao_v2_routes)
+                # farao um commit subsequente (no-op para estas entidades).
+                try:
+                    from app.utils.sincronizar_entregas_carvia import (
+                        sincronizar_entrega_carvia_por_nf,
+                    )
+                    sincronizar_entrega_carvia_por_nf(numero_nf)
+                except Exception as e_sync:
+                    logger.warning(
+                        "Erro ao sincronizar monitoramento CarVia pos-NF "
+                        "(nao-bloqueante) NF=%s: %s",
+                        numero_nf, e_sync,
+                    )
         except Exception as e:
             logger.warning("Erro ao lancar frete CarVia pos-NF: %s", e)
 
@@ -350,6 +368,77 @@ class EmbarqueCarViaService:
             }
             for r in resultados
         ]
+
+    @staticmethod
+    def auto_expandir_provisorios(embarque) -> int:
+        """Expande provisorios CarVia cujas cotacoes ja tem NFs anexadas.
+
+        Chamado por fechar_frete, fechar_frete_grupo e processar_cotacao_manual
+        APOS o commit que persiste os EmbarqueItem provisorios.
+
+        Cobre 2 cenarios:
+          (a) Parte 2A (CARVIA-{cot_id}): view retorna nf=NULL por design, mas
+              a cotacao ja tem CarviaPedidoItem.numero_nf preenchido.
+          (b) Parte 2B multi-NF: pedido.nf vem com "NF1, NF2" via string_agg —
+              FIX CR3 marcou como provisorio e este metodo expande cada NF.
+
+        expandir_provisorio e idempotente: dedup por (embarque_id, CARVIA-NF-{nf_id}).
+
+        Returns:
+            Quantidade de cotacoes processadas.
+        """
+        from app.carvia.models import CarviaPedido, CarviaPedidoItem
+
+        itens_carvia_prov = [
+            ei for ei in embarque.itens
+            if ei.status == 'ativo' and ei.provisorio and ei.carvia_cotacao_id
+        ]
+        if not itens_carvia_prov:
+            return 0
+
+        cot_ids_processadas = set()
+        for ei in itens_carvia_prov:
+            cot_id = ei.carvia_cotacao_id
+            if cot_id in cot_ids_processadas:
+                continue
+            cot_ids_processadas.add(cot_id)
+            try:
+                peds = CarviaPedido.query.filter_by(
+                    cotacao_id=cot_id
+                ).filter(CarviaPedido.status != 'CANCELADO').all()
+                for ped in peds:
+                    nfs_unicas = {
+                        nf for (nf,) in db.session.query(
+                            CarviaPedidoItem.numero_nf
+                        ).filter(
+                            CarviaPedidoItem.pedido_id == ped.id,
+                            CarviaPedidoItem.numero_nf.isnot(None),
+                            CarviaPedidoItem.numero_nf != '',
+                        ).distinct().all()
+                    }
+                    for nf_individual in nfs_unicas:
+                        try:
+                            EmbarqueCarViaService.expandir_provisorio(
+                                carvia_cotacao_id=cot_id,
+                                pedido_id=ped.id,
+                                numero_nf=nf_individual,
+                            )
+                            logger.info(
+                                "CR2 auto-expand: cot=%s ped=%s NF=%s emb=%s",
+                                cot_id, ped.id, nf_individual, embarque.id,
+                            )
+                        except Exception as e_nf:
+                            logger.warning(
+                                "CR2 falha NF=%s cot=%s: %s",
+                                nf_individual, cot_id, e_nf,
+                            )
+            except Exception as e_cot:
+                logger.warning("CR2 falha cot=%s: %s", cot_id, e_cot)
+
+        if cot_ids_processadas:
+            db.session.commit()
+
+        return len(cot_ids_processadas)
 
     @staticmethod
     def remover_provisorio_cotacao(carvia_cotacao_id: int) -> Optional[Dict]:

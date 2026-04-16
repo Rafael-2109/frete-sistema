@@ -1559,13 +1559,22 @@ def fechar_frete():
                         except Exception:
                             pass
 
+                    # FIX CR3: Detectar multi-NF vinda de string_agg (Parte 2B).
+                    # View usa string_agg(DISTINCT pi.numero_nf, ', ') — pedidos com
+                    # 2+ NFs retornam "NF1, NF2". Tratamos como provisorio e deixamos
+                    # o FIX CR2 (auto-expand apos commit) criar um EmbarqueItem real
+                    # por NF individual via expandir_provisorio.
+                    _nf_raw = (pedido.nf or '').strip()
+                    _eh_multi_nf = ',' in _nf_raw
+                    _nota_fiscal_unica = _nf_raw if _nf_raw and not _eh_multi_nf else None
+
                     item = EmbarqueItem(
                         embarque_id=embarque.id,
                         separacao_lote_id=pedido.separacao_lote_id,
                         cnpj_cliente=pedido.cnpj_cpf,
                         cliente=pedido.raz_social_red,
                         pedido=pedido.num_pedido,
-                        nota_fiscal=pedido.nf or None,
+                        nota_fiscal=_nota_fiscal_unica,
                         peso=pedido.peso_total or 0,
                         peso_cubado=carvia_peso_cubado,
                         valor=pedido.valor_saldo_total or 0,
@@ -1573,14 +1582,19 @@ def fechar_frete():
                         uf_destino=uf_cv,
                         cidade_destino=cidade_cv,
                         volumes=carvia_volumes,
-                        provisorio=not pedido.nf,
+                        provisorio=(_nota_fiscal_unica is None),
                         carvia_cotacao_id=carvia_cot_id,
                     )
                     if tipo == 'FRACIONADA':
                         TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
                         item.icms_destino = dados_tabela.get('icms_destino')
                     db.session.add(item)
-                    print(f"[DEBUG] ✅ CarVia PROVISORIO: {pedido.num_pedido} → {cidade_cv}/{uf_cv}")
+                    if _eh_multi_nf:
+                        print(f"[DEBUG] ✅ CarVia MULTI-NF (provisorio): {pedido.num_pedido} → {_nf_raw} ({cidade_cv}/{uf_cv})")
+                    elif _nota_fiscal_unica:
+                        print(f"[DEBUG] ✅ CarVia REAL: {pedido.num_pedido} NF={_nota_fiscal_unica} → {cidade_cv}/{uf_cv}")
+                    else:
+                        print(f"[DEBUG] ✅ CarVia PROVISORIO: {pedido.num_pedido} → {cidade_cv}/{uf_cv}")
 
                 else:
                     # --- Nacom: fluxo existente ---
@@ -1622,7 +1636,17 @@ def fechar_frete():
                     db.session.add(item)
 
         db.session.commit()
-        
+
+        # FIX CR2: Auto-expandir provisorios CarVia cuja cotacao ja tem NFs anexadas.
+        # Metodo extraido em EmbarqueCarViaService.auto_expandir_provisorios().
+        try:
+            from app.carvia.services.documentos.embarque_carvia_service import (
+                EmbarqueCarViaService,
+            )
+            EmbarqueCarViaService.auto_expandir_provisorios(embarque)
+        except Exception as e_cr2:
+            print(f"[DEBUG] ⚠️ CR2 auto-expand: {e_cr2}")
+
         # Propagar cotacao_id para Separacao — apenas Nacom (CarVia nao tem Separacao)
         for item in embarque.itens:
             if item.separacao_lote_id and item.status == 'ativo':
@@ -1634,7 +1658,7 @@ def fechar_frete():
                     nf_cd=False
                 )
                 print(f"[DEBUG] ✅ Separacao lote {item.separacao_lote_id} atualizado com cotacao_id={cotacao.id}")
-        
+
         db.session.commit()
 
         # 🚚 CRIAR ENTREGAS RASTREADAS (após commit dos EmbarqueItems)
@@ -1929,20 +1953,29 @@ def fechar_frete_grupo():
                 except (ValueError, TypeError):
                     pass
 
+                # FIX CR3: Detectar multi-NF vinda de string_agg (Parte 2B).
+                # View usa string_agg(DISTINCT pi.numero_nf, ', ') — pedidos com
+                # 2+ NFs retornam "NF1, NF2". Tratamos como provisorio e deixamos
+                # o FIX CR2 (auto-expand apos commit) criar um EmbarqueItem real
+                # por NF individual via expandir_provisorio.
+                _nf_raw = (pedido.nf or '').strip()
+                _eh_multi_nf = ',' in _nf_raw
+                _nota_fiscal_unica = _nf_raw if _nf_raw and not _eh_multi_nf else None
+
                 item = EmbarqueItem(
                     embarque_id=embarque.id,
                     separacao_lote_id=pedido.separacao_lote_id,
                     cnpj_cliente=pedido.cnpj_cpf,
                     cliente=pedido.raz_social_red,
                     pedido=pedido.num_pedido,
-                    nota_fiscal=pedido.nf or None,
+                    nota_fiscal=_nota_fiscal_unica,
                     peso=pedido.peso_total or 0,
                     valor=pedido.valor_saldo_total or 0,
                     pallets=0,
                     uf_destino=uf_cv,
                     cidade_destino=cidade_cv,
                     volumes=None,
-                    provisorio=not pedido.nf,
+                    provisorio=(_nota_fiscal_unica is None),
                     carvia_cotacao_id=carvia_cot_id,
                 )
                 if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:
@@ -1950,7 +1983,12 @@ def fechar_frete_grupo():
                     TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
                     item.icms_destino = dados_tabela.get('icms_destino', 0)
                 db.session.add(item)
-                print(f"[DEBUG] CarVia PROVISORIO (grupo): {pedido.num_pedido} → {cidade_cv}/{uf_cv}")
+                if _eh_multi_nf:
+                    print(f"[DEBUG] CarVia MULTI-NF grupo (provisorio): {pedido.num_pedido} → {_nf_raw} ({cidade_cv}/{uf_cv})")
+                elif _nota_fiscal_unica:
+                    print(f"[DEBUG] CarVia REAL (grupo): {pedido.num_pedido} NF={_nota_fiscal_unica} → {cidade_cv}/{uf_cv}")
+                else:
+                    print(f"[DEBUG] CarVia PROVISORIO (grupo): {pedido.num_pedido} → {cidade_cv}/{uf_cv}")
 
             else:
                 # --- Nacom: fluxo existente ---
@@ -1988,7 +2026,17 @@ def fechar_frete_grupo():
                 db.session.add(item)
 
         db.session.commit()
-        
+
+        # FIX CR2: Auto-expandir provisorios CarVia cuja cotacao ja tem NFs anexadas.
+        # Metodo extraido em EmbarqueCarViaService.auto_expandir_provisorios().
+        try:
+            from app.carvia.services.documentos.embarque_carvia_service import (
+                EmbarqueCarViaService,
+            )
+            EmbarqueCarViaService.auto_expandir_provisorios(embarque)
+        except Exception as e_cr2:
+            print(f"[DEBUG] ⚠️ CR2 auto-expand: {e_cr2}")
+
         # Propagar cotacao_id para Separacao — apenas Nacom (CarVia nao tem Separacao)
         for item in embarque.itens:
             if item.separacao_lote_id and item.status == 'ativo':
@@ -2000,7 +2048,7 @@ def fechar_frete_grupo():
                     nf_cd=False
                 )
                 print(f"[DEBUG] ✅ Separacao lote {item.separacao_lote_id} atualizado com cotacao_id={cotacao.id}")
-        
+
         db.session.commit()
 
         return jsonify({
