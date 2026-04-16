@@ -15,7 +15,6 @@ import base64
 import uuid
 import time
 import logging
-from datetime import datetime
 
 from app import db
 from app.utils.timezone import agora_utc_naive
@@ -30,8 +29,13 @@ MAX_RETRIES = 3
 RETRY_DELAYS = [2, 4, 8]
 
 
+WRITE_METHODS = {'create', 'write', 'unlink'}
+
+
 def _call_odoo_with_retry(odoo, model, method, *args, **kwargs):
-    """Wrapper que retenta chamadas Odoo em erros transientes (502/503/504)."""
+    """Wrapper que retenta chamadas Odoo em erros transientes (502/503/504).
+    NAO retenta create/write/unlink — 502 em create pode significar sucesso (O6 gotcha).
+    """
     for attempt in range(MAX_RETRIES):
         try:
             return odoo.execute_kw(model, method, *args, **kwargs)
@@ -42,6 +46,12 @@ def _call_odoo_with_retry(odoo, model, method, *args, **kwargs):
                 for code in ['502', '503', '504', 'ConnectionError',
                              'TimeoutError', 'Connection refused']
             )
+            if method in WRITE_METHODS:
+                logger.error(
+                    f'Odoo error on {method} (NOT retrying to avoid duplicates): '
+                    f'{err_str[:200]}'
+                )
+                raise
             if is_transient and attempt < MAX_RETRIES - 1:
                 delay = RETRY_DELAYS[attempt]
                 logger.warning(
@@ -139,11 +149,11 @@ class OdooInjector:
                     db.session.commit()
                     return
             except Exception:
-                # Se falhar a verificacao, prosseguir para criar novo
                 logger.warning(
                     f'Falha ao verificar escritural {self.cache.odoo_escritural_id} '
-                    f'existente — tentando criar novo'
+                    f'existente — abortando para evitar duplicata'
                 )
+                raise
 
         try:
             arquivo_b64 = base64.b64encode(self.cache.arquivo_cnab).decode('ascii')
@@ -198,8 +208,9 @@ class OdooInjector:
             except Exception:
                 logger.warning(
                     f'Falha ao verificar remessa {self.cache.odoo_remessa_id} '
-                    f'existente — tentando criar novo'
+                    f'existente — abortando para evitar duplicata'
                 )
+                raise
 
         try:
             arquivo_b64 = base64.b64encode(self.cache.arquivo_cnab).decode('ascii')
@@ -215,7 +226,7 @@ class OdooInjector:
                     'status': 'EMITIDO',
                     'l10n_br_tipo_cobranca_id': self.cache.tipo_cobranca_id_odoo,
                     'company_id': self.cache.company_id_odoo,
-                    'created_at_full_date': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+                    'created_at_full_date': agora_utc_naive().strftime('%d/%m/%Y %H:%M:%S'),
                 }],
             )
 
@@ -344,7 +355,7 @@ def buscar_titulos_pendentes(odoo, company_id: int, limit: int = 500) -> list:
     if not tipo_cob:
         return []
 
-    return _call_odoo_with_retry(
+    result = _call_odoo_with_retry(
         odoo,
         'account.move.line',
         'search_read',
@@ -363,6 +374,7 @@ def buscar_titulos_pendentes(odoo, company_id: int, limit: int = 500) -> list:
             'limit': limit,
         },
     )
+    return result or []
 
 
 def buscar_dados_sacado(odoo, partner_id: int) -> dict:

@@ -1,6 +1,5 @@
 from app.financeiro.services.remessa_vortx.layout_vortx import (
-    BANCO, BANCO_NOME, RAZAO_SOCIAL, CONVENIO, AGENCIA,
-    CONTA_SEM_DV, CONTA_DV, CARTEIRA, SISTEMA_ID,
+    BANCO, BANCO_NOME, RAZAO_SOCIAL, SISTEMA_ID,
     CONTA_GRAFENO_HEADER, LINE_WIDTH, SEPARATOR,
     id_empresa_detalhe,
 )

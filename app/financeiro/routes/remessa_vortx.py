@@ -16,12 +16,12 @@ Rotas:
 
 import logging
 from io import BytesIO
-from datetime import datetime
 
 from flask import render_template, request, flash, redirect, url_for, send_file, abort
 from flask_login import login_required, current_user
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.financeiro.routes import financeiro_bp
 from app.utils.auth_decorators import require_remessa_vortx
 
@@ -142,7 +142,7 @@ def remessa_vortx_gerar():
         nossos_numeros = alocar_nossos_numeros(len(titulos))
 
         # 3. Gerar CNAB
-        agora = datetime.now()
+        agora = agora_utc_naive()
         data_geracao = agora.strftime('%d%m%y')
         gen = CnabVortxGenerator(data_geracao=data_geracao)
 
@@ -229,6 +229,7 @@ def remessa_vortx_gerar():
             )
 
     except Exception as e:
+        db.session.rollback()
         logger.error(f'Erro ao gerar remessa VORTX: {e}', exc_info=True)
         flash(f'Erro ao gerar remessa: {str(e)[:300]}', 'danger')
 

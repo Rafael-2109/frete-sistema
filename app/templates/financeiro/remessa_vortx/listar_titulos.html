@@ -152,6 +152,12 @@
             }
             if (!confirm('Gerar remessa VORTX com ' + selecionados + ' titulo(s)?')) {
                 e.preventDefault();
+                return;
+            }
+            var btnGerar = document.getElementById('btnGerar');
+            if (btnGerar) {
+                btnGerar.disabled = true;
+                btnGerar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
             }
         });
     }
