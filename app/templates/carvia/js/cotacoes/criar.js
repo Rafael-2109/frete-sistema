@@ -187,6 +187,25 @@ function iniciarSetupNF() {
         document.getElementById('btnPrePreencher').disabled = false;
         if (!d.sucesso) { fb.innerHTML = '<div class="alert alert-danger py-1 small">' + (d.erro || 'Erro') + '</div>'; return; }
 
+        // Bloqueio: NF ja possui cotacao ativa
+        if (d.aviso_cotacao_existente && d.cotacao_existente_info) {
+            const info = d.cotacao_existente_info;
+            fb.innerHTML = '<div class="alert alert-danger py-2 small">' +
+                '<i class="fas fa-ban me-1"></i> ' +
+                'Esta NF ja possui cotacao ' +
+                '<a href="/carvia/cotacoes/' + info.cotacao_id + '" class="fw-bold">' +
+                info.numero_cotacao + '</a> (' + info.status + '). ' +
+                'Nao e possivel criar outra cotacao para a mesma NF.' +
+                '<div class="mt-2">' +
+                '<a href="/carvia/cotacoes/' + info.cotacao_id + '" class="btn btn-outline-primary btn-sm">' +
+                '<i class="fas fa-eye me-1"></i>Ver cotacao existente</a></div>' +
+                '</div>';
+            const btnSubmit = document.querySelector('#formCotacao button[type="submit"]');
+            if (btnSubmit) btnSubmit.disabled = true;
+            fileInput.value = '';
+            return;
+        }
+
         // Modo adicionar: pular wizard, apenas adicionar ao collection
         if (isAddMode) {
             const jaExiste = _nfsCollection.some(n =>
@@ -779,16 +798,23 @@ document.getElementById('formCotacao').addEventListener('submit', async function
             return;
         }
 
-        // Aviso de cotacao existente com link
+        // Bloqueio de cotacao existente — impede criacao duplicada
         if (d.aviso_cotacao_existente && d.cotacao_existente_info) {
             const info = d.cotacao_existente_info;
-            fb.innerHTML = '<div class="alert alert-warning py-2 small mb-0">' +
-                '<i class="fas fa-exclamation-triangle me-1"></i> ' +
+            fb.innerHTML = '<div class="alert alert-danger py-2 small mb-0">' +
+                '<i class="fas fa-ban me-1"></i> ' +
                 'Esta NF ja possui cotacao ' +
                 '<a href="/carvia/cotacoes/' + info.cotacao_id + '" class="fw-bold">' +
                 info.numero_cotacao + '</a> (' + info.status + '). ' +
-                'Continuar criara uma nova cotacao para a mesma NF.' +
+                'Nao e possivel criar outra cotacao para a mesma NF.' +
+                '<div class="mt-2">' +
+                '<a href="/carvia/cotacoes/' + info.cotacao_id + '" class="btn btn-outline-primary btn-sm">' +
+                '<i class="fas fa-eye me-1"></i>Ver cotacao existente</a></div>' +
                 '</div>';
+            // Desabilitar submit do formulario
+            const btnSubmit = document.querySelector('#formCotacao button[type="submit"]');
+            if (btnSubmit) btnSubmit.disabled = true;
+            return;
         } else {
             const nf = d.nf;
             fb.innerHTML = '<div class="alert alert-success py-2 small mb-0">' +

@@ -28,7 +28,7 @@ class CarviaCliente(db.Model):
         lazy='dynamic',
         cascade='all',
         foreign_keys='CarviaClienteEndereco.cliente_id',
-        order_by='CarviaClienteEndereco.tipo, CarviaClienteEndereco.principal.desc()'
+        order_by='CarviaClienteEndereco.tipo'
     )
 
     def __repr__(self):

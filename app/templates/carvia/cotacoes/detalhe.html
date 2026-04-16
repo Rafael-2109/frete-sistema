@@ -3,6 +3,7 @@
 {% set pode_editar_endereco = cotacao.status not in ('APROVADO', 'CANCELADO') or cotacao.criacao_tardia %}
 {% set pode_editar_geral = cotacao.status not in ('APROVADO', 'CANCELADO') %}
 {% set pode_salvar = pode_editar_geral or cotacao.criacao_tardia %}
+{% set _dis = '' if pode_editar_geral else 'disabled' %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -64,11 +65,20 @@
         <div class="col-md-8">
             <div class="card mb-3">
                 <div class="card-body">
+                    {% if not pode_editar_geral and not cotacao.criacao_tardia %}
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fas fa-lock me-1"></i>
+                        Cotacao <strong>{{ cotacao.status|lower }}</strong> — campos bloqueados.
+                        {% if cotacao.status == 'APROVADO' %}
+                        Para editar, use <em>Reabrir Cotacao</em> no painel lateral.
+                        {% endif %}
+                    </div>
+                    {% endif %}
                     {# Cliente + Tipo #}
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Cliente <span class="text-danger">*</span></label>
-                            <select class="form-select" id="selCliente" onchange="carregarEnderecos()">
+                            <select class="form-select" id="selCliente" onchange="carregarEnderecos()" {{ _dis }}>
                                 <option value="">Selecione...</option>
                                 {% for cli in clientes %}
                                 <option value="{{ cli.id }}" {{ 'selected' if cli.id == cotacao.cliente_id }}>{{ cli.nome_comercial }}</option>
@@ -77,14 +87,14 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Tipo Material <span class="text-danger">*</span></label>
-                            <select class="form-select" id="selTipoMaterial">
+                            <select class="form-select" id="selTipoMaterial" {{ _dis }}>
                                 <option value="CARGA_GERAL" {{ 'selected' if cotacao.tipo_material == 'CARGA_GERAL' }}>Carga Geral</option>
                                 <option value="MOTO" {{ 'selected' if cotacao.tipo_material == 'MOTO' }}>Moto</option>
                             </select>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Tipo Carga <span class="text-danger">*</span></label>
-                            <select class="form-select" id="selTipoCarga" onchange="toggleVeiculoBlock()">
+                            <select class="form-select" id="selTipoCarga" onchange="toggleVeiculoBlock()" {{ _dis }}>
                                 <option value="FRACIONADA" {{ 'selected' if cotacao.tipo_carga == 'FRACIONADA' }}>Fracionada</option>
                                 <option value="DIRETA" {{ 'selected' if cotacao.tipo_carga == 'DIRETA' }}>Direta</option>
                             </select>
@@ -95,7 +105,7 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Endereco Origem <span class="text-danger">*</span></label>
-                            <select class="form-select" id="selOrigem">
+                            <select class="form-select" id="selOrigem" {{ _dis }}>
                                 <option value="">Carregando...</option>
                             </select>
                         </div>
@@ -111,7 +121,7 @@
 
                             {# Modo dropdown (padrao) #}
                             <div id="blocoDestinoDropdown">
-                                <select class="form-select" id="selDestino">
+                                <select class="form-select" id="selDestino" {{ _dis }}>
                                     <option value="">Carregando...</option>
                                 </select>
                             </div>
@@ -208,34 +218,34 @@
                             <div class="col-md-3">
                                 <label class="form-label">Peso (kg)</label>
                                 <input type="number" class="form-control" id="inpPeso" step="0.001"
-                                       value="{{ cotacao.peso or '' }}" onblur="sugerirVeiculo()">
+                                       value="{{ cotacao.peso or '' }}" onblur="sugerirVeiculo()" {{ _dis }}>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Valor Mercadoria (R$)</label>
                                 <input type="number" class="form-control" id="inpValorMerc" step="0.01"
-                                       value="{{ cotacao.valor_mercadoria or '' }}">
+                                       value="{{ cotacao.valor_mercadoria or '' }}" {{ _dis }}>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Volumes</label>
                                 <input type="number" class="form-control" id="inpVolumes"
-                                       value="{{ cotacao.volumes or '' }}">
+                                       value="{{ cotacao.volumes or '' }}" {{ _dis }}>
                             </div>
                         </div>
                         <div class="row mb-3">
                             <div class="col-md-2">
                                 <label class="form-label">Comp. (m)</label>
                                 <input type="number" class="form-control" id="inpDimC" step="0.0001"
-                                       value="{{ cotacao.dimensao_c or '' }}">
+                                       value="{{ cotacao.dimensao_c or '' }}" {{ _dis }}>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Larg. (m)</label>
                                 <input type="number" class="form-control" id="inpDimL" step="0.0001"
-                                       value="{{ cotacao.dimensao_l or '' }}">
+                                       value="{{ cotacao.dimensao_l or '' }}" {{ _dis }}>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Alt. (m)</label>
                                 <input type="number" class="form-control" id="inpDimA" step="0.0001"
-                                       value="{{ cotacao.dimensao_a or '' }}">
+                                       value="{{ cotacao.dimensao_a or '' }}" {{ _dis }}>
                             </div>
                         </div>
                     </div>
@@ -267,9 +277,11 @@
                                 </tfoot>
                             </table>
                         </div>
+                        {% if pode_editar_geral %}
                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="adicionarLinhaMotos()">
                             <i class="fas fa-plus"></i> Adicionar
                         </button>
+                        {% endif %}
                     </div>
 
                     {# Datas + Obs #}
@@ -278,13 +290,15 @@
                             <label class="form-label">Data Expedicao</label>
                             <input type="date" class="form-control" id="inpDataExp"
                                    value="{{ cotacao.data_expedicao.strftime('%Y-%m-%d') if cotacao.data_expedicao else '' }}"
-                                   onchange="salvarData('data_expedicao', this.value)">
+                                   {% if pode_editar_geral %}onchange="salvarData('data_expedicao', this.value)"{% endif %}
+                                   {{ _dis }}>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Data Agenda</label>
                             <input type="date" class="form-control" id="inpDataAg"
                                    value="{{ cotacao.data_agenda.strftime('%Y-%m-%d') if cotacao.data_agenda else '' }}"
-                                   onchange="salvarData('data_agenda', this.value)">
+                                   {% if pode_editar_geral %}onchange="salvarData('data_agenda', this.value)"{% endif %}
+                                   {{ _dis }}>
                         </div>
                     </div>
                     {# Condicoes Comerciais #}
@@ -292,7 +306,7 @@
                     <div class="row mb-3">
                         <div class="col-md-3">
                             <label class="form-label">Condicao de Pagamento</label>
-                            <select class="form-select" id="selCondicaoPgto" onchange="togglePrazoDias()">
+                            <select class="form-select" id="selCondicaoPgto" onchange="togglePrazoDias()" {{ _dis }}>
                                 <option value="" {{ 'selected' if not cotacao.condicao_pagamento }}>Nao informado</option>
                                 <option value="A_VISTA" {{ 'selected' if cotacao.condicao_pagamento == 'A_VISTA' }}>A Vista</option>
                                 <option value="PRAZO" {{ 'selected' if cotacao.condicao_pagamento == 'PRAZO' }}>Prazo</option>
@@ -301,11 +315,11 @@
                         <div class="col-md-2" id="blocoPrazoDias" style="{{ '' if cotacao.condicao_pagamento == 'PRAZO' else 'display:none' }}">
                             <label class="form-label">Prazo (dias)</label>
                             <input type="number" class="form-control" id="inpPrazoDias" min="1" max="30"
-                                   value="{{ cotacao.prazo_dias or '' }}" placeholder="1-30">
+                                   value="{{ cotacao.prazo_dias or '' }}" placeholder="1-30" {{ _dis }}>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Pagador do Frete</label>
-                            <select class="form-select" id="selResponsavelFrete" onchange="togglePercentuais()">
+                            <select class="form-select" id="selResponsavelFrete" onchange="togglePercentuais()" {{ _dis }}>
                                 <option value="" {{ 'selected' if not cotacao.responsavel_frete }}>Nao informado</option>
                                 <option value="100_REMETENTE" {{ 'selected' if cotacao.responsavel_frete == '100_REMETENTE' }}>100% Remetente</option>
                                 <option value="100_DESTINATARIO" {{ 'selected' if cotacao.responsavel_frete == '100_DESTINATARIO' }}>100% Destinatario</option>
@@ -316,18 +330,18 @@
                         <div class="col-md-2" id="blocoPercentualRem" style="{{ '' if cotacao.responsavel_frete == 'PERSONALIZADO' else 'display:none' }}">
                             <label class="form-label">% Remetente</label>
                             <input type="number" class="form-control" id="inpPctRem" step="0.01" min="0" max="100"
-                                   value="{{ cotacao.percentual_remetente or '' }}">
+                                   value="{{ cotacao.percentual_remetente or '' }}" {{ _dis }}>
                         </div>
                         <div class="col-md-2" id="blocoPercentualDest" style="{{ '' if cotacao.responsavel_frete == 'PERSONALIZADO' else 'display:none' }}">
                             <label class="form-label">% Destinatario</label>
                             <input type="number" class="form-control" id="inpPctDest" step="0.01" min="0" max="100"
-                                   value="{{ cotacao.percentual_destinatario or '' }}">
+                                   value="{{ cotacao.percentual_destinatario or '' }}" {{ _dis }}>
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Observacoes</label>
-                        <textarea class="form-control" id="inpObs" rows="2">{{ cotacao.observacoes or '' }}</textarea>
+                        <textarea class="form-control" id="inpObs" rows="2" {{ _dis }}>{{ cotacao.observacoes or '' }}</textarea>
                     </div>
                 </div>
             </div>

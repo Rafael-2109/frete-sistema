@@ -203,6 +203,35 @@ def register_cotacao_v2_routes(bp):
             cnpj_emit_limpo = _re.sub(r'\D', '', cnpj_emitente)
             cnpj_dest_limpo = _re.sub(r'\D', '', cnpj_dest)
 
+            # 1b. Verificar cotacao existente para esta NF (mesma logica de api_setup_nf_existente)
+            aviso_cotacao_existente = False
+            cotacao_existente_info = None
+            numero_nf_parsed = dados.get('numero_nf') or ''
+            if numero_nf_parsed and cnpj_emit_limpo:
+                from app.carvia.models import (
+                    CarviaCotacao as _CotCheck, CarviaPedido as _PedCheck,
+                    CarviaPedidoItem as _PedItemCheck,
+                )
+                _dup_ped = db.session.query(_PedCheck).join(
+                    _PedItemCheck, _PedItemCheck.pedido_id == _PedCheck.id
+                ).join(
+                    _CotCheck, _PedCheck.cotacao_id == _CotCheck.id
+                ).join(
+                    CarviaClienteEndereco,
+                    _CotCheck.endereco_origem_id == CarviaClienteEndereco.id,
+                ).filter(
+                    _PedItemCheck.numero_nf == str(numero_nf_parsed),
+                    CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
+                    _CotCheck.status != 'CANCELADO',
+                ).first()
+                if _dup_ped and _dup_ped.cotacao:
+                    aviso_cotacao_existente = True
+                    cotacao_existente_info = {
+                        'cotacao_id': _dup_ped.cotacao.id,
+                        'numero_cotacao': _dup_ped.cotacao.numero_cotacao,
+                        'status': _dup_ped.cotacao.status,
+                    }
+
             # 2. Verificar cliente existente: PRIMEIRO pelo CNPJ destinatario
             #    (endereco tipo=DESTINO), depois pelo CNPJ emitente (endereco
             #    tipo=ORIGEM). Filtrar por tipo evita falso-match quando o mesmo
@@ -378,6 +407,8 @@ def register_cotacao_v2_routes(bp):
                 'receita_destinatario': receita_dest,
                 'receita_destinatario_erro': receita_dest_erro,
                 'motos_reconhecidas': motos_reconhecidas,
+                'aviso_cotacao_existente': aviso_cotacao_existente,
+                'cotacao_existente_info': cotacao_existente_info,
             })
 
         except Exception as e:
@@ -434,6 +465,7 @@ def register_cotacao_v2_routes(bp):
             ).filter(
                 CarviaPedidoItem.numero_nf == str(nf.numero_nf),
                 CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
+                CarviaCotacao.status != 'CANCELADO',
             ).first()
 
             if existing_pedido and existing_pedido.cotacao:
@@ -759,7 +791,6 @@ def register_cotacao_v2_routes(bp):
                     razao_social=dest_data.get('razao_social'),
                     dados_receita=dest_data.get('receita', {}),
                     dados_fisico=fisico if fisico else None,
-                    principal=True,
                 )
                 if endereco:
                     resultado['endereco_destino_id'] = endereco.id
@@ -865,6 +896,59 @@ def register_cotacao_v2_routes(bp):
                         nf_id_param=nf_id_param,
                         **_ctx_criar(),
                     )
+
+            # Guard: verificar NF duplicada antes de criar cotacao
+            nf_dados_guard = request.form.get('nf_dados_json', '').strip()
+            if nf_dados_guard:
+                try:
+                    import json as _json_guard
+                    _parsed_guard = _json_guard.loads(nf_dados_guard)
+                    _nfs_guard = _parsed_guard if isinstance(_parsed_guard, list) else [_parsed_guard]
+                except Exception:
+                    _nfs_guard = []
+
+                for _nf_g in _nfs_guard:
+                    _nf_db_id_g = _nf_g.get('nf_db_id') or _nf_g.get('nf_id')
+                    _nf_info_g = _nf_g.get('nf', {})
+                    _numero_nf_g = _nf_info_g.get('numero_nf') or ''
+                    _cnpj_emit_g = (_nf_info_g.get('cnpj_emitente') or '').replace('.', '').replace('/', '').replace('-', '')
+
+                    if _nf_db_id_g:
+                        from app.carvia.models import CarviaNf as _NfGuard
+                        _nf_obj_g = db.session.get(_NfGuard, int(_nf_db_id_g))
+                        if _nf_obj_g:
+                            _numero_nf_g = str(_nf_obj_g.numero_nf)
+                            _cnpj_emit_g = (_nf_obj_g.cnpj_emitente or '').replace('.', '').replace('/', '').replace('-', '')
+
+                    if _numero_nf_g and _cnpj_emit_g:
+                        from app.carvia.models import (
+                            CarviaCotacao as _CotGuard, CarviaPedido as _PedGuard,
+                            CarviaPedidoItem as _PedItemGuard, CarviaClienteEndereco as _EndGuard,
+                        )
+                        _dup = db.session.query(_PedGuard).join(
+                            _PedItemGuard, _PedItemGuard.pedido_id == _PedGuard.id
+                        ).join(
+                            _CotGuard, _PedGuard.cotacao_id == _CotGuard.id
+                        ).join(
+                            _EndGuard, _CotGuard.endereco_origem_id == _EndGuard.id,
+                        ).filter(
+                            _PedItemGuard.numero_nf == _numero_nf_g,
+                            _EndGuard.cnpj == _cnpj_emit_g,
+                            _CotGuard.status != 'CANCELADO',
+                        ).first()
+
+                        if _dup and _dup.cotacao:
+                            flash(
+                                f'NF {_numero_nf_g} ja possui cotacao '
+                                f'{_dup.cotacao.numero_cotacao} ({_dup.cotacao.status}). '
+                                f'Acesse a cotacao existente.',
+                                'danger',
+                            )
+                            return render_template(
+                                'carvia/cotacoes/criar.html',
+                                nf_id_param=nf_id_param,
+                                **_ctx_criar(),
+                            )
 
             cotacao, erro = CotacaoV2Service.criar_cotacao(
                 cliente_id=int(request.form.get('cliente_id', 0)),
@@ -2221,7 +2305,6 @@ def register_cotacao_v2_routes(bp):
             )
         ).order_by(
             CarviaClienteEndereco.tipo,
-            CarviaClienteEndereco.principal.desc()
         ).all()
 
         def _serializar(e):
@@ -2232,7 +2315,6 @@ def register_cotacao_v2_routes(bp):
                 'cnpj': e.cnpj,
                 'razao_social': e.razao_social,
                 'tipo': e.tipo,
-                'principal': e.principal,
                 'provisorio': e.provisorio,
                 'fisico_uf': e.fisico_uf,
                 'fisico_cidade': e.fisico_cidade,
@@ -2310,9 +2392,32 @@ def register_cotacao_v2_routes(bp):
     @bp.route('/api/cotacoes/enderecos/<int:endereco_id>', methods=['PATCH']) # type: ignore
     @login_required
     def api_editar_endereco_cotacao(endereco_id): # type: ignore
-        """Edita campos fisico_* de um endereco — acessivel da tela de cotacao."""
+        """Edita campos fisico_* de um endereco — acessivel da tela de cotacao.
+
+        Guard: bloqueia se endereco pertence a cotacao APROVADA/CANCELADA (sem criacao_tardia).
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
+
+        # Guard: verificar se endereco esta vinculado a cotacao bloqueada
+        from app.carvia.models import CarviaClienteEndereco, CarviaCotacao
+        endereco = db.session.get(CarviaClienteEndereco, endereco_id)
+        if not endereco:
+            return jsonify({'erro': 'Endereco nao encontrado.'}), 404
+
+        cotacao_bloqueada = CarviaCotacao.query.filter(
+            db.or_(
+                CarviaCotacao.endereco_origem_id == endereco_id,
+                CarviaCotacao.endereco_destino_id == endereco_id,
+            ),
+            CarviaCotacao.status.in_(['APROVADO', 'CANCELADO']),
+            CarviaCotacao.criacao_tardia.is_(False),
+        ).first()
+        if cotacao_bloqueada:
+            return jsonify({
+                'erro': f'Endereco vinculado a cotacao {cotacao_bloqueada.numero_cotacao} '
+                        f'({cotacao_bloqueada.status}). Reabra a cotacao para editar.',
+            }), 400
 
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
 

@@ -66,7 +66,6 @@
                             <th>CNPJ/CPF</th>
                             <th>Razao Social</th>
                             <th>Endereco Fisico</th>
-                            <th class="text-center">Principal</th>
                             <th class="text-center">Acoes</th>
                         </tr>
                     </thead>
@@ -93,15 +92,10 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if end.principal %}
-                                <i class="fas fa-star text-warning"></i>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
                                 <button type="button" class="btn btn-outline-primary btn-sm"
-                                        data-endereco='{{ {'tipo': end.tipo, 'principal': end.principal, 'fisico_logradouro': end.fisico_logradouro, 'fisico_numero': end.fisico_numero, 'fisico_bairro': end.fisico_bairro, 'fisico_cidade': end.fisico_cidade, 'fisico_uf': end.fisico_uf, 'fisico_cep': end.fisico_cep, 'fisico_complemento': end.fisico_complemento}|tojson }}'
+                                        data-endereco='{{ {'cliente_id': end.cliente_id, 'fisico_logradouro': end.fisico_logradouro, 'fisico_numero': end.fisico_numero, 'fisico_bairro': end.fisico_bairro, 'fisico_cidade': end.fisico_cidade, 'fisico_uf': end.fisico_uf, 'fisico_cep': end.fisico_cep, 'fisico_complemento': end.fisico_complemento}|tojson }}'
                                         onclick="editarEndereco({{ end.id }}, JSON.parse(this.dataset.endereco))"
-                                        title="Editar endereco fisico">
+                                        title="Editar endereco">
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 <button type="button" class="btn btn-outline-danger btn-sm"
@@ -149,11 +143,6 @@
                         </div>
                     </div>
                     <div class="col-md-5">
-                        <label class="form-label">Principal?</label>
-                        <div class="form-check mt-2">
-                            <input type="checkbox" class="form-check-input" id="endPrincipal">
-                            <label class="form-check-label" for="endPrincipal">Endereco principal</label>
-                        </div>
                     </div>
                 </div>
 
@@ -284,15 +273,15 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="editEndId">
-                {# Tipo nao e editavel — enderecos em Clientes sao sempre DESTINO.
-                   Origens sao globais e gerenciadas em "Origens Globais". #}
                 <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small">Principal?</label>
-                        <div class="form-check mt-1">
-                            <input type="checkbox" class="form-check-input" id="editPrincipal">
-                            <label class="form-check-label small" for="editPrincipal">Endereco principal</label>
-                        </div>
+                    <div class="col-md-12">
+                        <label class="form-label small">Cliente</label>
+                        <select class="form-select form-select-sm" id="editClienteId">
+                            {% for cli in todos_clientes %}
+                            <option value="{{ cli.id }}">{{ cli.nome_comercial }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Altere para transferir este endereco para outro cliente.</small>
                     </div>
                 </div>
                 <div class="row mb-3">
@@ -501,7 +490,6 @@ function salvarEndereco() {
         // Tipo fixo: enderecos em Clientes sao sempre DESTINO.
         // Origens sao globais e cadastradas na tela "Origens Globais".
         tipo: 'DESTINO',
-        principal: document.getElementById('endPrincipal').checked,
         razao_social: razaoSocial,
         receita_uf: tipoDocumento === 'cnpj' ? document.getElementById('recUf').value : '',
         receita_cidade: tipoDocumento === 'cnpj' ? document.getElementById('recCidade').value : '',
@@ -538,7 +526,7 @@ function salvarEndereco() {
 /* ===== Editar Endereco Fisico ===== */
 function editarEndereco(id, end) {
     document.getElementById('editEndId').value = id;
-    document.getElementById('editPrincipal').checked = !!end.principal;
+    document.getElementById('editClienteId').value = end.cliente_id || '';
     document.getElementById('editFisLogradouro').value = end.fisico_logradouro || '';
     document.getElementById('editFisNumero').value = end.fisico_numero || '';
     document.getElementById('editFisBairro').value = end.fisico_bairro || '';
@@ -551,10 +539,13 @@ function editarEndereco(id, end) {
 
 function atualizarEndereco() {
     const id = document.getElementById('editEndId').value;
+    const clienteVal = document.getElementById('editClienteId').value;
+    if (!clienteVal) {
+        alert('Selecione um cliente.');
+        return;
+    }
     const payload = {
-        // Tipo nao e enviado — enderecos em Clientes sao sempre DESTINO e nao podem
-        // ser convertidos em ORIGEM (origens sao globais, cliente_id=NULL).
-        principal: document.getElementById('editPrincipal').checked,
+        cliente_id: parseInt(clienteVal),
         fisico_logradouro: document.getElementById('editFisLogradouro').value,
         fisico_numero: document.getElementById('editFisNumero').value,
         fisico_bairro: document.getElementById('editFisBairro').value,

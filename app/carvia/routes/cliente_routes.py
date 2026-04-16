@@ -96,11 +96,13 @@ def register_cliente_routes(bp):
             return redirect(url_for('carvia.listar_clientes'))
 
         enderecos = cliente.enderecos.all()
+        todos_clientes = CarviaClienteService.listar_clientes(apenas_ativos=True)
 
         return render_template(
             'carvia/clientes/detalhe.html',
             cliente=cliente,
             enderecos=enderecos,
+            todos_clientes=todos_clientes,
         )
 
     @bp.route('/clientes/<int:cliente_id>/editar', methods=['GET', 'POST']) # type: ignore
@@ -190,7 +192,7 @@ def register_cliente_routes(bp):
                     razao_social=data.get('razao_social'),
                     dados_receita=dados_receita,
                     dados_fisico=dados_fisico,
-                    principal=data.get('principal', False),
+                    # principal removido — conceito descontinuado
                 )
             if erro:
                 return jsonify({'erro': erro}), 400

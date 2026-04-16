@@ -157,7 +157,6 @@ class CarviaClienteService:
         razao_social: Optional[str] = None,
         dados_receita: Optional[Dict] = None,
         dados_fisico: Optional[Dict] = None,
-        principal: bool = False,
     ) -> Tuple[Optional[object], Optional[str]]:
         """Adiciona endereco ao cliente. Retorna (endereco, erro).
 
@@ -198,20 +197,12 @@ class CarviaClienteService:
         # Se dados_fisico nao fornecido, copiar da Receita (pre-preenchido)
         fisico = dados_fisico if dados_fisico else dict(receita)
 
-        # Se marcando como principal, desmarcar outros do mesmo (cliente_id, tipo)
-        if principal:
-            CarviaClienteEndereco.query.filter(
-                CarviaClienteEndereco.cliente_id == cliente_id,
-                CarviaClienteEndereco.tipo == tipo,
-                CarviaClienteEndereco.principal.is_(True),
-            ).update({'principal': False})
-
         endereco = CarviaClienteEndereco(
             cliente_id=cliente_id,
             cnpj=cnpj_limpo,
             razao_social=razao_social,
             tipo=tipo,
-            principal=principal,
+            principal=False,
             criado_por=criado_por,
             criado_em=agora_utc_naive(),
             # Receita
@@ -239,7 +230,8 @@ class CarviaClienteService:
     def atualizar_endereco(endereco_id: int, dados: dict) -> Tuple[bool, Optional[str]]:
         """Atualiza endereco fisico (editavel). Retorna (sucesso, erro).
 
-        Para destinos provisorios, tambem aceita:
+        Aceita tambem:
+        - cliente_id: transferir endereco para outro cliente
         - cnpj: preencher CNPJ pendente (converte provisorio para definitivo)
         - dados_receita_*: preencher campos da Receita ao definir CNPJ
         """
@@ -248,6 +240,19 @@ class CarviaClienteService:
         endereco = db.session.get(CarviaClienteEndereco, endereco_id)
         if not endereco:
             return False, 'Endereco nao encontrado.'
+
+        # Transferir para outro cliente
+        if 'cliente_id' in dados:
+            novo_cliente_id = dados['cliente_id']
+            if novo_cliente_id is not None:
+                novo_cliente_id = int(novo_cliente_id)
+                from app.carvia.models import CarviaCliente
+                novo_cliente = db.session.get(CarviaCliente, novo_cliente_id)
+                if not novo_cliente:
+                    return False, 'Cliente destino nao encontrado.'
+                if not novo_cliente.ativo:
+                    return False, 'Cliente destino esta inativo.'
+            endereco.cliente_id = novo_cliente_id
 
         # Campos fisicos editaveis
         for campo in ('uf', 'cidade', 'logradouro', 'numero', 'bairro', 'cep', 'complemento'):
@@ -261,17 +266,6 @@ class CarviaClienteService:
                 endereco.tipo = tipo
         if 'razao_social' in dados:
             endereco.razao_social = dados['razao_social']
-        if 'principal' in dados:
-            # Se marcando como principal, desmarcar outros do mesmo (cliente_id, tipo)
-            if dados['principal'] and endereco.cliente_id:
-                from app.carvia.models import CarviaClienteEndereco as _CCE
-                _CCE.query.filter(
-                    _CCE.cliente_id == endereco.cliente_id,
-                    _CCE.tipo == endereco.tipo,
-                    _CCE.principal.is_(True),
-                    _CCE.id != endereco_id,
-                ).update({'principal': False})
-            endereco.principal = dados['principal']
 
         # Atualizar CNPJ (para completar destino provisorio)
         if 'cnpj' in dados and dados['cnpj']:

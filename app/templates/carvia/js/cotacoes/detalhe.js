@@ -6,19 +6,122 @@ const _cotacaoStatus = CARVIA_DATA.cotacaoStatus || '';
 // Endereco de entrega da cotacao (override, pode ser null)
 const _entregaCotacao = CARVIA_DATA.entregaCotacao;
 
-/* ===== Criacao Tardia: desabilitar campos nao-editaveis ===== */
-if (_criacaoTardia) {
-    document.addEventListener('DOMContentLoaded', () => {
-        // Campos que nao podem ser alterados na criacao tardia
-        const camposBloquear = [
-            'selCliente', 'selTipoMaterial',
-            'inpPeso', 'inpValorMerc', 'inpVolumes',
-            'inpDimC', 'inpDimL', 'inpDimA',
-        ];
-        camposBloquear.forEach(id => {
+/* ===== Readonly: desabilitar campos por status ===== */
+const _readonly = (!_criacaoTardia && ['APROVADO', 'CANCELADO'].includes(_cotacaoStatus));
+const _podeEditar = ['RASCUNHO', 'RECUSADO', 'PENDENTE_ADMIN'].includes(_cotacaoStatus);
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Criacao tardia: bloquear subset especifico
+    if (_criacaoTardia) {
+        ['selCliente', 'selTipoMaterial',
+         'inpPeso', 'inpValorMerc', 'inpVolumes',
+         'inpDimC', 'inpDimL', 'inpDimA',
+        ].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.disabled = true;
         });
+    }
+
+    // Readonly (APROVADO/CANCELADO sem tardia): desabilitar inputs de moto dinamicos
+    if (_readonly) {
+        document.querySelectorAll('#tbodyMotos input, #tbodyMotos select, #tbodyMotos button').forEach(el => {
+            el.disabled = true;
+        });
+    }
+
+    // Auto-save em RASCUNHO: salvar ao alterar campos
+    if (_podeEditar) {
+        _setupAutoSave();
+    }
+});
+
+/* ===== Auto-save com debounce ===== */
+let _autoSaveTimer = null;
+function autoSave(campo, valor) {
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(() => {
+        const payload = {};
+        // Converter strings vazias para null em IDs
+        if (campo.endsWith('_id')) {
+            payload[campo] = valor ? parseInt(valor) : null;
+        } else if (['peso', 'valor_mercadoria', 'dimensao_c', 'dimensao_l', 'dimensao_a',
+                     'percentual_remetente', 'percentual_destinatario'].includes(campo)) {
+            payload[campo] = valor ? parseFloat(valor) : null;
+        } else if (['volumes', 'prazo_dias'].includes(campo)) {
+            payload[campo] = valor ? parseInt(valor) : null;
+        } else {
+            payload[campo] = valor || null;
+        }
+        apiCall(`/carvia/api/cotacoes/${cotacaoId}`, 'PUT', payload).then(d => {
+            if (d.sucesso) {
+                _showAutoSaveFeedback(campo);
+            } else {
+                console.warn('Auto-save falhou:', campo, d.erro);
+            }
+        });
+    }, 500);
+}
+
+function _showAutoSaveFeedback(campo) {
+    // Mapa campo backend -> ID do element
+    const mapa = {
+        'cliente_id': 'selCliente', 'tipo_material': 'selTipoMaterial',
+        'tipo_carga': 'selTipoCarga', 'endereco_origem_id': 'selOrigem',
+        'endereco_destino_id': 'selDestino', 'peso': 'inpPeso',
+        'valor_mercadoria': 'inpValorMerc', 'volumes': 'inpVolumes',
+        'dimensao_c': 'inpDimC', 'dimensao_l': 'inpDimL', 'dimensao_a': 'inpDimA',
+        'condicao_pagamento': 'selCondicaoPgto', 'prazo_dias': 'inpPrazoDias',
+        'responsavel_frete': 'selResponsavelFrete',
+        'percentual_remetente': 'inpPctRem', 'percentual_destinatario': 'inpPctDest',
+        'observacoes': 'inpObs',
+    };
+    const elId = mapa[campo];
+    const el = elId ? document.getElementById(elId) : null;
+    if (!el) return;
+    // Inserir check temporario
+    const check = document.createElement('span');
+    check.className = 'text-success ms-1 small';
+    check.innerHTML = '<i class="fas fa-check"></i>';
+    check.style.transition = 'opacity 0.5s';
+    el.parentElement.appendChild(check);
+    setTimeout(() => { check.style.opacity = '0'; }, 1500);
+    setTimeout(() => { check.remove(); }, 2000);
+}
+
+function _setupAutoSave() {
+    // Selects: salvar ao mudar
+    const selectMap = {
+        'selCliente': 'cliente_id',
+        'selTipoMaterial': 'tipo_material',
+        'selTipoCarga': 'tipo_carga',
+        'selOrigem': 'endereco_origem_id',
+        'selDestino': 'endereco_destino_id',
+        'selCondicaoPgto': 'condicao_pagamento',
+        'selResponsavelFrete': 'responsavel_frete',
+    };
+    Object.entries(selectMap).forEach(([elId, campo]) => {
+        const el = document.getElementById(elId);
+        if (!el || el.disabled) return;
+        el.addEventListener('change', () => autoSave(campo, el.value));
+    });
+
+    // Inputs numericos e texto: salvar ao blur
+    const inputMap = {
+        'inpPeso': 'peso',
+        'inpValorMerc': 'valor_mercadoria',
+        'inpVolumes': 'volumes',
+        'inpDimC': 'dimensao_c',
+        'inpDimL': 'dimensao_l',
+        'inpDimA': 'dimensao_a',
+        'inpPrazoDias': 'prazo_dias',
+        'inpPctRem': 'percentual_remetente',
+        'inpPctDest': 'percentual_destinatario',
+        'inpObs': 'observacoes',
+    };
+    Object.entries(inputMap).forEach(([elId, campo]) => {
+        const el = document.getElementById(elId);
+        if (!el || el.disabled) return;
+        el.addEventListener('blur', () => autoSave(campo, el.value));
     });
 }
 
