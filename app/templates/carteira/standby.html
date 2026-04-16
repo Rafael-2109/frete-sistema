@@ -15,7 +15,10 @@
                 <small class="text-muted"><span id="contador-standby">0</span> pedidos em standby</small>
             </div>
 
-            <div class="btn-toolbar" role="toolbar">
+            <div class="btn-toolbar gap-2" role="toolbar">
+                <button class="btn btn-success btn-sm" onclick="exportarExcel()">
+                    <i class="fas fa-file-excel me-1"></i> Exportar Excel
+                </button>
                 <a href="{{ url_for('carteira.index') }}" class="btn btn-secondary btn-sm">
                     <i class="fas fa-arrow-left me-1"></i> Voltar
                 </a>
@@ -66,6 +69,15 @@
         </div>
     </section>
 
+    <!-- Alerta de duplicados/cancelados -->
+    <div id="stats-bar" class="alert alert-warning py-2 mb-3" style="display: none;">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <span id="stats-info"></span>
+        <button class="btn btn-sm btn-outline-danger ms-3" onclick="limparCanceladosDuplicados()">
+            <i class="fas fa-broom me-1"></i> Limpar
+        </button>
+    </div>
+
     <!-- Tabela de Pedidos Standby -->
     <section class="standby-section">
         <div class="card">
@@ -87,6 +99,8 @@
                                     </th>
                                     <th>Pedido</th>
                                     <th>Cliente</th>
+                                    <th>UF</th>
+                                    <th>Cidade</th>
                                     <th>Data Pedido</th>
                                     <th>Tipo</th>
                                     <th>Status</th>
@@ -148,6 +162,21 @@
                 pedidosStandby = data.pedidos;
                 document.getElementById('contador-standby').textContent = pedidosStandby.length;
 
+                // Mostrar barra de alertas se houver duplicados ou cancelados
+                const totalDup = data.total_duplicados || 0;
+                const totalCanc = data.total_cancelados || 0;
+                const statsBar = document.getElementById('stats-bar');
+
+                if (totalDup > 0 || totalCanc > 0) {
+                    const partes = [];
+                    if (totalCanc > 0) partes.push(`${totalCanc} pedido(s) cancelado(s)/removido(s) da carteira`);
+                    if (totalDup > 0) partes.push(`${totalDup} registro(s) duplicado(s)`);
+                    document.getElementById('stats-info').textContent = partes.join(' \u00B7 ');
+                    statsBar.style.display = 'block';
+                } else {
+                    statsBar.style.display = 'none';
+                }
+
                 if (pedidosStandby.length > 0) {
                     renderizarTabela(pedidosStandby);
                     tabela.style.display = 'block';
@@ -170,8 +199,8 @@
         tbody.innerHTML = '';
 
         pedidos.forEach(pedido => {
-            // Linha principal do pedido
             const tr = document.createElement('tr');
+            if (pedido.cancelado) tr.className = 'table-danger';
             tr.innerHTML = `
             <td>
                 <button class="btn btn-link btn-sm p-0" onclick="toggleProdutos('${pedido.num_pedido}')">
@@ -180,17 +209,20 @@
             </td>
             <td>
                 <strong>${pedido.num_pedido}</strong>
+                ${pedido.cancelado ? '<span class="badge bg-danger ms-1">CANCELADO</span>' : ''}
             </td>
             <td>
-                <div>${pedido.nome_cliente}</div>
+                <div>${pedido.raz_social_red || pedido.nome_cliente}</div>
                 <small class="text-muted">${pedido.cnpj_cliente}</small>
             </td>
+            <td>${pedido.uf || '-'}</td>
+            <td>${pedido.cidade || '-'}</td>
             <td>${pedido.data_pedido || '-'}</td>
             <td>
                 <span class="badge bg-tipo-standby bg-info">${pedido.tipo_standby}</span>
             </td>
             <td>
-                <span class="badge ${getBadgeClassStatus(pedido.status_standby)}" 
+                <span class="badge ${getBadgeClassStatus(pedido.status_standby)}"
                       style="cursor: pointer;"
                       onclick="abrirModalObservacoes('${pedido.num_pedido}', ${JSON.stringify(pedido.observacoes || []).replace(/"/g, '&quot;')})"
                       title="Clique para ver/adicionar observações">
@@ -202,22 +234,22 @@
             <td class="text-end">${formatarNumero(pedido.peso_total, 2)} kg</td>
             <td class="text-end">${formatarNumero(pedido.pallet_total, 2)}</td>
             <td>
-                <button class="btn btn-sm btn-outline-primary btn-acao-standby" 
+                <button class="btn btn-sm btn-outline-primary btn-acao-standby"
                         onclick="alterarStatus('${pedido.num_pedido}', 'ATIVO')"
                         title="Reverter para Ativo">
                     <i class="fas fa-undo"></i> Reverter
                 </button>
-                <button class="btn btn-sm btn-outline-warning btn-acao-standby" 
+                <button class="btn btn-sm btn-outline-warning btn-acao-standby"
                         onclick="alterarStatus('${pedido.num_pedido}', 'BLOQ. COML.')"
                         title="Bloquear Comercial">
                     <i class="fas fa-ban"></i> Bloquear
                 </button>
-                <button class="btn btn-sm btn-outline-info btn-acao-standby" 
+                <button class="btn btn-sm btn-outline-info btn-acao-standby"
                         onclick="alterarStatus('${pedido.num_pedido}', 'SALDO')"
                         title="Marcar como Saldo">
                     <i class="fas fa-box"></i> Saldo
                 </button>
-                <button class="btn btn-sm btn-outline-success btn-acao-standby" 
+                <button class="btn btn-sm btn-outline-success btn-acao-standby"
                         onclick="alterarStatus('${pedido.num_pedido}', 'CONFIRMADO')"
                         title="Confirmar e Retornar">
                     <i class="fas fa-check"></i> Confirmar
@@ -232,13 +264,13 @@
             trProdutos.className = 'produtos-standby';
             trProdutos.style.display = 'none';
             trProdutos.innerHTML = `
-            <td colspan="10">
+            <td colspan="12">
                 <div class="p-3">
                     <h6 class="mb-2">Produtos do Pedido ${pedido.num_pedido}:</h6>
                     <table class="table table-sm">
                         <thead>
                             <tr>
-                                <th>Código</th>
+                                <th>Codigo</th>
                                 <th>Quantidade</th>
                                 <th class="text-end">Valor</th>
                                 <th class="text-end">Peso</th>
@@ -342,9 +374,9 @@
         const status = document.getElementById('filtro-status-standby').value;
 
         const pedidosFiltrados = pedidosStandby.filter(pedido => {
-            // Filtro de busca
+            // Filtro de busca (inclui novos campos)
             if (busca) {
-                const textoBusca = `${pedido.num_pedido} ${pedido.nome_cliente} ${pedido.cnpj_cliente}`.toLowerCase();
+                const textoBusca = `${pedido.num_pedido} ${pedido.nome_cliente} ${pedido.raz_social_red || ''} ${pedido.cnpj_cliente} ${pedido.uf || ''} ${pedido.cidade || ''}`.toLowerCase();
                 if (!textoBusca.includes(busca)) return false;
             }
 
@@ -476,6 +508,38 @@
         modalBS.show();
     }
 
+    function exportarExcel() {
+        window.location.href = '/carteira/api/standby/exportar';
+    }
+
+    async function limparCanceladosDuplicados() {
+        if (!confirm('Confirma a limpeza? Registros duplicados e pedidos cancelados/removidos da carteira serao resolvidos.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/carteira/api/standby/limpar-cancelados-duplicados', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert('success', data.message);
+                setTimeout(() => carregarPedidosStandby(), 1000);
+            } else {
+                showAlert('error', data.message || 'Erro ao limpar');
+            }
+        } catch (error) {
+            console.error('Erro ao limpar standby:', error);
+            showAlert('error', 'Erro ao processar limpeza');
+        }
+    }
+
     function salvarObservacao() {
         const observacao = document.getElementById('novaObservacao').value.trim();
 
@@ -530,7 +594,7 @@
                     document.getElementById('novaObservacao').value = '';
 
                     // Recarregar dados para atualizar contador
-                    carregarDados();
+                    carregarPedidosStandby();
                 } else {
                     showAlert('error', 'Erro ao adicionar observação: ' + (data.message || 'Erro desconhecido'));
                 }
