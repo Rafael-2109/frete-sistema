@@ -94,16 +94,36 @@ class ListaPedidosService:
             'sub_rota': args.get('sub_rota', '').strip(),
         }
 
+        # Escopo: NACOM / CARVIA / GERAL (vazio)
+        origem = (args.get('origem', '') or '').strip().upper()
+        if origem not in ('NACOM', 'CARVIA'):
+            origem = ''
+
         return {
             'status_list': status_list,
             'active_conds': active_conds,
             'dates': {'expedicao_de': expedicao_de, 'expedicao_ate': expedicao_ate},
             'refinements': refinements,
+            'origem': origem,
         }
 
     # ---------------------------------------------------------------
     # APPLY HELPERS — composiveis para query e contadores
     # ---------------------------------------------------------------
+    @staticmethod
+    def _apply_origem(query, origem):
+        """Aplica filtro de escopo NACOM/CARVIA via prefixo separacao_lote_id."""
+        if origem == 'CARVIA':
+            query = query.filter(Pedido.separacao_lote_id.like('CARVIA-%'))
+        elif origem == 'NACOM':
+            query = query.filter(
+                db.or_(
+                    Pedido.separacao_lote_id.is_(None),
+                    ~Pedido.separacao_lote_id.like('CARVIA-%')
+                )
+            )
+        return query
+
     @staticmethod
     def _apply_statuses(query, status_list):
         """Aplica filtro de status (OR) na query."""
@@ -187,9 +207,10 @@ class ListaPedidosService:
                                   cnpjs_validos_agendamento=None,
                                   lotes_falta_item_ids=None,
                                   lotes_falta_pagamento_ids=None):
-        """Filtro unificado: status (OR), condicoes (AND), datas (range), refinamento."""
+        """Filtro unificado: origem (escopo), status (OR), condicoes (AND), datas (range), refinamento."""
         Svc = ListaPedidosService
         p = Svc._parse_filter_params(args)
+        query = Svc._apply_origem(query, p['origem'])
         query = Svc._apply_statuses(query, p['status_list'])
         query = Svc._apply_conditions(query, p['active_conds'], hoje,
                                       cnpjs_validos_agendamento,
@@ -220,8 +241,9 @@ class ListaPedidosService:
         Svc = ListaPedidosService
         p = Svc._parse_filter_params(args)
 
-        # --- STATUS COUNTS: base = refinements + dates + conditions ---
+        # --- STATUS COUNTS: base = origem + refinements + dates + conditions ---
         q_s = Pedido.query
+        q_s = Svc._apply_origem(q_s, p['origem'])
         q_s = Svc._apply_refinements(q_s, p['refinements'])
         q_s = Svc._apply_date_range(q_s, p['dates'])
         q_s = Svc._apply_conditions(q_s, p['active_conds'], hoje,
@@ -240,8 +262,9 @@ class ListaPedidosService:
             func.count(case((Pedido.nf_cd == True, 1))),
         ).one()
 
-        # --- CONDITION COUNTS: base = refinements + dates + statuses ---
+        # --- CONDITION COUNTS: base = origem + refinements + dates + statuses ---
         q_c = Pedido.query
+        q_c = Svc._apply_origem(q_c, p['origem'])
         q_c = Svc._apply_refinements(q_c, p['refinements'])
         q_c = Svc._apply_date_range(q_c, p['dates'])
         q_c = Svc._apply_statuses(q_c, p['status_list'])
@@ -255,8 +278,9 @@ class ListaPedidosService:
             func.count(case((Svc._expr_cond_lotes(lotes_item), 1))),
         ).one()
 
-        # --- DATE COUNTS: base = refinements + statuses + conditions (sem datas) ---
+        # --- DATE COUNTS: base = origem + refinements + statuses + conditions (sem datas) ---
         q_d = Pedido.query
+        q_d = Svc._apply_origem(q_d, p['origem'])
         q_d = Svc._apply_refinements(q_d, p['refinements'])
         q_d = Svc._apply_statuses(q_d, p['status_list'])
         q_d = Svc._apply_conditions(q_d, p['active_conds'], hoje,

@@ -39,6 +39,7 @@ def register_lista_routes(bp):
 
         # --- Contadores facetados (atualizam com filtros ativos) ---
         _filter_keys = [
+            'origem',
             'status', 'cond_atrasados', 'cond_sem_data', 'cond_pend_embarque',
             'cond_agend_pendente', 'cond_ag_pagamento', 'cond_ag_item',
             'expedicao_de', 'expedicao_ate', 'uf', 'rota', 'sub_rota',

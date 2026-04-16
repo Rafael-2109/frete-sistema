@@ -339,6 +339,7 @@ class PedidosCounterService:
     def _build_filter_fingerprint(args) -> str:
         """Gera hash MD5 dos parametros de filtro (exclui page/sort)."""
         filter_keys = sorted([
+            'origem',
             'status', 'cond_atrasados', 'cond_sem_data', 'cond_pend_embarque',
             'cond_agend_pendente', 'cond_ag_pagamento', 'cond_ag_item',
             'expedicao_de', 'expedicao_ate', 'uf', 'rota', 'sub_rota',

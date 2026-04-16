@@ -35,7 +35,7 @@
     };
 
     // Params que nao geram chips (controle interno)
-    var SKIP_CHIP_PARAMS = ['page', 'sort_by', 'sort_order'];
+    var SKIP_CHIP_PARAMS = ['page', 'sort_by', 'sort_order', 'origem'];
 
     // ═══════════════════════════════════════════════════════════════
     // CORE: navegarComFiltros
@@ -314,6 +314,28 @@
                 if (clearBtn) {
                     window.location.href = BASE_URL;
                 }
+            });
+        }
+
+        // Escopo GERAL/NACOM/CARVIA — auto-submit ao trocar
+        document.querySelectorAll('input.btn-check[name="origem"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                navegarComFiltros({ origem: this.value || null });
+            });
+        });
+
+        // Persistir origem nos links da pagina (paginacao, sort, etc.)
+        var currentOrigem = new URLSearchParams(window.location.search).get('origem');
+        if (currentOrigem) {
+            document.querySelectorAll('a[href]').forEach(function (link) {
+                var hrefAttr = link.getAttribute('href') || '';
+                if (!hrefAttr || hrefAttr.startsWith('#') || hrefAttr.startsWith('javascript:')) return;
+                try {
+                    var linkUrl = new URL(link.href, window.location.origin);
+                    if (linkUrl.pathname !== window.location.pathname) return;
+                    linkUrl.searchParams.set('origem', currentOrigem);
+                    link.href = linkUrl.toString();
+                } catch (e) { /* ignora URLs invalidas */ }
             });
         }
 
