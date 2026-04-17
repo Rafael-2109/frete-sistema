@@ -341,6 +341,8 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 | `task_started` | StreamEvent | _sse_event | case | TaskStartedMessage (subagente) |
 | `task_progress` | StreamEvent | _sse_event | case | TaskProgressMessage (subagente) |
 | `task_notification` | StreamEvent | _sse_event | case | TaskNotificationMessage (subagente) |
+| `subagent_summary` | StreamEvent | _sse_event | case | SubagentStop hook (#6) |
+| `subagent_validation` | StreamEvent (Redis pubsub) | _sse_event | case | validator worker (#4, fase 4) |
 | `stderr` | StreamEvent | _sse_event | case | SDK stderr callback (debug, admin-only) |
 | `done` | StreamEvent | _sse_event | case | ResultMessage (fim, inclui structured_output) |
 | `start` | — | SSE generator | case | Inicio do SSE stream |
@@ -437,6 +439,19 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 - **`RateLimitEvent`** (0.1.50): Pipeline 3-layer: client.py → routes/chat.py → chat.js (toast).
 - **`HookMatcher.timeout`** (0.1.50): `UserPromptSubmit` usa 120s.
 - **`AgentDefinition.skills`** (0.1.49): Skills nativas via `_SDK_HAS_NATIVE_FIELDS`.
+
+### Features adotadas (2026-04-16 — SDK 0.1.60 fases 1-2):
+- **`sdk/subagent_reader.py`**: Wrapper de `list_subagents` + `get_subagent_messages`. Fundacao usada por #1, #3, #5, #6. Retorna `SubagentSummary` com tools cronologicas, cost, tokens, findings_text. Aplica mascaramento PII por default (regex brasileiro em `utils/pii_masker.py`).
+- **Endpoint admin debug forense** (`routes/admin_subagents.py`, #1): 3 rotas admin-only — `/api/admin/sessions/<id>/subagents[/<aid>[/messages]]`. Flag `USE_SUBAGENT_DEBUG_ENDPOINT` (default true).
+- **Cost tracking granular** (`hooks.py` + `models.py` + `services/insights_service.py`, #3): SubagentStop persiste entry em `AgentSession.data['subagent_costs']` (JSONB v1, indice GIN em `scripts/migrations/agent_session_subagent_costs_idx.{py,sql}`). Classmethod `AgentSession.top_subagents_by_cost(days, limit)`. Flag `USE_SUBAGENT_COST_GRANULAR`.
+- **UI linha inline expansivel** (`routes/subagents.py` + `static/agente/js/chat.js` + `static/agente/css/_subagent-inline.css`, #6): Linha dentro do fluxo da conversa com estados running/done/expanded. Lazy-fetch em `/api/sessions/<id>/subagents/<aid>/summary`. PII sanitizada via `_sanitize_subagent_summary_for_user()` em `routes/chat.py` para non-admin. Admin ve cost + raw. Flag `USE_SUBAGENT_UI`.
+- **Memory mining cross-subagent** (`services/pattern_analyzer.py`, #5): `extrair_conhecimento_sessao(include_subagents=True, session_id=...)` injeta findings dos especialistas antes da conversa principal no prompt Sonnet. Cap 2K chars/subagent. Flag `USE_SUBAGENT_MEMORY_MINING`.
+
+**PII sanitization** (`utils/pii_masker.py`): Regex conservadora CPF/CNPJ/email formatados e sem formatacao. Preserva DV/filial/dominio. Admin pula sanitizacao via `_sanitize_subagent_summary_for_user()` em `routes/chat.py`.
+
+**GOTCHA**: Global exception handler em `app/__init__.py:511` re-raise HTTPException (exceto 404). `abort(403)` NAO funciona em rotas deste app — usar `return jsonify({'success': False, 'error': '...'}), 403` inline (pattern de `admin_learning.py`).
+
+**Pendente** (fases 3-4): #2 aposentar `/tmp/subagent-findings/` (soft, mantem fallback), #4 validacao anti-alucinacao async via RQ queue `agent_validation`.
 
 ### Bug fixes criticos (0.1.51–0.1.53):
 - **`is_error` MCP propagado** (0.1.51): Modelo sabe quando MCP tool falhou (antes interpretava erro como sucesso)
