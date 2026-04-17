@@ -27,6 +27,41 @@ import anthropic
 from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
+
+# Gatilhos de linguagem prescritiva (heuristica zero-LLM)
+# Ref: docs/superpowers/plans/2026-04-16-memory-system-redesign.md Task 6
+_MANDATORY_PATTERNS = [
+    r'\bSEMPRE\b',
+    r'\bNUNCA\b',
+    r'\brejeit(ar|e|o)\b',
+    r'\bnao acei(to|ta)\b',
+    r'\bformato (esta )?travado\b',
+    r'\bobriga(torio|toria)\b',
+    r'\bexigir\b',
+    r'\bimperati(vo|va)\b',
+    r'\bestritamente\b',
+]
+
+
+def _is_mandatory_trigger(text: str) -> bool:
+    """
+    Detecta linguagem prescritiva forte que justifica salvar memoria como
+    priority='mandatory' (vs 'contextual' ou 'advisory').
+
+    Zero-LLM: regex case-insensitive. Complementar ao Sonnet pos-sessao que
+    analisa contexto completo.
+
+    Returns:
+        True se texto contem gatilho prescritivo forte, False caso contrario.
+    """
+    if not text:
+        return False
+    for pattern in _MANDATORY_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return True
+    return False
+
+
 SONNET_MODEL = "claude-sonnet-4-6"
 
 # Limite de caracteres totais das sessões para enviar ao Sonnet
