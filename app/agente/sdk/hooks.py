@@ -638,20 +638,23 @@ def build_hooks(
                         # app context. Envolver em `with _app_ctx` resolve
                         # RuntimeError("Working outside of application context").
                         # Mesmo padrao que _session_archive_hook usa.
+                        # SQLAlchemy text() usa `:param` para bind. PostgreSQL
+                        # cast `::jsonb` conflita — gera "syntax error at or
+                        # near ':'". Solucao: usar CAST(... AS jsonb).
                         with _app_ctx:
                             result = db.session.execute(
                                 _sql_text("""
                                     UPDATE agent_sessions
                                     SET data = jsonb_set(
-                                        COALESCE(data, '{}'::jsonb),
+                                        COALESCE(data, CAST('{}' AS jsonb)),
                                         '{subagent_costs}',
                                         jsonb_build_object(
                                             'version', 2,
                                             'entries',
                                             COALESCE(
                                                 data->'subagent_costs'->'entries',
-                                                '[]'::jsonb
-                                            ) || :entry_json::jsonb
+                                                CAST('[]' AS jsonb)
+                                            ) || CAST(:entry_json AS jsonb)
                                         ),
                                         true
                                     )
