@@ -1,6 +1,5 @@
 """Testa que pattern_analyzer.extrair_conhecimento_sessao inclui subagents."""
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 def test_extrair_conhecimento_fetches_subagents_when_enabled(app):
