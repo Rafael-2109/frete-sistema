@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 
 from claude_agent_sdk import get_subagent_messages, list_subagents
 
