@@ -558,13 +558,24 @@ def build_hooks(
                         agent_type=agent_type,
                         include_pii=True,  # sanitizacao na camada 2 (routes/chat.py)
                     )
-                    _emit_subagent_summary(session_id, summary.to_dict())
-                    logger.debug(
-                        f"[HOOK:SubagentStop] subagent_summary emitido "
-                        f"(agent_type={agent_type})"
+                    logger.info(
+                        f"[HOOK:SubagentStop] get_subagent_summary "
+                        f"agent_type={agent_type} status={summary.status} "
+                        f"tools_used={len(summary.tools_used)} "
+                        f"findings_len={len(summary.findings_text)}"
                     )
+                    _emit_subagent_summary(session_id, summary.to_dict())
                 except Exception as ui_err:
-                    logger.debug(f"[HOOK:SubagentStop] emit UI falhou: {ui_err}")
+                    logger.warning(
+                        f"[HOOK:SubagentStop] emit UI falhou: {ui_err}"
+                    )
+            else:
+                logger.info(
+                    f"[HOOK:SubagentStop] emit UI SKIP "
+                    f"USE_SUBAGENT_UI={USE_SUBAGENT_UI} "
+                    f"session_id={bool(session_id)} "
+                    f"agent_id={bool(agent_id)}"
+                )
 
             # #4 Validacao anti-alucinacao async (enfileira job RQ)
             from ..config.feature_flags import (

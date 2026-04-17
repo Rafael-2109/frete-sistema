@@ -81,6 +81,61 @@ def api_admin_subagent_detail(session_id: str, agent_id: str):
     })
 
 
+@agente_bp.route('/api/admin/debug/subagent-fs', methods=['GET'])
+@login_required
+def api_admin_debug_subagent_fs():
+    """
+    Diagnostico: verifica se filesystem do SDK esta presente no container.
+
+    Retorna:
+    - projects_dir_exists: ~/.claude/projects/ existe?
+    - project_dirs: quantos projetos, exemplo de session_ids
+    - subagent_jsonls: quantos transcripts JSONL de subagents foram escritos
+    - redis_url_set: REDIS_URL env var esta definida?
+    """
+    import os
+    from pathlib import Path
+
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Admin only'}), 403
+
+    result = {
+        'projects_dir_exists': False,
+        'projects_dir': str(Path.home() / '.claude' / 'projects'),
+        'project_dirs_count': 0,
+        'project_sample': [],
+        'subagent_sessions_count': 0,
+        'subagent_jsonls_count': 0,
+        'sample_subagent_jsonl': None,
+        'redis_url_set': bool(os.environ.get('REDIS_URL')),
+        'home_dir': str(Path.home()),
+    }
+
+    projects_dir = Path.home() / '.claude' / 'projects'
+    if projects_dir.exists():
+        result['projects_dir_exists'] = True
+        project_dirs = [p for p in projects_dir.iterdir() if p.is_dir()]
+        result['project_dirs_count'] = len(project_dirs)
+        result['project_sample'] = [p.name for p in project_dirs[:3]]
+
+        # Busca JSONLs de subagents
+        subagent_jsonls = []
+        for proj in project_dirs:
+            for sess_dir in proj.iterdir():
+                if not sess_dir.is_dir():
+                    continue
+                sub_dir = sess_dir / 'subagents'
+                if sub_dir.exists():
+                    result['subagent_sessions_count'] += 1
+                    for jsonl in sub_dir.rglob('*.jsonl'):
+                        subagent_jsonls.append(str(jsonl))
+        result['subagent_jsonls_count'] = len(subagent_jsonls)
+        if subagent_jsonls:
+            result['sample_subagent_jsonl'] = subagent_jsonls[0]
+
+    return jsonify({'success': True, 'debug': result})
+
+
 @agente_bp.route(
     '/api/admin/sessions/<session_id>/subagents/<agent_id>/messages',
     methods=['GET'],

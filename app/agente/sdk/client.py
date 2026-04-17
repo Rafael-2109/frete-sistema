@@ -85,6 +85,7 @@ def _emit_subagent_summary(session_id, summary_dict: dict) -> None:
     No-op se session_id for falsy ou Redis falhar (best-effort, R1).
     """
     if not session_id:
+        logger.warning("[emit_subagent_summary] session_id vazio, skip")
         return
     try:
         import json
@@ -93,12 +94,18 @@ def _emit_subagent_summary(session_id, summary_dict: dict) -> None:
         redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
         r = redis.from_url(redis_url)
         channel = f'agent_sse:{session_id}'
-        r.publish(channel, json.dumps({
+        payload = json.dumps({
             'type': 'subagent_summary',
             'data': summary_dict,
-        }))
+        })
+        n_subs = r.publish(channel, payload)
+        logger.info(
+            f"[emit_subagent_summary] published channel={channel} "
+            f"agent_type={summary_dict.get('agent_type')} "
+            f"status={summary_dict.get('status')} subscribers={n_subs}"
+        )
     except Exception as e:
-        logger.debug(f"[emit_subagent_summary] falhou: {e}")
+        logger.warning(f"[emit_subagent_summary] falhou: {e}")
 
 
 class AgentClient:
