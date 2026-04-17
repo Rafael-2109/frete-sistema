@@ -40,13 +40,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_histmatch_conciliacao_id",
-      "columns": [
-        "conciliacao_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_histmatch_cnpj",
       "columns": [
         "cnpj_pagador"
@@ -72,6 +65,13 @@
       "columns": [
         "descricao_tokens",
         "tipo_documento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_histmatch_conciliacao_id",
+      "columns": [
+        "conciliacao_id"
       ],
       "unique": false
     }

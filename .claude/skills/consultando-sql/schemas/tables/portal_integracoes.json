@@ -91,11 +91,11 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_integracoes_protocolo",
+      "name": "ix_portal_integracoes_criado_em",
       "columns": [
-        "protocolo"
+        "criado_em"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "ix_portal_integracoes_status",
@@ -119,11 +119,11 @@
       "unique": false
     },
     {
-      "name": "ix_portal_integracoes_criado_em",
+      "name": "ix_portal_integracoes_protocolo",
       "columns": [
-        "criado_em"
+        "protocolo"
       ],
-      "unique": false
+      "unique": true
     }
   ]
 }

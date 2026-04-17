@@ -49,16 +49,16 @@
   ],
   "indices": [
     {
-      "name": "ix_cadastro_sub_rota_nome_cidade",
+      "name": "ix_cadastro_sub_rota_cod_uf",
       "columns": [
-        "nome_cidade"
+        "cod_uf"
       ],
       "unique": false
     },
     {
-      "name": "ix_cadastro_sub_rota_cod_uf",
+      "name": "ix_cadastro_sub_rota_nome_cidade",
       "columns": [
-        "cod_uf"
+        "nome_cidade"
       ],
       "unique": false
     },

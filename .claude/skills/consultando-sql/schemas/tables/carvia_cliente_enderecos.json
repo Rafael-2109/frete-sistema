@@ -96,9 +96,9 @@
     {
       "name": "ativo",
       "type": "boolean",
+      "description": "True = registro ativo",
       "nullable": false,
-      "default": true,
-      "description": "Soft-delete flag. Quando FALSE, endereco nao aparece como opcao em cotacoes mas continua vinculado ao historico."
+      "default": true
     },
     {
       "name": "criado_em",
@@ -120,6 +120,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_cliente_enderecos_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_endereco_tipo",
       "columns": [
         "tipo"
@@ -130,13 +137,6 @@
       "name": "ix_carvia_cliente_enderecos_cliente_id",
       "columns": [
         "cliente_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_cliente_enderecos_cnpj",
-      "columns": [
-        "cnpj"
       ],
       "unique": false
     }

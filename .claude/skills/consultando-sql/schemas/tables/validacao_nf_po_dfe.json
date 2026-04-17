@@ -186,9 +186,9 @@
   ],
   "indices": [
     {
-      "name": "ix_validacao_nf_po_dfe_po_modificada_apos_validacao",
+      "name": "ix_validacao_nf_po_dfe_odoo_po_vinculado_id",
       "columns": [
-        "po_modificada_apos_validacao"
+        "odoo_po_vinculado_id"
       ],
       "unique": false
     },
@@ -207,11 +207,11 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_nf_po_dfe_odoo_dfe_id",
+      "name": "ix_validacao_nf_po_dfe_po_modificada_apos_validacao",
       "columns": [
-        "odoo_dfe_id"
+        "po_modificada_apos_validacao"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "ix_validacao_nf_po_dfe_cnpj_fornecedor",
@@ -221,11 +221,11 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_nf_po_dfe_odoo_po_vinculado_id",
+      "name": "ix_validacao_nf_po_dfe_odoo_dfe_id",
       "columns": [
-        "odoo_po_vinculado_id"
+        "odoo_dfe_id"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_validacao_nf_po_dfe_status",

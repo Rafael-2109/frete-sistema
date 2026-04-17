@@ -197,24 +197,17 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_odoo_purchase_order_id",
-      "columns": [
-        "odoo_purchase_order_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_nf_chave_acesso",
-      "columns": [
-        "nf_chave_acesso"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_pedido_empresa",
       "columns": [
         "company_id",
         "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_odoo_purchase_order_id",
+      "columns": [
+        "odoo_purchase_order_id"
       ],
       "unique": false
     },
@@ -226,9 +219,9 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_num_pedido",
+      "name": "ix_pedido_compras_nf_chave_acesso",
       "columns": [
-        "num_pedido"
+        "nf_chave_acesso"
       ],
       "unique": false
     },
@@ -240,9 +233,9 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_status_odoo",
+      "name": "ix_pedido_compras_company_id",
       "columns": [
-        "status_odoo"
+        "company_id"
       ],
       "unique": false
     },
@@ -250,6 +243,20 @@
       "name": "idx_pedido_chave_acesso",
       "columns": [
         "nf_chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_status_odoo",
+      "columns": [
+        "status_odoo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_num_requisicao",
+      "columns": [
+        "num_requisicao"
       ],
       "unique": false
     },
@@ -268,16 +275,9 @@
       "unique": false
     },
     {
-      "name": "ix_pedido_compras_num_requisicao",
+      "name": "ix_pedido_compras_num_pedido",
       "columns": [
-        "num_requisicao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_company_id",
-      "columns": [
-        "company_id"
+        "num_pedido"
       ],
       "unique": false
     }

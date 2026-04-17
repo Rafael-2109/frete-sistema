@@ -277,9 +277,23 @@
   ],
   "indices": [
     {
-      "name": "ix_conhecimento_transporte_odoo_status_codigo",
+      "name": "ix_conhecimento_transporte_dfe_id",
       "columns": [
-        "odoo_status_codigo"
+        "dfe_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_conhecimento_transporte_tomador_e_empresa",
+      "columns": [
+        "tomador_e_empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_ativo",
+      "columns": [
+        "ativo"
       ],
       "unique": false
     },
@@ -287,6 +301,13 @@
       "name": "ix_conhecimento_transporte_cancelado",
       "columns": [
         "cancelado"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_odoo_status_codigo",
+      "columns": [
+        "odoo_status_codigo"
       ],
       "unique": false
     },
@@ -305,6 +326,13 @@
       "unique": true
     },
     {
+      "name": "ix_conhecimento_transporte_cte_complementa_chave",
+      "columns": [
+        "cte_complementa_chave"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_cte_chave_acesso",
       "columns": [
         "chave_acesso"
@@ -319,9 +347,9 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_chave",
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
       "columns": [
-        "cte_complementa_chave"
+        "cte_complementa_id"
       ],
       "unique": false
     },
@@ -330,13 +358,6 @@
       "columns": [
         "numero_cte",
         "serie_cte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_cte_complementa_id",
-      "columns": [
-        "cte_complementa_id"
       ],
       "unique": false
     },
@@ -435,27 +456,6 @@
       "name": "ix_conhecimento_transporte_cnpj_remetente",
       "columns": [
         "cnpj_remetente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_dfe_id",
-      "columns": [
-        "dfe_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_conhecimento_transporte_tomador_e_empresa",
-      "columns": [
-        "tomador_e_empresa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_ativo",
-      "columns": [
-        "ativo"
       ],
       "unique": false
     }
