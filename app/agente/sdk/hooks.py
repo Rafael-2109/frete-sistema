@@ -10,6 +10,7 @@ import logging
 from typing import Optional
 
 from app.utils.timezone import agora_utc_naive
+from ..config.feature_flags import USE_SUBAGENT_COST_GRANULAR
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -423,6 +424,7 @@ def build_hooks(
             agent_id = hook_input.get('agent_id', '')
             agent_type = hook_input.get('agent_type', '')
             transcript_path = hook_input.get('agent_transcript_path', '')
+            session_id = hook_input.get('session_id', '')
 
             # SDK 0.1.52+: Limpar mapa agent_id → agent_type
             if agent_id:
@@ -434,12 +436,12 @@ def build_hooks(
             duration_ms = None
             num_turns = None
             stop_reason = ''
+            last_result = None
 
             if transcript_path:
                 try:
                     import json as _json
                     with open(transcript_path, 'r') as f:
-                        last_result = None
                         for line in f:
                             line = line.strip()
                             if not line:
@@ -490,6 +492,55 @@ def build_hooks(
                     )
                 except Exception as cost_err:
                     logger.debug(f"[HOOK:SubagentStop] cost_tracker falhou: {cost_err}")
+
+            # #3 Cost granular — persiste em AgentSession.data (JSONB)
+            if USE_SUBAGENT_COST_GRANULAR and session_id and cost_usd is not None:
+                try:
+                    from app import db
+                    from ..models import AgentSession
+                    from sqlalchemy.orm.attributes import flag_modified
+
+                    input_tokens = 0
+                    output_tokens = 0
+                    cache_read = 0
+                    if last_result:
+                        usage = last_result.get('usage', {}) or {}
+                        input_tokens = usage.get('input_tokens') or 0
+                        output_tokens = usage.get('output_tokens') or 0
+                        cache_read = usage.get('cache_read_input_tokens') or 0
+
+                    sess = AgentSession.query.filter_by(
+                        session_id=session_id
+                    ).first()
+                    if sess is not None:
+                        data = sess.data or {}
+                        bucket = data.setdefault('subagent_costs', {
+                            'version': 1, 'entries': []
+                        })
+                        bucket['entries'].append({
+                            'agent_id': agent_id,
+                            'agent_type': agent_type,
+                            'cost_usd': float(cost_usd),
+                            'input_tokens': int(input_tokens),
+                            'output_tokens': int(output_tokens),
+                            'cache_read_tokens': int(cache_read),
+                            'duration_ms': int(duration_ms or 0),
+                            'num_turns': int(num_turns or 0),
+                            'stop_reason': stop_reason or 'end_turn',
+                            'started_at': None,
+                            'ended_at': agora_utc_naive().isoformat(),
+                        })
+                        sess.data = data
+                        flag_modified(sess, 'data')
+                        db.session.commit()
+                        logger.debug(
+                            f"[HOOK:SubagentStop] cost granular persistido "
+                            f"em sess.data (agent_type={agent_type})"
+                        )
+                except Exception as granular_err:
+                    logger.debug(
+                        f"[HOOK:SubagentStop] cost granular falhou: {granular_err}"
+                    )
 
             return {}
         except Exception as e:

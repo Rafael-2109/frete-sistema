@@ -133,6 +133,9 @@ def get_insights_data(
             logger.warning(f"[INSIGHTS] Erro ao gerar recomendacoes: {e}")
             current['recommendations'] = []
 
+        # ── Custo granular por subagente (#3) ──
+        current['subagent_costs'] = _get_subagent_cost_section(days=days)
+
         return current
 
     except Exception as e:
@@ -1432,3 +1435,29 @@ def _compute_capdo_quality_metrics(
             'domain_diversity': {},
             'knowledge_type_distribution': {},
         }
+
+
+# =============================================================================
+# CUSTO GRANULAR POR SUBAGENTE (#3)
+# =============================================================================
+
+def _get_subagent_cost_section(days: int = 30) -> dict:
+    """Top subagentes por custo nos ultimos N dias (feature #3)."""
+    from ..config.feature_flags import USE_SUBAGENT_COST_GRANULAR
+    if not USE_SUBAGENT_COST_GRANULAR:
+        return {}
+
+    from ..models import AgentSession
+    try:
+        top = AgentSession.top_subagents_by_cost(days=days, limit=5)
+        total = sum(t['total_cost'] for t in top)
+        return {
+            'top_subagents': top,
+            'total_cost_30d': round(total, 4),
+            'period_days': days,
+        }
+    except Exception as e:
+        logger.warning(
+            f"[insights] subagent_cost_section falhou: {e}"
+        )
+        return {}

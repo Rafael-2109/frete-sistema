@@ -416,6 +416,39 @@ class AgentSession(db.Model):
             .limit(limit)\
             .all()
 
+    @classmethod
+    def top_subagents_by_cost(cls, days: int = 30, limit: int = 10) -> list:
+        """
+        Top N subagentes por custo acumulado nos ultimos `days` dias.
+
+        Usa o indice GIN em data->subagent_costs. Retorna:
+        [{'agent_type': str, 'total_cost': float, 'invocacoes': int}, ...]
+        """
+        from sqlalchemy import text
+        from app import db
+
+        q = text("""
+            SELECT
+                e->>'agent_type' AS agent_type,
+                SUM((e->>'cost_usd')::numeric) AS total_cost,
+                COUNT(*) AS invocacoes
+            FROM agent_sessions s,
+                 jsonb_array_elements(s.data->'subagent_costs'->'entries') e
+            WHERE s.created_at > now() - make_interval(days => :days)
+            GROUP BY e->>'agent_type'
+            ORDER BY total_cost DESC
+            LIMIT :limit
+        """)
+        rows = db.session.execute(q, {'days': days, 'limit': limit}).fetchall()
+        return [
+            {
+                'agent_type': r.agent_type,
+                'total_cost': float(r.total_cost or 0),
+                'invocacoes': int(r.invocacoes or 0),
+            }
+            for r in rows
+        ]
+
 
 class AgentMemory(db.Model):
     """
