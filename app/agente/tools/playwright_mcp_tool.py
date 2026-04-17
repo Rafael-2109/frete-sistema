@@ -43,6 +43,8 @@ import time
 import uuid
 from typing import Annotated, Any, Dict, List
 
+from app.utils.file_storage import get_file_storage
+
 logger = logging.getLogger(__name__)
 
 # =====================================================================
@@ -450,24 +452,57 @@ try:
             logger.warning(f"[BROWSER] Erro no cleanup de screenshots: {e}")
         return removed
 
-    def _save_screenshot(png_bytes: bytes, prefix: str = "screenshot") -> str:
+    def _save_screenshot(png_bytes: bytes, prefix: str = "screenshot") -> dict:
         """
         Salva PNG em /tmp/agente_files/screenshots/ com nome unico.
+        Se USE_S3=True, tambem faz upload para S3 em playwright-screenshots/YYYY-MM/.
 
         Args:
             png_bytes: Bytes da imagem PNG.
             prefix: Prefixo do nome do arquivo.
 
         Returns:
-            Nome do arquivo salvo (ex: screenshot_abc12345.png).
+            dict com keys: filename, local_path, s3_path (Optional), s3_url (Optional).
         """
+        from io import BytesIO
+        from flask import current_app
+
         os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
         short_id = uuid.uuid4().hex[:8]
         filename = f"{prefix}_{short_id}.png"
         filepath = os.path.join(SCREENSHOTS_DIR, filename)
         with open(filepath, "wb") as f:
             f.write(png_bytes)
-        return filename
+
+        result = {
+            "filename": filename,
+            "local_path": filepath,
+            "s3_path": None,
+            "s3_url": None,
+        }
+
+        # Upload para S3 se habilitado (best-effort, falha silenciosa)
+        try:
+            use_s3 = current_app.config.get("USE_S3", False)
+            if use_s3:
+                from datetime import datetime
+                year_month = datetime.utcnow().strftime("%Y-%m")
+                folder = f"playwright-screenshots/{year_month}"
+
+                buf = BytesIO(png_bytes)
+                buf.name = filename  # FileStorage usa .name para detectar extensao
+
+                storage = get_file_storage()
+                s3_path = storage.save_file(buf, folder=folder, filename=filename)
+                if s3_path:
+                    s3_url = storage.get_file_url(s3_path)
+                    result["s3_path"] = s3_path
+                    result["s3_url"] = s3_url
+                    logger.info(f"[BROWSER] Screenshot uploaded S3: {s3_path}")
+        except Exception as s3_err:
+            logger.warning(f"[BROWSER] S3 upload falhou (screenshot local OK): {s3_err}")
+
+        return result
 
     @tool(
         "browser_screenshot",
@@ -543,8 +578,15 @@ try:
                 png_bytes = await _page.screenshot(type="png", full_page=full_page)
                 capture_desc = "pagina inteira" if full_page else "viewport"
 
-            # Salvar PNG original no disco (para download via URL)
-            filename = _save_screenshot(png_bytes)
+            # Salvar PNG original no disco (para download via URL) + upload S3 se ativo
+            screenshot_info = _save_screenshot(png_bytes)
+            # Suporta dict (novo) e str (legado)
+            if isinstance(screenshot_info, dict):
+                filename = screenshot_info["filename"]
+                _s3_url = screenshot_info.get("s3_url")
+            else:
+                filename = screenshot_info
+                _s3_url = None
             url = f"/agente/api/files/screenshots/{filename}"
 
             original_size_kb = len(png_bytes) / 1024
@@ -603,6 +645,7 @@ try:
                     )
                     title = await _page.title()
                     page_url = _page.url
+                    s3_line = f"\nS3 URL: {_s3_url}" if _s3_url else ""
                     return {
                         "content": [
                             {
@@ -611,12 +654,15 @@ try:
                                     f"Screenshot capturado ({capture_desc}): {original_size_kb:.0f}KB "
                                     f"(muito grande para inline, disponível via URL)\n"
                                     f"Pagina: {title} ({page_url})\n"
-                                    f"URL da imagem: {url}\n\n"
+                                    f"URL da imagem: {url}{s3_line}\n\n"
                                     f"Para exibir ao usuario, inclua no markdown:\n"
                                     f"![Screenshot]({url})"
                                 ),
                             },
                         ],
+                        "filename": filename,
+                        "local_path": os.path.join(SCREENSHOTS_DIR, filename),
+                        "s3_url": _s3_url,
                     }
                 except Exception as compress_err:
                     logger.warning(f"[BROWSER] Erro ao comprimir screenshot: {compress_err}")
@@ -637,6 +683,7 @@ try:
             title = await _page.title()
             page_url = _page.url
 
+            s3_line = f"\nS3 URL (1h): {_s3_url}" if _s3_url else ""
             return {
                 "content": [
                     {
@@ -649,12 +696,15 @@ try:
                         "text": (
                             f"Screenshot capturado ({capture_desc}): {final_size_kb:.0f}KB\n"
                             f"Pagina: {title} ({page_url})\n"
-                            f"URL da imagem (PNG original): {url}\n\n"
+                            f"URL da imagem (PNG original): {url}{s3_line}\n\n"
                             f"Para exibir ao usuario, inclua no markdown:\n"
                             f"![Screenshot]({url})"
                         ),
                     },
                 ],
+                "filename": filename,
+                "local_path": os.path.join(SCREENSHOTS_DIR, filename),
+                "s3_url": _s3_url,
             }
 
         except Exception as e:
