@@ -1052,6 +1052,13 @@ function renderSubagentLineStart(data) {
         <span class="subagent-meta">executando\u2026</span>
         <span class="subagent-caret">\u25bc</span>
     `;
+    // Salva payload inicial em dataset.summary para que toggleExpand tenha
+    // agent_type ao restaurar — mesmo antes do subagent_summary chegar.
+    // Bug 2026-04-17: sem isso, badge virava 'subagente' ao recolher.
+    line.dataset.summary = JSON.stringify({
+        agent_id: agentId,
+        agent_type: agentType,
+    });
     line.addEventListener('click', () => toggleSubagentExpand(agentId));
     messagesContainer.appendChild(line);
     subagentLines.set(agentId, line);
@@ -1097,13 +1104,23 @@ function renderSubagentLineSummary(data) {
         : '';
     const metaText = `${numTools} tool${numTools !== 1 ? 's' : ''} \u00b7 ${durationSec}s${costStr}`;
 
+    // Preservar agent_type pre-existente do start caso o summary nao traga
+    // (defense-in-depth — hoje summary sempre traz, mas no futuro pode variar).
+    let priorAgentType = '';
+    try {
+        const prior = JSON.parse(line.dataset.summary || '{}');
+        priorAgentType = prior.agent_type || '';
+    } catch (_) { /* ignore */ }
+    const badgeText = data.agent_type || priorAgentType || 'subagente';
+
     line.innerHTML = `
         <span class="subagent-dot"></span>
-        <span class="subagent-badge">${_subagentEscapeHtml(data.agent_type || 'subagente')}</span>
+        <span class="subagent-badge">${_subagentEscapeHtml(badgeText)}</span>
         <span class="subagent-meta">${_subagentEscapeHtml(metaText)}</span>
         <span class="subagent-caret">\u25bc</span>
     `;
-    line.dataset.summary = JSON.stringify(data);
+    // Merge: novos dados do summary + agent_type garantido.
+    line.dataset.summary = JSON.stringify({ ...data, agent_type: badgeText });
 }
 
 function renderSubagentValidationWarning(data) {
