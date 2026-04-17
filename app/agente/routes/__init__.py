@@ -37,6 +37,7 @@ from app.agente.routes import chat  # noqa: F401, E402
 from app.agente.routes import sessions  # noqa: F401, E402
 from app.agente.routes import admin_learning  # noqa: F401, E402
 from app.agente.routes import admin_subagents  # noqa: F401 — registra rotas admin de subagentes
+from . import subagents  # noqa: F401 — rota user-facing para UI #6
 from app.agente.routes import files  # noqa: F401, E402
 from app.agente.routes import health  # noqa: F401, E402
 from app.agente.routes import feedback  # noqa: F401, E402
