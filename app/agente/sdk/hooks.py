@@ -368,15 +368,30 @@ def build_hooks(
             )
 
             # P2 — Arquivar subagents + findings para S3 (best-effort)
+            # GOTCHA 2026-04-17: archive_session_to_s3 usa current_app e
+            # db.session. Hook async roda FORA do Flask app context.
+            # Mesmo padrao que SubagentStop aplicou.
             try:
                 import os
                 if os.environ.get('AGENT_SESSION_ARCHIVE_S3', 'true').lower() == 'true':
+                    from contextlib import nullcontext
                     from .session_archive import archive_session_to_s3
                     session_id_stop = hook_input.get('session_id', '')
                     if session_id_stop:
-                        archive_session_to_s3(session_id_stop)
+                        try:
+                            from flask import current_app as _app_probe
+                            _ = _app_probe.name
+                            _ctx = nullcontext()
+                        except RuntimeError:
+                            from app import create_app as _create_app
+                            _ctx = _create_app().app_context()
+                        with _ctx:
+                            archive_session_to_s3(session_id_stop)
             except Exception as arch_err:
-                logger.debug(f"[HOOK:Stop] archive S3 falhou: {arch_err}")
+                logger.warning(
+                    f"[HOOK:Stop] archive S3 falhou: "
+                    f"{type(arch_err).__name__}: {arch_err}"
+                )
 
             return {}
         except Exception as e:
