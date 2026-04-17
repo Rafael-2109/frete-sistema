@@ -298,9 +298,7 @@ def extrair_conhecimento_sessao(
 
 #### Camada 1 — `sdk/client.py`
 
-Adicionar `'subagent_summary'` ao case exhaustivo de `_parse_sdk_message`. Disparado indireto: `_subagent_stop_hook` persiste cost → enfileira evento na event_queue → `_parse_sdk_message` reconhece tipo sintetico.
-
-**Alternativa mais limpa**: criar novo metodo `emit_subagent_summary()` chamado pelo hook, que coloca StreamEvent na queue. Evita parsing sintetico.
+Criar metodo `emit_subagent_summary(agent_id, agent_type, summary_dict)` chamado pelo `_subagent_stop_hook`. O metodo constroi `StreamEvent(type='subagent_summary', data=...)` e o coloca diretamente na event_queue (respeitando ContextVar pattern, sem tocar em `permissions.py`). Evita parsing sintetico em `_parse_sdk_message`.
 
 #### Camada 2 — `routes/chat.py`
 
@@ -675,7 +673,7 @@ Total estimado: 10-11 dias de dev + testes + rollout monitorado.
 | `app/agente/models.py` | +classmethod `top_subagents_by_cost` |
 | `app/agente/config/feature_flags.py` | +5 flags |
 | `app/agente/CLAUDE.md` | +documentacao das features adotadas |
-| `app/agente/templates/agente/chat.html` | Container-alvo (se necessario) |
+| `app/agente/templates/agente/chat.html` | Nao modificar (linhas sao injetadas dinamicamente por `chat.js` no container `#messages` existente) |
 | `app/static/agente/js/chat.js` | +case `subagent_summary`, +case `subagent_validation`, +renderSubagentLine |
 | `app/static/agente/css/agent-theme.css` | +@import `_subagent-inline.css` |
 | `worker_render.py` | +queue `agent_validation` |
