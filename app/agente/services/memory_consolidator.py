@@ -127,6 +127,8 @@ def maybe_move_to_cold(user_id: int) -> int:
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.is_cold == False,  # noqa: E712
             AgentMemory.category != 'permanent',  # permanentes sao imunes
+            AgentMemory.priority != 'mandatory',  # Proteção: mandatory nunca vai para cold
+            AgentMemory.effective_count < 50,  # Proteção: memorias comprovadamente uteis (Task 8)
             AgentMemory.usage_count >= COLD_MOVE_MIN_USAGE,
             efficacy < COLD_MOVE_MAX_EFFICACY,
         ).all()
