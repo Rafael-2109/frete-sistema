@@ -195,6 +195,84 @@ class FileStorage:
                 current_app.logger.error(f"Erro ao gerar URL local para {file_path}: {str(e)}")
                 return None
     
+    def file_exists(self, file_path):
+        """
+        Verifica existencia do arquivo no storage (S3 head_object ou local).
+
+        Necessario antes de gerar presigned URL — a URL e valida mesmo
+        quando o objeto nao existe, e o 404 so apareceria ao usuario no
+        navegador. Usar este metodo para decidir se re-enfileira o job
+        SSW (ex: DACTE sumiu do bucket).
+
+        Returns:
+            bool: True se existe e acessivel.
+        """
+        if not file_path:
+            return False
+
+        if self.use_s3 and not file_path.startswith('uploads/'):
+            try:
+                if file_path.startswith('s3://'):
+                    bucket_name = file_path.split('/')[2]
+                    object_key = '/'.join(file_path.split('/')[3:])
+                else:
+                    bucket_name = self.bucket_name
+                    object_key = file_path
+                self.s3_client.head_object(Bucket=bucket_name, Key=object_key)
+                return True
+            except ClientError as e:
+                code = e.response.get('Error', {}).get('Code', '')
+                if code in ('404', 'NoSuchKey', 'NotFound'):
+                    return False
+                current_app.logger.warning(
+                    f"head_object erro inesperado para {file_path}: {str(e)}"
+                )
+                return False
+
+        full_path = os.path.join(current_app.root_path, 'static', file_path)
+        return os.path.exists(full_path)
+
+    def get_presigned_url(self, file_path, expires_in=3600):
+        """
+        Gera presigned URL para VISUALIZACAO inline (sem Content-Disposition).
+
+        Usado por rotas de download de PDF/XML originais quando o arquivo
+        esta no S3 (fallback apos tentativa local). Diferente de
+        `get_file_url` porque aceita TTL customizado e e seguro chamar
+        em fluxos com URL de curta duracao (ex: 300s).
+
+        Args:
+            file_path: Caminho do arquivo (bucket_key ou 's3://bucket/key')
+            expires_in: TTL em segundos (default 3600 = 1h)
+
+        Returns:
+            str: Presigned URL, ou None se local/erro.
+        """
+        if not file_path:
+            return None
+
+        if not (self.use_s3 and not file_path.startswith('uploads/')):
+            return None
+
+        try:
+            if file_path.startswith('s3://'):
+                bucket_name = file_path.split('/')[2]
+                object_key = '/'.join(file_path.split('/')[3:])
+            else:
+                bucket_name = self.bucket_name
+                object_key = file_path
+
+            return self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': bucket_name, 'Key': object_key},
+                ExpiresIn=expires_in,
+            )
+        except ClientError as e:
+            current_app.logger.error(
+                f"Erro ao gerar presigned URL para {file_path}: {str(e)}"
+            )
+            return None
+
     def get_download_url(self, file_path, filename=None):
         """
         Gera URL para DOWNLOAD forçado de arquivo (Content-Disposition: attachment)

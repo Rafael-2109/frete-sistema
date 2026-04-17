@@ -859,45 +859,86 @@ function downloadCteXml(operacaoId) {
         .catch(() => alert('Erro de conexao ao baixar arquivo'));
 }
 
-// ─── PDF SSW (unificado: abre direto se ja tem cte_pdf_path, senao busca no SSW) ───
+// ─── PDF SSW (unificado: abre direto se ja tem cte_pdf_path + arquivo no storage; senao busca no SSW) ───
 function abrirOuBaixarPdfSsw(id, temPath) {
-    if (temPath) {
-        window.open('/carvia/api/operacao/' + id + '/pdf-original', '_blank');
-        return;
-    }
-    if (!confirm('PDF ainda nao foi baixado do SSW. Deseja buscar agora? (leva ~30-45s)')) {
-        return;
-    }
     var btn = document.getElementById('btn-pdf-ssw-' + id);
     var labelOriginal = '<i class="fas fa-file-pdf"></i> PDF SSW';
+
+    function iniciarAguardoSsw(msg) {
+        // Job SSW enfileirado — desabilita botao e agenda reload.
+        alert(msg || 'Rebuscando no SSW. Aguarde ~30-45s e a pagina recarregara.');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW...';
+        }
+        setTimeout(function() { window.location.reload(); }, 45000);
+    }
+
+    function enfileirarBuscaSsw() {
+        // Usado quando NAO ha cte_pdf_path (primeira busca).
+        if (!confirm('PDF ainda nao foi baixado do SSW. Deseja buscar agora? (leva ~30-45s)')) {
+            return;
+        }
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+        }
+        var csrf = document.querySelector('meta[name="csrf-token"]')?.content
+                || document.querySelector('input[name="csrf_token"]')?.value || '';
+        fetch('/carvia/api/operacao/' + id + '/baixar-pdf-ssw', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrf,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.sucesso) {
+                iniciarAguardoSsw(data.mensagem);
+            } else {
+                alert('Erro: ' + (data.erro || 'Falha desconhecida'));
+                if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+            }
+        })
+        .catch(function(e) {
+            alert('Erro de rede: ' + e);
+            if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+        });
+    }
+
+    if (!temPath) {
+        enfileirarBuscaSsw();
+        return;
+    }
+
+    // temPath=true — verificar disponibilidade ANTES de abrir.
+    // Se arquivo sumiu do storage, backend ja limpa path e re-enfileira
+    // job SSW automaticamente; frontend so precisa aguardar.
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
     }
-    var csrf = document.querySelector('meta[name="csrf-token"]')?.content
-            || document.querySelector('input[name="csrf_token"]')?.value || '';
-    fetch('/carvia/api/operacao/' + id + '/baixar-pdf-ssw', {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': csrf,
-            'Content-Type': 'application/json'
-        }
+    fetch('/carvia/api/operacao/' + id + '/pdf-original?check=1', {
+        headers: { 'Accept': 'application/json' }
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.sucesso) {
-            alert(data.mensagem);
-            // NAO reabilita o botao — mantem desabilitado ate o reload para
-            // evitar que o usuario clique de novo e enfileire job duplicado.
-            if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW...'; }
-            setTimeout(function() { window.location.reload(); }, 45000);
-        } else {
-            alert('Erro: ' + (data.erro || 'Falha desconhecida'));
+    .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+    .then(function(res) {
+        var data = res.data || {};
+        if (data.disponivel && data.url) {
+            window.open(data.url, '_blank');
             if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+            return;
         }
+        if (data.rebuscando_ssw) {
+            iniciarAguardoSsw(data.mensagem);
+            return;
+        }
+        alert(data.mensagem || data.erro || 'PDF indisponivel.');
+        if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
     })
     .catch(function(e) {
-        alert('Erro de rede: ' + e);
+        alert('Erro de rede ao verificar PDF: ' + e);
         if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
     });
 }

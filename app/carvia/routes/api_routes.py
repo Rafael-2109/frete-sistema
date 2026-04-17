@@ -808,42 +808,114 @@ def register_api_routes(bp):
     @bp.route('/api/operacao/<int:operacao_id>/pdf-original')
     @login_required
     def api_download_operacao_pdf_original(operacao_id):
-        """Retorna o PDF original importado de uma CarviaOperacao."""
+        """Retorna o PDF original de uma CarviaOperacao.
+
+        Suporta modo JSON (`?check=1`) usado pelo botao PDF SSW:
+        - disponivel=True + url = abre no navegador.
+        - disponivel=False + rebuscando_ssw=True = arquivo sumiu do
+          bucket; cte_pdf_path foi limpado e job SSW re-enfileirado.
+
+        Sem `?check=1`: mantem comportamento legado (redirect/send_file).
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
         import os
-        from flask import send_file as flask_send_file
+        from flask import send_file as flask_send_file, request
         from app.carvia.models import CarviaOperacao
         from app import db
+
+        want_json = request.args.get('check') == '1'
 
         op = db.session.get(CarviaOperacao, operacao_id)
         if not op:
             return jsonify({'erro': 'Operacao nao encontrada'}), 404
 
+        def _reenfileirar_job_ssw():
+            """Limpa cte_pdf_path, enfileira job e retorna tuple (sucesso, msg)."""
+            if not op.cte_numero:
+                return (False, 'Operacao sem cte_numero — nao e possivel buscar no SSW')
+            try:
+                op.cte_pdf_path = None
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                logger.error(
+                    f"Falha ao limpar cte_pdf_path op={operacao_id}: {e}"
+                )
+                return (False, 'Falha ao limpar path — tente novamente')
+            try:
+                from app.portal.workers import enqueue_job
+                from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                    baixar_pdf_ssw_operacao_job,
+                )
+                enqueue_job(
+                    baixar_pdf_ssw_operacao_job, operacao_id,
+                    queue_name='default', timeout='10m',
+                )
+                return (True, 'PDF ausente no storage. Nova busca no SSW enfileirada — atualize em ~30-45s.')
+            except Exception as e:
+                logger.error(
+                    f"Falha ao enfileirar baixar-pdf-ssw op={operacao_id}: {e}"
+                )
+                return (False, f'Falha ao enfileirar job SSW: {e}')
+
         if not op.cte_pdf_path:
+            if want_json:
+                return jsonify({
+                    'disponivel': False,
+                    'mensagem': 'PDF original nao disponivel para esta operacao'
+                }), 404
             return jsonify({'erro': 'PDF original nao disponivel para esta operacao'}), 404
 
         path = op.cte_pdf_path
+        nome = f'CTe_{op.cte_numero or operacao_id}_original.pdf'
 
+        # Path URL absoluta
         if path.startswith('http'):
+            if want_json:
+                return jsonify({'disponivel': True, 'url': path}), 200
             return redirect(path)
 
+        # Path local
         if os.path.exists(path):
-            nome = f'CTe_{op.cte_numero or operacao_id}_original.pdf'
+            if want_json:
+                from flask import url_for
+                return jsonify({
+                    'disponivel': True,
+                    'url': url_for('carvia.api_download_operacao_pdf_original',
+                                   operacao_id=operacao_id),
+                }), 200
             return flask_send_file(path, mimetype='application/pdf',
                                    as_attachment=False, download_name=nome)
 
+        # Path S3 — checar existencia ANTES de redirect
         try:
             from app.utils.file_storage import get_file_storage
             storage = get_file_storage()
-            url = storage.get_presigned_url(path, expires_in=300)
-            if url:
-                return redirect(url)
+            if storage.file_exists(path):
+                url = storage.get_presigned_url(path, expires_in=300)
+                if url:
+                    if want_json:
+                        return jsonify({'disponivel': True, 'url': url}), 200
+                    return redirect(url)
         except Exception as e:
-            logger.warning(f"Falha ao obter presigned URL para {path}: {e}")
+            logger.warning(f"Falha ao verificar/gerar presigned URL para {path}: {e}")
 
-        return jsonify({'erro': 'Arquivo nao encontrado'}), 404
+        # Arquivo ausente — limpa path, re-enfileira job SSW
+        sucesso, mensagem = _reenfileirar_job_ssw()
+        status = 202 if sucesso else 500
+        if want_json:
+            return jsonify({
+                'disponivel': False,
+                'rebuscando_ssw': sucesso,
+                'mensagem': mensagem,
+            }), status
+        return jsonify({
+            'erro': 'Arquivo nao encontrado',
+            'rebuscando_ssw': sucesso,
+            'mensagem': mensagem,
+        }), status
 
     # ------------------------------------------------------------------
     # SSW — Re-buscar CTRC e re-baixar DACTE para CarviaOperacao
