@@ -105,6 +105,7 @@ def test_subagent_stop_skips_enqueue_when_flag_off(tmp_path, app):
              patch('redis.from_url', return_value=MagicMock()):
             hooks = _make_hooks()
             handler = _find_stop_handler(hooks)
+            assert handler is not None
             import asyncio
             asyncio.run(handler({
                 'agent_id': 'aid-enq-off',
@@ -136,6 +137,7 @@ def test_subagent_stop_survives_redis_connection_error(tmp_path, app):
         with patch('redis.from_url', side_effect=Exception('redis down')):
             hooks = _make_hooks()
             handler = _find_stop_handler(hooks)
+            assert handler is not None
             import asyncio
             # Nao deve levantar
             asyncio.run(handler({
