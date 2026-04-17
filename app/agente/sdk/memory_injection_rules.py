@@ -4,7 +4,7 @@ L1 Rules Channel — Builder de <user_rules priority="mandatory">.
 Separa memorias com priority='mandatory' do usuario em bloco XML distinto,
 renderizado como extensao do system prompt (vs contexto passivo).
 
-Ref: docs/superpowers/plans/2026-04-16-memory-system-redesign.md
+Ref: docs/superpowers/plans/2026-04-16-memory-system-redesign.md Task 3
 """
 import logging
 from typing import Optional
@@ -46,9 +46,11 @@ def _build_user_rules(user_id: int) -> Optional[str]:
                 (rule.content or '').strip(),
                 source=f"mem_id={rule.id} path={rule.path}"
             )
+            if not content:
+                continue  # skip empty rules to avoid malformed XML
+            scope_val = "empresa" if rule.user_id == 0 else "pessoal"
             parts.append(
-                f'  <rule path="{xml_escape(rule.path)}" scope="'
-                f'{"empresa" if rule.user_id == 0 else "pessoal"}">'
+                f'  <rule path="{xml_escape(rule.path)}" scope="{scope_val}">'
             )
             parts.append(f'    {content}')
             parts.append('  </rule>')
@@ -56,11 +58,11 @@ def _build_user_rules(user_id: int) -> Optional[str]:
 
         result = '\n'.join(parts)
         logger.info(
-            f"[USER_RULES] user_id={user_id} rules={len(rules)} "
+            f"[MEMORY_INJECT_RULES] user_id={user_id} rules={len(rules)} "
             f"chars={len(result)}"
         )
         return result
 
     except Exception as e:
-        logger.warning(f"[USER_RULES] Build failed (ignored): {e}")
+        logger.debug(f"[MEMORY_INJECT_RULES] Build failed (ignored): {e}")
         return None
