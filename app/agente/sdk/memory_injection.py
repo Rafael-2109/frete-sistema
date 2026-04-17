@@ -357,11 +357,18 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
 
         # Buscar heuristicas empresa de alta importancia (nivel 5)
         # Ordenar por effective_count desc (mais aplicadas primeiro)
+        # Aceita tanto /heuristicas/ (confianca estabelecida) quanto /protocolos/
+        # (regras operacionais explicitas, ex: baseline, formatos travados).
+        # Ref: docs/superpowers/plans/2026-04-16-memory-system-redesign.md Task 5
+        from sqlalchemy import or_ as sql_or
         candidates = AgentMemory.query.filter(
             AgentMemory.user_id == 0,
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.is_cold == False,  # noqa: E712
-            AgentMemory.path.like('/memories/empresa/heuristicas/%'),
+            sql_or(
+                AgentMemory.path.like('/memories/empresa/heuristicas/%'),
+                AgentMemory.path.like('/memories/empresa/protocolos/%'),
+            ),
             AgentMemory.importance_score >= MANDATORY_IMPORTANCE_THRESHOLD,
         ).order_by(
             AgentMemory.effective_count.desc()
