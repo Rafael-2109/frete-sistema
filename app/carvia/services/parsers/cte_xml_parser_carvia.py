@@ -222,7 +222,20 @@ class CTeXMLParserCarvia(CTeXMLParser):
         }
 
     def get_destinatario(self) -> Dict:
-        """Extrai dados do destinatario (dest)"""
+        """Extrai dados do destinatario priorizando o endereco de entrega (<receb>).
+
+        Em CTe v4.00, <receb> representa o LOCAL DE ENTREGA fisico (onde a carga
+        sera efetivamente entregue), enquanto <dest> e o destinatario fiscal/comercial.
+        Para fins operacionais/logisticos CarVia, usamos o recebedor como fonte primaria
+        e caimos no destinatario fiscal apenas quando <receb> nao existe no XML.
+        """
+        receb = self._find_tag('receb')
+        if receb is not None:
+            cnpj = self._get_tag_text_in('CNPJ', receb)
+            nome = self._get_tag_text_in('xNome', receb)
+            if cnpj or nome:
+                return {'cnpj': cnpj, 'nome': nome}
+
         dest = self._find_tag('dest')
         if dest is None:
             return {}
@@ -366,7 +379,12 @@ class CTeXMLParserCarvia(CTeXMLParser):
         return self._get_tag_text_in('fone', rem) if rem else None
 
     def get_fone_destinatario(self) -> Optional[str]:
-        """Extrai telefone do destinatario"""
+        """Extrai telefone priorizando o recebedor (LOC ENTREGA) com fallback no destinatario fiscal."""
+        receb = self._find_tag('receb')
+        if receb is not None:
+            fone = self._get_tag_text_in('fone', receb)
+            if fone:
+                return fone
         dest = self._find_tag('dest')
         return self._get_tag_text_in('fone', dest) if dest else None
 
@@ -513,7 +531,16 @@ class CTeXMLParserCarvia(CTeXMLParser):
         return self._extrair_endereco('enderReme', 'rem')
 
     def get_endereco_destinatario(self) -> Dict:
-        """Extrai endereco completo do destinatario (<dest>/<enderDest>)"""
+        """Extrai endereco priorizando o LOCAL DE ENTREGA (<receb>/<enderReceb>).
+
+        Em CTe v4.00, o endereco de entrega fisica (LOC ENTREGA) vem de <enderReceb>.
+        O <enderDest> e o endereco fiscal do destinatario (pode ser diferente).
+        Para CarVia, priorizamos o endereco de entrega e caimos no destinatario fiscal
+        apenas como fallback quando o recebedor nao esta presente no XML.
+        """
+        endereco_entrega = self._extrair_endereco('enderReceb', 'receb')
+        if endereco_entrega:
+            return endereco_entrega
         return self._extrair_endereco('enderDest', 'dest')
 
     def get_ie_emitente(self) -> Optional[str]:
@@ -527,7 +554,12 @@ class CTeXMLParserCarvia(CTeXMLParser):
         return self._get_tag_text_in('IE', rem) if rem else None
 
     def get_ie_destinatario(self) -> Optional[str]:
-        """Extrai IE do destinatario"""
+        """Extrai IE priorizando o recebedor (LOC ENTREGA) com fallback no destinatario fiscal."""
+        receb = self._find_tag('receb')
+        if receb is not None:
+            ie = self._get_tag_text_in('IE', receb)
+            if ie:
+                return ie
         dest = self._find_tag('dest')
         return self._get_tag_text_in('IE', dest) if dest else None
 
