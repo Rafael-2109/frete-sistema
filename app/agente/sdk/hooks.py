@@ -565,6 +565,36 @@ def build_hooks(
                 except Exception as ui_err:
                     logger.debug(f"[HOOK:SubagentStop] emit UI falhou: {ui_err}")
 
+            # #4 Validacao anti-alucinacao async (enfileira job RQ)
+            from ..config.feature_flags import (
+                USE_SUBAGENT_VALIDATION,
+                SUBAGENT_VALIDATION_THRESHOLD,
+            )
+            if USE_SUBAGENT_VALIDATION and session_id and agent_id:
+                try:
+                    import os
+                    from rq import Queue
+                    import redis
+
+                    redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+                    r = redis.from_url(redis_url)
+                    q = Queue('agent_validation', connection=r)
+                    q.enqueue(
+                        'app.agente.workers.subagent_validator.validate_subagent_output',
+                        session_id=session_id,
+                        agent_id=agent_id,
+                        threshold=SUBAGENT_VALIDATION_THRESHOLD,
+                        job_timeout=60,
+                    )
+                    logger.debug(
+                        f"[HOOK:SubagentStop] validacao enfileirada "
+                        f"(agent_type={agent_type}, agent_id={agent_id[:12]})"
+                    )
+                except Exception as val_err:
+                    logger.debug(
+                        f"[HOOK:SubagentStop] validacao enqueue falhou: {val_err}"
+                    )
+
             return {}
         except Exception as e:
             logger.debug(f"[HOOK:SubagentStop] Suppressed: {e}")
