@@ -129,3 +129,6 @@ app/mcp_sistema/.env.production
 
 # Git worktrees (isolated workspaces)
 .worktrees/
+
+# Superpowers visual companion mockups
+.superpowers/
