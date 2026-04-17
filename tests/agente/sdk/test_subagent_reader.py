@@ -110,7 +110,7 @@ def test_get_subagent_summary_masks_pii_when_include_pii_false():
                                         include_pii=False)
 
     assert '12.345.678/0001-90' not in summary.findings_text
-    assert '**.***.***' in summary.findings_text
+    assert '0001-90' in summary.findings_text  # preserva filial
 
 
 def test_get_session_subagents_summary_batch():

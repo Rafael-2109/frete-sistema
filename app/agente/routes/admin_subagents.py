@@ -10,7 +10,7 @@ Flag: USE_SUBAGENT_DEBUG_ENDPOINT (default true).
 """
 import logging
 
-from flask import abort, jsonify
+from flask import jsonify
 from flask_login import current_user, login_required
 
 from app.agente.config.feature_flags import USE_SUBAGENT_DEBUG_ENDPOINT
@@ -23,9 +23,11 @@ from app.agente.sdk.subagent_reader import (
 logger = logging.getLogger('sistema_fretes')
 
 
-# NOTA: abort(403) nao funciona neste app — global exception handler
-# (app/__init__.py) re-raise HTTPException. Usar `return jsonify(), 403`
-# inline. Pattern espelha admin_learning.py.
+# NOTA: abort(403) re-raise como 500 — global exception handler (app/__init__.py)
+# so trata 404 especialmente, outros HTTPException sao tratados como unhandled.
+# Para 403: usar `return jsonify(), 403` inline (pattern admin_learning.py).
+# Para 404: abort(404) funciona (handler delega para handle_404), mas usar
+# return jsonify() mantem consistencia do pattern em todo o modulo.
 
 
 @agente_bp.route(
@@ -36,7 +38,7 @@ logger = logging.getLogger('sistema_fretes')
 def api_admin_list_subagents(session_id: str):
     """Lista subagentes de uma sessao com metadata resumida."""
     if not USE_SUBAGENT_DEBUG_ENDPOINT:
-        abort(404)
+        return jsonify({'success': False, 'error': 'Feature desabilitada'}), 404
     if current_user.perfil != 'administrador':
         return jsonify({'success': False, 'error': 'Acesso restrito a administradores'}), 403
 
@@ -58,7 +60,7 @@ def api_admin_list_subagents(session_id: str):
 def api_admin_subagent_detail(session_id: str, agent_id: str):
     """Detalhe completo de um subagente — tools, findings, cost, tokens."""
     if not USE_SUBAGENT_DEBUG_ENDPOINT:
-        abort(404)
+        return jsonify({'success': False, 'error': 'Feature desabilitada'}), 404
     if current_user.perfil != 'administrador':
         return jsonify({'success': False, 'error': 'Acesso restrito a administradores'}), 403
 
@@ -87,7 +89,7 @@ def api_admin_subagent_detail(session_id: str, agent_id: str):
 def api_admin_subagent_messages(session_id: str, agent_id: str):
     """Mensagens brutas do JSONL (para debug profundo)."""
     if not USE_SUBAGENT_DEBUG_ENDPOINT:
-        abort(404)
+        return jsonify({'success': False, 'error': 'Feature desabilitada'}), 404
     if current_user.perfil != 'administrador':
         return jsonify({'success': False, 'error': 'Acesso restrito a administradores'}), 403
 

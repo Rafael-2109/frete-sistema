@@ -447,7 +447,7 @@ USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "false").lower() 
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
 # ====================================================================
-# Todas as 5 flags default=true — ativas imediatamente para rollout.
+# 5 flags booleanas + 2 valores (threshold/admin-override) default=true.
 # Rollback: setar AGENT_SUBAGENT_*=false + restart (sem redeploy).
 
 # #1 Endpoint admin debug forense — drill-down em subagentes de qualquer sessao

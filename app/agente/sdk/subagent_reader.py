@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,16 @@ from app.utils.timezone import agora_brasil_naive
 logger = logging.getLogger('sistema_fretes')
 
 Status = Literal['running', 'done', 'error']
+
+# UUID ou hex-like (agent_id/session_id). Rejeita ../, **, /, \
+_RE_SAFE_ID = re.compile(r'^[0-9a-fA-F-]{1,64}$')
+
+
+def _is_safe_id(value: str) -> bool:
+    """Valida que value nao contem path traversal nem glob wildcards."""
+    if not value:
+        return False
+    return bool(_RE_SAFE_ID.match(value))
 
 
 @dataclass
@@ -132,7 +143,19 @@ def _resolve_transcript_path(
     agent_id: str,
     directory: Optional[str] = None,
 ) -> Optional[str]:
-    """Resolve caminho do JSONL do subagente em ~/.claude/projects/.../subagents/."""
+    """Resolve caminho do JSONL do subagente em ~/.claude/projects/.../subagents/.
+
+    Validacao anti-path-traversal: session_id e agent_id devem ser UUID-like.
+    Rejeita valores contendo '..', '/', '\\', '*' — previne escapar do
+    diretorio de projeto e expor JSONLs adjacentes.
+    """
+    if not _is_safe_id(session_id) or not _is_safe_id(agent_id):
+        logger.debug(
+            f"[subagent_reader] rejected path resolve — unsafe id: "
+            f"session={session_id!r} agent={agent_id!r}"
+        )
+        return None
+
     base = Path(directory) if directory else Path.home() / '.claude' / 'projects'
     if directory is None:
         # Busca cross-project (SDK default behavior)
@@ -141,6 +164,7 @@ def _resolve_transcript_path(
                 continue
             sub_dir = proj_dir / session_id / 'subagents'
             if sub_dir.exists():
+                # agent_id ja validado como UUID-like, sem wildcards
                 for f in sub_dir.rglob(f'{agent_id}*.jsonl'):
                     return str(f)
     return None
