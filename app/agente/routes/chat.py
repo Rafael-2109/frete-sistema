@@ -1087,9 +1087,18 @@ def _stream_chat_response(
                                 _ps_ev_data = _sanitize_subagent_summary_for_user(
                                     _ps_ev_data, current_user
                                 )
+                            logger.info(
+                                f"[SSE] pubsub poll YIELD type={_ps_ev_type} "
+                                f"agent_id={_ps_ev_data.get('agent_id','?')[:12]} "
+                                f"agent_type={_ps_ev_data.get('agent_type','?')} "
+                                f"tools_used={len(_ps_ev_data.get('tools_used') or [])}"
+                            )
                             yield _sse_event(_ps_ev_type, _ps_ev_data)
                     except Exception as _ps_poll_err:
-                        logger.debug(f"[SSE] pubsub poll falhou (ignorado): {_ps_poll_err}")
+                        logger.warning(
+                            f"[SSE] pubsub poll falhou: "
+                            f"{type(_ps_poll_err).__name__}: {_ps_poll_err}"
+                        )
 
                 # FIX-7: Fechar SSE após evento 'done' — não esperar None indefinidamente.
                 # O done indica que o agente terminou. Aguarda brevemente por suggestions.
@@ -1121,9 +1130,17 @@ def _stream_chat_response(
                                 _ps_ev_data = _sanitize_subagent_summary_for_user(
                                     _ps_ev_data, current_user
                                 )
+                            logger.info(
+                                f"[SSE] pubsub idle YIELD type={_ps_ev_type} "
+                                f"agent_id={_ps_ev_data.get('agent_id','?')[:12]} "
+                                f"agent_type={_ps_ev_data.get('agent_type','?')}"
+                            )
                             yield _sse_event(_ps_ev_type, _ps_ev_data)
                     except Exception as _ps_poll_err:
-                        logger.debug(f"[SSE] pubsub poll idle falhou (ignorado): {_ps_poll_err}")
+                        logger.warning(
+                            f"[SSE] pubsub poll idle falhou: "
+                            f"{type(_ps_poll_err).__name__}: {_ps_poll_err}"
+                        )
 
                 # =================================================================
                 # DETECÇÃO DE THREAD MORTA
