@@ -98,7 +98,7 @@ Gotchas rapidos:
 | Timezone (convencao Brasil naive) | `.claude/references/REGRAS_TIMEZONE.md` |
 | Routing de skills | `.claude/references/ROUTING_SKILLS.md` |
 | Infraestrutura Render | `.claude/references/INFRAESTRUTURA.md` |
-| Confiabilidade de subagentes | `.claude/references/SUBAGENT_RELIABILITY.md` |
+| Confiabilidade de subagentes | `.claude/references/SUBAGENT_RELIABILITY.md` (M1.1: SDK 0.1.60+ via `subagent_reader.get_subagent_findings` primario, `/tmp/` fallback) |
 | Protocolo de memoria (agente) | `.claude/references/MEMORY_PROTOCOL.md` |
 | Regras de output complementares (I1, I5, I6) | `.claude/references/REGRAS_OUTPUT.md` |
 | Estudo system prompts 2026 (best practices + pre-mortem + red team) | `.claude/references/STUDY_PROMPT_ENGINEERING_2026.md` |

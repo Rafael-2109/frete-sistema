@@ -66,6 +66,22 @@ O subagente escreve findings detalhados em arquivo. O principal le o arquivo par
 {outputs de scripts, trechos de arquivos — o que for crucial}
 ```
 
+### M1.1: Ordem de Leitura (SDK 0.1.60+, 2026-04-17)
+
+Com o SDK 0.1.60, o projeto ganhou `list_subagents()` + `get_subagent_messages()` — fonte canonica do transcript completo de cada subagente em `~/.claude/projects/<proj>/<session>/subagents/`. O protocolo M1 (`/tmp/subagent-findings/`) continua ativo como fallback escrito.
+
+**Ordem recomendada** ao ler findings de um subagente:
+
+1. **Primaria** — `app.agente.sdk.subagent_reader.get_subagent_findings(session_id, agent_type)` — le do JSONL do SDK. Completo, estruturado, sem precisar parsear markdown. Usado pelo agente web.
+2. **Fallback** — `/tmp/subagent-findings/{agent_type}-{contexto}.md` — apenas se (1) retornou `None`:
+   - SDK nao encontrou o subagent (agent_id invalido)
+   - JSONL corrompido (ver `app/agente/CLAUDE.md:161` para risco conhecido)
+   - SDK downgrade temporario
+
+**Nao remover** a instrucao de escrita em `/tmp/` dos agents de acao — e rede de seguranca contra falhas do SDK.
+
+**Para o Claude Code (dev) e Agente Web**: M1 (`/tmp/`) ainda e o mecanismo primario ate Fase 4 da feature #2. Quando `get_subagent_findings` ficar comprovadamente estavel em producao, podemos considerar aposentar `/tmp/` (nao feito ainda).
+
 ### M2: Prompts Estruturados com Definition of Done
 
 Todo prompt de subagente DEVE incluir criterios de output:
