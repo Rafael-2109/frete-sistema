@@ -126,21 +126,25 @@ def api_admin_debug_subagent_fs():
         candidates.insert(0, Path(os.environ['CLAUDE_CONFIG_DIR']))
 
     for cand in candidates:
-        info = {'exists': cand.exists(), 'is_dir': False, 'children': []}
-        if cand.exists() and cand.is_dir():
-            info['is_dir'] = True
-            try:
-                info['children'] = [p.name for p in list(cand.iterdir())[:10]]
-            except OSError:
-                info['children'] = '<permission denied>'
-            # Busca JSONLs em profundidade
-            try:
-                for jsonl in cand.rglob('*.jsonl'):
-                    result['jsonl_found'].append(str(jsonl))
-                    if len(result['jsonl_found']) >= 5:
-                        break
-            except OSError:
-                pass
+        info = {'exists': False, 'is_dir': False, 'children': [], 'error': None}
+        try:
+            info['exists'] = cand.exists()
+            if info['exists'] and cand.is_dir():
+                info['is_dir'] = True
+                try:
+                    info['children'] = [p.name for p in list(cand.iterdir())[:10]]
+                except (OSError, PermissionError) as e:
+                    info['children'] = f'<{type(e).__name__}>'
+                # Busca JSONLs em profundidade
+                try:
+                    for jsonl in cand.rglob('*.jsonl'):
+                        result['jsonl_found'].append(str(jsonl))
+                        if len(result['jsonl_found']) >= 5:
+                            break
+                except (OSError, PermissionError):
+                    pass
+        except (OSError, PermissionError) as e:
+            info['error'] = f'{type(e).__name__}: {e}'
         result['paths_checked'][str(cand)] = info
 
     # Tenta achar JSONLs em qualquer lugar via find (com timeout)
