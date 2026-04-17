@@ -143,18 +143,30 @@ def list_session_subagents(
     return []
 
 
+def _default_metadata() -> dict:
+    """Metadata zerada — formato padrao retornado por funcoes de leitura."""
+    return {
+        'cost_usd': 0.0, 'duration_ms': 0, 'num_turns': 0,
+        'input_tokens': 0, 'output_tokens': 0,
+        'cache_read_tokens': 0, 'cache_creation_tokens': 0,
+        'stop_reason': None, 'started_at': None, 'ended_at': None,
+    }
+
+
 def _read_result_metadata(transcript_path: Optional[str]) -> dict:
     """
-    Parseia a ultima ResultMessage do JSONL para extrair cost/tokens/duration.
+    Parseia a ultima ResultMessage do JSONL (se existir) para extrair
+    cost/tokens/duration. Compat forward: se o CLI comecar a gravar
+    type:'result' no transcript de subagent, sera aproveitado.
 
-    Retorna dict com: cost_usd, duration_ms, num_turns, input_tokens,
-    output_tokens, cache_read_tokens, stop_reason. Campos ausentes = 0.
+    Retorna dict com `_default_metadata()`. Campos ausentes = 0.
+
+    NOTA: SDK 0.1.60 NAO grava type:'result' em transcript de SUBAGENT
+    (apenas no PAI). Para subagents, usar `_compute_subagent_metadata_from_jsonl`
+    como fallback.
+    FONTE: claude_agent_sdk/_internal/sessions.py:791-794 (_TRANSCRIPT_ENTRY_TYPES).
     """
-    default = {
-        'cost_usd': 0.0, 'duration_ms': 0, 'num_turns': 0,
-        'input_tokens': 0, 'output_tokens': 0, 'cache_read_tokens': 0,
-        'stop_reason': None,
-    }
+    default = _default_metadata()
     if not transcript_path or not Path(transcript_path).exists():
         return default
 
@@ -177,17 +189,189 @@ def _read_result_metadata(transcript_path: Optional[str]) -> dict:
 
         usage = last_result.get('usage', {}) or {}
         return {
+            **default,
             'cost_usd': last_result.get('total_cost_usd') or 0.0,
             'duration_ms': last_result.get('duration_ms') or 0,
             'num_turns': last_result.get('num_turns') or 0,
             'input_tokens': usage.get('input_tokens') or 0,
             'output_tokens': usage.get('output_tokens') or 0,
             'cache_read_tokens': usage.get('cache_read_input_tokens') or 0,
+            'cache_creation_tokens': usage.get('cache_creation_input_tokens') or 0,
             'stop_reason': last_result.get('stop_reason'),
         }
     except (OSError, IOError) as e:
         logger.debug(f"[subagent_reader] transcript inacessivel: {e}")
         return default
+
+
+def _parse_iso_timestamp(value) -> Optional[datetime]:
+    """Parseia timestamp do JSONL. Tolera varios formatos:
+
+    - ISO string com Z: `'2026-04-17T12:20:13.600Z'`
+    - ISO string com offset: `'2026-04-17T12:20:13.600+00:00'`
+    - ISO string naive: `'2026-04-17T12:20:13'`
+    - Epoch milliseconds (int ou float): `1713352813600`
+    - Epoch seconds: `1713352813.6` (diferencia via magnitude)
+    - datetime object (retorna as-is se timezone-naive, converte aware→naive)
+
+    Retorna sempre **timezone-naive** para consistencia com _TIMEZONE_BRASIL
+    padrao do projeto. Facilita max/min sem TypeError (B5 pre-mortem).
+    """
+    if value is None:
+        return None
+    # Datetime direto
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            return value.replace(tzinfo=None)
+        return value
+    # Epoch numerico
+    if isinstance(value, (int, float)):
+        try:
+            from datetime import timezone as _tz
+            # Heuristica: > 1e12 = milliseconds (post-2001); caso contrario segundos
+            ts = value / 1000.0 if value > 1e12 else float(value)
+            # Python 3.12+: utcfromtimestamp e deprecated — usar
+            # fromtimestamp(tz=UTC) + replace(tzinfo=None) para manter naive.
+            return datetime.fromtimestamp(ts, _tz.utc).replace(tzinfo=None)
+        except (ValueError, OverflowError, OSError):
+            return None
+    # String ISO
+    if isinstance(value, str) and value:
+        try:
+            normalized = value.replace('Z', '+00:00') if value.endswith('Z') else value
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is not None:
+                return parsed.replace(tzinfo=None)
+            return parsed
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _compute_subagent_metadata_from_jsonl(transcript_path: Optional[str]) -> dict:
+    """
+    Calcula metadata (cost/duration/tokens/num_turns/timestamps) de subagent
+    somando `usage` de cada AssistantMessage + diff de timestamps.
+
+    Necessario porque SDK 0.1.60 NAO grava type:'result' em transcript de
+    subagent (apenas no PAI). Ver `_read_result_metadata` para compat forward.
+
+    Usa pricing com cache correto via `sdk/pricing.py`.
+
+    Defesa contra JSONL corrompido:
+    - Linhas invalidas ignoradas (json.JSONDecodeError)
+    - Usage ausente/None trata como zeros
+    - Timestamps invalidos ignorados (duration_ms=0)
+    - Multiplas linhas `assistant` somadas (nao sao cumulativas per-message
+      em transcript de disco — cada AssistantMessage e 1 turno completo).
+    """
+    default = _default_metadata()
+    if not transcript_path or not Path(transcript_path).exists():
+        return default
+
+    try:
+        from .pricing import calculate_cost_with_cache
+    except ImportError as e:
+        logger.warning(f"[subagent_reader] pricing module indisponivel: {e}")
+        return default
+
+    input_total = 0
+    output_total = 0
+    cache_read_total = 0
+    cache_creation_total = 0
+    num_turns = 0
+    model_seen: Optional[str] = None
+    first_ts: Optional[datetime] = None
+    last_ts: Optional[datetime] = None
+    cost_total = 0.0
+
+    try:
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(msg, dict):
+                    continue
+
+                # Timestamps: aproveitar de toda linha valida para bounds.
+                ts = _parse_iso_timestamp(msg.get('timestamp'))
+                if ts is not None:
+                    if first_ts is None or ts < first_ts:
+                        first_ts = ts
+                    if last_ts is None or ts > last_ts:
+                        last_ts = ts
+
+                if msg.get('type') != 'assistant':
+                    continue
+
+                # B4 fix: filtrar sidechains (mensagens de subagents aninhados
+                # chamados por este mesmo subagent). O SDK marca com
+                # `isSidechain: true` — contar somaria tokens 2x.
+                if msg.get('isSidechain') is True:
+                    continue
+
+                # AssistantMessage: extrair usage + model
+                inner = msg.get('message') or {}
+                if not isinstance(inner, dict):
+                    continue
+
+                usage = inner.get('usage') or {}
+                if not isinstance(usage, dict):
+                    usage = {}
+
+                msg_input = usage.get('input_tokens') or 0
+                msg_output = usage.get('output_tokens') or 0
+                msg_cache_read = usage.get('cache_read_input_tokens') or 0
+                msg_cache_create = usage.get('cache_creation_input_tokens') or 0
+
+                # Agregar
+                input_total += max(0, int(msg_input))
+                output_total += max(0, int(msg_output))
+                cache_read_total += max(0, int(msg_cache_read))
+                cache_creation_total += max(0, int(msg_cache_create))
+                num_turns += 1
+
+                # Model para pricing (usa o primeiro visto — subagent geralmente
+                # usa 1 modelo consistente; variacao e incomum)
+                msg_model = inner.get('model')
+                if msg_model and not model_seen:
+                    model_seen = str(msg_model)
+
+                # Custo por turno (cache correto)
+                cost_total += calculate_cost_with_cache(
+                    input_tokens=int(msg_input) or 0,
+                    output_tokens=int(msg_output) or 0,
+                    cache_creation_tokens=int(msg_cache_create) or 0,
+                    cache_read_tokens=int(msg_cache_read) or 0,
+                    model=model_seen,
+                )
+    except (OSError, IOError) as e:
+        logger.debug(f"[subagent_reader] compute_metadata: transcript inacessivel: {e}")
+        return default
+
+    # Calcular duration: max de 0 (protege contra timestamps fora de ordem)
+    duration_ms = 0
+    if first_ts and last_ts:
+        delta_sec = (last_ts - first_ts).total_seconds()
+        duration_ms = max(0, int(delta_sec * 1000))
+
+    return {
+        'cost_usd': round(cost_total, 6),
+        'duration_ms': duration_ms,
+        'num_turns': num_turns,
+        'input_tokens': input_total,
+        'output_tokens': output_total,
+        'cache_read_tokens': cache_read_total,
+        'cache_creation_tokens': cache_creation_total,
+        'stop_reason': 'end_turn' if num_turns > 0 else None,
+        'started_at': first_ts,
+        'ended_at': last_ts,
+    }
 
 
 def _resolve_transcript_path(
@@ -299,33 +483,51 @@ def get_subagent_summary(
             started_at=None, ended_at=None, duration_ms=None,
         )
 
+    # T4b: SessionMessage do SDK 0.1.60 tem shape:
+    #   SessionMessage(type, uuid, session_id, message, parent_tool_use_id)
+    # onde `message` e dict Anthropic API {role, content, ...}.
+    # Parser anterior acessava msg.content que NAO existe — retornava vazio.
+    # FONTE: sessions.py:1005-1017 e types.py:1134-1155.
+    def _extract_content_list(msg) -> list:
+        """Extrai lista de content blocks da SessionMessage, tolerante a
+        formatos variantes (dict Anthropic OU atributo direto content)."""
+        # SDK 0.1.60: SessionMessage.message = dict Anthropic
+        msg_dict = getattr(msg, 'message', None)
+        if isinstance(msg_dict, dict):
+            content = msg_dict.get('content')
+        else:
+            # Fallback: formato legacy com content direto
+            content = getattr(msg, 'content', None)
+        if isinstance(content, list):
+            return content
+        if isinstance(content, str):
+            # Mensagem simples sem blocks — envolver em bloco text
+            return [{'type': 'text', 'text': content}]
+        return []
+
     # Mapeia tool_use_id -> conteudo do tool_result
     tool_results: dict[str, str] = {}
     for msg in messages:
-        content = getattr(msg, 'content', None)
-        if isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict) and block.get('type') == 'tool_result':
-                    tid = block.get('tool_use_id', '')
-                    res = block.get('content', '')
-                    if isinstance(res, list):
-                        res = ' '.join(
-                            b.get('text', '') for b in res
-                            if isinstance(b, dict)
-                        )
-                    tool_results[tid] = str(res)
+        for block in _extract_content_list(msg):
+            if isinstance(block, dict) and block.get('type') == 'tool_result':
+                tid = block.get('tool_use_id', '')
+                res = block.get('content', '')
+                if isinstance(res, list):
+                    res = ' '.join(
+                        b.get('text', '') for b in res
+                        if isinstance(b, dict)
+                    )
+                tool_results[tid] = str(res)
 
     # Extrai tool_calls e findings_text em ordem cronologica
     tools_used: list[dict] = []
     findings_parts: list[str] = []
 
     for msg in messages:
-        content = getattr(msg, 'content', None)
-        if not isinstance(content, list):
-            if isinstance(content, str):
-                findings_parts.append(content)
+        blocks = _extract_content_list(msg)
+        if not blocks:
             continue
-        for block in content:
+        for block in blocks:
             if not isinstance(block, dict):
                 continue
             btype = block.get('type')
@@ -344,12 +546,21 @@ def get_subagent_summary(
     if not include_pii:
         findings_text = mask_pii(findings_text)
 
-    # Metadata do ResultMessage
+    # Metadata: tenta ResultMessage primeiro (compat forward), fallback para
+    # compute baseado em AssistantMessage.usage + timestamps (T4).
     transcript_path = _resolve_transcript_path(session_id, agent_id, directory)
     meta = _read_result_metadata(transcript_path)
+    if not meta.get('cost_usd') and not meta.get('num_turns'):
+        # Transcript de subagent NAO tem type:'result' (SDK 0.1.60 exclui
+        # 'result' de _TRANSCRIPT_ENTRY_TYPES em sessions.py:791-794).
+        # Fallback: somar usage de cada assistant message + diff timestamps.
+        computed = _compute_subagent_metadata_from_jsonl(transcript_path)
+        if computed.get('num_turns'):
+            meta = computed
 
-    started_at = getattr(messages[0], 'timestamp', None)
-    ended_at = getattr(messages[-1], 'timestamp', None)
+    # started_at/ended_at do JSONL (SessionMessage nao expoe timestamp)
+    started_at = meta.get('started_at')
+    ended_at = meta.get('ended_at')
 
     return SubagentSummary(
         agent_id=agent_id,

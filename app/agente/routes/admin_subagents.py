@@ -245,20 +245,129 @@ def api_admin_subagent_messages(session_id: str, agent_id: str):
         logger.error(f"[admin_subagents] get_subagent_messages falhou: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+    # T4b (2026-04-17): SessionMessage do SDK 0.1.60 tem shape
+    # SessionMessage(type, uuid, session_id, message, parent_tool_use_id)
+    # onde `message` e dict Anthropic. Nao acessar .role/.content direto.
+    # FONTE: claude_agent_sdk/types.py:1134-1155.
+    def _serialize_msg(m):
+        msg_dict = getattr(m, 'message', None)
+        if isinstance(msg_dict, dict):
+            return {
+                'type': getattr(m, 'type', None),
+                'uuid': getattr(m, 'uuid', None),
+                'role': msg_dict.get('role'),
+                'model': msg_dict.get('model'),
+                'content': msg_dict.get('content'),
+                'usage': msg_dict.get('usage'),
+            }
+        # Fallback legacy
+        return {
+            'type': getattr(m, 'type', None),
+            'role': getattr(m, 'role', None),
+            'content': getattr(m, 'content', None),
+        }
+
     return jsonify({
         'success': True,
         'session_id': session_id,
         'agent_id': agent_id,
         'count': len(messages),
-        'messages': [
-            {
-                'role': getattr(m, 'role', None),
-                'content': getattr(m, 'content', None),
-                'timestamp': (
-                    getattr(m, 'timestamp', None).isoformat()
-                    if getattr(m, 'timestamp', None) else None
-                ),
-            }
-            for m in messages
-        ],
+        'messages': [_serialize_msg(m) for m in messages],
     })
+
+
+@agente_bp.route('/api/admin/debug/subagent-smoketest', methods=['GET'])
+@login_required
+def api_admin_subagent_smoketest():
+    """
+    T12 (2026-04-17): healthcheck post-deploy para pipeline de subagente.
+
+    Percorre as ultimas 20 sessoes com `subagent_costs` populado,
+    executa `list_subagents` + `get_subagent_summary` da primeira que
+    encontrar, e retorna relatorio.
+
+    Criterio de "healthy":
+    - list_subagents() retorna >= 1 agent_id
+    - get_subagent_summary retorna status='done' com tools_used > 0 OU findings > 0
+    - cost_usd > 0 em pelo menos 1 entry de subagent_costs
+
+    Uso: `curl /agente/api/admin/debug/subagent-smoketest` logado como admin.
+    Rodar em post-deploy hook; rollback se healthy=False por 15min+.
+    """
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Admin only'}), 403
+
+    from sqlalchemy import text as _sql_text
+    from app import db
+    from app.agente.sdk.subagent_reader import (
+        list_session_subagents,
+        get_subagent_summary,
+    )
+
+    report: dict = {
+        'healthy': False,
+        'session_id': None,
+        'list_subagents_count': 0,
+        'summary_status': None,
+        'tools_used': 0,
+        'findings_len': 0,
+        'cost_usd': 0.0,
+        'num_turns': 0,
+        'entries_in_db': 0,
+        'error': None,
+    }
+
+    try:
+        row = db.session.execute(_sql_text("""
+            SELECT session_id,
+                   jsonb_array_length(data->'subagent_costs'->'entries') AS n_entries
+            FROM agent_sessions
+            WHERE data ? 'subagent_costs'
+              AND jsonb_array_length(data->'subagent_costs'->'entries') > 0
+              AND updated_at > now() - interval '24 hours'
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)).fetchone()
+
+        if row is None:
+            report['error'] = (
+                'Nenhuma sessao com subagent_costs nas ultimas 24h. '
+                'Pipeline pode estar quebrado OU nao houve uso.'
+            )
+            return jsonify({'success': True, 'report': report})
+
+        report['session_id'] = row.session_id
+        report['entries_in_db'] = row.n_entries
+
+        # list_subagents
+        agent_ids = list_session_subagents(row.session_id)
+        report['list_subagents_count'] = len(agent_ids)
+
+        if not agent_ids:
+            report['error'] = 'list_subagents retornou vazio para sessao com entries no DB'
+            return jsonify({'success': True, 'report': report})
+
+        # get_subagent_summary do primeiro agent
+        summary = get_subagent_summary(
+            session_id=row.session_id,
+            agent_id=agent_ids[0],
+            include_pii=True,
+        )
+        report['summary_status'] = summary.status
+        report['tools_used'] = len(summary.tools_used)
+        report['findings_len'] = len(summary.findings_text or '')
+        report['cost_usd'] = round(summary.cost_usd, 6)
+        report['num_turns'] = summary.num_turns
+
+        # Healthy se: summary bem formado + cost calculado
+        report['healthy'] = (
+            summary.status == 'done'
+            and (summary.num_turns > 0 or summary.cost_usd > 0)
+            and (len(summary.tools_used) > 0 or len(summary.findings_text or '') > 0)
+        )
+
+    except Exception as e:
+        logger.error(f"[subagent_smoketest] falhou: {e}")
+        report['error'] = f'{type(e).__name__}: {str(e)[:300]}'
+
+    return jsonify({'success': True, 'report': report})

@@ -72,15 +72,20 @@ from .stream_parser import (  # noqa: E402 — re-exports para tests (patch.mult
 
 def _emit_subagent_summary(session_id, summary_dict: dict) -> None:
     """
-    Emite evento 'subagent_summary' via Redis pubsub no canal agent_sse:<session_id>.
+    Emite evento 'subagent_summary' via Redis pubsub + buffer FIFO.
 
     Chamado pelo _subagent_stop_hook apos persistir cost granular. O SSE
-    generator em routes/chat.py subscreve esse canal e forward o evento
-    para o frontend (unificado com Task 4.4 validator worker).
+    generator em routes/chat.py subscreve `agent_sse:<session_id>` (delivery
+    quente) e dreva `agent_sse_buffer:<session_id>` no startup (replay).
 
     FIX 2026-04-17: anteriormente usava event_queue.put_nowait(StreamEvent(...))
     mas event_queue espera bytes/strings (protocolo SDK interno), causando
     TypeError em sessoes com subagent que termina em status=error.
+
+    T7 (2026-04-17 parte 2): adicionado buffer Redis LIST com TTL 5min.
+    Resolve race condition onde hook publica DEPOIS do SSE fechar
+    (3/5 casos em producao tinham subscribers=0). Usa RPUSH (FIFO) para
+    preservar ordem cronologica.
 
     No-op se session_id for falsy ou Redis falhar (best-effort, R1).
     """
@@ -94,11 +99,22 @@ def _emit_subagent_summary(session_id, summary_dict: dict) -> None:
         redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
         r = redis.from_url(redis_url)
         channel = f'agent_sse:{session_id}'
+        buffer_key = f'agent_sse_buffer:{session_id}'
         payload = json.dumps({
             'type': 'subagent_summary',
             'data': summary_dict,
         })
+        # Pub: delivery quente (clientes conectados)
         n_subs = r.publish(channel, payload)
+        # Buffer: replay em reconnect (TTL 5min — suficiente para UX normal,
+        # nao acumula indefinidamente em sessoes longas)
+        try:
+            r.rpush(buffer_key, payload)  # FIFO: RPUSH + LRANGE 0 -1
+            r.expire(buffer_key, 300)
+            # Cap defensivo: manter apenas ultimos 20 eventos por sessao.
+            r.ltrim(buffer_key, -20, -1)
+        except Exception as buf_err:
+            logger.debug(f"[emit_subagent_summary] buffer falhou: {buf_err}")
         logger.info(
             f"[emit_subagent_summary] published channel={channel} "
             f"agent_type={summary_dict.get('agent_type')} "

@@ -335,7 +335,7 @@ try:
                 ch = "teams" if session_id.startswith('teams_') else "web"
                 canal_tag = " [Teams]" if ch == "teams" else ""
                 output_lines.append(f"📋 **{title}**{canal_tag} ({created})")
-                output_lines.append(f"   ID: {session_id[:8]}... | {msg_count} mensagens | Atualizada: {updated}")
+                output_lines.append(f"   session_id: {session_id} | {msg_count} mensagens | Atualizada: {updated}")
 
                 # Tentar extrair trecho relevante do data_text
                 data_text = row[5] or ''
@@ -446,6 +446,7 @@ try:
                 canal_tag = " [Teams]" if sess.session_id.startswith('teams_') else ""
                 output_lines.append(f"{i}. **{title}**{canal_tag}")
                 output_lines.append(f"   📅 {created} | 💬 {msg_count} msgs | 💰 ${cost:.4f}")
+                output_lines.append(f"   session_id: {sess.session_id}")
 
                 summary_text = None
                 topics_list = []

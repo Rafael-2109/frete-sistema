@@ -461,6 +461,24 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 **Pendente** (fase 3): #2 aposentar `/tmp/subagent-findings/` (soft, mantem fallback).
 
+### Bugs corrigidos na Fase 2 (2026-04-17)
+
+Diagnosticados via logs Render: **19/19 sessoes em 48h com `subagent_costs` VAZIO** antes do fix. 3 bugs de raiz + 1 descoberto durante investigacao:
+
+- **Bug 1 — `cost_usd=None` sempre**: JSONL de SUBAGENT nao contem `type:'result'` (SDK 0.1.60 exclui `result` de `_TRANSCRIPT_ENTRY_TYPES` em `sessions.py:791-794`). Solucao: novo helper `_compute_subagent_metadata_from_jsonl()` em `subagent_reader.py` soma `usage` de cada `AssistantMessage` + diff de timestamps. `_read_result_metadata()` ainda tenta `type:'result'` primeiro (compat forward).
+
+- **Bug 2 — `subscribers=0` em 60% dos publishes**: race condition hook async (`spawn_task`) vs SSE close em 3s pos-`done`. Solucao T7: `_emit_subagent_summary` (`client.py:73`) publica em pubsub **E** `RPUSH` em `agent_sse_buffer:<session_id>` (TTL 5min, cap 20). SSE generator dreva buffer com `LRANGE 0 -1` antes de subscribir pubsub (`routes/chat.py:963-1010`).
+
+- **Bug 3 — `list_subagents` retornando vazio**: REFUTADO em producao. `CLAUDE_CONFIG_DIR=/tmp/.claude` ja setado como env var no Render; SDK default funciona.
+
+- **Bug 4 — parser de blocks retorna 0 tools**: `SessionMessage.message` do SDK 0.1.60 e dict Anthropic `{role, content, ...}` — parser antigo acessava `msg.content` direto (sempre None). Fix em `subagent_reader.py:_extract_content_list()` usa `msg.message.get('content')`. Log de 2026-04-17 12:20:13 mostrava `status=done tools_used=0 findings_len=0` apesar de JSONL de 131KB com 24 linhas — era este bug.
+
+**Pricing correto com cache** (`sdk/pricing.py` novo): tabela por modelo distinguindo `input`, `output`, `cache_creation` (1.25x input), `cache_read` (0.10x input). Ex Opus 4.7: $5/$25 per MTok.
+
+**Persistencia v2** (`hooks.py:528-610`): entries em `AgentSession.data->'subagent_costs'->'entries'` agora tem `schema_version='v2'`, escritas via `UPDATE ... jsonb_set(..., || :entry_json::jsonb)` SQL raw — atomico, elimina lost-update de subagents concorrentes que afetava v1 silenciosamente.
+
+**Smoketest endpoint** (`routes/admin_subagents.py:api_admin_subagent_smoketest`): `GET /agente/api/admin/debug/subagent-smoketest` valida pipeline end-to-end (list_subagents + get_subagent_summary + SQL entries). Healthy requer `status=done` + `num_turns>0 OU cost_usd>0` + `tools_used>0 OU findings_len>0`.
+
 ### Bug fixes criticos (0.1.51–0.1.53):
 - **`is_error` MCP propagado** (0.1.51): Modelo sabe quando MCP tool falhou (antes interpretava erro como sucesso)
 - **`SIGKILL` fallback nativo** (0.1.51): SDK agora mata subprocess zombie. `_force_kill_subprocess()` em `client_pool.py` pode ser simplificado

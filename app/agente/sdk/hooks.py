@@ -526,53 +526,123 @@ def build_hooks(
                     logger.debug(f"[HOOK:SubagentStop] cost_tracker falhou: {cost_err}")
 
             # #3 Cost granular — persiste em AgentSession.data (JSONB)
-            if USE_SUBAGENT_COST_GRANULAR and session_id and cost_usd is not None:
+            # T5+T6 (2026-04-17): se last_result ausente (SDK 0.1.60 nao grava
+            # type:'result' em subagent), usar helper compartilhado que soma
+            # usage de AssistantMessages + timestamps.
+            # T8: schema v2 + UPSERT atomico via SQL raw para evitar
+            # lost-update em subagents concorrentes.
+            if USE_SUBAGENT_COST_GRANULAR and session_id and agent_id:
                 try:
+                    import json as _json
                     from app import db
-                    from ..models import AgentSession
-                    from sqlalchemy.orm.attributes import flag_modified
+                    from sqlalchemy import text as _sql_text
 
-                    input_tokens = 0
-                    output_tokens = 0
-                    cache_read = 0
+                    # Obter metadata — ResultMessage (compat forward) OU
+                    # compute do JSONL (subagent real SDK 0.1.60)
+                    computed_started_at = None
                     if last_result:
                         usage = last_result.get('usage', {}) or {}
-                        input_tokens = usage.get('input_tokens') or 0
-                        output_tokens = usage.get('output_tokens') or 0
-                        cache_read = usage.get('cache_read_input_tokens') or 0
+                        computed_input = usage.get('input_tokens') or 0
+                        computed_output = usage.get('output_tokens') or 0
+                        computed_cache_read = usage.get('cache_read_input_tokens') or 0
+                        computed_cache_create = usage.get('cache_creation_input_tokens') or 0
+                        computed_cost = cost_usd or 0.0
+                        computed_duration = duration_ms or 0
+                        computed_turns = num_turns or 0
+                        computed_stop = stop_reason or 'end_turn'
+                    else:
+                        from .subagent_reader import (
+                            _compute_subagent_metadata_from_jsonl
+                        )
+                        meta = _compute_subagent_metadata_from_jsonl(transcript_path)
+                        computed_input = meta['input_tokens']
+                        computed_output = meta['output_tokens']
+                        computed_cache_read = meta['cache_read_tokens']
+                        computed_cache_create = meta['cache_creation_tokens']
+                        computed_cost = meta['cost_usd']
+                        computed_duration = meta['duration_ms']
+                        computed_turns = meta['num_turns']
+                        computed_stop = meta['stop_reason'] or 'end_turn'
+                        # B12 fix: usar started_at computado do JSONL
+                        _sa = meta.get('started_at')
+                        if _sa is not None:
+                            try:
+                                computed_started_at = _sa.isoformat()
+                            except AttributeError:
+                                computed_started_at = None
 
-                    sess = AgentSession.query.filter_by(
-                        session_id=session_id
-                    ).first()
-                    if sess is not None:
-                        data = sess.data or {}
-                        bucket = data.setdefault('subagent_costs', {
-                            'version': 1, 'entries': []
-                        })
-                        bucket['entries'].append({
+                    # So persistir se tivermos dados uteis
+                    if computed_turns > 0 or computed_cost > 0:
+                        entry = {
+                            'schema_version': 'v2',
                             'agent_id': agent_id,
                             'agent_type': agent_type,
-                            'cost_usd': float(cost_usd),
-                            'input_tokens': int(input_tokens),
-                            'output_tokens': int(output_tokens),
-                            'cache_read_tokens': int(cache_read),
-                            'duration_ms': int(duration_ms or 0),
-                            'num_turns': int(num_turns or 0),
-                            'stop_reason': stop_reason or 'end_turn',
-                            'started_at': None,
+                            'cost_usd': float(computed_cost),
+                            'input_tokens': int(computed_input),
+                            'output_tokens': int(computed_output),
+                            'cache_read_tokens': int(computed_cache_read),
+                            'cache_creation_tokens': int(computed_cache_create),
+                            'duration_ms': int(computed_duration),
+                            'num_turns': int(computed_turns),
+                            'stop_reason': computed_stop,
+                            'started_at': computed_started_at,
                             'ended_at': agora_utc_naive().isoformat(),
-                        })
-                        sess.data = data
-                        flag_modified(sess, 'data')
+                        }
+
+                        # T8 UPSERT atomico: jsonb_set append no array
+                        # entries — impede lost-update em writes concorrentes.
+                        # `UPDATE ... SET data = jsonb_set(..., data->... || :new)`
+                        # e atomico por row em PostgreSQL: acquire lock, read,
+                        # compute, write — UPDATE subsequente espera lock.
+                        # Inicializa bucket se ausente (COALESCE).
+                        result = db.session.execute(
+                            _sql_text("""
+                                UPDATE agent_sessions
+                                SET data = jsonb_set(
+                                    COALESCE(data, '{}'::jsonb),
+                                    '{subagent_costs}',
+                                    jsonb_build_object(
+                                        'version', 2,
+                                        'entries',
+                                        COALESCE(
+                                            data->'subagent_costs'->'entries',
+                                            '[]'::jsonb
+                                        ) || :entry_json::jsonb
+                                    ),
+                                    true
+                                )
+                                WHERE session_id = :sid
+                            """),
+                            {
+                                'sid': session_id,
+                                'entry_json': _json.dumps(entry),
+                            }
+                        )
+                        # B1 fix: detectar sessao inexistente (race com
+                        # get_or_create em chat.py:567). UPDATE com 0 rows nao
+                        # falha — warning para monitoramento.
+                        if result.rowcount == 0:
+                            logger.warning(
+                                f"[HOOK:SubagentStop] cost granular UPDATE "
+                                f"rowcount=0 — session_id={session_id[:12]}... "
+                                f"nao existe em agent_sessions (race com "
+                                f"get_or_create?). Entry perdida: "
+                                f"agent_type={agent_type}"
+                            )
                         db.session.commit()
-                        logger.debug(
-                            f"[HOOK:SubagentStop] cost granular persistido "
-                            f"em sess.data (agent_type={agent_type})"
+                        logger.info(
+                            f"[HOOK:SubagentStop] cost granular persistido v2 "
+                            f"agent_type={agent_type} cost=${computed_cost:.4f} "
+                            f"turns={computed_turns} duration={computed_duration}ms"
                         )
                 except Exception as granular_err:
-                    logger.debug(
+                    logger.warning(
                         f"[HOOK:SubagentStop] cost granular falhou: {granular_err}"
                     )
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
 
             # #6 UI — emite subagent_summary via Redis pubsub para o frontend
             # FIX 2026-04-17: anteriormente usava event_queue local, que corrompia

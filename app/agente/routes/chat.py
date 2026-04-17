@@ -960,6 +960,11 @@ def _stream_chat_response(
         # #4 Async validation events via Redis pubsub (non-blocking poll)
         # Worker RQ (subagent_validator) publica em agent_sse:<session_id>.
         # Setup best-effort — falha NAO afeta o stream principal.
+        #
+        # T7 (2026-04-17): alem do subscribe, drenar buffer LIST
+        # `agent_sse_buffer:<session_id>` preenchido por _emit_subagent_summary.
+        # Cobre race condition onde hook publica apos SSE fechar (evento
+        # permanece no buffer TTL 5min para proximo SSE da mesma sessao).
         try:
             import redis as _redis_lib
             _redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
@@ -967,6 +972,38 @@ def _stream_chat_response(
             _pubsub = _redis_conn.pubsub(ignore_subscribe_messages=True)
             _pubsub.subscribe(f'agent_sse:{session_id}')
             logger.debug(f"[SSE] pubsub subscrito: agent_sse:{session_id}")
+
+            # T7: drain buffer (eventos perdidos em SSE anterior)
+            try:
+                _buf_key = f'agent_sse_buffer:{session_id}'
+                _buffered = _redis_conn.lrange(_buf_key, 0, -1) or []
+                if _buffered:
+                    logger.info(
+                        f"[SSE] drenando buffer: {len(_buffered)} eventos "
+                        f"para agent_sse_buffer:{session_id}"
+                    )
+                    import json as _json_buf
+                    for _raw in _buffered:
+                        try:
+                            _pl = _json_buf.loads(_raw)
+                            _ev_type = _pl.get('type', 'unknown')
+                            _ev_data = _pl.get('data', {})
+                            if _ev_type.startswith('subagent_'):
+                                _ev_data = _sanitize_subagent_summary_for_user(
+                                    _ev_data, current_user
+                                )
+                            yield _sse_event(_ev_type, _ev_data)
+                        except Exception as _drain_parse_err:
+                            logger.debug(
+                                f"[SSE] drain parse falhou: {_drain_parse_err}"
+                            )
+                    # Remove buffer apos drain (evita re-emissao em reconnect)
+                    try:
+                        _redis_conn.delete(_buf_key)
+                    except Exception:
+                        pass
+            except Exception as _drain_err:
+                logger.debug(f"[SSE] drain buffer falhou (ignorado): {_drain_err}")
         except Exception as _ps_err:
             logger.debug(f"[SSE] pubsub setup falhou (ignorado): {_ps_err}")
             _pubsub = None
