@@ -965,54 +965,63 @@ def _stream_chat_response(
         # `agent_sse_buffer:<session_id>` preenchido por _emit_subagent_summary.
         # Cobre race condition onde hook publica apos SSE fechar (evento
         # permanece no buffer TTL 5min para proximo SSE da mesma sessao).
-        try:
-            import redis as _redis_lib
-            _redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-            _redis_conn = _redis_lib.from_url(_redis_url)
-            _pubsub = _redis_conn.pubsub(ignore_subscribe_messages=True)
-            _pubsub.subscribe(f'agent_sse:{session_id}')
-            # Log info (era debug) para diagnosticar subscribers=0 em prod
-            logger.info(f"[SSE] pubsub subscrito: agent_sse:{session_id[:12]}...")
-
-            # T7: drain buffer (eventos perdidos em SSE anterior)
-            try:
-                _buf_key = f'agent_sse_buffer:{session_id}'
-                _buffered = _redis_conn.lrange(_buf_key, 0, -1) or []
-                if _buffered:
-                    logger.info(
-                        f"[SSE] drenando buffer: {len(_buffered)} eventos "
-                        f"para agent_sse_buffer:{session_id}"
-                    )
-                    import json as _json_buf
-                    for _raw in _buffered:
-                        try:
-                            _pl = _json_buf.loads(_raw)
-                            _ev_type = _pl.get('type', 'unknown')
-                            _ev_data = _pl.get('data', {})
-                            if _ev_type.startswith('subagent_'):
-                                _ev_data = _sanitize_subagent_summary_for_user(
-                                    _ev_data, current_user
-                                )
-                            yield _sse_event(_ev_type, _ev_data)
-                        except Exception as _drain_parse_err:
-                            logger.debug(
-                                f"[SSE] drain parse falhou: {_drain_parse_err}"
-                            )
-                    # Remove buffer apos drain (evita re-emissao em reconnect)
-                    try:
-                        _redis_conn.delete(_buf_key)
-                    except Exception:
-                        pass
-            except Exception as _drain_err:
-                logger.debug(f"[SSE] drain buffer falhou (ignorado): {_drain_err}")
-        except Exception as _ps_err:
-            # Log warning (era debug) — setup falha = race pubsub/buffer sao
-            # a unica forma do frontend receber subagent_summary. Critico detectar.
-            logger.warning(
-                f"[SSE] pubsub setup falhou para session={session_id[:12]}...: "
-                f"{type(_ps_err).__name__}: {_ps_err}"
-            )
+        # Guard: sem session_id nao ha como subscribir pubsub.
+        # Aceitar: session pode ser criada mais tarde no fluxo (novo chat).
+        if not session_id:
+            logger.info("[SSE] pubsub skip — session_id ainda None (novo chat)")
             _pubsub = None
+            _redis_conn = None
+        else:
+            try:
+                import redis as _redis_lib
+                _redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+                _redis_conn = _redis_lib.from_url(_redis_url)
+                _pubsub = _redis_conn.pubsub(ignore_subscribe_messages=True)
+                _pubsub.subscribe(f'agent_sse:{session_id}')
+                logger.info(
+                    f"[SSE] pubsub subscrito: agent_sse:{str(session_id)[:12]}..."
+                )
+
+                # T7: drain buffer (eventos perdidos em SSE anterior)
+                try:
+                    _buf_key = f'agent_sse_buffer:{session_id}'
+                    _buffered = _redis_conn.lrange(_buf_key, 0, -1) or []
+                    if _buffered:
+                        logger.info(
+                            f"[SSE] drenando buffer: {len(_buffered)} eventos "
+                            f"para agent_sse_buffer:{str(session_id)[:12]}..."
+                        )
+                        import json as _json_buf
+                        for _raw in _buffered:
+                            try:
+                                _pl = _json_buf.loads(_raw)
+                                _ev_type = _pl.get('type', 'unknown')
+                                _ev_data = _pl.get('data', {})
+                                if _ev_type.startswith('subagent_'):
+                                    _ev_data = _sanitize_subagent_summary_for_user(
+                                        _ev_data, current_user
+                                    )
+                                yield _sse_event(_ev_type, _ev_data)
+                            except Exception as _drain_parse_err:
+                                logger.debug(
+                                    f"[SSE] drain parse falhou: {_drain_parse_err}"
+                                )
+                        # Remove buffer apos drain (evita re-emissao em reconnect)
+                        try:
+                            _redis_conn.delete(_buf_key)
+                        except Exception:
+                            pass
+                except Exception as _drain_err:
+                    logger.debug(
+                        f"[SSE] drain buffer falhou (ignorado): {_drain_err}"
+                    )
+            except Exception as _ps_err:
+                logger.warning(
+                    f"[SSE] pubsub setup falhou para "
+                    f"session={str(session_id)[:12]}...: "
+                    f"{type(_ps_err).__name__}: {_ps_err}"
+                )
+                _pubsub = None
 
         while True:
             # Deadline check: menor entre inatividade e teto absoluto
