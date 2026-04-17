@@ -108,6 +108,15 @@ echo "Migration: remessa VORTX (flag usuario + tabela cache + sequence)..."
 python scripts/migrations/adicionar_remessa_vortx.py \
     || echo "⚠️ Migration adicionar_remessa_vortx falhou, continuando deploy..."
 
+# 11. Migration Features SDK 0.1.60 (2026-04-17): indice GIN para subagent_costs.
+# Feature #3 — cost tracking granular por subagente em AgentSession.data JSONB.
+# Suporta queries agregadas de top subagentes por custo sem full scan.
+# Idempotente (CREATE INDEX IF NOT EXISTS).
+# Ref: docs/superpowers/specs/2026-04-16-agent-sdk-0160-features-design.md
+echo "Migration: indice GIN agent_session.subagent_costs..."
+python scripts/migrations/agent_session_subagent_costs_idx.py \
+    || echo "⚠️ Migration agent_session_subagent_costs_idx falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
