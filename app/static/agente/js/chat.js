@@ -1017,6 +1017,185 @@ async function handleStreamResponse(response) {
     }
 }
 
+// ─── Subagent inline expansible line (#6) ────────────────────────────
+// Map agent_id -> DOM element para atualizar linha existente ao receber
+// eventos subsequentes (task_progress, subagent_summary, subagent_validation).
+const subagentLines = new Map();
+
+function _subagentEscapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = String(str ?? '');
+    return div.innerHTML;
+}
+
+function renderSubagentLineStart(data) {
+    // data: {task_id, task_type, description} ou {agent_id, agent_type}
+    const agentId = data.agent_id || data.task_id;
+    const agentType = data.agent_type || data.task_type || data.description || 'subagente';
+
+    if (!agentId || subagentLines.has(agentId)) return;  // idempotente
+
+    const messagesContainer = document.getElementById('messages') ||
+                              document.querySelector('.messages-container') ||
+                              document.querySelector('.chat-messages');
+    if (!messagesContainer) {
+        console.warn('[subagent-ui] container #messages nao encontrado');
+        return;
+    }
+
+    const line = document.createElement('div');
+    line.className = 'subagent-inline running';
+    line.dataset.agentId = agentId;
+    line.innerHTML = `
+        <span class="subagent-dot"></span>
+        <span class="subagent-badge">${_subagentEscapeHtml(agentType)}</span>
+        <span class="subagent-meta">executando\u2026</span>
+        <span class="subagent-caret">\u25bc</span>
+    `;
+    line.addEventListener('click', () => toggleSubagentExpand(agentId));
+    messagesContainer.appendChild(line);
+    subagentLines.set(agentId, line);
+}
+
+function renderSubagentLineProgress(data) {
+    const agentId = data.agent_id || data.task_id;
+    const line = subagentLines.get(agentId);
+    if (!line) return;
+    const meta = line.querySelector('.subagent-meta');
+    const tool = data.last_tool_name || 'processando';
+    if (meta) meta.textContent = `usando ${tool}\u2026`;
+}
+
+function renderSubagentLineSummary(data) {
+    // data: SubagentSummary.to_dict() sanitizado por perfil
+    const agentId = data.agent_id;
+    if (!agentId) return;
+
+    let line = subagentLines.get(agentId);
+
+    if (!line) {
+        // Fallback: evento chegou sem task_started anterior
+        const messagesContainer = document.getElementById('messages') ||
+                                  document.querySelector('.messages-container') ||
+                                  document.querySelector('.chat-messages');
+        if (!messagesContainer) return;
+        line = document.createElement('div');
+        line.className = 'subagent-inline';
+        line.dataset.agentId = agentId;
+        messagesContainer.appendChild(line);
+        subagentLines.set(agentId, line);
+        line.addEventListener('click', () => toggleSubagentExpand(agentId));
+    }
+
+    line.classList.remove('running');
+    line.classList.add('done');
+
+    const numTools = (data.tools_used || []).length;
+    const durationSec = Math.round((data.duration_ms || 0) / 100) / 10;
+    const costStr = data.cost_usd != null
+        ? ` \u00b7 $${Number(data.cost_usd).toFixed(4)}`
+        : '';
+    const metaText = `${numTools} tool${numTools !== 1 ? 's' : ''} \u00b7 ${durationSec}s${costStr}`;
+
+    line.innerHTML = `
+        <span class="subagent-dot"></span>
+        <span class="subagent-badge">${_subagentEscapeHtml(data.agent_type || 'subagente')}</span>
+        <span class="subagent-meta">${_subagentEscapeHtml(metaText)}</span>
+        <span class="subagent-caret">\u25bc</span>
+    `;
+    line.dataset.summary = JSON.stringify(data);
+}
+
+function renderSubagentValidationWarning(data) {
+    // data: {agent_id, agent_type, score, reason, flagged_claims}
+    const line = subagentLines.get(data.agent_id);
+    if (!line) return;
+
+    const badge = line.querySelector('.subagent-badge');
+    if (badge && !line.querySelector('.validation-warning')) {
+        const warn = document.createElement('span');
+        warn.className = 'validation-warning';
+        warn.title = `Score: ${data.score} \u2014 ${data.reason || ''}`;
+        badge.after(warn);
+    }
+    line.dataset.validation = JSON.stringify(data);
+}
+
+async function toggleSubagentExpand(agentId) {
+    const line = subagentLines.get(agentId);
+    if (!line) return;
+
+    if (line.classList.contains('expanded')) {
+        line.classList.remove('expanded');
+        const details = line.querySelector('.subagent-inline-details');
+        if (details) details.remove();
+        const header = line.querySelector('.subagent-header');
+        if (header) {
+            // Restaurar do summary
+            const data = JSON.parse(line.dataset.summary || '{}');
+            const numTools = (data.tools_used || []).length;
+            const durationSec = Math.round((data.duration_ms || 0) / 100) / 10;
+            const costStr = data.cost_usd != null
+                ? ` \u00b7 $${Number(data.cost_usd).toFixed(4)}`
+                : '';
+            line.innerHTML = `
+                <span class="subagent-dot"></span>
+                <span class="subagent-badge">${_subagentEscapeHtml(data.agent_type || 'subagente')}</span>
+                <span class="subagent-meta">${_subagentEscapeHtml(numTools + ' tools \u00b7 ' + durationSec + 's' + costStr)}</span>
+                <span class="subagent-caret">\u25bc</span>
+            `;
+        }
+        return;
+    }
+
+    line.classList.add('expanded');
+    const originalHtml = line.innerHTML;
+    line.innerHTML = `<div class="subagent-header">${originalHtml}</div>`;
+
+    const details = document.createElement('div');
+    details.className = 'subagent-inline-details';
+    details.textContent = 'Carregando\u2026';
+    line.appendChild(details);
+
+    // Descobrir session_id: usar variavel global sessionId do chat.js
+    const sid = sessionId;
+
+    if (!sid) {
+        details.textContent = 'Erro: sessao nao identificada';
+        return;
+    }
+
+    try {
+        const resp = await fetch(
+            `/agente/api/sessions/${sid}/subagents/${agentId}/summary`
+        );
+        if (!resp.ok) {
+            details.textContent = `Erro ${resp.status}`;
+            return;
+        }
+        const payload = await resp.json();
+        const s = payload.subagent || {};
+        const toolsHtml = (s.tools_used || []).map((t) =>
+            `<li><span class="tool-name">${_subagentEscapeHtml(t.name)}</span>` +
+            `<span class="tool-result">${_subagentEscapeHtml((t.result_summary || '').slice(0, 120))}</span></li>`
+        ).join('');
+        const validationHtml = line.dataset.validation
+            ? (() => {
+                const v = JSON.parse(line.dataset.validation);
+                return `<div class="validation-reason">Score ${v.score}: ${_subagentEscapeHtml(v.reason || '')}</div>`;
+              })()
+            : '';
+        const findingsHtml = s.findings_text
+            ? `<div style="margin-top:8px;color:var(--agent-text-secondary)">${_subagentEscapeHtml(s.findings_text.slice(0, 400))}</div>`
+            : '';
+        details.innerHTML = `<ol>${toolsHtml}</ol>${validationHtml}${findingsHtml}`;
+    } catch (err) {
+        details.textContent = `Erro: ${err.message}`;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
 // Processa evento SSE com estado compartilhado
 function processSSEEvent(eventType, data, state) {
     try {
@@ -1175,6 +1354,7 @@ function processSSEEvent(eventType, data, state) {
                     status: 'pending',
                     timestamp: new Date()
                 });
+                renderSubagentLineStart(data);  // NOVO: linha inline expansivel (#6)
                 console.log(`[SSE] Subagente iniciado: ${taskDesc} (type=${taskType})`);
                 break;
             }
@@ -1186,6 +1366,7 @@ function processSSEEvent(eventType, data, state) {
                 if (lastTool) {
                     showTyping(`🤖 Subagente usando ${lastTool}...`);
                 }
+                renderSubagentLineProgress(data);  // NOVO: atualiza linha inline (#6)
                 console.log(`[SSE] Subagente progresso: ${progressDesc} (last_tool=${lastTool})`);
                 break;
             }
@@ -1210,6 +1391,16 @@ function processSSEEvent(eventType, data, state) {
                 console.log(`[SSE] Subagente concluiu: status=${notifStatus} summary=${notifSummary.substring(0, 80)}`);
                 break;
             }
+
+            // NOVO (#6): Summary de subagente (dados completos apos conclusao)
+            case 'subagent_summary':
+                renderSubagentLineSummary(data);
+                break;
+
+            // NOVO (#4): Validacao de subagente — icone de aviso na linha
+            case 'subagent_validation':
+                renderSubagentValidationWarning(data);
+                break;
 
             case 'rate_limit': {
                 // SDK 0.1.50: Rate limit event
