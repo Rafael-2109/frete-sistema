@@ -1557,7 +1557,7 @@ try:
         "/memories/learned/regras.xml (regras de negócio), "
         "/memories/corrections/dominio.xml (correções). "
         "Se o arquivo já existir, o conteúdo será SUBSTITUÍDO.",
-        {"path": Annotated[str, "Path completo onde salvar (ex: /memories/user.xml, /memories/corrections/regra_frete.md, /memories/empresa/termos/palmito.md)"], "content": Annotated[str, "Conteudo da memoria em formato texto ou XML. Para user.xml e preferences.xml, usar formato XML existente"]},
+        {"path": Annotated[str, "Path completo onde salvar (ex: /memories/user.xml, /memories/corrections/regra_frete.md, /memories/empresa/termos/palmito.md)"], "content": Annotated[str, "Conteudo da memoria em formato texto ou XML. Para user.xml e preferences.xml, usar formato XML existente"], "priority": Annotated[str, "Prioridade: 'mandatory' (regra usuario) | 'advisory' (diretriz operacional) | 'contextual' (default) - mapeia para 3 canais de memoria via injection"]},
         annotations=ToolAnnotations(
             readOnlyHint=False,
             destructiveHint=False,
@@ -1571,9 +1571,10 @@ try:
         Cria ou atualiza memória.
 
         Args:
-            args: {"path": str, "content": str, "category": str (optional)}
+            args: {"path": str, "content": str, "category": str (optional), "priority": str (optional)}
 
         category pode ser: permanent, structural, operational, contextual.
+        priority pode ser: mandatory, advisory, contextual (default).
         Se não informado, classificação automática por heurística de path + content.
 
         Returns:
@@ -1582,6 +1583,7 @@ try:
         path = args.get("path", "").strip()
         content = args.get("content", "").strip()
         category_override = args.get("category", "").strip().lower() or None
+        priority = args.get("priority", "contextual").strip().lower() or "contextual"
 
         if not path:
             return {
@@ -1598,6 +1600,14 @@ try:
             path = _validate_path(path)
             content = _sanitize_content(content)
             user_id = _resolve_user_id(args)
+
+            # Validar priority
+            valid_priorities = {'mandatory', 'advisory', 'contextual'}
+            if priority not in valid_priorities:
+                return {
+                    "content": [{"type": "text", "text": f"Erro: priority invalida '{priority}'. Deve ser: mandatory, advisory ou contextual"}],
+                    "is_error": True,
+                }
 
             # PRD v2.1: Classificar escopo pelo path
             # Paths /memories/empresa/* sao memorias compartilhadas (user_id=0)
@@ -1634,6 +1644,7 @@ try:
                     existing.is_directory = False
                     existing.importance_score = importance
                     existing.category = category
+                    existing.priority = priority
                     existing.last_accessed_at = agora_utc_naive()
                     # Se salvando novo conteúdo, limpar flag de conflito
                     existing.has_potential_conflict = False
@@ -1666,6 +1677,7 @@ try:
                     mem = AgentMemory.create_file(actual_user_id, path, content)
                     mem.importance_score = importance
                     mem.category = category
+                    mem.priority = priority
                     mem.last_accessed_at = agora_utc_naive()
                     # PRD v2.1: escopo e created_by
                     mem.escopo = escopo
@@ -1825,6 +1837,7 @@ try:
                     "action": action,
                     "category": None,
                     "importance": None,
+                    "priority": priority,
                 },
             }
 
