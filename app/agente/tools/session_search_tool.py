@@ -745,15 +745,212 @@ try:
             }
 
     # ========================================================================
-    # MCP Server Registration (Enhanced v4.0.0)
+    # OUTPUT SCHEMA — get_subagent_transcript
+    # ========================================================================
+
+    SUBAGENT_TRANSCRIPT_OUTPUT_SCHEMA: dict = {
+        "type": "object",
+        "properties": {
+            "found": {"type": "boolean"},
+            "agent_id": {"type": "string"},
+            "agent_type": {"type": "string"},
+            "status": {"type": "string"},
+            "duration_ms": {"type": "integer"},
+            "num_tools": {"type": "integer"},
+            "findings_text": {"type": "string"},
+            "tools_used": {"type": "array"},
+            "cost_usd": {"type": "number"},
+            "error": {"type": "string"},
+        },
+        "required": ["found"],
+    }
+
+    @enhanced_tool(
+        "get_subagent_transcript",
+        (
+            "Consulta transcript completo de um subagente executado em uma sessao. "
+            "Retorna tools usadas em ordem cronologica, duracao, findings finais. "
+            "Use quando o usuario perguntar: 'o que o analista-carteira fez na sessao X', "
+            "'mostra as tools do raio-x-pedido', 'por que o agente disse Y — veja o subagente Z'. "
+            "Nao usar quando: sessao e atual (agente ja tem contexto) OU usuario quer debug "
+            "generico (use search_sessions). Admin (debug_mode) pode usar target_user_id."
+        ),
+        {
+            "session_id": Annotated[str, "UUID da sessao (ex: '6cfe04d6-5f1f-...')"],
+            "agent_type": Annotated[str, "Tipo do subagente (ex: 'analista-carteira', 'raio-x-pedido')"],
+            "include_tools_detail": Annotated[bool, "Se True, inclui lista de tools com args/results resumidos (default True)"],
+            "target_user_id": Annotated[int, "Admin-only (debug_mode): investigar sessao de outro usuario"],
+        },
+        annotations=ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        ),
+        output_schema=SUBAGENT_TRANSCRIPT_OUTPUT_SCHEMA,
+    )
+    async def get_subagent_transcript(args: Dict[str, Any]) -> Dict[str, Any]:
+        """Consulta transcript de um subagente especifico numa sessao."""
+        session_id = (args.get("session_id") or "").strip()
+        agent_type_req = (args.get("agent_type") or "").strip()
+        include_tools_detail = args.get("include_tools_detail", True)
+
+        if not session_id or not agent_type_req:
+            structured = {"found": False, "error": "session_id e agent_type sao obrigatorios"}
+            return {
+                "content": [{"type": "text", "text": structured["error"]}],
+                "structuredContent": structured,
+                "is_error": True,
+            }
+
+        try:
+            user_id = _resolve_user_id(args)
+        except (RuntimeError, PermissionError) as e:
+            structured = {"found": False, "error": str(e)}
+            return {
+                "content": [{"type": "text", "text": f"Erro: {e}"}],
+                "structuredContent": structured,
+                "is_error": True,
+            }
+
+        from ..config.permissions import get_debug_mode
+        is_admin = get_debug_mode()
+
+        def _find_agent_id_from_db():
+            """
+            Resolve agent_id pelo agent_type consultando AgentSession.data['subagent_costs'].
+            Retorna (agent_id, ended_at_iso) do subagente mais recente do tipo.
+            """
+            from ..models import AgentSession
+            sess = AgentSession.query.filter_by(session_id=session_id).first()
+            if sess is None:
+                return None, None
+            data = sess.data or {}
+            costs = data.get("subagent_costs", {})
+            entries = costs.get("entries", [])
+            # Filtra por agent_type e pega mais recente (ended_at desc)
+            matching = [
+                e for e in entries
+                if e.get("agent_type") == agent_type_req and e.get("agent_id")
+            ]
+            if not matching:
+                # Retorna lista de tipos disponiveis para mensagem de erro
+                available = sorted({e.get("agent_type", "") for e in entries if e.get("agent_type")})
+                return None, available
+            # Mais recente pelo ended_at (string ISO — lexicograficamente ordenavel)
+            matching_sorted = sorted(
+                matching,
+                key=lambda e: e.get("ended_at") or "",
+                reverse=True,
+            )
+            best = matching_sorted[0]
+            return best["agent_id"], best.get("ended_at")
+
+        def _do_transcript():
+            agent_id, meta = _find_agent_id_from_db()
+
+            if agent_id is None:
+                # meta e lista de tipos disponiveis
+                available_types = meta or []
+                error_msg = (
+                    f"Subagente '{agent_type_req}' nao encontrado na sessao. "
+                    f"Subagents disponiveis: "
+                    f"{available_types if available_types else 'nenhum'}"
+                )
+                return {"found": False, "error": error_msg}, error_msg
+
+            from app.agente.sdk.subagent_reader import get_subagent_summary
+            summary = get_subagent_summary(
+                session_id=session_id,
+                agent_id=agent_id,
+                agent_type=agent_type_req,
+                include_pii=is_admin,
+            )
+
+            if summary.status == "error":
+                error_msg = (
+                    f"Subagente '{agent_type_req}' (id={agent_id[:12]}) encontrado "
+                    f"no registro mas transcript inacessivel."
+                )
+                return {"found": False, "error": error_msg}, error_msg
+
+            response = {
+                "found": True,
+                "agent_id": summary.agent_id,
+                "agent_type": summary.agent_type or agent_type_req,
+                "status": summary.status,
+                "duration_ms": summary.duration_ms or 0,
+                "num_tools": len(summary.tools_used),
+                "findings_text": (summary.findings_text or "")[:3000],
+            }
+
+            if include_tools_detail:
+                response["tools_used"] = [
+                    {
+                        "name": t.get("name", "unknown"),
+                        "result_summary": (t.get("result_summary") or "")[:200],
+                    }
+                    for t in summary.tools_used[:20]
+                ]
+            else:
+                response["tools_used"] = []
+
+            if is_admin:
+                response["cost_usd"] = round(summary.cost_usd, 6)
+
+            # Texto formatado para o content
+            lines = [
+                f"Subagente: {response['agent_type']} | Status: {response['status']} | "
+                f"Duracao: {response['duration_ms']}ms | Tools: {response['num_tools']}\n"
+            ]
+            if response["findings_text"]:
+                lines.append(f"Findings:\n{response['findings_text']}\n")
+            if include_tools_detail and response.get("tools_used"):
+                lines.append("Tools usadas:")
+                for t in response["tools_used"]:
+                    lines.append(f"  - {t['name']}: {t['result_summary']}")
+            if is_admin and "cost_usd" in response:
+                lines.append(f"\nCusto: ${response['cost_usd']:.6f}")
+
+            return response, "\n".join(lines)
+
+        try:
+            structured, text_output = _execute_with_context(_do_transcript)
+            if not structured.get("found"):
+                return {
+                    "content": [{"type": "text", "text": structured.get("error", "Nao encontrado")}],
+                    "structuredContent": structured,
+                    "is_error": True,
+                }
+            return {
+                "content": [{"type": "text", "text": text_output}],
+                "structuredContent": structured,
+            }
+        except Exception as e:
+            logger.error(f"[SESSION_SEARCH] Erro get_subagent_transcript: {e}")
+            structured = {"found": False, "error": f"Erro interno: {str(e)[:200]}"}
+            return {
+                "content": [{"type": "text", "text": structured["error"]}],
+                "structuredContent": structured,
+                "is_error": True,
+            }
+
+    # ========================================================================
+    # MCP Server Registration (Enhanced v4.1.0)
     # ========================================================================
     sessions_server = create_enhanced_mcp_server(
         name="sessions",
-        version="4.0.0",
-        tools=[search_sessions, list_recent_sessions, semantic_search_sessions, list_session_users],
+        version="4.1.0",
+        tools=[
+            search_sessions,
+            list_recent_sessions,
+            semantic_search_sessions,
+            list_session_users,
+            get_subagent_transcript,
+        ],
     )
 
-    logger.info("[SESSION_SEARCH] Enhanced MCP 'sessions' v4.0.0 registrado (4 tools, structuredContent)")
+    logger.info("[SESSION_SEARCH] Enhanced MCP 'sessions' v4.1.0 registrado (5 tools, structuredContent)")
 
 except ImportError as e:
     sessions_server = None
