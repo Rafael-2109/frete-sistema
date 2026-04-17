@@ -235,6 +235,7 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 | **Web inatividade** | 240s | `routes/_constants.py` | Renovavel a cada evento real (heartbeats NAO renovam) |
 | **Teams inatividade** | 240s | `services.py:848` | Renovavel a cada chunk recebido |
 | SDK stream_close | 240s | `client.py:547` | Timeout CLI hooks/MCP |
+| Job `validate_subagent_output` | 60s | `hooks.py:SubagentStop enqueue` | Timeout RQ para validacao Haiku |
 | Web teto absoluto | 540s | `routes/_constants.py` | Teto absoluto SSE (Render 600s limit) |
 | Teams teto absoluto | 600s | `services.py:849` | Teto absoluto Teams |
 | Render hard limit | 600s | infra | Request timeout do servidor |
@@ -447,11 +448,14 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 - **UI linha inline expansivel** (`routes/subagents.py` + `static/agente/js/chat.js` + `static/agente/css/_subagent-inline.css`, #6): Linha dentro do fluxo da conversa com estados running/done/expanded. Lazy-fetch em `/api/sessions/<id>/subagents/<aid>/summary`. PII sanitizada via `_sanitize_subagent_summary_for_user()` em `routes/chat.py` para non-admin. Admin ve cost + raw. Flag `USE_SUBAGENT_UI`.
 - **Memory mining cross-subagent** (`services/pattern_analyzer.py`, #5): `extrair_conhecimento_sessao(include_subagents=True, session_id=...)` injeta findings dos especialistas antes da conversa principal no prompt Sonnet. Cap 2K chars/subagent. Flag `USE_SUBAGENT_MEMORY_MINING`.
 
+### Features adotadas (2026-04-17 — SDK 0.1.60 fase 4):
+- **Validacao anti-alucinacao async** (`workers/subagent_validator.py` + `sdk/hooks.py` enqueue + `routes/chat.py` pubsub subscriber, #4): `SubagentStop` hook enfileira job RQ em queue `agent_validation` (processada por `worker_render.py` e `worker_atacadao.py`). Worker carrega summary via `subagent_reader`, chama Haiku 4.5 (`claude-haiku-4-5-20251001`) com prompt estruturado comparando tool_results vs `findings_text`, parseia JSON `{score, reason, flagged_claims}` e persiste em `AgentSession.data['subagent_validations']` (JSONB v1). Se `score < SUBAGENT_VALIDATION_THRESHOLD` (default 70, env var), publica evento `subagent_validation` no canal Redis `agent_sse:<session_id>`. SSE generator em `routes/chat.py` subscreve esse canal via non-blocking `pubsub.get_message(timeout=0.0)` e emite evento ao frontend. `chat.js` renderiza icone ⚠ amarelo na linha do subagent (CSS `.validation-warning`). Flag `USE_SUBAGENT_VALIDATION` controla enqueue + subscribe. Custo: ~$0.0005/call.
+
 **PII sanitization** (`utils/pii_masker.py`): Regex conservadora CPF/CNPJ/email formatados e sem formatacao. Preserva DV/filial/dominio. Admin pula sanitizacao via `_sanitize_subagent_summary_for_user()` em `routes/chat.py`.
 
 **GOTCHA**: Global exception handler em `app/__init__.py:511` re-raise HTTPException (exceto 404). `abort(403)` NAO funciona em rotas deste app — usar `return jsonify({'success': False, 'error': '...'}), 403` inline (pattern de `admin_learning.py`).
 
-**Pendente** (fases 3-4): #2 aposentar `/tmp/subagent-findings/` (soft, mantem fallback), #4 validacao anti-alucinacao async via RQ queue `agent_validation`.
+**Pendente** (fase 3): #2 aposentar `/tmp/subagent-findings/` (soft, mantem fallback).
 
 ### Bug fixes criticos (0.1.51–0.1.53):
 - **`is_error` MCP propagado** (0.1.51): Modelo sabe quando MCP tool falhou (antes interpretava erro como sucesso)
