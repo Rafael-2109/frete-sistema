@@ -25,6 +25,11 @@ from typing import Dict, Any, List, Optional
 
 import anthropic
 from app.utils.timezone import agora_utc_naive
+
+# Feature #5 — Memory mining cross-subagent (SDK 0.1.60)
+from app.agente.config.feature_flags import USE_SUBAGENT_MEMORY_MINING
+from app.agente.sdk.subagent_reader import get_session_subagents_summary
+
 logger = logging.getLogger(__name__)
 
 
@@ -1698,10 +1703,42 @@ def _get_existing_titles() -> str:
         return ""
 
 
+def _format_subagent_findings_for_extraction(
+    subagents,
+    max_chars_per_subagent: int = 2000,
+) -> str:
+    """Formata findings de subagents para injecao no prompt Sonnet (#5)."""
+    if not subagents:
+        return ''
+
+    parts = ['## Descobertas dos Especialistas (sessao)\n']
+    for s in subagents:
+        if getattr(s, 'status', None) != 'done':
+            continue
+        duration_s = (getattr(s, 'duration_ms', 0) or 0) / 1000
+        header = (
+            f"### {s.agent_type} "
+            f"({len(s.tools_used)} tools, {duration_s:.1f}s)"
+        )
+        parts.append(header)
+        for t in s.tools_used[:5]:
+            name = t.get('name', 'unknown')
+            result = (t.get('result_summary') or '')[:150]
+            parts.append(f"- {name}: {result}")
+        if s.findings_text:
+            findings = s.findings_text[:max_chars_per_subagent]
+            parts.append(f"\nResultado: {findings}\n")
+        parts.append('')
+
+    return '\n'.join(parts)
+
+
 def extrair_conhecimento_sessao(
     app,
     user_id: int,
     session_messages: list[dict],
+    include_subagents: bool = True,
+    session_id: Optional[str] = None,
 ) -> bool:
     """
     Extrai conhecimento organizacional de TODAS as mensagens de uma sessao via Sonnet.
@@ -1723,6 +1760,20 @@ def extrair_conhecimento_sessao(
     Returns:
         True se extraiu e salvou algo, False caso contrario
     """
+    # Feature #5 — Memory mining cross-subagent (fetch antes do early-return para
+    # que o resultado possa ser reutilizado futuramente ou logado mesmo sem extracao)
+    subagent_section = ''
+    if include_subagents and USE_SUBAGENT_MEMORY_MINING and session_id:
+        try:
+            subagents_list = get_session_subagents_summary(
+                session_id, include_pii=False
+            )
+            subagent_section = _format_subagent_findings_for_extraction(
+                subagents_list
+            )
+        except Exception as e:
+            logger.debug(f"[pattern_analyzer] subagent fetch falhou: {e}")
+
     if not session_messages or len(session_messages) < 2:
         return False
 
@@ -1739,8 +1790,11 @@ def extrair_conhecimento_sessao(
         except Exception:
             pass  # Best-effort
 
-        # Construir mensagem do usuario com titulos + conversa
+        # Construir mensagem do usuario com subagents + titulos + conversa
         user_parts = []
+        if subagent_section:
+            # Injeta findings dos especialistas ANTES da conversa principal
+            user_parts.append(f"{subagent_section}\n\n## Conversa principal\n")
         if existing_titles:
             user_parts.append(f"<titulos_existentes>\n{existing_titles}\n</titulos_existentes>\n\n")
         user_parts.append(f"<conversa>\n{formatted}\n</conversa>")

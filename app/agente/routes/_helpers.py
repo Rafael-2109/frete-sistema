@@ -180,6 +180,8 @@ def run_post_session_processing(
                                 app=app,
                                 user_id=user_id,
                                 session_messages=messages_for_extraction,
+                                include_subagents=True,
+                                session_id=session_id,
                             )
                     except Exception as bg_err:
                         logger.warning(
