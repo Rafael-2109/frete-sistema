@@ -485,8 +485,8 @@ try:
         try:
             use_s3 = current_app.config.get("USE_S3", False)
             if use_s3:
-                from datetime import datetime
-                year_month = datetime.utcnow().strftime("%Y-%m")
+                from app.utils.timezone import agora_utc_naive
+                year_month = agora_utc_naive().strftime("%Y-%m")
                 folder = f"playwright-screenshots/{year_month}"
 
                 buf = BytesIO(png_bytes)
