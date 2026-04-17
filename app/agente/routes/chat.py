@@ -439,6 +439,31 @@ async def _async_stream_sdk_client(
         }))
 
 
+def _sanitize_subagent_summary_for_user(summary: dict, user) -> dict:
+    """
+    Aplica sanitizacao PII + remove cost_usd se user nao for admin.
+
+    Admin: ve tudo raw. User normal: PII mascarada, sem custo.
+    """
+    from app.agente.utils.pii_masker import mask_pii
+
+    if getattr(user, 'perfil', None) == 'administrador':
+        return dict(summary)  # copia shallow, sem alteracao
+
+    sanitized = dict(summary)
+    sanitized.pop('cost_usd', None)
+    sanitized['findings_text'] = mask_pii(sanitized.get('findings_text', ''))
+    sanitized['tools_used'] = [
+        {
+            **t,
+            'args_summary': mask_pii(t.get('args_summary', '')),
+            'result_summary': mask_pii(t.get('result_summary', '')),
+        }
+        for t in sanitized.get('tools_used', [])
+    ]
+    return sanitized
+
+
 def _stream_chat_response(
     message: str,
     original_message: str,
@@ -685,6 +710,12 @@ def _stream_chat_response(
                     event_queue.put(_sse_event('stderr', {
                         'line': event.content,
                     }))
+
+                elif event.type == 'subagent_summary':
+                    # Task 2.1 emit: payload em event.content (StreamEvent usa 'content')
+                    payload = event.content or {}
+                    sanitized = _sanitize_subagent_summary_for_user(payload, current_user)
+                    event_queue.put(_sse_event('subagent_summary', sanitized))
 
                 elif event.type == 'done':
                     message_id = event.metadata.get('message_id', '') or str(agora_utc_naive().timestamp())
