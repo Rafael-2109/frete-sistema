@@ -23,10 +23,9 @@ from app.agente.sdk.subagent_reader import (
 logger = logging.getLogger('sistema_fretes')
 
 
-def _require_admin():
-    """Aborta 403 se nao for admin. Usar como guard inicial nas rotas."""
-    if current_user.perfil != 'administrador':
-        abort(403, description='Acesso restrito a administradores')
+# NOTA: abort(403) nao funciona neste app — global exception handler
+# (app/__init__.py) re-raise HTTPException. Usar `return jsonify(), 403`
+# inline. Pattern espelha admin_learning.py.
 
 
 @agente_bp.route(
