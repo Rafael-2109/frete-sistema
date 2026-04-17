@@ -70,6 +70,24 @@ from .stream_parser import (  # noqa: E402 — re-exports para tests (patch.mult
 )
 
 
+def _emit_subagent_summary(event_queue, summary_dict: dict) -> None:
+    """
+    Emite StreamEvent('subagent_summary') na event_queue da sessao.
+
+    Chamado pelo _subagent_stop_hook apos persistir cost granular.
+    Thread-safe: event_queue e um queue.Queue() protegido por lock interno.
+    No-op se event_queue for None.
+    """
+    if event_queue is None:
+        return
+    try:
+        event_queue.put_nowait(StreamEvent(
+            type='subagent_summary',
+            content=summary_dict,
+        ))
+    except Exception as e:
+        logger.debug(f"[emit_subagent_summary] falhou: {e}")
+
 
 class AgentClient:
     """

@@ -542,6 +542,29 @@ def build_hooks(
                         f"[HOOK:SubagentStop] cost granular falhou: {granular_err}"
                     )
 
+            # #6 UI — emite subagent_summary para o frontend
+            from ..config.feature_flags import USE_SUBAGENT_UI
+            if USE_SUBAGENT_UI and session_id and agent_id:
+                try:
+                    from .subagent_reader import get_subagent_summary
+                    from .client import _emit_subagent_summary
+                    from ..config.permissions import get_event_queue
+                    event_queue = get_event_queue(session_id)
+                    if event_queue is not None:
+                        summary = get_subagent_summary(
+                            session_id=session_id,
+                            agent_id=agent_id,
+                            agent_type=agent_type,
+                            include_pii=True,  # sanitizacao na camada 2 (routes/chat.py)
+                        )
+                        _emit_subagent_summary(event_queue, summary.to_dict())
+                        logger.debug(
+                            f"[HOOK:SubagentStop] subagent_summary emitido "
+                            f"(agent_type={agent_type})"
+                        )
+                except Exception as ui_err:
+                    logger.debug(f"[HOOK:SubagentStop] emit UI falhou: {ui_err}")
+
             return {}
         except Exception as e:
             logger.debug(f"[HOOK:SubagentStop] Suppressed: {e}")
