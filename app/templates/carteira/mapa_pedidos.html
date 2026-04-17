@@ -332,6 +332,8 @@
 
         // Pedidos selecionados
         const pedidosSelecionados = {{ pedidos_selecionados| tojson }};
+        // Lotes selecionados (preferido — distingue CarVia via prefixo)
+        const lotesSelecionados = {{ lotes_selecionados| tojson if lotes_selecionados is defined else '[]' }};
 
         // Inicializar mapa
         function initMap() {
@@ -434,7 +436,10 @@
                 headers: {
                     'X-CSRFToken': getCSRFToken()
                 },
-                data: JSON.stringify({ pedidos: pedidosSelecionados }),
+                data: JSON.stringify({
+                    lotes: lotesSelecionados,
+                    pedidos: pedidosSelecionados
+                }),
                 success: function (response) {
                     if (response.sucesso) {
                         clientesData = response.clientes;
@@ -948,8 +953,8 @@
         function calcularRotaOtimizada() {
             const clientesSelecionados = getClientesSelecionados();
 
-            if (clientesSelecionados.length < 2) {
-                Swal.fire('Aviso', 'Selecione pelo menos 2 entregas para calcular a rota', 'warning');
+            if (clientesSelecionados.length < 1) {
+                Swal.fire('Aviso', 'Selecione pelo menos 1 entrega para calcular a rota', 'warning');
                 return;
             }
 

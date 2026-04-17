@@ -151,39 +151,69 @@ class MapaService:
             logger.error(f"Erro ao obter pedidos para mapa: {str(e)}")
             return []
 
-    def obter_clientes_para_mapa(self, pedido_ids: List[str]) -> List[Dict[str, Any]]:
+    def obter_clientes_para_mapa(self, pedido_ids: List[str], lotes: List[str] = None) -> List[Dict[str, Any]]:
         """
         Obtém dados dos clientes (agrupados por CNPJ + endereço) para exibição no mapa.
         Cada cliente pode ter múltiplos pedidos.
 
         FONTE DE DADOS:
-        - Valores (valor_saldo, peso, pallet): Separacao (sincronizado_nf=False OU nf_cd=True)
-          Motivo: CarteiraPrincipal.qtd_saldo_produto_pedido é zerada após separação,
-          resultando em valor 0 e peso 0 se calculado a partir dela.
-          NFs que voltaram ao CD (nf_cd=True) devem ser incluídas pois representam saldo pendente.
-        - Endereço de entrega: CarteiraPrincipal (campos cep_endereco_ent, rua_endereco_ent, etc.)
-          Motivo: Separacao não possui campos detalhados de endereço de entrega.
+        - NACOM:
+          - Valores (valor_saldo, peso, pallet): Separacao (sem filtro sincronizado_nf
+            para incluir faturados; mantém qtd_saldo > 0 ou nf_cd=True).
+          - Endereço de entrega: CarteiraPrincipal.
+        - CarVia: CarviaPedido + CarviaCotacao + CarviaClienteEndereco (endereço destino).
+          Valores via SUM(CarviaPedidoItem.valor_total).
 
         Args:
-            pedido_ids: Lista de num_pedido dos pedidos selecionados
+            pedido_ids: Lista de num_pedido (compat legado).
+            lotes: Lista de separacao_lote_id — preferido, distingue CarVia via prefixo.
 
         Returns:
             Lista de dicionários com dados dos clientes e seus pedidos
         """
         try:
-            # 1. Buscar separações ativas (fonte de verdade para valores)
-            # Inclui NFs que voltaram ao CD (nf_cd=True) — padrão busca_dados.py:100-107
-            separacoes = Separacao.query.filter(
-                Separacao.num_pedido.in_(pedido_ids),
-                Separacao.qtd_saldo > 0,
-                or_(
-                    Separacao.sincronizado_nf == False,  # Não faturadas
-                    Separacao.nf_cd == True               # NFs que voltaram ao CD
-                )
-            ).all()
+            lotes = lotes or []
+            pedido_ids = pedido_ids or []
 
-            if not separacoes:
-                logger.warning(f"Nenhuma separação ativa encontrada para pedidos: {pedido_ids}")
+            # Separar lotes CarVia (prefixo) de lotes/pedidos NACOM
+            lotes_carvia = [l for l in lotes if str(l).startswith('CARVIA-')]
+            lotes_nacom = [l for l in lotes if not str(l).startswith('CARVIA-')]
+
+            # Para compat: pedido_ids podem ser num_pedido NACOM ou CarVia (PED-*).
+            # Detectar CarVia via lookup em CarviaPedido.numero_pedido / CarviaCotacao.numero_cotacao
+            pedido_ids_nacom, pedido_ids_carvia_extra = self._classificar_pedido_ids(pedido_ids)
+
+            # Buscar nums NACOM via Separacao por separacao_lote_id (lotes_nacom)
+            # ou por num_pedido (pedido_ids_nacom)
+            sep_filters = []
+            if lotes_nacom:
+                sep_filters.append(Separacao.separacao_lote_id.in_(lotes_nacom))
+            if pedido_ids_nacom:
+                sep_filters.append(Separacao.num_pedido.in_(pedido_ids_nacom))
+
+            separacoes = []
+            if sep_filters:
+                # SEM filtro sincronizado_nf: faturados continuam tendo endereco/coords
+                # qtd_saldo > 0 OU nf_cd=True garante registros relevantes
+                separacoes = Separacao.query.filter(
+                    or_(*sep_filters),
+                    or_(
+                        Separacao.qtd_saldo > 0,
+                        Separacao.nf_cd == True,
+                        Separacao.sincronizado_nf == True,  # Faturados (saldo=0 mas tem endereco)
+                    )
+                ).all()
+
+            # Processar CarVia em paralelo
+            clientes_carvia = self._obter_clientes_carvia(
+                lotes_carvia, pedido_ids_carvia_extra
+            )
+
+            if not separacoes and not clientes_carvia:
+                logger.warning(
+                    "Nenhum dado encontrado p/ mapa: lotes=%s, pedidos=%s",
+                    lotes, pedido_ids,
+                )
                 return []
 
             # Agrupar separações por num_pedido (um pedido pode ter múltiplos itens na separação)
@@ -344,7 +374,18 @@ class MapaService:
                 clientes_dict[cliente_key]['totais']['itens'] += pedido_info['itens']
                 clientes_dict[cliente_key]['totais']['qtd_pedidos'] += 1
 
-            # 4. Geocodificar endereços e montar lista final
+            # 4. Mesclar CarVia (mesmo CNPJ+endereco = mesmo cliente_key)
+            for cv_cliente in clientes_carvia:
+                key = cv_cliente['cliente_id']
+                if key in clientes_dict:
+                    # Append pedidos do CarVia ao cliente existente
+                    clientes_dict[key]['pedidos'].extend(cv_cliente['pedidos'])
+                    for k in ('valor', 'peso', 'pallet', 'itens', 'qtd_pedidos'):
+                        clientes_dict[key]['totais'][k] += cv_cliente['totais'].get(k, 0)
+                else:
+                    clientes_dict[key] = cv_cliente
+
+            # 5. Geocodificar endereços e montar lista final
             clientes_mapa = []
 
             for cliente_key, cliente_data in clientes_dict.items():
@@ -365,6 +406,240 @@ class MapaService:
 
         except Exception as e:
             logger.error(f"Erro ao obter clientes para mapa: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return []
+
+    # ---------------------------------------------------------------
+    # CarVia helpers
+    # ---------------------------------------------------------------
+    def _classificar_pedido_ids(self, pedido_ids: List[str]) -> Tuple[List[str], List[str]]:
+        """Separa pedido_ids legados em (NACOM, CarVia) via lookup nas tabelas CarVia.
+
+        Retorna (nacom_ids, carvia_ids). carvia_ids contem numero_pedido CarVia
+        (PED-*) ou numero_cotacao (COT-*) — usado pelo _obter_clientes_carvia.
+        """
+        if not pedido_ids:
+            return [], []
+        try:
+            from app.carvia.models import CarviaPedido, CarviaCotacao
+            cv_peds = {
+                r[0] for r in db.session.query(CarviaPedido.numero_pedido).filter(
+                    CarviaPedido.numero_pedido.in_(pedido_ids)
+                ).all()
+            }
+            cv_cots = {
+                r[0] for r in db.session.query(CarviaCotacao.numero_cotacao).filter(
+                    CarviaCotacao.numero_cotacao.in_(pedido_ids)
+                ).all()
+            }
+            carvia_ids = list(cv_peds | cv_cots)
+            nacom_ids = [p for p in pedido_ids if p not in cv_peds and p not in cv_cots]
+            return nacom_ids, carvia_ids
+        except Exception as e:
+            logger.warning("Erro classificando pedido_ids CarVia: %s", e)
+            return list(pedido_ids), []
+
+    def _obter_clientes_carvia(
+        self, lotes_carvia: List[str], numeros_carvia_extra: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Busca pedidos/cotacoes CarVia e retorna no formato de cliente.
+
+        Aceita:
+          - lotes_carvia: 'CARVIA-PED-{ped_id}' ou 'CARVIA-{cot_id}'
+          - numeros_carvia_extra: numero_pedido (PED-*) ou numero_cotacao
+        """
+        if not lotes_carvia and not numeros_carvia_extra:
+            return []
+
+        try:
+            from app.carvia.models import (
+                CarviaPedido, CarviaPedidoItem, CarviaCotacao,
+                CarviaClienteEndereco,
+            )
+
+            # Resolver IDs de pedidos e cotacoes a partir dos lotes
+            ped_ids = set()
+            cot_ids = set()
+            for lote in lotes_carvia:
+                try:
+                    s = str(lote)
+                    if s.startswith('CARVIA-PED-'):
+                        ped_ids.add(int(s.replace('CARVIA-PED-', '')))
+                    elif s.startswith('CARVIA-'):
+                        cot_ids.add(int(s.replace('CARVIA-', '')))
+                except (ValueError, TypeError):
+                    pass
+
+            # Resolver numeros extra (compat — quando JS enviou num_pedido)
+            if numeros_carvia_extra:
+                rows_p = CarviaPedido.query.filter(
+                    CarviaPedido.numero_pedido.in_(numeros_carvia_extra)
+                ).all()
+                for cp in rows_p:
+                    ped_ids.add(cp.id)
+                rows_c = CarviaCotacao.query.filter(
+                    CarviaCotacao.numero_cotacao.in_(numeros_carvia_extra)
+                ).all()
+                for cc in rows_c:
+                    cot_ids.add(cc.id)
+
+            # Buscar pedidos CarVia
+            pedidos_cv = []
+            if ped_ids:
+                pedidos_cv = CarviaPedido.query.filter(
+                    CarviaPedido.id.in_(list(ped_ids))
+                ).all()
+
+            # Cotacoes alvo: explicit (cot_ids) + as cotacoes dos pedidos
+            cot_ids_alvo = set(cot_ids)
+            for p in pedidos_cv:
+                if p.cotacao_id:
+                    cot_ids_alvo.add(p.cotacao_id)
+
+            cotacoes_dict = {}
+            if cot_ids_alvo:
+                cots = CarviaCotacao.query.filter(
+                    CarviaCotacao.id.in_(list(cot_ids_alvo))
+                ).all()
+                cotacoes_dict = {c.id: c for c in cots}
+
+            # Buscar enderecos destino em batch
+            endereco_ids = {
+                c.endereco_destino_id for c in cotacoes_dict.values()
+                if c.endereco_destino_id
+            }
+            enderecos_dict = {}
+            if endereco_ids:
+                rows = CarviaClienteEndereco.query.filter(
+                    CarviaClienteEndereco.id.in_(list(endereco_ids))
+                ).all()
+                enderecos_dict = {e.id: e for e in rows}
+
+            # Buscar valores agregados por pedido (SUM CarviaPedidoItem.valor_total)
+            valores_por_ped = {}
+            if ped_ids:
+                rows = db.session.query(
+                    CarviaPedidoItem.pedido_id,
+                    func.coalesce(func.sum(CarviaPedidoItem.valor_total), 0).label('valor'),
+                    func.count(CarviaPedidoItem.id).label('itens'),
+                ).filter(
+                    CarviaPedidoItem.pedido_id.in_(list(ped_ids))
+                ).group_by(CarviaPedidoItem.pedido_id).all()
+                for pid, valor, itens in rows:
+                    valores_por_ped[pid] = (float(valor or 0), int(itens or 0))
+
+            # Montar dict de clientes
+            clientes_dict = {}
+
+            def _add_to_cliente(end_obj, pedido_info):
+                """Adiciona pedido_info ao cliente derivado de end_obj."""
+                if not end_obj:
+                    return
+                cnpj = (end_obj.cnpj or '').strip()
+                cep = (end_obj.fisico_cep or '').strip()
+                numero = (end_obj.fisico_numero or '').strip()
+                key = hashlib.md5(f"{cnpj}_{cep}_{numero}".encode()).hexdigest()[:12]
+
+                if key not in clientes_dict:
+                    partes = []
+                    if end_obj.fisico_logradouro:
+                        partes.append(end_obj.fisico_logradouro)
+                    if numero:
+                        partes.append(f"nº {numero}")
+                    if end_obj.fisico_bairro:
+                        partes.append(end_obj.fisico_bairro)
+                    if end_obj.fisico_cidade:
+                        partes.append(end_obj.fisico_cidade)
+                    if end_obj.fisico_uf:
+                        partes.append(end_obj.fisico_uf)
+                    if cep:
+                        partes.append(f"CEP {cep}")
+                    partes.append("Brasil")
+                    endereco_completo = ", ".join(filter(None, partes))
+
+                    clientes_dict[key] = {
+                        'cliente_id': key,
+                        'cliente': {
+                            'cnpj': cnpj,
+                            'nome': end_obj.razao_social or 'Cliente CarVia',
+                            'telefone': None,
+                        },
+                        'endereco': {
+                            'completo': endereco_completo,
+                            'rua': end_obj.fisico_logradouro,
+                            'numero': numero,
+                            'bairro': end_obj.fisico_bairro,
+                            'cidade': end_obj.fisico_cidade,
+                            'uf': end_obj.fisico_uf,
+                            'cep': cep,
+                        },
+                        'pedidos': [],
+                        'totais': {
+                            'valor': 0, 'peso': 0, 'pallet': 0,
+                            'itens': 0, 'qtd_pedidos': 0,
+                        },
+                        'coordenadas': None,
+                    }
+
+                clientes_dict[key]['pedidos'].append(pedido_info)
+                clientes_dict[key]['totais']['valor'] += pedido_info['valor']
+                clientes_dict[key]['totais']['peso'] += pedido_info['peso']
+                clientes_dict[key]['totais']['pallet'] += pedido_info['pallet']
+                clientes_dict[key]['totais']['itens'] += pedido_info['itens']
+                clientes_dict[key]['totais']['qtd_pedidos'] += 1
+
+            # Adicionar pedidos
+            for p in pedidos_cv:
+                cot = cotacoes_dict.get(p.cotacao_id)
+                if not cot:
+                    continue
+                end = enderecos_dict.get(cot.endereco_destino_id)
+                valor, itens = valores_por_ped.get(p.id, (0.0, 0))
+                pedido_info = {
+                    'num_pedido': p.numero_pedido,
+                    'valor': valor,
+                    'peso': 0.0,  # CarVia: peso e proporcional/cubado — calculo distinto
+                    'pallet': 0.0,
+                    'itens': itens,
+                    'observacoes': cot.observacoes if cot else None,
+                    'expedicao': cot.data_expedicao.strftime('%d/%m/%Y') if cot and cot.data_expedicao else None,
+                    'agendamento': cot.data_agenda.strftime('%d/%m/%Y') if cot and cot.data_agenda else None,
+                    'agendamento_confirmado': False,
+                    'protocolo': None,
+                    'separacao_lote_id': f'CARVIA-PED-{p.id}',
+                }
+                _add_to_cliente(end, pedido_info)
+
+            # Adicionar cotacoes "soltas" (sem pedido — CARVIA-{cot_id})
+            for cot_id in cot_ids:
+                cot = cotacoes_dict.get(cot_id)
+                if not cot:
+                    continue
+                # Skip se já adicionada via pedido
+                ja_via_pedido = any(p.cotacao_id == cot_id for p in pedidos_cv)
+                if ja_via_pedido:
+                    continue
+                end = enderecos_dict.get(cot.endereco_destino_id)
+                pedido_info = {
+                    'num_pedido': cot.numero_cotacao,
+                    'valor': float(cot.valor_mercadoria or 0),
+                    'peso': 0.0,
+                    'pallet': 0.0,
+                    'itens': 0,
+                    'observacoes': cot.observacoes,
+                    'expedicao': cot.data_expedicao.strftime('%d/%m/%Y') if cot.data_expedicao else None,
+                    'agendamento': cot.data_agenda.strftime('%d/%m/%Y') if cot.data_agenda else None,
+                    'agendamento_confirmado': False,
+                    'protocolo': None,
+                    'separacao_lote_id': f'CARVIA-{cot.id}',
+                }
+                _add_to_cliente(end, pedido_info)
+
+            return list(clientes_dict.values())
+
+        except Exception as e:
+            logger.error("Erro ao obter clientes CarVia: %s", e)
             import traceback
             logger.error(traceback.format_exc())
             return []

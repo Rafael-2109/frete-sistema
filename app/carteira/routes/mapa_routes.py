@@ -23,25 +23,33 @@ mapa_service = MapaService()
 @bp.route('/visualizar')
 @login_required
 def visualizar_mapa():
-    """Página principal de visualização no mapa"""
+    """Página principal de visualização no mapa.
+
+    Aceita ?lotes[]=... (preferido — separacao_lote_id, distingue CarVia)
+    ou ?pedidos[]=... (legado — num_pedido).
+    """
     try:
         # Obter API key para o template
         api_key = os.getenv('GOOGLE_MAPS_API_KEY', '')
-        
-        # Obter pedidos selecionados da sessão ou query string
+
+        # Preferir lotes (separacao_lote_id) — robusto para NACOM + CarVia
+        lotes_selecionados = request.args.getlist('lotes[]')
+        # Compat: aceitar pedidos[] (legado, num_pedido)
         pedidos_selecionados = request.args.getlist('pedidos[]')
-        
-        if not pedidos_selecionados:
+
+        if not lotes_selecionados and not pedidos_selecionados:
             # Tentar obter da sessão
+            lotes_selecionados = session.get('lotes_selecionados_mapa', [])
             pedidos_selecionados = session.get('pedidos_selecionados_mapa', [])
-            
+
         return render_template(
             'carteira/mapa_pedidos.html',
             api_key=api_key,
             pedidos_selecionados=pedidos_selecionados,
+            lotes_selecionados=lotes_selecionados,
             usuario=current_user
         )
-        
+
     except Exception as e:
         logger.error(f"Erro ao carregar página do mapa: {str(e)}")
         return f"Erro ao carregar mapa: {str(e)}", 500
@@ -90,19 +98,28 @@ def obter_pedidos_mapa():
 @bp.route('/api/clientes', methods=['POST'])
 @login_required
 def obter_clientes_mapa():
-    """API para obter dados dos clientes (agrupados por CNPJ+endereço) para o mapa"""
-    try:
-        data = request.get_json()
-        pedido_ids = data.get('pedidos', [])
+    """API para obter dados dos clientes (agrupados por CNPJ+endereço) para o mapa.
 
-        if not pedido_ids:
+    Body JSON:
+      - lotes: lista de separacao_lote_id (preferido — distingue CarVia via prefixo)
+      - pedidos: lista de num_pedido (legado/compat)
+    """
+    try:
+        data = request.get_json() or {}
+        lotes = data.get('lotes', []) or []
+        pedido_ids = data.get('pedidos', []) or []
+
+        if not lotes and not pedido_ids:
             return jsonify({'erro': 'Nenhum pedido selecionado'}), 400
 
         # Salvar na sessão para uso posterior
+        session['lotes_selecionados_mapa'] = lotes
         session['pedidos_selecionados_mapa'] = pedido_ids
 
-        # Obter dados dos clientes agrupados
-        clientes = mapa_service.obter_clientes_para_mapa(pedido_ids)
+        # Obter dados dos clientes agrupados (suporta NACOM + CarVia)
+        clientes = mapa_service.obter_clientes_para_mapa(
+            pedido_ids, lotes=lotes
+        )
 
         if not clientes:
             return jsonify({'erro': 'Nenhum cliente encontrado com endereço válido'}), 404

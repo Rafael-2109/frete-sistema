@@ -184,6 +184,17 @@ class PedidosCounterService:
         """
         Calcula contadores de status + agend_pendente em UMA UNICA QUERY com CASE WHEN.
         Substitui ~8 queries individuais (inclui agend_pendente que era query separada).
+
+        Semantica unificada NACOM + CarVia:
+          - abertos    = NACOM + CarVia (sem embarque)
+          - cotados    = NACOM + CarVia (em embarque sem data_embarque)
+          - faturados  = APENAS NACOM (CarVia nao entra)
+          - atrasados / sem_data / pend_embarque = NACOM + CarVia
+          - nf_cd      = APENAS NACOM (flag exclusiva NACOM)
+
+        NACOM filtra com `~CARVIA-%` para evitar capturar CarVia por engano
+        (CarVia 2B na VIEW pedidos tem `nf` preenchida assim que NF e anexada).
+        CarVia e contado via `_carvia_lotes_por_status` (sets reais de embarque).
         """
         M = _get_model()
         # Expressao agend_pendente (incorporada aqui para evitar scan extra da VIEW)
@@ -196,21 +207,26 @@ class PedidosCounterService:
                 ((M.nf.is_(None)) | (M.nf == "")) &
                 (M.data_embarque.is_(None)) &
                 ((M.cod_uf == 'SP') | (M.rota == 'FOB')) &
-                (~cnpj_raiz.in_(CNPJS_EXCLUIR_AGENDAMENTO))
+                (~cnpj_raiz.in_(CNPJS_EXCLUIR_AGENDAMENTO)) &
+                (~M.separacao_lote_id.like('CARVIA-%'))
             )
         else:
             agend_expr = M.separacao_lote_id == 'IMPOSSIVEL'
 
+        # NACOM: tudo o que NAO e CarVia
+        nao_carvia = ~M.separacao_lote_id.like('CARVIA-%')
+
         resultado = db.session.query(
-            # 0: todos
+            # 0: todos (NACOM + CarVia)
             func.count(),
-            # 1: abertos (inclui nf_cd=True)
+            # 1: abertos NACOM (nao inclui CarVia — somado depois)
             func.count(case(
-                ((M.status == 'ABERTO') | (M.nf_cd == True), 1)
+                (nao_carvia & ((M.status == 'ABERTO') | (M.nf_cd == True)), 1)
             )),
-            # 2: cotados
+            # 2: cotados NACOM (nao inclui CarVia — somado depois)
             func.count(case(
                 (
+                    nao_carvia &
                     (M.cotacao_id.isnot(None)) &
                     (M.data_embarque.is_(None)) &
                     ((M.nf.is_(None)) | (M.nf == "")) &
@@ -218,13 +234,14 @@ class PedidosCounterService:
                     1
                 )
             )),
-            # 3: nf_cd
+            # 3: nf_cd (apenas NACOM)
             func.count(case(
-                (M.nf_cd == True, 1)
+                (nao_carvia & (M.nf_cd == True), 1)
             )),
-            # 4: atrasados
+            # 4: atrasados NACOM
             func.count(case(
                 (
+                    nao_carvia &
                     (
                         ((M.cotacao_id.isnot(None)) & (M.data_embarque.is_(None)) & ((M.nf.is_(None)) | (M.nf == ""))) |
                         ((M.cotacao_id.is_(None)) & ((M.nf.is_(None)) | (M.nf == "")))
@@ -235,16 +252,18 @@ class PedidosCounterService:
                     1
                 )
             )),
-            # 5: atrasados_abertos
+            # 5: atrasados_abertos NACOM
             func.count(case(
                 (
+                    nao_carvia &
                     (M.status == 'ABERTO') & (M.expedicao < hoje),
                     1
                 )
             )),
-            # 6: sem_data
+            # 6: sem_data NACOM
             func.count(case(
                 (
+                    nao_carvia &
                     (M.expedicao.is_(None)) &
                     (M.nf_cd == False) &
                     ((M.nf.is_(None)) | (M.nf == "")) &
@@ -252,35 +271,115 @@ class PedidosCounterService:
                     1
                 )
             )),
-            # 7: pend_embarque (sem data_embarque — inclui NF no CD)
+            # 7: pend_embarque NACOM (sem data_embarque — inclui NF no CD)
             func.count(case(
-                (M.data_embarque.is_(None), 1)
+                (nao_carvia & (M.data_embarque.is_(None)), 1)
             )),
-            # 8: faturados (tem NF preenchida, nao esta no CD)
+            # 8: faturados (APENAS NACOM — CarVia nao entra)
             func.count(case(
                 (
+                    nao_carvia &
                     (M.nf.isnot(None)) & (M.nf != "") &
                     (M.nf_cd == False),
                     1
                 )
             )),
-            # 9: agend_pendente (era query separada — _contar_agend_pendente)
+            # 9: agend_pendente (apenas NACOM)
             func.count(case(
                 (agend_expr, 1)
             )),
         ).one()
 
+        # Contadores CarVia (sets reais via EmbarqueItem) + condicoes (atrasados/sem_data)
+        carvia_counts = PedidosCounterService._calcular_contadores_carvia(hoje)
+
         return {
             'todos': resultado[0] or 0,
-            'abertos': resultado[1] or 0,
-            'cotados': resultado[2] or 0,
-            'nf_cd': resultado[3] or 0,
-            'atrasados': resultado[4] or 0,
-            'atrasados_abertos': resultado[5] or 0,
-            'sem_data': resultado[6] or 0,
-            'pend_embarque': resultado[7] or 0,
-            'faturados': resultado[8] or 0,
-            'agend_pendente': resultado[9] or 0,
+            'abertos': (resultado[1] or 0) + carvia_counts['abertos'],
+            'cotados': (resultado[2] or 0) + carvia_counts['cotados'],
+            'nf_cd': resultado[3] or 0,  # NACOM apenas
+            'atrasados': (resultado[4] or 0) + carvia_counts['atrasados'],
+            'atrasados_abertos': resultado[5] or 0,  # NACOM apenas (legado)
+            'sem_data': (resultado[6] or 0) + carvia_counts['sem_data'],
+            'pend_embarque': (resultado[7] or 0) + carvia_counts['pend_embarque'],
+            'faturados': resultado[8] or 0,  # APENAS NACOM (CarVia nao entra)
+            'agend_pendente': resultado[9] or 0,  # NACOM apenas
+        }
+
+    @staticmethod
+    def _calcular_contadores_carvia(hoje) -> Dict[str, int]:
+        """Calcula contadores CarVia usando sets reais de EmbarqueItem.
+
+        Estrutura:
+          - abertos    = total CarVia - cotados - embarcados
+          - cotados    = len(set cotado)
+          - atrasados  = lotes nao embarcados com expedicao < hoje
+          - sem_data   = lotes nao embarcados com expedicao IS NULL
+          - pend_embarque = total CarVia - embarcados
+        """
+        from app.pedidos.services.lista_service import ListaPedidosService
+        M = _get_model()
+        carvia_sets = ListaPedidosService._carvia_lotes_por_status()
+        cotados_set = carvia_sets['cotado']
+        embarcados_set = carvia_sets['embarcado']
+        cotados = list(cotados_set) or ['_NONE_']
+        embarcados = list(embarcados_set) or ['_NONE_']
+
+        # Query unica para totais CarVia (4 contadores)
+        carvia_prefix = M.separacao_lote_id.like('CARVIA-%')
+        nao_embarcado = M.separacao_lote_id.notin_(embarcados)
+        nao_cotado_nao_embarcado = (
+            M.separacao_lote_id.notin_(cotados) &
+            M.separacao_lote_id.notin_(embarcados)
+        )
+
+        try:
+            row = db.session.query(
+                func.count(case((carvia_prefix, 1))),  # 0: total CarVia
+                func.count(case((carvia_prefix & nao_cotado_nao_embarcado, 1))),  # 1: abertos
+                func.count(case(
+                    (carvia_prefix & nao_embarcado & (M.expedicao < hoje), 1)
+                )),  # 2: atrasados
+                func.count(case(
+                    (carvia_prefix & nao_embarcado & M.expedicao.is_(None), 1)
+                )),  # 3: sem_data
+            ).one()
+            total_carvia = row[0] or 0
+            abertos = row[1] or 0
+            atrasados = row[2] or 0
+            sem_data = row[3] or 0
+        except Exception as e:
+            logger.warning("Erro contadores CarVia: %s", e)
+            return {'abertos': 0, 'cotados': 0, 'atrasados': 0,
+                    'sem_data': 0, 'pend_embarque': 0}
+
+        # cotados = lotes em set cotado E presentes na VIEW
+        try:
+            cotados_count = 0
+            if cotados_set:
+                cotados_count = db.session.query(func.count()).filter(
+                    M.separacao_lote_id.in_(list(cotados_set))
+                ).scalar() or 0
+        except Exception:
+            cotados_count = 0
+
+        # pend_embarque = total CarVia - embarcados na VIEW
+        embarcados_count_view = 0
+        if embarcados_set:
+            try:
+                embarcados_count_view = db.session.query(func.count()).filter(
+                    M.separacao_lote_id.in_(list(embarcados_set))
+                ).scalar() or 0
+            except Exception:
+                embarcados_count_view = 0
+        pend_embarque = max(0, total_carvia - embarcados_count_view)
+
+        return {
+            'abertos': abertos,
+            'cotados': cotados_count,
+            'atrasados': atrasados,
+            'sem_data': sem_data,
+            'pend_embarque': pend_embarque,
         }
 
     @staticmethod

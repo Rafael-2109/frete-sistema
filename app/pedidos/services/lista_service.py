@@ -145,15 +145,16 @@ class ListaPedidosService:
     @staticmethod
     def _apply_conditions(query, active_conds, hoje,
                           cnpjs_agendamento=None,
-                          lotes_item=None, lotes_pgto=None):
+                          lotes_item=None, lotes_pgto=None,
+                          carvia_sets=None):
         """Aplica filtros de condicao (AND) na query."""
         Svc = ListaPedidosService
         if active_conds.get('cond_atrasados'):
-            query = query.filter(Svc._filtro_cond_atrasados(hoje))
+            query = query.filter(Svc._filtro_cond_atrasados(hoje, carvia_sets))
         if active_conds.get('cond_sem_data'):
-            query = query.filter(Svc._filtro_cond_sem_data())
+            query = query.filter(Svc._filtro_cond_sem_data(carvia_sets))
         if active_conds.get('cond_pend_embarque'):
-            query = query.filter(Pedido.data_embarque.is_(None))
+            query = query.filter(Svc._filtro_cond_pend_embarque(carvia_sets))
         if active_conds.get('cond_agend_pendente'):
             query = Svc._apply_cond_agend_pendente(query, cnpjs_agendamento)
         if active_conds.get('cond_ag_pagamento'):
@@ -223,7 +224,8 @@ class ListaPedidosService:
         query = Svc._apply_conditions(query, p['active_conds'], hoje,
                                       cnpjs_validos_agendamento,
                                       lotes_falta_item_ids,
-                                      lotes_falta_pagamento_ids)
+                                      lotes_falta_pagamento_ids,
+                                      carvia_sets=carvia_sets)
         query = Svc._apply_date_range(query, p['dates'])
         query = Svc._apply_refinements(query, p['refinements'])
         return query
@@ -256,7 +258,8 @@ class ListaPedidosService:
         q_s = Svc._apply_refinements(q_s, p['refinements'])
         q_s = Svc._apply_date_range(q_s, p['dates'])
         q_s = Svc._apply_conditions(q_s, p['active_conds'], hoje,
-                                    cnpjs_agendamento, lotes_item, lotes_pgto)
+                                    cnpjs_agendamento, lotes_item, lotes_pgto,
+                                    carvia_sets=carvia_sets)
 
         # Contadores usam _get_status_filter (cobre NACOM + CarVia)
         f_aberto = Svc._get_status_filter('aberto', carvia_sets)
@@ -280,9 +283,9 @@ class ListaPedidosService:
         q_c = Svc._apply_statuses(q_c, p['status_list'], carvia_sets)
 
         cr = q_c.with_entities(
-            func.count(case((Svc._filtro_cond_atrasados(hoje), 1))),
-            func.count(case((Svc._filtro_cond_sem_data(), 1))),
-            func.count(case((Pedido.data_embarque.is_(None), 1))),
+            func.count(case((Svc._filtro_cond_atrasados(hoje, carvia_sets), 1))),
+            func.count(case((Svc._filtro_cond_sem_data(carvia_sets), 1))),
+            func.count(case((Svc._filtro_cond_pend_embarque(carvia_sets), 1))),
             func.count(case((Svc._expr_cond_agend_pendente(cnpjs_agendamento), 1))),
             func.count(case((Svc._expr_cond_lotes(lotes_pgto), 1))),
             func.count(case((Svc._expr_cond_lotes(lotes_item), 1))),
@@ -294,7 +297,8 @@ class ListaPedidosService:
         q_d = Svc._apply_refinements(q_d, p['refinements'])
         q_d = Svc._apply_statuses(q_d, p['status_list'], carvia_sets)
         q_d = Svc._apply_conditions(q_d, p['active_conds'], hoje,
-                                    cnpjs_agendamento, lotes_item, lotes_pgto)
+                                    cnpjs_agendamento, lotes_item, lotes_pgto,
+                                    carvia_sets=carvia_sets)
 
         datas = [hoje + timedelta(days=i) for i in range(4)]
         date_cases = [func.count(case((func.date(Pedido.expedicao) == d, 1))) for d in datas]
@@ -425,19 +429,29 @@ class ListaPedidosService:
     def _get_status_filter(status_key, carvia_sets=None):
         """Retorna clausula WHERE para um status individual.
 
-        Inclui OR para pedidos CarVia (Pedido.separacao_lote_id LIKE 'CARVIA-%')
-        usando os sets pre-computados em `_carvia_lotes_por_status`.
-        Se `carvia_sets` nao for fornecido, calcula on-demand (evitar chamar
-        repetidamente em loops — passe explicitamente em funcoes de alta carga).
+        Semantica unificada NACOM + CarVia (definicao baseada em embarque):
+          - aberto    = SEM embarque ativo
+          - cotado    = EM embarque ativo, sem data_embarque
+          - faturado  = APENAS NACOM (nf preenchida e nao no CD)
+          - nf_cd     = nf_cd=True (NACOM)
+
+        CarVia EMBARCADO (com data_embarque) nao cai em nenhum dos 3 filtros
+        de status: aparece apenas na lista "Todos" e nos filtros de condicao.
+
+        NACOM filtra com `~CARVIA-%` para evitar capturar CarVia por engano
+        (CarVia 2B na VIEW pedidos tem `nf` preenchida assim que NF e anexada).
         """
         if carvia_sets is None:
             carvia_sets = ListaPedidosService._carvia_lotes_por_status()
         cotados = list(carvia_sets['cotado']) or ['_NONE_']
         embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
         carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+        nao_carvia = ~carvia_prefix
 
         if status_key == 'aberto':
-            nacom = Pedido.status == 'ABERTO'
+            # NACOM: status=ABERTO E nao e CarVia
+            nacom = db.and_(nao_carvia, Pedido.status == 'ABERTO')
+            # CarVia: lote NAO esta em set cotado nem embarcado
             carvia = db.and_(
                 carvia_prefix,
                 Pedido.separacao_lote_id.notin_(cotados),
@@ -445,36 +459,46 @@ class ListaPedidosService:
             )
             return db.or_(nacom, carvia)
         elif status_key == 'cotado':
+            # NACOM: tem cotacao_id, sem data_embarque, sem nf, nao e CarVia
             nacom = db.and_(
+                nao_carvia,
                 Pedido.cotacao_id.isnot(None),
                 Pedido.data_embarque.is_(None),
                 (Pedido.nf.is_(None)) | (Pedido.nf == ""),
                 Pedido.nf_cd == False
             )
+            # CarVia: lote em set cotado (embarque sem data_embarque)
             carvia = db.and_(
                 carvia_prefix,
                 Pedido.separacao_lote_id.in_(cotados),
             )
             return db.or_(nacom, carvia)
         elif status_key == 'faturado':
-            nacom = db.and_(
+            # APENAS NACOM (CarVia embarcado nao entra)
+            return db.and_(
+                nao_carvia,
                 (Pedido.nf.isnot(None)) & (Pedido.nf != ""),
                 Pedido.nf_cd == False
             )
-            # CarVia: faturado = embarque saiu (tem NF expandida embarcada)
-            carvia = db.and_(
-                carvia_prefix,
-                Pedido.separacao_lote_id.in_(embarcados),
-            )
-            return db.or_(nacom, carvia)
         elif status_key == 'nf_cd':
             return Pedido.nf_cd == True
         return None
 
     @staticmethod
-    def _filtro_cond_atrasados(hoje):
-        """Expression: pedidos atrasados (sem NF, expedicao < hoje)."""
-        return db.and_(
+    def _filtro_cond_atrasados(hoje, carvia_sets=None):
+        """Expression: pedidos atrasados (expedicao < hoje, ainda nao saiu).
+
+        NACOM: sem NF, sem data_embarque, expedicao < hoje
+        CarVia: lote NAO em set embarcado, expedicao < hoje
+        """
+        if carvia_sets is None:
+            carvia_sets = ListaPedidosService._carvia_lotes_por_status()
+        embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
+        carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+        nao_carvia = ~carvia_prefix
+
+        nacom = db.and_(
+            nao_carvia,
             db.or_(
                 db.and_(Pedido.cotacao_id.isnot(None), Pedido.data_embarque.is_(None),
                         (Pedido.nf.is_(None)) | (Pedido.nf == "")),
@@ -485,16 +509,60 @@ class ListaPedidosService:
             Pedido.expedicao < hoje,
             (Pedido.nf.is_(None)) | (Pedido.nf == "")
         )
+        carvia = db.and_(
+            carvia_prefix,
+            Pedido.separacao_lote_id.notin_(embarcados),
+            Pedido.expedicao < hoje,
+        )
+        return db.or_(nacom, carvia)
 
     @staticmethod
-    def _filtro_cond_sem_data():
-        """Expression: pedidos sem data de expedicao."""
-        return db.and_(
+    def _filtro_cond_sem_data(carvia_sets=None):
+        """Expression: pedidos sem data de expedicao.
+
+        NACOM: expedicao IS NULL e ainda nao saiu/faturou
+        CarVia: expedicao IS NULL e lote NAO em set embarcado
+        """
+        if carvia_sets is None:
+            carvia_sets = ListaPedidosService._carvia_lotes_por_status()
+        embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
+        carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+        nao_carvia = ~carvia_prefix
+
+        nacom = db.and_(
+            nao_carvia,
             Pedido.expedicao.is_(None),
             Pedido.nf_cd == False,
             (Pedido.nf.is_(None)) | (Pedido.nf == ""),
             Pedido.data_embarque.is_(None)
         )
+        carvia = db.and_(
+            carvia_prefix,
+            Pedido.expedicao.is_(None),
+            Pedido.separacao_lote_id.notin_(embarcados),
+        )
+        return db.or_(nacom, carvia)
+
+    @staticmethod
+    def _filtro_cond_pend_embarque(carvia_sets=None):
+        """Expression: pedidos pendentes de embarque (sem data_embarque).
+
+        NACOM: data_embarque IS NULL (inclui NF no CD)
+        CarVia: lote NAO em set embarcado (VIEW expoe data_embarque sempre NULL
+        para CarVia, entao usar set para coerencia).
+        """
+        if carvia_sets is None:
+            carvia_sets = ListaPedidosService._carvia_lotes_por_status()
+        embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
+        carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+        nao_carvia = ~carvia_prefix
+
+        nacom = db.and_(nao_carvia, Pedido.data_embarque.is_(None))
+        carvia = db.and_(
+            carvia_prefix,
+            Pedido.separacao_lote_id.notin_(embarcados),
+        )
+        return db.or_(nacom, carvia)
 
     @staticmethod
     def _expr_cond_agend_pendente(cnpjs_agendamento):

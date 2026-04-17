@@ -11,15 +11,12 @@ function abrirMapaPedidos() {
         return false;
     }
 
-    const pedidoNumeros = [];
-    selectedCheckboxes.forEach(checkbox => {
-        const row = checkbox.closest('tr');
-        const numPedido = row.querySelector('td:nth-child(3) strong').textContent.trim();
-        pedidoNumeros.push(numPedido);
-    });
-
+    // Enviar separacao_lote_id (robusto p/ NACOM e CarVia: distingue prefixo CARVIA-)
+    // Backend aceita ambos: ?lotes[]=... (preferido) ou ?pedidos[]=... (legado)
     const params = new URLSearchParams();
-    pedidoNumeros.forEach(num => params.append('pedidos[]', num));
+    selectedCheckboxes.forEach(checkbox => {
+        params.append('lotes[]', checkbox.value);
+    });
 
     const url = '/carteira/mapa/visualizar?' + params.toString();
     window.open(url, '_blank');
