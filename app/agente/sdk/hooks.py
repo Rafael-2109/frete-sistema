@@ -534,8 +534,22 @@ def build_hooks(
             if USE_SUBAGENT_COST_GRANULAR and session_id and agent_id:
                 try:
                     import json as _json
+                    from contextlib import nullcontext
                     from app import db
                     from sqlalchemy import text as _sql_text
+
+                    # GOTCHA 2026-04-17: Hooks async do SDK rodam FORA do Flask
+                    # app context. `db.session.execute` sem context explode com
+                    # RuntimeError("Working outside of application context").
+                    # Padrao adotado em memory_injection.py:620-630.
+                    try:
+                        from flask import current_app as _app_probe
+                        _ = _app_probe.name
+                        _app_ctx = nullcontext()
+                    except RuntimeError:
+                        from app import create_app as _create_app
+                        _hook_app = _create_app()
+                        _app_ctx = _hook_app.app_context()
 
                     # Obter metadata — ResultMessage (compat forward) OU
                     # compute do JSONL (subagent real SDK 0.1.60)
@@ -595,33 +609,47 @@ def build_hooks(
                         # e atomico por row em PostgreSQL: acquire lock, read,
                         # compute, write — UPDATE subsequente espera lock.
                         # Inicializa bucket se ausente (COALESCE).
-                        result = db.session.execute(
-                            _sql_text("""
-                                UPDATE agent_sessions
-                                SET data = jsonb_set(
-                                    COALESCE(data, '{}'::jsonb),
-                                    '{subagent_costs}',
-                                    jsonb_build_object(
-                                        'version', 2,
-                                        'entries',
-                                        COALESCE(
-                                            data->'subagent_costs'->'entries',
-                                            '[]'::jsonb
-                                        ) || :entry_json::jsonb
-                                    ),
-                                    true
-                                )
-                                WHERE session_id = :sid
-                            """),
-                            {
-                                'sid': session_id,
-                                'entry_json': _json.dumps(entry),
-                            }
+                        #
+                        # B15 fix (2026-04-17): hook async roda FORA do Flask
+                        # app context. Envolver em `with _app_ctx` resolve
+                        # RuntimeError("Working outside of application context").
+                        # Mesmo padrao que _session_archive_hook usa.
+                        with _app_ctx:
+                            result = db.session.execute(
+                                _sql_text("""
+                                    UPDATE agent_sessions
+                                    SET data = jsonb_set(
+                                        COALESCE(data, '{}'::jsonb),
+                                        '{subagent_costs}',
+                                        jsonb_build_object(
+                                            'version', 2,
+                                            'entries',
+                                            COALESCE(
+                                                data->'subagent_costs'->'entries',
+                                                '[]'::jsonb
+                                            ) || :entry_json::jsonb
+                                        ),
+                                        true
+                                    )
+                                    WHERE session_id = :sid
+                                """),
+                                {
+                                    'sid': session_id,
+                                    'entry_json': _json.dumps(entry),
+                                }
+                            )
+                            rowcount = result.rowcount
+                            db.session.commit()
+                        logger.info(
+                            f"[HOOK:SubagentStop] cost granular persistido v2 "
+                            f"agent_type={agent_type} cost=${computed_cost:.4f} "
+                            f"turns={computed_turns} duration={computed_duration}ms "
+                            f"rowcount={rowcount}"
                         )
                         # B1 fix: detectar sessao inexistente (race com
                         # get_or_create em chat.py:567). UPDATE com 0 rows nao
                         # falha — warning para monitoramento.
-                        if result.rowcount == 0:
+                        if rowcount == 0:
                             logger.warning(
                                 f"[HOOK:SubagentStop] cost granular UPDATE "
                                 f"rowcount=0 — session_id={session_id[:12]}... "
@@ -629,20 +657,14 @@ def build_hooks(
                                 f"get_or_create?). Entry perdida: "
                                 f"agent_type={agent_type}"
                             )
-                        db.session.commit()
-                        logger.info(
-                            f"[HOOK:SubagentStop] cost granular persistido v2 "
-                            f"agent_type={agent_type} cost=${computed_cost:.4f} "
-                            f"turns={computed_turns} duration={computed_duration}ms"
-                        )
                 except Exception as granular_err:
                     logger.warning(
-                        f"[HOOK:SubagentStop] cost granular falhou: {granular_err}"
+                        f"[HOOK:SubagentStop] cost granular falhou: "
+                        f"{type(granular_err).__name__}: {granular_err}"
                     )
-                    try:
-                        db.session.rollback()
-                    except Exception:
-                        pass
+                    # Nao tentar rollback aqui — se o with _app_ctx saiu (via
+                    # exception), a session ja fez rollback automatico no
+                    # __exit__. Tentar rollback fora de context re-explode.
 
             # #6 UI — emite subagent_summary via Redis pubsub para o frontend
             # FIX 2026-04-17: anteriormente usava event_queue local, que corrompia

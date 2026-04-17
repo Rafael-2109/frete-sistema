@@ -971,7 +971,8 @@ def _stream_chat_response(
             _redis_conn = _redis_lib.from_url(_redis_url)
             _pubsub = _redis_conn.pubsub(ignore_subscribe_messages=True)
             _pubsub.subscribe(f'agent_sse:{session_id}')
-            logger.debug(f"[SSE] pubsub subscrito: agent_sse:{session_id}")
+            # Log info (era debug) para diagnosticar subscribers=0 em prod
+            logger.info(f"[SSE] pubsub subscrito: agent_sse:{session_id[:12]}...")
 
             # T7: drain buffer (eventos perdidos em SSE anterior)
             try:
@@ -1005,7 +1006,12 @@ def _stream_chat_response(
             except Exception as _drain_err:
                 logger.debug(f"[SSE] drain buffer falhou (ignorado): {_drain_err}")
         except Exception as _ps_err:
-            logger.debug(f"[SSE] pubsub setup falhou (ignorado): {_ps_err}")
+            # Log warning (era debug) — setup falha = race pubsub/buffer sao
+            # a unica forma do frontend receber subagent_summary. Critico detectar.
+            logger.warning(
+                f"[SSE] pubsub setup falhou para session={session_id[:12]}...: "
+                f"{type(_ps_err).__name__}: {_ps_err}"
+            )
             _pubsub = None
 
         while True:
