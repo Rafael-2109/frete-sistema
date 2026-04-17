@@ -432,3 +432,14 @@ USE_IMPROVEMENT_DIALOGUE = os.getenv("AGENT_IMPROVEMENT_DIALOGUE", "false").lowe
 
 # Minimo de mensagens na sessao para gerar sugestoes de melhoria
 IMPROVEMENT_DIALOGUE_MIN_MESSAGES = int(os.getenv("AGENT_IMPROVEMENT_MIN_MESSAGES", "3"))
+
+# ====================================================================
+# User Rules Channel (Memory v3 — 3 canais de memoria)
+# ====================================================================
+
+# Novo canal L1: Injecao obrigatoria de regras do usuario (priority=mandatory)
+# Quando true: _build_user_rules() e chamado no inicio da injecao de memoria
+# Injeta <user_rules priority="mandatory"> como PRIMEIRO bloco em tier0_parts
+# Sempre injetado sem consumir budget — priority maxima no prompt.
+# Default false: ativacao gradual apos testes com usuarios piloto.
+USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "false").lower() == "true"

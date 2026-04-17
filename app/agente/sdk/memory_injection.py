@@ -630,6 +630,20 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             tier0_parts = []
             tier0_chars = 0
 
+            # ── L1: User Rules (SEMPRE, priority=mandatory) — NOVO CANAL ──
+            try:
+                from ..config.feature_flags import USE_USER_RULES_CHANNEL
+                if USE_USER_RULES_CHANNEL:
+                    from .memory_injection_rules import _build_user_rules
+                    rules_block = _build_user_rules(user_id)
+                    if rules_block:
+                        # Nao consome budget — sempre incluido no inicio
+                        tier0_parts.append(rules_block)  # Primeiro no prompt
+                        tier0_chars += len(rules_block)
+                        logger.info(f"[MEMORY_INJECT] L1 user_rules injected: {len(rules_block)} chars")
+            except Exception as l1_err:
+                logger.debug(f"[MEMORY_INJECT] L1 rules falhou (ignorado): {l1_err}")
+
             session_window = _build_session_window(user_id)
             if session_window:
                 tier0_parts.append(session_window)

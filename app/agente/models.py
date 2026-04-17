@@ -486,6 +486,12 @@ class AgentMemory(db.Model):
     # escopo='empresa': memoria compartilhada (user_id=0, visivel para todos)
     escopo = db.Column(db.String(20), default='pessoal', nullable=False)
 
+    # Prioridade de injecao (v3 — 3 canais de memoria, 2026-04-16)
+    # 'mandatory': regra do usuario (priority=obrigatoria, <user_rules>)
+    # 'advisory': diretriz operacional (priority=critica, <operational_directives>)
+    # 'contextual': memoria contextual (default, <user_memories> via RAG)
+    priority = db.Column(db.String(20), default='contextual', nullable=False)
+
     # Quem originou a memoria empresa (auditoria). NULL para pessoais.
     created_by = db.Column(
         db.Integer,
