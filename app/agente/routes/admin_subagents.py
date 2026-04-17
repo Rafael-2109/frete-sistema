@@ -168,6 +168,60 @@ def api_admin_debug_subagent_fs():
     except Exception:
         result['claude_cli_path'] = None
 
+    # ═══════════════════════════════════════════════════════════════════
+    # Investigacao SQL direta (agent tool allowlist bloqueia agent_sessions)
+    # ═══════════════════════════════════════════════════════════════════
+    try:
+        from sqlalchemy import text
+        from app import db
+
+        # 1. Indice GIN criado? (migration Task 1.5)
+        idx_rows = db.session.execute(text("""
+            SELECT indexname FROM pg_indexes
+            WHERE tablename = 'agent_sessions'
+              AND indexname LIKE '%subagent%'
+        """)).fetchall()
+        result['sql_indexes_subagent'] = [r.indexname for r in idx_rows]
+
+        # 2. Alguma sessao recente tem subagent_costs persistido? (Task 1.6)
+        cost_rows = db.session.execute(text("""
+            SELECT
+                session_id,
+                user_id,
+                created_at,
+                (data ? 'subagent_costs') AS tem_cost,
+                COALESCE(
+                    jsonb_array_length(data->'subagent_costs'->'entries'),
+                    0
+                ) AS num_entries
+            FROM agent_sessions
+            WHERE created_at > now() - interval '4 hours'
+            ORDER BY created_at DESC
+            LIMIT 10
+        """)).fetchall()
+        result['sql_recent_sessions'] = [
+            {
+                'session_id': r.session_id[:16] + '...',
+                'user_id': r.user_id,
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+                'tem_cost': bool(r.tem_cost),
+                'num_entries': r.num_entries,
+            }
+            for r in cost_rows
+        ]
+
+        # 3. Alguma sessao tem subagent_validations? (Task 4.1)
+        val_row = db.session.execute(text("""
+            SELECT COUNT(*) AS n
+            FROM agent_sessions
+            WHERE data ? 'subagent_validations'
+              AND created_at > now() - interval '24 hours'
+        """)).fetchone()
+        result['sql_sessions_with_validation'] = val_row.n if val_row else 0
+
+    except Exception as sql_err:
+        result['sql_error'] = f'{type(sql_err).__name__}: {sql_err}'
+
     return jsonify({'success': True, 'debug': result})
 
 
