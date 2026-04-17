@@ -80,7 +80,7 @@ def job_failure_handler(job, connection, type, value, traceback):
 @click.option('--workers', default=1, help='Número de workers paralelos')
 @click.option('--verbose', is_flag=True, help='Modo verbose com mais logs')
 @click.option('--burst', is_flag=True, help='Executa jobs pendentes e para')
-@click.option('--queues', default='atacadao,high,default', help='Filas a processar (separadas por vírgula)')
+@click.option('--queues', default='atacadao,agent_validation,high,default', help='Filas a processar (separadas por vírgula)')
 def run_worker(workers, verbose, burst, queues):
     """
     Executa o worker do Atacadão
