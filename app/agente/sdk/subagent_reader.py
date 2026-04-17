@@ -116,6 +116,30 @@ def list_session_subagents(
     logger.info(
         f"[subagent_reader] list_subagents empty for session={session_id[:16]}"
     )
+
+    # P2 fallback: tenta restore do S3 e re-procura
+    try:
+        from .session_archive import restore_session_from_s3
+        if restore_session_from_s3(session_id):
+            # Apos restore, /tmp/agent_archive_restore/<session>/ tem os JSONLs
+            # SDK list_subagents aceita directory customizado
+            restore_dir = Path('/tmp/agent_archive_restore') / session_id
+            if restore_dir.exists():
+                try:
+                    result = list(list_subagents(
+                        session_id, directory=str(restore_dir)
+                    ))
+                    if result:
+                        logger.info(
+                            f"[subagent_reader] list_subagents recovered "
+                            f"{len(result)} agents from S3 archive"
+                        )
+                        return result
+                except Exception as e:
+                    logger.debug(f"[subagent_reader] post-restore list: {e}")
+    except Exception as e:
+        logger.debug(f"[subagent_reader] S3 restore falhou: {e}")
+
     return []
 
 

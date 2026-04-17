@@ -367,6 +367,17 @@ def build_hooks(
                 f"sdk_session={sdk_sid[:12] if sdk_sid != 'unknown' else 'unknown'}"
             )
 
+            # P2 — Arquivar subagents + findings para S3 (best-effort)
+            try:
+                import os
+                if os.environ.get('AGENT_SESSION_ARCHIVE_S3', 'true').lower() == 'true':
+                    from .session_archive import archive_session_to_s3
+                    session_id_stop = hook_input.get('session_id', '')
+                    if session_id_stop:
+                        archive_session_to_s3(session_id_stop)
+            except Exception as arch_err:
+                logger.debug(f"[HOOK:Stop] archive S3 falhou: {arch_err}")
+
             return {}
         except Exception as e:
             logger.debug(f"[HOOK:Stop] Suppressed (stream likely closed): {e}")
