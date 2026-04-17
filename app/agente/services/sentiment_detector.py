@@ -60,12 +60,16 @@ FRUSTRATION_MARKERS = [
     r'\bpreciso disso\b',
 ]
 
-# Instrução injetada quando frustração é detectada
+# Instrução injetada quando frustração é detectada.
+# FIX 2026-04-17: usa <system-reminder> (tag oficial Claude) em vez de
+# "[CONTEXTO INTERNO — NAO MENCIONE: ...]" — Opus 4.7 tem defesas fortes
+# contra prompt injection e estava sinalizando o formato antigo como
+# ataque (falso positivo — era instrucao legitima do sistema).
 FRUSTRATION_INSTRUCTION = (
-    "\n\n[CONTEXTO INTERNO — NÃO MENCIONE: O usuário demonstra pressa ou frustração. "
-    "Seja MAIS direto, MENOS explicativo. Vá direto ao ponto sem rodeios. "
-    "Evite introduções longas, listas desnecessárias e explicações que o usuário não pediu. "
-    "Responda de forma concisa e objetiva.]"
+    "\n\n<system-reminder>O usuario demonstra pressa ou frustracao. "
+    "Seja MAIS direto, MENOS explicativo. Va direto ao ponto sem rodeios. "
+    "Evite introducoes longas, listas desnecessarias e explicacoes que o usuario nao pediu. "
+    "Responda de forma concisa e objetiva.</system-reminder>"
 )
 
 
