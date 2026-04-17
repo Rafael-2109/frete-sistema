@@ -309,11 +309,14 @@ def _compute_subagent_metadata_from_jsonl(transcript_path: Optional[str]) -> dic
                 if msg.get('type') != 'assistant':
                     continue
 
-                # B4 fix: filtrar sidechains (mensagens de subagents aninhados
-                # chamados por este mesmo subagent). O SDK marca com
-                # `isSidechain: true` — contar somaria tokens 2x.
-                if msg.get('isSidechain') is True:
-                    continue
+                # NOTA 2026-04-17: filtro isSidechain REMOVIDO porque
+                # transcripts de subagent (/tmp/.claude/projects/.../subagents/
+                # agent-*.jsonl) contem SOMENTE mensagens do proprio subagent
+                # — e suas proprias mensagens podem estar marcadas como
+                # `isSidechain: true` (elas SAO sidechain do transcript do
+                # pai). Filtrar aqui zeraria num_turns.
+                # Risco teorico de double-count por subagent aninhado nao se
+                # aplica: cada subagent tem JSONL separado.
 
                 # AssistantMessage: extrair usage + model
                 inner = msg.get('message') or {}

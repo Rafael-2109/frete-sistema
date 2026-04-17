@@ -531,6 +531,12 @@ def build_hooks(
             # usage de AssistantMessages + timestamps.
             # T8: schema v2 + UPSERT atomico via SQL raw para evitar
             # lost-update em subagents concorrentes.
+            # Log diagnostico antes do gate (detectar flag off / session/agent vazio)
+            logger.info(
+                f"[HOOK:SubagentStop] cost granular pre-gate: "
+                f"flag={USE_SUBAGENT_COST_GRANULAR} "
+                f"session={bool(session_id)} agent={bool(agent_id)}"
+            )
             if USE_SUBAGENT_COST_GRANULAR and session_id and agent_id:
                 try:
                     import json as _json
@@ -585,7 +591,25 @@ def build_hooks(
                             except AttributeError:
                                 computed_started_at = None
 
+                    # Log diagnostico dos valores computados
+                    logger.info(
+                        f"[HOOK:SubagentStop] cost granular computed: "
+                        f"turns={computed_turns} cost=${computed_cost:.6f} "
+                        f"input={computed_input} output={computed_output} "
+                        f"cache_read={computed_cache_read} "
+                        f"cache_create={computed_cache_create} "
+                        f"duration={computed_duration}ms "
+                        f"last_result={bool(last_result)}"
+                    )
+
                     # So persistir se tivermos dados uteis
+                    if not (computed_turns > 0 or computed_cost > 0):
+                        logger.warning(
+                            f"[HOOK:SubagentStop] cost granular SKIP — "
+                            f"turns=0 e cost=0. Transcript="
+                            f"{transcript_path or 'NONE'} "
+                            f"agent_type={agent_type}"
+                        )
                     if computed_turns > 0 or computed_cost > 0:
                         entry = {
                             'schema_version': 'v2',
