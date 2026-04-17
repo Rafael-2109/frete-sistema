@@ -1,5 +1,4 @@
 """Testes do mascaramento PII brasileiro (CPF, CNPJ, email)."""
-import pytest
 from app.agente.utils.pii_masker import mask_pii
 
 
