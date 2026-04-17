@@ -443,3 +443,42 @@ IMPROVEMENT_DIALOGUE_MIN_MESSAGES = int(os.getenv("AGENT_IMPROVEMENT_MIN_MESSAGE
 # Sempre injetado sem consumir budget — priority maxima no prompt.
 # Default false: ativacao gradual apos testes com usuarios piloto.
 USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "false").lower() == "true"
+
+# ====================================================================
+# Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
+# ====================================================================
+# Todas as 5 flags default=true — ativas imediatamente para rollout.
+# Rollback: setar AGENT_SUBAGENT_*=false + restart (sem redeploy).
+
+# #1 Endpoint admin debug forense — drill-down em subagentes de qualquer sessao
+USE_SUBAGENT_DEBUG_ENDPOINT = os.getenv(
+    "AGENT_SUBAGENT_DEBUG_ENDPOINT", "true"
+).lower() == "true"
+
+# #3 Cost tracking granular por subagente — persiste em AgentSession.data JSONB
+USE_SUBAGENT_COST_GRANULAR = os.getenv(
+    "AGENT_SUBAGENT_COST_GRANULAR", "true"
+).lower() == "true"
+
+# #5 Memory mining cross-subagent — pattern_analyzer inclui findings dos especialistas
+USE_SUBAGENT_MEMORY_MINING = os.getenv(
+    "AGENT_SUBAGENT_MEMORY_MINING", "true"
+).lower() == "true"
+
+# #6 UI linha inline expansivel no chat
+USE_SUBAGENT_UI = os.getenv("AGENT_SUBAGENT_UI", "true").lower() == "true"
+
+# #4 Validacao anti-alucinacao async (Haiku 4.5 score 0-100)
+USE_SUBAGENT_VALIDATION = os.getenv(
+    "AGENT_SUBAGENT_VALIDATION", "true"
+).lower() == "true"
+
+# #4 Threshold de flag (score abaixo do qual dispara warning)
+SUBAGENT_VALIDATION_THRESHOLD = int(
+    os.getenv("AGENT_SUBAGENT_VALIDATION_THRESHOLD", "70")
+)
+
+# #6 Admin override — permite admin ver PII raw em UI
+SUBAGENT_UI_RAW_FOR_ADMIN = os.getenv(
+    "AGENT_SUBAGENT_UI_RAW_FOR_ADMIN", "true"
+).lower() == "true"
