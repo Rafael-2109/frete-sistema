@@ -85,53 +85,84 @@ def api_admin_subagent_detail(session_id: str, agent_id: str):
 @login_required
 def api_admin_debug_subagent_fs():
     """
-    Diagnostico: verifica se filesystem do SDK esta presente no container.
+    Diagnostico: verifica onde o SDK Claude escreve transcripts no container.
 
-    Retorna:
-    - projects_dir_exists: ~/.claude/projects/ existe?
-    - project_dirs: quantos projetos, exemplo de session_ids
-    - subagent_jsonls: quantos transcripts JSONL de subagents foram escritos
-    - redis_url_set: REDIS_URL env var esta definida?
+    Descobre qual path esta sendo usado pelo CLI do SDK — importante para
+    descobrir se o container nao tem o diretorio criado OU se o SDK usa
+    HOME/CLAUDE_CONFIG_DIR diferente do esperado.
     """
     import os
+    import subprocess
     from pathlib import Path
 
     if current_user.perfil != 'administrador':
         return jsonify({'success': False, 'error': 'Admin only'}), 403
 
     result = {
-        'projects_dir_exists': False,
-        'projects_dir': str(Path.home() / '.claude' / 'projects'),
-        'project_dirs_count': 0,
-        'project_sample': [],
-        'subagent_sessions_count': 0,
-        'subagent_jsonls_count': 0,
-        'sample_subagent_jsonl': None,
-        'redis_url_set': bool(os.environ.get('REDIS_URL')),
-        'home_dir': str(Path.home()),
+        'env': {
+            'HOME': os.environ.get('HOME'),
+            'CLAUDE_CONFIG_DIR': os.environ.get('CLAUDE_CONFIG_DIR'),
+            'ANTHROPIC_API_KEY_set': bool(os.environ.get('ANTHROPIC_API_KEY')),
+            'REDIS_URL_set': bool(os.environ.get('REDIS_URL')),
+            'USER': os.environ.get('USER'),
+            'PWD': os.environ.get('PWD'),
+        },
+        'python_home': str(Path.home()),
+        'python_cwd': os.getcwd(),
+        'paths_checked': {},
+        'jsonl_found': [],
     }
 
-    projects_dir = Path.home() / '.claude' / 'projects'
-    if projects_dir.exists():
-        result['projects_dir_exists'] = True
-        project_dirs = [p for p in projects_dir.iterdir() if p.is_dir()]
-        result['project_dirs_count'] = len(project_dirs)
-        result['project_sample'] = [p.name for p in project_dirs[:3]]
+    # Lista paths candidatos onde o SDK pode ter escrito
+    candidates = [
+        Path.home() / '.claude',
+        Path('/opt/render/.claude'),
+        Path('/opt/render/project/src/.claude'),
+        Path('/tmp/.claude'),
+        Path('/root/.claude'),
+        Path('/home/render/.claude'),
+    ]
+    if os.environ.get('CLAUDE_CONFIG_DIR'):
+        candidates.insert(0, Path(os.environ['CLAUDE_CONFIG_DIR']))
 
-        # Busca JSONLs de subagents
-        subagent_jsonls = []
-        for proj in project_dirs:
-            for sess_dir in proj.iterdir():
-                if not sess_dir.is_dir():
-                    continue
-                sub_dir = sess_dir / 'subagents'
-                if sub_dir.exists():
-                    result['subagent_sessions_count'] += 1
-                    for jsonl in sub_dir.rglob('*.jsonl'):
-                        subagent_jsonls.append(str(jsonl))
-        result['subagent_jsonls_count'] = len(subagent_jsonls)
-        if subagent_jsonls:
-            result['sample_subagent_jsonl'] = subagent_jsonls[0]
+    for cand in candidates:
+        info = {'exists': cand.exists(), 'is_dir': False, 'children': []}
+        if cand.exists() and cand.is_dir():
+            info['is_dir'] = True
+            try:
+                info['children'] = [p.name for p in list(cand.iterdir())[:10]]
+            except OSError:
+                info['children'] = '<permission denied>'
+            # Busca JSONLs em profundidade
+            try:
+                for jsonl in cand.rglob('*.jsonl'):
+                    result['jsonl_found'].append(str(jsonl))
+                    if len(result['jsonl_found']) >= 5:
+                        break
+            except OSError:
+                pass
+        result['paths_checked'][str(cand)] = info
+
+    # Tenta achar JSONLs em qualquer lugar via find (com timeout)
+    try:
+        out = subprocess.run(
+            ['find', '/opt/render', '/tmp', '-name', '*.jsonl',
+             '-path', '*subagents*', '-type', 'f'],
+            capture_output=True, text=True, timeout=5
+        )
+        jsonls_found = [p for p in out.stdout.strip().split('\n') if p]
+        result['find_subagents_jsonl'] = jsonls_found[:10]
+    except Exception as e:
+        result['find_error'] = str(e)
+
+    # Verifica se o CLI esta instalado
+    try:
+        out = subprocess.run(
+            ['which', 'claude'], capture_output=True, text=True, timeout=2
+        )
+        result['claude_cli_path'] = out.stdout.strip() or None
+    except Exception:
+        result['claude_cli_path'] = None
 
     return jsonify({'success': True, 'debug': result})
 
