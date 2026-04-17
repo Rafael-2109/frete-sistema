@@ -285,6 +285,42 @@ class EmbarqueCarViaService:
         }
 
     @staticmethod
+    def calcular_cubado_por_modelos(carvia_cotacao_id: int, modelos_veiculos: List[str]) -> float:
+        """Calcula peso cubado total de N veiculos somando o cubado unitario por modelo.
+
+        Usa `CarviaCotacaoMoto.peso_cubado_total / quantidade` como cubado unitario
+        de cada modelo cadastrado na cotacao; match exato por nome.upper(), com
+        fallback por substring.
+
+        Args:
+            carvia_cotacao_id: ID da CarviaCotacao (fonte dos modelos)
+            modelos_veiculos: lista de strings com modelo de cada veiculo a contabilizar
+
+        Returns:
+            peso cubado total (float, arredondado 2 casas). Zero se modelos nao batem.
+        """
+        from app.carvia.models import CarviaCotacaoMoto
+
+        cubado_por_modelo: Dict[str, float] = {}
+        for m in CarviaCotacaoMoto.query.filter_by(cotacao_id=carvia_cotacao_id).all():
+            if m.modelo_moto and m.quantidade and m.quantidade > 0:
+                cubado_por_modelo[m.modelo_moto.nome.upper()] = (
+                    float(m.peso_cubado_total or 0) / int(m.quantidade)
+                )
+
+        total = 0.0
+        for modelo_raw in modelos_veiculos:
+            mod = (modelo_raw or '').upper()
+            if mod in cubado_por_modelo:
+                total += cubado_por_modelo[mod]
+            else:
+                for nome, cubado in cubado_por_modelo.items():
+                    if nome in mod or mod in nome:
+                        total += cubado
+                        break
+        return round(total, 2)
+
+    @staticmethod
     def _cotacao_totalmente_resolvida(carvia_cotacao_id: int) -> bool:
         """Verifica se TODOS pedidos da cotacao tem NF preenchida."""
         from app.carvia.models import CarviaPedido, CarviaPedidoItem

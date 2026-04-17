@@ -42,8 +42,11 @@
                         <tr>
                             <th>Numero</th>
                             <th>Cliente</th>
+                            <th>Emitente</th>
                             <th>Destino</th>
                             <th>Material</th>
+                            <th class="text-end">Peso (kg)</th>
+                            <th class="text-end">Qtd</th>
                             <th class="text-end">Valor</th>
                             <th class="text-center">Pagamento</th>
                             <th class="text-center">Status</th>
@@ -61,8 +64,15 @@
                             </td>
                             <td>{{ cot.cliente.nome_comercial if cot.cliente else '-' }}</td>
                             <td>
+                                {% if cot.endereco_origem %}
+                                <small>{{ cot.endereco_origem.razao_social or cot.endereco_origem.cnpj or '-' }}</small>
+                                <br><small class="text-muted">{{ cot.endereco_origem.fisico_cidade }}/{{ cot.endereco_origem.fisico_uf }}</small>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
                                 {% if cot.endereco_destino %}
-                                {{ cot.endereco_destino.fisico_cidade }}/{{ cot.endereco_destino.fisico_uf }}
+                                <small>{{ cot.endereco_destino.razao_social or cot.endereco_destino.cnpj or '-' }}</small>
+                                <br><small class="text-muted">{{ cot.endereco_destino.fisico_cidade }}/{{ cot.endereco_destino.fisico_uf }}</small>
                                 {% else %}-{% endif %}
                             </td>
                             <td>
@@ -70,6 +80,21 @@
                                 <span class="badge bg-info">Moto</span>
                                 {% else %}
                                 <span class="badge bg-secondary">Carga Geral</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if cot.tipo_material == 'MOTO' %}
+                                    {% set peso_exibir = cot.peso_total_motos or cot.peso %}
+                                {% else %}
+                                    {% set peso_exibir = cot.peso %}
+                                {% endif %}
+                                {% if peso_exibir %}{{ peso_exibir|numero_br(2) }}{% else %}-{% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if cot.tipo_material == 'MOTO' %}
+                                    {{ cot.qtd_total_motos or 0 }}
+                                {% else %}
+                                    {{ cot.volumes or '-' }}
                                 {% endif %}
                             </td>
                             <td class="text-end">
@@ -110,7 +135,7 @@
                                 <span class="badge bg-dark">Cancelado</span>
                                 {% endif %}
                                 {% if cot.cotacao_manual %}
-                                <span class="badge bg-info ms-1" title="Cotacao manual"><i class="fas fa-pencil-alt"></i></span>
+                                <span class="badge bg-info ms-1" title="Cotacao manual (sem lookup de tabela)"><i class="fas fa-pencil-alt"></i> Manual</span>
                                 {% endif %}
                                 {% if cot.alerta_saida_sem_nf %}
                                 <span class="badge bg-danger ms-1"

@@ -11,6 +11,83 @@ from app import db
 
 logger = logging.getLogger(__name__)
 
+# Tolerancia para comparacao de totais (arredondamento Numeric/float)
+_TOL_KG = 0.01
+_TOL_VAL = 0.01
+
+
+def _agregar_totais_nfs_cotacao(cotacao_id):
+    """Agrega peso_bruto / valor_total / quantidade_volumes das NFs ja vinculadas
+    a CarviaPedidoItem desta cotacao.
+
+    Tambem calcula peso cubado agregado das NFs via
+    `EmbarqueCarViaService.calcular_cubado_por_modelos` (para MOTO) — para
+    CARGA_GERAL o cubado agregado retorna 0 (NFs de CARGA_GERAL nao tem
+    cubado proprio; usar peso_bruto como proxy na validacao).
+
+    Returns:
+        dict com:
+          - peso_bruto: float (kg)
+          - peso_cubado: float (kg) — 0 para CARGA_GERAL
+          - valor_total: float (R$)
+          - quantidade_volumes: int
+          - nfs_vinculadas: set[str] — numeros de NF ja vinculadas (para skip
+            de re-anexacao)
+    """
+    from app.carvia.models import (
+        CarviaNf, CarviaNfVeiculo, CarviaPedido, CarviaPedidoItem,
+    )
+    from app.carvia.services.documentos.embarque_carvia_service import (
+        EmbarqueCarViaService,
+    )
+
+    nfs_vinculadas_nums = {
+        n for (n,) in db.session.query(
+            CarviaPedidoItem.numero_nf
+        ).join(
+            CarviaPedido, CarviaPedidoItem.pedido_id == CarviaPedido.id
+        ).filter(
+            CarviaPedido.cotacao_id == cotacao_id,
+            CarviaPedidoItem.numero_nf.isnot(None),
+            CarviaPedidoItem.numero_nf != '',
+        ).distinct().all()
+    }
+
+    if not nfs_vinculadas_nums:
+        return {
+            'peso_bruto': 0.0,
+            'peso_cubado': 0.0,
+            'valor_total': 0.0,
+            'quantidade_volumes': 0,
+            'nfs_vinculadas': set(),
+        }
+
+    # Agregados diretos das CarviaNfs
+    nfs_rows = CarviaNf.query.filter(
+        CarviaNf.numero_nf.in_(list(nfs_vinculadas_nums))
+    ).all()
+    peso_bruto = sum(float(n.peso_bruto or 0) for n in nfs_rows)
+    valor_total = sum(float(n.valor_total or 0) for n in nfs_rows)
+    volumes = sum(int(n.quantidade_volumes or 0) for n in nfs_rows)
+
+    # Cubado agregado: somar modelos de CarviaNfVeiculo das NFs vinculadas
+    modelos = [
+        v.modelo for v in CarviaNfVeiculo.query.filter(
+            CarviaNfVeiculo.nf_id.in_([n.id for n in nfs_rows])
+        ).all()
+    ]
+    peso_cubado = EmbarqueCarViaService.calcular_cubado_por_modelos(
+        cotacao_id, modelos
+    ) if modelos else 0.0
+
+    return {
+        'peso_bruto': peso_bruto,
+        'peso_cubado': peso_cubado,
+        'valor_total': valor_total,
+        'quantidade_volumes': volumes,
+        'nfs_vinculadas': nfs_vinculadas_nums,
+    }
+
 
 def register_cotacao_v2_routes(bp):
 
@@ -486,6 +563,7 @@ def register_cotacao_v2_routes(bp):
                     CarviaClienteEndereco.cnpj == cnpj_dest_limpo,
                     CarviaClienteEndereco.tipo == 'DESTINO',
                     CarviaClienteEndereco.cliente_id.isnot(None),
+                    CarviaClienteEndereco.ativo == True,
                 ).all()
                 for end in enderecos_dest:
                     if end.cliente:
@@ -498,6 +576,7 @@ def register_cotacao_v2_routes(bp):
                     CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
                     CarviaClienteEndereco.tipo == 'ORIGEM',
                     CarviaClienteEndereco.cliente_id.isnot(None),
+                    CarviaClienteEndereco.ativo == True,
                 ).all()
                 for end in enderecos_orig:
                     if end.cliente:
@@ -515,6 +594,7 @@ def register_cotacao_v2_routes(bp):
                     CarviaClienteEndereco.cnpj == cnpj_emit_limpo,
                     CarviaClienteEndereco.tipo == 'ORIGEM',
                     CarviaClienteEndereco.cliente_id.is_(None),
+                    CarviaClienteEndereco.ativo == True,
                 ).first()
                 if orig_global:
                     endereco_origem_id = orig_global.id
@@ -522,7 +602,8 @@ def register_cotacao_v2_routes(bp):
             # Buscar destino do cliente
             if cliente_id and cnpj_dest_limpo:
                 dest = CarviaClienteEndereco.query.filter_by(
-                    cliente_id=cliente_id, cnpj=cnpj_dest_limpo, tipo='DESTINO'
+                    cliente_id=cliente_id, cnpj=cnpj_dest_limpo,
+                    tipo='DESTINO', ativo=True
                 ).first()
                 if dest:
                     endereco_destino_id = dest.id
@@ -2052,11 +2133,20 @@ def register_cotacao_v2_routes(bp):
         )
         from app.utils.timezone import agora_utc_naive
 
-        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        # SELECT FOR UPDATE: serializa anexacoes concorrentes na mesma cotacao
+        # (evita race condition onde 2 requests leem agg base identico e ambas
+        # passam pelo teto de peso/valor em APROVADA).
+        cotacao = CarviaCotacao.query.filter_by(
+            id=cotacao_id
+        ).with_for_update().first()
         if not cotacao:
             return jsonify({'erro': 'Cotacao nao encontrada.'}), 404
-        if cotacao.status != 'APROVADO':
-            return jsonify({'erro': f'Cotacao em status {cotacao.status}, esperado APROVADO.'}), 400
+        # Status permitidos: qualquer um editavel + APROVADO (com validacao de teto adiante)
+        _STATUS_ANEXAR_NF = {'RASCUNHO', 'PENDENTE_ADMIN', 'ENVIADO', 'APROVADO', 'RECUSADO'}
+        if cotacao.status not in _STATUS_ANEXAR_NF:
+            return jsonify({
+                'erro': f'Cotacao em status {cotacao.status} nao permite anexar NF.'
+            }), 400
 
         # Determinar filial: novo fluxo (origem_id) ou legado (filial direta)
         origem_id = request.form.get('origem_id', type=int)
@@ -2114,6 +2204,91 @@ def register_cotacao_v2_routes(bp):
                 if nf:
                     nf_reutilizada = True
                     numero_nf = nf.numero_nf or numero_nf
+
+            # 2.5. Validar/Recalcular limites da cotacao
+            # - APROVADO: bloqueia se soma(NFs + nova NF) excede peso, peso_cubado ou valor
+            # - Nao-APROVADO: recalcula cotacao.peso / peso_cubado / valor_mercadoria /
+            #   volumes (apenas aumenta, nunca diminui). Pricing nao e redisparado.
+            from app.carvia.services.documentos.embarque_carvia_service import (
+                EmbarqueCarViaService,
+            )
+
+            peso_nova = float(
+                (nf.peso_bruto if nf else dados.get('peso_bruto')) or 0
+            )
+            valor_nova = float(
+                (nf.valor_total if nf else dados.get('valor_total')) or 0
+            )
+            volumes_nova = int(
+                (nf.quantidade_volumes if nf else dados.get('quantidade_volumes')) or 0
+            )
+
+            # Cubado da NF nova: MOTO soma por modelos, CARGA_GERAL usa peso_bruto
+            if cotacao.tipo_material == 'MOTO':
+                if nf:
+                    modelos_nf = [v.modelo for v in nf.veiculos.all()]
+                else:
+                    modelos_nf = [v.get('modelo') for v in dados.get('veiculos', [])]
+                cubado_nova = EmbarqueCarViaService.calcular_cubado_por_modelos(
+                    cotacao_id, modelos_nf
+                )
+            else:
+                cubado_nova = peso_nova  # CARGA_GERAL: proxy conservador
+
+            agg = _agregar_totais_nfs_cotacao(cotacao_id)
+            eh_reanexacao = str(numero_nf) in agg['nfs_vinculadas']
+
+            if not eh_reanexacao:
+                soma_peso = agg['peso_bruto'] + peso_nova
+                soma_cubado = agg['peso_cubado'] + cubado_nova
+                soma_valor = agg['valor_total'] + valor_nova
+                soma_volumes = agg['quantidade_volumes'] + volumes_nova
+
+                # Teto cubado: MOTO -> peso_total_motos (property); CARGA_GERAL -> peso_cubado
+                if cotacao.tipo_material == 'MOTO':
+                    teto_peso_cubado = float(cotacao.peso_total_motos or 0)
+                else:
+                    teto_peso_cubado = float(cotacao.peso_cubado or 0)
+                teto_peso = float(cotacao.peso or 0)
+                teto_valor = float(cotacao.valor_mercadoria or 0)
+
+                if cotacao.status == 'APROVADO':
+                    excessos = []
+                    if teto_peso > 0 and soma_peso > teto_peso + _TOL_KG:
+                        excessos.append(
+                            f"peso {soma_peso:.2f}/{teto_peso:.2f} kg"
+                        )
+                    if teto_peso_cubado > 0 and soma_cubado > teto_peso_cubado + _TOL_KG:
+                        excessos.append(
+                            f"peso cubado {soma_cubado:.2f}/{teto_peso_cubado:.2f} kg"
+                        )
+                    if teto_valor > 0 and soma_valor > teto_valor + _TOL_VAL:
+                        excessos.append(
+                            f"valor R$ {soma_valor:.2f}/{teto_valor:.2f}"
+                        )
+                    if excessos:
+                        db.session.rollback()
+                        return jsonify({
+                            'erro': (
+                                f'NF excede limites da cotacao aprovada: '
+                                f'{"; ".join(excessos)}. Cancele a cotacao '
+                                f'ou reabra-a (status != APROVADO) para recalcular.'
+                            )
+                        }), 400
+                else:
+                    # Nao-APROVADO: recalcular totais da cotacao (apenas aumenta)
+                    if soma_peso > teto_peso + _TOL_KG:
+                        cotacao.peso = soma_peso
+                    if cotacao.tipo_material != 'MOTO':
+                        # CARGA_GERAL: atualiza peso_cubado quando excedido
+                        if soma_cubado > float(cotacao.peso_cubado or 0) + _TOL_KG:
+                            cotacao.peso_cubado = soma_cubado
+                    # MOTO: peso_total_motos e property derivada de CarviaCotacaoMoto
+                    if soma_valor > teto_valor + _TOL_VAL:
+                        cotacao.valor_mercadoria = soma_valor
+                    cotacao.volumes = soma_volumes
+                    # valor_tabela / valor_final_aprovado permanecem congelados;
+                    # usuario reprecifica manualmente se desejar.
 
             # 3. Criar CarviaNf + itens (se nao reutilizada)
             if not nf:
@@ -2273,6 +2448,110 @@ def register_cotacao_v2_routes(bp):
             logger.error("Erro ao anexar NF na cotacao %s: %s", cotacao_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
+    # ==================== API: NFs SEM COTACAO ====================
+
+    @bp.route('/api/nfs-sem-cotacao') # type: ignore
+    @login_required
+    def api_listar_nfs_sem_cotacao(): # type: ignore
+        """Lista CarviaNfs sem vinculo a CarviaPedidoItem (ATIVA + status != CANCELADA).
+
+        Query params opcionais:
+          - cnpj_emitente: filtro exato
+          - cnpj_destinatario: filtro exato
+          - limit: default 100
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaNf, CarviaPedidoItem
+
+        limit = request.args.get('limit', default=100, type=int)
+        cnpj_emit = (request.args.get('cnpj_emitente') or '').strip()
+        cnpj_dest = (request.args.get('cnpj_destinatario') or '').strip()
+
+        # Subquery: numeros de NF ja vinculados a qualquer CarviaPedidoItem
+        subq_vinculadas = db.session.query(
+            CarviaPedidoItem.numero_nf
+        ).filter(
+            CarviaPedidoItem.numero_nf.isnot(None),
+            CarviaPedidoItem.numero_nf != '',
+        ).distinct().subquery()
+
+        q = CarviaNf.query.filter(
+            CarviaNf.status == 'ATIVA',
+            CarviaNf.numero_nf.notin_(db.session.query(subq_vinculadas)),
+        )
+        if cnpj_emit:
+            q = q.filter(CarviaNf.cnpj_emitente == cnpj_emit)
+        if cnpj_dest:
+            q = q.filter(CarviaNf.cnpj_destinatario == cnpj_dest)
+
+        nfs = q.order_by(CarviaNf.data_emissao.desc().nullslast(),
+                         CarviaNf.id.desc()).limit(limit).all()
+
+        return jsonify({
+            'nfs': [{
+                'id': n.id,
+                'numero_nf': n.numero_nf,
+                'chave_acesso_nf': n.chave_acesso_nf,
+                'cnpj_emitente': n.cnpj_emitente,
+                'nome_emitente': n.nome_emitente,
+                'cnpj_destinatario': n.cnpj_destinatario,
+                'nome_destinatario': n.nome_destinatario,
+                'uf_emitente': n.uf_emitente,
+                'uf_destinatario': n.uf_destinatario,
+                'peso_bruto': float(n.peso_bruto) if n.peso_bruto else None,
+                'valor_total': float(n.valor_total) if n.valor_total else None,
+                'quantidade_volumes': n.quantidade_volumes,
+                'data_emissao': n.data_emissao.isoformat() if n.data_emissao else None,
+            } for n in nfs],
+            'total': len(nfs),
+        })
+
+    @bp.route('/api/nfs-sem-cotacao/count-similares') # type: ignore
+    @login_required
+    def api_count_nfs_similares(): # type: ignore
+        """Conta CarviaNfs sem cotacao com mesmo (cnpj_emitente, cnpj_destinatario).
+
+        Query params:
+          - cnpj_emitente (obrigatorio)
+          - cnpj_destinatario (obrigatorio)
+          - exclude_nf_id: ID de NF a excluir da contagem (ja selecionada)
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaNf, CarviaPedidoItem
+
+        cnpj_emit = (request.args.get('cnpj_emitente') or '').strip()
+        cnpj_dest = (request.args.get('cnpj_destinatario') or '').strip()
+        exclude_id = request.args.get('exclude_nf_id', type=int)
+
+        if not cnpj_emit or not cnpj_dest:
+            return jsonify({'erro': 'cnpj_emitente e cnpj_destinatario obrigatorios.'}), 400
+
+        subq_vinculadas = db.session.query(
+            CarviaPedidoItem.numero_nf
+        ).filter(
+            CarviaPedidoItem.numero_nf.isnot(None),
+            CarviaPedidoItem.numero_nf != '',
+        ).distinct().subquery()
+
+        q = CarviaNf.query.filter(
+            CarviaNf.status == 'ATIVA',
+            CarviaNf.cnpj_emitente == cnpj_emit,
+            CarviaNf.cnpj_destinatario == cnpj_dest,
+            CarviaNf.numero_nf.notin_(db.session.query(subq_vinculadas)),
+        )
+        if exclude_id:
+            q = q.filter(CarviaNf.id != exclude_id)
+
+        return jsonify({
+            'count': q.count(),
+            'cnpj_emitente': cnpj_emit,
+            'cnpj_destinatario': cnpj_dest,
+        })
+
     # ==================== API: ENDERECOS DO CLIENTE ====================
 
     @bp.route('/api/cotacoes/enderecos-cliente/<int:cliente_id>') # type: ignore
@@ -2291,6 +2570,7 @@ def register_cotacao_v2_routes(bp):
         from sqlalchemy import or_
 
         enderecos = CarviaClienteEndereco.query.filter(
+            CarviaClienteEndereco.ativo == True,
             or_(
                 # Origens globais (compartilhadas)
                 db.and_(
@@ -2425,9 +2705,13 @@ def register_cotacao_v2_routes(bp):
         if not data:
             return jsonify({'erro': 'Dados obrigatorios.'}), 400
 
-        ok, erro = CarviaClienteService.atualizar_endereco(endereco_id, data)
+        ok, erro, contexto = CarviaClienteService.atualizar_endereco(endereco_id, data)
         if not ok:
-            return jsonify({'erro': erro}), 400
+            resp = {'erro': erro}
+            if contexto:
+                resp.update(contexto)
+            status = 409 if contexto and contexto.get('acao_sugerida') == 'mesclar' else 400
+            return jsonify(resp), status
         db.session.commit()
         return jsonify({'sucesso': True})
 

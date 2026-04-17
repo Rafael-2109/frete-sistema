@@ -37,7 +37,7 @@
     {# Upload de NF (Iniciar / Adicionar) — unico ponto de entrada #}
     <div class="card mb-3" id="cardUploadNF" {% if nf_id_param %}style="display:none"{% endif %}>
         <div class="card-body">
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
                 <div>
                     <label class="form-label fw-bold mb-1" id="lblUploadNF">Iniciar pela NF</label>
                     <div class="form-text mt-0" id="txtUploadNF">Envie um PDF (DANFE) ou XML (NF-e) para pre-preencher a cotacao.</div>
@@ -46,8 +46,60 @@
                 <button type="button" class="btn btn-outline-primary btn-sm" onclick="iniciarSetupNF()" id="btnPrePreencher">
                     <i class="fas fa-magic"></i> Preencher
                 </button>
+                <div class="vr d-none d-md-block"></div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="abrirModalNfsSemCotacao()" id="btnNfsSemCotacao">
+                    <i class="fas fa-list"></i> NFs sem Cotacao
+                    <span class="badge bg-warning text-dark ms-1 d-none" id="badgeNfsSimilares" title="NFs com mesmo par emitente/destinatario sem cotacao">0</span>
+                </button>
             </div>
             <div id="prePreencherFeedback" class="mt-2" style="display:none"></div>
+        </div>
+    </div>
+
+    {# Modal: Buscar NFs sem Cotacao #}
+    <div class="modal fade" id="modalNfsSemCotacao" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-list"></i> NFs sem Cotacao</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <input type="text" class="form-control form-control-sm" id="inpFiltroCnpjEmit" placeholder="CNPJ emitente (opcional)" style="max-width:220px">
+                        <input type="text" class="form-control form-control-sm" id="inpFiltroCnpjDest" placeholder="CNPJ destinatario (opcional)" style="max-width:220px">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="buscarNfsSemCotacao()">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                        <span class="ms-auto small text-muted" id="lblTotalNfsSem">-</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:40px"><input type="checkbox" id="chkSelAllNfs" onclick="selAllNfs(this)"></th>
+                                    <th>NF</th>
+                                    <th>Emitente</th>
+                                    <th>Destinatario</th>
+                                    <th class="text-end">Peso (kg)</th>
+                                    <th class="text-end">Volumes</th>
+                                    <th class="text-end">Valor (R$)</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyNfsSemCotacao">
+                                <tr><td colspan="8" class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i> Aguardando busca...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btnUsarNfsSelecionadas" onclick="usarNfsSelecionadas()" disabled>
+                        <i class="fas fa-check"></i> Usar <span id="qtdNfsSelecionadas">0</span> NF(s) selecionada(s)
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -467,4 +519,131 @@ const CARVIA_DATA = {
 };
 </script>
 <script>{% include 'carvia/js/cotacoes/criar.js' %}</script>
+
+{# Modal NFs sem Cotacao — fluxo separado (nao-destrutivo) #}
+<script>
+let _nfsSemCotacaoCache = [];
+
+function abrirModalNfsSemCotacao() {
+    document.getElementById('inpFiltroCnpjEmit').value = '';
+    document.getElementById('inpFiltroCnpjDest').value = '';
+    document.getElementById('tbodyNfsSemCotacao').innerHTML =
+        '<tr><td colspan="8" class="text-center text-muted py-3">'
+        + '<i class="fas fa-spinner fa-spin"></i> Buscando...</td></tr>';
+    new bootstrap.Modal(document.getElementById('modalNfsSemCotacao')).show();
+    buscarNfsSemCotacao();
+}
+
+function buscarNfsSemCotacao() {
+    const cnpjEmit = (document.getElementById('inpFiltroCnpjEmit').value || '').trim();
+    const cnpjDest = (document.getElementById('inpFiltroCnpjDest').value || '').trim();
+    const params = new URLSearchParams();
+    if (cnpjEmit) params.append('cnpj_emitente', cnpjEmit);
+    if (cnpjDest) params.append('cnpj_destinatario', cnpjDest);
+    params.append('limit', '200');
+
+    fetch('/carvia/api/nfs-sem-cotacao?' + params.toString())
+    .then(r => r.json())
+    .then(data => {
+        if (data.erro) {
+            document.getElementById('tbodyNfsSemCotacao').innerHTML =
+                '<tr><td colspan="8" class="text-danger text-center py-3">' + data.erro + '</td></tr>';
+            return;
+        }
+        _nfsSemCotacaoCache = data.nfs || [];
+        renderizarTabelaNfsSemCotacao();
+        document.getElementById('lblTotalNfsSem').textContent =
+            (data.total || 0) + ' NF(s) encontrada(s)';
+    })
+    .catch(err => {
+        document.getElementById('tbodyNfsSemCotacao').innerHTML =
+            '<tr><td colspan="8" class="text-danger text-center py-3">Erro: ' + err.message + '</td></tr>';
+    });
+}
+
+function renderizarTabelaNfsSemCotacao() {
+    const tbody = document.getElementById('tbodyNfsSemCotacao');
+    if (!_nfsSemCotacaoCache.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center py-3">Nenhuma NF sem cotacao encontrada.</td></tr>';
+        document.getElementById('btnUsarNfsSelecionadas').disabled = true;
+        return;
+    }
+    const linhas = _nfsSemCotacaoCache.map(nf => {
+        const peso = nf.peso_bruto != null ? nf.peso_bruto.toFixed(2) : '-';
+        const volumes = nf.quantidade_volumes != null ? nf.quantidade_volumes : '-';
+        const valor = nf.valor_total != null
+            ? nf.valor_total.toLocaleString('pt-BR', {minimumFractionDigits: 2})
+            : '-';
+        const data = nf.data_emissao || '-';
+        return `<tr>
+            <td><input type="checkbox" class="chk-nf-sem-cot" value="${nf.id}"
+                  data-cnpj-emit="${nf.cnpj_emitente || ''}"
+                  data-cnpj-dest="${nf.cnpj_destinatario || ''}"
+                  onclick="atualizarSelecaoNfs()"></td>
+            <td><strong>${nf.numero_nf}</strong></td>
+            <td><small>${nf.nome_emitente || '-'}</small><br><small class="text-muted">${nf.cnpj_emitente || '-'} · ${nf.uf_emitente || '-'}</small></td>
+            <td><small>${nf.nome_destinatario || '-'}</small><br><small class="text-muted">${nf.cnpj_destinatario || '-'} · ${nf.uf_destinatario || '-'}</small></td>
+            <td class="text-end">${peso}</td>
+            <td class="text-end">${volumes}</td>
+            <td class="text-end">${valor}</td>
+            <td><small class="text-muted">${data}</small></td>
+        </tr>`;
+    }).join('');
+    tbody.innerHTML = linhas;
+    atualizarSelecaoNfs();
+}
+
+function selAllNfs(checkbox) {
+    document.querySelectorAll('.chk-nf-sem-cot').forEach(c => { c.checked = checkbox.checked; });
+    atualizarSelecaoNfs();
+}
+
+function atualizarSelecaoNfs() {
+    const selecionados = Array.from(document.querySelectorAll('.chk-nf-sem-cot:checked'));
+    document.getElementById('qtdNfsSelecionadas').textContent = selecionados.length;
+    document.getElementById('btnUsarNfsSelecionadas').disabled = selecionados.length === 0;
+
+    // Contador de similares: se exatamente 1 selecionado, buscar NFs com mesmo par CNPJ
+    const badge = document.getElementById('badgeNfsSimilares');
+    if (selecionados.length === 1) {
+        const c = selecionados[0];
+        const cnpjEmit = c.getAttribute('data-cnpj-emit') || '';
+        const cnpjDest = c.getAttribute('data-cnpj-dest') || '';
+        const nfId = c.value;
+        if (cnpjEmit && cnpjDest) {
+            const params = new URLSearchParams({
+                cnpj_emitente: cnpjEmit,
+                cnpj_destinatario: cnpjDest,
+                exclude_nf_id: nfId,
+            });
+            fetch('/carvia/api/nfs-sem-cotacao/count-similares?' + params.toString())
+            .then(r => r.json())
+            .then(d => {
+                if (d.count != null && d.count > 0) {
+                    badge.textContent = d.count;
+                    badge.classList.remove('d-none');
+                    badge.setAttribute('title',
+                        d.count + ' outra(s) NF(s) sem cotacao com mesmo par emitente/destinatario');
+                } else {
+                    badge.classList.add('d-none');
+                }
+            });
+        }
+    } else {
+        badge.classList.add('d-none');
+    }
+}
+
+function usarNfsSelecionadas() {
+    const selecionados = Array.from(document.querySelectorAll('.chk-nf-sem-cot:checked'));
+    if (!selecionados.length) return;
+    if (selecionados.length > 1) {
+        alert('Selecao multipla sera suportada em versao futura. Por enquanto, selecione apenas 1 NF.');
+        return;
+    }
+    const nfId = selecionados[0].value;
+    // Redirecionar para criar cotacao com nf_id na URL (fluxo ja existente)
+    window.location.href = '/carvia/cotacoes/nova?nf_id=' + encodeURIComponent(nfId);
+}
+</script>
 {% endblock %}

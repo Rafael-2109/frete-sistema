@@ -56,17 +56,52 @@ def register_pedido_routes(bp):
         else:
             pedidos = todos
 
-        # Pre-build NFs e embarque por pedido
-        from app.carvia.models import CarviaNf
+        # Pre-build NFs, embarque, peso/valor/qtd, emitente/destino por pedido
+        from app.carvia.models import CarviaNf, CarviaPedidoItem
         from app.embarques.models import EmbarqueItem, Embarque
+        from sqlalchemy import func as sqlfunc
 
         nfs_por_pedido = {}
         embarques_por_pedido = {}
+        peso_por_pedido = {}  # float kg
+        valor_por_pedido = {}  # float R$
+        qtd_por_pedido = {}    # int (soma CarviaPedidoItem.quantidade)
+        emitente_por_pedido = {}    # cotacao.endereco_origem
+        destino_por_pedido = {}     # cotacao.endereco_destino
+
+        ped_ids = [p.id for p in pedidos]
+
+        # Batch: somar quantidade e valor dos CarviaPedidoItem por pedido
+        if ped_ids:
+            rows = db.session.query(
+                CarviaPedidoItem.pedido_id,
+                sqlfunc.coalesce(sqlfunc.sum(CarviaPedidoItem.quantidade), 0),
+                sqlfunc.coalesce(sqlfunc.sum(CarviaPedidoItem.valor_total), 0),
+            ).filter(
+                CarviaPedidoItem.pedido_id.in_(ped_ids)
+            ).group_by(CarviaPedidoItem.pedido_id).all()
+            for pid, qtd, valor in rows:
+                qtd_por_pedido[pid] = int(qtd or 0)
+                valor_por_pedido[pid] = float(valor or 0)
+
         for ped in pedidos:
             itens = ped.itens.all()
             nf_nums = sorted({i.numero_nf for i in itens if i.numero_nf})
             nfs_por_pedido[ped.id] = nf_nums
 
+            # Peso: somar peso_bruto das CarviaNfs vinculadas; se nenhuma, fallback 0
+            if nf_nums:
+                peso_por_pedido[ped.id] = float(
+                    db.session.query(
+                        sqlfunc.coalesce(sqlfunc.sum(CarviaNf.peso_bruto), 0)
+                    ).filter(
+                        CarviaNf.numero_nf.in_(nf_nums)
+                    ).scalar() or 0
+                )
+            else:
+                peso_por_pedido[ped.id] = 0.0
+
+            # Embarque: primeiro CARVIA-NF-{nf_id} ativo dessas NFs
             for nf_num in nf_nums:
                 nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
                 if nf_obj:
@@ -80,6 +115,12 @@ def register_pedido_routes(bp):
                         )
                         break
 
+            # Emitente/Destinatario: cotacao.endereco_origem/destino
+            cot = ped.cotacao
+            if cot:
+                emitente_por_pedido[ped.id] = cot.endereco_origem
+                destino_por_pedido[ped.id] = cot.endereco_destino
+
         return render_template(
             'carvia/pedidos/listar.html',
             pedidos=pedidos,
@@ -87,6 +128,11 @@ def register_pedido_routes(bp):
             contadores=dict(contadores),
             nfs_por_pedido=nfs_por_pedido,
             embarques_por_pedido=embarques_por_pedido,
+            peso_por_pedido=peso_por_pedido,
+            valor_por_pedido=valor_por_pedido,
+            qtd_por_pedido=qtd_por_pedido,
+            emitente_por_pedido=emitente_por_pedido,
+            destino_por_pedido=destino_por_pedido,
         )
 
     @bp.route('/pedidos-carvia/<int:pedido_id>')
@@ -339,8 +385,62 @@ def register_pedido_routes(bp):
         if not pedido:
             return jsonify({'erro': 'Pedido nao encontrado.'}), 404
 
+        # Desanexo em pedido EMBARCADO: permitido se nenhum CarviaFrete da NF
+        # estiver CONFERIDO/FATURADO ou vinculado a fatura cliente.
+        # Busca em 2 caminhos: via CarviaOperacao (normal) e via CarviaFrete.numeros_nfs
+        # (fallback para fretes sem operacao_id — backfill ou legado).
+        aviso_frete = None
         if pedido.status_calculado == 'EMBARCADO':
-            return jsonify({'erro': 'Pedido EMBARCADO nao pode ter NF desanexada.'}), 400
+            nfs_para_check = [i.numero_nf for i in pedido.itens.all() if i.numero_nf]
+            if nfs_para_check:
+                from app.carvia.models import (
+                    CarviaFrete, CarviaOperacao, CarviaOperacaoNf,
+                )
+                status_bloqueante = db.or_(
+                    CarviaFrete.status == 'CONFERIDO',
+                    CarviaFrete.status == 'FATURADO',
+                    CarviaFrete.status_conferencia == 'APROVADO',
+                    CarviaFrete.fatura_cliente_id.isnot(None),
+                )
+
+                # Caminho 1: via CarviaOperacao → CarviaOperacaoNf → CarviaNf
+                frete_bloqueante = db.session.query(CarviaFrete).join(
+                    CarviaOperacao, CarviaFrete.operacao_id == CarviaOperacao.id
+                ).join(
+                    CarviaOperacaoNf,
+                    CarviaOperacaoNf.operacao_id == CarviaOperacao.id
+                ).join(
+                    CarviaNf, CarviaOperacaoNf.nf_id == CarviaNf.id
+                ).filter(
+                    CarviaNf.numero_nf.in_(nfs_para_check),
+                    status_bloqueante,
+                ).first()
+
+                # Caminho 2 (fallback): CarviaFrete sem operacao_id via numeros_nfs CSV
+                if not frete_bloqueante:
+                    conds_csv = [
+                        CarviaFrete.numeros_nfs.ilike(f'%{nf}%')
+                        for nf in nfs_para_check
+                    ]
+                    if conds_csv:
+                        frete_bloqueante = db.session.query(CarviaFrete).filter(
+                            CarviaFrete.operacao_id.is_(None),
+                            db.or_(*conds_csv),
+                            status_bloqueante,
+                        ).first()
+
+                if frete_bloqueante:
+                    return jsonify({
+                        'erro': (
+                            f'NF possui CarviaFrete #{frete_bloqueante.id} '
+                            f'conferido/faturado. Desfaca a conferencia '
+                            f'financeira antes de desanexar.'
+                        )
+                    }), 400
+                aviso_frete = (
+                    'Embarque ja saiu da portaria. CTe/frete precisa ser '
+                    'ajustado manualmente no modulo CarVia.'
+                )
 
         try:
             cotacao_id = pedido.cotacao_id
@@ -416,10 +516,13 @@ def register_pedido_routes(bp):
                 "NF desanexada do pedido %s (cotacao %s). NFs: %s",
                 pedido.numero_pedido, cotacao_id, nfs_do_pedido,
             )
-            return jsonify({
+            resposta = {
                 'sucesso': True,
                 'mensagem': f'NF desanexada. Pedido {pedido.numero_pedido} voltou para ABERTO.',
-            })
+            }
+            if aviso_frete:
+                resposta['aviso'] = aviso_frete
+            return jsonify(resposta)
 
         except Exception as e:
             db.session.rollback()
@@ -442,8 +545,61 @@ def register_pedido_routes(bp):
         if not pedido:
             return jsonify({'erro': 'Pedido nao encontrado.'}), 404
 
+        # Permitir excluir pedido EMBARCADO apenas se nenhum CarviaFrete
+        # da NF esta CONFERIDO/FATURADO / vinculado a fatura cliente.
+        # Busca em 2 caminhos (idem api_desanexar_nf_pedido): via CarviaOperacao
+        # e via CarviaFrete.numeros_nfs CSV (fallback para fretes sem operacao_id).
+        aviso_frete = None
         if pedido.status_calculado == 'EMBARCADO':
-            return jsonify({'erro': 'Pedido ja embarcado, nao pode ser excluido.'}), 400
+            from app.carvia.models import CarviaNf as _CN
+            nfs_para_check = [i.numero_nf for i in pedido.itens.all() if i.numero_nf]
+            if nfs_para_check:
+                from app.carvia.models import (
+                    CarviaFrete, CarviaOperacao, CarviaOperacaoNf,
+                )
+                status_bloqueante = db.or_(
+                    CarviaFrete.status == 'CONFERIDO',
+                    CarviaFrete.status == 'FATURADO',
+                    CarviaFrete.status_conferencia == 'APROVADO',
+                    CarviaFrete.fatura_cliente_id.isnot(None),
+                )
+
+                frete_bloqueante = db.session.query(CarviaFrete).join(
+                    CarviaOperacao, CarviaFrete.operacao_id == CarviaOperacao.id
+                ).join(
+                    CarviaOperacaoNf,
+                    CarviaOperacaoNf.operacao_id == CarviaOperacao.id
+                ).join(
+                    _CN, CarviaOperacaoNf.nf_id == _CN.id
+                ).filter(
+                    _CN.numero_nf.in_(nfs_para_check),
+                    status_bloqueante,
+                ).first()
+
+                if not frete_bloqueante:
+                    conds_csv = [
+                        CarviaFrete.numeros_nfs.ilike(f'%{nf}%')
+                        for nf in nfs_para_check
+                    ]
+                    if conds_csv:
+                        frete_bloqueante = db.session.query(CarviaFrete).filter(
+                            CarviaFrete.operacao_id.is_(None),
+                            db.or_(*conds_csv),
+                            status_bloqueante,
+                        ).first()
+
+                if frete_bloqueante:
+                    return jsonify({
+                        'erro': (
+                            f'Pedido tem NF com CarviaFrete #{frete_bloqueante.id} '
+                            f'conferido/faturado. Desfaca a conferencia '
+                            f'financeira antes de excluir o pedido.'
+                        )
+                    }), 400
+                aviso_frete = (
+                    'Embarque ja saiu da portaria. CTe/frete precisa ser '
+                    'ajustado manualmente no modulo CarVia.'
+                )
 
         try:
             numero = pedido.numero_pedido
@@ -541,10 +697,13 @@ def register_pedido_routes(bp):
             db.session.commit()
 
             logger.info("Pedido %s excluido com restauracao (cotacao %s)", numero, cotacao_id)
-            return jsonify({
+            resposta = {
                 'sucesso': True,
                 'mensagem': f'Pedido {numero} excluido. Saldo restaurado.',
-            })
+            }
+            if aviso_frete:
+                resposta['aviso'] = aviso_frete
+            return jsonify(resposta)
 
         except Exception as e:
             db.session.rollback()

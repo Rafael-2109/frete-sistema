@@ -573,7 +573,12 @@ function criarPedido() {
 function excluirPedido(pedidoId, num) {
     if (!confirm('Excluir pedido ' + num + '? Isso remove o pedido, seus itens e o EmbarqueItem vinculado.')) return;
     apiCall('/carvia/api/pedidos-carvia/' + pedidoId, 'DELETE').then(d => {
-        if (d.sucesso) location.reload(); else alert(d.erro || 'Erro ao excluir.');
+        if (d.sucesso) {
+            if (d.aviso) alert('ATENCAO: ' + d.aviso);
+            location.reload();
+        } else {
+            alert(d.erro || 'Erro ao excluir.');
+        }
     });
 }
 
@@ -680,7 +685,14 @@ function editarFilial(pedidoId, filialAtual) {
 function desanexarNFPedido(pedidoId, numPedido) {
     if (!confirm('Desanexar NF do pedido ' + numPedido + '? O pedido voltara para ABERTO.')) return;
     apiCall('/carvia/api/pedidos-carvia/' + pedidoId + '/desanexar-nf')
-    .then(d => { if (d.sucesso) location.reload(); else alert(d.erro || 'Erro ao desanexar.'); });
+    .then(d => {
+        if (d.sucesso) {
+            if (d.aviso) alert('ATENCAO: ' + d.aviso);
+            location.reload();
+        } else {
+            alert(d.erro || 'Erro ao desanexar.');
+        }
+    });
 }
 
 /* ===== Desconto Sincronizado ===== */

@@ -125,12 +125,19 @@ class ListaPedidosService:
         return query
 
     @staticmethod
-    def _apply_statuses(query, status_list):
-        """Aplica filtro de status (OR) na query."""
+    def _apply_statuses(query, status_list, carvia_sets=None):
+        """Aplica filtro de status (OR) na query.
+
+        `carvia_sets` e opcional — pass-through para `_get_status_filter`
+        evitar recomputar sets CarVia em chamadas multiplas.
+        """
         if not status_list:
             return query
         Svc = ListaPedidosService
-        filters = [f for f in (Svc._get_status_filter(s) for s in status_list) if f is not None]
+        filters = [
+            f for f in (Svc._get_status_filter(s, carvia_sets) for s in status_list)
+            if f is not None
+        ]
         if filters:
             query = query.filter(db.or_(*filters))
         return query
@@ -210,8 +217,9 @@ class ListaPedidosService:
         """Filtro unificado: origem (escopo), status (OR), condicoes (AND), datas (range), refinamento."""
         Svc = ListaPedidosService
         p = Svc._parse_filter_params(args)
+        carvia_sets = Svc._carvia_lotes_por_status()
         query = Svc._apply_origem(query, p['origem'])
-        query = Svc._apply_statuses(query, p['status_list'])
+        query = Svc._apply_statuses(query, p['status_list'], carvia_sets)
         query = Svc._apply_conditions(query, p['active_conds'], hoje,
                                       cnpjs_validos_agendamento,
                                       lotes_falta_item_ids,
@@ -240,6 +248,7 @@ class ListaPedidosService:
         """
         Svc = ListaPedidosService
         p = Svc._parse_filter_params(args)
+        carvia_sets = Svc._carvia_lotes_por_status()
 
         # --- STATUS COUNTS: base = origem + refinements + dates + conditions ---
         q_s = Pedido.query
@@ -249,17 +258,18 @@ class ListaPedidosService:
         q_s = Svc._apply_conditions(q_s, p['active_conds'], hoje,
                                     cnpjs_agendamento, lotes_item, lotes_pgto)
 
+        # Contadores usam _get_status_filter (cobre NACOM + CarVia)
+        f_aberto = Svc._get_status_filter('aberto', carvia_sets)
+        f_cotado = Svc._get_status_filter('cotado', carvia_sets)
+        f_faturado = Svc._get_status_filter('faturado', carvia_sets)
+        f_nf_cd = Svc._get_status_filter('nf_cd', carvia_sets)
+
         sr = q_s.with_entities(
             func.count(),
-            func.count(case((Pedido.status == 'ABERTO', 1))),
-            func.count(case((db.and_(
-                Pedido.cotacao_id.isnot(None), Pedido.data_embarque.is_(None),
-                (Pedido.nf.is_(None)) | (Pedido.nf == ""), Pedido.nf_cd == False
-            ), 1))),
-            func.count(case((db.and_(
-                (Pedido.nf.isnot(None)) & (Pedido.nf != ""), Pedido.nf_cd == False
-            ), 1))),
-            func.count(case((Pedido.nf_cd == True, 1))),
+            func.count(case((f_aberto, 1))),
+            func.count(case((f_cotado, 1))),
+            func.count(case((f_faturado, 1))),
+            func.count(case((f_nf_cd, 1))),
         ).one()
 
         # --- CONDITION COUNTS: base = origem + refinements + dates + statuses ---
@@ -267,7 +277,7 @@ class ListaPedidosService:
         q_c = Svc._apply_origem(q_c, p['origem'])
         q_c = Svc._apply_refinements(q_c, p['refinements'])
         q_c = Svc._apply_date_range(q_c, p['dates'])
-        q_c = Svc._apply_statuses(q_c, p['status_list'])
+        q_c = Svc._apply_statuses(q_c, p['status_list'], carvia_sets)
 
         cr = q_c.with_entities(
             func.count(case((Svc._filtro_cond_atrasados(hoje), 1))),
@@ -282,7 +292,7 @@ class ListaPedidosService:
         q_d = Pedido.query
         q_d = Svc._apply_origem(q_d, p['origem'])
         q_d = Svc._apply_refinements(q_d, p['refinements'])
-        q_d = Svc._apply_statuses(q_d, p['status_list'])
+        q_d = Svc._apply_statuses(q_d, p['status_list'], carvia_sets)
         q_d = Svc._apply_conditions(q_d, p['active_conds'], hoje,
                                     cnpjs_agendamento, lotes_item, lotes_pgto)
 
@@ -320,22 +330,143 @@ class ListaPedidosService:
     # EXPRESSIONS — para uso em case() dentro de contadores
     # ---------------------------------------------------------------
     @staticmethod
-    def _get_status_filter(status_key):
-        """Retorna clausula WHERE para um status individual."""
+    def _carvia_lotes_por_status():
+        """Classifica separacao_lote_id CarVia em 'cotado' vs 'embarcado'.
+
+        - 'cotado' = separacao_lote_id CarVia cujo pedido/cotacao esta em embarque
+          ativo SEM data_embarque preenchida (aguardando saida).
+        - 'embarcado' = idem, mas COM data_embarque preenchida.
+
+        Mapeia 2 caminhos:
+          (a) CARVIA-PED-{ped_id} via CarviaPedidoItem.numero_nf → CarviaNf.id
+              → EmbarqueItem separacao_lote_id='CARVIA-NF-{nf_id}'.
+          (b) EmbarqueItem.separacao_lote_id diretamente CARVIA-* (provisorio
+              ou legado) com provisorio=True; lote do proprio EmbarqueItem mais
+              lotes CARVIA-PED-{id} dos pedidos sem NF da mesma cotacao.
+
+        Returns:
+            dict {'cotado': set[str], 'embarcado': set[str]}
+        """
+        from app.embarques.models import EmbarqueItem, Embarque
+        from app.carvia.models import CarviaPedido, CarviaPedidoItem, CarviaNf
+
+        cotado = set()
+        embarcado = set()
+
+        # (a) PED via NF expandida
+        rows_nf = db.session.query(
+            CarviaPedido.id.label('ped_id'),
+            Embarque.data_embarque.label('data_embarque'),
+        ).join(
+            CarviaPedidoItem, CarviaPedidoItem.pedido_id == CarviaPedido.id
+        ).join(
+            CarviaNf, CarviaNf.numero_nf == CarviaPedidoItem.numero_nf
+        ).join(
+            EmbarqueItem,
+            EmbarqueItem.separacao_lote_id == (
+                db.literal('CARVIA-NF-') + db.cast(CarviaNf.id, db.String)
+            ),
+        ).join(
+            Embarque, Embarque.id == EmbarqueItem.embarque_id
+        ).filter(
+            EmbarqueItem.status == 'ativo',
+            Embarque.status == 'ativo',
+        ).all()
+        for row in rows_nf:
+            lote = f'CARVIA-PED-{row.ped_id}'
+            (embarcado if row.data_embarque else cotado).add(lote)
+
+        # (b) Provisorio direto
+        rows_prov = db.session.query(
+            EmbarqueItem.separacao_lote_id.label('lote'),
+            EmbarqueItem.carvia_cotacao_id.label('cot_id'),
+            Embarque.data_embarque.label('data_embarque'),
+        ).join(
+            Embarque, Embarque.id == EmbarqueItem.embarque_id
+        ).filter(
+            EmbarqueItem.status == 'ativo',
+            Embarque.status == 'ativo',
+            EmbarqueItem.provisorio == True,  # noqa: E712
+        ).all()
+
+        # Mapa cotacao_id → [pedidos sem NF] para propagar status aos PEDs irmaos
+        peds_sem_nf_por_cot = {}
+        if rows_prov:
+            cot_ids = {r.cot_id for r in rows_prov if r.cot_id}
+            if cot_ids:
+                # NOT EXISTS correlacionado: muito mais eficiente que NOT IN
+                # com subquery irrestrita (evita full-scan em carvia_pedido_itens)
+                has_nf_subq = db.session.query(CarviaPedidoItem).filter(
+                    CarviaPedidoItem.pedido_id == CarviaPedido.id,
+                    CarviaPedidoItem.numero_nf.isnot(None),
+                    CarviaPedidoItem.numero_nf != '',
+                ).exists()
+                peds_sem_nf = CarviaPedido.query.filter(
+                    CarviaPedido.cotacao_id.in_(list(cot_ids)),
+                    ~has_nf_subq,
+                    CarviaPedido.status != 'CANCELADO',
+                ).all()
+                for p in peds_sem_nf:
+                    peds_sem_nf_por_cot.setdefault(p.cotacao_id, []).append(p.id)
+
+        for row in rows_prov:
+            lote = row.lote
+            target = embarcado if row.data_embarque else cotado
+            target.add(lote)
+            if row.cot_id and row.cot_id in peds_sem_nf_por_cot:
+                for ped_id in peds_sem_nf_por_cot[row.cot_id]:
+                    lote_ped = f'CARVIA-PED-{ped_id}'
+                    if lote_ped not in cotado and lote_ped not in embarcado:
+                        target.add(lote_ped)
+
+        return {'cotado': cotado, 'embarcado': embarcado}
+
+    @staticmethod
+    def _get_status_filter(status_key, carvia_sets=None):
+        """Retorna clausula WHERE para um status individual.
+
+        Inclui OR para pedidos CarVia (Pedido.separacao_lote_id LIKE 'CARVIA-%')
+        usando os sets pre-computados em `_carvia_lotes_por_status`.
+        Se `carvia_sets` nao for fornecido, calcula on-demand (evitar chamar
+        repetidamente em loops — passe explicitamente em funcoes de alta carga).
+        """
+        if carvia_sets is None:
+            carvia_sets = ListaPedidosService._carvia_lotes_por_status()
+        cotados = list(carvia_sets['cotado']) or ['_NONE_']
+        embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
+        carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+
         if status_key == 'aberto':
-            return Pedido.status == 'ABERTO'
+            nacom = Pedido.status == 'ABERTO'
+            carvia = db.and_(
+                carvia_prefix,
+                Pedido.separacao_lote_id.notin_(cotados),
+                Pedido.separacao_lote_id.notin_(embarcados),
+            )
+            return db.or_(nacom, carvia)
         elif status_key == 'cotado':
-            return db.and_(
+            nacom = db.and_(
                 Pedido.cotacao_id.isnot(None),
                 Pedido.data_embarque.is_(None),
                 (Pedido.nf.is_(None)) | (Pedido.nf == ""),
                 Pedido.nf_cd == False
             )
+            carvia = db.and_(
+                carvia_prefix,
+                Pedido.separacao_lote_id.in_(cotados),
+            )
+            return db.or_(nacom, carvia)
         elif status_key == 'faturado':
-            return db.and_(
+            nacom = db.and_(
                 (Pedido.nf.isnot(None)) & (Pedido.nf != ""),
                 Pedido.nf_cd == False
             )
+            # CarVia: faturado = embarque saiu (tem NF expandida embarcada)
+            carvia = db.and_(
+                carvia_prefix,
+                Pedido.separacao_lote_id.in_(embarcados),
+            )
+            return db.or_(nacom, carvia)
         elif status_key == 'nf_cd':
             return Pedido.nf_cd == True
         return None
@@ -641,63 +772,155 @@ class ListaPedidosService:
                 if item.separacao_lote_id not in embarques_por_lote:
                     embarques_por_lote[item.separacao_lote_id] = embarque
 
-        # --- CarVia: fallback batch para lotes sem EmbarqueItem ---
+        # --- CarVia: fallback batch para lotes sem EmbarqueItem direto ---
+        # Regra: o badge de embarque respeita o EmbarqueItem REAL do sub-pedido.
+        # Se o pedido tem CarviaPedidoItem.numero_nf, procuramos CARVIA-NF-{nf_id}.
+        # Se nao acha NF expandida, NAO associa o badge (evita "pedido fantasma"
+        # herdando embarque de outro pedido da mesma cotacao).
+        # Fallback via carvia_cotacao_id so roda quando ainda ha PROVISORIO ativo
+        # (provisorio=True) — caso de pedido sem NF aguardando expansao.
         carvia_sem_embarque = [
             p for p in pedidos
             if getattr(p, 'eh_carvia', False)
             and p.separacao_lote_id not in embarques_por_lote
         ]
         if carvia_sem_embarque:
-            from app.carvia.models import CarviaPedido as _CP
+            from app.carvia.models import (
+                CarviaPedido as _CP, CarviaPedidoItem as _CPI, CarviaNf as _CN,
+            )
 
-            # Coletar cotacao_ids via batch
-            ped_ids = []
-            cot_ids_diretos = []
-            lote_to_cot_id = {}
+            # 1. Resolver por NF propria (CARVIA-NF-{nf_id})
+            # Coleta: ped_ids de CARVIA-PED-* e cot_ids de CARVIA-{cot_id}
+            ped_ids_com_lote = []  # [(ped_id, lote_key)]
+            lote_to_cot_id = {}    # para fallback por cotacao_id adiante
             for p in carvia_sem_embarque:
                 lote = p.separacao_lote_id or ''
                 try:
                     if lote.startswith('CARVIA-PED-'):
-                        ped_ids.append(int(lote.replace('CARVIA-PED-', '')))
+                        ped_ids_com_lote.append(
+                            (int(lote.replace('CARVIA-PED-', '')), lote)
+                        )
                     elif lote.startswith('CARVIA-'):
                         cid = int(lote.replace('CARVIA-', ''))
-                        cot_ids_diretos.append(cid)
                         lote_to_cot_id[lote] = cid
                 except (ValueError, TypeError):
                     pass
 
-            # Batch load CarviaPedido para obter cotacao_id
-            if ped_ids:
-                carvia_peds = _CP.query.filter(_CP.id.in_(ped_ids)).all()
-                for cp in carvia_peds:
+            # Batch load CarviaPedido → cotacao_id
+            ped_id_to_cot = {}
+            if ped_ids_com_lote:
+                ids_unicos = list({pid for (pid, _) in ped_ids_com_lote})
+                for cp in _CP.query.filter(_CP.id.in_(ids_unicos)).all():
                     if cp.cotacao_id:
-                        lote_key = f'CARVIA-PED-{cp.id}'
-                        lote_to_cot_id[lote_key] = cp.cotacao_id
+                        ped_id_to_cot[cp.id] = cp.cotacao_id
 
-            # Batch load EmbarqueItems por carvia_cotacao_id
-            all_cot_ids = list(set(lote_to_cot_id.values()))
+            # Batch load NFs dos pedidos (CarviaPedidoItem.numero_nf)
+            nf_nums_por_ped = {}  # ped_id → set[numero_nf]
+            if ped_ids_com_lote:
+                ids_unicos = list({pid for (pid, _) in ped_ids_com_lote})
+                rows = db.session.query(
+                    _CPI.pedido_id, _CPI.numero_nf
+                ).filter(
+                    _CPI.pedido_id.in_(ids_unicos),
+                    _CPI.numero_nf.isnot(None),
+                    _CPI.numero_nf != '',
+                ).distinct().all()
+                for pid, nf_num in rows:
+                    nf_nums_por_ped.setdefault(pid, set()).add(str(nf_num))
+
+            # Batch load CarviaNf para mapear numero_nf → id
+            todos_nf_nums = set()
+            for s in nf_nums_por_ped.values():
+                todos_nf_nums.update(s)
+            nf_num_to_id = {}
+            if todos_nf_nums:
+                for nf_obj in _CN.query.filter(
+                    _CN.numero_nf.in_(list(todos_nf_nums))
+                ).all():
+                    nf_num_to_id[str(nf_obj.numero_nf)] = nf_obj.id
+
+            # Para cada pedido CARVIA-PED-*, se tem NF: resolver via CARVIA-NF-{nf_id}
+            lotes_resolvidos = set()  # lotes que ja sao "decididos" (com ou sem embarque)
+            todos_nf_lotes = []
+            lote_ped_to_nf_lotes = {}  # lote_ped → [lote_nf, ...]
+            for ped_id, lote_ped in ped_ids_com_lote:
+                nfs = nf_nums_por_ped.get(ped_id, set())
+                if nfs:
+                    lote_nfs = [
+                        f'CARVIA-NF-{nf_num_to_id[n]}'
+                        for n in nfs if n in nf_num_to_id
+                    ]
+                    lote_ped_to_nf_lotes[lote_ped] = lote_nfs
+                    todos_nf_lotes.extend(lote_nfs)
+                    # Pedido tem NF → nao cai no fallback de provisorio
+                    lotes_resolvidos.add(lote_ped)
+
+            # Batch load EmbarqueItems ativos pelos lotes CARVIA-NF-*
+            nf_lote_to_embarque = {}
+            if todos_nf_lotes:
+                rows = (
+                    db.session.query(EmbarqueItem, Embarque)
+                    .join(Embarque, EmbarqueItem.embarque_id == Embarque.id)
+                    .filter(
+                        EmbarqueItem.separacao_lote_id.in_(list(set(todos_nf_lotes))),
+                        EmbarqueItem.status == 'ativo',
+                        Embarque.status == 'ativo',
+                    )
+                    .order_by(Embarque.numero.desc())
+                    .all()
+                )
+                for ei, emb in rows:
+                    if ei.separacao_lote_id not in nf_lote_to_embarque:
+                        nf_lote_to_embarque[ei.separacao_lote_id] = emb
+
+            # Atribuir embarque aos pedidos com NF (se encontrado)
+            for lote_ped, lote_nfs in lote_ped_to_nf_lotes.items():
+                for lote_nf in lote_nfs:
+                    if lote_nf in nf_lote_to_embarque:
+                        embarques_por_lote[lote_ped] = nf_lote_to_embarque[lote_nf]
+                        break
+                # Se nenhum achou: deixa sem badge (decidido via lotes_resolvidos)
+
+            # 2. Fallback por carvia_cotacao_id APENAS para lotes ainda nao decididos
+            #    (pedidos sem NF + lotes CARVIA-{cot_id} puros)
+            lote_to_cot_id_filtrado = {
+                lote: cid for lote, cid in lote_to_cot_id.items()
+                if lote not in lotes_resolvidos
+            }
+            for ped_id, lote_ped in ped_ids_com_lote:
+                if lote_ped not in lotes_resolvidos:
+                    cot_id = ped_id_to_cot.get(ped_id)
+                    if cot_id:
+                        lote_to_cot_id_filtrado[lote_ped] = cot_id
+
+            all_cot_ids = list(set(lote_to_cot_id_filtrado.values()))
             if all_cot_ids:
+                # CRITICO: filtrar provisorio=True — garante que so associa se
+                # a cotacao ainda tem PROVISORIO ativo (nao expandido).
                 cv_em_items = EmbarqueItem.query.filter(
                     EmbarqueItem.carvia_cotacao_id.in_(all_cot_ids),
+                    EmbarqueItem.provisorio == True,  # noqa: E712
                     EmbarqueItem.status == 'ativo',
                 ).all()
-                cv_embarque_ids = {ei.embarque_id for ei in cv_em_items if ei.embarque_id}
+                cv_embarque_ids = {
+                    ei.embarque_id for ei in cv_em_items if ei.embarque_id
+                }
                 cv_embarques = {}
                 if cv_embarque_ids:
                     for emb in Embarque.query.filter(
                         Embarque.id.in_(list(cv_embarque_ids)),
-                        Embarque.status == 'ativo'
+                        Embarque.status == 'ativo',
                     ).all():
                         cv_embarques[emb.id] = emb
 
-                # Map cotacao_id -> embarque
                 cot_to_embarque = {}
                 for ei in cv_em_items:
                     if ei.carvia_cotacao_id and ei.embarque_id in cv_embarques:
-                        cot_to_embarque[ei.carvia_cotacao_id] = cv_embarques[ei.embarque_id]
+                        cot_to_embarque[ei.carvia_cotacao_id] = (
+                            cv_embarques[ei.embarque_id]
+                        )
 
-                # Atribuir
-                for lote_key, cot_id in lote_to_cot_id.items():
+                for lote_key, cot_id in lote_to_cot_id_filtrado.items():
                     emb = cot_to_embarque.get(cot_id)
                     if emb:
                         embarques_por_lote[lote_key] = emb

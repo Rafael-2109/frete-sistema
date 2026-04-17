@@ -321,10 +321,18 @@ class CarviaPedido(db.Model):
     def status_calculado(self):
         """Status derivado do estado real, sem dependencia de atualizacao manual.
 
+        Regras:
+          - Se pedido TEM NF propria (CarviaPedidoItem.numero_nf preenchido):
+            depende APENAS dos EmbarqueItems CARVIA-NF-{nf_id} dessas NFs.
+            Se nenhum existe ativo → ABERTO (mesmo que a cotacao tenha
+            provisorio ativo consumido por outros pedidos).
+          - Se pedido NAO tem NF: pode estar via padrao legado CARVIA-PED-{id}
+            ou via provisorio (provisorio=True) da cotacao.
+
         ABERTO: pedido nao esta em nenhum embarque
-        COTADO: pedido esta em embarque (provisorio ou real) — ha cotacao de compra
-        EMBARCADO: COTADO + portaria registrou saida (embarque.data_embarque)
-        CANCELADO: cancelamento explicito (coluna status)
+        COTADO: em embarque sem saida (data_embarque=NULL)
+        EMBARCADO: em embarque com data_embarque preenchida
+        CANCELADO: coluna status=CANCELADO
         """
         if self.status == 'CANCELADO':
             return 'CANCELADO'
@@ -332,49 +340,58 @@ class CarviaPedido(db.Model):
         from app.embarques.models import EmbarqueItem, Embarque
         from app.carvia.models.documentos import CarviaNf
 
-        em_embarque = False
-
-        # 1. Buscar EmbarqueItems reais via padrao CARVIA-NF-{nf_id}
         itens_lista = self.itens.all()
         nf_nums = {i.numero_nf for i in itens_lista if i.numero_nf}
-        for nf_num in nf_nums:
-            nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
-            if nf_obj:
-                ei = EmbarqueItem.query.filter_by(
-                    separacao_lote_id=f'CARVIA-NF-{nf_obj.id}',
-                    status='ativo',
-                ).first()
-                if ei:
-                    embarque = db.session.get(Embarque, ei.embarque_id)
-                    if embarque and embarque.data_embarque:
-                        return 'EMBARCADO'
-                    em_embarque = True
 
-        # 2. Backward compat: padrao antigo CARVIA-PED-{id}
-        if not em_embarque:
-            em_legado = EmbarqueItem.query.filter_by(
-                separacao_lote_id=f'CARVIA-PED-{self.id}',
-                status='ativo',
-            ).first()
-            if em_legado:
-                embarque = db.session.get(Embarque, em_legado.embarque_id)
-                if embarque and embarque.data_embarque:
-                    return 'EMBARCADO'
-                em_embarque = True
+        # Passo 1: pedido COM NF propria — decide exclusivamente via CARVIA-NF-{nf_id}
+        if nf_nums:
+            em_embarque_via_nf = False
+            for nf_num in nf_nums:
+                nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
+                if nf_obj:
+                    ei = EmbarqueItem.query.filter_by(
+                        separacao_lote_id=f'CARVIA-NF-{nf_obj.id}',
+                        status='ativo',
+                    ).first()
+                    if ei:
+                        embarque = db.session.get(Embarque, ei.embarque_id)
+                        if embarque and embarque.data_embarque:
+                            return 'EMBARCADO'
+                        em_embarque_via_nf = True
+            if em_embarque_via_nf:
+                return 'COTADO'
+            # Pedido tem NF mas NENHUM EmbarqueItem CARVIA-NF-* ativo → ABERTO
+            # (provisorio da cotacao pode ter sido consumido por outro pedido)
+            return 'ABERTO'
 
-        # 3. Provisorio via cotacao (cotacao adicionada ao embarque)
-        if not em_embarque:
-            ei_prov = EmbarqueItem.query.filter_by(
-                carvia_cotacao_id=self.cotacao_id,
-                status='ativo',
-            ).first()
-            if ei_prov:
-                embarque_prov = db.session.get(Embarque, ei_prov.embarque_id)
-                if embarque_prov and embarque_prov.data_embarque:
-                    return 'EMBARCADO'
-                em_embarque = True
+        # Passo 2: pedido SEM NF — padrao legado CARVIA-PED-{id}
+        em_legado = EmbarqueItem.query.filter_by(
+            separacao_lote_id=f'CARVIA-PED-{self.id}',
+            status='ativo',
+        ).first()
+        if em_legado:
+            embarque = db.session.get(Embarque, em_legado.embarque_id)
+            if embarque and embarque.data_embarque:
+                return 'EMBARCADO'
+            return 'COTADO'
 
-        if em_embarque:
+        # Passo 3: pedido SEM NF — so conta se AINDA ha provisorio com SALDO ativo
+        # na cotacao. Exige `volumes > 0 OR peso > 0` para evitar exibir pedido
+        # como COTADO quando provisorio foi consumido por outro pedido expandido
+        # (provisorio pode permanecer com saldo zero apos expansao parcial).
+        ei_prov = EmbarqueItem.query.filter(
+            EmbarqueItem.carvia_cotacao_id == self.cotacao_id,
+            EmbarqueItem.provisorio == True,  # noqa: E712
+            EmbarqueItem.status == 'ativo',
+            db.or_(
+                EmbarqueItem.volumes > 0,
+                EmbarqueItem.peso > 0,
+            ),
+        ).first()
+        if ei_prov:
+            embarque_prov = db.session.get(Embarque, ei_prov.embarque_id)
+            if embarque_prov and embarque_prov.data_embarque:
+                return 'EMBARCADO'
             return 'COTADO'
 
         return 'ABERTO'

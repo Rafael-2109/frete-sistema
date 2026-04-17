@@ -34,9 +34,13 @@
                         <tr>
                             <th>Numero</th>
                             <th>Cotacao</th>
+                            <th>Emitente</th>
+                            <th>Destino</th>
                             <th>NF</th>
                             <th>Filial</th>
-                            <th>Tipo</th>
+                            <th class="text-end">Qtd</th>
+                            <th class="text-end">Peso (kg)</th>
+                            <th class="text-end">Valor</th>
                             <th class="text-center">Embarque</th>
                             <th class="text-center">Status</th>
                             <th class="text-center">Obs.</th>
@@ -58,13 +62,35 @@
                                 </a>
                             </td>
                             <td>
+                                {% set emit = emitente_por_pedido.get(ped.id) %}
+                                {% if emit %}
+                                <small>{{ emit.razao_social or emit.cnpj or '-' }}</small>
+                                <br><small class="text-muted">{{ emit.fisico_cidade }}/{{ emit.fisico_uf }}</small>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
+                                {% set dest = destino_por_pedido.get(ped.id) %}
+                                {% if dest %}
+                                <small>{{ dest.razao_social or dest.cnpj or '-' }}</small>
+                                <br><small class="text-muted">{{ dest.fisico_cidade }}/{{ dest.fisico_uf }}</small>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td>
                                 {% set nfs = nfs_por_pedido.get(ped.id, []) %}
                                 {% if nfs %}
                                     {% for nf in nfs %}<span class="badge carvia-badge-faturado">{{ nf }}</span> {% endfor %}
                                 {% else %}-{% endif %}
                             </td>
-                            <td>{{ ped.filial }}</td>
-                            <td>{{ ped.tipo_separacao }}</td>
+                            <td>{{ ped.filial }}<br><small class="text-muted">{{ ped.tipo_separacao }}</small></td>
+                            <td class="text-end">{{ qtd_por_pedido.get(ped.id, 0) }}</td>
+                            <td class="text-end">
+                                {% set peso = peso_por_pedido.get(ped.id, 0) %}
+                                {% if peso %}{{ peso|numero_br(2) }}{% else %}-{% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% set valor = valor_por_pedido.get(ped.id, 0) %}
+                                {% if valor %}{{ valor|valor_br }}{% else %}-{% endif %}
+                            </td>
                             <td class="text-center">
                                 {% set emb = embarques_por_pedido.get(ped.id) %}
                                 {% if emb %}
