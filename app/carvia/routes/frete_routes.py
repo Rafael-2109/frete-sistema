@@ -239,6 +239,16 @@ def register_frete_routes(bp):
             frete_eh_moto = (cotacao_venda.tipo_material == 'MOTO')
             if frete_eh_moto:
                 cotacao_qtd_motos = cotacao_venda.qtd_total_motos
+            # Sanitiza Decimal -> float para divisoes no template
+            # (peso_total/valor_venda sao float; Decimal/float levanta TypeError).
+            # Objeto transient nesta rota — nao ha commit que persista a conversao.
+            from app.utils.json_helpers import sanitize_for_json
+            if cotacao_venda.valor_final_aprovado is not None:
+                cotacao_venda.valor_final_aprovado = sanitize_for_json(cotacao_venda.valor_final_aprovado)
+            if cotacao_venda.valor_tabela is not None:
+                cotacao_venda.valor_tabela = sanitize_for_json(cotacao_venda.valor_tabela)
+            if cotacao_venda.percentual_desconto is not None:
+                cotacao_venda.percentual_desconto = sanitize_for_json(cotacao_venda.percentual_desconto)
         elif operacao:
             # Fallback: detectar moto via CarviaNfVeiculo das NFs da operacao
             from app.carvia.models.documentos import CarviaNfVeiculo, CarviaOperacaoNf
