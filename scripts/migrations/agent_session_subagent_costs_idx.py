@@ -8,11 +8,18 @@ so e consultado em path queries).
 Usage:
     python scripts/migrations/agent_session_subagent_costs_idx.py
 """
+import os
 import sys
 
-from sqlalchemy import text
+# Adiciona raiz do projeto ao sys.path quando script e executado direto
+# (ex: `python scripts/migrations/agent_session_subagent_costs_idx.py`)
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
-from app import create_app, db
+from sqlalchemy import text  # noqa: E402
+
+from app import create_app, db  # noqa: E402
 
 
 def verificar_indice() -> bool:

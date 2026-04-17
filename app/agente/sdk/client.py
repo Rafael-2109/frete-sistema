@@ -70,21 +70,33 @@ from .stream_parser import (  # noqa: E402 — re-exports para tests (patch.mult
 )
 
 
-def _emit_subagent_summary(event_queue, summary_dict: dict) -> None:
+def _emit_subagent_summary(session_id, summary_dict: dict) -> None:
     """
-    Emite StreamEvent('subagent_summary') na event_queue da sessao.
+    Emite evento 'subagent_summary' via Redis pubsub no canal agent_sse:<session_id>.
 
-    Chamado pelo _subagent_stop_hook apos persistir cost granular.
-    Thread-safe: event_queue e um queue.Queue() protegido por lock interno.
-    No-op se event_queue for None.
+    Chamado pelo _subagent_stop_hook apos persistir cost granular. O SSE
+    generator em routes/chat.py subscreve esse canal e forward o evento
+    para o frontend (unificado com Task 4.4 validator worker).
+
+    FIX 2026-04-17: anteriormente usava event_queue.put_nowait(StreamEvent(...))
+    mas event_queue espera bytes/strings (protocolo SDK interno), causando
+    TypeError em sessoes com subagent que termina em status=error.
+
+    No-op se session_id for falsy ou Redis falhar (best-effort, R1).
     """
-    if event_queue is None:
+    if not session_id:
         return
     try:
-        event_queue.put_nowait(StreamEvent(
-            type='subagent_summary',
-            content=summary_dict,
-        ))
+        import json
+        import os
+        import redis
+        redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+        r = redis.from_url(redis_url)
+        channel = f'agent_sse:{session_id}'
+        r.publish(channel, json.dumps({
+            'type': 'subagent_summary',
+            'data': summary_dict,
+        }))
     except Exception as e:
         logger.debug(f"[emit_subagent_summary] falhou: {e}")
 
