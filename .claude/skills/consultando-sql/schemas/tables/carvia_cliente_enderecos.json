@@ -94,6 +94,13 @@
       "default": false
     },
     {
+      "name": "ativo",
+      "type": "boolean",
+      "nullable": false,
+      "default": true,
+      "description": "Soft-delete flag. Quando FALSE, endereco nao aparece como opcao em cotacoes mas continua vinculado ao historico."
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",

@@ -106,6 +106,8 @@ class CarviaClienteService:
     def resolver_clientes_por_cnpjs(cnpjs) -> Dict[str, Dict]:
         """Resolve conjunto de CNPJs para CarviaCliente (batch, sem N+1).
 
+        Considera apenas enderecos ATIVOS — inativos nao devem sugerir cliente.
+
         Args:
             cnpjs: iteravel de CNPJs (com ou sem formatacao)
 
@@ -133,6 +135,7 @@ class CarviaClienteService:
         ).filter(
             CarviaClienteEndereco.cnpj.in_(cnpjs_limpos),
             CarviaClienteEndereco.cliente_id.isnot(None),
+            CarviaClienteEndereco.ativo == True,
         ).all()
 
         result: Dict[str, Dict] = {}
@@ -183,11 +186,12 @@ class CarviaClienteService:
         if tipo == 'ORIGEM':
             return None, 'Origens sao globais. Use adicionar_origem_global() em vez de adicionar_endereco().'
 
-        # Verificar duplicata
+        # Verificar duplicata (considera apenas ativos — o index parcial ignora inativos)
         existente = CarviaClienteEndereco.query.filter_by(
             cliente_id=cliente_id,
             cnpj=cnpj_limpo,
             tipo=tipo,
+            ativo=True,
         ).first()
         if existente:
             return None, f'Endereco com documento {cnpj_limpo} ({tipo}) ja cadastrado para este cliente.'
@@ -227,32 +231,90 @@ class CarviaClienteService:
         return endereco, None
 
     @staticmethod
-    def atualizar_endereco(endereco_id: int, dados: dict) -> Tuple[bool, Optional[str]]:
-        """Atualiza endereco fisico (editavel). Retorna (sucesso, erro).
+    def atualizar_endereco(
+        endereco_id: int, dados: dict
+    ) -> Tuple[bool, Optional[str], Optional[Dict]]:
+        """Atualiza endereco fisico (editavel). Retorna (sucesso, erro, contexto).
 
         Aceita tambem:
-        - cliente_id: transferir endereco para outro cliente
+        - cliente_id: transferir endereco para outro cliente (pre-valida duplicata)
         - cnpj: preencher CNPJ pendente (converte provisorio para definitivo)
+        - ativo: soft delete / reativar
         - dados_receita_*: preencher campos da Receita ao definir CNPJ
+
+        Quando a transferencia de cliente causaria violacao do unique
+        (cliente_id, cnpj, tipo), retorna (False, msg, {
+            'acao_sugerida': 'mesclar',
+            'endereco_existente_id': <id>,
+            'cliente_destino_id': <id>,
+            'cliente_destino_nome': <nome>,
+        }). Chamador pode oferecer mesclar ao usuario.
         """
-        from app.carvia.models import CarviaClienteEndereco
+        from app.carvia.models import CarviaCliente, CarviaClienteEndereco
 
         endereco = db.session.get(CarviaClienteEndereco, endereco_id)
         if not endereco:
-            return False, 'Endereco nao encontrado.'
+            return False, 'Endereco nao encontrado.', None
 
-        # Transferir para outro cliente
+        # Transferir para outro cliente (pre-validar antes do flush)
         if 'cliente_id' in dados:
             novo_cliente_id = dados['cliente_id']
             if novo_cliente_id is not None:
                 novo_cliente_id = int(novo_cliente_id)
-                from app.carvia.models import CarviaCliente
                 novo_cliente = db.session.get(CarviaCliente, novo_cliente_id)
                 if not novo_cliente:
-                    return False, 'Cliente destino nao encontrado.'
+                    return False, 'Cliente destino nao encontrado.', None
                 if not novo_cliente.ativo:
-                    return False, 'Cliente destino esta inativo.'
+                    return False, 'Cliente destino esta inativo.', None
+
+                # Detectar duplicata ANTES do flush (evitar UniqueViolation cru)
+                if (endereco.cnpj and endereco.tipo and
+                        novo_cliente_id != endereco.cliente_id):
+                    duplicata = CarviaClienteEndereco.query.filter(
+                        CarviaClienteEndereco.cliente_id == novo_cliente_id,
+                        CarviaClienteEndereco.cnpj == endereco.cnpj,
+                        CarviaClienteEndereco.tipo == endereco.tipo,
+                        CarviaClienteEndereco.ativo == True,
+                        CarviaClienteEndereco.id != endereco_id,
+                    ).first()
+                    if duplicata:
+                        return (
+                            False,
+                            (f'Ja existe endereco ativo com CNPJ {endereco.cnpj} '
+                             f'({endereco.tipo}) no cliente "{novo_cliente.nome_comercial}". '
+                             f'Deseja mesclar o historico neste existente?'),
+                            {
+                                'acao_sugerida': 'mesclar',
+                                'endereco_existente_id': duplicata.id,
+                                'cliente_destino_id': novo_cliente_id,
+                                'cliente_destino_nome': novo_cliente.nome_comercial,
+                            },
+                        )
             endereco.cliente_id = novo_cliente_id
+
+        # Soft-delete / reativar
+        if 'ativo' in dados:
+            novo_ativo = bool(dados['ativo'])
+            # Ao reativar, detectar conflito com unique parcial
+            if novo_ativo and not endereco.ativo and endereco.cnpj and endereco.cliente_id:
+                conflito = CarviaClienteEndereco.query.filter(
+                    CarviaClienteEndereco.cliente_id == endereco.cliente_id,
+                    CarviaClienteEndereco.cnpj == endereco.cnpj,
+                    CarviaClienteEndereco.tipo == endereco.tipo,
+                    CarviaClienteEndereco.ativo == True,
+                    CarviaClienteEndereco.id != endereco_id,
+                ).first()
+                if conflito:
+                    return (
+                        False,
+                        (f'Nao e possivel reativar: ja existe outro endereco ativo '
+                         f'com mesmo CNPJ e tipo neste cliente (id={conflito.id}).'),
+                        {
+                            'acao_sugerida': 'mesclar',
+                            'endereco_existente_id': conflito.id,
+                        },
+                    )
+            endereco.ativo = novo_ativo
 
         # Campos fisicos editaveis
         for campo in ('uf', 'cidade', 'logradouro', 'numero', 'bairro', 'cep', 'complemento'):
@@ -282,54 +344,237 @@ class CarviaClienteService:
                 setattr(endereco, chave, dados[chave])
 
         db.session.flush()
-        return True, None
+        return True, None, None
 
     @staticmethod
-    def remover_endereco(endereco_id: int) -> Tuple[bool, Optional[str]]:
-        """Remove endereco. Retorna (sucesso, erro)."""
-        from app.carvia.models import CarviaClienteEndereco, CarviaCotacao
+    def buscar_candidatos_migracao(endereco_id: int) -> List:
+        """Retorna outros enderecos ativos com mesmo (cnpj, tipo) em OUTROS clientes.
+
+        Usado antes de hard delete para oferecer opcao de migracao do historico.
+        """
+        from app.carvia.models import CarviaClienteEndereco
+
+        endereco = db.session.get(CarviaClienteEndereco, endereco_id)
+        if not endereco or not endereco.cnpj:
+            return []
+
+        query = CarviaClienteEndereco.query.filter(
+            CarviaClienteEndereco.cnpj == endereco.cnpj,
+            CarviaClienteEndereco.tipo == endereco.tipo,
+            CarviaClienteEndereco.ativo == True,
+            CarviaClienteEndereco.id != endereco_id,
+        )
+        # Se o endereco pertence a cliente, considerar apenas enderecos de OUTROS
+        # clientes (nao origens globais). Se e origem global, nao ha candidato (seria
+        # a propria — origens globais sao unicas por CNPJ).
+        if endereco.cliente_id is not None:
+            query = query.filter(CarviaClienteEndereco.cliente_id.isnot(None))
+            query = query.filter(CarviaClienteEndereco.cliente_id != endereco.cliente_id)
+        else:
+            query = query.filter(CarviaClienteEndereco.cliente_id.is_(None))
+
+        return query.all()
+
+    @staticmethod
+    def _migrar_referencias(origem_id: int, destino_id: int) -> int:
+        """Migra todas FKs de origem_id → destino_id. Retorna total migrado.
+
+        Atualmente so carvia_cotacoes (endereco_origem_id, endereco_destino_id).
+        Se novas FKs forem adicionadas, incluir aqui.
+        """
+        from app.carvia.models import CarviaCotacao
+
+        total = 0
+        total += CarviaCotacao.query.filter_by(
+            endereco_origem_id=origem_id
+        ).update({'endereco_origem_id': destino_id}, synchronize_session=False)
+        total += CarviaCotacao.query.filter_by(
+            endereco_destino_id=origem_id
+        ).update({'endereco_destino_id': destino_id}, synchronize_session=False)
+        return total
+
+    @staticmethod
+    def mesclar_enderecos(
+        origem_id: int, destino_id: int
+    ) -> Tuple[bool, Optional[str], Optional[Dict]]:
+        """Mescla origem → destino: migra cotacoes + soft-delete origem.
+
+        Pre-requisitos: mesmo cnpj E mesmo tipo. IDs distintos. Destino ativo.
+        Retorna (sucesso, erro, {total_migrado, origem_id, destino_id}).
+        """
+        from app.carvia.models import CarviaClienteEndereco
+
+        if origem_id == destino_id:
+            return False, 'Origem e destino sao o mesmo endereco.', None
+
+        origem = db.session.get(CarviaClienteEndereco, origem_id)
+        destino = db.session.get(CarviaClienteEndereco, destino_id)
+        if not origem:
+            return False, 'Endereco origem nao encontrado.', None
+        if not destino:
+            return False, 'Endereco destino nao encontrado.', None
+        if not destino.ativo:
+            return False, 'Endereco destino esta inativo — reative antes de mesclar.', None
+        if origem.cnpj != destino.cnpj:
+            return False, 'CNPJ do origem e destino nao coincidem.', None
+        if origem.tipo != destino.tipo:
+            return False, 'Tipo (ORIGEM/DESTINO) do origem e destino nao coincidem.', None
+
+        total = CarviaClienteService._migrar_referencias(origem_id, destino_id)
+        origem.ativo = False  # soft-delete: historico preservado
+        db.session.flush()
+
+        return True, None, {
+            'total_migrado': total,
+            'origem_id': origem_id,
+            'destino_id': destino_id,
+        }
+
+    @staticmethod
+    def migrar_e_remover(
+        origem_id: int, destino_id: int
+    ) -> Tuple[bool, Optional[str], Optional[Dict]]:
+        """Migra cotacoes origem → destino e DELETA fisicamente o origem.
+
+        Usado quando usuario quer erradicar o endereco errado. Requer destino
+        valido (candidato em OUTRO cliente com mesmo cnpj+tipo).
+        Retorna (sucesso, erro, {total_migrado}).
+        """
+        from app.carvia.models import CarviaClienteEndereco
+
+        if origem_id == destino_id:
+            return False, 'Origem e destino sao o mesmo endereco.', None
+
+        origem = db.session.get(CarviaClienteEndereco, origem_id)
+        destino = db.session.get(CarviaClienteEndereco, destino_id)
+        if not origem:
+            return False, 'Endereco origem nao encontrado.', None
+        if not destino:
+            return False, 'Endereco destino nao encontrado.', None
+        if not destino.ativo:
+            return False, 'Endereco destino esta inativo.', None
+        if origem.cnpj != destino.cnpj or origem.tipo != destino.tipo:
+            return False, 'Destino deve ter mesmo CNPJ e tipo do origem.', None
+
+        total = CarviaClienteService._migrar_referencias(origem_id, destino_id)
+        db.session.delete(origem)
+        db.session.flush()
+        return True, None, {'total_migrado': total}
+
+    @staticmethod
+    def remover_endereco(
+        endereco_id: int, forcar: bool = False
+    ) -> Tuple[bool, Optional[str], Optional[Dict]]:
+        """Remove endereco (hard delete). Retorna (sucesso, erro, contexto).
+
+        Regras:
+          - Se endereco NAO tem cotacoes vinculadas → DELETE direto.
+          - Se tem cotacoes, exige migracao para outro endereco valido (via
+            migrar_e_remover) — este metodo retorna erro + candidatos.
+          - `forcar=True`: apenas para callers internos; deleta mesmo com
+            cotacoes (usado por migrar_e_remover).
+
+        Contexto quando bloqueado:
+            {
+              'candidatos_migracao': [ {id, cliente_id, cliente_nome, fisico_cidade, fisico_uf, razao_social} ],
+              'total_cotacoes': <int>,
+              'sugestao': 'migrar_e_remover' | 'desativar'
+            }
+        """
+        from app.carvia.models import CarviaClienteEndereco, CarviaCotacao, CarviaCliente
 
         endereco = db.session.get(CarviaClienteEndereco, endereco_id)
         if not endereco:
-            return False, 'Endereco nao encontrado.'
+            return False, 'Endereco nao encontrado.', None
 
-        # Verificar se esta em uso por cotacoes ATIVAS (ignora CANCELADO/RECUSADO — "lixo")
-        em_uso = CarviaCotacao.query.filter(
+        # Contar cotacoes vinculadas (todos status — e FK real no banco)
+        total_cotacoes = CarviaCotacao.query.filter(
             db.or_(
                 CarviaCotacao.endereco_origem_id == endereco_id,
                 CarviaCotacao.endereco_destino_id == endereco_id,
             ),
-            CarviaCotacao.status.notin_(['CANCELADO', 'RECUSADO']),
         ).count()
-        if em_uso:
-            return False, f'Endereco em uso por {em_uso} cotacao(oes) ativa(s). Nao e possivel remover.'
 
-        db.session.delete(endereco)
-        db.session.flush()
-        return True, None
+        if total_cotacoes == 0 or forcar:
+            db.session.delete(endereco)
+            db.session.flush()
+            return True, None, {'total_cotacoes': total_cotacoes}
+
+        # Tem cotacoes: buscar candidatos para migracao
+        candidatos = CarviaClienteService.buscar_candidatos_migracao(endereco_id)
+
+        candidatos_serial = []
+        for c in candidatos:
+            cliente_nome = None
+            if c.cliente_id:
+                cli = db.session.get(CarviaCliente, c.cliente_id)
+                cliente_nome = cli.nome_comercial if cli else None
+            candidatos_serial.append({
+                'id': c.id,
+                'cliente_id': c.cliente_id,
+                'cliente_nome': cliente_nome,
+                'razao_social': c.razao_social,
+                'fisico_cidade': c.fisico_cidade,
+                'fisico_uf': c.fisico_uf,
+            })
+
+        if candidatos_serial:
+            return (
+                False,
+                (f'Endereco vinculado a {total_cotacoes} cotacao(oes). '
+                 f'Selecione um destino abaixo para migrar o historico e remover.'),
+                {
+                    'candidatos_migracao': candidatos_serial,
+                    'total_cotacoes': total_cotacoes,
+                    'sugestao': 'migrar_e_remover',
+                },
+            )
+
+        return (
+            False,
+            (f'Endereco vinculado a {total_cotacoes} cotacao(oes) e nao ha outro '
+             f'endereco valido (mesmo CNPJ+tipo) para migrar o historico. '
+             f'Use "Desativar" para remove-lo das opcoes sem perder o historico.'),
+            {
+                'candidatos_migracao': [],
+                'total_cotacoes': total_cotacoes,
+                'sugestao': 'desativar',
+            },
+        )
 
     @staticmethod
-    def buscar_enderecos_por_cnpj(cnpj: str) -> List:
+    def buscar_enderecos_por_cnpj(cnpj: str, apenas_ativos: bool = True) -> List:
         """Busca todos os enderecos cadastrados para um CNPJ (cross-cliente).
 
         Inclui origens globais (cliente_id IS NULL) e destinos de clientes.
+        Por padrao retorna apenas ativos — callers que precisam de historico
+        completo devem passar apenas_ativos=False explicitamente.
         """
         from app.carvia.models import CarviaClienteEndereco
 
         cnpj_limpo = CarviaClienteService._limpar_cnpj(cnpj)
-        return CarviaClienteEndereco.query.filter_by(cnpj=cnpj_limpo).all()
+        query = CarviaClienteEndereco.query.filter_by(cnpj=cnpj_limpo)
+        if apenas_ativos:
+            query = query.filter(CarviaClienteEndereco.ativo == True)
+        return query.all()
 
     # ==================== ORIGENS GLOBAIS ====================
 
     @staticmethod
-    def listar_origens_globais() -> List:
-        """Retorna todas as origens globais (cliente_id IS NULL, tipo=ORIGEM)."""
+    def listar_origens_globais(apenas_ativos: bool = True) -> List:
+        """Retorna todas as origens globais (cliente_id IS NULL, tipo=ORIGEM).
+
+        Por padrao filtra apenas ativas — origens desativadas nao aparecem como opcao.
+        """
         from app.carvia.models import CarviaClienteEndereco
 
-        return CarviaClienteEndereco.query.filter(
+        query = CarviaClienteEndereco.query.filter(
             CarviaClienteEndereco.tipo == 'ORIGEM',
             CarviaClienteEndereco.cliente_id.is_(None),
-        ).order_by(CarviaClienteEndereco.razao_social).all()
+        )
+        if apenas_ativos:
+            query = query.filter(CarviaClienteEndereco.ativo == True)
+        return query.order_by(CarviaClienteEndereco.razao_social).all()
 
     @staticmethod
     def adicionar_origem_global(
@@ -350,11 +595,12 @@ class CarviaClienteService:
         if not cnpj_limpo or len(cnpj_limpo) not in (11, 14):
             return None, 'Documento invalido (CNPJ=14 digitos, CPF=11 digitos).'
 
-        # Verificar se ja existe origem global com esse CNPJ
+        # Verificar se ja existe origem global ATIVA com esse CNPJ
         existente = CarviaClienteEndereco.query.filter(
             CarviaClienteEndereco.cnpj == cnpj_limpo,
             CarviaClienteEndereco.tipo == 'ORIGEM',
             CarviaClienteEndereco.cliente_id.is_(None),
+            CarviaClienteEndereco.ativo == True,
         ).first()
         if existente:
             return existente, None  # Retorna existente sem erro

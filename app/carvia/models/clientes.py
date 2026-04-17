@@ -78,6 +78,11 @@ class CarviaClienteEndereco(db.Model):
     principal = db.Column(db.Boolean, nullable=False, default=False)
     provisorio = db.Column(db.Boolean, nullable=False, default=False)
 
+    # Soft-delete: enderecos inativos nao aparecem como opcao em cotacoes,
+    # mas permanecem vinculados a cotacoes historicas. Indices uq_* parciais
+    # tem filtro WHERE ativo = TRUE para permitir re-cadastro correto.
+    ativo = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=False)
 

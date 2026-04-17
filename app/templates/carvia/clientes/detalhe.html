@@ -50,11 +50,20 @@
 
     {# Enderecos #}
     <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
             <strong><i class="fas fa-map-marker-alt"></i> Enderecos ({{ enderecos|length }})</strong>
-            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoEndereco">
-                <i class="fas fa-plus"></i> Novo Endereco
-            </button>
+            <div class="d-flex gap-2 align-items-center">
+                {% if total_inativos %}
+                <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cliente.id, mostrar_inativos=(0 if mostrar_inativos else 1)) }}"
+                   class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-{{ 'eye-slash' if mostrar_inativos else 'eye' }}"></i>
+                    {% if mostrar_inativos %}Ocultar inativos{% else %}Mostrar inativos ({{ total_inativos }}){% endif %}
+                </a>
+                {% endif %}
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoEndereco">
+                    <i class="fas fa-plus"></i> Novo Endereco
+                </button>
+            </div>
         </div>
         <div class="card-body p-0">
             {% if enderecos %}
@@ -63,6 +72,7 @@
                     <thead>
                         <tr>
                             <th>Tipo</th>
+                            <th>Status</th>
                             <th>CNPJ/CPF</th>
                             <th>Razao Social</th>
                             <th>Endereco Fisico</th>
@@ -71,7 +81,7 @@
                     </thead>
                     <tbody>
                         {% for end in enderecos %}
-                        <tr>
+                        <tr{% if not end.ativo %} class="text-muted"{% endif %}>
                             <td>
                                 {% if end.tipo == 'ORIGEM' %}
                                 <span class="badge bg-info">Origem</span>
@@ -79,7 +89,14 @@
                                 <span class="badge bg-warning">Destino</span>
                                 {% endif %}
                             </td>
-                            <td><code>{{ end.cnpj }}</code></td>
+                            <td>
+                                {% if end.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ end.cnpj or '-' }}</code></td>
                             <td>{{ end.razao_social or '-' }}</td>
                             <td class="small">
                                 {% if end.fisico_logradouro %}
@@ -91,18 +108,36 @@
                                 <span class="text-muted">Sem endereco fisico</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">
+                            <td class="text-center text-nowrap">
+                                {% if end.ativo %}
                                 <button type="button" class="btn btn-outline-primary btn-sm"
                                         data-endereco='{{ {'cliente_id': end.cliente_id, 'fisico_logradouro': end.fisico_logradouro, 'fisico_numero': end.fisico_numero, 'fisico_bairro': end.fisico_bairro, 'fisico_cidade': end.fisico_cidade, 'fisico_uf': end.fisico_uf, 'fisico_cep': end.fisico_cep, 'fisico_complemento': end.fisico_complemento}|tojson }}'
                                         onclick="editarEndereco({{ end.id }}, JSON.parse(this.dataset.endereco))"
                                         title="Editar endereco">
                                     <i class="fas fa-edit"></i>
                                 </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm"
+                                        onclick="desativarEndereco({{ end.id }})"
+                                        title="Desativar (soft delete — some das opcoes)">
+                                    <i class="fas fa-eye-slash"></i>
+                                </button>
                                 <button type="button" class="btn btn-outline-danger btn-sm"
                                         onclick="removerEndereco({{ end.id }})"
-                                        title="Remover">
+                                        title="Remover (hard delete — com migracao de historico se preciso)">
                                     <i class="fas fa-trash"></i>
                                 </button>
+                                {% else %}
+                                <button type="button" class="btn btn-outline-success btn-sm"
+                                        onclick="reativarEndereco({{ end.id }})"
+                                        title="Reativar">
+                                    <i class="fas fa-undo"></i> Reativar
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        onclick="removerEndereco({{ end.id }})"
+                                        title="Remover permanentemente">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -111,7 +146,7 @@
             </div>
             {% else %}
             <div class="text-center py-4 text-muted">
-                <p>Nenhum endereco cadastrado.</p>
+                <p>Nenhum endereco {% if not mostrar_inativos and total_inativos %}ativo {% endif %}cadastrado.</p>
                 <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoEndereco">
                     <i class="fas fa-plus"></i> Adicionar Endereco
                 </button>
@@ -257,6 +292,62 @@
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary btn-sm" id="btnSalvarEndereco" onclick="salvarEndereco()" disabled>
                     <i class="fas fa-save"></i> Salvar Endereco
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Mesclar Enderecos — aparece quando 409 ao trocar cliente #}
+<div class="modal fade" id="modalMesclar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-code-branch"></i> Endereco duplicado detectado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="mesclarMensagem" class="mb-3"></p>
+                <div class="alert alert-info small mb-0">
+                    <strong>O que acontece ao mesclar?</strong>
+                    <ul class="mb-0 mt-1">
+                        <li>Todas as cotacoes vinculadas ao endereco atual sao transferidas para o endereco existente.</li>
+                        <li>O endereco atual e <strong>desativado</strong> (soft delete): permanece no banco para historico, mas some das opcoes.</li>
+                        <li>Se preferir, use "Cancelar" e depois "Desativar" para apenas desativar sem mesclar.</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning btn-sm" id="btnConfirmarMesclar">
+                    <i class="fas fa-code-branch"></i> Mesclar agora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal Candidatos de migracao — aparece quando DELETE retorna 409 #}
+<div class="modal fade" id="modalCandidatos" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> Remover endereco em uso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="candidatosMensagem" class="mb-3"></p>
+                <div id="candidatosLista"></div>
+                <hr>
+                <div class="alert alert-warning small mb-0">
+                    <strong>Nao e o endereco correto?</strong> Prefira "Desativar" — o endereco some das opcoes
+                    mas o historico das cotacoes e preservado. A remocao definitiva exige um destino valido (mesmo CNPJ e tipo em outro cliente).
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnDesativarEmVezRemover">
+                    <i class="fas fa-eye-slash"></i> Apenas desativar
                 </button>
             </div>
         </div>
@@ -560,28 +651,192 @@ function atualizarEndereco() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
     })
+    .then(r => r.json().then(d => ({status: r.status, body: d})))
+    .then(({status, body}) => {
+        if (body.sucesso) {
+            location.reload();
+            return;
+        }
+        // 409: duplicata — oferecer MESCLAR
+        if (status === 409 && body.acao_sugerida === 'mesclar' && body.endereco_existente_id) {
+            // Fechar modal de edicao antes de abrir o de mesclar
+            const modalEl = document.getElementById('modalEditarEndereco');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            abrirModalMesclar({
+                origemId: parseInt(id),
+                destinoId: body.endereco_existente_id,
+                mensagem: body.erro,
+            });
+            return;
+        }
+        alert(body.erro || 'Erro ao atualizar.');
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+
+/* ===== Mesclar Enderecos (migra cotacoes + soft delete origem) ===== */
+function abrirModalMesclar({origemId, destinoId, mensagem}) {
+    document.getElementById('mesclarMensagem').textContent = mensagem || (
+        `Detectada duplicata: o endereco atual (id=${origemId}) ja existe como ` +
+        `id=${destinoId} no cliente destino. Ao mesclar, as cotacoes do atual serao ` +
+        `transferidas para o existente.`
+    );
+    const btn = document.getElementById('btnConfirmarMesclar');
+    btn.onclick = () => {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mesclando...';
+        fetch(`/carvia/api/enderecos/${origemId}/mesclar-com/${destinoId}`, {
+            method: 'POST',
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-code-branch"></i> Mesclar agora';
+                alert(data.erro || 'Erro ao mesclar.');
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-code-branch"></i> Mesclar agora';
+            alert('Erro: ' + err);
+        });
+    };
+    new bootstrap.Modal(document.getElementById('modalMesclar')).show();
+}
+
+/* ===== Desativar (soft delete — some das opcoes) ===== */
+function desativarEndereco(id) {
+    if (!confirm('Desativar este endereco? Ele nao aparecera mais como opcao em cotacoes, ' +
+                 'mas permanecera vinculado ao historico existente. Pode ser reativado depois.')) return;
+
+    fetch(`/carvia/api/enderecos/${id}/desativar`, {method: 'PATCH'})
     .then(r => r.json())
     .then(data => {
         if (data.sucesso) {
             location.reload();
         } else {
-            alert(data.erro || 'Erro ao atualizar.');
+            alert(data.erro || 'Erro ao desativar.');
         }
     })
     .catch(err => alert('Erro: ' + err));
 }
 
-/* ===== Remover Endereco ===== */
+/* ===== Reativar ===== */
+function reativarEndereco(id) {
+    fetch(`/carvia/api/enderecos/${id}/reativar`, {method: 'PATCH'})
+    .then(r => r.json().then(d => ({status: r.status, body: d})))
+    .then(({status, body}) => {
+        if (body.sucesso) {
+            location.reload();
+            return;
+        }
+        if (status === 409 && body.acao_sugerida === 'mesclar' && body.endereco_existente_id) {
+            if (confirm((body.erro || 'Duplicata detectada.') +
+                        '\n\nDeseja mesclar o historico no endereco ativo existente?')) {
+                abrirModalMesclar({
+                    origemId: id,
+                    destinoId: body.endereco_existente_id,
+                    mensagem: body.erro,
+                });
+            }
+            return;
+        }
+        alert(body.erro || 'Erro ao reativar.');
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+
+/* ===== Remover Endereco (com fluxo de migracao) ===== */
 function removerEndereco(id) {
-    if (!confirm('Remover este endereco?')) return;
+    if (!confirm('Remover este endereco permanentemente?\n\n' +
+                 'Se houver cotacoes vinculadas, sera perguntado em qual outro endereco migrar o historico.'))
+        return;
 
     fetch(`/carvia/api/enderecos/${id}`, {method: 'DELETE'})
+    .then(r => r.json().then(d => ({status: r.status, body: d})))
+    .then(({status, body}) => {
+        if (body.sucesso) {
+            location.reload();
+            return;
+        }
+        // 409: tem cotacoes — mostrar candidatos ou sugerir desativar
+        if (status === 409 && body.candidatos_migracao !== undefined) {
+            abrirModalCandidatos({
+                origemId: id,
+                mensagem: body.erro,
+                candidatos: body.candidatos_migracao,
+                totalCotacoes: body.total_cotacoes,
+                sugestao: body.sugestao,
+            });
+            return;
+        }
+        alert(body.erro || 'Erro ao remover.');
+    })
+    .catch(err => alert('Erro: ' + err));
+}
+
+/* ===== Modal candidatos de migracao (antes de hard delete) ===== */
+function abrirModalCandidatos({origemId, mensagem, candidatos, totalCotacoes, sugestao}) {
+    document.getElementById('candidatosMensagem').textContent = mensagem ||
+        `Endereco vinculado a ${totalCotacoes} cotacao(oes). Selecione um destino para migrar o historico.`;
+
+    const listaEl = document.getElementById('candidatosLista');
+    if (!candidatos || candidatos.length === 0) {
+        listaEl.innerHTML = '<div class="alert alert-warning small mb-0">' +
+            'Nao ha outro endereco valido (mesmo CNPJ e tipo em outro cliente) para migracao. ' +
+            'Use "Apenas desativar" para tirar das opcoes sem perder o historico.' +
+            '</div>';
+    } else {
+        let html = '<div class="list-group">';
+        candidatos.forEach(c => {
+            const cid = c.cliente_nome || ('cliente #' + c.cliente_id);
+            const cidade = c.fisico_cidade || '-';
+            const uf = c.fisico_uf || '-';
+            const razao = c.razao_social || '-';
+            html += `
+                <button type="button" class="list-group-item list-group-item-action"
+                        onclick="confirmarMigrarRemover(${origemId}, ${c.id})">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${cid}</strong>
+                            <div class="small text-muted">${razao} (${cidade}/${uf})</div>
+                        </div>
+                        <span class="badge bg-primary">Migrar para este</span>
+                    </div>
+                </button>`;
+        });
+        html += '</div>';
+        listaEl.innerHTML = html;
+    }
+
+    const btnDesativar = document.getElementById('btnDesativarEmVezRemover');
+    btnDesativar.onclick = () => {
+        const modalEl = document.getElementById('modalCandidatos');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        desativarEndereco(origemId);
+    };
+
+    new bootstrap.Modal(document.getElementById('modalCandidatos')).show();
+}
+
+function confirmarMigrarRemover(origemId, destinoId) {
+    if (!confirm('Confirma migrar as cotacoes para o endereco selecionado e REMOVER permanentemente o endereco atual?'))
+        return;
+
+    fetch(`/carvia/api/enderecos/${origemId}/migrar-e-remover/${destinoId}`, {
+        method: 'POST',
+    })
     .then(r => r.json())
     .then(data => {
         if (data.sucesso) {
             location.reload();
         } else {
-            alert(data.erro || 'Erro ao remover.');
+            alert(data.erro || 'Erro na migracao.');
         }
     })
     .catch(err => alert('Erro: ' + err));

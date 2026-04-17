@@ -83,19 +83,34 @@ def register_cliente_routes(bp):
     @bp.route('/clientes/<int:cliente_id>') # type: ignore
     @login_required
     def detalhe_cliente(cliente_id): # type: ignore
-        """Detalhe do cliente com enderecos"""
+        """Detalhe do cliente com enderecos.
+
+        Query params:
+            mostrar_inativos=1 — inclui enderecos com ativo=False
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        from app.carvia.models import CarviaClienteEndereco
 
         cliente = CarviaClienteService.buscar_por_id(cliente_id)
         if not cliente:
             flash('Cliente nao encontrado.', 'warning')
             return redirect(url_for('carvia.listar_clientes'))
 
-        enderecos = cliente.enderecos.all()
+        mostrar_inativos = request.args.get('mostrar_inativos', '0') == '1'
+
+        query = cliente.enderecos
+        if not mostrar_inativos:
+            query = query.filter(CarviaClienteEndereco.ativo == True)
+        enderecos = query.all()
+
+        total_inativos = cliente.enderecos.filter(
+            CarviaClienteEndereco.ativo == False
+        ).count()
+
         todos_clientes = CarviaClienteService.listar_clientes(apenas_ativos=True)
 
         return render_template(
@@ -103,6 +118,8 @@ def register_cliente_routes(bp):
             cliente=cliente,
             enderecos=enderecos,
             todos_clientes=todos_clientes,
+            mostrar_inativos=mostrar_inativos,
+            total_inativos=total_inativos,
         )
 
     @bp.route('/clientes/<int:cliente_id>/editar', methods=['GET', 'POST']) # type: ignore
@@ -212,7 +229,12 @@ def register_cliente_routes(bp):
     @bp.route('/api/enderecos/<int:endereco_id>', methods=['PUT']) # type: ignore
     @login_required
     def api_atualizar_endereco(endereco_id): # type: ignore
-        """Atualiza endereco fisico (JSON API)"""
+        """Atualiza endereco fisico (JSON API).
+
+        Se a troca de cliente_id causaria duplicata, retorna 409 com
+        {erro, acao_sugerida: 'mesclar', endereco_existente_id, ...}.
+        Frontend pode entao oferecer MESCLAR ao usuario.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
@@ -223,9 +245,18 @@ def register_cliente_routes(bp):
             return jsonify({'erro': 'Dados JSON invalidos.'}), 400
 
         try:
-            sucesso, erro = CarviaClienteService.atualizar_endereco(endereco_id, data)
+            sucesso, erro, contexto = CarviaClienteService.atualizar_endereco(
+                endereco_id, data
+            )
             if not sucesso:
-                return jsonify({'erro': erro}), 400
+                resp = {'erro': erro}
+                status = 400
+                if contexto and contexto.get('acao_sugerida') == 'mesclar':
+                    resp.update(contexto)
+                    status = 409  # Conflict — frontend deve oferecer merge
+                elif 'nao encontrado' in (erro or ''):
+                    status = 404
+                return jsonify(resp), status
 
             db.session.commit()
             return jsonify({'sucesso': True, 'mensagem': 'Endereco atualizado.'})
@@ -238,24 +269,163 @@ def register_cliente_routes(bp):
     @bp.route('/api/enderecos/<int:endereco_id>', methods=['DELETE']) # type: ignore
     @login_required
     def api_remover_endereco(endereco_id): # type: ignore
-        """Remove endereco (hard delete)"""
+        """Remove endereco (hard delete se sem cotacoes; retorna candidatos senao).
+
+        Retorna 409 com lista de candidatos de migracao se o endereco tiver
+        cotacoes vinculadas. Frontend deve oferecer escolher destino e chamar
+        /migrar-e-remover/<destino_id>, ou cair para /desativar.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
 
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         try:
-            sucesso, erro = CarviaClienteService.remover_endereco(endereco_id)
+            sucesso, erro, contexto = CarviaClienteService.remover_endereco(endereco_id)
+            if not sucesso:
+                resp = {'erro': erro}
+                if contexto:
+                    resp.update(contexto)
+                status = 404 if 'nao encontrado' in (erro or '') else 409
+                return jsonify(resp), status
+
+            db.session.commit()
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Endereco removido.',
+                **(contexto or {}),
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao remover endereco #%s: %s", endereco_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route(
+        '/api/enderecos/<int:origem_id>/mesclar-com/<int:destino_id>',
+        methods=['POST']
+    ) # type: ignore
+    @login_required
+    def api_mesclar_enderecos(origem_id, destino_id): # type: ignore
+        """Mescla origem → destino: migra cotacoes + soft delete origem."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+
+        try:
+            sucesso, erro, contexto = CarviaClienteService.mesclar_enderecos(
+                origem_id, destino_id
+            )
+            if not sucesso:
+                return jsonify({'erro': erro}), 400
+
+            db.session.commit()
+            ctx = contexto or {}
+            return jsonify({
+                'sucesso': True,
+                'mensagem': (f'Mesclado: {ctx.get("total_migrado", 0)} cotacao(oes) '
+                             f'migrada(s); endereco origem desativado.'),
+                **ctx,
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Erro ao mesclar enderecos #%s → #%s: %s",
+                origem_id, destino_id, e
+            )
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route(
+        '/api/enderecos/<int:origem_id>/migrar-e-remover/<int:destino_id>',
+        methods=['POST']
+    ) # type: ignore
+    @login_required
+    def api_migrar_e_remover_endereco(origem_id, destino_id): # type: ignore
+        """Migra cotacoes para destino e DELETA fisicamente o origem."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+
+        try:
+            sucesso, erro, contexto = CarviaClienteService.migrar_e_remover(
+                origem_id, destino_id
+            )
+            if not sucesso:
+                return jsonify({'erro': erro}), 400
+
+            db.session.commit()
+            ctx = contexto or {}
+            return jsonify({
+                'sucesso': True,
+                'mensagem': (f'Migrado: {ctx.get("total_migrado", 0)} cotacao(oes); '
+                             f'endereco origem removido.'),
+                **ctx,
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Erro ao migrar+remover endereco #%s → #%s: %s",
+                origem_id, destino_id, e
+            )
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/enderecos/<int:endereco_id>/desativar', methods=['PATCH']) # type: ignore
+    @login_required
+    def api_desativar_endereco(endereco_id): # type: ignore
+        """Soft-delete: marca endereco como ativo=False (some das opcoes)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+
+        try:
+            sucesso, erro, _ = CarviaClienteService.atualizar_endereco(
+                endereco_id, {'ativo': False}
+            )
             if not sucesso:
                 status = 404 if 'nao encontrado' in (erro or '') else 400
                 return jsonify({'erro': erro}), status
 
             db.session.commit()
-            return jsonify({'sucesso': True, 'mensagem': 'Endereco removido.'})
+            return jsonify({'sucesso': True, 'mensagem': 'Endereco desativado.'})
 
         except Exception as e:
             db.session.rollback()
-            logger.error("Erro ao remover endereco #%s: %s", endereco_id, e)
+            logger.error("Erro ao desativar endereco #%s: %s", endereco_id, e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/enderecos/<int:endereco_id>/reativar', methods=['PATCH']) # type: ignore
+    @login_required
+    def api_reativar_endereco(endereco_id): # type: ignore
+        """Reativa endereco desativado. Bloqueia se ja existir outro ativo com mesmo
+        (cliente_id, cnpj, tipo)."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+
+        try:
+            sucesso, erro, contexto = CarviaClienteService.atualizar_endereco(
+                endereco_id, {'ativo': True}
+            )
+            if not sucesso:
+                resp = {'erro': erro}
+                if contexto:
+                    resp.update(contexto)
+                status = (404 if 'nao encontrado' in (erro or '')
+                          else 409 if contexto else 400)
+                return jsonify(resp), status
+
+            db.session.commit()
+            return jsonify({'sucesso': True, 'mensagem': 'Endereco reativado.'})
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Erro ao reativar endereco #%s: %s", endereco_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
     # ==================== ORIGENS GLOBAIS ====================
