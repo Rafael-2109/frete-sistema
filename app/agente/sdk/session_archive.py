@@ -182,27 +182,55 @@ def archive_session_to_s3(session_id: str) -> Optional[str]:
                 f"files={len(files)} size={len(tarball_bytes)}B "
                 f"path={s3_path}"
             )
-            # Grava ponteiro em AgentSession.data — resolve nosso UUID
-            # antes (session_id recebido pode ser SDK ID ephemeral)
+            # Grava ponteiros em AgentSession.data — UPSERT atomico via SQL
+            # raw (jsonb_set). Evita race com _save_messages_to_db que commita
+            # logo depois e sobrescreveria read-modify-write do ORM.
+            # Mesmo padrao do cost granular v2 (hooks.py:605).
+            #
+            # Chaves escolhidas: `s3_archive_key`, `s3_archive_at`,
+            # `s3_archive_size` — facilita query SQL. `s3_archive` (legado)
+            # mantido para compat.
             try:
                 from app import db
-                from sqlalchemy.orm.attributes import flag_modified
-                from app.agente.models import AgentSession
+                from sqlalchemy import text as _sql_text
+                from app.utils.timezone import agora_utc_naive
+                import json as _json_ptr
+
                 our_uuid = _resolve_our_session_uuid(session_id)
                 if our_uuid:
-                    sess = AgentSession.query.filter_by(
-                        session_id=our_uuid
-                    ).first()
-                    if sess is not None:
-                        data = sess.data or {}
-                        data['s3_archive'] = s3_path
-                        sess.data = data
-                        flag_modified(sess, 'data')
-                        db.session.commit()
-                    else:
+                    archive_at = agora_utc_naive().isoformat()
+                    ptr_updates = {
+                        's3_archive': s3_path,
+                        's3_archive_key': s3_path,
+                        's3_archive_at': archive_at,
+                        's3_archive_size': len(tarball_bytes),
+                    }
+                    # UPSERT atomico por chave. jsonb_set com `true` cria se
+                    # ausente. Concatenar multiplos sets via chamadas aninhadas.
+                    result = db.session.execute(
+                        _sql_text("""
+                            UPDATE agent_sessions
+                            SET data =
+                                COALESCE(data, CAST('{}' AS jsonb))
+                                || CAST(:patch AS jsonb)
+                            WHERE session_id = :sid
+                        """),
+                        {
+                            'sid': our_uuid,
+                            'patch': _json_ptr.dumps(ptr_updates),
+                        }
+                    )
+                    db.session.commit()
+                    if result.rowcount == 0:
                         logger.warning(
-                            f"[session_archive] AgentSession {our_uuid[:16]} "
-                            f"nao encontrada — ponteiro nao gravado (archive orfao)"
+                            f"[session_archive] ponteiro UPDATE rowcount=0 — "
+                            f"AgentSession {our_uuid[:16]} nao encontrada "
+                            f"(archive orfao em S3: {s3_path})"
+                        )
+                    else:
+                        logger.info(
+                            f"[session_archive] ponteiro gravado: "
+                            f"session={our_uuid[:16]} key={s3_path}"
                         )
                 else:
                     logger.warning(
@@ -211,7 +239,8 @@ def archive_session_to_s3(session_id: str) -> Optional[str]:
                     )
             except Exception as db_err:
                 logger.warning(
-                    f"[session_archive] ponteiro DB falhou: {db_err}"
+                    f"[session_archive] ponteiro DB falhou: "
+                    f"{type(db_err).__name__}: {db_err}"
                 )
 
         return s3_path
