@@ -105,6 +105,7 @@ Gotchas rapidos:
 | Quality review do system_prompt.md v4.2.0 (score + findings) | `.claude/references/STUDY_PROMPT_ENGINEERING_2026_QUALITY_REVIEW.md` |
 | Roadmap prompt engineering 2026 (R1-R17, P0-P3) | `.claude/references/ROADMAP_PROMPT_ENGINEERING_2026.md` |
 | Prompt injection hardening (defense in depth) | `.claude/references/PROMPT_INJECTION_HARDENING.md` |
+| S3 storage (arquivos persistidos — todos modulos) | `.claude/references/S3_STORAGE.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
 ---

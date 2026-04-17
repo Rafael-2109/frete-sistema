@@ -265,6 +265,10 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 2. **`get_or_create()` NAO e atomico** (`models.py:380-395`) — query + insert separados, sem `SELECT FOR UPDATE`. Duas threads podem criar sessao duplicada → `IntegrityError`. NUNCA assumir retorno valido sem try/except.
 3. **Cascade delete** — `models.py` define `cascade='all, delete-orphan'` nos backrefs (linhas 79, 469, 689). `db.session.query(Model).filter_by(...).delete()` NAO dispara cascade → orphans. DEVE usar `db.session.delete(obj)`.
 
+### S3 Storage (screenshots, archive)
+
+Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoes (`agent-archive/{YYYY-MM}/{session}.tar.gz`) usam S3 compartilhado via `get_file_storage()`. Ambos sao best-effort (falha silenciosa se USE_S3=false ou erro de rede). Detalhes completos: `.claude/references/S3_STORAGE.md`.
+
 ### Arquivos legados — NAO usar, NAO estender
 | Arquivo | Status |
 |---------|--------|
