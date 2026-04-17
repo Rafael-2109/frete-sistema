@@ -933,6 +933,11 @@ def _stream_chat_response(
                     # Última tentativa - isso não deveria acontecer
                     logger.critical(f"[AGENTE] CRÍTICO: Falha ao enviar None: {final_error}")
 
+    # #4 Pubsub: inicializar antes do try para que finally possa fazer cleanup
+    # sem NameError mesmo se a excecao ocorrer antes do setup.
+    _redis_conn = None
+    _pubsub = None
+
     try:
         logger.info("[AGENTE] _stream_chat_response iniciado")
 
@@ -951,6 +956,20 @@ def _stream_chat_response(
         absolute_deadline = now + MAX_STREAM_DURATION_SECONDS
         event_count = 0
         consecutive_empty = 0  # Contador de timeouts consecutivos sem eventos
+
+        # #4 Async validation events via Redis pubsub (non-blocking poll)
+        # Worker RQ (subagent_validator) publica em agent_sse:<session_id>.
+        # Setup best-effort — falha NAO afeta o stream principal.
+        try:
+            import redis as _redis_lib
+            _redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+            _redis_conn = _redis_lib.from_url(_redis_url)
+            _pubsub = _redis_conn.pubsub(ignore_subscribe_messages=True)
+            _pubsub.subscribe(f'agent_sse:{session_id}')
+            logger.debug(f"[SSE] pubsub subscrito: agent_sse:{session_id}")
+        except Exception as _ps_err:
+            logger.debug(f"[SSE] pubsub setup falhou (ignorado): {_ps_err}")
+            _pubsub = None
 
         while True:
             # Deadline check: menor entre inatividade e teto absoluto
@@ -996,6 +1015,23 @@ def _stream_chat_response(
 
                 yield event
 
+                # Poll pubsub para eventos assincronos (#4 subagent_validation)
+                if _pubsub is not None:
+                    try:
+                        _ps_msg = _pubsub.get_message(timeout=0.0)
+                        if _ps_msg and _ps_msg.get('type') == 'message':
+                            import json as _json
+                            _ps_payload = _json.loads(_ps_msg['data'])
+                            _ps_ev_type = _ps_payload.get('type', 'unknown')
+                            _ps_ev_data = _ps_payload.get('data', {})
+                            if _ps_ev_type.startswith('subagent_'):
+                                _ps_ev_data = _sanitize_subagent_summary_for_user(
+                                    _ps_ev_data, current_user
+                                )
+                            yield _sse_event(_ps_ev_type, _ps_ev_data)
+                    except Exception as _ps_poll_err:
+                        logger.debug(f"[SSE] pubsub poll falhou (ignorado): {_ps_poll_err}")
+
                 # FIX-7: Fechar SSE após evento 'done' — não esperar None indefinidamente.
                 # O done indica que o agente terminou. Aguarda brevemente por suggestions.
                 if isinstance(event, str) and 'event: done\n' in event:
@@ -1012,6 +1048,23 @@ def _stream_chat_response(
 
             except Empty:
                 consecutive_empty += 1
+
+                # Poll pubsub durante idle (sem eventos na event_queue)
+                if _pubsub is not None:
+                    try:
+                        _ps_msg = _pubsub.get_message(timeout=0.0)
+                        if _ps_msg and _ps_msg.get('type') == 'message':
+                            import json as _json
+                            _ps_payload = _json.loads(_ps_msg['data'])
+                            _ps_ev_type = _ps_payload.get('type', 'unknown')
+                            _ps_ev_data = _ps_payload.get('data', {})
+                            if _ps_ev_type.startswith('subagent_'):
+                                _ps_ev_data = _sanitize_subagent_summary_for_user(
+                                    _ps_ev_data, current_user
+                                )
+                            yield _sse_event(_ps_ev_type, _ps_ev_data)
+                    except Exception as _ps_poll_err:
+                        logger.debug(f"[SSE] pubsub poll idle falhou (ignorado): {_ps_poll_err}")
 
                 # =================================================================
                 # DETECÇÃO DE THREAD MORTA
@@ -1051,6 +1104,18 @@ def _stream_chat_response(
         yield _sse_event('error', {'message': str(e)})
 
     finally:
+        # Cleanup pubsub (#4): fechar assinatura Redis antes de salvar no banco
+        if _pubsub is not None:
+            try:
+                _pubsub.close()
+            except Exception:
+                pass
+        if _redis_conn is not None:
+            try:
+                _redis_conn.close()
+            except Exception:
+                pass
+
         # =================================================================
         # GARANTIA: SEMPRE salva mensagens no banco, mesmo em caso de erro
         # =================================================================
