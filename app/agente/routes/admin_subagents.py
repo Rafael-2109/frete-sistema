@@ -1,0 +1,119 @@
+"""
+Endpoint admin de debug forense de subagentes (#1, SDK 0.1.60).
+
+Permite admin investigar respostas do agente sem re-executar a sessao:
+lista todos os subagentes de uma sessao, mostra tool_calls em ordem
+cronologica com args/results raw (sem mascaramento PII), custo e duracao.
+
+Pattern de auth: @login_required + inline check perfil='administrador' → 403.
+Flag: USE_SUBAGENT_DEBUG_ENDPOINT (default true).
+"""
+import logging
+
+from flask import abort, jsonify
+from flask_login import current_user, login_required
+
+from app.agente.config.feature_flags import USE_SUBAGENT_DEBUG_ENDPOINT
+from app.agente.routes import agente_bp
+from app.agente.sdk.subagent_reader import (
+    get_session_subagents_summary,
+    get_subagent_summary,
+)
+
+logger = logging.getLogger('sistema_fretes')
+
+
+def _require_admin():
+    """Aborta 403 se nao for admin. Usar como guard inicial nas rotas."""
+    if current_user.perfil != 'administrador':
+        abort(403, description='Acesso restrito a administradores')
+
+
+@agente_bp.route(
+    '/api/admin/sessions/<session_id>/subagents',
+    methods=['GET'],
+)
+@login_required
+def api_admin_list_subagents(session_id: str):
+    """Lista subagentes de uma sessao com metadata resumida."""
+    if not USE_SUBAGENT_DEBUG_ENDPOINT:
+        abort(404)
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Acesso restrito a administradores'}), 403
+
+    summaries = get_session_subagents_summary(session_id, include_pii=True)
+
+    return jsonify({
+        'success': True,
+        'session_id': session_id,
+        'count': len(summaries),
+        'subagents': [s.to_dict(include_cost=True) for s in summaries],
+    })
+
+
+@agente_bp.route(
+    '/api/admin/sessions/<session_id>/subagents/<agent_id>',
+    methods=['GET'],
+)
+@login_required
+def api_admin_subagent_detail(session_id: str, agent_id: str):
+    """Detalhe completo de um subagente — tools, findings, cost, tokens."""
+    if not USE_SUBAGENT_DEBUG_ENDPOINT:
+        abort(404)
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Acesso restrito a administradores'}), 403
+
+    summary = get_subagent_summary(
+        session_id, agent_id, include_pii=True, max_tool_chars=2000
+    )
+
+    if summary.status == 'error':
+        return jsonify({
+            'success': False,
+            'error': f'Subagent {agent_id} nao encontrado na sessao {session_id}',
+        }), 404
+
+    return jsonify({
+        'success': True,
+        'session_id': session_id,
+        'subagent': summary.to_dict(include_cost=True),
+    })
+
+
+@agente_bp.route(
+    '/api/admin/sessions/<session_id>/subagents/<agent_id>/messages',
+    methods=['GET'],
+)
+@login_required
+def api_admin_subagent_messages(session_id: str, agent_id: str):
+    """Mensagens brutas do JSONL (para debug profundo)."""
+    if not USE_SUBAGENT_DEBUG_ENDPOINT:
+        abort(404)
+    if current_user.perfil != 'administrador':
+        return jsonify({'success': False, 'error': 'Acesso restrito a administradores'}), 403
+
+    from claude_agent_sdk import get_subagent_messages
+
+    try:
+        messages = list(get_subagent_messages(session_id, agent_id))
+    except Exception as e:
+        logger.error(f"[admin_subagents] get_subagent_messages falhou: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    return jsonify({
+        'success': True,
+        'session_id': session_id,
+        'agent_id': agent_id,
+        'count': len(messages),
+        'messages': [
+            {
+                'role': getattr(m, 'role', None),
+                'content': getattr(m, 'content', None),
+                'timestamp': (
+                    getattr(m, 'timestamp', None).isoformat()
+                    if getattr(m, 'timestamp', None) else None
+                ),
+            }
+            for m in messages
+        ],
+    })
