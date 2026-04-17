@@ -441,8 +441,14 @@ def build_hooks(
             if transcript_path:
                 try:
                     import json as _json
+                    import os as _os
+                    file_exists = _os.path.exists(transcript_path)
+                    file_size = _os.path.getsize(transcript_path) if file_exists else 0
+                    lines_read = 0
+                    result_count = 0
                     with open(transcript_path, 'r') as f:
                         for line in f:
+                            lines_read += 1
                             line = line.strip()
                             if not line:
                                 continue
@@ -450,6 +456,7 @@ def build_hooks(
                                 msg = _json.loads(line)
                                 if msg.get('type') == 'result':
                                     last_result = msg
+                                    result_count += 1
                             except _json.JSONDecodeError:
                                 continue
 
@@ -458,10 +465,24 @@ def build_hooks(
                             duration_ms = last_result.get('duration_ms')
                             num_turns = last_result.get('num_turns')
                             stop_reason = last_result.get('stop_reason', '')
-                except (OSError, IOError) as file_err:
-                    logger.debug(
-                        f"[HOOK:SubagentStop] Transcript inacessivel: {file_err}"
+
+                    logger.info(
+                        f"[HOOK:SubagentStop] transcript_read "
+                        f"path={transcript_path} exists={file_exists} "
+                        f"size={file_size}B lines={lines_read} "
+                        f"results={result_count} "
+                        f"cost_usd={cost_usd} num_turns={num_turns}"
                     )
+                except (OSError, IOError) as file_err:
+                    logger.warning(
+                        f"[HOOK:SubagentStop] Transcript inacessivel: "
+                        f"path={transcript_path} err={file_err}"
+                    )
+            else:
+                logger.warning(
+                    f"[HOOK:SubagentStop] agent_transcript_path VAZIO no "
+                    f"hook_input — keys={list(hook_input.keys())}"
+                )
 
             logger.info(
                 f"[HOOK:SubagentStop] "

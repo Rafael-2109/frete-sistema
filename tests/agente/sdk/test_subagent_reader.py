@@ -21,7 +21,8 @@ def test_list_session_subagents_returns_list_of_ids():
         result = list_session_subagents('session-uuid')
 
     assert result == ['agent-uuid-1', 'agent-uuid-2']
-    mock.assert_called_once_with('session-uuid', directory=None)
+    # Chamada sem directory=None (SDK default honra CLAUDE_CONFIG_DIR / ~/.claude)
+    mock.assert_called_with('session-uuid')
 
 
 def test_list_session_subagents_empty_when_no_subagents():

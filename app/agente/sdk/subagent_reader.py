@@ -79,16 +79,44 @@ class SubagentSummary:
         return d
 
 
+def _candidate_directories(directory: Optional[str]) -> list[Optional[str]]:
+    """
+    Diretorios candidatos para list_subagents/get_subagent_messages.
+
+    Ordem:
+    1. directory explicito (se fornecido)
+    2. None (SDK default: $CLAUDE_CONFIG_DIR ou ~/.claude)
+    3. /tmp/.claude (Render: CLI bundled escreve aqui)
+    """
+    if directory:
+        return [directory]
+    return [None, '/tmp/.claude']
+
+
 def list_session_subagents(
     session_id: str,
     directory: Optional[str] = None,
 ) -> list[str]:
-    """Wrapper de list_subagents(). Retorna lista de agent_ids."""
-    try:
-        return list(list_subagents(session_id, directory=directory))
-    except Exception as e:
-        logger.debug(f"[subagent_reader] list_subagents falhou: {e}")
-        return []
+    """Wrapper de list_subagents(). Tenta multiplos diretorios (Render fallback)."""
+    for candidate in _candidate_directories(directory):
+        try:
+            # SDK: directory=None usa ~/.claude, string sobrescreve
+            kwargs = {'directory': candidate} if candidate else {}
+            result = list(list_subagents(session_id, **kwargs))
+            if result:
+                logger.info(
+                    f"[subagent_reader] list_subagents found {len(result)} "
+                    f"agents in directory={candidate or '<default>'}"
+                )
+                return result
+        except Exception as e:
+            logger.debug(
+                f"[subagent_reader] list_subagents dir={candidate}: {e}"
+            )
+    logger.info(
+        f"[subagent_reader] list_subagents empty for session={session_id[:16]}"
+    )
+    return []
 
 
 def _read_result_metadata(transcript_path: Optional[str]) -> dict:
@@ -156,17 +184,38 @@ def _resolve_transcript_path(
         )
         return None
 
-    base = Path(directory) if directory else Path.home() / '.claude' / 'projects'
-    if directory is None:
-        # Busca cross-project (SDK default behavior)
-        for proj_dir in base.iterdir():
-            if not proj_dir.is_dir():
+    # Descobre projects_dir. Ordem de precedencia:
+    # 1. directory explicito (argumento)
+    # 2. $CLAUDE_CONFIG_DIR (honrar SDK behavior)
+    # 3. ~/.claude/projects/ (home)
+    # 4. /tmp/.claude/projects/ (Render: CLI escreve aqui por default)
+    if directory:
+        bases = [Path(directory)]
+    else:
+        import os as _os
+        bases = []
+        if _os.environ.get('CLAUDE_CONFIG_DIR'):
+            bases.append(Path(_os.environ['CLAUDE_CONFIG_DIR']) / 'projects')
+        bases.append(Path.home() / '.claude' / 'projects')
+        # Fallback: Render CLI escreve em /tmp/.claude/projects/ quando
+        # HOME=/opt/render nao e writable pelo subprocess CLI.
+        bases.append(Path('/tmp/.claude/projects'))
+
+    for base in bases:
+        try:
+            if not base.exists() or not base.is_dir():
                 continue
-            sub_dir = proj_dir / session_id / 'subagents'
-            if sub_dir.exists():
-                # agent_id ja validado como UUID-like, sem wildcards
-                for f in sub_dir.rglob(f'{agent_id}*.jsonl'):
-                    return str(f)
+            for proj_dir in base.iterdir():
+                if not proj_dir.is_dir():
+                    continue
+                sub_dir = proj_dir / session_id / 'subagents'
+                if sub_dir.exists():
+                    # agent_id ja validado como UUID-like, sem wildcards
+                    for f in sub_dir.rglob(f'{agent_id}*.jsonl'):
+                        return str(f)
+        except (OSError, PermissionError) as e:
+            logger.debug(f"[subagent_reader] base={base} inaccessible: {e}")
+            continue
     return None
 
 
@@ -206,12 +255,19 @@ def get_subagent_summary(
 
     Se o subagente nao for encontrado, retorna SubagentSummary com status='error'.
     """
-    try:
-        messages = list(get_subagent_messages(session_id, agent_id,
-                                               directory=directory))
-    except Exception as e:
-        logger.debug(f"[subagent_reader] get_subagent_messages falhou: {e}")
-        messages = []
+    messages = []
+    for candidate in _candidate_directories(directory):
+        try:
+            kwargs = {'directory': candidate} if candidate else {}
+            messages = list(get_subagent_messages(
+                session_id, agent_id, **kwargs
+            ))
+            if messages:
+                break
+        except Exception as e:
+            logger.debug(
+                f"[subagent_reader] get_subagent_messages dir={candidate}: {e}"
+            )
 
     if not messages:
         return SubagentSummary(
