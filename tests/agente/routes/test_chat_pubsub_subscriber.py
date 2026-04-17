@@ -1,5 +1,5 @@
 """Testa que o SSE generator subscreve canal Redis pubsub (#4 async events)."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 def test_sanitize_function_handles_subagent_validation():
