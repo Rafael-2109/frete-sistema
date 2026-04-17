@@ -1,0 +1,143 @@
+/*
+ * Linha inline expansivel de subagente no chat (#6).
+ * Design tokens: var(--agent-*) definidos em agent-theme.css.
+ * Estados: running | done | expanded | validation_warning.
+ */
+
+.subagent-inline {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--agent-text-secondary, #94a3b8);
+  font-size: 12px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.subagent-inline:hover {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.subagent-inline .subagent-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.subagent-inline.running .subagent-dot {
+  background: var(--agent-warning, #f59e0b);
+  animation: subagent-pulse 1.5s infinite;
+}
+
+.subagent-inline.done .subagent-dot {
+  background: var(--agent-success, #10b981);
+}
+
+.subagent-inline.error .subagent-dot {
+  background: var(--agent-danger, #ef4444);
+}
+
+@keyframes subagent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.subagent-inline .subagent-badge {
+  background: rgba(0, 212, 170, 0.15);
+  color: var(--agent-accent-primary, #00d4aa);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.subagent-inline .subagent-meta {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagent-inline .subagent-caret {
+  color: var(--agent-text-muted, #64748b);
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.subagent-inline.expanded {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.subagent-inline.expanded .subagent-caret {
+  transform: rotate(180deg);
+}
+
+.subagent-inline.expanded .subagent-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+
+.subagent-inline-details {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.2);
+  font-size: 11px;
+  color: var(--agent-text-primary, #e2e8f0);
+}
+
+.subagent-inline-details ol {
+  padding-left: 18px;
+  margin: 4px 0;
+}
+
+.subagent-inline-details li {
+  margin: 3px 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.subagent-inline-details .tool-name {
+  color: var(--agent-accent-primary, #00d4aa);
+  font-weight: 600;
+}
+
+.subagent-inline-details .tool-result {
+  color: var(--agent-text-secondary, #94a3b8);
+  margin-left: 4px;
+}
+
+.subagent-inline .validation-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--agent-warning, #f59e0b);
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.subagent-inline .validation-warning::before {
+  content: "⚠";
+}
+
+.subagent-inline-details .validation-reason {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 2px solid var(--agent-warning, #f59e0b);
+  border-radius: 3px;
+  color: var(--agent-warning, #f59e0b);
+  font-size: 11px;
+}
