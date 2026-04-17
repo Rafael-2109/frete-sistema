@@ -134,7 +134,8 @@ def get_insights_data(
             current['recommendations'] = []
 
         # ── Custo granular por subagente (#3) ──
-        current['subagent_costs'] = _get_subagent_cost_section(days=days)
+        # Funcao definida abaixo no mesmo modulo (Pyright nao resolve forward ref em arquivo grande)
+        current['subagent_costs'] = _get_subagent_cost_section(days=days)  # pyright: ignore[reportUndefinedVariable]
 
         return current
 

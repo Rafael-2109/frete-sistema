@@ -125,6 +125,7 @@ def test_subagent_stop_multiple_subagents_append_entries(tmp_path, app):
 
         hooks = _make_hooks(user_id=1)
         handler = _find_stop_handler(hooks)
+        assert handler is not None, 'SubagentStop handler nao encontrado'
         import asyncio
         for i, agent_type in enumerate(['analista-carteira', 'raio-x-pedido']):
             transcript = _make_transcript(
@@ -169,6 +170,7 @@ def test_subagent_stop_flag_off_does_not_persist(tmp_path, app):
         with patch('app.agente.sdk.hooks.USE_SUBAGENT_COST_GRANULAR', False):
             hooks = _make_hooks(user_id=1)
             handler = _find_stop_handler(hooks)
+            assert handler is not None, 'SubagentStop handler nao encontrado'
             import asyncio
             asyncio.run(handler({
                 'agent_id': 'aid-off',
