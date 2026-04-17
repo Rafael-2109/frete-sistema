@@ -154,6 +154,13 @@
       "unique": false
     },
     {
+      "name": "ix_pallet_solucoes_credito_id",
+      "columns": [
+        "credito_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_solucao_credito_tipo",
       "columns": [
         "credito_id",
@@ -187,13 +194,6 @@
       "name": "ix_pallet_solucoes_tipo",
       "columns": [
         "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_solucoes_credito_id",
-      "columns": [
-        "credito_id"
       ],
       "unique": false
     }

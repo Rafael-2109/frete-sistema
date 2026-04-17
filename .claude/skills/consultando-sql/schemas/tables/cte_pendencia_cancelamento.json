@@ -70,16 +70,16 @@
   ],
   "indices": [
     {
-      "name": "ix_cte_pendencia_cancelamento_criado_em",
+      "name": "ix_cte_pendencia_cancelamento_cte_id",
       "columns": [
-        "criado_em"
+        "cte_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_cte_pendencia_cancelamento_cte_id",
+      "name": "ix_cte_pendencia_cancelamento_criado_em",
       "columns": [
-        "cte_id"
+        "criado_em"
       ],
       "unique": false
     },

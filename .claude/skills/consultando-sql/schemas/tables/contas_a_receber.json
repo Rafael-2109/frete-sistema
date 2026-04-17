@@ -226,6 +226,34 @@
   ],
   "indices": [
     {
+      "name": "idx_conta_receber_odoo_line_id",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_parcela",
+      "columns": [
+        "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_uf_cliente",
+      "columns": [
+        "uf_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_receber_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_receber_odoo_line_id",
       "columns": [
         "odoo_line_id"
@@ -233,9 +261,16 @@
       "unique": true
     },
     {
-      "name": "ix_contas_a_receber_titulo_nf",
+      "name": "idx_conta_receber_vencimento",
       "columns": [
-        "titulo_nf"
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_empresa",
+      "columns": [
+        "empresa"
       ],
       "unique": false
     },
@@ -243,13 +278,6 @@
       "name": "ix_contas_a_receber_metodo_baixa",
       "columns": [
         "metodo_baixa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_conta_receber_vencimento",
-      "columns": [
-        "vencimento"
       ],
       "unique": false
     },
@@ -268,13 +296,6 @@
       "unique": false
     },
     {
-      "name": "idx_conta_receber_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_conta_receber_nf",
       "columns": [
         "titulo_nf"
@@ -282,30 +303,9 @@
       "unique": false
     },
     {
-      "name": "idx_conta_receber_odoo_line_id",
+      "name": "ix_contas_a_receber_titulo_nf",
       "columns": [
-        "odoo_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_empresa",
-      "columns": [
-        "empresa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_parcela",
-      "columns": [
-        "parcela"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_receber_uf_cliente",
-      "columns": [
-        "uf_cliente"
+        "titulo_nf"
       ],
       "unique": false
     }

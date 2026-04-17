@@ -71,16 +71,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cidade_uf_destino",
+      "name": "ix_carvia_cidade_uf_origem",
       "columns": [
-        "uf_destino"
+        "uf_origem"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cidade_uf_origem",
+      "name": "ix_carvia_cidade_uf_destino",
       "columns": [
-        "uf_origem"
+        "uf_destino"
       ],
       "unique": false
     }

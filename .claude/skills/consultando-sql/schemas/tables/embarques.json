@@ -288,16 +288,16 @@
   ],
   "indices": [
     {
-      "name": "idx_emb_tipo_carga",
+      "name": "idx_emb_data_embarque",
       "columns": [
-        "tipo_carga"
+        "data_embarque"
       ],
       "unique": false
     },
     {
-      "name": "idx_emb_data_embarque",
+      "name": "idx_emb_status",
       "columns": [
-        "data_embarque"
+        "status"
       ],
       "unique": false
     },
@@ -310,9 +310,9 @@
       "unique": false
     },
     {
-      "name": "idx_emb_status",
+      "name": "idx_emb_tipo_carga",
       "columns": [
-        "status"
+        "tipo_carga"
       ],
       "unique": false
     }

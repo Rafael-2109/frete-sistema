@@ -284,16 +284,16 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_ativo",
+      "name": "ix_conhecimento_transporte_cancelado",
       "columns": [
-        "ativo"
+        "cancelado"
       ],
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cancelado",
+      "name": "ix_conhecimento_transporte_tipo_cte",
       "columns": [
-        "cancelado"
+        "tipo_cte"
       ],
       "unique": false
     },
@@ -305,31 +305,9 @@
       "unique": true
     },
     {
-      "name": "ix_conhecimento_transporte_tipo_cte",
-      "columns": [
-        "tipo_cte"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_cte_chave_acesso",
       "columns": [
         "chave_acesso"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_numero_serie",
-      "columns": [
-        "numero_cte",
-        "serie_cte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_cte_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
       ],
       "unique": false
     },
@@ -348,6 +326,28 @@
       "unique": false
     },
     {
+      "name": "idx_cte_numero_serie",
+      "columns": [
+        "numero_cte",
+        "serie_cte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "columns": [
+        "cte_complementa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_cte_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_cte_cnpj_remetente",
       "columns": [
         "cnpj_remetente"
@@ -362,14 +362,14 @@
       "unique": false
     },
     {
-      "name": "ix_conhecimento_transporte_cte_complementa_id",
+      "name": "idx_cte_data_emissao",
       "columns": [
-        "cte_complementa_id"
+        "data_emissao"
       ],
       "unique": false
     },
     {
-      "name": "idx_cte_data_emissao",
+      "name": "ix_conhecimento_transporte_data_emissao",
       "columns": [
         "data_emissao"
       ],
@@ -386,13 +386,6 @@
       "name": "idx_cte_status",
       "columns": [
         "odoo_status_codigo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_data_emissao",
-      "columns": [
-        "data_emissao"
       ],
       "unique": false
     },
@@ -456,6 +449,13 @@
       "name": "ix_conhecimento_transporte_tomador_e_empresa",
       "columns": [
         "tomador_e_empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_ativo",
+      "columns": [
+        "ativo"
       ],
       "unique": false
     }

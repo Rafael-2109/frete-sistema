@@ -235,17 +235,37 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_numero_nfd",
+      "name": "ix_nf_devolucao_ativo",
       "columns": [
-        "numero_nfd"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "idx_nfd_numero_serie",
+      "name": "ix_nf_devolucao_e_pallet_devolucao",
       "columns": [
-        "numero_nfd",
-        "serie_nfd"
+        "e_pallet_devolucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_entrega_monitorada_id",
+      "columns": [
+        "entrega_monitorada_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nfd",
+      "columns": [
+        "numero_nfd"
       ],
       "unique": false
     },
@@ -336,6 +356,14 @@
       "unique": false
     },
     {
+      "name": "idx_nfd_numero_serie",
+      "columns": [
+        "numero_nfd",
+        "serie_nfd"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_devolucao_odoo_nf_venda_id",
       "columns": [
         "odoo_nf_venda_id"
@@ -360,34 +388,6 @@
       "name": "ix_nf_devolucao_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_e_pallet_devolucao",
-      "columns": [
-        "e_pallet_devolucao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_entrega_monitorada_id",
-      "columns": [
-        "entrega_monitorada_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
       ],
       "unique": false
     }

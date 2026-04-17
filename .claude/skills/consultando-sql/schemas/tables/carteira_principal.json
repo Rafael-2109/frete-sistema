@@ -362,16 +362,10 @@
   ],
   "indices": [
     {
-      "name": "ix_carteira_principal_cnpj_cpf",
+      "name": "idx_carteira_ativo_saldo",
       "columns": [
-        "cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_importante",
-      "columns": [
-        "importante"
+        "num_pedido",
+        "cod_produto"
       ],
       "unique": false
     },
@@ -383,46 +377,9 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_status_data",
-      "columns": [
-        "status_pedido",
-        "data_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_vendedor",
-      "columns": [
-        "vendedor"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carteira_principal_status_pedido",
       "columns": [
         "status_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_cliente_vendedor",
-      "columns": [
-        "cnpj_cpf",
-        "vendedor"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_odoo_write_date",
-      "columns": [
-        "odoo_write_date"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_data_pedido",
-      "columns": [
-        "data_pedido"
       ],
       "unique": false
     },
@@ -442,6 +399,29 @@
       "unique": false
     },
     {
+      "name": "idx_carteira_cliente_vendedor",
+      "columns": [
+        "cnpj_cpf",
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_odoo_write_date",
+      "columns": [
+        "odoo_write_date"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_status_data",
+      "columns": [
+        "status_pedido",
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carteira_principal_num_pedido",
       "columns": [
         "num_pedido"
@@ -449,10 +429,30 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_ativo_saldo",
+      "name": "ix_carteira_principal_data_pedido",
       "columns": [
-        "num_pedido",
-        "cod_produto"
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_vendedor",
+      "columns": [
+        "vendedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cnpj_cpf",
+      "columns": [
+        "cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_importante",
+      "columns": [
+        "importante"
       ],
       "unique": false
     }

@@ -53,17 +53,17 @@
   ],
   "indices": [
     {
-      "name": "ix_permissao_comercial_usuario_id",
-      "columns": [
-        "usuario_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_usuario_tipo",
       "columns": [
         "usuario_id",
         "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_permissao_comercial_usuario_id",
+      "columns": [
+        "usuario_id"
       ],
       "unique": false
     }

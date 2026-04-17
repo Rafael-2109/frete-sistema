@@ -100,6 +100,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_extrato_linhas_data",
+      "columns": [
+        "data"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_extrato_linhas_origem",
       "columns": [
         "origem"
@@ -117,13 +124,6 @@
       "name": "ix_carvia_extrato_linhas_status_conciliacao",
       "columns": [
         "status_conciliacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_extrato_linhas_data",
-      "columns": [
-        "data"
       ],
       "unique": false
     }
