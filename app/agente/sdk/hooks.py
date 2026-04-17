@@ -391,10 +391,23 @@ def build_hooks(
         antes mesmo do TaskStartedMessage (que e async e pode demorar).
         Permite ao frontend mostrar 'Delegando para analista-carteira...'
         imediatamente.
+
+        FIX 2026-04-17: publicar `task_started` via pubsub com AGENT_ID (nao
+        task_id). Testes em prod mostraram que o CLI bundled NAO emite
+        TaskStartedMessage para subagents locais (definidos em
+        `.claude/agents/*.md`) — apenas `Tool START: Grep/Read/Bash` da
+        conversa interna. Resultado: linha "running" nunca era criada, e
+        quando `subagent_summary` chegava com agent_id diferente do task_id,
+        frontend caia em fallback (criar linha DONE orfa) — inconsistente.
+
+        Publicar aqui usando o MESMO agent_id que o SubagentStop vai usar
+        garante que o Map no frontend case (agent_id) tanto na start quanto
+        na done, e a linha transiciona running→done corretamente.
         """
         try:
             agent_id = hook_input.get('agent_id', '')
             agent_type = hook_input.get('agent_type', '')
+            session_id_local = hook_input.get('session_id', '')
 
             # SDK 0.1.52+: Registrar mapa agent_id → agent_type
             # para politicas de seguranca em can_use_tool()
@@ -408,6 +421,50 @@ def build_hooks(
                 f"agent_id={agent_id[:12] if agent_id else 'N/A'} | "
                 f"user_id={user_id or 'None'}"
             )
+
+            # Publicar task_started no pubsub (FIX CLI nao emite
+            # TaskStartedMessage para subagents locais)
+            if session_id_local and agent_id:
+                try:
+                    import json as _json
+                    import os as _os
+                    import redis as _redis_lib
+                    redis_url = _os.environ.get(
+                        'REDIS_URL', 'redis://localhost:6379/0'
+                    )
+                    r = _redis_lib.from_url(redis_url)
+                    channel = f'agent_sse:{session_id_local}'
+                    buffer_key = f'agent_sse_buffer:{session_id_local}'
+                    # Payload compativel com renderSubagentLineStart:
+                    #   data.agent_id || data.task_id
+                    #   data.agent_type || data.task_type || data.description
+                    payload = _json.dumps({
+                        'type': 'task_started',
+                        'data': {
+                            'agent_id': agent_id,
+                            'task_id': agent_id,  # fallback compat
+                            'agent_type': agent_type,
+                            'task_type': 'subagent',
+                            'description': agent_type,
+                        },
+                    })
+                    n = r.publish(channel, payload)
+                    try:
+                        r.rpush(buffer_key, payload)
+                        r.expire(buffer_key, 300)
+                        r.ltrim(buffer_key, -20, -1)
+                    except Exception:
+                        pass
+                    logger.info(
+                        f"[HOOK:SubagentStart] task_started publicado "
+                        f"channel={channel} agent_id={agent_id[:12]} "
+                        f"subscribers={n}"
+                    )
+                except Exception as pub_err:
+                    logger.warning(
+                        f"[HOOK:SubagentStart] publish task_started falhou: "
+                        f"{pub_err}"
+                    )
 
             # Contexto para o modelo: saber que subagente foi acionado
             return {
