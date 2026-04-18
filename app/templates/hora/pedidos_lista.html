@@ -1,0 +1,58 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>Pedidos (HORA → Motochefe)</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-outline-primary">
+      <i class="fas fa-file-import"></i> Importar XLSX
+    </a>
+    <a href="{{ url_for('hora.pedidos_novo') }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Novo pedido
+    </a>
+  </div>
+</div>
+
+<div class="mb-3">
+  <a class="btn btn-sm btn-outline-secondary {% if not filtro_status %}active{% endif %}"
+     href="{{ url_for('hora.pedidos_lista') }}">Todos</a>
+  <a class="btn btn-sm btn-outline-secondary {% if filtro_status == 'ABERTO' %}active{% endif %}"
+     href="{{ url_for('hora.pedidos_lista', status='ABERTO') }}">Abertos</a>
+  <a class="btn btn-sm btn-outline-secondary {% if filtro_status == 'PARCIALMENTE_FATURADO' %}active{% endif %}"
+     href="{{ url_for('hora.pedidos_lista', status='PARCIALMENTE_FATURADO') }}">Parcialmente faturados</a>
+  <a class="btn btn-sm btn-outline-secondary {% if filtro_status == 'FATURADO' %}active{% endif %}"
+     href="{{ url_for('hora.pedidos_lista', status='FATURADO') }}">Faturados</a>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead><tr>
+      <th>#</th>
+      <th>Número</th>
+      <th>Data</th>
+      <th>CNPJ destino</th>
+      <th>Itens</th>
+      <th>Status</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+      {% for p in pedidos %}
+        <tr>
+          <td><small>{{ p.id }}</small></td>
+          <td><strong>{{ p.numero_pedido }}</strong></td>
+          <td>{{ p.data_pedido.strftime('%d/%m/%Y') }}</td>
+          <td class="chassi-mono">{{ p.cnpj_destino }}</td>
+          <td>{{ p.itens|length }}</td>
+          <td><span class="badge badge-status-{{ p.status|lower }}">{{ p.status }}</span></td>
+          <td>
+            <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=p.id) }}"
+               class="btn btn-sm btn-outline-primary">Ver</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted">Nenhum pedido encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

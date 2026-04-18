@@ -1,0 +1,60 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3">Dashboard HORA</h2>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-2 col-sm-6"><div class="hora-kpi">
+    <div class="hora-kpi-label">Motos cadastradas</div>
+    <div class="hora-kpi-valor">{{ total_motos }}</div>
+  </div></div>
+  <div class="col-md-2 col-sm-6"><div class="hora-kpi">
+    <div class="hora-kpi-label">Lojas ativas</div>
+    <div class="hora-kpi-valor">{{ total_lojas }}</div>
+  </div></div>
+  <div class="col-md-2 col-sm-6"><div class="hora-kpi">
+    <div class="hora-kpi-label">Pedidos em aberto</div>
+    <div class="hora-kpi-valor">{{ total_pedidos_abertos }}</div>
+  </div></div>
+  <div class="col-md-2 col-sm-6"><div class="hora-kpi">
+    <div class="hora-kpi-label">NFs importadas</div>
+    <div class="hora-kpi-valor">{{ total_nfs }}</div>
+  </div></div>
+  <div class="col-md-2 col-sm-6"><div class="hora-kpi">
+    <div class="hora-kpi-label">Em conferência</div>
+    <div class="hora-kpi-valor text-info">{{ total_recebimentos_em_conferencia }}</div>
+  </div></div>
+  <div class="col-md-2 col-sm-6"><div class="hora-kpi">
+    <div class="hora-kpi-label">Com divergência</div>
+    <div class="hora-kpi-valor text-danger">{{ total_recebimentos_com_divergencia }}</div>
+  </div></div>
+</div>
+
+<h4 class="mb-2">Eventos recentes</h4>
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead><tr>
+      <th>Data/hora</th>
+      <th>Chassi</th>
+      <th>Tipo</th>
+      <th>Loja</th>
+      <th>Operador</th>
+      <th>Detalhe</th>
+    </tr></thead>
+    <tbody>
+      {% for e in eventos_recentes %}
+        <tr>
+          <td><small>{{ e.timestamp.strftime('%d/%m/%Y %H:%M') }}</small></td>
+          <td class="chassi-mono">{{ e.numero_chassi }}</td>
+          <td><span class="badge badge-status-{{ e.tipo|lower }}">{{ e.tipo }}</span></td>
+          <td>{{ e.loja.nome if e.loja else '—' }}</td>
+          <td>{{ e.operador or '—' }}</td>
+          <td><small>{{ e.detalhe or '' }}</small></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-center text-muted">Nenhum evento registrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

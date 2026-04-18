@@ -1,0 +1,227 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>Recebimento #{{ recebimento.id }}</h2>
+  <span class="badge fs-6 badge-status-{{ recebimento.status|lower }}">{{ recebimento.status }}</span>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">NF</div>
+    <div><a href="{{ url_for('hora.nfs_detalhe', nf_id=recebimento.nf_id) }}">{{ recebimento.nf.numero_nf }}</a></div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Loja</div>
+    <div>{{ recebimento.loja.nome }}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Data</div>
+    <div>{{ recebimento.data_recebimento.strftime('%d/%m/%Y') }}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Progresso</div>
+    <div>{{ recebimento.conferencias|length }} / {{ recebimento.nf.itens|length }}</div>
+  </div></div>
+</div>
+
+{% if chassis_esperados_nao_conferidos %}
+<div class="alert alert-warning">
+  <strong>{{ chassis_esperados_nao_conferidos|length }} chassi(s) esperados mas ainda não conferidos:</strong>
+  <div class="chassi-mono small mt-1">{{ chassis_esperados_nao_conferidos|join(', ') }}</div>
+</div>
+{% endif %}
+
+{% if chassis_extras %}
+<div class="alert alert-danger">
+  <strong>{{ chassis_extras|length }} chassi(s) conferidos que NÃO estão na NF:</strong>
+  <div class="chassi-mono small mt-1">{{ chassis_extras|join(', ') }}</div>
+</div>
+{% endif %}
+
+{% if recebimento.status == 'EM_CONFERENCIA' %}
+<div class="card p-3 mb-4">
+  <h5>Conferir chassi</h5>
+  <form method="post" action="{{ url_for('hora.recebimentos_conferir', recebimento_id=recebimento.id) }}"
+        id="form-conferencia">
+    <div class="row g-2">
+      <div class="col-md-4">
+        <label class="form-label">Chassi (QR Code) <span class="text-danger">*</span></label>
+        <input type="text" name="numero_chassi" id="input-chassi"
+               class="form-control chassi-mono" required autofocus
+               placeholder="escaneie ou digite"
+               data-validate-url="{{ url_for('hora.recebimentos_validar_chassi', recebimento_id=recebimento.id) }}">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <div class="form-check">
+          <input type="checkbox" name="qr_code_lido" id="qr_code_lido" class="form-check-input" checked>
+          <label for="qr_code_lido" class="form-check-label">QR Code lido</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Divergência (se houver)</label>
+        <select name="tipo_divergencia" id="select-divergencia" class="form-select">
+          <option value="">— Sem divergência (OK) —</option>
+          <option value="MODELO_DIFERENTE">Modelo diferente</option>
+          <option value="COR_DIFERENTE">Cor diferente</option>
+          <option value="MOTOR_DIFERENTE">Motor diferente</option>
+          <option value="AVARIA_FISICA">Avaria física</option>
+          <option value="CHASSI_EXTRA">Chassi extra (não está na NF)</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Detalhe</label>
+        <input type="text" name="detalhe_divergencia" class="form-control">
+      </div>
+    </div>
+
+    <!-- Feedback visual da validação automática -->
+    <div id="chassi-feedback" class="mt-3" style="display: none;">
+      <div class="alert d-flex align-items-start gap-2 mb-0" role="alert">
+        <i class="fas fa-info-circle mt-1"></i>
+        <div class="flex-grow-1">
+          <strong id="feedback-titulo"></strong>
+          <div id="feedback-mensagem" class="small"></div>
+          <div id="feedback-esperado" class="small mt-1"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <button type="submit" class="btn btn-success" id="btn-registrar">Registrar conferência</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function() {
+  const input = document.getElementById('input-chassi');
+  const feedback = document.getElementById('chassi-feedback');
+  const feedbackAlert = feedback.querySelector('.alert');
+  const feedbackIcon = feedback.querySelector('i');
+  const feedbackTitulo = document.getElementById('feedback-titulo');
+  const feedbackMensagem = document.getElementById('feedback-mensagem');
+  const feedbackEsperado = document.getElementById('feedback-esperado');
+  const selectDiv = document.getElementById('select-divergencia');
+  const btnRegistrar = document.getElementById('btn-registrar');
+  const url = input.dataset.validateUrl;
+
+  let debounce;
+
+  function limparFeedback() {
+    feedback.style.display = 'none';
+    feedbackAlert.className = 'alert d-flex align-items-start gap-2 mb-0';
+  }
+
+  function setFeedback(tipo, titulo, mensagem, esperado) {
+    feedback.style.display = 'block';
+    feedbackAlert.className = 'alert d-flex align-items-start gap-2 mb-0';
+    const mapClasse = {
+      ok: 'alert-success',
+      aviso: 'alert-warning',
+      erro: 'alert-danger',
+    };
+    const mapIcone = {
+      ok: 'fa-check-circle',
+      aviso: 'fa-exclamation-triangle',
+      erro: 'fa-times-circle',
+    };
+    feedbackAlert.classList.add(mapClasse[tipo] || 'alert-info');
+    feedbackIcon.className = 'fas ' + (mapIcone[tipo] || 'fa-info-circle') + ' mt-1';
+    feedbackTitulo.textContent = titulo;
+    feedbackMensagem.textContent = mensagem || '';
+    feedbackEsperado.innerHTML = esperado || '';
+  }
+
+  async function validar() {
+    const chassi = input.value.trim().toUpperCase();
+    if (!chassi || chassi.length < 5) {
+      limparFeedback();
+      return;
+    }
+
+    try {
+      const resp = await fetch(url + '?chassi=' + encodeURIComponent(chassi));
+      if (!resp.ok) { limparFeedback(); return; }
+      const data = await resp.json();
+
+      // Esperado: modelo/cor da NF (ou cadastro)
+      let esperadoHtml = '';
+      if (data.modelo_esperado || data.cor_esperada) {
+        esperadoHtml = '<strong>Esperado (NF):</strong> ';
+        if (data.modelo_esperado) esperadoHtml += 'Modelo <code>' + data.modelo_esperado + '</code> ';
+        if (data.cor_esperada) esperadoHtml += 'Cor <code>' + data.cor_esperada + '</code>';
+      }
+
+      // Decidir tipo + auto-select divergência
+      if (!data.na_nf) {
+        setFeedback('erro', 'CHASSI EXTRA', data.mensagem, esperadoHtml);
+        selectDiv.value = 'CHASSI_EXTRA';
+      } else if (data.ja_conferido) {
+        setFeedback('aviso', 'Já conferido', data.mensagem, esperadoHtml);
+      } else {
+        setFeedback('ok', 'Chassi OK', data.mensagem + ' Compare modelo/cor e marque divergência se houver.', esperadoHtml);
+        if (selectDiv.value === 'CHASSI_EXTRA') selectDiv.value = '';
+      }
+    } catch (err) {
+      console.error(err);
+      limparFeedback();
+    }
+  }
+
+  input.addEventListener('input', function() {
+    clearTimeout(debounce);
+    debounce = setTimeout(validar, 250);
+  });
+  input.addEventListener('blur', validar);
+  input.addEventListener('change', validar);
+})();
+</script>
+{% endif %}
+
+<h4>Conferências registradas</h4>
+<div class="table-responsive mb-3">
+  <table class="table table-sm table-hover">
+    <thead><tr>
+      <th>Chassi</th>
+      <th>Conferido em</th>
+      <th>QR</th>
+      <th>Divergência</th>
+      <th>Detalhe</th>
+      <th>Operador</th>
+    </tr></thead>
+    <tbody>
+      {% for c in recebimento.conferencias %}
+        <tr class="{% if c.tipo_divergencia %}table-warning{% endif %}">
+          <td class="chassi-mono">{{ c.numero_chassi }}</td>
+          <td><small>{{ c.conferido_em.strftime('%d/%m %H:%M') }}</small></td>
+          <td>{% if c.qr_code_lido %}<i class="fas fa-qrcode text-success"></i>{% else %}—{% endif %}</td>
+          <td>
+            {% if c.tipo_divergencia %}
+              <span class="badge hora-badge-divergencia">{{ c.tipo_divergencia }}</span>
+            {% else %}
+              <span class="badge bg-success">OK</span>
+            {% endif %}
+          </td>
+          <td><small>{{ c.detalhe_divergencia or '' }}</small></td>
+          <td>{{ c.operador or '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-center text-muted">Nenhum chassi conferido ainda.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if recebimento.status == 'EM_CONFERENCIA' %}
+<form method="post" action="{{ url_for('hora.recebimentos_finalizar', recebimento_id=recebimento.id) }}"
+      onsubmit="return confirm('Finalizar este recebimento? Não será possível registrar novas conferências.');">
+  <button type="submit" class="btn btn-primary">
+    <i class="fas fa-check"></i> Finalizar recebimento
+  </button>
+  <a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Voltar</a>
+</form>
+{% else %}
+<a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Voltar</a>
+{% endif %}
+{% endblock %}

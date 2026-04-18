@@ -37,6 +37,13 @@ class AprovarUsuarioForm(FlaskForm):
     sistema_logistica = BooleanField('Acesso ao Sistema de Logística')
     sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
     sistema_carvia = BooleanField('Acesso ao Sistema CarVia')
+    sistema_lojas = BooleanField('Acesso ao Sistema Lojas HORA')
+    loja_hora_id = SelectField(
+        'Loja HORA (segregação)',
+        choices=[('', 'Todas as lojas')],
+        validators=[Optional()],
+        coerce=str,
+    )
     acesso_comissao_carvia = BooleanField('Acesso a Comissoes CarVia')
     sistema_remessa_vortx = BooleanField('Gerar Remessas VORTX')
     observacoes = TextAreaField('Observações', validators=[Optional()])
@@ -64,6 +71,13 @@ class EditarUsuarioForm(FlaskForm):
     sistema_logistica = BooleanField('Acesso ao Sistema de Logística')
     sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
     sistema_carvia = BooleanField('Acesso ao Sistema CarVia')
+    sistema_lojas = BooleanField('Acesso ao Sistema Lojas HORA')
+    loja_hora_id = SelectField(
+        'Loja HORA (segregação)',
+        choices=[('', 'Todas as lojas')],
+        validators=[Optional()],
+        coerce=str,
+    )
     acesso_comissao_carvia = BooleanField('Acesso a Comissoes CarVia')
     sistema_remessa_vortx = BooleanField('Gerar Remessas VORTX')
     status = SelectField('Status', choices=[

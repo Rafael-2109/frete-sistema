@@ -1,0 +1,51 @@
+{
+  "name": "hora_modelo",
+  "description": "Tabela hora_modelo",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome_modelo",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "potencia_motor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "descricao",
+      "type": "text"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_modelo_nome_modelo",
+      "columns": [
+        "nome_modelo"
+      ],
+      "unique": true
+    }
+  ]
+}

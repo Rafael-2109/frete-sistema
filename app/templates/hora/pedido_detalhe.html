@@ -1,0 +1,85 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>Pedido {{ pedido.numero_pedido }}</h2>
+  <span class="badge fs-6 badge-status-{{ pedido.status|lower }}">{{ pedido.status }}</span>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Data do pedido</div>
+    <div>{{ pedido.data_pedido.strftime('%d/%m/%Y') }}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">CNPJ destino</div>
+    <div class="chassi-mono">{{ pedido.cnpj_destino }}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Itens</div>
+    <div class="hora-kpi-valor">{{ pedido.itens|length }}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">NFs vinculadas</div>
+    <div class="hora-kpi-valor">{{ nfs_vinculadas|length }}</div>
+  </div></div>
+</div>
+
+{% if chassis_nao_faturados %}
+<div class="alert alert-warning">
+  <strong>{{ chassis_nao_faturados|length }} chassi(s) do pedido ainda não faturado(s):</strong>
+  <div class="chassi-mono small mt-1">{{ chassis_nao_faturados|join(', ') }}</div>
+</div>
+{% endif %}
+
+{% if chassis_extra_em_nf %}
+<div class="alert alert-danger">
+  <strong>{{ chassis_extra_em_nf|length }} chassi(s) em NF fora do pedido:</strong>
+  <div class="chassi-mono small mt-1">{{ chassis_extra_em_nf|join(', ') }}</div>
+</div>
+{% endif %}
+
+<h4>Itens do pedido</h4>
+<div class="table-responsive mb-4">
+  <table class="table table-sm table-hover">
+    <thead><tr>
+      <th>Chassi</th><th>Modelo</th><th>Cor</th><th>Preço esperado</th>
+    </tr></thead>
+    <tbody>
+      {% for item in pedido.itens %}
+        <tr>
+          <td class="chassi-mono">{{ item.numero_chassi }}</td>
+          <td>{{ item.modelo.nome_modelo if item.modelo else '—' }}</td>
+          <td>{{ item.cor or '—' }}</td>
+          <td>R$ {{ "%.2f"|format(item.preco_compra_esperado) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if nfs_vinculadas %}
+<h4>NFs vinculadas</h4>
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead><tr>
+      <th>#</th><th>Número</th><th>Emissor</th><th>Data</th><th>Valor</th><th>Chassis</th>
+    </tr></thead>
+    <tbody>
+      {% for nf in nfs_vinculadas %}
+        <tr>
+          <td><a href="{{ url_for('hora.nfs_detalhe', nf_id=nf.id) }}">{{ nf.id }}</a></td>
+          <td>{{ nf.numero_nf }}</td>
+          <td>{{ nf.nome_emitente or nf.cnpj_emitente }}</td>
+          <td>{{ nf.data_emissao.strftime('%d/%m/%Y') }}</td>
+          <td>R$ {{ "%.2f"|format(nf.valor_total) }}</td>
+          <td>{{ nf.itens|length }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<a href="{{ url_for('hora.pedidos_lista') }}" class="btn btn-secondary">Voltar</a>
+{% endblock %}

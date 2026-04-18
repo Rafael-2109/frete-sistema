@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="hora-topbar d-flex align-items-center gap-2 flex-wrap">
+    <strong class="me-2"><i class="fas fa-store"></i> Lojas HORA</strong>
+    <a class="nav-link {% if request.endpoint == 'hora.dashboard' %}active{% endif %}"
+       href="{{ url_for('hora.dashboard') }}">Dashboard</a>
+    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.lojas') %}active{% endif %}"
+       href="{{ url_for('hora.lojas_lista') }}">Lojas</a>
+    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.modelos') %}active{% endif %}"
+       href="{{ url_for('hora.modelos_lista') }}">Modelos</a>
+    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.pedidos') %}active{% endif %}"
+       href="{{ url_for('hora.pedidos_lista') }}">Pedidos</a>
+    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.nfs') %}active{% endif %}"
+       href="{{ url_for('hora.nfs_lista') }}">NFs de Entrada</a>
+    <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.recebimentos') %}active{% endif %}"
+       href="{{ url_for('hora.recebimentos_lista') }}">Recebimentos</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% block hora_content %}{% endblock %}
+</div>
+{% endblock %}

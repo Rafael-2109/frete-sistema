@@ -1173,6 +1173,20 @@ def create_app(config_name=None):
 
         app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
 
+    # 🏪 Módulo HORA - Lojas Motochefe (varejo B2C)
+    # Isolado de motochefe-distribuidora e carvia (PJs distintas).
+    # Ver docs/hora/INVARIANTES.md e app/hora/CLAUDE.md.
+    try:
+        from app.hora.routes import hora_bp
+
+        app.register_blueprint(hora_bp)
+        app.logger.info("✅ Módulo HORA (Lojas) registrado com sucesso")
+    except ImportError as e:
+        app.logger.error(f"❌ Módulo HORA - ImportError: {e}")
+        import traceback
+
+        app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+
     # 🚀 MCP Logistica
 
     # 🔗 Integração TagPlus

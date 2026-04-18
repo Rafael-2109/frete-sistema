@@ -1,0 +1,55 @@
+{
+  "name": "hora_moto",
+  "description": "Tabela hora_moto",
+  "fields": [
+    {
+      "name": "numero_chassi",
+      "type": "varchar(30)",
+      "description": "Primary key"
+    },
+    {
+      "name": "modelo_id",
+      "type": "integer",
+      "description": "FK → hora_modelo.id",
+      "nullable": false
+    },
+    {
+      "name": "cor",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "numero_motor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "ano_modelo",
+      "type": "integer"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "modelo_id",
+      "references": "hora_modelo.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_moto_modelo_id",
+      "columns": [
+        "modelo_id"
+      ],
+      "unique": false
+    }
+  ]
+}

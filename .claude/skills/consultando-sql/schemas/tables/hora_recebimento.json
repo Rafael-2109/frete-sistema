@@ -1,0 +1,92 @@
+{
+  "name": "hora_recebimento",
+  "description": "Tabela hora_recebimento",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_id",
+      "type": "integer",
+      "description": "FK → hora_nf_entrada.id",
+      "nullable": false
+    },
+    {
+      "name": "loja_id",
+      "type": "integer",
+      "description": "FK → hora_loja.id",
+      "nullable": false
+    },
+    {
+      "name": "data_recebimento",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "operador",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "EM_CONFERENCIA"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_id",
+      "references": "hora_nf_entrada.id"
+    },
+    {
+      "column": "loja_id",
+      "references": "hora_loja.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "nf_id",
+      "loja_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_recebimento_loja_id",
+      "columns": [
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_recebimento_nf_id",
+      "columns": [
+        "nf_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_recebimento_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

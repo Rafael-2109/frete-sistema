@@ -1,0 +1,65 @@
+{
+  "name": "hora_pedido_item",
+  "description": "Tabela hora_pedido_item",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pedido_id",
+      "type": "integer",
+      "description": "FK → hora_pedido.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_chassi",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "modelo_id",
+      "type": "integer",
+      "description": "FK → hora_modelo.id"
+    },
+    {
+      "name": "cor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "preco_compra_esperado",
+      "type": "numeric(15,2)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pedido_id",
+      "references": "hora_pedido.id"
+    },
+    {
+      "column": "numero_chassi",
+      "references": "hora_moto.numero_chassi"
+    },
+    {
+      "column": "modelo_id",
+      "references": "hora_modelo.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_pedido_item_numero_chassi",
+      "columns": [
+        "numero_chassi"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_pedido_item_pedido_id",
+      "columns": [
+        "pedido_id"
+      ],
+      "unique": false
+    }
+  ]
+}

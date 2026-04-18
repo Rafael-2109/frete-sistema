@@ -1,0 +1,35 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3">Novo Recebimento</h2>
+
+<form method="post" class="card p-3" style="max-width: 700px;">
+  <div class="mb-3">
+    <label class="form-label">NF de entrada <span class="text-danger">*</span></label>
+    <select name="nf_id" class="form-select" required>
+      <option value="">— Selecione —</option>
+      {% for nf in nfs %}
+        <option value="{{ nf.id }}">
+          NF {{ nf.numero_nf }} — {{ nf.nome_emitente or nf.cnpj_emitente }}
+          — {{ nf.data_emissao.strftime('%d/%m/%Y') }} ({{ nf.itens|length }} chassis)
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Loja receptora <span class="text-danger">*</span></label>
+    <select name="loja_id" class="form-select" required>
+      <option value="">— Selecione —</option>
+      {% for l in lojas %}
+        <option value="{{ l.id }}">{{ l.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Iniciar conferência</button>
+    <a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

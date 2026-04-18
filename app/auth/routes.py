@@ -139,6 +139,9 @@ def aprovar_usuario(user_id):
     vendedores = obter_lista_vendedores()
     form.vendedor_vinculado.choices = [('', 'Selecione...')] + [(v, v) for v in vendedores]
     
+    # Popular choices de lojas HORA (todas + ativas)
+    form.loja_hora_id.choices = _obter_choices_lojas_hora()
+
     if form.validate_on_submit():
         usuario.perfil = form.perfil.data
         vendedor_vinculado = form.vendedor_vinculado.data if form.vendedor_vinculado.data else None
@@ -147,6 +150,8 @@ def aprovar_usuario(user_id):
         usuario.sistema_logistica = form.sistema_logistica.data  # ✅ NOVO
         usuario.sistema_motochefe = form.sistema_motochefe.data  # ✅ NOVO
         usuario.sistema_carvia = form.sistema_carvia.data
+        usuario.sistema_lojas = form.sistema_lojas.data
+        usuario.loja_hora_id = int(form.loja_hora_id.data) if form.loja_hora_id.data else None
         usuario.acesso_comissao_carvia = form.acesso_comissao_carvia.data
         usuario.sistema_remessa_vortx = form.sistema_remessa_vortx.data
 
@@ -159,6 +164,8 @@ def aprovar_usuario(user_id):
     form.sistema_logistica.data = usuario.sistema_logistica  # ✅ NOVO
     form.sistema_motochefe.data = usuario.sistema_motochefe  # ✅ NOVO
     form.sistema_carvia.data = usuario.sistema_carvia
+    form.sistema_lojas.data = usuario.sistema_lojas
+    form.loja_hora_id.data = str(usuario.loja_hora_id) if usuario.loja_hora_id else ''
     form.acesso_comissao_carvia.data = usuario.acesso_comissao_carvia
     form.sistema_remessa_vortx.data = usuario.sistema_remessa_vortx
 
@@ -212,7 +219,8 @@ def editar_usuario(user_id):
     # Carregar lista de vendedores
     vendedores = obter_lista_vendedores()
     form.vendedor_vinculado.choices = [('', 'Selecione...')] + [(v, v) for v in vendedores]
-    
+    form.loja_hora_id.choices = _obter_choices_lojas_hora()
+
     if form.validate_on_submit():
         usuario.nome = form.nome.data
         usuario.email = form.email.data
@@ -226,6 +234,8 @@ def editar_usuario(user_id):
         usuario.sistema_logistica = form.sistema_logistica.data  # ✅ NOVO
         usuario.sistema_motochefe = form.sistema_motochefe.data  # ✅ NOVO
         usuario.sistema_carvia = form.sistema_carvia.data
+        usuario.sistema_lojas = form.sistema_lojas.data
+        usuario.loja_hora_id = int(form.loja_hora_id.data) if form.loja_hora_id.data else None
         usuario.acesso_comissao_carvia = form.acesso_comissao_carvia.data
         usuario.sistema_remessa_vortx = form.sistema_remessa_vortx.data
 
@@ -246,10 +256,26 @@ def editar_usuario(user_id):
     form.sistema_logistica.data = usuario.sistema_logistica  # ✅ NOVO
     form.sistema_motochefe.data = usuario.sistema_motochefe  # ✅ NOVO
     form.sistema_carvia.data = usuario.sistema_carvia
+    form.sistema_lojas.data = usuario.sistema_lojas
+    form.loja_hora_id.data = str(usuario.loja_hora_id) if usuario.loja_hora_id else ''
     form.acesso_comissao_carvia.data = usuario.acesso_comissao_carvia
     form.sistema_remessa_vortx.data = usuario.sistema_remessa_vortx
 
     return render_template('auth/editar_usuario.html', form=form, usuario=usuario)
+
+def _obter_choices_lojas_hora():
+    """Retorna choices para SelectField de loja HORA. [('', 'Todas'), ...].
+
+    Lazy import para evitar circular (app.hora depende de app core).
+    Tolerante a tabela hora_loja ainda inexistente (retorna só 'Todas').
+    """
+    try:
+        from app.hora.models import HoraLoja
+        lojas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.nome).all()
+        return [('', 'Todas as lojas')] + [(str(l.id), f'{l.nome} ({l.cnpj})') for l in lojas]
+    except Exception:
+        return [('', 'Todas as lojas')]
+
 
 def obter_lista_vendedores():
     """Obtém lista de vendedores únicos do faturamento"""

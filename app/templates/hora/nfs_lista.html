@@ -1,0 +1,52 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>NFs de Entrada (Motochefe → HORA)</h2>
+  <a href="{{ url_for('hora.nfs_upload') }}" class="btn btn-primary">
+    <i class="fas fa-upload"></i> Importar DANFE
+  </a>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead><tr>
+      <th>#</th>
+      <th>Número</th>
+      <th>Emissor</th>
+      <th>CNPJ emit.</th>
+      <th>Data</th>
+      <th>Valor</th>
+      <th>Chassis</th>
+      <th>Pedido</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+      {% for nf in nfs %}
+        <tr>
+          <td><small>{{ nf.id }}</small></td>
+          <td><strong>{{ nf.numero_nf }}</strong></td>
+          <td><small>{{ nf.nome_emitente or '—' }}</small></td>
+          <td class="chassi-mono"><small>{{ nf.cnpj_emitente }}</small></td>
+          <td>{{ nf.data_emissao.strftime('%d/%m/%Y') }}</td>
+          <td>R$ {{ "%.2f"|format(nf.valor_total) }}</td>
+          <td>{{ nf.itens|length }}</td>
+          <td>
+            {% if nf.pedido_id %}
+              <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=nf.pedido_id) }}">{{ nf.pedido.numero_pedido }}</a>
+            {% else %}
+              <span class="text-muted">sem pedido</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('hora.nfs_detalhe', nf_id=nf.id) }}"
+               class="btn btn-sm btn-outline-primary">Ver</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="text-center text-muted">Nenhuma NF importada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

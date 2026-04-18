@@ -1,0 +1,59 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>Recebimentos</h2>
+  <a href="{{ url_for('hora.recebimentos_novo') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> Novo recebimento
+  </a>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-3">
+    <select name="loja_id" class="form-select form-select-sm">
+      <option value="">Todas lojas</option>
+      {% for l in lojas %}
+        <option value="{{ l.id }}" {% if filtro_loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <select name="status" class="form-select form-select-sm">
+      <option value="">Todos status</option>
+      <option value="EM_CONFERENCIA" {% if filtro_status == 'EM_CONFERENCIA' %}selected{% endif %}>Em conferência</option>
+      <option value="CONCLUIDO" {% if filtro_status == 'CONCLUIDO' %}selected{% endif %}>Concluído</option>
+      <option value="COM_DIVERGENCIA" {% if filtro_status == 'COM_DIVERGENCIA' %}selected{% endif %}>Com divergência</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <button type="submit" class="btn btn-sm btn-outline-primary">Filtrar</button>
+  </div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead><tr>
+      <th>#</th><th>Data</th><th>NF</th><th>Loja</th>
+      <th>Chassis conferidos</th><th>Status</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for r in recebimentos %}
+        <tr>
+          <td><small>{{ r.id }}</small></td>
+          <td>{{ r.data_recebimento.strftime('%d/%m/%Y') }}</td>
+          <td>{{ r.nf.numero_nf }}</td>
+          <td>{{ r.loja.nome }}</td>
+          <td>{{ r.conferencias|length }} / {{ r.nf.itens|length }}</td>
+          <td><span class="badge badge-status-{{ r.status|lower }}">{{ r.status }}</span></td>
+          <td>
+            <a href="{{ url_for('hora.recebimentos_detalhe', recebimento_id=r.id) }}"
+               class="btn btn-sm btn-outline-primary">Abrir</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted">Nenhum recebimento.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -108,6 +108,16 @@
                                     <small class="text-muted d-block">Permissão adicional para acessar comissões dentro do CarVia</small>
                                 </div>
                                 <div class="form-check mt-2">
+                                    {{ form.sistema_lojas(class="form-check-input", id="sistemaLojas") }}
+                                    {{ form.sistema_lojas.label(class="form-check-label", for="sistemaLojas") }}
+                                    <small class="text-muted d-block">Acesso ao módulo Lojas HORA (varejo B2C)</small>
+                                </div>
+                                <div class="ms-4 mt-2">
+                                    {{ form.loja_hora_id.label(class="form-label form-label-sm") }}
+                                    {{ form.loja_hora_id(class="form-select form-select-sm") }}
+                                    <small class="text-muted d-block">Segregação por loja. "Todas" = vê dados de todas as lojas HORA.</small>
+                                </div>
+                                <div class="form-check mt-2">
                                     {{ form.sistema_remessa_vortx(class="form-check-input", id="sistemaRemessaVortx") }}
                                     {{ form.sistema_remessa_vortx.label(class="form-check-label", for="sistemaRemessaVortx") }}
                                     <small class="text-muted d-block">Gerar remessas CNAB VORTX (banco 310) e injetar no Odoo</small>

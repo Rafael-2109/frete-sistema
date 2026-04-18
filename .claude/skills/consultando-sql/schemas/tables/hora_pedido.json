@@ -1,0 +1,78 @@
+{
+  "name": "hora_pedido",
+  "description": "Tabela hora_pedido",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero_pedido",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj_destino",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "data_pedido",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "ABERTO"
+    },
+    {
+      "name": "arquivo_origem_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_pedido_numero_pedido",
+      "columns": [
+        "numero_pedido"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_hora_pedido_cnpj_destino",
+      "columns": [
+        "cnpj_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_pedido_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

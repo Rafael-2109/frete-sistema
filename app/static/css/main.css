@@ -73,6 +73,7 @@
 @import url('./modules/_fretes.css') layer(modules);
 @import url('./modules/_bi.css') layer(modules);
 @import url('./modules/_motochefe.css') layer(modules);
+@import url('./modules/_hora.css') layer(modules);
 @import url('./modules/_manufatura.css') layer(modules);
 @import url('./modules/_rastreamento.css') layer(modules);
 @import url('./modules/_rastreamento-standalone.css') layer(modules);

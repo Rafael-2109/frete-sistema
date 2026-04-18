@@ -27,6 +27,10 @@ class Usuario(db.Model, UserMixin):
     sistema_seguranca = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao modulo de seguranca
     acesso_comissao_carvia = db.Column(db.Boolean, default=False, nullable=False)  # Acesso a comissoes CarVia
     sistema_remessa_vortx = db.Column(db.Boolean, default=False, nullable=False)  # Acesso a geracao de remessa VORTX
+    sistema_lojas = db.Column(db.Boolean, default=False, nullable=False)  # Acesso ao modulo Lojas HORA
+    # Segregacao por loja HORA: NULL = acesso a todas; <id> = restrito a 1 loja.
+    # Nao usa FK explicita (manter app/auth independente de app/hora).
+    loja_hora_id = db.Column(db.Integer, nullable=True)
 
     # Dados de controle
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
@@ -161,6 +165,23 @@ class Usuario(db.Model, UserMixin):
     def pode_gerar_remessa_vortx(self):
         """Verifica se pode gerar remessa VORTX (flag dedicada ou admin)"""
         return self.sistema_remessa_vortx or self.perfil == 'administrador'
+
+    def pode_acessar_lojas(self):
+        """Verifica se pode acessar o modulo Lojas HORA (varejo B2C)."""
+        return self.sistema_lojas or self.perfil == 'administrador'
+
+    def lojas_hora_ids_permitidas(self):
+        """Retorna restricao de loja para este usuario no modulo HORA.
+
+        - None: acesso a TODAS as lojas (admin ou usuario sem loja_hora_id setada).
+        - [<id>]: restrito a 1 loja HORA (segregacao por loja).
+        """
+        # Admin ve tudo, independente de loja_hora_id.
+        if self.perfil == 'administrador':
+            return None
+        if self.loja_hora_id is None:
+            return None
+        return [self.loja_hora_id]
 
     def __repr__(self):
         return f'<Usuario {self.email}>'

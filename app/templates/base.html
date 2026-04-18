@@ -149,6 +149,47 @@
           </li>
           {% endif %}
 
+          {# 🏪 Dropdown Lojas HORA (varejo B2C, PJ distinta do Motochefe-distribuidora) #}
+          {% if current_user.is_authenticated and current_user.pode_acessar_lojas() %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="navbarHora" role="button"
+               data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-store"></i> Lojas HORA
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="navbarHora">
+                <li><a class="dropdown-item" href="{{ url_for('hora.dashboard') }}">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-address-book"></i> Cadastros</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.lojas_lista') }}">
+                    <i class="fas fa-store"></i> Lojas
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.modelos_lista') }}">
+                    <i class="fas fa-list"></i> Modelos
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-exchange-alt"></i> Estoque</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.pedidos_lista') }}">
+                    <i class="fas fa-file-invoice"></i> Pedidos (HORA → Motochefe)
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.nfs_lista') }}">
+                    <i class="fas fa-file-import"></i> NFs de Entrada
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.recebimentos_lista') }}">
+                    <i class="fas fa-clipboard-check"></i> Recebimentos
+                </a></li>
+                {% if current_user.perfil == 'administrador' %}
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-users-cog"></i> Administração</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.permissoes_lista') }}">
+                    <i class="fas fa-user-shield"></i> Usuários / Permissões
+                </a></li>
+                {% endif %}
+            </ul>
+          </li>
+          {% endif %}
+
           {# 🆕 Link DIRETO na barra: CarVia Vencimentos #}
           {% if current_user.is_authenticated and current_user.sistema_carvia %}
           <li class="nav-item">

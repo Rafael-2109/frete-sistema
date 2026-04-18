@@ -1,0 +1,36 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>Modelos</h2>
+  <a href="{{ url_for('hora.modelos_novo') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> Novo modelo
+  </a>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead><tr>
+      <th>Nome</th>
+      <th>Potência</th>
+      <th>Descrição</th>
+      <th>Status</th>
+    </tr></thead>
+    <tbody>
+      {% for m in modelos %}
+        <tr>
+          <td><strong>{{ m.nome_modelo }}</strong></td>
+          <td>{{ m.potencia_motor or '—' }}</td>
+          <td><small>{{ m.descricao or '' }}</small></td>
+          <td>
+            {% if m.ativo %}<span class="badge bg-success">Ativo</span>
+            {% else %}<span class="badge bg-secondary">Inativo</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="text-center text-muted">Nenhum modelo cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

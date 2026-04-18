@@ -1,0 +1,137 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3">Preview: Importar Pedido</h2>
+<p class="text-muted"><small>Arquivo: <code>{{ nome_arquivo }}</code> — header detectado na linha {{ extracao.header_row }}.</small></p>
+
+{% if extracao.avisos %}
+<div class="alert alert-warning">
+  <strong>Avisos:</strong>
+  <ul class="mb-0">
+    {% for aviso in extracao.avisos %}<li>{{ aviso }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('hora.pedidos_importar_xlsx_confirmar') }}">
+  <input type="hidden" name="token" value="{{ token }}">
+
+  <div class="card p-3 mb-3">
+    <h5>Loja destino (via lookup de CNPJ)</h5>
+    <p class="mb-2"><small class="text-muted">{{ msg_lookup }}</small></p>
+
+    <div class="mb-2">
+      <strong>CNPJs encontrados no arquivo:</strong>
+      {% if extracao.cnpjs_candidatos %}
+        {% for c in extracao.cnpjs_candidatos %}
+          <code class="me-2">{{ c }}</code>
+        {% endfor %}
+      {% else %}
+        <span class="text-muted">nenhum</span>
+      {% endif %}
+    </div>
+
+    <div class="row g-2">
+      <div class="col-md-8">
+        <label class="form-label">Loja HORA (CNPJ destino)</label>
+        <select name="cnpj_loja" class="form-select" required>
+          {% if cnpj_resolvido %}
+            {% for loja in lojas_ativas %}
+              <option value="{{ loja.cnpj }}" {% if loja.cnpj == cnpj_resolvido %}selected{% endif %}>
+                {{ loja.nome }} — {{ loja.cnpj }}{% if loja.cnpj == cnpj_resolvido %} (resolvida){% endif %}
+              </option>
+            {% endfor %}
+          {% else %}
+            <option value="">— Selecione a loja manualmente —</option>
+            {% for loja in lojas_ativas %}
+              <option value="{{ loja.cnpj }}">{{ loja.nome }} — {{ loja.cnpj }}</option>
+            {% endfor %}
+          {% endif %}
+        </select>
+      </div>
+      <div class="col-md-4 d-flex align-items-end">
+        <div class="text-muted small">
+          {% if cnpj_resolvido %}
+            <i class="fas fa-check-circle text-success"></i> Resolvido automaticamente
+          {% else %}
+            <i class="fas fa-exclamation-triangle text-warning"></i> Seleção manual necessária
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-3 mb-3">
+    <h5>Cabeçalho do pedido</h5>
+    <div class="row g-2 small">
+      <div class="col-md-3">
+        <label class="form-label">Número pedido</label>
+        <input type="text" class="form-control" value="{{ extracao.numero_pedido or '—' }}" readonly>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Data do pedido</label>
+        <input type="text" class="form-control"
+               value="{{ extracao.data_pedido.strftime('%d/%m/%Y') if extracao.data_pedido else '—' }}"
+               readonly>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Cliente (texto do arquivo)</label>
+        <input type="text" class="form-control" value="{{ extracao.cliente_nome or '—' }}" readonly>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-3 mb-3">
+    <h5>Itens extraídos ({{ extracao.itens|length }})</h5>
+    <div class="table-responsive hora-table-sticky" style="max-height: 500px; overflow-y: auto;">
+      <table class="table table-sm table-hover">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Linha</th>
+            <th>Chassi</th>
+            <th>Modelo</th>
+            <th>Cor</th>
+            <th>Preço</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in extracao.itens %}
+            <tr class="{% if item.aviso == 'chassi_pendente' %}table-warning{% endif %}">
+              <td><small>{{ loop.index }}</small></td>
+              <td><small>L{{ item.linha_origem }}</small></td>
+              <td class="chassi-mono">
+                {% if item.numero_chassi %}
+                  {{ item.numero_chassi }}
+                {% else %}
+                  <span class="text-warning"><i class="fas fa-hourglass-half"></i> PENDENTE</span>
+                {% endif %}
+              </td>
+              <td>{{ item.modelo or '—' }}</td>
+              <td>{{ item.cor or '—' }}</td>
+              <td>R$ {{ "%.2f"|format(item.preco_compra_esperado) if item.preco_compra_esperado else '—' }}</td>
+              <td>
+                {% if item.aviso == 'chassi_pendente' %}
+                  <span class="badge hora-badge-divergencia">chassi pendente</span>
+                {% else %}
+                  <span class="badge bg-success">OK</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-success">
+      <i class="fas fa-check"></i> Confirmar e criar pedido
+    </button>
+    <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-secondary">
+      Voltar e escolher outro arquivo
+    </a>
+  </div>
+</form>
+{% endblock %}

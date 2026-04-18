@@ -1,0 +1,81 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>NF {{ nf.numero_nf }}</h2>
+  <div>
+    {% if nf.pedido_id %}
+      <span class="badge bg-success">Vinculada ao pedido {{ nf.pedido.numero_pedido }}</span>
+    {% else %}
+      <span class="badge bg-warning text-dark">Sem pedido</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="hora-kpi">
+    <div class="hora-kpi-label">Chave de acesso</div>
+    <div class="chassi-mono small">{{ nf.chave_44 }}</div>
+  </div></div>
+  <div class="col-md-4"><div class="hora-kpi">
+    <div class="hora-kpi-label">Emissor</div>
+    <div>{{ nf.nome_emitente or '—' }}</div>
+    <div class="chassi-mono small text-muted">{{ nf.cnpj_emitente }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Data</div>
+    <div>{{ nf.data_emissao.strftime('%d/%m/%Y') }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Valor total</div>
+    <div>R$ {{ "%.2f"|format(nf.valor_total) }}</div>
+  </div></div>
+</div>
+
+{% if not nf.pedido_id and pedidos_disponiveis %}
+<form method="post" action="{{ url_for('hora.nfs_vincular_pedido', nf_id=nf.id) }}" class="card p-3 mb-3">
+  <h5>Vincular a pedido</h5>
+  <div class="row">
+    <div class="col-md-8">
+      <select name="pedido_id" class="form-select" required>
+        <option value="">— Selecione —</option>
+        {% for p in pedidos_disponiveis %}
+          <option value="{{ p.id }}">
+            {{ p.numero_pedido }} — {{ p.data_pedido.strftime('%d/%m/%Y') }} ({{ p.itens|length }} chassis)
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <button type="submit" class="btn btn-primary">Vincular</button>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+<h4>Chassis faturados</h4>
+<div class="table-responsive mb-3">
+  <table class="table table-sm table-hover">
+    <thead><tr>
+      <th>Chassi</th>
+      <th>Modelo (texto NF)</th>
+      <th>Cor (texto NF)</th>
+      <th>Motor (texto NF)</th>
+      <th>Preço real</th>
+    </tr></thead>
+    <tbody>
+      {% for item in nf.itens %}
+        <tr>
+          <td class="chassi-mono">{{ item.numero_chassi }}</td>
+          <td>{{ item.modelo_texto_original or '—' }}</td>
+          <td>{{ item.cor_texto_original or '—' }}</td>
+          <td class="chassi-mono small">{{ item.numero_motor_texto_original or '—' }}</td>
+          <td>R$ {{ "%.2f"|format(item.preco_real) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<a href="{{ url_for('hora.nfs_lista') }}" class="btn btn-secondary">Voltar</a>
+{% endblock %}

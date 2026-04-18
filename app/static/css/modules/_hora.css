@@ -1,0 +1,145 @@
+/**
+ * _hora.css - Lojas HORA Module Overrides
+ *
+ * Estilos do modulo HORA (varejo B2C de motos eletricas).
+ * Usa SOMENTE design tokens do sistema + Bootstrap CSS variables
+ * para adaptacao automatica light/dark mode.
+ *
+ * Token mapping:
+ * - Fundo superficie -> var(--bs-tertiary-bg) ou var(--bg-light)
+ * - Texto principal -> var(--bs-body-color) ou var(--text)
+ * - Texto secundario -> var(--bs-secondary-color) ou var(--text-muted)
+ * - Borda -> var(--bs-border-color) ou var(--border)
+ * - Hover -> var(--bs-secondary-bg)
+ */
+
+@layer modules {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     HORA TOPBAR - Navegacao interna do modulo
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .hora-topbar {
+    background: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    padding: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+  }
+
+  .hora-topbar strong {
+    color: var(--bs-body-color);
+  }
+
+  .hora-topbar .nav-link {
+    color: var(--bs-secondary-color);
+    padding: 0.35rem 0.8rem;
+    border-radius: 0.25rem;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .hora-topbar .nav-link:hover {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+  }
+
+  .hora-topbar .nav-link.active {
+    background: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary);
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     HORA KPI - Cards de metrica no dashboard
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .hora-kpi {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    color: var(--bs-body-color);
+  }
+
+  .hora-kpi-valor {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--bs-body-color);
+  }
+
+  .hora-kpi-label {
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     HORA BADGES - Status e divergencias
+     API --_badge-bg/color seguindo padrao components/_badges.css
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .hora-badge-divergencia {
+    background-color: var(--bs-warning);
+    color: var(--bs-warning-text-emphasis, #664d03);
+  }
+
+  .badge-status-aberto {
+    background-color: var(--bs-primary);
+    color: var(--bs-white, #fff);
+  }
+
+  .badge-status-faturado,
+  .badge-status-concluido,
+  .badge-status-concluida {
+    background-color: var(--bs-success);
+    color: var(--bs-white, #fff);
+  }
+
+  .badge-status-parcialmente_faturado,
+  .badge-status-em_conferencia {
+    background-color: var(--bs-warning);
+    color: var(--bs-warning-text-emphasis, #664d03);
+  }
+
+  .badge-status-com_divergencia,
+  .badge-status-cancelada,
+  .badge-status-cancelado,
+  .badge-status-avariada {
+    background-color: var(--bs-danger);
+    color: var(--bs-white, #fff);
+  }
+
+  .badge-status-recebida,
+  .badge-status-conferida {
+    background-color: var(--bs-info);
+    color: var(--bs-white, #fff);
+  }
+
+  .badge-status-vendida {
+    background-color: var(--bs-success);
+    color: var(--bs-white, #fff);
+  }
+
+  .badge-status-devolvida,
+  .badge-status-reservada {
+    background-color: var(--bs-secondary);
+    color: var(--bs-white, #fff);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     UTILITARIOS HORA
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .chassi-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  /* Tabelas sticky header (usado no preview de import) */
+  .hora-table-sticky thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bs-tertiary-bg);
+    z-index: 10;
+  }
+
+}
