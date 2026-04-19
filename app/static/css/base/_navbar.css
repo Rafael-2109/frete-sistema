@@ -79,6 +79,9 @@
     color: var(--bs-primary);
 }
 
+/* Brand CarVia/HORA/Campo Belo: regras movidas para modules/_navbar_brand_themes.css
+   (arquivo principal cache-busteado via asset_url para forcar reload). */
+
 /* ==========================================================================
    NAV LINKS
    ========================================================================== */

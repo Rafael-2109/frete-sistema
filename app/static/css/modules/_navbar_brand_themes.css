@@ -1,0 +1,49 @@
+/* ==========================================================================
+   Navbar Brand — Variacoes por modulo (CarVia, HORA, Nacom/Campo Belo)
+   Cache-bustada via @import em main.css (mudanca de hash forca reload)
+   ========================================================================== */
+
+/* --- Navbar fina para fluxos Logistica (CarVia + Nacom/Campo Belo + HORA) --- */
+.nc-navbar {
+    min-height: 44px !important;
+    padding: 0.1rem 0 !important;
+}
+
+.nc-navbar .navbar-brand {
+    padding: 0.05rem 0 !important;
+}
+
+/* --- CarVia: degrade na navbar inteira (25% azul | 50% degrade | 25% cor original) --- */
+.nc-navbar.nc-navbar--carvia {
+    background: linear-gradient(90deg,
+        #044383 0%,
+        #044383 25%,
+        var(--bs-secondary-bg, #1a2332) 75%,
+        var(--bs-secondary-bg, #1a2332) 100%) !important;
+}
+
+/* --- Dark: degrade ancorado em px absolutos (nao em %) para casar com largura do logo
+       Area branca fixa cobre o logo; resto da navbar fica preto solido --- */
+.nc-navbar.nc-navbar--white-bg {
+    background:
+        linear-gradient(90deg,
+            #ffffff 0px,
+            #ffffff 140px,
+            #000000 240px,
+            #000000 100%) #000000 !important;
+}
+
+/* Em light mode, deixa a navbar nativa (branco) aparecer */
+[data-theme="light"] .nc-navbar.nc-navbar--white-bg,
+[data-bs-theme="light"] .nc-navbar.nc-navbar--white-bg {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%) !important;
+}
+
+[data-theme="light"] .nc-navbar.nc-navbar--carvia,
+[data-bs-theme="light"] .nc-navbar.nc-navbar--carvia {
+    background: linear-gradient(90deg,
+        #044383 0%,
+        #044383 25%,
+        #ffffff 75%,
+        #ffffff 100%) !important;
+}
