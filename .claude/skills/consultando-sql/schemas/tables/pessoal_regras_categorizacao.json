@@ -32,6 +32,18 @@
       "type": "text"
     },
     {
+      "name": "cpf_cnpj_padrao",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "valor_min",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_max",
+      "type": "numeric(15,2)"
+    },
+    {
       "name": "vezes_usado",
       "type": "integer",
       "default": 0

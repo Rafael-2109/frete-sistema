@@ -186,6 +186,20 @@
   ],
   "indices": [
     {
+      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
+      "columns": [
+        "numero_agendamento"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
+      "columns": [
+        "ofx_fitid"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_comprovante_pagamento_boleto_odoo_statement_line_id",
       "columns": [
         "odoo_statement_line_id"
@@ -207,20 +221,6 @@
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_numero_agendamento",
-      "columns": [
-        "numero_agendamento"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
-      "columns": [
-        "ofx_checknum"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_comp_data_vencimento",
       "columns": [
         "data_vencimento"
@@ -228,9 +228,9 @@
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_tipo",
+      "name": "ix_comprovante_pagamento_boleto_ofx_checknum",
       "columns": [
-        "tipo"
+        "ofx_checknum"
       ],
       "unique": false
     },
@@ -242,9 +242,9 @@
       "unique": false
     },
     {
-      "name": "idx_comp_ofx_checknum",
+      "name": "idx_comp_odoo_statement_line",
       "columns": [
-        "ofx_checknum"
+        "odoo_statement_line_id"
       ],
       "unique": false
     },
@@ -256,16 +256,16 @@
       "unique": false
     },
     {
-      "name": "idx_comp_odoo_statement_line",
+      "name": "idx_comp_ofx_checknum",
       "columns": [
-        "odoo_statement_line_id"
+        "ofx_checknum"
       ],
       "unique": false
     },
     {
-      "name": "ix_comprovante_pagamento_boleto_ofx_fitid",
+      "name": "ix_comprovante_pagamento_boleto_tipo",
       "columns": [
-        "ofx_fitid"
+        "tipo"
       ],
       "unique": false
     }

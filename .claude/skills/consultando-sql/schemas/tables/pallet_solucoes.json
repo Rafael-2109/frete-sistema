@@ -147,9 +147,16 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_solucoes_nf_venda",
+      "name": "ix_pallet_solucoes_credito_destino_id",
       "columns": [
-        "nf_venda"
+        "credito_destino_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_solucoes_tipo",
+      "columns": [
+        "tipo"
       ],
       "unique": false
     },
@@ -157,6 +164,13 @@
       "name": "idx_solucao_nf_venda",
       "columns": [
         "nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_solucoes_credito_id",
+      "columns": [
+        "credito_id"
       ],
       "unique": false
     },
@@ -169,16 +183,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_tipo",
+      "name": "ix_pallet_solucoes_nf_venda",
       "columns": [
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_solucoes_credito_destino_id",
-      "columns": [
-        "credito_destino_id"
+        "nf_venda"
       ],
       "unique": false
     },
@@ -187,13 +194,6 @@
       "columns": [
         "tipo",
         "criado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_solucoes_credito_id",
-      "columns": [
-        "credito_id"
       ],
       "unique": false
     }

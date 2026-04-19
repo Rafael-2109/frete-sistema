@@ -22,6 +22,12 @@
       "type": "varchar(50)"
     },
     {
+      "name": "ordem_exibicao",
+      "type": "integer",
+      "default": 0,
+      "description": "Campo legado, nao mapeado no model Python. Usar 'grupo, nome' para ordenar."
+    },
+    {
       "name": "ativa",
       "type": "boolean",
       "default": true

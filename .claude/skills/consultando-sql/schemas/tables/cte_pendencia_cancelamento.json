@@ -70,16 +70,9 @@
   ],
   "indices": [
     {
-      "name": "ix_cte_pendencia_cancelamento_frete_id",
+      "name": "ix_cte_pendencia_cancelamento_cte_id",
       "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cte_pendencia_cancelamento_chave_acesso",
-      "columns": [
-        "chave_acesso"
+        "cte_id"
       ],
       "unique": false
     },
@@ -98,9 +91,16 @@
       "unique": false
     },
     {
-      "name": "ix_cte_pendencia_cancelamento_cte_id",
+      "name": "ix_cte_pendencia_cancelamento_chave_acesso",
       "columns": [
-        "cte_id"
+        "chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cte_pendencia_cancelamento_frete_id",
+      "columns": [
+        "frete_id"
       ],
       "unique": false
     }
