@@ -207,7 +207,9 @@
       "Bash(crontab -l -u rafaelnascimento)",
       "Bash(sudo -n crontab -u rafaelnascimento -l)",
       "Bash(ln -s ../../.venv .venv)",
-      "mcp__sequential-thinking__sequentialthinking"
+      "mcp__sequential-thinking__sequentialthinking",
+      "Skill(resolvendo-problemas)",
+      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/scripts/migrations/hora_*)"
     ],
     "deny": [],
     "defaultMode": "auto"

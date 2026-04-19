@@ -119,16 +119,16 @@
   ],
   "indices": [
     {
-      "name": "idx_importacao_temp_status",
+      "name": "idx_importacao_temp_criado",
       "columns": [
-        "status"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "idx_importacao_temp_criado",
+      "name": "idx_importacao_temp_expira",
       "columns": [
-        "criado_em"
+        "expira_em"
       ],
       "unique": false
     },
@@ -140,9 +140,9 @@
       "unique": false
     },
     {
-      "name": "idx_importacao_temp_expira",
+      "name": "idx_importacao_temp_status",
       "columns": [
-        "expira_em"
+        "status"
       ],
       "unique": false
     },

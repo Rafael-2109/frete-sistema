@@ -44,6 +44,11 @@
       "description": "FK → carvia_nfs.id"
     },
     {
+      "name": "cte_complementar_id",
+      "type": "integer",
+      "description": "FK → carvia_cte_complementares.id"
+    },
+    {
       "name": "valor_mercadoria",
       "type": "numeric(15,2)"
     },
@@ -89,6 +94,10 @@
     {
       "column": "nf_id",
       "references": "carvia_nfs.id"
+    },
+    {
+      "column": "cte_complementar_id",
+      "references": "carvia_cte_complementares.id"
     }
   ],
   "indices": [
@@ -103,6 +112,13 @@
       "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
       "columns": [
         "fatura_cliente_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_fatura_cliente_itens_cte_complementar_id",
+      "columns": [
+        "cte_complementar_id"
       ],
       "unique": false
     },

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 268,
+  "total_relationships": 287,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -294,6 +294,12 @@
       "from_table": "carvia_fatura_cliente_itens",
       "from_column": "nf_id",
       "to_table": "carvia_nfs",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_fatura_cliente_itens",
+      "from_column": "cte_complementar_id",
+      "to_table": "carvia_cte_complementares",
       "to_column": "id"
     },
     {
@@ -996,6 +1002,114 @@
       "from_table": "historico_tabelas_frete",
       "from_column": "transportadora_id",
       "to_table": "transportadoras",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_moto",
+      "from_column": "modelo_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_moto_evento",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_moto_evento",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_nf_entrada",
+      "from_column": "pedido_id",
+      "to_table": "hora_pedido",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_nf_entrada_item",
+      "from_column": "nf_id",
+      "to_table": "hora_nf_entrada",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_nf_entrada_item",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_pedido_item",
+      "from_column": "pedido_id",
+      "to_table": "hora_pedido",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_pedido_item",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_pedido_item",
+      "from_column": "modelo_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento",
+      "from_column": "nf_id",
+      "to_table": "hora_nf_entrada",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento_conferencia",
+      "from_column": "recebimento_id",
+      "to_table": "hora_recebimento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento_conferencia",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_tabela_preco",
+      "from_column": "modelo_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_item",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_item",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_venda_item",
+      "from_column": "tabela_preco_id",
+      "to_table": "hora_tabela_preco",
       "to_column": "id"
     },
     {

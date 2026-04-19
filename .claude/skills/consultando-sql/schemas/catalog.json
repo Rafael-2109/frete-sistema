@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 180,
+  "total_tabelas": 193,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1011,6 +1011,123 @@
         "requisicao_id",
         "operacao",
         "alterado_em"
+      ]
+    },
+    {
+      "name": "hora_loja",
+      "description": "Tabela hora_loja",
+      "key_fields": [
+        "cnpj",
+        "nome",
+        "endereco"
+      ]
+    },
+    {
+      "name": "hora_modelo",
+      "description": "Tabela hora_modelo",
+      "key_fields": [
+        "nome_modelo",
+        "potencia_motor",
+        "descricao"
+      ]
+    },
+    {
+      "name": "hora_moto",
+      "description": "Tabela hora_moto",
+      "key_fields": [
+        "modelo_id",
+        "cor",
+        "numero_motor"
+      ]
+    },
+    {
+      "name": "hora_moto_evento",
+      "description": "Tabela hora_moto_evento",
+      "key_fields": [
+        "numero_chassi",
+        "tipo",
+        "origem_tabela"
+      ]
+    },
+    {
+      "name": "hora_nf_entrada",
+      "description": "Tabela hora_nf_entrada",
+      "key_fields": [
+        "chave_44",
+        "numero_nf",
+        "serie_nf"
+      ]
+    },
+    {
+      "name": "hora_nf_entrada_item",
+      "description": "Tabela hora_nf_entrada_item",
+      "key_fields": [
+        "nf_id",
+        "numero_chassi",
+        "preco_real"
+      ]
+    },
+    {
+      "name": "hora_pedido",
+      "description": "Tabela hora_pedido",
+      "key_fields": [
+        "numero_pedido",
+        "cnpj_destino",
+        "data_pedido"
+      ]
+    },
+    {
+      "name": "hora_pedido_item",
+      "description": "Tabela hora_pedido_item",
+      "key_fields": [
+        "pedido_id",
+        "numero_chassi",
+        "modelo_id"
+      ]
+    },
+    {
+      "name": "hora_recebimento",
+      "description": "Tabela hora_recebimento",
+      "key_fields": [
+        "nf_id",
+        "loja_id",
+        "data_recebimento"
+      ]
+    },
+    {
+      "name": "hora_recebimento_conferencia",
+      "description": "Tabela hora_recebimento_conferencia",
+      "key_fields": [
+        "recebimento_id",
+        "numero_chassi",
+        "conferido_em"
+      ]
+    },
+    {
+      "name": "hora_tabela_preco",
+      "description": "Tabela hora_tabela_preco",
+      "key_fields": [
+        "modelo_id",
+        "preco_tabela",
+        "vigencia_inicio"
+      ]
+    },
+    {
+      "name": "hora_venda",
+      "description": "Tabela hora_venda",
+      "key_fields": [
+        "loja_id",
+        "cpf_cliente",
+        "nome_cliente"
+      ]
+    },
+    {
+      "name": "hora_venda_item",
+      "description": "Tabela hora_venda_item",
+      "key_fields": [
+        "venda_id",
+        "numero_chassi",
+        "tabela_preco_id"
       ]
     },
     {
