@@ -763,3 +763,52 @@ class CarviaEnderecoCorrecao(db.Model):
             f'<CarviaEnderecoCorrecao {self.id} op={self.operacao_id} '
             f'{self.campo} motivo={self.motivo}>'
         )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# E9 (2026-04-19): CarviaConferenciaHistorico — append-only log de
+# transicoes de status_conferencia em CarviaFrete (conferencia por CTe).
+# Resolve GAP-31 (histórico de status adiado).
+# ────────────────────────────────────────────────────────────────────────────
+
+class CarviaConferenciaHistorico(db.Model):
+    """Historico append-only de mudancas em CarviaFrete.status_conferencia.
+
+    Cada reconferencia gera 1 registro. Permite responder:
+      - Quantas vezes este frete foi reconferido?
+      - Quem aprovou e em quando (primeira conferencia vs corrente)?
+      - Valores antes/depois de cada ajuste.
+    """
+    __tablename__ = 'carvia_conferencia_historico'
+
+    id = db.Column(db.Integer, primary_key=True)
+    frete_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_fretes.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    status_antes = db.Column(db.String(20))
+    status_depois = db.Column(db.String(20), nullable=False)
+    valor_considerado_antes = db.Column(db.Numeric(15, 2))
+    valor_considerado_depois = db.Column(db.Numeric(15, 2))
+    usuario = db.Column(db.String(100), nullable=False)
+    data = db.Column(
+        db.DateTime, nullable=False,
+        default=agora_utc_naive, index=True,
+    )
+    # Context JSON: detalhes_conferencia snapshot, motivo, etc.
+    detalhes_json = db.Column(db.JSON)
+
+    __table_args__ = (
+        db.Index(
+            'ix_carvia_conf_historico_frete_data',
+            'frete_id', 'data',
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<CarviaConferenciaHistorico {self.id} frete={self.frete_id} '
+            f'{self.status_antes}->{self.status_depois}>'
+        )

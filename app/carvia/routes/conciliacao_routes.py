@@ -277,7 +277,17 @@ def register_conciliacao_routes(bp):
     @bp.route('/api/conciliacao/conciliar', methods=['POST']) # type: ignore
     @login_required
     def api_conciliar(): # type: ignore
-        """Cria vinculos de conciliacao."""
+        """Cria vinculos de conciliacao.
+
+        E1 (2026-04-19): suporta conciliacao multi-linha atomica. Body
+        JSON pode ter:
+          - extrato_linha_id: int (legado, 1 linha)
+          - extrato_linhas_ids: list[int] (N linhas -> mesmo conjunto de docs)
+
+        Quando multiplas linhas: TODAS sao conciliadas contra os mesmos
+        `documentos` numa unica transacao. Se qualquer falhar, rollback
+        atomico. Caller divide `valor_alocado` entre as linhas.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
@@ -285,24 +295,65 @@ def register_conciliacao_routes(bp):
         if not data:
             return jsonify({'erro': 'Dados nao fornecidos'}), 400
 
+        # E1: aceita singular OU array
         extrato_linha_id = data.get('extrato_linha_id')
+        extrato_linhas_ids = data.get('extrato_linhas_ids') or []
         documentos = data.get('documentos', [])
 
-        if not extrato_linha_id:
-            return jsonify({'erro': 'extrato_linha_id obrigatorio'}), 400
+        if extrato_linha_id is not None and not extrato_linhas_ids:
+            extrato_linhas_ids = [int(extrato_linha_id)]
+
+        if not extrato_linhas_ids:
+            return jsonify({
+                'erro': 'extrato_linha_id ou extrato_linhas_ids obrigatorio'
+            }), 400
         if not documentos:
             return jsonify({'erro': 'Nenhum documento selecionado'}), 400
 
         try:
             from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
-            resultado = CarviaConciliacaoService.conciliar(
-                int(extrato_linha_id),
-                documentos,
-                current_user.email,
-            )
+            # Caso simples: 1 linha -> chama direto (preserva contrato)
+            if len(extrato_linhas_ids) == 1:
+                resultado = CarviaConciliacaoService.conciliar(
+                    int(extrato_linhas_ids[0]),
+                    documentos,
+                    current_user.email,
+                )
+                db.session.commit()
+                return jsonify(resultado)
+
+            # Caso multi-linha: loop atomico. documentos[i] deve ter
+            # linha_id ou o sistema chama cada linha contra TODOS os docs.
+            # Contrato: caller ja dividiu. documentos e array de dicts com
+            # opcionalmente 'linha_id' para roteamento — senao aplica a
+            # cada linha na ordem.
+            resultados_por_linha = []
+            for idx, linha_id in enumerate(extrato_linhas_ids):
+                docs_linha = [
+                    d for d in documentos
+                    if d.get('linha_id') is None
+                    or int(d.get('linha_id')) == int(linha_id)
+                ]
+                if not docs_linha:
+                    continue
+                r = CarviaConciliacaoService.conciliar(
+                    int(linha_id),
+                    docs_linha,
+                    current_user.email,
+                )
+                resultados_por_linha.append({
+                    'linha_id': linha_id,
+                    **r,
+                })
+
             db.session.commit()
-            return jsonify(resultado)
+            return jsonify({
+                'sucesso': True,
+                'multi_linha': True,
+                'total_linhas': len(extrato_linhas_ids),
+                'resultados': resultados_por_linha,
+            })
 
         except ValueError as e:
             db.session.rollback()
@@ -310,6 +361,71 @@ def register_conciliacao_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao conciliar: {e}")
+            return jsonify({'erro': str(e)}), 500
+
+    # ===================================================================
+    # E2 (2026-04-19): Registrar estorno (reversal OFX)
+    # ===================================================================
+
+    @bp.route('/api/conciliacao/estorno', methods=['POST'])  # type: ignore
+    @login_required
+    def api_registrar_estorno():  # type: ignore
+        """E2: marca par de linhas OFX como estorno (reversal).
+
+        Body JSON: { linha_estorno_id, linha_original_id }
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        data = request.get_json() or {}
+        linha_estorno_id = data.get('linha_estorno_id')
+        linha_original_id = data.get('linha_original_id')
+        if not linha_estorno_id or not linha_original_id:
+            return jsonify({
+                'erro': 'linha_estorno_id e linha_original_id obrigatorios'
+            }), 400
+
+        try:
+            from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                CarviaConciliacaoService,
+            )
+            r = CarviaConciliacaoService.registrar_estorno(
+                int(linha_estorno_id),
+                int(linha_original_id),
+                current_user.email,
+            )
+            if not r.get('sucesso'):
+                db.session.rollback()
+                return jsonify(r), 422
+            db.session.commit()
+            return jsonify(r)
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(f'E2 estorno: erro {e}')
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route(
+        '/api/conciliacao/estorno/candidatos/<int:linha_id>',
+        methods=['GET'],
+    )  # type: ignore
+    @login_required
+    def api_candidatos_estorno(linha_id):  # type: ignore
+        """E2: lista candidatos a 'linha_original' para uma linha de estorno.
+        Ordenado por score (refnum > checknum > data proxima).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                CarviaConciliacaoService,
+            )
+            candidatos = CarviaConciliacaoService.detectar_candidatos_estorno(
+                linha_id
+            )
+            return jsonify({'sucesso': True, 'candidatos': candidatos})
+        except Exception as e:
+            logger.exception(f'E2 candidatos: erro {e}')
             return jsonify({'erro': str(e)}), 500
 
     # ===================================================================

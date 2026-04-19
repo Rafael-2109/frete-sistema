@@ -223,6 +223,149 @@ class ConferenciaService:
         opcoes.sort(key=lambda x: x['valor_frete'])
         return opcoes
 
+    # ==================================================================
+    # E8 (2026-04-19): Fila de resolucao de fretes DIVERGENTE
+    # ==================================================================
+
+    def listar_fretes_divergentes(self, limit=200):
+        """E8: lista fretes com status_conferencia=DIVERGENTE para resolver.
+
+        Ordenado por conferido_em asc (mais antigos primeiro — maior prioridade).
+        """
+        from app.carvia.models import CarviaFrete
+
+        try:
+            fretes = (
+                CarviaFrete.query
+                .filter(
+                    CarviaFrete.status_conferencia == 'DIVERGENTE',
+                    CarviaFrete.status != 'CANCELADO',
+                )
+                .order_by(CarviaFrete.conferido_em.asc().nullsfirst())
+                .limit(limit)
+                .all()
+            )
+        except Exception as e:
+            # Schema drift (status_conferencia ausente no DB local) nao
+            # derruba a query. Retorna lista vazia.
+            logger.warning('E8 listar_fretes_divergentes drift: %s', e)
+            db.session.rollback()
+            return []
+
+        resultado = []
+        for f in fretes:
+            resultado.append({
+                'frete_id': f.id,
+                'operacao_id': getattr(f, 'operacao_id', None),
+                'transportadora_id': f.transportadora_id,
+                'valor_cotado': float(f.valor_cotado) if f.valor_cotado else None,
+                'valor_considerado': (
+                    float(f.valor_considerado) if f.valor_considerado else None
+                ),
+                'valor_pago': float(f.valor_pago) if f.valor_pago else None,
+                'conferido_por': f.conferido_por,
+                'conferido_em': (
+                    f.conferido_em.isoformat()
+                    if f.conferido_em else None
+                ),
+                'observacoes': f.observacoes,
+            })
+        return resultado
+
+    # ==================================================================
+    # E7 (2026-04-19): Rateio de pedagio proporcional ao peso
+    # ==================================================================
+
+    def calcular_rateio_pedagio(
+        self, frete_id, valor_total_pedagio, base='peso_bruto',
+    ):
+        """E7: rateia pedagio entre NFs do frete proporcionalmente.
+
+        Args:
+            frete_id: ID do CarviaFrete
+            valor_total_pedagio: valor total a ratear (R$)
+            base: 'peso_bruto' | 'valor' — base de rateio (default peso)
+
+        Returns dict com distribuicao: lista de dicts por NF:
+          {nf_id, numero_nf, peso_bruto, valor_total, peso_pct, valor_rateado}
+        """
+        from app.carvia.models import (
+            CarviaFrete, CarviaOperacaoNf, CarviaNf,
+        )
+
+        try:
+            frete = db.session.get(CarviaFrete, frete_id)
+            if not frete:
+                return {'sucesso': False, 'erro': 'frete_nao_encontrado'}
+            operacao_id = getattr(frete, 'operacao_id', None)
+            if not operacao_id:
+                return {'sucesso': False, 'erro': 'frete_sem_operacao'}
+
+            # Junction -> NFs
+            nfs = (
+                db.session.query(CarviaNf)
+                .join(
+                    CarviaOperacaoNf,
+                    CarviaNf.id == CarviaOperacaoNf.nf_id,
+                )
+                .filter(CarviaOperacaoNf.operacao_id == operacao_id)
+                .all()
+            )
+            if not nfs:
+                return {'sucesso': False, 'erro': 'frete_sem_nfs'}
+
+            # Soma total da base
+            if base == 'peso_bruto':
+                soma_base = sum(
+                    float(nf.peso_bruto or 0) for nf in nfs
+                )
+            else:
+                soma_base = sum(
+                    float(nf.valor_total or 0) for nf in nfs
+                )
+
+            if soma_base <= 0:
+                return {'sucesso': False, 'erro': f'soma_{base}_zero'}
+
+            total = float(valor_total_pedagio)
+            distribuicao = []
+            rateado_ate_agora = 0.0
+            for i, nf in enumerate(nfs):
+                base_val = (
+                    float(nf.peso_bruto or 0)
+                    if base == 'peso_bruto'
+                    else float(nf.valor_total or 0)
+                )
+                pct = (base_val / soma_base) if soma_base > 0 else 0
+                # Ultima NF pega o residuo para evitar problemas de
+                # arredondamento (sum(rateio) == total exato)
+                if i == len(nfs) - 1:
+                    valor_rat = round(total - rateado_ate_agora, 2)
+                else:
+                    valor_rat = round(total * pct, 2)
+                    rateado_ate_agora += valor_rat
+                distribuicao.append({
+                    'nf_id': nf.id,
+                    'numero_nf': nf.numero_nf,
+                    'peso_bruto': float(nf.peso_bruto or 0),
+                    'valor_total': float(nf.valor_total or 0),
+                    'base_valor': base_val,
+                    'percentual': round(pct * 100, 2),
+                    'valor_rateado': valor_rat,
+                })
+
+            return {
+                'sucesso': True,
+                'frete_id': frete_id,
+                'valor_total_pedagio': total,
+                'base': base,
+                'soma_base': soma_base,
+                'distribuicao': distribuicao,
+            }
+        except Exception as e:
+            logger.exception('E7 rateio pedagio: erro %s', e)
+            return {'sucesso': False, 'erro': str(e)}
+
     def registrar_conferencia(self, frete_id: int, valor_considerado: float,
                                status: str, usuario: str,
                                observacoes: str = None,
@@ -283,6 +426,10 @@ class ConferenciaService:
                 except Exception as e:
                     logger.warning(f"Erro ao gerar snapshot frete {frete_id}: {e}")
 
+            # E9 (2026-04-19): snapshot antes de mutar para gravar historico
+            status_antes_e9 = frete.status_conferencia
+            valor_considerado_antes_e9 = frete.valor_considerado
+
             frete.valor_considerado = valor_considerado
             if valor_pago is not None:
                 frete.valor_pago = valor_pago
@@ -322,6 +469,30 @@ class ConferenciaService:
                     aprovacao_id = resultado_trat.get('aprovacao_id')
                 else:
                     frete.status_conferencia = 'APROVADO'
+
+            # E9 (2026-04-19): registra historico append-only da transicao.
+            # Nao-bloqueante: erro aqui nao reverte a conferencia.
+            try:
+                from app.carvia.models import CarviaConferenciaHistorico
+                hist = CarviaConferenciaHistorico(
+                    frete_id=frete_id,
+                    status_antes=status_antes_e9,
+                    status_depois=frete.status_conferencia,
+                    valor_considerado_antes=valor_considerado_antes_e9,
+                    valor_considerado_depois=valor_considerado,
+                    usuario=usuario,
+                    detalhes_json={
+                        'observacoes': observacoes,
+                        'tratativa_aberta': tratativa_aberta,
+                        'aprovacao_id': aprovacao_id,
+                    },
+                )
+                db.session.add(hist)
+            except Exception as e_hist:
+                logger.warning(
+                    'E9 historico conferencia: erro frete=%s: %s',
+                    frete_id, e_hist,
+                )
 
             # Cascade para fatura
             fatura_atualizada = False

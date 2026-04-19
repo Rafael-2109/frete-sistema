@@ -186,6 +186,17 @@ class CarviaExtratoLinha(db.Model):
     #  "Dinheiro/Caixa"). Obrigatorio para origem='MANUAL', NULL para OFX/CSV.
     conta_origem = db.Column(db.String(100), nullable=True)
 
+    # E2 (2026-04-19): par de estorno — quando OFX contem um ESTORNO
+    # (reversal) de uma linha anterior, `linha_original_id` aponta para a
+    # linha revertida. Detectado via refnum/checknum no import OFX OU
+    # marcado manualmente pelo operador.
+    linha_original_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_extrato_linhas.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+
     criado_por = db.Column(db.String(100), nullable=False)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
 
@@ -271,6 +282,12 @@ class CarviaConciliacao(db.Model):
     # fatura_cliente | fatura_transportadora | despesa | custo_entrega | receita
     documento_id = db.Column(db.Integer, nullable=False)
     valor_alocado = db.Column(db.Numeric(15, 2), nullable=False)
+    # E3 (2026-04-19): juros/multa (acrescimo) e desconto em conciliacao.
+    # Quando pagamento chega com valor != fatura, nao precisa criar
+    # Receita/Despesa avulsa — basta indicar no vinculo. Status 100%
+    # considera: valor_alocado + valor_acrescimo - valor_desconto.
+    valor_acrescimo = db.Column(db.Numeric(15, 2), nullable=True)
+    valor_desconto = db.Column(db.Numeric(15, 2), nullable=True)
     conciliado_por = db.Column(db.String(100), nullable=False)
     conciliado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
 

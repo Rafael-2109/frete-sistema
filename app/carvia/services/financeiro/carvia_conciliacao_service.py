@@ -609,8 +609,17 @@ class CarviaConciliacaoService:
         from app.utils.timezone import agora_utc_naive
         from sqlalchemy import func as sqlfunc
 
+        # E3 (2026-04-19): status 100% considera acrescimo (juros/multa) e
+        # desconto. Total efetivo = valor_alocado + acrescimo - desconto.
         total = db.session.query(
-            sqlfunc.coalesce(sqlfunc.sum(CarviaConciliacao.valor_alocado), 0)
+            sqlfunc.coalesce(
+                sqlfunc.sum(
+                    CarviaConciliacao.valor_alocado
+                    + sqlfunc.coalesce(CarviaConciliacao.valor_acrescimo, 0)
+                    - sqlfunc.coalesce(CarviaConciliacao.valor_desconto, 0)
+                ),
+                0,
+            )
         ).filter(
             CarviaConciliacao.tipo_documento == tipo_documento,
             CarviaConciliacao.documento_id == documento_id,
@@ -1028,4 +1037,341 @@ class CarviaConciliacaoService:
                 'PERSONALIZADO': f'{int(frete.percentual_remetente or 0)}/{int(frete.percentual_destinatario or 0)}',
             }
             resultado['responsavel_frete_label'] = labels.get(frete.responsavel_frete, frete.responsavel_frete)
+        return resultado
+
+    # ===================================================================
+    # E5 (2026-04-19): Admin — corrigir FT CONFERIDA em 1 passo
+    # ===================================================================
+
+    @staticmethod
+    def admin_corrigir_ft_conferida(fatura_id, usuario, motivo):
+        """E5: fluxo atomico admin para desconciliar FT CONFERIDA.
+
+        Cenario: FT foi conciliada erroneamente, marcada CONFERIDA e
+        propagou PAGO para CEs. Correcao normal exige 4 passos manuais.
+        Este endpoint reabre conferencia + desconcilia + reverte CEs
+        em UMA transacao, com audit trail em CarviaAdminAudit.
+
+        Retorna dict com resultado agregado. Nao commita — caller decide.
+        """
+        from app.carvia.models import (
+            CarviaFaturaTransportadora, CarviaConciliacao,
+        )
+        from app.utils.timezone import agora_utc_naive
+        try:
+            ft = db.session.get(CarviaFaturaTransportadora, fatura_id)
+            if not ft:
+                return {'sucesso': False, 'erro': 'ft_nao_encontrada'}
+
+            # Reabre conferencia
+            status_ant = ft.status_conferencia
+            ft.status_conferencia = 'EM_CONFERENCIA'
+            if hasattr(ft, 'em_conferencia_por'):
+                ft.em_conferencia_por = usuario
+                ft.em_conferencia_em = agora_utc_naive()
+
+            # Desconcilia todas as conciliacoes da FT
+            concs = CarviaConciliacao.query.filter_by(
+                tipo_documento='fatura_transportadora',
+                documento_id=fatura_id,
+            ).all()
+            desconciliadas = 0
+            for c in concs:
+                r = CarviaConciliacaoService.desconciliar(c.id, usuario)
+                if r.get('sucesso'):
+                    desconciliadas += 1
+
+            # Audit
+            try:
+                from app.carvia.models import CarviaAdminAudit
+                db.session.add(CarviaAdminAudit(
+                    acao='admin_corrigir_ft_conferida',
+                    entidade_tipo='fatura_transportadora',
+                    entidade_id=fatura_id,
+                    executado_por=usuario,
+                    executado_em=agora_utc_naive(),
+                    detalhes={
+                        'status_conferencia_antes': status_ant,
+                        'motivo': motivo,
+                        'desconciliadas': desconciliadas,
+                    },
+                ))
+            except Exception as e_aud:
+                logger.warning('E5 audit falhou: %s', e_aud)
+
+            return {
+                'sucesso': True,
+                'fatura_id': fatura_id,
+                'desconciliadas': desconciliadas,
+                'status_conferencia_antes': status_ant,
+                'status_conferencia_depois': 'EM_CONFERENCIA',
+            }
+        except Exception as e:
+            logger.exception('E5 admin_corrigir_ft_conferida: erro %s', e)
+            return {'sucesso': False, 'erro': str(e)}
+
+    # ===================================================================
+    # E6 (2026-04-19): Calcular valor atualizado de fatura com juros/multa
+    # ===================================================================
+
+    @staticmethod
+    def calcular_valor_atualizado_fatura(
+        fatura_id, data_pagamento=None,
+        multa_percentual=2.0, juros_mes=1.0,
+    ):
+        """E6: retorna valor_total ajustado para fatura cliente em atraso.
+
+        Formula:
+          valor_atualizado = valor_total * (1 + multa% + juros_mensal% * meses_atraso)
+        Se data_pagamento < vencimento: retorna valor_total original (sem acrescimo).
+
+        Args:
+            fatura_id: int
+            data_pagamento: date — default hoje
+            multa_percentual: multa fixa aplicada quando ha atraso
+            juros_mes: juros ao mes (pro rata diario: mes/30)
+
+        Returns dict com valores calculados. Nao muta o banco.
+        """
+        from app.carvia.models import CarviaFaturaCliente
+        from datetime import date as _date
+        from decimal import Decimal as _D
+
+        if data_pagamento is None:
+            data_pagamento = _date.today()
+
+        f = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not f:
+            return {'sucesso': False, 'erro': 'fatura_nao_encontrada'}
+        if not f.vencimento:
+            return {'sucesso': False, 'erro': 'fatura_sem_vencimento'}
+
+        valor_original = float(f.valor_total or 0)
+        dias_atraso = (data_pagamento - f.vencimento).days
+
+        if dias_atraso <= 0:
+            return {
+                'sucesso': True,
+                'fatura_id': fatura_id,
+                'vencimento': f.vencimento.isoformat(),
+                'dias_atraso': 0,
+                'valor_original': valor_original,
+                'valor_atualizado': valor_original,
+                'multa': 0.0,
+                'juros': 0.0,
+            }
+
+        multa = valor_original * (multa_percentual / 100)
+        juros_diario = (juros_mes / 100) / 30
+        juros = valor_original * juros_diario * dias_atraso
+
+        valor_atualizado = valor_original + multa + juros
+        return {
+            'sucesso': True,
+            'fatura_id': fatura_id,
+            'vencimento': f.vencimento.isoformat(),
+            'data_pagamento': data_pagamento.isoformat(),
+            'dias_atraso': dias_atraso,
+            'valor_original': valor_original,
+            'valor_atualizado': valor_atualizado,
+            'multa': multa,
+            'juros': juros,
+            'multa_percentual': multa_percentual,
+            'juros_mes': juros_mes,
+        }
+
+    # ===================================================================
+    # E10 (2026-04-19): Distribuicao FIFO de pagamento parcial
+    # ===================================================================
+
+    @staticmethod
+    def sugerir_distribuicao_fifo(
+        cnpj_cliente, valor_disponivel, tipo_documento='fatura_cliente',
+    ):
+        """E10: sugere distribuicao de um valor entre faturas pendentes do
+        mesmo cliente, ordenadas por vencimento (FIFO — mais antigas primeiro).
+
+        Retorna lista de dicts {fatura_id, numero_fatura, vencimento,
+        saldo_pendente, valor_sugerido} ate esgotar `valor_disponivel`.
+        """
+        from app.carvia.models import CarviaFaturaCliente
+        if tipo_documento != 'fatura_cliente':
+            return {'sucesso': False, 'erro': 'tipo_nao_suportado'}
+
+        faturas = (
+            CarviaFaturaCliente.query
+            .filter(
+                CarviaFaturaCliente.cnpj_cliente == cnpj_cliente,
+                CarviaFaturaCliente.status.notin_(['PAGA', 'CANCELADA']),
+                CarviaFaturaCliente.vencimento.isnot(None),
+            )
+            .order_by(CarviaFaturaCliente.vencimento.asc())
+            .all()
+        )
+
+        distribuicao = []
+        restante = float(valor_disponivel)
+        for f in faturas:
+            if restante <= 0.009:
+                break
+            saldo = float(f.valor_total or 0) - float(f.total_conciliado or 0)
+            if saldo <= 0:
+                continue
+            alocado = min(saldo, restante)
+            distribuicao.append({
+                'fatura_id': f.id,
+                'numero_fatura': f.numero_fatura,
+                'vencimento': f.vencimento.isoformat(),
+                'valor_total': float(f.valor_total or 0),
+                'saldo_pendente': saldo,
+                'valor_sugerido': alocado,
+                'quitacao_total': alocado >= (saldo - 0.009),
+            })
+            restante -= alocado
+
+        return {
+            'sucesso': True,
+            'cnpj_cliente': cnpj_cliente,
+            'valor_disponivel': float(valor_disponivel),
+            'valor_alocado': float(valor_disponivel) - restante,
+            'valor_restante': restante,
+            'distribuicao': distribuicao,
+            'faturas_alocadas': len(distribuicao),
+        }
+
+    # ===================================================================
+    # E2 (2026-04-19): Registrar estorno (reversal) de linha OFX
+    # ===================================================================
+
+    @staticmethod
+    def registrar_estorno(linha_estorno_id, linha_original_id, usuario):
+        """E2: marca par de linhas como estorno (reversal OFX).
+
+        Cenario: banco estorna credito apos operacao. Operador precisa
+        (a) marcar que linha_estorno eh reversal de linha_original,
+        (b) desconciliar automaticamente linha_original.
+
+        Validacoes:
+          - Ambas existem
+          - Sinais opostos (CREDITO vs DEBITO) e valores iguais em absoluto
+          - linha_original nao pode ja ser estorno (evita loop)
+
+        Nao commita — chamador decide.
+        """
+        from app.carvia.models import CarviaExtratoLinha
+
+        estorno = db.session.get(CarviaExtratoLinha, linha_estorno_id)
+        original = db.session.get(CarviaExtratoLinha, linha_original_id)
+
+        if not estorno or not original:
+            return {'sucesso': False, 'erro': 'linha_nao_encontrada'}
+
+        if estorno.id == original.id:
+            return {'sucesso': False, 'erro': 'linha_nao_pode_estornar_a_si_mesma'}
+
+        if estorno.tipo == original.tipo:
+            return {
+                'sucesso': False,
+                'erro': 'linhas_precisam_ter_tipos_opostos_CREDITO_vs_DEBITO',
+            }
+
+        if float(estorno.valor) != float(original.valor):
+            return {
+                'sucesso': False,
+                'erro': (
+                    f'valores_divergem_{float(estorno.valor)}_vs_'
+                    f'{float(original.valor)}'
+                ),
+            }
+
+        if original.linha_original_id is not None:
+            return {
+                'sucesso': False,
+                'erro': 'linha_original_ja_esta_marcada_como_estorno',
+            }
+
+        # Desconciliar original se tiver conciliacoes (propaga para docs)
+        desconciliadas = 0
+        if original.total_conciliado and float(original.total_conciliado) > 0:
+            from app.carvia.models import CarviaConciliacao
+            concs = CarviaConciliacao.query.filter_by(
+                extrato_linha_id=original.id
+            ).all()
+            for c in concs:
+                resultado_desc = (
+                    CarviaConciliacaoService.desconciliar(c.id, usuario)
+                )
+                if resultado_desc.get('sucesso'):
+                    desconciliadas += 1
+
+        estorno.linha_original_id = original.id
+
+        logger.info(
+            f'E2 estorno registrado: estorno={linha_estorno_id} '
+            f'original={linha_original_id} desconciliadas={desconciliadas}'
+        )
+        return {
+            'sucesso': True,
+            'linha_estorno_id': linha_estorno_id,
+            'linha_original_id': linha_original_id,
+            'conciliacoes_desfeitas': desconciliadas,
+        }
+
+    @staticmethod
+    def detectar_candidatos_estorno(linha_id):
+        """E2 helper: busca candidatos a 'original' para uma linha de
+        estorno. Criterios: sinal oposto + mesmo valor absoluto + mesma
+        conta_bancaria + refnum/checknum igual OU data proxima (±7 dias).
+        """
+        from app.carvia.models import CarviaExtratoLinha
+        from datetime import timedelta
+
+        linha = db.session.get(CarviaExtratoLinha, linha_id)
+        if not linha:
+            return []
+
+        tipo_oposto = 'DEBITO' if linha.tipo == 'CREDITO' else 'CREDITO'
+        data_min = linha.data - timedelta(days=7)
+        data_max = linha.data + timedelta(days=7)
+
+        query = CarviaExtratoLinha.query.filter(
+            CarviaExtratoLinha.id != linha.id,
+            CarviaExtratoLinha.tipo == tipo_oposto,
+            CarviaExtratoLinha.valor == linha.valor,
+            CarviaExtratoLinha.linha_original_id.is_(None),
+            CarviaExtratoLinha.data >= data_min,
+            CarviaExtratoLinha.data <= data_max,
+        )
+        if linha.conta_bancaria:
+            query = query.filter(
+                CarviaExtratoLinha.conta_bancaria == linha.conta_bancaria
+            )
+
+        candidatos = query.order_by(CarviaExtratoLinha.data.desc()).all()
+
+        resultado = []
+        for c in candidatos:
+            score = 0
+            motivos = []
+            if c.refnum and linha.refnum and c.refnum == linha.refnum:
+                score += 50
+                motivos.append('refnum_igual')
+            if c.checknum and linha.checknum and c.checknum == linha.checknum:
+                score += 30
+                motivos.append('checknum_igual')
+            if c.data == linha.data:
+                score += 10
+                motivos.append('mesma_data')
+            resultado.append({
+                'id': c.id,
+                'data': c.data.isoformat(),
+                'valor': float(c.valor),
+                'descricao': c.descricao,
+                'refnum': c.refnum,
+                'checknum': c.checknum,
+                'score': score,
+                'motivos': motivos,
+            })
+
+        resultado.sort(key=lambda x: x['score'], reverse=True)
         return resultado

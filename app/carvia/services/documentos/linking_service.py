@@ -275,6 +275,11 @@ class LinkingService:
         1. Match por chave (44 digitos) — mais confiavel
         2. Fallback: match por numero_nf + cnpj_emitente normalizados
 
+        C4 (2026-04-19) Refator 2.5: substitui ILIKE (`cast(String).contains`)
+        por operador JSONB nativo `@>` (contains-any-of-array). Isso usa
+        o indice GIN `ix_carvia_operacoes_nfs_ref_json_gin` (GAP-34)
+        eficientemente — antes era full scan em cada linha.
+
         Args:
             nf: CarviaNf recem-criada (ja tem id)
 
@@ -282,6 +287,7 @@ class LinkingService:
             int — numero de junctions criadas
         """
         from app.carvia.models import CarviaOperacao
+        from sqlalchemy.dialects.postgresql import JSONB
 
         if not nf or not nf.id:
             return 0
@@ -293,24 +299,40 @@ class LinkingService:
         nf_numero = nf.numero_nf
         nf_cnpj = re.sub(r'\D', '', nf.cnpj_emitente or '')
 
-        # GAP-34: Pre-filtrar operacoes via text search no JSON (evita full table scan)
-        # Usa cast para text + LIKE para reduzir linhas carregadas em Python
-        text_filters = []
+        # C4 (2026-04-19): operador JSONB `@>` pega o indice GIN.
+        # `nfs_referenciadas_json @> '[{"chave": "..."}]'` eh O(log N) vs
+        # `cast(String) LIKE '%...%'` que era O(N*M). Constroi filtro
+        # disjuncao com cada chave candidata individualmente (um predicado
+        # JSONB @> aceita apenas objetos contained dentro do array).
+        jsonb_filters = []
+        # Match por chave (44 dig)
         if nf_chave:
-            text_filters.append(
-                CarviaOperacao.nfs_referenciadas_json.cast(db.String).contains(nf_chave)
+            jsonb_filters.append(
+                CarviaOperacao.nfs_referenciadas_json.cast(JSONB).op('@>')(
+                    [{'chave': nf_chave}]
+                )
             )
+        # Match por numero_nf normalizado (sem zeros)
         if nf_numero:
             nf_num_norm = nf_numero.lstrip('0') or '0'
-            text_filters.append(
-                CarviaOperacao.nfs_referenciadas_json.cast(db.String).contains(nf_num_norm)
+            jsonb_filters.append(
+                CarviaOperacao.nfs_referenciadas_json.cast(JSONB).op('@>')(
+                    [{'numero_nf': nf_num_norm}]
+                )
             )
+            # Fallback: numero_nf sem normalizacao (caso registrado com zeros)
+            if nf_num_norm != nf_numero:
+                jsonb_filters.append(
+                    CarviaOperacao.nfs_referenciadas_json.cast(JSONB).op('@>')(
+                        [{'numero_nf': nf_numero}]
+                    )
+                )
 
         base_filter = CarviaOperacao.nfs_referenciadas_json.isnot(None)
-        if text_filters:
+        if jsonb_filters:
             operacoes = CarviaOperacao.query.filter(
                 base_filter,
-                or_(*text_filters),
+                or_(*jsonb_filters),
             ).all()
         else:
             operacoes = CarviaOperacao.query.filter(base_filter).all()

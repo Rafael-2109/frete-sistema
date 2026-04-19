@@ -84,8 +84,18 @@ class CarviaHistoricoMatchService:
         Returns:
             bool: True se inseriu, False se skip (sem erro)
         """
-        # Escopo atual: fatura_cliente apenas
-        if tipo_documento != 'fatura_cliente':
+        # E4 (2026-04-19): estende para todos os tipos — antes limitado a
+        # fatura_cliente. Cada tipo tem seu extrator de CNPJ:
+        #   fatura_cliente       -> cnpj_cliente
+        #   fatura_transportadora -> transportadora.cnpj
+        #   despesa              -> fornecedor_cnpj (se existir)
+        #   custo_entrega        -> fornecedor_cnpj
+        #   receita              -> pulada (sem CNPJ proprio)
+        TIPOS_SUPORTADOS = {
+            'fatura_cliente', 'fatura_transportadora',
+            'despesa', 'custo_entrega',
+        }
+        if tipo_documento not in TIPOS_SUPORTADOS:
             return False
 
         from app.carvia.models import (
@@ -116,24 +126,43 @@ class CarviaHistoricoMatchService:
         #    flushes passarao sem erro — se falharem, e bug do caller que
         #    o hook nao pode nem deve mascarar.
         try:
-            fatura = db.session.get(CarviaFaturaCliente, documento_id)
-            if not fatura or not fatura.cnpj_cliente:
+            # E4: extrai CNPJ por tipo de documento
+            cnpj = None
+            if tipo_documento == 'fatura_cliente':
+                fatura = db.session.get(CarviaFaturaCliente, documento_id)
+                if fatura:
+                    cnpj = (fatura.cnpj_cliente or '').strip()
+            elif tipo_documento == 'fatura_transportadora':
+                from app.carvia.models import CarviaFaturaTransportadora
+                ft = db.session.get(CarviaFaturaTransportadora, documento_id)
+                if ft and ft.transportadora:
+                    cnpj = (ft.transportadora.cnpj or '').strip()
+            elif tipo_documento == 'despesa':
+                from app.carvia.models import CarviaDespesa
+                d = db.session.get(CarviaDespesa, documento_id)
+                # CarviaDespesa pode nao ter cnpj de fornecedor por enquanto
+                cnpj = None
+                if d and hasattr(d, 'fornecedor_cnpj'):
+                    cnpj = (getattr(d, 'fornecedor_cnpj', None) or '').strip()
+            elif tipo_documento == 'custo_entrega':
+                from app.carvia.models import CarviaCustoEntrega
+                ce = db.session.get(CarviaCustoEntrega, documento_id)
+                if ce:
+                    cnpj = (getattr(ce, 'fornecedor_cnpj', None) or '').strip()
+
+            if not cnpj:
                 return False
 
             tokens = CarviaHistoricoMatchService.tokens_chave(linha.descricao)
             if not tokens:
                 return False  # linha sem descricao util (so stopwords)
 
-            cnpj = (fatura.cnpj_cliente or '').strip()
-            if not cnpj:
-                return False
-
             # Validacao rigorosa de tamanhos (evita StringDataRightTruncation).
             # CNPJ acima de 20 chars sinaliza dado corrompido — skip.
             if len(cnpj) > 20:
                 logger.warning(
-                    'registrar_aprendizado: cnpj fatura %s > 20 chars (%d) — skip',
-                    fatura.id, len(cnpj),
+                    'registrar_aprendizado: cnpj doc %s=%s > 20 chars (%d) — skip',
+                    tipo_documento, documento_id, len(cnpj),
                 )
                 return False
 
