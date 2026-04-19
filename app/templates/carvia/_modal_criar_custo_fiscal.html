@@ -28,6 +28,7 @@
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">Tipo de Custo</label>
                         <select id="custoFiscalTipoCusto" class="form-select form-select-sm">
+                            <option value="GNRE_ICMS">GNRE / ICMS Antecipado</option>
                             <option value="OUTROS" selected>OUTROS</option>
                             <option value="DIARIA">DIARIA</option>
                             <option value="REENTREGA">REENTREGA</option>
@@ -62,6 +63,14 @@
                     <span class="ms-2">Carregando CTes...</span>
                 </div>
 
+                {# D11 (2026-04-19): alerta quando ha match ICMS #}
+                <div id="custoFiscalMatchAlert" class="alert alert-success py-2 mb-2 d-none">
+                    <i class="fas fa-magic"></i>
+                    <strong>Sugestao automatica:</strong>
+                    <span id="custoFiscalMatchCount">0</span> CTe(s) com ICMS proximo ao
+                    valor da linha (diferenca &lt; 5%) aparecem no topo.
+                </div>
+
                 {# Tabela de CTes #}
                 <div id="custoFiscalCteContainer" class="table-responsive" style="max-height:350px; overflow-y:auto;">
                     <table class="table table-sm table-hover carvia-table mb-0">
@@ -75,6 +84,7 @@
                                 <th class="text-end">Valor Merc.</th>
                                 <th class="text-end">Peso</th>
                                 <th class="text-end">Valor CTe</th>
+                                <th class="text-end">ICMS (R$)</th>
                                 <th>Data NF</th>
                                 <th>Data CTe</th>
                                 <th style="width:80px"></th>
@@ -135,7 +145,15 @@
 
         // Pre-preencher campos
         document.getElementById('custoFiscalDescricao').value = params.descricao || '';
-        document.getElementById('custoFiscalTipoCusto').value = 'OUTROS';
+        // D9 (2026-04-19): pre-selecao automatica de GNRE_ICMS quando
+        // descricao menciona GNRE / SEFAZ / Secretaria de Fazenda.
+        const desc = (params.descricao || '').toUpperCase();
+        const padraoFiscal = /GNRE|SEFAZ|SEC\.?\s*FAZENDA|SECRETARIA|FAZENDA/i;
+        if (padraoFiscal.test(desc)) {
+            document.getElementById('custoFiscalTipoCusto').value = 'GNRE_ICMS';
+        } else {
+            document.getElementById('custoFiscalTipoCusto').value = 'OUTROS';
+        }
 
         // Reset estado
         document.getElementById('custoFiscalCteSelecionado').classList.add('d-none');
@@ -160,13 +178,22 @@
         const container = document.getElementById('custoFiscalCteContainer');
         const vazio = document.getElementById('custoFiscalCteVazio');
         const tbody = document.getElementById('custoFiscalCteBody');
+        const matchAlert = document.getElementById('custoFiscalMatchAlert');
 
         loading.classList.remove('d-none');
         container.classList.add('d-none');
         vazio.classList.add('d-none');
+        matchAlert.classList.add('d-none');
 
+        const params = new URLSearchParams();
+        if (busca) params.set('busca', busca);
+        // D11: passar valor do extrato para sugestao ICMS
+        if (linhaParams && linhaParams.valor) {
+            params.set('valor_extrato', String(linhaParams.valor));
+        }
         let url = CARVIA_URLS.apiCtesParaCusto;
-        if (busca) url += '?busca=' + encodeURIComponent(busca);
+        const qs = params.toString();
+        if (qs) url += '?' + qs;
 
         fetch(url)
             .then(r => r.json())
@@ -180,6 +207,12 @@
                 }
 
                 container.classList.remove('d-none');
+                // D11: contar matches e mostrar alerta
+                const matches = data.ctes.filter(c => c.match_icms).length;
+                if (matches > 0) {
+                    document.getElementById('custoFiscalMatchCount').textContent = matches;
+                    matchAlert.classList.remove('d-none');
+                }
                 renderizarCtes(data.ctes);
             })
             .catch(err => {
@@ -207,8 +240,28 @@
             const destNome = c.destinatario_nome || '-';
             const destLocal = [c.destinatario_cidade, c.destinatario_uf].filter(Boolean).join('/');
 
+            // D11: celula ICMS com badge Match quando aplicavel
+            let icmsCell = '-';
+            if (c.icms_valor != null) {
+                const valor = fmtNum(c.icms_valor);
+                if (c.match_icms) {
+                    const pct = c.delta_icms_pct != null
+                        ? ' <small>(±' + c.delta_icms_pct.toFixed(1) + '%)</small>'
+                        : '';
+                    icmsCell = `<span class="badge bg-success">${valor}</span>${pct}`;
+                } else if (c.delta_icms_pct != null && c.delta_icms_pct < 20) {
+                    icmsCell = `<span class="text-warning">${valor}</span>`;
+                } else {
+                    icmsCell = valor;
+                }
+            }
+            // D11: destacar linha inteira quando match_icms
+            if (c.match_icms) {
+                tr.classList.add('table-warning');
+            }
+
             tr.innerHTML = `
-                <td><strong>${c.cte_numero}</strong></td>
+                <td><strong>${c.cte_numero}</strong>${c.match_icms ? ' <i class="fas fa-bullseye text-success" title="Match ICMS"></i>' : ''}</td>
                 <td class="small">${c.nome_cliente || '-'}</td>
                 <td class="small">${origem || '-'}</td>
                 <td class="small">${destino || '-'}</td>
@@ -216,6 +269,7 @@
                 <td class="text-end small">${c.valor_mercadoria != null ? fmtNum(c.valor_mercadoria) : '-'}</td>
                 <td class="text-end small">${fmtPeso(c.peso_utilizado)}</td>
                 <td class="text-end small fw-semibold">${c.cte_valor != null ? fmtNum(c.cte_valor) : '-'}</td>
+                <td class="text-end small">${icmsCell}</td>
                 <td class="small">${c.nf_data_emissao || '-'}</td>
                 <td class="small">${c.cte_data_emissao || '-'}</td>
                 <td>

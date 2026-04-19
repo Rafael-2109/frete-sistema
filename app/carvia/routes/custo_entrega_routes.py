@@ -26,8 +26,12 @@ TIPOS_CUSTO = [
     'PEDAGIO_EXTRA', 'TAXA_DESCARGA', 'OUTROS',
 ]
 STATUS_CUSTO = ['PENDENTE', 'VINCULADO_FT', 'PAGO', 'CANCELADO']
-ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx', 'msg', 'eml'}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# C3 (2026-04-19): politicas centralizadas em upload_policies.py
+from app.carvia.utils.upload_policies import (  # noqa: E402
+    ALLOWED_EXT_ANEXO as ALLOWED_EXTENSIONS,
+    MAX_BYTES_ANEXO as MAX_FILE_SIZE,
+)
 
 # Mapeamento tipo_custo → motivo SSW opcao 222
 # D=descarga, E=estadia, R=reembolso, C=complementar geral
@@ -47,11 +51,9 @@ PISCOFINS_DIVISOR = 0.9075
 
 
 def _allowed_file(filename):
-    """Verifica se extensao do arquivo e permitida."""
-    return (
-        '.' in filename
-        and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-    )
+    """Verifica se extensao do arquivo e permitida (C3: reusa helper central)."""
+    from app.carvia.utils.upload_policies import is_extensao_permitida
+    return is_extensao_permitida(filename, ALLOWED_EXTENSIONS)
 
 
 def register_custo_entrega_routes(bp):

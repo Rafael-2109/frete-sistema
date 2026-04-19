@@ -291,6 +291,17 @@ def register_operacao_routes(bp):
                 'tomador_label': tomador_label(operacao.cte_tomador),
             }
 
+        # A4.2 (2026-04-18): Historico de correcoes de endereco (CC-e / manual).
+        # Lista ordenada desc por criado_em (usa indice criado na migration).
+        from app.carvia.models import CarviaEnderecoCorrecao
+        correcoes_endereco = (
+            CarviaEnderecoCorrecao.query
+            .filter_by(operacao_id=operacao.id)
+            .order_by(CarviaEnderecoCorrecao.criado_em.desc())
+            .limit(50)
+            .all()
+        )
+
         return render_template(
             'carvia/detalhe_operacao.html',
             operacao=operacao,
@@ -301,6 +312,7 @@ def register_operacao_routes(bp):
             custos_entrega=custos_entrega,
             cliente_comercial=cliente_comercial,
             papeis=papeis,
+            correcoes_endereco=correcoes_endereco,
         )
 
     # ==================== CRIAR OPERACAO MANUAL ====================
@@ -565,6 +577,56 @@ def register_operacao_routes(bp):
                 operacao.observacoes = form.observacoes.data
                 operacao.calcular_peso_utilizado()
 
+                # A4.2 (2026-04-18): Enderecos textuais + audit trail
+                # Gate via feature flag (default False para rollout gradual).
+                from flask import current_app as _cc_app
+                _ativar_enderecos = _cc_app.config.get(
+                    'CARVIA_FEATURE_EDITAR_ENDERECO_CCE', False
+                )
+                if _ativar_enderecos:
+                    from app.carvia.models import CarviaEnderecoCorrecao
+                    _campos_endereco = [
+                        'remetente_logradouro', 'remetente_numero',
+                        'remetente_bairro', 'remetente_cep',
+                        'destinatario_logradouro', 'destinatario_numero',
+                        'destinatario_bairro', 'destinatario_cep',
+                    ]
+                    _motivo = (form.motivo_correcao.data or 'CORRECAO_MANUAL').strip()
+                    _numero_cce = (form.numero_cce.data or '').strip() or None
+                    if _motivo == 'CC-E' and not _numero_cce:
+                        # CC-e sem numero nao e fatal; grava mesmo assim
+                        # (operador pode preencher depois). Log warning.
+                        logger.warning(
+                            'Operacao %s: CC-e sem numero informado',
+                            operacao_id,
+                        )
+                    _correcoes = []
+                    _usuario_str = getattr(current_user, 'email', None) or \
+                        getattr(current_user, 'nome', None) or 'sistema'
+                    for _campo in _campos_endereco:
+                        _valor_novo = (getattr(form, _campo).data or '').strip() or None
+                        _valor_anterior = getattr(operacao, _campo)
+                        if (_valor_anterior or '') == (_valor_novo or ''):
+                            continue
+                        setattr(operacao, _campo, _valor_novo)
+                        _correcoes.append(CarviaEnderecoCorrecao(
+                            operacao_id=operacao.id,
+                            campo=_campo,
+                            valor_anterior=_valor_anterior,
+                            valor_novo=_valor_novo,
+                            motivo=_motivo,
+                            numero_cce=_numero_cce,
+                            criado_por=_usuario_str,
+                        ))
+                    for _c in _correcoes:
+                        db.session.add(_c)
+                    if _correcoes:
+                        logger.info(
+                            'Operacao %s: %d correcao(oes) de endereco '
+                            'registrada(s) motivo=%s',
+                            operacao_id, len(_correcoes), _motivo,
+                        )
+
                 # Re-executar auto-cubagem se empresa usa cubagem (R3)
                 try:
                     from app.carvia.services.pricing.moto_recognition_service import MotoRecognitionService
@@ -590,6 +652,85 @@ def register_operacao_routes(bp):
             form=form,
             operacao=operacao,
         )
+
+    # ==================== CANCELAMENTO EM CASCATA (B3 2026-04-18) ====================
+
+    @bp.route(
+        '/operacoes/<int:operacao_id>/cascade/dependencias',
+        methods=['GET'],
+    )
+    @login_required
+    def api_cascade_dependencias(operacao_id):
+        """B3: retorna JSON com dependencias ativas da operacao
+        (sub/CTeComp/CE/CarviaFrete) — usado pelo modal de cancelamento."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            from flask import jsonify
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        from flask import jsonify
+        from app.carvia.services.documentos.operacao_cancel_service import (
+            listar_dependencias_ativas,
+        )
+        dados = listar_dependencias_ativas(operacao_id)
+        if dados.get('operacao') is None:
+            return jsonify({'erro': 'Operacao nao encontrada'}), 404
+        return jsonify(dados), 200
+
+    @bp.route(
+        '/operacoes/<int:operacao_id>/cascade/cancelar',
+        methods=['POST'],
+    )
+    @login_required
+    def api_cascade_cancelar(operacao_id):
+        """B3: cancela lista de dependencias + operacao em uma transacao.
+
+        Body JSON:
+          {
+            "subcontratos": [id, ...],
+            "ctes_complementares": [id, ...],
+            "custos_entrega": [id, ...],
+            "carvia_fretes": [id, ...],
+            "cancelar_operacao": bool,
+            "motivo": str (opcional)
+          }
+        """
+        from flask import jsonify, request as _req
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        # Feature flag para rollout gradual
+        from flask import current_app as _cc_app
+        if not _cc_app.config.get(
+            'CARVIA_FEATURE_CASCADE_CANCELAMENTO', False
+        ):
+            return jsonify({
+                'erro': 'Feature desabilitada. '
+                'Use fluxo manual em cada dependencia.'
+            }), 403
+
+        from app.carvia.services.documentos.operacao_cancel_service import (
+            executar_cancelamento_cascata,
+        )
+        payload = _req.get_json(silent=True) or {}
+        usuario = (
+            getattr(current_user, 'email', None)
+            or getattr(current_user, 'nome', None)
+            or 'sistema'
+        )
+        resultado = executar_cancelamento_cascata(
+            operacao_id=operacao_id,
+            ids_a_cancelar={
+                'subcontratos': payload.get('subcontratos') or [],
+                'ctes_complementares': payload.get('ctes_complementares') or [],
+                'custos_entrega': payload.get('custos_entrega') or [],
+                'carvia_fretes': payload.get('carvia_fretes') or [],
+                'cancelar_operacao': bool(payload.get('cancelar_operacao')),
+            },
+            usuario=usuario,
+            motivo=payload.get('motivo'),
+        )
+        status_http = 200 if resultado.get('status') in ('OK', 'PARCIAL') else 422
+        return jsonify(resultado), status_http
 
     # ==================== CANCELAR OPERACAO ====================
 

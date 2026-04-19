@@ -167,6 +167,34 @@ def emitir_cte_complementar_job(emissao_comp_id: int) -> dict:
             emissao.atualizado_em = agora_utc_naive()
             db.session.commit()
 
+            # A3.4 (2026-04-17): Fallback pos-222 quando Playwright nao capturou
+            # ctrc_complementar. Enfileira verificar_ctrc_cte_comp_job (caso A =
+            # EXTRACAO via SSW 101 --cte) com delay para dar tempo de indexar.
+            # Nao-bloqueante: erro aqui nao afeta fluxo principal.
+            if (not ctrc_comp) and cte_comp and cte_comp.cte_numero:
+                try:
+                    from app.portal.workers import enqueue_job
+                    from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                        verificar_ctrc_cte_comp_job,
+                    )
+                    enqueue_job(
+                        verificar_ctrc_cte_comp_job,
+                        cte_comp.id,
+                        queue_name='default',
+                        timeout='10m',
+                    )
+                    logger.info(
+                        "EmissaoCteComp %s: CTRC nao capturado pelo Playwright, "
+                        "enfileirado verificar_ctrc_cte_comp_job para cte_comp=%s",
+                        emissao_comp_id, cte_comp.id,
+                    )
+                except Exception as e_job:
+                    logger.warning(
+                        "EmissaoCteComp %s: falha ao enfileirar fallback "
+                        "verificar_ctrc_cte_comp_job: %s",
+                        emissao_comp_id, e_job,
+                    )
+
             logger.info(
                 "EmissaoCteComp %s concluida: CTRC=%s, valor=%s, icms=%s%%, "
                 "xml=%s",

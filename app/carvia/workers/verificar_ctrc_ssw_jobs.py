@@ -4,9 +4,13 @@ Jobs RQ: Verificacao de CTRC e download de DACTE via SSW (opcao 101).
 Tres jobs independentes:
 
 1. `verificar_ctrc_cte_comp_job(cte_comp_id)` — CTe Complementar.
-   Disparado quando o usuario marca um CTe Comp. com "Verificar SSW" no
-   preview da importacao manual. Consulta opcao 101 pelo CTRC atual e
-   corrige se divergir.
+   Tres casos (A3.2, 2026-04-17):
+     - Caso A: ctrc_numero vazio + cte_numero preenchido -> busca SSW 101
+       via --cte (extrai CTRC novo, simetrico a verificar_ctrc_operacao_job).
+     - Caso B: ctrc_numero preenchido -> resolver_ctrc_ssw (verifica divergencia).
+     - Caso C: ambos vazios -> SKIPPED.
+   Disparado automaticamente pos-commit da importacao manual (CARVIA_FEATURE_ENQUEUE_CTRC_CTE_COMP_AUTO)
+   e apos emissao 222 quando ctrc_complementar nao foi capturado.
 
 2. `verificar_ctrc_operacao_job(operacao_id)` — CTe CarVia (Operacao).
    Disparado apos emissao automatica (worker `ssw_cte_jobs`), apos
@@ -188,22 +192,40 @@ def _consultar_101_por_cte_com_dacte(cte_numero, filial='CAR', operacao_id=None)
 # ────────────────────────────────────────────────────────────────────────────
 
 def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
-    """Job RQ: consulta SSW opcao 101 e atualiza ctrc_numero se divergir.
+    """Job RQ: consulta SSW opcao 101 para obter/verificar ctrc_numero
+    de um CarviaCteComplementar.
 
-    Usa `resolver_ctrc_ssw` (persistencia CTe Comp.) que ja pesquisa via
-    CTRC atual armazenado.
+    A3.2 (2026-04-17): 3 casos tratados explicitamente
+      - Caso A (EXTRACAO): ctrc_numero vazio + cte_numero preenchido ->
+        busca SSW via --cte (simetrico a verificar_ctrc_operacao_job).
+        Se SSW retornar ctrc_completo -> persistido; senao ERRO.
+      - Caso B (VERIFICACAO): ctrc_numero preenchido -> delega para
+        resolver_ctrc_ssw (logica original — compara com SSW, corrige
+        se divergir).
+      - Caso C (SKIPPED): ambos vazios -> SKIPPED com motivo explicito.
+
+    R15 SSL resilience: Caso A usa liberar_conexao_antes_playwright() +
+    commit_com_retry (mesmo padrao do verificar_ctrc_operacao_job).
+    Caso B mantem compatibilidade com fluxo original (commit direto).
 
     Args:
         cte_comp_id: ID do CarviaCteComplementar a verificar
 
     Returns:
-        dict com {status, ctrc_anterior, ctrc_novo, motivo}
-        status: 'CORRIGIDO' | 'OK' | 'SKIPPED' | 'ERRO'
+        dict com {status, ctrc_anterior, ctrc_novo, motivo, cte_numero?}
+        status: 'EXTRAIDO' | 'CORRIGIDO' | 'OK' | 'SKIPPED' | 'ERRO'
     """
     from app import create_app, db
     from app.carvia.models import CarviaCteComplementar
     from app.carvia.services.cte_complementar_persistencia import (
         resolver_ctrc_ssw,
+    )
+    from app.carvia.workers._ssw_helpers import (
+        consultar_101_por_cte,
+        formatar_ctrc_ssw,
+        liberar_conexao_antes_playwright,
+        commit_com_retry,
+        normalizar_cte_numero,
     )
     from app.utils.timezone import agora_utc_naive
 
@@ -220,18 +242,110 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
                 'motivo': 'CTe Comp nao encontrado',
             }
 
-        if not cte_comp.ctrc_numero:
+        ctrc_anterior = cte_comp.ctrc_numero
+        cte_numero_local = cte_comp.cte_numero
+
+        # ────────────── Caso C: ambos vazios — SKIPPED ──────────────
+        if not ctrc_anterior and not cte_numero_local:
             logger.info(
                 "verificar_ctrc_cte_comp_job: CTe Comp %s sem ctrc_numero "
-                "(nada a verificar)",
+                "E sem cte_numero (nada a verificar)",
                 cte_comp_id,
             )
             return {
                 'status': 'SKIPPED',
-                'motivo': 'CTe Comp sem ctrc_numero',
+                'motivo': 'CTe Comp sem ctrc_numero e sem cte_numero',
             }
 
-        ctrc_anterior = cte_comp.ctrc_numero
+        # ────────────── Caso A: EXTRACAO (ctrc vazio + cte_numero) ──────────────
+        if not ctrc_anterior and cte_numero_local:
+            cte_numero_str = normalizar_cte_numero(cte_numero_local)
+
+            # R15: libera conexao antes do Playwright (60-120s+)
+            liberar_conexao_antes_playwright()
+
+            try:
+                resultado = consultar_101_por_cte(
+                    cte_numero_str, filial='CAR'
+                )
+            except Exception as e:
+                logger.exception(
+                    "verificar_ctrc_cte_comp_job: erro ao consultar SSW "
+                    "opcao 101 --cte %s (cte_comp=%s)",
+                    cte_numero_str, cte_comp_id,
+                )
+                return {
+                    'status': 'ERRO',
+                    'erro': str(e),
+                    'ctrc_anterior': None,
+                    'cte_numero': cte_numero_str,
+                }
+
+            if not resultado.get('sucesso'):
+                erro_msg = resultado.get('erro', 'Falha na consulta 101')
+                logger.warning(
+                    "verificar_ctrc_cte_comp_job: 101 nao encontrou CTe "
+                    "%s (cte_comp=%s): %s",
+                    cte_numero_str, cte_comp_id, erro_msg,
+                )
+                return {
+                    'status': 'ERRO',
+                    'erro': erro_msg,
+                    'ctrc_anterior': None,
+                    'cte_numero': cte_numero_str,
+                }
+
+            dados = resultado.get('dados', {}) or {}
+            ctrc_completo_ssw = dados.get('ctrc_completo')
+            ctrc_novo = formatar_ctrc_ssw(ctrc_completo_ssw)
+
+            if not ctrc_novo:
+                logger.warning(
+                    "verificar_ctrc_cte_comp_job: 101 nao retornou "
+                    "ctrc_completo (cte_comp=%s, cte=%s, dados=%s)",
+                    cte_comp_id, cte_numero_str, list(dados.keys()),
+                )
+                return {
+                    'status': 'ERRO',
+                    'erro': 'SSW nao retornou ctrc_completo',
+                    'ctrc_anterior': None,
+                    'cte_numero': cte_numero_str,
+                }
+
+            # Persistir com retry (R15)
+            def _aplicar_extracao():
+                cc = db.session.get(CarviaCteComplementar, cte_comp_id)
+                if not cc:
+                    raise ValueError(
+                        f"CTe Comp {cte_comp_id} desapareceu pos-Playwright"
+                    )
+                # Guard: nao sobrescreve se outro worker ja populou
+                if cc.ctrc_numero:
+                    logger.info(
+                        "verificar_ctrc_cte_comp_job: CTe Comp %s ja tem "
+                        "ctrc_numero=%s (definido por outro job) — "
+                        "ignorando novo valor %s",
+                        cte_comp_id, cc.ctrc_numero, ctrc_novo,
+                    )
+                    return
+                cc.ctrc_numero = ctrc_novo
+                cc.atualizado_em = agora_utc_naive()
+
+            commit_com_retry(_aplicar_extracao)
+
+            logger.info(
+                "verificar_ctrc_cte_comp_job: CTe Comp %s — CTRC EXTRAIDO "
+                "%s (via 101 --cte %s)",
+                cte_comp_id, ctrc_novo, cte_numero_str,
+            )
+            return {
+                'status': 'EXTRAIDO',
+                'ctrc_anterior': None,
+                'ctrc_novo': ctrc_novo,
+                'cte_numero': cte_numero_str,
+            }
+
+        # ────────────── Caso B: VERIFICACAO (ctrc preenchido) ──────────────
         try:
             ctrc_corrigido = resolver_ctrc_ssw(
                 ctrc_atual=ctrc_anterior,

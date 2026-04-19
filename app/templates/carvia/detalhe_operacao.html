@@ -765,6 +765,59 @@
 </script>
 {% endif %}
 
+{# A4.2 (2026-04-18): Historico de correcoes de endereco (CC-e / manual). #}
+{% if correcoes_endereco %}
+<div class="container-fluid mt-4">
+    <details class="card">
+        <summary class="card-header" style="cursor: pointer;">
+            <i class="fas fa-history text-muted"></i>
+            <strong>Historico de correcoes de endereco</strong>
+            <span class="badge bg-secondary">{{ correcoes_endereco|length }}</span>
+        </summary>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>Quando</th>
+                            <th>Motivo</th>
+                            <th>CC-e</th>
+                            <th>Campo</th>
+                            <th>De</th>
+                            <th>Para</th>
+                            <th>Por</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for c in correcoes_endereco %}
+                        <tr>
+                            <td class="small text-muted">
+                                {{ c.criado_em|formatar_data_hora_brasil if c.criado_em else '-' }}
+                            </td>
+                            <td>
+                                {% if c.motivo == 'CC-E' %}
+                                <span class="badge bg-warning text-dark">CC-e</span>
+                                {% elif c.motivo == 'CORRECAO_MANUAL' %}
+                                <span class="badge bg-secondary">Manual</span>
+                                {% else %}
+                                <span class="badge bg-light text-dark">{{ c.motivo }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">{{ c.numero_cce or '-' }}</td>
+                            <td class="small"><code>{{ c.campo }}</code></td>
+                            <td class="small"><del class="text-muted">{{ c.valor_anterior or '-' }}</del></td>
+                            <td class="small"><strong>{{ c.valor_novo or '-' }}</strong></td>
+                            <td class="small">{{ c.criado_por or '-' }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </details>
+</div>
+{% endif %}
+
 {% endblock %}
 
 <!-- Modal: Vincular NF a Operacao -->

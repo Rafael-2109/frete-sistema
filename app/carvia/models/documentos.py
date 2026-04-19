@@ -303,6 +303,11 @@ class CarviaOperacao(db.Model):
     cte_pdf_path = db.Column(db.String(500))
     cte_data_emissao = db.Column(db.Date)
     icms_aliquota = db.Column(db.Numeric(5, 2))  # Aliquota ICMS do CTe original (ex: 12.00)
+    # D10 (2026-04-19): valor absoluto ICMS e base de calculo persistidos
+    # (antes vinham do XML em runtime). Habilita D11 — sugestao GNRE no modal
+    # de custo fiscal via valor ICMS determinstico.
+    icms_valor = db.Column(db.Numeric(15, 2))  # Ex: vICMS do XML CTe
+    icms_base_calculo = db.Column(db.Numeric(15, 2))  # Ex: vBC do XML CTe
 
     # Cliente (remetente da carga)
     cnpj_cliente = db.Column(db.String(20), nullable=False, index=True)
@@ -313,6 +318,19 @@ class CarviaOperacao(db.Model):
     cidade_origem = db.Column(db.String(100))
     uf_destino = db.Column(db.String(2), nullable=False)
     cidade_destino = db.Column(db.String(100), nullable=False)
+
+    # A4.1 (2026-04-18): Enderecos textuais (logradouro/CEP/bairro/numero)
+    # para suportar correcao via CC-e (Bug #4). Todos nullable — preenchidos
+    # no import via parser (get_todas_informacoes_carvia) e editaveis via
+    # UI. Historico de correcoes em CarviaEnderecoCorrecao.
+    remetente_logradouro = db.Column(db.String(150))
+    remetente_numero = db.Column(db.String(20))
+    remetente_bairro = db.Column(db.String(150))
+    remetente_cep = db.Column(db.String(10))
+    destinatario_logradouro = db.Column(db.String(150))
+    destinatario_numero = db.Column(db.String(20))
+    destinatario_bairro = db.Column(db.String(150))
+    destinatario_cep = db.Column(db.String(10))
 
     # Pesos (nivel operacao, compartilhado entre subcontratos)
     peso_bruto = db.Column(db.Numeric(15, 3))
@@ -692,3 +710,56 @@ class CarviaSubcontrato(db.Model):
 
     def __repr__(self):
         return f'<CarviaSubcontrato {self.id} op={self.operacao_id} ({self.status})>'
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# A4.1 (2026-04-18): CarviaEnderecoCorrecao — audit trail de correcoes
+# de endereco em CarviaOperacao. Cada registro = 1 campo modificado.
+# motivo: 'CC-E' | 'CORRECAO_MANUAL' | 'OUTROS'
+# ────────────────────────────────────────────────────────────────────────────
+
+class CarviaEnderecoCorrecao(db.Model):
+    """Audit trail de correcoes de endereco em CarviaOperacao.
+
+    Cada registro representa 1 campo modificado (logradouro, CEP, bairro
+    ou numero — de remetente ou destinatario). CC-e da SEFAZ nao pode
+    alterar CNPJ nem UF/cidade destino — so endereco textual.
+    """
+    __tablename__ = 'carvia_endereco_correcoes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    operacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_operacoes.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    # Nome do campo em CarviaOperacao (ex: remetente_logradouro).
+    # Validamos no form/service — evita FK para catalogo.
+    campo = db.Column(db.String(40), nullable=False)
+    valor_anterior = db.Column(db.String(150))
+    valor_novo = db.Column(db.String(150))
+    # Origem da correcao
+    motivo = db.Column(db.String(20), nullable=False, default='CORRECAO_MANUAL')
+    # Numero da CC-e no SSW (quando motivo='CC-E')
+    numero_cce = db.Column(db.String(30))
+
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    criado_por = db.Column(db.String(100))
+
+    __table_args__ = (
+        db.Index(
+            'ix_carvia_endereco_correcoes_operacao_criado',
+            'operacao_id', 'criado_em',
+        ),
+        db.Index(
+            'ix_carvia_endereco_correcoes_motivo_criado',
+            'motivo', 'criado_em',
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<CarviaEnderecoCorrecao {self.id} op={self.operacao_id} '
+            f'{self.campo} motivo={self.motivo}>'
+        )

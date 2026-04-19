@@ -647,11 +647,24 @@ class ImportacaoService:
                                     )
 
                                 # Fat→NF: atualizar nf_id em itens de fatura
-                                fat_count = linker.vincular_nf_a_itens_fatura_orfaos(nf)
+                                # A2 (2026-04-17): agora retorna dict com
+                                # nf_items_atualizados + itens_suplementares_criados
+                                # (retroativamente, via expandir_itens_com_nfs_do_cte).
+                                fat_stats = linker.vincular_nf_a_itens_fatura_orfaos(nf)
+                                fat_count = fat_stats.get('nf_items_atualizados', 0)
                                 if fat_count > 0:
                                     logger.info(
                                         f"Re-linking NF→Fatura: NF {nf.id} vinculada "
                                         f"a {fat_count} item(ns) de fatura"
+                                    )
+                                if fat_stats.get('itens_suplementares_criados', 0) > 0:
+                                    logger.info(
+                                        "Re-linking NF→Fatura: NF %s — "
+                                        "%d item(ns) suplementar(es) criado(s) "
+                                        "em %d fatura(s) (A2 retroativo)",
+                                        nf.id,
+                                        fat_stats['itens_suplementares_criados'],
+                                        fat_stats.get('faturas_expandidas', 0),
                                     )
                             except Exception as e_link:
                                 logger.warning(
@@ -885,6 +898,11 @@ class ImportacaoService:
             # para evitar race: se o commit falhar por qualquer razao, os
             # cte_comp ids nao existirao e o job falharia silenciosamente.
             cte_comps_para_verificar_ssw = []
+            # A1 (2026-04-17): Fechar vinculo com fatura pre-existente e
+            # executado APOS commit geral em transacao propria (NN2).
+            # Savepoint do bloco 3.5 nao partilha com mutacao de
+            # fatura.valor_total.
+            cte_comps_para_fechar_vinculo = []
 
             # W9: cada iteracao usa begin_nested(). Pre-checks sem writes
             # (falta de chave, op original ausente, comp ja existente)
@@ -1055,7 +1073,17 @@ class ImportacaoService:
                                 )
 
                         cte_comp_persistido = cte_comp
-                        if cte_data.get('verificar_ctrc_ssw'):
+                        # A3.3 (2026-04-17): enqueue automatico via feature flag.
+                        # Antes era opt-in (cte_data.get('verificar_ctrc_ssw'));
+                        # agora sempre enfileira se flag ativa — padrao
+                        # simetrico ao verificar_ctrc_operacao_job. O job trata
+                        # 3 casos (EXTRACAO / VERIFICACAO / SKIPPED) via A3.2.
+                        from flask import current_app as _app
+                        _enqueue_auto = _app.config.get(
+                            'CARVIA_FEATURE_ENQUEUE_CTRC_CTE_COMP_AUTO',
+                            False,
+                        )
+                        if _enqueue_auto or cte_data.get('verificar_ctrc_ssw'):
                             cte_comp_id_para_ssw = cte_comp.id
 
                         logger.info(
@@ -1074,6 +1102,12 @@ class ImportacaoService:
                         ctes_comp_criados.append(cte_comp_persistido)
                         if cte_comp_id_para_ssw is not None:
                             cte_comps_para_verificar_ssw.append(cte_comp_id_para_ssw)
+                        # A1 (2026-04-17): coleta IDs para fechar vinculo
+                        # com fatura pre-existente pos-commit geral (NN2 —
+                        # savepoint isolado).
+                        cte_comps_para_fechar_vinculo.append(
+                            cte_comp_persistido.id
+                        )
 
                 except IntegrityError as e:
                     # SAVEPOINT ja revertido automaticamente. NAO chamar
@@ -1356,6 +1390,63 @@ class ImportacaoService:
                     logger.warning(
                         "Falha ao importar worker verificar_ctrc_ssw_jobs: %s",
                         e_imp,
+                    )
+
+            # A1 (2026-04-17): Fechar vinculo de CTe Comp tardio com
+            # fatura pre-existente APOS commit geral (NN2 — transacao
+            # separada em fechar_vinculo_cte_comp_fatura).
+            # Feature flag CARVIA_FEATURE_AUTO_VINCULAR_CTE_COMP
+            # (default False) para rollout gradual.
+            if cte_comps_para_fechar_vinculo:
+                try:
+                    from flask import current_app as _app_flag
+                    _fechar_auto = _app_flag.config.get(
+                        'CARVIA_FEATURE_AUTO_VINCULAR_CTE_COMP',
+                        False,
+                    )
+                    if _fechar_auto:
+                        from app.carvia.services.documentos.linking_service import (
+                            LinkingService,
+                        )
+                        _linker_a1 = LinkingService()
+                        for _cc_id in cte_comps_para_fechar_vinculo:
+                            try:
+                                _res = _linker_a1.fechar_vinculo_cte_comp_fatura(
+                                    _cc_id
+                                )
+                                logger.info(
+                                    "A1 fechar_vinculo CTe Comp %s: "
+                                    "status=%s motivo=%s",
+                                    _cc_id,
+                                    _res.get('status'),
+                                    _res.get('motivo'),
+                                )
+                            except Exception as e_a1:
+                                logger.warning(
+                                    "A1 fechar_vinculo falhou para CTe "
+                                    "Comp %s: %s",
+                                    _cc_id, e_a1,
+                                )
+                        # Commit final do fechamento (cada chamada ja faz
+                        # flush interno, mas garantimos commit do batch).
+                        try:
+                            db.session.commit()
+                        except Exception as e_commit:
+                            logger.warning(
+                                "A1 commit final falhou: %s — rollback",
+                                e_commit,
+                            )
+                            db.session.rollback()
+                    else:
+                        logger.info(
+                            "A1 fechar_vinculo: feature flag OFF — "
+                            "pulando %d CTe(s) Comp criados",
+                            len(cte_comps_para_fechar_vinculo),
+                        )
+                except Exception as e_outer:
+                    logger.warning(
+                        "A1 fechar_vinculo: erro no hook pos-commit: %s",
+                        e_outer,
                     )
 
             # Enfileirar verificacao de CTRC para CarviaOperacao via opcao
@@ -1902,6 +1993,15 @@ class ImportacaoService:
             cidade_origem=cte_data.get('cidade_origem'),
             uf_destino=cte_data.get('uf_destino') or 'XX',
             cidade_destino=cte_data.get('cidade_destino') or 'DESCONHECIDO',
+            # A4.1 (2026-04-18): enderecos textuais do XML
+            remetente_logradouro=cte_data.get('remetente_logradouro'),
+            remetente_numero=cte_data.get('remetente_numero'),
+            remetente_bairro=cte_data.get('remetente_bairro'),
+            remetente_cep=cte_data.get('remetente_cep'),
+            destinatario_logradouro=cte_data.get('destinatario_logradouro'),
+            destinatario_numero=cte_data.get('destinatario_numero'),
+            destinatario_bairro=cte_data.get('destinatario_bairro'),
+            destinatario_cep=cte_data.get('destinatario_cep'),
             peso_bruto=peso_total if peso_total > 0 else None,
             peso_utilizado=peso_total if peso_total > 0 else None,
             valor_mercadoria=valor_total if valor_total > 0 else None,
@@ -1910,6 +2010,10 @@ class ImportacaoService:
             status='RASCUNHO',
             criado_por=criado_por,
             icms_aliquota=cte_data.get('impostos', {}).get('aliquota_icms'),
+            # D10 (2026-04-19): persiste valor e base ICMS (ja extraidos
+            # pelo parser get_impostos) para sugestao GNRE automatica.
+            icms_valor=cte_data.get('impostos', {}).get('valor_icms'),
+            icms_base_calculo=cte_data.get('impostos', {}).get('base_icms'),
             cte_tomador=cte_tomador_persist,
         )
 

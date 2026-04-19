@@ -117,7 +117,11 @@ class CarviaCustoEntrega(db.Model):
 
     TIPOS_CUSTO = [
         'DIARIA', 'REENTREGA', 'ARMAZENAGEM', 'DEVOLUCAO', 'AVARIA',
-        'PEDAGIO_EXTRA', 'TAXA_DESCARGA', 'OUTROS'
+        'PEDAGIO_EXTRA', 'TAXA_DESCARGA',
+        # D9 (2026-04-19): ICMS antecipado (GNRE/SEFAZ). Separacao do tipo
+        # OUTROS permite relatorios fiscais por UF/periodo.
+        'GNRE_ICMS',
+        'OUTROS',
     ]
 
     STATUS_CHOICES = ['PENDENTE', 'VINCULADO_FT', 'PAGO', 'CANCELADO']

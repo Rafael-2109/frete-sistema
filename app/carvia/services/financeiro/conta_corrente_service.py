@@ -171,6 +171,121 @@ class ContaCorrenteService:
             return {'sucesso': False, 'erro': str(e)}
 
     # =================================================================
+    # D8 (2026-04-19): Saldo inicial por transportadora
+    # =================================================================
+    @staticmethod
+    def registrar_saldo_inicial(
+        transportadora_id: int,
+        valor: float,
+        tipo_movimento: str,  # 'DEBITO' (transp. deve) | 'CREDITO' (deve a transp.)
+        usuario: str,
+        observacoes: Optional[str] = None,
+        data_referencia: Optional[str] = None,
+    ) -> Dict:
+        """D8: Registra saldo inicial da conta corrente de uma transportadora.
+
+        Usado na migracao do controle de planilha para o sistema. Cria 1
+        movimentacao com tipo especificado e descricao "Saldo inicial
+        migrado em {data_referencia}".
+
+        Diferente de `lancar_movimentacao`, NAO exige `frete_id` (usa NULL).
+
+        Args:
+            transportadora_id: ID da Transportadora
+            valor: valor absoluto (positivo)
+            tipo_movimento: 'DEBITO' (transp. deve a nos) | 'CREDITO'
+                (nos devemos a transp.)
+            usuario: criado_por
+            observacoes: texto livre (opcional)
+            data_referencia: data ISO do saldo (default: hoje)
+
+        Nao commita — chamador decide.
+        """
+        from app.carvia.models import CarviaContaCorrenteTransportadora
+        from datetime import date as _date
+
+        if tipo_movimento not in ('DEBITO', 'CREDITO'):
+            return {
+                'sucesso': False,
+                'erro': "tipo_movimento deve ser 'DEBITO' ou 'CREDITO'",
+            }
+
+        try:
+            valor_abs = Decimal(str(valor))
+        except (ValueError, TypeError):
+            return {'sucesso': False, 'erro': 'valor invalido'}
+
+        if valor_abs <= 0:
+            return {'sucesso': False, 'erro': 'valor deve ser positivo'}
+
+        # Idempotencia: se ja existe mov com descricao "Saldo inicial migrado"
+        # para essa transportadora, nao cria nova — abortar com aviso.
+        ja_existe = (
+            CarviaContaCorrenteTransportadora.query
+            .filter(
+                CarviaContaCorrenteTransportadora.transportadora_id == transportadora_id,
+                CarviaContaCorrenteTransportadora.status == 'ATIVO',
+                CarviaContaCorrenteTransportadora.frete_id.is_(None),
+                CarviaContaCorrenteTransportadora.descricao.ilike(
+                    '%Saldo inicial migrado%'
+                ),
+            )
+            .first()
+        )
+        if ja_existe:
+            return {
+                'sucesso': False,
+                'erro': (
+                    f'Saldo inicial ja registrado para transportadora '
+                    f'{transportadora_id} (mov_id={ja_existe.id})'
+                ),
+                'movimentacao_id': ja_existe.id,
+            }
+
+        data_ref = data_referencia or _date.today().isoformat()
+        descricao = f'Saldo inicial migrado em {data_ref}'
+
+        if tipo_movimento == 'DEBITO':
+            valor_debito = valor_abs
+            valor_credito = Decimal('0')
+        else:  # CREDITO
+            valor_debito = Decimal('0')
+            valor_credito = valor_abs
+
+        try:
+            mov = CarviaContaCorrenteTransportadora(
+                transportadora_id=transportadora_id,
+                frete_id=None,
+                tipo_movimentacao=tipo_movimento,
+                valor_diferenca=valor_abs,
+                valor_debito=valor_debito,
+                valor_credito=valor_credito,
+                descricao=descricao,
+                observacoes=observacoes,
+                status='ATIVO',
+                criado_em=agora_utc_naive(),
+                criado_por=usuario,
+            )
+            db.session.add(mov)
+            db.session.flush()
+
+            logger.info(
+                'D8 saldo_inicial transp=%s tipo=%s valor=%s mov_id=%s',
+                transportadora_id, tipo_movimento, valor_abs, mov.id,
+            )
+            return {
+                'sucesso': True,
+                'movimentacao_id': mov.id,
+                'tipo_movimento': tipo_movimento,
+                'valor': float(valor_abs),
+            }
+        except Exception as e:
+            logger.exception(
+                'D8 saldo_inicial: erro transp=%s: %s', transportadora_id, e
+            )
+            return {'sucesso': False, 'erro': str(e)}
+
+    # =================================================================
     # Cancelamento (estorno)
     # =================================================================
     @staticmethod

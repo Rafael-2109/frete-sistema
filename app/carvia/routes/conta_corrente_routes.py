@@ -52,6 +52,53 @@ def register_conta_corrente_routes(bp):
         )
 
     # ==================================================================
+    # D8 (2026-04-19): Saldo inicial de transportadora
+    # ==================================================================
+    @bp.route(
+        '/contas-correntes/<int:transportadora_id>/saldo-inicial',
+        methods=['POST'],
+    )  # type: ignore
+    @login_required
+    def api_registrar_saldo_inicial_cc(transportadora_id):  # type: ignore
+        """D8: registra saldo inicial migrado para uma transportadora.
+
+        Apenas administrador. Body JSON:
+          { "valor": 1500.00, "tipo_movimento": "CREDITO",
+            "observacoes": "...", "data_referencia": "2026-04-19" }
+
+        tipo_movimento:
+          - DEBITO:   transportadora deve a nos (saldo positivo)
+          - CREDITO:  nos devemos a transp. (saldo negativo)
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+        if getattr(current_user, 'perfil', None) != 'administrador':
+            return jsonify({
+                'erro': 'Apenas administradores podem registrar saldo inicial.'
+            }), 403
+
+        data = request.get_json() or {}
+        try:
+            resultado = ContaCorrenteService.registrar_saldo_inicial(
+                transportadora_id=transportadora_id,
+                valor=data.get('valor'),
+                tipo_movimento=(data.get('tipo_movimento') or '').upper().strip(),
+                usuario=current_user.email,
+                observacoes=data.get('observacoes'),
+                data_referencia=data.get('data_referencia'),
+            )
+            if not resultado.get('sucesso'):
+                return jsonify(resultado), 422
+            db.session.commit()
+            return jsonify(resultado)
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(
+                f'D8 saldo_inicial transp={transportadora_id}: erro {e}'
+            )
+            return jsonify({'erro': str(e)}), 500
+
+    # ==================================================================
     # Extrato de uma transportadora
     # ==================================================================
     @bp.route('/contas-correntes/<int:transportadora_id>')  # type: ignore

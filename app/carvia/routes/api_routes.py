@@ -1013,6 +1013,67 @@ def register_api_routes(bp):
             return jsonify({'erro': str(e)}), 500
 
     # ------------------------------------------------------------------
+    # SSW — Re-buscar CTRC para CarviaCteComplementar (A3.5)
+    # ------------------------------------------------------------------
+
+    @bp.route(
+        '/api/cte-complementar/<int:cte_comp_id>/atualizar-ctrc',
+        methods=['POST'],
+    )
+    @login_required
+    def api_atualizar_ctrc_cte_complementar(cte_comp_id):
+        """Enfileira job RQ para consultar/verificar CTRC do CTe Complementar
+        via SSW opcao 101.
+
+        A3.5 (2026-04-17): equivalente a `api_atualizar_ctrc_operacao`.
+        O worker `verificar_ctrc_cte_comp_job` trata 3 casos:
+          - Caso A (EXTRACAO): ctrc_numero vazio + cte_numero preenchido
+          - Caso B (VERIFICACAO): ctrc_numero preenchido (divergencia)
+          - Caso C (SKIPPED): ambos vazios
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from app.carvia.models import CarviaCteComplementar
+
+            cte_comp = db.session.get(CarviaCteComplementar, cte_comp_id)
+            if not cte_comp:
+                return jsonify({'erro': 'CTe Complementar nao encontrado'}), 404
+            if cte_comp.status == 'CANCELADO':
+                return jsonify({'erro': 'CTe Complementar cancelado'}), 422
+            if not cte_comp.cte_numero and not cte_comp.ctrc_numero:
+                return jsonify({
+                    'erro': (
+                        'CTe Complementar sem cte_numero e sem ctrc_numero '
+                        '— nao e possivel buscar no SSW'
+                    )
+                }), 422
+
+            from app.portal.workers import enqueue_job
+            from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                verificar_ctrc_cte_comp_job,
+            )
+            job = enqueue_job(
+                verificar_ctrc_cte_comp_job, cte_comp_id,
+                queue_name='default', timeout='10m',
+            )
+            return jsonify({
+                'sucesso': True,
+                'job_id': job.id,
+                'mensagem': (
+                    'Atualizacao do CTRC (CTe Complementar) enfileirada. '
+                    'Atualize a pagina em alguns segundos.'
+                ),
+            }), 202
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                f'Erro ao enfileirar atualizar-ctrc cte_comp={cte_comp_id}: {e}'
+            )
+            return jsonify({'erro': str(e)}), 500
+
+    # ------------------------------------------------------------------
     # Conferencia de CTe Subcontratado
     # ------------------------------------------------------------------
 

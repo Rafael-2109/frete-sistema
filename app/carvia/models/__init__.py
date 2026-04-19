@@ -21,10 +21,11 @@ Split em dominios: documentos, faturas, financeiro, cte_custos, config_moto,
 clientes, cotacao, tabelas, admin, frete.
 """
 
-# Documentos (NF, Operacao, Subcontrato)
+# Documentos (NF, Operacao, Subcontrato, EnderecoCorrecao)
 from app.carvia.models.documentos import (  # noqa: F401
     CarviaNf, CarviaNfItem, CarviaNfVeiculo,
     CarviaOperacao, CarviaOperacaoNf, CarviaSubcontrato,
+    CarviaEnderecoCorrecao,
 )
 
 # Faturas (Cliente + Transportadora)
@@ -95,6 +96,7 @@ __all__ = [
     # Documentos
     'CarviaNf', 'CarviaNfItem', 'CarviaNfVeiculo',
     'CarviaOperacao', 'CarviaOperacaoNf', 'CarviaSubcontrato',
+    'CarviaEnderecoCorrecao',
     # Faturas
     'CarviaFaturaCliente', 'CarviaFaturaClienteItem',
     'CarviaFaturaTransportadoraItem', 'CarviaFaturaTransportadora',

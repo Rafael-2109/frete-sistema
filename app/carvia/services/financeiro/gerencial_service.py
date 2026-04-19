@@ -111,17 +111,39 @@ class GerencialService:
             qtd_motos, peso_efetivo,
             valor_por_unidade (ou None), valor_por_kg_cubado (ou None)
 
+        D1 (2026-04-19): inclui margem bruta por UF/mes via CarviaFrete.
+        Soma de `valor_cotado` (custo total subcontrato) subtraida da receita
+        (`cte_valor`). Campos: `custo_total`, `margem_bruta`,
+        `percentual_margem`.
+
         Regras:
         - Exclui status CANCELADO e registros sem UF/data
         - qtd_motos = COUNT(CarviaNfVeiculo.id) — so operacoes com motos identificadas
         - peso_efetivo = peso_cubado_total se > 0, senao peso_bruto_nfs_total
         - Sem motos identificadas → valor_por_unidade = None (N/A)
         - Divisao por zero → None (template exibe N/A)
+        - margem = (cte_valor - SUM(frete.valor_cotado)) por op
+        - Se nao ha CarviaFrete vinculado, custo_total=0 (margem=receita)
         """
         from app.carvia.models import CarviaOperacao
+        from app.carvia.models.frete import CarviaFrete
 
         nf_peso = _build_nf_peso_subquery('nf_peso')
         moto_count = _build_moto_count_subquery('moto_count')
+
+        # D1: subquery de custo por operacao (SUM valor_cotado de CarviaFrete
+        # nao-CANCELADO)
+        custo_sub = (
+            db.session.query(
+                CarviaFrete.operacao_id.label('operacao_id'),
+                func.coalesce(
+                    func.sum(CarviaFrete.valor_cotado), 0
+                ).label('custo_total'),
+            )
+            .filter(CarviaFrete.status != 'CANCELADO')
+            .group_by(CarviaFrete.operacao_id)
+            .subquery('custo_por_op')
+        )
 
         mes_trunc = func.date_trunc(
             'month', CarviaOperacao.cte_data_emissao
@@ -135,9 +157,12 @@ class GerencialService:
                 func.coalesce(func.sum(moto_count.c.qtd_veiculos), 0).label('qtd_motos'),
                 func.coalesce(func.sum(CarviaOperacao.peso_cubado), 0).label('peso_cubado_total'),
                 func.coalesce(func.sum(nf_peso.c.total_peso_bruto), 0).label('peso_bruto_nfs_total'),
+                # D1: custo total (SUM de valor_cotado de CarviaFrete via subquery)
+                func.coalesce(func.sum(custo_sub.c.custo_total), 0).label('custo_total'),
             )
             .outerjoin(nf_peso, nf_peso.c.operacao_id == CarviaOperacao.id)
             .outerjoin(moto_count, moto_count.c.operacao_id == CarviaOperacao.id)
+            .outerjoin(custo_sub, custo_sub.c.operacao_id == CarviaOperacao.id)
             .filter(
                 CarviaOperacao.status != 'CANCELADO',
                 CarviaOperacao.cte_data_emissao.isnot(None),
@@ -158,6 +183,17 @@ class GerencialService:
             )
             metricas['uf_destino'] = row.uf_destino
             metricas['mes_label'] = _mes_label(row.mes)
+
+            # D1: margem bruta e percentual
+            receita = float(row.valor_total or 0)
+            custo = float(row.custo_total or 0)
+            margem = receita - custo
+            metricas['custo_total'] = custo
+            metricas['margem_bruta'] = margem
+            metricas['percentual_margem'] = (
+                (margem / receita * 100) if receita > 0 else None
+            )
+
             resultado.append(metricas)
 
         return resultado
@@ -212,6 +248,249 @@ class GerencialService:
         totais['total_despesas'] = Decimal(str(total_despesas))
 
         return totais
+
+    # ── D3 (2026-04-19): DSO / aging de faturas cliente ──────────────
+
+    def aging_faturas_cliente(self, hoje=None):
+        """Retorna aging de faturas cliente PENDENTE agrupado por cliente.
+
+        Buckets (em dias desde vencimento):
+          - em_dia:  vencimento >= hoje
+          - b_0_30:  0-30 dias vencido
+          - b_31_60: 31-60 dias vencido
+          - b_61_90: 61-90 dias vencido
+          - b_90p:   mais de 90 dias
+
+        Retorna lista de dicts (1 por cliente):
+          {cnpj_cliente, nome, total_pendente, em_dia, b_0_30, b_31_60,
+           b_61_90, b_90p, qtd_faturas}
+        """
+        from app.carvia.models import CarviaFaturaCliente
+        from datetime import date as _date
+
+        if hoje is None:
+            hoje = _date.today()
+
+        faturas = (
+            CarviaFaturaCliente.query
+            .filter(
+                CarviaFaturaCliente.status != 'CANCELADA',
+                CarviaFaturaCliente.status != 'PAGA',
+                CarviaFaturaCliente.vencimento.isnot(None),
+            )
+            .all()
+        )
+
+        por_cliente = {}
+        for f in faturas:
+            key = f.cnpj_cliente or '(sem cnpj)'
+            if key not in por_cliente:
+                por_cliente[key] = {
+                    'cnpj_cliente': f.cnpj_cliente,
+                    'nome': f.nome_cliente or f.cnpj_cliente,
+                    'total_pendente': 0.0,
+                    'em_dia': 0.0,
+                    'b_0_30': 0.0,
+                    'b_31_60': 0.0,
+                    'b_61_90': 0.0,
+                    'b_90p': 0.0,
+                    'qtd_faturas': 0,
+                }
+
+            entrada = por_cliente[key]
+            valor = float(f.valor_total or 0) - float(f.total_conciliado or 0)
+            if valor <= 0:
+                continue  # quitada via conciliacao parcial
+
+            dias_vencido = (hoje - f.vencimento).days
+
+            entrada['qtd_faturas'] += 1
+            entrada['total_pendente'] += valor
+            if dias_vencido < 0:
+                entrada['em_dia'] += valor
+            elif dias_vencido <= 30:
+                entrada['b_0_30'] += valor
+            elif dias_vencido <= 60:
+                entrada['b_31_60'] += valor
+            elif dias_vencido <= 90:
+                entrada['b_61_90'] += valor
+            else:
+                entrada['b_90p'] += valor
+
+        # Ordenar por total_pendente desc
+        resultado = sorted(
+            por_cliente.values(),
+            key=lambda x: x['total_pendente'],
+            reverse=True,
+        )
+        return resultado
+
+    def calcular_dso(self, data_inicio, data_fim):
+        """Days Sales Outstanding no periodo.
+
+        Formula classica: DSO = (contas_a_receber / receita_periodo) *
+        dias_periodo. Simplificacao para CarVia:
+          - contas_a_receber = SUM(valor_pendente) de faturas nao-PAGAs
+          - receita_periodo  = SUM(valor_total) de faturas emitidas no periodo
+          - dias_periodo     = data_fim - data_inicio
+
+        Retorna dict: {dso_dias, contas_a_receber, receita_periodo,
+                       dias_periodo, prazo_medio_pagamento}.
+        Alem de DSO, retorna `prazo_medio_pagamento` = media real de dias
+        entre data_emissao e pago_em (apenas faturas pagas no periodo).
+        """
+        from app.carvia.models import CarviaFaturaCliente
+
+        dias_periodo = (data_fim - data_inicio).days + 1
+        if dias_periodo <= 0:
+            dias_periodo = 1
+
+        # Receita do periodo
+        receita = db.session.query(
+            func.coalesce(func.sum(CarviaFaturaCliente.valor_total), 0)
+        ).filter(
+            CarviaFaturaCliente.status != 'CANCELADA',
+            CarviaFaturaCliente.data_emissao >= data_inicio,
+            CarviaFaturaCliente.data_emissao <= data_fim,
+        ).scalar() or 0
+        receita = float(receita)
+
+        # Contas a receber (qualquer fatura NAO PAGA/CANCELADA, saldo >0)
+        faturas_pendentes = (
+            CarviaFaturaCliente.query
+            .filter(
+                CarviaFaturaCliente.status.notin_(['PAGA', 'CANCELADA']),
+            )
+            .all()
+        )
+        contas_a_receber = 0.0
+        for f in faturas_pendentes:
+            saldo = float(f.valor_total or 0) - float(f.total_conciliado or 0)
+            if saldo > 0:
+                contas_a_receber += saldo
+
+        dso = (
+            (contas_a_receber / receita) * dias_periodo
+            if receita > 0 else None
+        )
+
+        # Prazo medio de pagamento real (faturas pagas no periodo)
+        faturas_pagas = CarviaFaturaCliente.query.filter(
+            CarviaFaturaCliente.status == 'PAGA',
+            CarviaFaturaCliente.pago_em.isnot(None),
+            CarviaFaturaCliente.data_emissao.isnot(None),
+            CarviaFaturaCliente.data_emissao >= data_inicio,
+            CarviaFaturaCliente.data_emissao <= data_fim,
+        ).all()
+        if faturas_pagas:
+            total_dias = 0
+            n = 0
+            for f in faturas_pagas:
+                pagamento_dt = f.pago_em.date() if hasattr(f.pago_em, 'date') else f.pago_em
+                delta = (pagamento_dt - f.data_emissao).days
+                if delta >= 0:
+                    total_dias += delta
+                    n += 1
+            prazo_medio = (total_dias / n) if n > 0 else None
+        else:
+            prazo_medio = None
+
+        return {
+            'dso_dias': dso,
+            'contas_a_receber': contas_a_receber,
+            'receita_periodo': receita,
+            'dias_periodo': dias_periodo,
+            'prazo_medio_pagamento': prazo_medio,
+            'qtd_faturas_pagas': len(faturas_pagas),
+        }
+
+    # ── D7 (2026-04-19): cotacoes APROVADAS sem embarque Nacom ──────
+
+    def cotacoes_aprovadas_sem_embarque(self, dias_limite=7):
+        """Retorna cotacoes APROVADAS ha mais de N dias sem EmbarqueItem
+        vinculado — candidatas a limpeza/alerta.
+
+        Integracao com Nacom: CarviaPedido.pedido_nacom_id aponta para
+        Pedidos Nacom; EmbarqueItem vincula via separacao_lote_id. Se a
+        cotacao foi aprovada mas nenhum EmbarqueItem foi criado, a
+        operacao provisoria esta esquecida.
+
+        Args:
+            dias_limite: dias desde aprovacao para considerar "atrasada"
+                (default 7).
+
+        Returns: lista de dicts:
+            {cotacao_id, codigo, cliente, valor, aprovada_em, dias_atras,
+             pedido_id, pedido_nacom_id}
+        """
+        from app.carvia.models import CarviaCotacao, CarviaPedido
+        from datetime import date as _date, timedelta as _td
+
+        data_limite = _date.today() - _td(days=dias_limite)
+
+        # Cotacoes aprovadas antes de data_limite
+        rows = (
+            db.session.query(CarviaCotacao)
+            .filter(
+                CarviaCotacao.status == 'APROVADO',
+                CarviaCotacao.aprovado_em.isnot(None),
+                CarviaCotacao.aprovado_em <= data_limite,
+            )
+            .all()
+        )
+
+        resultado = []
+        hoje = _date.today()
+        for c in rows:
+            # Busca pedido vinculado para verificar embarque
+            pedido = (
+                CarviaPedido.query
+                .filter(CarviaPedido.cotacao_id == c.id)
+                .first()
+            )
+
+            # Considera "sem embarque" se:
+            # - nao tem pedido vinculado OU
+            # - pedido sem pedido_nacom_id
+            # Detalhe fino (EmbarqueItem por separacao_lote) fica a cargo
+            # da UI — aqui mostramos candidatas para investigacao.
+            tem_embarque = bool(
+                pedido and getattr(pedido, 'pedido_nacom_id', None)
+            )
+            if tem_embarque:
+                continue
+
+            aprovada_em = c.aprovado_em
+            if aprovada_em and hasattr(aprovada_em, 'date'):
+                aprovada_em_date = aprovada_em.date()
+            else:
+                aprovada_em_date = aprovada_em
+            dias_atras = (
+                (hoje - aprovada_em_date).days
+                if aprovada_em_date else None
+            )
+
+            resultado.append({
+                'cotacao_id': c.id,
+                'codigo': getattr(c, 'codigo_cotacao', None) or f'COT-{c.id}',
+                'cliente': c.nome_cliente,
+                'cnpj_cliente': c.cnpj_cliente,
+                'valor': float(c.valor_cotado) if c.valor_cotado else None,
+                'aprovada_em': (
+                    aprovada_em_date.isoformat() if aprovada_em_date else None
+                ),
+                'dias_atras': dias_atras,
+                'pedido_id': pedido.id if pedido else None,
+                'pedido_nacom_id': (
+                    getattr(pedido, 'pedido_nacom_id', None)
+                    if pedido else None
+                ),
+            })
+
+        resultado.sort(
+            key=lambda x: x.get('dias_atras') or 0, reverse=True
+        )
+        return resultado
 
     # ── Aba Itens NF × CTe ───────────────────────────────────────────
 

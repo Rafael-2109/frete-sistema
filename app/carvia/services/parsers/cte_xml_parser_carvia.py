@@ -698,6 +698,11 @@ class CTeXMLParserCarvia(CTeXMLParser):
         rem = self.get_remetente()
         dest = self.get_destinatario()
         nfs = self.get_nfs_referenciadas()
+        # A4.1 (2026-04-18): enderecos textuais (logradouro, CEP, bairro,
+        # numero) para suportar correcao via CC-e (Bug #4). Antes so
+        # cidade/UF eram persistidos.
+        end_rem = self.get_endereco_remetente() or {}
+        end_dest = self.get_endereco_destinatario() or {}
 
         return {
             # CTe
@@ -714,6 +719,15 @@ class CTeXMLParserCarvia(CTeXMLParser):
             'cidade_origem': rota.get('cidade_origem'),
             'uf_destino': rota.get('uf_destino'),
             'cidade_destino': rota.get('cidade_destino'),
+            # A4.1: enderecos textuais persistiveis
+            'remetente_logradouro': end_rem.get('logradouro'),
+            'remetente_numero': end_rem.get('numero'),
+            'remetente_bairro': end_rem.get('bairro'),
+            'remetente_cep': end_rem.get('cep'),
+            'destinatario_logradouro': end_dest.get('logradouro'),
+            'destinatario_numero': end_dest.get('numero'),
+            'destinatario_bairro': end_dest.get('bairro'),
+            'destinatario_cep': end_dest.get('cep'),
             # Carga
             'valor_mercadoria': carga.get('valor_carga'),
             'peso_bruto': carga.get('peso_bruto'),
@@ -722,6 +736,9 @@ class CTeXMLParserCarvia(CTeXMLParser):
             'emitente': emit,
             'remetente': rem,
             'destinatario': dest,
+            # Enderecos completos (incluindo logradouro/cep/bairro/numero)
+            'endereco_remetente': end_rem,
+            'endereco_destinatario': end_dest,
             # NFs referenciadas
             'nfs_referenciadas': nfs,
             # Impostos

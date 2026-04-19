@@ -396,19 +396,30 @@ class ConferenciaService:
         total = len(fretes)
         status_anterior = fatura.status_conferencia
 
+        # D6 (2026-04-19): popula autoria de DIVERGENTE / EM_CONFERENCIA
+        # alem de CONFERIDO (antes so CONFERIDO tinha rastreabilidade).
+        agora = agora_utc_naive()
         if contagem['APROVADO'] == total:
             fatura.status_conferencia = 'CONFERIDO'
             fatura.conferido_por = usuario
-            fatura.conferido_em = agora_utc_naive()
+            fatura.conferido_em = agora
             for f in fretes:
                 if f.status == 'FATURADO':
                     f.status = 'CONFERIDO'
         elif contagem['DIVERGENTE'] > 0:
             fatura.status_conferencia = 'DIVERGENTE'
             fatura.conferido_por = usuario
-            fatura.conferido_em = agora_utc_naive()
+            fatura.conferido_em = agora
+            # D6: autoria dedicada — preserva mesmo apos mudanca de status
+            if hasattr(fatura, 'divergente_por'):
+                fatura.divergente_por = usuario
+                fatura.divergente_em = agora
         elif contagem['APROVADO'] > 0:
             fatura.status_conferencia = 'EM_CONFERENCIA'
+            # D6: autoria EM_CONFERENCIA
+            if hasattr(fatura, 'em_conferencia_por'):
+                fatura.em_conferencia_por = usuario
+                fatura.em_conferencia_em = agora
 
         novo_status = fatura.status_conferencia
         atualizado = novo_status != status_anterior

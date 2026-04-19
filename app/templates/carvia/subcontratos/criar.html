@@ -13,6 +13,21 @@
         </a>
     </div>
 
+    {# C2 (2026-04-19): banner de aviso — fluxo atual prefere portaria /
+       CarviaFreteService (R10-R13 do CLAUDE.md). Criacao manual permanece
+       para casos excepcionais (fretes antigos, correcoes) mas nao deve ser
+       o caminho default. #}
+    <div class="alert alert-warning d-flex align-items-center">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <div>
+            <strong>Atencao — Fluxo alternativo:</strong>
+            Subcontratos normalmente sao criados automaticamente via
+            <strong>Portaria → CarviaFreteService</strong> (R10-R13 CLAUDE.md).
+            Use este formulario apenas para casos excepcionais: fretes antigos,
+            correcoes manuais ou subs sem CarviaFrete associado (legado).
+        </div>
+    </div>
+
     {% if not operacao %}
     <!-- PASSO 1: Selecionar CTe CarVia (operacao) -->
     <div class="card">

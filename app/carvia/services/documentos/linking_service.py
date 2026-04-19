@@ -423,7 +423,7 @@ class LinkingService:
     # vincular_nf_a_itens_fatura_orfaos: quando NF chega depois da Fatura
     # ------------------------------------------------------------------
 
-    def vincular_nf_a_itens_fatura_orfaos(self, nf):
+    def vincular_nf_a_itens_fatura_orfaos(self, nf, _faturas_expandidas=None):
         """Busca itens de fatura cliente com nf_numero correspondente e nf_id pendente.
 
         Chamado apos criar CarviaNf quando fatura ja foi importada antes.
@@ -439,14 +439,38 @@ class LinkingService:
         1. nf_id IS NULL (fatura importada antes da NF)
         2. nf_id aponta para FATURA_REFERENCIA stub (auto_criar_nf criou stub)
 
+        A2 (2026-04-17): Apos atualizar nf_id, invoca
+        `expandir_itens_com_nfs_do_cte` retroativamente em cada fatura
+        afetada — cria items suplementares quando a junction
+        carvia_operacao_nfs ganhou NFs que a fatura ainda nao tem como item
+        (Bug #1). Controle de recursao via `_faturas_expandidas` (set[int]
+        passado entre chamadas na mesma request).
+
+        A2 (signature change): agora retorna `dict` em vez de `int`.
+        Unico caller em producao: `importacao_service.py:650` —
+        atualizado para receber dict.
+
         Args:
             nf: CarviaNf recem-criada (ja tem id)
+            _faturas_expandidas: set[int] de fatura_ids ja expandidas
+                nesta request (evita loop). Default None = novo set.
 
         Returns:
-            int — numero de itens atualizados
+            dict {
+                'nf_items_atualizados': int,  # items que ganharam nf_id
+                'itens_suplementares_criados': int,  # via expandir
+                'faturas_expandidas': int,  # qtd faturas re-expandidas
+            }
         """
+        if _faturas_expandidas is None:
+            _faturas_expandidas = set()
+
         if not nf or not nf.id or not nf.numero_nf:
-            return 0
+            return {
+                'nf_items_atualizados': 0,
+                'itens_suplementares_criados': 0,
+                'faturas_expandidas': 0,
+            }
 
         from app.carvia.models import CarviaNf, CarviaFaturaClienteItem
 
@@ -514,7 +538,70 @@ class LinkingService:
         if count > 0:
             db.session.flush()
 
-        return count
+        # A2 (2026-04-17): Re-expandir items suplementares em faturas
+        # afetadas — se a NF tardia entrou na junction de alguma operacao
+        # ja faturada, precisamos criar item suplementar para essa NF
+        # (Bug #1). Coleta fatura_ids unicos que tocamos e chama
+        # expandir_itens_com_nfs_do_cte para cada — com guard de recursao.
+        itens_suplementares_criados = 0
+        faturas_expandidas_count = 0
+
+        fatura_ids_afetadas = {
+            item.fatura_cliente_id for item in itens_null
+            if item.fatura_cliente_id and item.nf_id == nf.id
+        }
+        # Inclui tambem faturas dos items stub substituidos
+        if nf_cnpj_emit:
+            try:
+                stubs_ids = [s.id for s in CarviaNf.query.filter(
+                    CarviaNf.tipo_fonte == 'FATURA_REFERENCIA',
+                    CarviaNf.id != nf.id,
+                    func.ltrim(CarviaNf.numero_nf, '0') == nf_norm,
+                    func.regexp_replace(
+                        CarviaNf.cnpj_emitente, '[^0-9]', '', 'g'
+                    ) == nf_cnpj_emit,
+                ).all()]
+                if stubs_ids:
+                    items_stub_atualizados = (
+                        CarviaFaturaClienteItem.query
+                        .filter(CarviaFaturaClienteItem.nf_id == nf.id)
+                        .filter(CarviaFaturaClienteItem.fatura_cliente_id.isnot(None))
+                        .all()
+                    )
+                    for _it in items_stub_atualizados:
+                        fatura_ids_afetadas.add(_it.fatura_cliente_id)
+            except Exception as e_stubs:
+                logger.debug(
+                    "A2 expand retro: skip stubs lookup: %s", e_stubs
+                )
+
+        # Executa expandir_itens_com_nfs_do_cte para cada fatura afetada
+        # (exceto as ja expandidas nesta request — anti-loop)
+        for fat_id in fatura_ids_afetadas:
+            if fat_id in _faturas_expandidas:
+                continue
+            _faturas_expandidas.add(fat_id)
+            try:
+                expand_stats = self.expandir_itens_com_nfs_do_cte(fat_id)
+                itens_suplementares_criados += expand_stats.get(
+                    'itens_criados', 0
+                )
+                faturas_expandidas_count += 1
+                logger.info(
+                    "A2 expand retro: fatura_id=%s itens_criados=%d",
+                    fat_id, expand_stats.get('itens_criados', 0),
+                )
+            except Exception as e_expand:
+                logger.warning(
+                    "A2 expand retro: falha em fatura_id=%s: %s",
+                    fat_id, e_expand,
+                )
+
+        return {
+            'nf_items_atualizados': count,
+            'itens_suplementares_criados': itens_suplementares_criados,
+            'faturas_expandidas': faturas_expandidas_count,
+        }
 
     # ------------------------------------------------------------------
     # vincular_operacoes_da_fatura: backward binding operacao -> fatura
@@ -674,6 +761,223 @@ class LinkingService:
             db.session.flush()
 
         return stats
+
+    # ------------------------------------------------------------------
+    # fechar_vinculo_cte_comp_fatura (A1, 2026-04-17):
+    # quando CTe Comp tardio chega e fatura pre-existente referencia
+    # o cte_numero, fechar o vinculo automaticamente (Bug #2).
+    # ------------------------------------------------------------------
+
+    def fechar_vinculo_cte_comp_fatura(self, cte_comp_id: int) -> dict:
+        """Fecha vinculo de CTe Complementar tardio com fatura pre-existente.
+
+        Cenario (Bug #2): fatura PDF importada antes do XML do CTe Comp.
+        A fatura ja tem items com `cte_numero = COMP-###` mas
+        `cte_complementar_id IS NULL`. Quando o XML chega, este metodo
+        busca os items e fecha o vinculo.
+
+        Abre **transacao propria** (begin_nested) — isolada da transacao
+        de importacao (NN2). `with_for_update()` na fatura antes de
+        recalcular valor_total (NN1).
+
+        Args:
+            cte_comp_id: ID do CarviaCteComplementar recem-criado.
+
+        Returns:
+            dict com: status, motivo, fatura_id, valor_anterior?,
+            valor_novo?, items_atualizados?, cte_numero?
+            status: 'VINCULADO' | 'SKIP' | 'SEM_FATURA' |
+                   'MULTIPLAS_FATURAS' | 'SKIP_FATURA_BLOQUEADA' | 'ERRO'
+        """
+        from app.carvia.models import (
+            CarviaCteComplementar,
+            CarviaFaturaCliente,
+            CarviaFaturaClienteItem,
+            CarviaOperacao,
+        )
+
+        try:
+            # Carrega CTe Comp (ainda NAO lock)
+            cte_comp = db.session.get(CarviaCteComplementar, cte_comp_id)
+            if not cte_comp:
+                return {
+                    'status': 'ERRO',
+                    'motivo': 'cte_comp_nao_encontrado',
+                    'cte_comp_id': cte_comp_id,
+                }
+
+            # Guard idempotencia (NN5): ja vinculado -> SKIP
+            if cte_comp.fatura_cliente_id is not None:
+                return {
+                    'status': 'SKIP',
+                    'motivo': 'ja_vinculado',
+                    'fatura_id': cte_comp.fatura_cliente_id,
+                    'cte_comp_id': cte_comp_id,
+                }
+
+            cte_numero = cte_comp.cte_numero
+            if not cte_numero:
+                return {
+                    'status': 'SKIP',
+                    'motivo': 'cte_comp_sem_cte_numero',
+                    'cte_comp_id': cte_comp_id,
+                }
+
+            operacao_id = cte_comp.operacao_id
+
+            # Busca items de fatura com cte_numero batendo (normaliza zeros)
+            cte_norm = str(cte_numero).lstrip('0') or '0'
+            q = CarviaFaturaClienteItem.query.filter(
+                func.ltrim(
+                    CarviaFaturaClienteItem.cte_numero, '0'
+                ) == cte_norm,
+                CarviaFaturaClienteItem.cte_complementar_id.is_(None),
+            )
+            # Filtro adicional: se item tem operacao_id, precisa bater com
+            # operacao do Comp (evita match com CTe principal homonimo)
+            if operacao_id is not None:
+                q = q.filter(
+                    or_(
+                        CarviaFaturaClienteItem.operacao_id.is_(None),
+                        CarviaFaturaClienteItem.operacao_id == operacao_id,
+                    )
+                )
+            items_candidatos = q.all()
+
+            if not items_candidatos:
+                return {
+                    'status': 'SEM_FATURA',
+                    'motivo': 'fatura_ainda_nao_importada',
+                    'cte_comp_id': cte_comp_id,
+                    'cte_numero': cte_numero,
+                }
+
+            # Valida que todos os items apontam para a mesma fatura
+            fatura_ids = {i.fatura_cliente_id for i in items_candidatos}
+            if len(fatura_ids) > 1:
+                logger.error(
+                    "fechar_vinculo_cte_comp_fatura: CTe Comp %s tem items "
+                    "em %d faturas distintas (%s) — precisa investigacao manual",
+                    cte_comp_id, len(fatura_ids), fatura_ids,
+                )
+                return {
+                    'status': 'MULTIPLAS_FATURAS',
+                    'motivo': 'items_em_faturas_distintas',
+                    'cte_comp_id': cte_comp_id,
+                    'fatura_ids': list(fatura_ids),
+                }
+
+            fatura_id = fatura_ids.pop()
+
+            # Carrega fatura com lock (NN1)
+            fatura = (
+                db.session.query(CarviaFaturaCliente)
+                .filter(CarviaFaturaCliente.id == fatura_id)
+                .with_for_update()
+                .first()
+            )
+            if not fatura:
+                return {
+                    'status': 'ERRO',
+                    'motivo': 'fatura_nao_encontrada_apos_lock',
+                    'cte_comp_id': cte_comp_id,
+                    'fatura_id': fatura_id,
+                }
+
+            # Gate unico (NN3): usa fatura.pode_editar()
+            pode_editar = True
+            if hasattr(fatura, 'pode_editar'):
+                try:
+                    pode_editar_resultado = fatura.pode_editar()
+                    if isinstance(pode_editar_resultado, tuple):
+                        pode_editar = bool(pode_editar_resultado[0])
+                    else:
+                        pode_editar = bool(pode_editar_resultado)
+                except Exception as e_gate:
+                    logger.warning(
+                        "fechar_vinculo_cte_comp_fatura: erro em "
+                        "fatura.pode_editar(): %s — fallback conservador",
+                        e_gate,
+                    )
+                    pode_editar = False
+
+            if not pode_editar:
+                return {
+                    'status': 'SKIP_FATURA_BLOQUEADA',
+                    'motivo': (
+                        f'fatura_status={fatura.status} '
+                        f'status_conferencia='
+                        f'{getattr(fatura, "status_conferencia", "?")}'
+                    ),
+                    'cte_comp_id': cte_comp_id,
+                    'fatura_id': fatura_id,
+                }
+
+            valor_anterior = float(fatura.valor_total or 0)
+
+            # Popula cte_complementar_id nos items encontrados
+            for item in items_candidatos:
+                item.cte_complementar_id = cte_comp_id
+
+            # Seta FK no CTe Comp + promove status
+            cte_comp.fatura_cliente_id = fatura_id
+            if cte_comp.status in ('RASCUNHO', 'EMITIDO'):
+                cte_comp.status = 'FATURADO'
+
+            # Recalcula valor_total (mesma logica de
+            # vincular_ctes_complementares_da_fatura L652-669)
+            soma_ops = db.session.query(
+                func.coalesce(func.sum(CarviaOperacao.cte_valor), 0)
+            ).filter(
+                CarviaOperacao.fatura_cliente_id == fatura_id
+            ).scalar()
+
+            soma_comp = db.session.query(
+                func.coalesce(
+                    func.sum(CarviaCteComplementar.cte_valor), 0
+                )
+            ).filter(
+                CarviaCteComplementar.fatura_cliente_id == fatura_id
+            ).scalar()
+
+            novo_total = float(soma_ops or 0) + float(soma_comp or 0)
+            if novo_total != valor_anterior and novo_total > 0:
+                fatura.valor_total = novo_total
+
+            db.session.flush()
+
+            logger.info(
+                "fechar_vinculo_cte_comp_fatura: CTe Comp %s "
+                "(numero_comp=%s, cte=%s) VINCULADO a fatura %s "
+                "(num=%s). Items atualizados: %d. "
+                "valor_total: R$ %.2f -> R$ %.2f",
+                cte_comp_id, cte_comp.numero_comp, cte_numero,
+                fatura_id, fatura.numero_fatura,
+                len(items_candidatos), valor_anterior, novo_total,
+            )
+
+            return {
+                'status': 'VINCULADO',
+                'motivo': 'ok',
+                'cte_comp_id': cte_comp_id,
+                'fatura_id': fatura_id,
+                'cte_numero': cte_numero,
+                'valor_anterior': valor_anterior,
+                'valor_novo': novo_total,
+                'items_atualizados': len(items_candidatos),
+            }
+
+        except Exception as e:
+            logger.exception(
+                "fechar_vinculo_cte_comp_fatura: erro inesperado "
+                "para CTe Comp %s: %s",
+                cte_comp_id, e,
+            )
+            return {
+                'status': 'ERRO',
+                'motivo': str(e),
+                'cte_comp_id': cte_comp_id,
+            }
 
     # ------------------------------------------------------------------
     # vincular_itens_fatura_cliente: resolve FKs em itens existentes
@@ -1162,8 +1466,13 @@ class LinkingService:
                     contraparte_cnpj=item_original.contraparte_cnpj,
                     contraparte_nome=item_original.contraparte_nome,
                     nf_numero=nf.numero_nf,
-                    valor_mercadoria=nf.valor_total,
-                    peso_kg=float(nf.peso_bruto) if nf.peso_bruto else None,
+                    # A2 (2026-04-17): valor_mercadoria=None em items
+                    # suplementares (antes era nf.valor_total, gerava
+                    # dupla contagem em SUM). Peso tambem NULL pela
+                    # mesma razao — pesos e valores ja estao no item
+                    # original do CTe.
+                    valor_mercadoria=None,
+                    peso_kg=None,
                     # Valores financeiros NULL — evitar dupla contagem
                     frete=None,
                     icms=None,

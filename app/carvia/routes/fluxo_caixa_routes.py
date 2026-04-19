@@ -502,3 +502,84 @@ def register_fluxo_caixa_routes(bp):
             db.session.rollback()
             logger.error(f"Erro ao definir saldo inicial: {e}")
             return jsonify({'erro': str(e)}), 500
+
+    # ==================== D4 (2026-04-19): AJUSTE MANUAL DE SALDO ====================
+
+    @bp.route('/api/extrato-conta/ajuste-manual', methods=['POST'])
+    @login_required
+    def api_ajuste_manual():
+        """D4 (2026-04-19): cria um ajuste manual de saldo.
+
+        Reusa CarviaContaMovimentacao com tipo_doc='ajuste'. O UNIQUE parcial
+        exclui 'ajuste' e 'saldo_inicial' (GAP-10 ja resolvido), entao podemos
+        criar multiplos ajustes com doc_id=0. Cada ajuste tem descricao
+        obrigatoria (>= 10 chars) para audit trail.
+
+        Permissao: restrita a admin (campo perfil='administrador'). Usuarios
+        carvia gerais nao podem criar ajustes arbitrarios.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+        if getattr(current_user, 'perfil', None) != 'administrador':
+            return jsonify({
+                'erro': 'Apenas administradores podem criar ajustes manuais.'
+            }), 403
+
+        data = request.get_json() or {}
+        valor_raw = data.get('valor')
+        tipo_movimento = (data.get('tipo_movimento') or '').upper().strip()
+        descricao = (data.get('descricao') or '').strip()
+
+        # Validacoes
+        try:
+            valor = float(valor_raw)
+        except (TypeError, ValueError):
+            return jsonify({'erro': 'valor invalido'}), 400
+        if valor <= 0:
+            return jsonify({
+                'erro': 'valor deve ser positivo (tipo_movimento define sinal)'
+            }), 400
+        if tipo_movimento not in ('CREDITO', 'DEBITO'):
+            return jsonify({
+                'erro': 'tipo_movimento deve ser CREDITO ou DEBITO'
+            }), 400
+        if len(descricao) < 10:
+            return jsonify({
+                'erro': 'descricao obrigatoria (min 10 caracteres para audit trail)'
+            }), 400
+
+        try:
+            from app.carvia.models import CarviaContaMovimentacao
+            from app.utils.timezone import agora_utc_naive
+
+            mov = CarviaContaMovimentacao(
+                tipo_doc='ajuste',
+                doc_id=0,
+                tipo_movimento=tipo_movimento,
+                valor=valor,
+                descricao=descricao,
+                criado_por=current_user.email,
+                criado_em=agora_utc_naive(),
+            )
+            db.session.add(mov)
+            db.session.commit()
+
+            saldo_atual = _obter_saldo_atual()
+            logger.info(
+                'D4 ajuste_manual id=%s %s R$%.2f por=%s desc=%r saldo=%.2f',
+                mov.id, tipo_movimento, valor,
+                current_user.email, descricao, saldo_atual,
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'movimentacao_id': mov.id,
+                'tipo_movimento': tipo_movimento,
+                'valor': valor,
+                'descricao': descricao,
+                'saldo_atual': saldo_atual,
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"D4 ajuste_manual: erro {e}")
+            return jsonify({'erro': str(e)}), 500

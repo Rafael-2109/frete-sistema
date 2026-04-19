@@ -48,6 +48,15 @@
                 <i class="fas fa-edit"></i> Editar
             </a>
             {% endif %}
+            {# A3.5 (2026-04-17): Atualizar CTRC via SSW 101 (equivalente a detalhe_operacao.html) #}
+            {% if cte_comp.cte_numero and cte_comp.status != 'CANCELADO' %}
+            <button type="button" class="btn btn-outline-warning btn-sm"
+                    id="btn-atualizar-ctrc-cte-comp-{{ cte_comp.id }}"
+                    onclick="atualizarCtrcCteCompSsw({{ cte_comp.id }})"
+                    title="Re-consultar CTRC no SSW (opcao 101)">
+                <i class="fas fa-sync"></i> Atualizar CTRC
+            </button>
+            {% endif %}
             {# Botoes admin removidos (Sprint 0) #}
             <a href="{{ url_for('carvia.listar_ctes_complementares') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar
@@ -280,5 +289,42 @@
 })();
 </script>
 {% endif %}
+
+{# A3.5 (2026-04-17): JS do botao "Atualizar CTRC" — pattern identico ao detalhe_operacao.html #}
+<script>
+function atualizarCtrcCteCompSsw(id) {
+    if (!confirm('Re-consultar CTRC no SSW? (leva ~20-30s)')) return;
+    var btn = document.getElementById('btn-atualizar-ctrc-cte-comp-' + id);
+    var labelOriginal = '<i class="fas fa-sync"></i> Atualizar CTRC';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
+    }
+    var csrf = document.querySelector('meta[name="csrf-token"]')?.content
+            || document.querySelector('input[name="csrf_token"]')?.value || '';
+    fetch('/carvia/api/cte-complementar/' + id + '/atualizar-ctrc', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrf,
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.sucesso) {
+            alert(data.mensagem);
+            if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW...'; }
+            setTimeout(function() { window.location.reload(); }, 30000);
+        } else {
+            alert('Erro: ' + (data.erro || 'Falha desconhecida'));
+            if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+        }
+    })
+    .catch(function(e) {
+        alert('Erro de rede: ' + e);
+        if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
+    });
+}
+</script>
 
 {% endblock %}

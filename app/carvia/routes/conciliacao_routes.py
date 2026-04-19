@@ -1117,6 +1117,10 @@ def register_conciliacao_routes(bp):
 
         Filtra apenas CTes com uf_origem != SP (GNRE aplica-se a CTes de fora de SP).
         Enriquece com dados do destinatário via NF vinculada.
+
+        D11 (2026-04-19): Quando o caller passa `valor_extrato` (linha DEBITO
+        de GNRE/SEFAZ), ordena CTes por proximidade de `icms_valor`. CTes com
+        diferenca <= 5% recebem `match_icms=True` e aparecem no topo.
         """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1124,6 +1128,16 @@ def register_conciliacao_routes(bp):
         from app.carvia.models import CarviaOperacao
 
         busca = request.args.get('busca', '').strip()
+        # D11: valor do extrato para sugestao automatica (opcional)
+        valor_extrato_raw = request.args.get('valor_extrato', '').strip()
+        valor_extrato = None
+        if valor_extrato_raw:
+            try:
+                valor_extrato = float(valor_extrato_raw.replace(',', '.'))
+                if valor_extrato <= 0:
+                    valor_extrato = None
+            except (ValueError, TypeError):
+                valor_extrato = None
 
         query = db.session.query(CarviaOperacao).filter(
             CarviaOperacao.status != 'CANCELADO',
@@ -1151,6 +1165,23 @@ def register_conciliacao_routes(bp):
             # Primeiro NF para dados do destinatário
             primeiro_nf = op.nfs.first()
 
+            icms_valor_float = float(op.icms_valor) if op.icms_valor else None
+            icms_base_float = (
+                float(op.icms_base_calculo) if op.icms_base_calculo else None
+            )
+            icms_aliq_float = (
+                float(op.icms_aliquota) if op.icms_aliquota else None
+            )
+
+            # D11: score de similaridade de valor ICMS com a linha do extrato
+            match_icms = False
+            delta_icms_pct = None
+            if valor_extrato is not None and icms_valor_float:
+                delta = abs(icms_valor_float - valor_extrato)
+                delta_icms_pct = (delta / valor_extrato) * 100 if valor_extrato else None
+                if delta_icms_pct is not None and delta_icms_pct <= 5.0:
+                    match_icms = True
+
             resultado.append({
                 'id': op.id,
                 'cte_numero': op.cte_numero or f'OP-{op.id}',
@@ -1163,6 +1194,12 @@ def register_conciliacao_routes(bp):
                 'valor_mercadoria': float(op.valor_mercadoria) if op.valor_mercadoria else None,
                 'peso_utilizado': float(op.peso_utilizado) if op.peso_utilizado else None,
                 'cte_valor': float(op.cte_valor) if op.cte_valor else None,
+                # D11: dados ICMS persistidos (antes em runtime via XML)
+                'icms_valor': icms_valor_float,
+                'icms_base_calculo': icms_base_float,
+                'icms_aliquota': icms_aliq_float,
+                'match_icms': match_icms,
+                'delta_icms_pct': delta_icms_pct,
                 'cte_data_emissao': (
                     op.cte_data_emissao.strftime('%d/%m/%Y')
                     if op.cte_data_emissao else ''
@@ -1183,7 +1220,26 @@ def register_conciliacao_routes(bp):
                 ),
             })
 
-        return jsonify({'sucesso': True, 'ctes': resultado})
+        # D11: reordenar priorizando match_icms, depois por delta_icms_pct
+        # ascendente (menor diferenca = mais relevante). CTes sem ICMS ou
+        # sem valor_extrato vao ao final na ordem original (por data desc).
+        if valor_extrato is not None:
+            def _sort_key(item):
+                # Menor delta primeiro; None vai pro final
+                delta = item.get('delta_icms_pct')
+                has_delta = delta is not None
+                return (
+                    0 if item['match_icms'] else 1,  # matches primeiro
+                    0 if has_delta else 1,           # com delta primeiro
+                    delta if has_delta else 999999,  # menor delta primeiro
+                )
+            resultado.sort(key=_sort_key)
+
+        return jsonify({
+            'sucesso': True,
+            'ctes': resultado,
+            'valor_extrato_usado': valor_extrato,
+        })
 
     @bp.route('/api/conciliacao/criar-custo-fiscal', methods=['POST'])  # type: ignore
     @login_required

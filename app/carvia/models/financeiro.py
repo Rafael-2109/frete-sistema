@@ -34,6 +34,23 @@ class CarviaDespesa(db.Model):
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
 
+    # D2 (2026-04-19): FKs opcionais para CTe / CarviaFrete — permite
+    # vincular despesa (ex: seguro) a operacao especifica, habilita
+    # calculo de margem real por frete. Ambas nullable (CarviaDespesa
+    # generica continua funcionando sem vinculo).
+    operacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_operacoes.id'),
+        nullable=True,
+        index=True,
+    )
+    frete_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_fretes.id'),
+        nullable=True,
+        index=True,
+    )
+
     @property
     def numero_despesa(self):
         """Codigo exibivel no formato DESP-### (mesmo usado no extrato/conciliacao)"""

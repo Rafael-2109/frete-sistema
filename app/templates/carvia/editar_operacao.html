@@ -69,6 +69,70 @@
                     </div>
                 </div>
 
+                {# A4.2 (2026-04-18): Enderecos textuais + metadados de correcao.
+                   Gate via feature flag CARVIA_FEATURE_EDITAR_ENDERECO_CCE. #}
+                {% if config.get('CARVIA_FEATURE_EDITAR_ENDERECO_CCE', False) %}
+                <h5 class="mb-3">
+                    <i class="fas fa-map-marker-alt"></i> Enderecos (CC-e / correcao manual)
+                </h5>
+                <div class="alert alert-info small">
+                    Endereco textual do CTe. Em caso de CC-e (SEFAZ opcao 736):
+                    escolha motivo <strong>CC-E</strong> e informe o numero da CC-e
+                    emitida no SSW. Toda alteracao gera registro auditavel.
+                </div>
+
+                <h6 class="mt-3 mb-2">Remetente</h6>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Logradouro</label>
+                        {{ form.remetente_logradouro(class="form-control") }}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Numero</label>
+                        {{ form.remetente_numero(class="form-control") }}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Bairro</label>
+                        {{ form.remetente_bairro(class="form-control") }}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">CEP</label>
+                        {{ form.remetente_cep(class="form-control") }}
+                    </div>
+                </div>
+
+                <h6 class="mt-3 mb-2">Destinatario</h6>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Logradouro</label>
+                        {{ form.destinatario_logradouro(class="form-control") }}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Numero</label>
+                        {{ form.destinatario_numero(class="form-control") }}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Bairro</label>
+                        {{ form.destinatario_bairro(class="form-control") }}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">CEP</label>
+                        {{ form.destinatario_cep(class="form-control") }}
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label">Motivo da alteracao</label>
+                        {{ form.motivo_correcao(class="form-select") }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Numero CC-e (se aplicavel)</label>
+                        {{ form.numero_cce(class="form-control", placeholder="Ex: 150900012345") }}
+                    </div>
+                </div>
+                {% endif %}
+
                 <h5 class="mb-3"><i class="fas fa-weight-hanging"></i> Peso e Valor</h5>
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">

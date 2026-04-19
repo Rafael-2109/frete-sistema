@@ -189,6 +189,16 @@ class CarviaFaturaClienteItem(db.Model):
         nullable=True,
         index=True
     )
+    # A1 (2026-04-17): FK para CTe Complementar quando item refere
+    # uma linha de COMP-### no PDF da fatura. Populado via
+    # `LinkingService.fechar_vinculo_cte_comp_fatura` quando o XML
+    # do CTe Comp chega depois da fatura (Bug #2).
+    cte_complementar_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_cte_complementares.id'),
+        nullable=True,
+        index=True
+    )
 
     # Valores
     valor_mercadoria = db.Column(db.Numeric(15, 2))
@@ -297,6 +307,13 @@ class CarviaFaturaTransportadora(db.Model):
     status_conferencia = db.Column(db.String(20), default='PENDENTE')
     conferido_por = db.Column(db.String(100))
     conferido_em = db.Column(db.DateTime)
+    # D6 (2026-04-19): autoria de estados intermediarios (antes so CONFERIDO
+    # tinha autoria — GAP-32). Rotas de transicao populam estes campos
+    # para rastreabilidade de "quem deixou em DIVERGENTE/EM_CONFERENCIA".
+    divergente_por = db.Column(db.String(100))
+    divergente_em = db.Column(db.DateTime)
+    em_conferencia_por = db.Column(db.String(100))
+    em_conferencia_em = db.Column(db.DateTime)
     # Observacoes da conferencia — preenchido no form "Aprovar Conferencia"
     # (paridade Nacom: FaturaFrete.observacoes_conferencia). Historico de
     # reaberturas eh prefixado com "REABERTA EM {data} por {user} - {motivo}".

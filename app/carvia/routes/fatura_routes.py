@@ -2722,6 +2722,89 @@ def register_fatura_routes(bp):
             logger.error(f"Erro ao vincular CTe Comp #{cte_comp_id} a fatura #{fatura_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
+    # ==================== D5 (2026-04-19): RECALCULAR VALOR_TOTAL DA FATURA ====================
+
+    @bp.route(
+        '/faturas-cliente/<int:fatura_id>/recalcular-valor',
+        methods=['POST'],
+    )  # type: ignore
+    @login_required
+    def api_recalcular_valor_fatura_cliente(fatura_id):  # type: ignore
+        """D5 (2026-04-19): recalcula valor_total da fatura = soma dos
+        cte_valor das operacoes + CTe Comps vinculados.
+
+        Gate: fatura.pode_editar() (NN3). Se fatura esta CONFERIDA/PAGA/
+        CANCELADA, retorna 422. Usa lock (NN1) para evitar race com
+        conciliacao.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        try:
+            from sqlalchemy import func as sa_func
+
+            fatura = (
+                db.session.query(CarviaFaturaCliente)
+                .filter(CarviaFaturaCliente.id == fatura_id)
+                .with_for_update()
+                .first()
+            )
+            if not fatura:
+                return jsonify({
+                    'sucesso': False, 'erro': 'Fatura nao encontrada'
+                }), 404
+
+            pode, razao = fatura.pode_editar()
+            if not pode:
+                return jsonify({
+                    'sucesso': False,
+                    'erro': razao or 'Fatura nao pode ser editada',
+                    'status': fatura.status,
+                    'status_conferencia': fatura.status_conferencia,
+                }), 422
+
+            valor_anterior = float(fatura.valor_total or 0)
+
+            soma_ops = db.session.query(
+                sa_func.coalesce(sa_func.sum(CarviaOperacao.cte_valor), 0)
+            ).filter(
+                CarviaOperacao.fatura_cliente_id == fatura_id
+            ).scalar()
+
+            soma_comp = db.session.query(
+                sa_func.coalesce(
+                    sa_func.sum(CarviaCteComplementar.cte_valor), 0
+                )
+            ).filter(
+                CarviaCteComplementar.fatura_cliente_id == fatura_id
+            ).scalar()
+
+            novo_total = float(soma_ops or 0) + float(soma_comp or 0)
+            fatura.valor_total = novo_total
+            db.session.commit()
+
+            logger.info(
+                'D5 recalcular_valor fatura=%s: R$%.2f -> R$%.2f '
+                '(ops=%.2f + comps=%.2f)',
+                fatura_id, valor_anterior, novo_total,
+                float(soma_ops or 0), float(soma_comp or 0),
+            )
+
+            return jsonify({
+                'sucesso': True,
+                'fatura_id': fatura_id,
+                'valor_anterior': valor_anterior,
+                'valor_novo': novo_total,
+                'soma_operacoes': float(soma_ops or 0),
+                'soma_complementares': float(soma_comp or 0),
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.exception(
+                'D5 recalcular_valor fatura=%s: erro %s', fatura_id, e
+            )
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
     @bp.route('/faturas-cliente/<int:fatura_id>/desvincular-cte-comp/<int:cte_comp_id>', methods=['POST']) # type: ignore
     @login_required
     def api_desvincular_cte_comp_fatura_cliente(fatura_id, cte_comp_id): # type: ignore

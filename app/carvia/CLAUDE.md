@@ -101,7 +101,18 @@ Novos fretes DEVEM seguir o fluxo unico **Cotacao → Pedido → Embarque → NF
 Conciliacao 100% de um documento altera automaticamente status (`PAGA`/`PAGO`/`RECEBIDO`) e campos `pago_em`/`pago_por`. Desconciliacao reverte. **Propagacao automatica FT → CE** quando FT e paga. Detalhes: [FINANCEIRO.md](FINANCEIRO.md).
 
 ### R14: Admin — Hard Delete com Auditoria
-`AdminService` permite hard delete (bypassa status machine) com audit trail em `CarviaAdminAudit`. **Bloqueios por entidade**: Sub com `fatura_transportadora_id`; FC `conciliado=True`; FT com `CarviaConciliacao`; CTe Comp `FATURADO`; CE `PAGO` ou vinculado a FT; Despesa `PAGO`.
+`AdminService` permite hard delete (bypassa status machine) com audit trail em `CarviaAdminAudit`.
+
+**Entidades com hard-delete admin ATIVO** (atualizado 2026-04-18 — B4 sprint hygiene):
+- `fatura-cliente` (FC) — bloqueia se `conciliado=True`
+- `fatura-transportadora` (FT) — bloqueia se ha `CarviaConciliacao`
+- `receita` — sem bloqueio adicional
+- `subcontrato-orfao` — apenas legado, sem `frete_id`
+
+**Entidades REMOVIDAS do hard-delete admin** (auditoria W-sessao): `nf`, `operacao`, `subcontrato`, `cte-complementar`, `custo-entrega`, `despesa`, `FIELD_EDIT`. Para estas, usar **fluxo normal de cancelamento**. Se precisar cancelar operacao com dependencias, usar **B3 cascade** (`POST /operacoes/<id>/cascade/cancelar` com feature flag `CARVIA_FEATURE_CASCADE_CANCELAMENTO`).
+
+### R14.1: Cascade de Cancelamento (B3, 2026-04-18)
+`app/carvia/services/documentos/operacao_cancel_service.py` fornece cancelamento atomico em ordem topologica (CarviaFrete -> CE -> CTe Comp -> Sub -> Operacao). Bloqueios permanecem (Sub FATURADO, CE PAGO/vinculado FT, CarviaFrete CONFERIDO). Feature flag `CARVIA_FEATURE_CASCADE_CANCELAMENTO` default `False`.
 
 **Gaps de seguranca conhecidos**: [AUDIT_ADMIN_SERVICE.md](AUDIT_ADMIN_SERVICE.md) — 12 gaps mapeados (3 CRITICO, 5 ALTO, 3 MEDIO).
 

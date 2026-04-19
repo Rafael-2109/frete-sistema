@@ -327,15 +327,37 @@ def register_cte_complementar_routes(bp):
             ))
 
         try:
-            # Validar transicoes permitidas
-            if novo_status == 'EMITIDO' and cte_comp.status != 'RASCUNHO':
-                flash('Somente CTe em RASCUNHO pode ser EMITIDO.', 'warning')
+            # B1 (2026-04-18): Validar transicoes permitidas.
+            # Espelha R4 CLAUDE.md — status irreversivel (exceto CANCELADO).
+            # Matriz de transicoes validas:
+            #   RASCUNHO   -> EMITIDO | CANCELADO
+            #   EMITIDO    -> FATURADO | CANCELADO
+            #   FATURADO   -> (nenhuma — terminal)
+            #   CANCELADO  -> (nenhuma — terminal)
+            TRANSICOES_VALIDAS = {
+                'RASCUNHO': {'EMITIDO', 'CANCELADO'},
+                'EMITIDO': {'FATURADO', 'CANCELADO'},
+                'FATURADO': set(),
+                'CANCELADO': set(),
+            }
+            status_atual = cte_comp.status or 'RASCUNHO'
+            permitidas = TRANSICOES_VALIDAS.get(status_atual, set())
+
+            if novo_status == status_atual:
+                flash(
+                    f'Status ja e {status_atual}. Nenhuma alteracao.', 'info'
+                )
                 return redirect(url_for(
                     'carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id
                 ))
 
-            if novo_status == 'CANCELADO' and cte_comp.status == 'FATURADO':
-                flash('Nao e possivel cancelar CTe complementar FATURADO.', 'warning')
+            if novo_status not in permitidas:
+                flash(
+                    f'Transicao {status_atual} -> {novo_status} nao permitida. '
+                    f'Transicoes validas a partir de {status_atual}: '
+                    f'{", ".join(sorted(permitidas)) or "(nenhuma — terminal)"}.',
+                    'warning',
+                )
                 return redirect(url_for(
                     'carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id
                 ))

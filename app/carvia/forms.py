@@ -29,7 +29,11 @@ def validar_cnpj(_form, field):
 
 
 class OperacaoManualForm(FlaskForm):
-    """Formulario para criacao manual de operacao (sem CTe)"""
+    """Formulario para criacao manual de operacao (sem CTe).
+
+    A4.2 (2026-04-18): adiciona 8 campos de endereco textual e 2 campos
+    de metadados para registro de correcao (motivo + numero CC-e).
+    """
     cnpj_cliente = StringField(
         'CNPJ Cliente',
         validators=[DataRequired(), Length(min=14, max=20), validar_cnpj]
@@ -42,6 +46,46 @@ class OperacaoManualForm(FlaskForm):
     cidade_origem = StringField('Cidade Origem', validators=[Optional(), Length(max=100)])
     uf_destino = StringField('UF Destino', validators=[DataRequired(), Length(max=2)])
     cidade_destino = StringField('Cidade Destino', validators=[DataRequired(), Length(max=100)])
+    # A4.1/A4.2: Enderecos textuais (todos opcionais — preenchidos via XML
+    # na importacao, editaveis manualmente pos-CC-e)
+    remetente_logradouro = StringField(
+        'Remetente — Logradouro', validators=[Optional(), Length(max=150)]
+    )
+    remetente_numero = StringField(
+        'Remetente — Numero', validators=[Optional(), Length(max=20)]
+    )
+    remetente_bairro = StringField(
+        'Remetente — Bairro', validators=[Optional(), Length(max=150)]
+    )
+    remetente_cep = StringField(
+        'Remetente — CEP', validators=[Optional(), Length(max=10)]
+    )
+    destinatario_logradouro = StringField(
+        'Destinatario — Logradouro', validators=[Optional(), Length(max=150)]
+    )
+    destinatario_numero = StringField(
+        'Destinatario — Numero', validators=[Optional(), Length(max=20)]
+    )
+    destinatario_bairro = StringField(
+        'Destinatario — Bairro', validators=[Optional(), Length(max=150)]
+    )
+    destinatario_cep = StringField(
+        'Destinatario — CEP', validators=[Optional(), Length(max=10)]
+    )
+    # Metadados de correcao (validados no service quando campos de endereco mudam)
+    motivo_correcao = SelectField(
+        'Motivo da Correcao',
+        choices=[
+            ('CORRECAO_MANUAL', 'Correcao manual'),
+            ('CC-E', 'Carta de Correcao (SEFAZ opcao 736)'),
+            ('OUTROS', 'Outros'),
+        ],
+        default='CORRECAO_MANUAL',
+        validators=[Optional()],
+    )
+    numero_cce = StringField(
+        'Numero da CC-e no SSW', validators=[Optional(), Length(max=30)]
+    )
     peso_bruto = DecimalField('Peso Bruto (kg)', validators=[Optional()], places=3)
     valor_mercadoria = DecimalField('Valor Mercadoria (R$)', validators=[Optional()], places=2)
     observacoes = TextAreaField('Observacoes', validators=[Optional()])
