@@ -33,14 +33,20 @@
 <body>
 
   {% if current_user.is_authenticated %}
-  <nav class="navbar navbar-expand-lg nc-navbar">
+  <nav class="navbar navbar-expand-lg nc-navbar{% if request.path.startswith('/carvia/') %} nc-navbar--carvia{% endif %}">
     <div class="container-fluid">
       {% if not is_comercial_only %}
       <a class="navbar-brand" href="{% if current_user.sistema_motochefe and not current_user.sistema_logistica %}{{ url_for('motochefe.dashboard_motochefe') }}{% else %}{{ url_for('main.dashboard') }}{% endif %}">
         {% if current_user.sistema_motochefe and not current_user.sistema_logistica %}
         <i class="fas fa-motorcycle"></i> <span>Sistema MotoChefe</span>
         {% else %}
-        <i class="fas fa-truck"></i> <span>{% if request.path.startswith('/carvia/') %}Logística CarVia{% else %}Logística Nacom Goya{% endif %}</span>
+        {% if request.path.startswith('/carvia/') %}
+          <img src="{{ url_for('static', filename='carvia/logo_crop.png') }}" alt="CarVia Transporte e Logística" style="height: 42px; width: auto; display: block;">
+        {% elif request.path.startswith('/hora/') %}
+          <img src="{{ url_for('static', filename='motochefe/logo_crop.png') }}" alt="Lojas HORA" style="height: 38px; width: auto; display: block;">
+        {% else %}
+          <img src="{{ url_for('static', filename='nacom/logo_campo_belo_crop.png') }}" alt="Campo Belo Conservas" style="height: 48px; width: auto; display: block;">
+        {% endif %}
         {% endif %}
       </a>
       {% else %}

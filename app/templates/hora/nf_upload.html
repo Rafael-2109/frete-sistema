@@ -13,16 +13,54 @@
   </div>
 
   <div class="mb-3">
+    <label class="form-label">
+      Loja destino (física) <span class="text-danger">*</span>
+    </label>
+    <select name="loja_destino_id" class="form-select" required id="select-loja-destino">
+      <option value="">— Selecione a loja que receberá as motos —</option>
+      {% for loja in lojas_ativas %}
+        <option value="{{ loja.id }}">
+          {{ loja.rotulo_display }}{% if loja.cidade %} ({{ loja.cidade }}){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <small class="form-text text-muted">
+      Todas as NFs HORA vêm emitidas para o CNPJ da matriz.
+      Selecione a loja física que vai receber (ex.: Motochefe Bragança).
+      Se vincular a um pedido, a loja dele será usada automaticamente.
+    </small>
+  </div>
+
+  <div class="mb-3">
     <label class="form-label">Vincular a pedido (opcional)</label>
-    <select name="pedido_id" class="form-select">
+    <select name="pedido_id" class="form-select" id="select-pedido"
+            data-lojas='{% for p in pedidos %}{% if p.loja_destino_id %}{"pedido_id": {{ p.id }}, "loja_id": {{ p.loja_destino_id }}}{% if not loop.last %},{% endif %}{% endif %}{% endfor %}'>
       <option value="">— Não vincular agora —</option>
       {% for p in pedidos %}
-        <option value="{{ p.id }}">
-          {{ p.numero_pedido }} — {{ p.data_pedido.strftime('%d/%m/%Y') }} ({{ p.itens|length }} chassis)
+        <option value="{{ p.id }}" data-loja-id="{{ p.loja_destino_id or '' }}">
+          {{ p.numero_pedido }}
+          {%- if p.loja_destino %} → {{ p.loja_destino.rotulo_display }}{% endif %}
+          — {{ p.data_pedido.strftime('%d/%m/%Y') }} ({{ p.itens|length }} chassis)
         </option>
       {% endfor %}
     </select>
   </div>
+
+  <script>
+  (function() {
+    const selPedido = document.getElementById('select-pedido');
+    const selLoja = document.getElementById('select-loja-destino');
+    if (!selPedido || !selLoja) return;
+    selPedido.addEventListener('change', function() {
+      const opt = selPedido.options[selPedido.selectedIndex];
+      const lojaId = opt ? opt.dataset.lojaId : '';
+      if (lojaId) {
+        selLoja.value = lojaId;
+        selLoja.dispatchEvent(new Event('change'));
+      }
+    });
+  })();
+  </script>
 
   <div class="d-flex gap-2">
     <button type="submit" class="btn btn-primary">Importar</button>

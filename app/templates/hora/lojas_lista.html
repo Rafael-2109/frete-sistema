@@ -1,36 +1,141 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h2>Lojas HORA</h2>
-  <a href="{{ url_for('hora.lojas_novo') }}" class="btn btn-primary">
-    <i class="fas fa-plus"></i> Nova loja
-  </a>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('hora.lojas_mapa') }}" class="btn btn-outline-primary">
+      <i class="fas fa-map-marked-alt"></i> Ver no mapa
+    </a>
+    <a href="{{ url_for('hora.lojas_novo') }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Nova loja
+    </a>
+  </div>
 </div>
 
 <div class="table-responsive">
-  <table class="table table-hover">
+  <table class="table table-hover align-middle">
     <thead><tr>
-      <th>Nome</th>
+      <th>Apelido <small class="text-muted">(clique para editar)</small></th>
+      <th>Razão Social</th>
       <th>CNPJ</th>
       <th>Cidade/UF</th>
+      <th>Situação</th>
       <th>Status</th>
+      <th></th>
     </tr></thead>
     <tbody>
       {% for loja in lojas %}
-        <tr>
-          <td>{{ loja.nome }}</td>
+        <tr data-loja-id="{{ loja.id }}"
+            data-edit-url="{{ url_for('hora.lojas_editar_apelido', loja_id=loja.id) }}">
+          <td>
+            <span class="apelido-display" role="button" tabindex="0" title="Clique para editar"
+                  style="cursor: pointer; border-bottom: 1px dashed var(--bs-border-color);">
+              <strong>{{ loja.apelido or loja.nome_fantasia or '—' }}</strong>
+              <i class="fas fa-pen ms-1 small text-muted"></i>
+            </span>
+            <span class="apelido-edit d-none">
+              <div class="input-group input-group-sm">
+                <input type="text" class="form-control form-control-sm apelido-input"
+                       value="{{ loja.apelido or '' }}" placeholder="Ex.: Motochefe Bragança">
+                <button type="button" class="btn btn-success btn-sm apelido-salvar">
+                  <i class="fas fa-check"></i>
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm apelido-cancelar">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </span>
+          </td>
+          <td><small>{{ loja.razao_social or loja.nome }}</small></td>
           <td class="chassi-mono">{{ loja.cnpj }}</td>
           <td>{{ loja.cidade or '—' }}{% if loja.uf %}/{{ loja.uf }}{% endif %}</td>
+          <td>
+            {% if loja.situacao_cadastral %}
+              <small class="text-muted">{{ loja.situacao_cadastral }}</small>
+            {% else %}—{% endif %}
+          </td>
           <td>
             {% if loja.ativa %}<span class="badge bg-success">Ativa</span>
             {% else %}<span class="badge bg-secondary">Inativa</span>{% endif %}
           </td>
+          <td>
+            <a href="{{ url_for('hora.lojas_detalhe', loja_id=loja.id) }}"
+               class="btn btn-sm btn-outline-primary" title="Ver todas as informações">
+              <i class="fas fa-eye"></i> Detalhes
+            </a>
+          </td>
         </tr>
       {% else %}
-        <tr><td colspan="4" class="text-center text-muted">Nenhuma loja cadastrada.</td></tr>
+        <tr><td colspan="7" class="text-center text-muted">Nenhuma loja cadastrada.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
+<script>
+(function() {
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
+  document.querySelectorAll('tr[data-loja-id]').forEach(tr => {
+    const display = tr.querySelector('.apelido-display');
+    const edit = tr.querySelector('.apelido-edit');
+    const input = tr.querySelector('.apelido-input');
+    const btnSalvar = tr.querySelector('.apelido-salvar');
+    const btnCancelar = tr.querySelector('.apelido-cancelar');
+    const url = tr.dataset.editUrl;
+
+    function entrarEdicao() {
+      display.classList.add('d-none');
+      edit.classList.remove('d-none');
+      input.focus();
+      input.select();
+    }
+
+    function sairEdicao() {
+      edit.classList.add('d-none');
+      display.classList.remove('d-none');
+    }
+
+    async function salvar() {
+      const apelido = input.value.trim();
+      btnSalvar.disabled = true;
+      try {
+        const fd = new FormData();
+        fd.append('apelido', apelido);
+        const resp = await fetch(url, {
+          method: 'POST',
+          body: fd,
+          headers: { 'X-CSRFToken': getCsrfToken(), 'Accept': 'application/json' },
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          display.querySelector('strong').textContent = apelido || '—';
+          sairEdicao();
+        } else {
+          alert('Erro: ' + (data.mensagem || 'desconhecido'));
+        }
+      } catch (e) {
+        alert('Erro de rede: ' + e.message);
+      } finally {
+        btnSalvar.disabled = false;
+      }
+    }
+
+    display.addEventListener('click', entrarEdicao);
+    display.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); entrarEdicao(); }
+    });
+    btnCancelar.addEventListener('click', sairEdicao);
+    btnSalvar.addEventListener('click', salvar);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); salvar(); }
+      if (e.key === 'Escape') { sairEdicao(); }
+    });
+  });
+})();
+</script>
 {% endblock %}

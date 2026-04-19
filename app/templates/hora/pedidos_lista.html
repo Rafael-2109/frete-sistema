@@ -30,7 +30,7 @@
       <th>#</th>
       <th>Número</th>
       <th>Data</th>
-      <th>CNPJ destino</th>
+      <th>Loja Destino</th>
       <th>Itens</th>
       <th>Status</th>
       <th></th>
@@ -41,7 +41,13 @@
           <td><small>{{ p.id }}</small></td>
           <td><strong>{{ p.numero_pedido }}</strong></td>
           <td>{{ p.data_pedido.strftime('%d/%m/%Y') }}</td>
-          <td class="chassi-mono">{{ p.cnpj_destino }}</td>
+          <td>
+            {% if p.loja_destino %}
+              <strong>{{ p.loja_destino.rotulo_display }}</strong>
+            {% else %}
+              <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> sem loja</span>
+            {% endif %}
+          </td>
           <td>{{ p.itens|length }}</td>
           <td><span class="badge badge-status-{{ p.status|lower }}">{{ p.status }}</span></td>
           <td>

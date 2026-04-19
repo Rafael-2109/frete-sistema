@@ -3,34 +3,226 @@
 {% block hora_content %}
 <h2 class="mb-3">Nova Loja</h2>
 
-<form method="post" class="card p-3" style="max-width: 700px;">
-  <div class="mb-3">
-    <label class="form-label">CNPJ <span class="text-danger">*</span></label>
-    <input type="text" name="cnpj" class="form-control" required
-           placeholder="somente números ou com pontuação">
-  </div>
-  <div class="mb-3">
-    <label class="form-label">Nome <span class="text-danger">*</span></label>
-    <input type="text" name="nome" class="form-control" required>
-  </div>
-  <div class="mb-3">
-    <label class="form-label">Endereço</label>
-    <input type="text" name="endereco" class="form-control">
-  </div>
-  <div class="row">
-    <div class="col-md-8 mb-3">
-      <label class="form-label">Cidade</label>
-      <input type="text" name="cidade" class="form-control">
+<form method="post" id="form-loja" class="card p-3" style="max-width: 900px;">
+  <!-- CNPJ + botão Receita -->
+  <div class="row g-2 mb-3">
+    <div class="col-md-6">
+      <label class="form-label">CNPJ <span class="text-danger">*</span></label>
+      <div class="input-group">
+        <input type="text" name="cnpj" id="input-cnpj" class="form-control chassi-mono" required
+               placeholder="00.000.000/0000-00 ou 14 dígitos"
+               data-consultar-url="{{ url_for('hora.lojas_consultar_cnpj') }}">
+        <button type="button" id="btn-consultar-receita" class="btn btn-outline-primary">
+          <i class="fas fa-search"></i> Buscar na Receita
+        </button>
+      </div>
+      <small class="text-muted">
+        Auto-preenche razão social, endereço, CEP, telefone e mais via ReceitaWS.
+      </small>
     </div>
-    <div class="col-md-4 mb-3">
-      <label class="form-label">UF</label>
-      <input type="text" name="uf" class="form-control" maxlength="2" style="text-transform: uppercase;">
+
+    <div class="col-md-6">
+      <label class="form-label">Apelido (Loja) <span class="text-danger">*</span></label>
+      <input type="text" name="apelido" id="input-apelido" class="form-control" required
+             placeholder="Ex.: Motochefe Bragança">
+      <small class="text-muted">Rótulo interno amigável, usado em menus e listagens.</small>
     </div>
   </div>
 
+  <!-- Feedback receita -->
+  <div id="receita-feedback" class="mb-3" style="display: none;">
+    <div class="alert d-flex align-items-start gap-2 mb-0">
+      <i class="fas mt-1"></i>
+      <div class="flex-grow-1">
+        <strong id="receita-titulo"></strong>
+        <div id="receita-mensagem" class="small"></div>
+      </div>
+    </div>
+  </div>
+
+  <input type="hidden" name="receita_payload" id="receita-payload">
+
+  <!-- Dados fiscais -->
+  <fieldset class="mb-3">
+    <legend class="fs-6 text-muted"><i class="fas fa-id-card"></i> Dados fiscais</legend>
+    <div class="row g-2">
+      <div class="col-md-8">
+        <label class="form-label">Razão Social</label>
+        <input type="text" name="razao_social" id="f-razao-social" class="form-control">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Nome Fantasia</label>
+        <input type="text" name="nome_fantasia" id="f-nome-fantasia" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Inscrição Estadual</label>
+        <input type="text" name="inscricao_estadual" id="f-ie" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Situação</label>
+        <input type="text" id="f-situacao" class="form-control" readonly>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Abertura</label>
+        <input type="text" id="f-abertura" class="form-control" readonly>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Porte</label>
+        <input type="text" id="f-porte" class="form-control" readonly>
+      </div>
+      <div class="col-md-12">
+        <label class="form-label">Atividade Principal</label>
+        <input type="text" id="f-atividade" class="form-control" readonly>
+      </div>
+    </div>
+  </fieldset>
+
+  <!-- Endereço -->
+  <fieldset class="mb-3">
+    <legend class="fs-6 text-muted"><i class="fas fa-map-marker-alt"></i> Endereço</legend>
+    <div class="row g-2">
+      <div class="col-md-2">
+        <label class="form-label">CEP</label>
+        <input type="text" name="cep" id="f-cep" class="form-control">
+      </div>
+      <div class="col-md-7">
+        <label class="form-label">Logradouro</label>
+        <input type="text" name="logradouro" id="f-logradouro" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Número</label>
+        <input type="text" name="numero" id="f-numero" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Complemento</label>
+        <input type="text" name="complemento" id="f-complemento" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Bairro</label>
+        <input type="text" name="bairro" id="f-bairro" class="form-control">
+      </div>
+      <div class="col-md-8">
+        <label class="form-label">Cidade</label>
+        <input type="text" name="cidade" id="f-cidade" class="form-control">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">UF</label>
+        <input type="text" name="uf" id="f-uf" class="form-control" maxlength="2"
+               style="text-transform: uppercase;">
+      </div>
+    </div>
+  </fieldset>
+
+  <!-- Contato -->
+  <fieldset class="mb-3">
+    <legend class="fs-6 text-muted"><i class="fas fa-phone"></i> Contato</legend>
+    <div class="row g-2">
+      <div class="col-md-6">
+        <label class="form-label">Telefone</label>
+        <input type="text" name="telefone" id="f-telefone" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">E-mail</label>
+        <input type="email" name="email" id="f-email" class="form-control">
+      </div>
+    </div>
+  </fieldset>
+
   <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-primary">Salvar</button>
+    <button type="submit" class="btn btn-primary">Salvar loja</button>
     <a href="{{ url_for('hora.lojas_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
+
+<script>
+(function() {
+  const input = document.getElementById('input-cnpj');
+  const btn = document.getElementById('btn-consultar-receita');
+  const feedback = document.getElementById('receita-feedback');
+  const fbAlert = feedback.querySelector('.alert');
+  const fbIcon = feedback.querySelector('i');
+  const fbTitulo = document.getElementById('receita-titulo');
+  const fbMsg = document.getElementById('receita-mensagem');
+  const payload = document.getElementById('receita-payload');
+  const inputApelido = document.getElementById('input-apelido');
+  const url = input.dataset.consultarUrl;
+
+  const campos = {
+    razao_social: document.getElementById('f-razao-social'),
+    nome_fantasia: document.getElementById('f-nome-fantasia'),
+    situacao_cadastral: document.getElementById('f-situacao'),
+    data_abertura: document.getElementById('f-abertura'),
+    porte: document.getElementById('f-porte'),
+    atividade_principal: document.getElementById('f-atividade'),
+    cep: document.getElementById('f-cep'),
+    logradouro: document.getElementById('f-logradouro'),
+    numero: document.getElementById('f-numero'),
+    complemento: document.getElementById('f-complemento'),
+    bairro: document.getElementById('f-bairro'),
+    cidade: document.getElementById('f-cidade'),
+    uf: document.getElementById('f-uf'),
+    telefone: document.getElementById('f-telefone'),
+    email: document.getElementById('f-email'),
+  };
+
+  function setFeedback(tipo, titulo, mensagem) {
+    feedback.style.display = 'block';
+    fbAlert.className = 'alert d-flex align-items-start gap-2 mb-0';
+    const cls = {ok: 'alert-success', erro: 'alert-danger', loading: 'alert-info'}[tipo] || 'alert-info';
+    fbAlert.classList.add(cls);
+    const ico = {ok: 'fa-check-circle', erro: 'fa-times-circle', loading: 'fa-spinner fa-spin'}[tipo] || 'fa-info-circle';
+    fbIcon.className = 'fas ' + ico + ' mt-1';
+    fbTitulo.textContent = titulo;
+    fbMsg.textContent = mensagem || '';
+  }
+
+  function formatarDataBr(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  async function consultar() {
+    const cnpj = input.value.trim();
+    if (!cnpj) { setFeedback('erro', 'CNPJ vazio', 'Digite o CNPJ antes de consultar.'); return; }
+
+    setFeedback('loading', 'Consultando Receita...', 'Aguarde até 10s.');
+    btn.disabled = true;
+    try {
+      const resp = await fetch(url + '?cnpj=' + encodeURIComponent(cnpj));
+      const data = await resp.json();
+      if (!data.ok) {
+        setFeedback('erro', 'Falha na consulta', data.mensagem || 'Erro desconhecido');
+        return;
+      }
+      const d = data.dados;
+      payload.value = JSON.stringify(d);
+
+      // Autopreenche campos
+      for (const [k, el] of Object.entries(campos)) {
+        if (!el) continue;
+        let val = d[k] || '';
+        if (k === 'data_abertura') val = formatarDataBr(val);
+        el.value = val;
+      }
+
+      // Sugere apelido se vazio (usa nome_fantasia ou razao_social)
+      if (!inputApelido.value && (d.nome_fantasia || d.razao_social)) {
+        inputApelido.value = d.nome_fantasia || d.razao_social;
+      }
+
+      setFeedback('ok', 'Dados carregados', d.razao_social || cnpj);
+    } catch (err) {
+      setFeedback('erro', 'Erro de rede', err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  btn.addEventListener('click', consultar);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); consultar(); }
+  });
+})();
+</script>
 {% endblock %}

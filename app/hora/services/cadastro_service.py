@@ -13,11 +13,17 @@ from app.hora.models import HoraLoja, HoraModelo, HoraTabelaPreco
 
 def criar_loja(
     cnpj: str,
-    nome: str,
+    nome: Optional[str] = None,
+    apelido: Optional[str] = None,
     endereco: Optional[str] = None,
     cidade: Optional[str] = None,
     uf: Optional[str] = None,
+    dados_receita: Optional[dict] = None,
 ) -> HoraLoja:
+    """Cria HoraLoja. Se `dados_receita` (output de receitaws_service.consultar_cnpj)
+    for fornecido, autopreenche os campos fiscais e de endereço."""
+    from app.utils.timezone import agora_utc_naive
+
     cnpj_norm = ''.join(c for c in cnpj if c.isdigit())
     if len(cnpj_norm) != 14:
         raise ValueError(f"CNPJ inválido (esperado 14 dígitos): {cnpj}")
@@ -26,14 +32,43 @@ def criar_loja(
     if existente:
         raise ValueError(f"Loja já cadastrada com CNPJ {cnpj_norm}")
 
+    nome_final = (
+        nome
+        or (dados_receita.get('razao_social') if dados_receita else None)
+        or apelido
+        or f'CNPJ {cnpj_norm}'
+    )
+
     loja = HoraLoja(
         cnpj=cnpj_norm,
-        nome=nome,
+        nome=nome_final,
+        apelido=apelido,
         endereco=endereco,
         cidade=cidade,
         uf=uf.upper() if uf else None,
         ativa=True,
     )
+
+    if dados_receita:
+        loja.razao_social = dados_receita.get('razao_social')
+        loja.nome_fantasia = dados_receita.get('nome_fantasia')
+        loja.situacao_cadastral = dados_receita.get('situacao_cadastral')
+        loja.data_abertura = dados_receita.get('data_abertura')
+        loja.porte = dados_receita.get('porte')
+        loja.natureza_juridica = dados_receita.get('natureza_juridica')
+        loja.atividade_principal = dados_receita.get('atividade_principal')
+        loja.logradouro = dados_receita.get('logradouro')
+        loja.numero = dados_receita.get('numero')
+        loja.complemento = dados_receita.get('complemento')
+        loja.bairro = dados_receita.get('bairro')
+        loja.cep = dados_receita.get('cep')
+        # Sobrescreve cidade/uf se vieram da Receita e não foram passados manualmente
+        loja.cidade = loja.cidade or dados_receita.get('cidade')
+        loja.uf = loja.uf or dados_receita.get('uf')
+        loja.telefone = dados_receita.get('telefone')
+        loja.email = dados_receita.get('email')
+        loja.receitaws_consultado_em = agora_utc_naive()
+
     db.session.add(loja)
     db.session.commit()
     return loja

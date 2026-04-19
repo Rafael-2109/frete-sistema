@@ -1,0 +1,173 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>Mapa das Lojas</h2>
+  <div class="d-flex gap-2">
+    <button id="btn-geocodar-todas" class="btn btn-outline-primary" type="button">
+      <i class="fas fa-map-pin"></i> Geocodificar faltantes
+    </button>
+    <a href="{{ url_for('hora.lojas_lista') }}" class="btn btn-secondary">
+      <i class="fas fa-list"></i> Ver lista
+    </a>
+  </div>
+</div>
+
+{% if not tem_google %}
+<div class="alert alert-info d-flex align-items-start gap-2">
+  <i class="fas fa-info-circle mt-1"></i>
+  <div>
+    <strong>Usando OpenStreetMap (Leaflet) + Nominatim.</strong>
+    Para usar Google Maps, configure a variável de ambiente
+    <code>GOOGLE_MAPS_API_KEY</code> no Render.
+  </div>
+</div>
+{% endif %}
+
+<div id="mapa-hora"
+     data-lojas='{{ lojas_json|tojson }}'
+     data-geocodar-url="{{ url_for('hora.lojas_geocodar', loja_id=0).replace('/0/', '/{id}/') }}"
+     style="height: 70vh; min-height: 500px; width: 100%; border-radius: 0.5rem; border: 1px solid var(--bs-border-color);"></div>
+
+<div class="mt-3 small text-muted">
+  <i class="fas fa-circle text-success"></i> Com coordenadas ·
+  <i class="fas fa-circle text-warning"></i> Sem coordenadas (clique no botão acima para geocodificar) ·
+  <i class="fas fa-circle text-danger"></i> Endereço insuficiente
+</div>
+
+{% if tem_google %}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_key }}&libraries=marker&v=weekly" async defer></script>
+{% else %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+{% endif %}
+
+<script>
+(function() {
+  const el = document.getElementById('mapa-hora');
+  const lojas = JSON.parse(el.dataset.lojas);
+  const geocodarUrlTpl = el.dataset.geocodarUrl;
+  const temGoogle = {{ tem_google|tojson }};
+  const btnGeocodar = document.getElementById('btn-geocodar-todas');
+
+  // Brasil center fallback
+  const CENTRO_BR = { lat: -15.78, lng: -47.93 };
+
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
+  async function geocodarLoja(id) {
+    const url = geocodarUrlTpl.replace('{id}', id);
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCsrfToken(), 'Accept': 'application/json' },
+    });
+    return await resp.json();
+  }
+
+  async function geocodarTodas() {
+    btnGeocodar.disabled = true;
+    let ok = 0, erro = 0;
+    for (const l of lojas) {
+      if (l.lat && l.lng) continue;
+      try {
+        const r = await geocodarLoja(l.id);
+        if (r.ok) { ok++; l.lat = r.lat; l.lng = r.lng; }
+        else erro++;
+      } catch (e) { erro++; }
+    }
+    btnGeocodar.disabled = false;
+    alert(`Geocodificação concluída: ${ok} OK, ${erro} com erro.`);
+    if (ok > 0) location.reload();
+  }
+  btnGeocodar.addEventListener('click', geocodarTodas);
+
+  // ═══════════════════════════════ GOOGLE MAPS ═══════════════════════════════
+  function initGoogle() {
+    const comCoords = lojas.filter(l => l.lat && l.lng);
+    const center = comCoords.length
+      ? { lat: comCoords[0].lat, lng: comCoords[0].lng }
+      : CENTRO_BR;
+
+    const map = new google.maps.Map(el, {
+      center,
+      zoom: comCoords.length ? 10 : 4,
+      mapTypeControl: true,
+    });
+
+    const bounds = new google.maps.LatLngBounds();
+    for (const l of comCoords) {
+      const pos = { lat: l.lat, lng: l.lng };
+      const marker = new google.maps.Marker({
+        position: pos,
+        map,
+        title: l.apelido,
+      });
+      const info = new google.maps.InfoWindow({
+        content: `
+          <div style="min-width: 200px;">
+            <strong>${l.apelido}</strong><br>
+            <small>${l.endereco || ''}</small><br>
+            <small>CNPJ: ${l.cnpj}</small>
+            ${l.telefone ? `<br><small>Tel: ${l.telefone}</small>` : ''}
+          </div>
+        `,
+      });
+      marker.addListener('click', () => info.open(map, marker));
+      bounds.extend(pos);
+    }
+    if (comCoords.length > 1) map.fitBounds(bounds);
+  }
+
+  // ═══════════════════════════════ LEAFLET (fallback) ═══════════════════════════════
+  function initLeaflet() {
+    const comCoords = lojas.filter(l => l.lat && l.lng);
+    const center = comCoords.length
+      ? [comCoords[0].lat, comCoords[0].lng]
+      : [CENTRO_BR.lat, CENTRO_BR.lng];
+
+    const map = L.map('mapa-hora').setView(center, comCoords.length ? 10 : 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    const markers = [];
+    for (const l of comCoords) {
+      const m = L.marker([l.lat, l.lng]).addTo(map);
+      m.bindPopup(`
+        <strong>${l.apelido}</strong><br>
+        <small>${l.endereco || ''}</small><br>
+        <small>CNPJ: ${l.cnpj}</small>
+        ${l.telefone ? `<br><small>Tel: ${l.telefone}</small>` : ''}
+      `);
+      markers.push(m);
+    }
+    if (markers.length > 1) {
+      const group = L.featureGroup(markers);
+      map.fitBounds(group.getBounds().pad(0.15));
+    }
+  }
+
+  // Inicializa
+  if (temGoogle) {
+    // Google Maps carrega async. Polling até window.google existir.
+    const poll = setInterval(() => {
+      if (window.google && window.google.maps) {
+        clearInterval(poll);
+        initGoogle();
+      }
+    }, 100);
+    setTimeout(() => clearInterval(poll), 10000);
+  } else {
+    // Leaflet carrega síncrono, mas garantimos que L está definido.
+    if (window.L) initLeaflet();
+    else window.addEventListener('load', initLeaflet);
+  }
+})();
+</script>
+{% endblock %}

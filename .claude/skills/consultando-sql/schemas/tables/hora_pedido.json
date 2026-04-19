@@ -18,6 +18,11 @@
       "nullable": false
     },
     {
+      "name": "loja_destino_id",
+      "type": "integer",
+      "description": "FK → hora_loja.id"
+    },
+    {
       "name": "data_pedido",
       "type": "date",
       "nullable": false
@@ -37,6 +42,10 @@
       "type": "text"
     },
     {
+      "name": "apelido_detectado",
+      "type": "varchar(100)"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
@@ -52,13 +61,19 @@
       "description": "Última atualização"
     }
   ],
+  "foreign_keys": [
+    {
+      "column": "loja_destino_id",
+      "references": "hora_loja.id"
+    }
+  ],
   "indices": [
     {
-      "name": "ix_hora_pedido_numero_pedido",
+      "name": "ix_hora_pedido_status",
       "columns": [
-        "numero_pedido"
+        "status"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "ix_hora_pedido_cnpj_destino",
@@ -68,9 +83,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_status",
+      "name": "ix_hora_pedido_numero_pedido",
       "columns": [
-        "status"
+        "numero_pedido"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_hora_pedido_loja_destino_id",
+      "columns": [
+        "loja_destino_id"
       ],
       "unique": false
     }

@@ -91,6 +91,7 @@
 @import url('./modules/_frota.css') layer(modules);
 @import url('./modules/_dashboard.css') layer(modules);
 @import url('./modules/_scanner.css') layer(modules);
+@import url('./modules/_navbar_brand_themes.css') layer(modules);
 
 /* Utilities - Helper classes */
 @import url('./utilities/_utilities.css') layer(utilities);

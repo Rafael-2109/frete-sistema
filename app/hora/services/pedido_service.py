@@ -15,6 +15,8 @@ def criar_pedido(
     cnpj_destino: str,
     data_pedido: date,
     itens: Iterable[Mapping],
+    loja_destino_id: Optional[int] = None,
+    apelido_detectado: Optional[str] = None,
     arquivo_origem_s3_key: Optional[str] = None,
     observacoes: Optional[str] = None,
     criado_por: Optional[str] = None,
@@ -38,9 +40,17 @@ def criar_pedido(
     if not itens_lista:
         raise ValueError("Pedido sem itens — pelo menos um item é obrigatório")
 
+    # Valida loja_destino_id se fornecido
+    if loja_destino_id:
+        from app.hora.models import HoraLoja
+        if not HoraLoja.query.get(loja_destino_id):
+            raise ValueError(f'loja_destino_id={loja_destino_id} inexistente')
+
     pedido = HoraPedido(
         numero_pedido=numero_pedido,
         cnpj_destino=cnpj_norm,
+        loja_destino_id=loja_destino_id,
+        apelido_detectado=apelido_detectado,
         data_pedido=data_pedido,
         status='ABERTO',
         arquivo_origem_s3_key=arquivo_origem_s3_key,
@@ -100,6 +110,7 @@ def criar_pedido(
 def criar_pedido_a_partir_de_extracao(
     pedido_extraido,
     cnpj_destino_override: Optional[str] = None,
+    loja_destino_id: Optional[int] = None,
     criado_por: Optional[str] = None,
 ):
     """Cria HoraPedido a partir de um PedidoExtraido (output do parser XLSX).
@@ -108,13 +119,19 @@ def criar_pedido_a_partir_de_extracao(
         pedido_extraido: instância de PedidoExtraido.
         cnpj_destino_override: se o parser não achou CNPJ ou achou errado,
             permite forçar (ex.: CNPJ da loja HORA resolvido via lookup).
+        loja_destino_id: OBRIGATÓRIO. Loja HORA que receberá fisicamente as motos.
+            Selecionado manualmente na UI (pode ser auto-sugerido via apelido_detectado).
         criado_por: usuário que importou.
     """
     cnpj = cnpj_destino_override or pedido_extraido.cnpj_destino
     if not cnpj:
         raise ValueError(
-            "CNPJ destino não identificado e nenhum override fornecido. "
-            "Selecione a loja manualmente."
+            "CNPJ destino não identificado e nenhum override fornecido."
+        )
+    if not loja_destino_id:
+        raise ValueError(
+            "Loja de destino é obrigatória. Selecione a loja HORA que vai receber as motos "
+            "(ex: Motochefe Bragança)."
         )
 
     itens = [
@@ -130,6 +147,8 @@ def criar_pedido_a_partir_de_extracao(
     return criar_pedido(
         numero_pedido=pedido_extraido.numero_pedido,
         cnpj_destino=cnpj,
+        loja_destino_id=loja_destino_id,
+        apelido_detectado=pedido_extraido.apelido_detectado,
         data_pedido=pedido_extraido.data_pedido or date.today(),
         itens=itens,
         observacoes='\n'.join(pedido_extraido.avisos) if pedido_extraido.avisos else None,
@@ -140,15 +159,20 @@ def criar_pedido_a_partir_de_extracao(
 def listar_pedidos(
     status: Optional[str] = None,
     limit: int = 100,
-    cnpjs_permitidos=None,
+    lojas_permitidas_ids=None,
+    cnpjs_permitidos=None,  # legacy, mantido por compat
 ) -> List[HoraPedido]:
-    """Lista pedidos. cnpjs_permitidos=None → todos; set/list → filtra por cnpj_destino."""
+    """Lista pedidos. lojas_permitidas_ids=None → todos; [id] → filtra por loja_destino_id."""
     query = HoraPedido.query.order_by(HoraPedido.data_pedido.desc(), HoraPedido.id.desc())
     if status:
         query = query.filter_by(status=status)
-    if cnpjs_permitidos is not None:
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        query = query.filter(HoraPedido.loja_destino_id.in_(list(lojas_permitidas_ids)))
+    elif cnpjs_permitidos is not None:
         if not cnpjs_permitidos:
-            return []  # usuário tem restrição mas nenhum CNPJ casa
+            return []
         query = query.filter(HoraPedido.cnpj_destino.in_(list(cnpjs_permitidos)))
     return query.limit(limit).all()
 

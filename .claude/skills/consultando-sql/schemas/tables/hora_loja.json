@@ -13,13 +13,65 @@
       "nullable": false
     },
     {
+      "name": "apelido",
+      "type": "varchar(100)"
+    },
+    {
       "name": "nome",
       "type": "varchar(100)",
       "nullable": false
     },
     {
-      "name": "endereco",
+      "name": "razao_social",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "nome_fantasia",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "inscricao_estadual",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "situacao_cadastral",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "data_abertura",
+      "type": "date"
+    },
+    {
+      "name": "porte",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "natureza_juridica",
       "type": "varchar(255)"
+    },
+    {
+      "name": "atividade_principal",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "logradouro",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "complemento",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "bairro",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cep",
+      "type": "varchar(9)"
     },
     {
       "name": "cidade",
@@ -30,10 +82,42 @@
       "type": "varchar(2)"
     },
     {
+      "name": "telefone",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "email",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "endereco",
+      "type": "varchar(255)"
+    },
+    {
       "name": "ativa",
       "type": "boolean",
       "nullable": false,
       "default": true
+    },
+    {
+      "name": "receitaws_consultado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "latitude",
+      "type": "numeric(10,7)"
+    },
+    {
+      "name": "longitude",
+      "type": "numeric(10,7)"
+    },
+    {
+      "name": "geocodado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "geocoding_provider",
+      "type": "varchar(20)"
     },
     {
       "name": "criado_em",
@@ -48,6 +132,13 @@
     }
   ],
   "indices": [
+    {
+      "name": "ix_hora_loja_apelido",
+      "columns": [
+        "apelido"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_hora_loja_cnpj",
       "columns": [

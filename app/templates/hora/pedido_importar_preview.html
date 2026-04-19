@@ -17,44 +17,46 @@
   <input type="hidden" name="token" value="{{ token }}">
 
   <div class="card p-3 mb-3">
-    <h5>Loja destino (via lookup de CNPJ)</h5>
+    <h5>Loja destino</h5>
     <p class="mb-2"><small class="text-muted">{{ msg_lookup }}</small></p>
 
     <div class="mb-2">
-      <strong>CNPJs encontrados no arquivo:</strong>
-      {% if extracao.cnpjs_candidatos %}
-        {% for c in extracao.cnpjs_candidatos %}
-          <code class="me-2">{{ c }}</code>
-        {% endfor %}
+      <strong>Texto detectado no cabeçalho:</strong>
+      {% if extracao.apelido_detectado %}
+        <code class="me-2">{{ extracao.apelido_detectado }}</code>
       {% else %}
         <span class="text-muted">nenhum</span>
+      {% endif %}
+      {% if extracao.cnpjs_candidatos %}
+        <br><small class="text-muted">
+          CNPJs no arquivo ({{ extracao.cnpjs_candidatos|length }}):
+          {% for c in extracao.cnpjs_candidatos %}<code class="me-1">{{ c }}</code>{% endfor %}
+          — típico vir o CNPJ da matriz (Tatuapé).
+        </small>
       {% endif %}
     </div>
 
     <div class="row g-2">
       <div class="col-md-8">
-        <label class="form-label">Loja HORA (CNPJ destino)</label>
-        <select name="cnpj_loja" class="form-select" required>
-          {% if cnpj_resolvido %}
-            {% for loja in lojas_ativas %}
-              <option value="{{ loja.cnpj }}" {% if loja.cnpj == cnpj_resolvido %}selected{% endif %}>
-                {{ loja.nome }} — {{ loja.cnpj }}{% if loja.cnpj == cnpj_resolvido %} (resolvida){% endif %}
-              </option>
-            {% endfor %}
-          {% else %}
-            <option value="">— Selecione a loja manualmente —</option>
-            {% for loja in lojas_ativas %}
-              <option value="{{ loja.cnpj }}">{{ loja.nome }} — {{ loja.cnpj }}</option>
-            {% endfor %}
-          {% endif %}
+        <label class="form-label">
+          Loja HORA (destino físico) <span class="text-danger">*</span>
+        </label>
+        <select name="loja_destino_id" class="form-select" required>
+          <option value="">— Selecione a loja —</option>
+          {% for loja in lojas_ativas %}
+            <option value="{{ loja.id }}"
+                    {% if loja.id == loja_sugerida_id %}selected{% endif %}>
+              {{ loja.rotulo_display }}{% if loja.cidade %} ({{ loja.cidade }}){% endif %}{% if loja.id == loja_sugerida_id %} — sugerida{% endif %}
+            </option>
+          {% endfor %}
         </select>
       </div>
       <div class="col-md-4 d-flex align-items-end">
         <div class="text-muted small">
-          {% if cnpj_resolvido %}
-            <i class="fas fa-check-circle text-success"></i> Resolvido automaticamente
+          {% if loja_sugerida_id %}
+            <i class="fas fa-check-circle text-success"></i> Auto-sugerida via cabeçalho
           {% else %}
-            <i class="fas fa-exclamation-triangle text-warning"></i> Seleção manual necessária
+            <i class="fas fa-exclamation-triangle text-warning"></i> Selecione manualmente
           {% endif %}
         </div>
       </div>
