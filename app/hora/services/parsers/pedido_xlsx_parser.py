@@ -32,10 +32,17 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
+from app import db
+
 logger = logging.getLogger(__name__)
 
 
 # ----------------------------- Config -----------------------------
+
+# CNPJ da matriz HORA (Tatuapé). Todos os pedidos/NFs da HORA são emitidos para
+# este CNPJ — a loja física de destino é identificada por apelido/nome. Sua
+# presença no XLSX serve como triagem: se não aparece, não é pedido HORA.
+CNPJ_MATRIZ_HORA = '62634044000120'
 
 ALIASES_CAMPO = {
     'modelo': ['PRODUTO', 'MODELO', 'DESCRICAO'],
@@ -74,6 +81,9 @@ class PedidoExtraido:
     cliente_nome: Optional[str]
     cidade: Optional[str]
     uf: Optional[str]
+    apelido_detectado: Optional[str] = None
+    # Texto bruto capturado do cabeçalho que parece identificar a loja destino
+    # (ex: "HORA BRAGANÇA", "MOTOCHEFE TATUAPÉ"). Usado p/ sugerir loja_destino.
     cnpjs_candidatos: List[str] = field(default_factory=list)
     itens: List[ItemPedidoExtraido] = field(default_factory=list)
     avisos: List[str] = field(default_factory=list)
@@ -226,8 +236,21 @@ def _extrair_metadados(linhas_antes_header: List[Tuple], nome_arquivo: Optional[
         'cliente_nome': None,
         'cidade': None,
         'uf': None,
+        'apelido_detectado': None,
         'cnpjs_candidatos': [],  # todos CNPJs encontrados (ordem de aparição)
     }
+
+    # Padrões de apelido de loja (genéricos — match contra banco faz refinamento).
+    # "HORA BRAGANÇA", "MOTOCHEFE TATUAPÉ", "LOJA PRAIA GRANDE", etc.
+    re_apelido = re.compile(
+        r'\b(?:HORA|MOTOCHEFE|LOJA|FRANQUIA)\s+([A-Z\u00C0-\u00FF][A-Z\u00C0-\u00FF\s]+?)(?:\s*[-—|,]|\s*$)',
+        re.IGNORECASE,
+    )
+    # Também captura "BRAGANÇA" isolado em linhas tipo "OPERAÇÃO SP - LOJA FRANQUIA"
+    re_cidade_known = re.compile(
+        r'\b(BRAGAN[ÇC]A|TATUAP[EÉ]|PRAIA\s+GRANDE|SANTOS|S[AÃ]O\s+PAULO)\b',
+        re.IGNORECASE,
+    )
 
     # CNPJ formatado (com . / -) OU raw 14 dígitos puros.
     # O raw pega número do pedido com 14+ dígitos? Não — número de pedido tem <10 dígitos
@@ -305,6 +328,27 @@ def _extrair_metadados(linhas_antes_header: List[Tuple], nome_arquivo: Optional[
                 m = re_uf.search(texto)
                 if m:
                     meta['uf'] = m.group(1).upper()
+
+            # Detecta apelido/cidade-loja no cabeçalho (prioridade: cidade conhecida)
+            if not meta['apelido_detectado']:
+                m = re_cidade_known.search(texto)
+                if m:
+                    meta['apelido_detectado'] = m.group(1).upper()
+                else:
+                    m2 = re_apelido.search(texto)
+                    if m2:
+                        candidato = m2.group(1).strip().rstrip(':').strip()
+                        # Rejeita termos genéricos
+                        if (2 < len(candidato) < 50 and
+                                candidato.upper() not in {'FRANQUIA', 'MATRIZ', 'FILIAL', 'LOJA'}):
+                            meta['apelido_detectado'] = candidato.upper()
+
+    # Fallback: tenta extrair apelido do nome do arquivo ("13.04H HORA BRAGANÇA" → "BRAGANÇA")
+    if not meta['apelido_detectado'] and nome_arquivo:
+        base = re.sub(r'\.xlsx?$', '', nome_arquivo, flags=re.IGNORECASE)
+        m = re_cidade_known.search(base)
+        if m:
+            meta['apelido_detectado'] = m.group(1).upper()
 
     # Fallbacks
     if not meta['numero_pedido'] and nome_arquivo:
@@ -469,12 +513,63 @@ def parse_pedido_xlsx(
         cliente_nome=meta.get('cliente_nome'),
         cidade=meta.get('cidade'),
         uf=meta.get('uf'),
+        apelido_detectado=meta.get('apelido_detectado'),
         cnpjs_candidatos=meta.get('cnpjs_candidatos', []),
         itens=itens,
         avisos=avisos,
         header_row=header_idx + 1,
         metodo_extracao='REGEX',
     )
+
+
+def resolver_loja_por_apelido(apelido_detectado: Optional[str]) -> Tuple[Optional[int], str]:
+    """Tenta casar apelido detectado no header do XLSX contra HoraLoja.apelido/nome.
+
+    Match case-insensitive contra apelido, nome_fantasia, razao_social e cidade.
+    Retorna (loja_id, mensagem).
+    """
+    if not apelido_detectado:
+        return None, 'Nenhum apelido/cidade identificado no cabeçalho.'
+
+    from app.hora.models import HoraLoja
+    alvo = apelido_detectado.upper().strip()
+
+    # Busca em ordem de prioridade: apelido → nome_fantasia → razão → cidade
+    for campo in (HoraLoja.apelido, HoraLoja.nome_fantasia,
+                  HoraLoja.razao_social, HoraLoja.nome, HoraLoja.cidade):
+        candidatas = (
+            HoraLoja.query
+            .filter(HoraLoja.ativa.is_(True))
+            .filter(db.func.upper(campo).like(f'%{alvo}%'))
+            .all()
+        )
+        if len(candidatas) == 1:
+            loja = candidatas[0]
+            return loja.id, f'Loja sugerida: {loja.rotulo_display} (match em {campo.key})'
+        elif len(candidatas) > 1:
+            nomes = ', '.join(l.rotulo_display for l in candidatas[:3])
+            return None, f'{len(candidatas)} lojas casam com "{alvo}": {nomes}... — selecione manualmente.'
+
+    return None, f'Nenhuma loja ativa casa com "{alvo}". Cadastre a loja ou selecione manualmente.'
+
+
+def cnpj_matriz_presente(cnpjs_candidatos: List[str]) -> bool:
+    """Triagem: verifica se o CNPJ da matriz HORA (Tatuapé) aparece no XLSX.
+
+    Todos os pedidos legítimos da HORA são emitidos para o CNPJ da matriz —
+    a loja física de entrega é identificada separadamente por nome/apelido.
+    A ausência deste CNPJ indica que o arquivo NÃO é pedido HORA (provavelmente
+    foi aberto da pasta errada ou é pedido de outro cliente).
+
+    Args:
+        cnpjs_candidatos: lista de CNPJs encontrados no cabeçalho do XLSX.
+
+    Returns:
+        True se o CNPJ da matriz HORA está entre os candidatos.
+    """
+    if not cnpjs_candidatos:
+        return False
+    return CNPJ_MATRIZ_HORA in cnpjs_candidatos
 
 
 def resolver_loja_por_cnpj(cnpjs_candidatos: List[str]) -> Tuple[Optional[str], str]:

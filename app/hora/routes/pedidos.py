@@ -13,10 +13,12 @@ from app.hora.decorators import require_lojas as login_required
 from app.hora.models import HoraLoja, HoraPedido, HoraNfEntrada
 from app.hora.routes import hora_bp
 from app.hora.services import pedido_service
-from app.hora.services.auth_helper import cnpjs_lojas_permitidas, usuario_tem_acesso_a_loja
+from app.hora.services.auth_helper import lojas_permitidas_ids, usuario_tem_acesso_a_loja
 from app.hora.services.parsers import (
+    CNPJ_MATRIZ_HORA,
+    cnpj_matriz_presente,
     parse_pedido_xlsx,
-    resolver_loja_por_cnpj,
+    resolver_loja_por_apelido,
     PedidoParseError,
 )
 
@@ -28,7 +30,7 @@ def pedidos_lista():
     pedidos = pedido_service.listar_pedidos(
         status=status,
         limit=200,
-        cnpjs_permitidos=cnpjs_lojas_permitidas(),
+        lojas_permitidas_ids=lojas_permitidas_ids(),
     )
     return render_template('hora/pedidos_lista.html', pedidos=pedidos, filtro_status=status)
 
@@ -37,9 +39,8 @@ def pedidos_lista():
 @login_required
 def pedidos_detalhe(pedido_id: int):
     pedido = HoraPedido.query.get_or_404(pedido_id)
-    # Autorização por loja: se restrito, checar que cnpj_destino bate
-    cnpjs_ok = cnpjs_lojas_permitidas()
-    if cnpjs_ok is not None and pedido.cnpj_destino not in cnpjs_ok:
+    # Autorização por loja_destino
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
         from flask import abort
         abort(403)
     nfs_vinculadas = HoraNfEntrada.query.filter_by(pedido_id=pedido.id).all()
@@ -120,6 +121,7 @@ def _serializar_extracao(pedido_extraido) -> str:
         'numero_pedido': pedido_extraido.numero_pedido,
         'cnpj_destino': pedido_extraido.cnpj_destino,
         'cnpjs_candidatos': pedido_extraido.cnpjs_candidatos,
+        'apelido_detectado': pedido_extraido.apelido_detectado,
         'data_pedido': pedido_extraido.data_pedido.isoformat() if pedido_extraido.data_pedido else None,
         'cliente_nome': pedido_extraido.cliente_nome,
         'cidade': pedido_extraido.cidade,
@@ -161,6 +163,7 @@ def _deserializar_extracao(token: str):
         numero_pedido=payload['numero_pedido'],
         cnpj_destino=payload['cnpj_destino'],
         cnpjs_candidatos=payload.get('cnpjs_candidatos', []),
+        apelido_detectado=payload.get('apelido_detectado'),
         data_pedido=date.fromisoformat(payload['data_pedido']) if payload['data_pedido'] else None,
         cliente_nome=payload['cliente_nome'],
         cidade=payload['cidade'],
@@ -190,8 +193,24 @@ def pedidos_importar_xlsx():
         flash(f'Erro ao parsear: {exc}', 'danger')
         return render_template('hora/pedido_importar.html')
 
-    # Resolve loja via lookup de CNPJ
-    cnpj_resolvido, msg_lookup = resolver_loja_por_cnpj(extracao.cnpjs_candidatos)
+    # Triagem: o CNPJ da matriz HORA (Tatuapé) precisa aparecer no cabeçalho do
+    # XLSX. Se não aparece, o arquivo provavelmente não é pedido HORA — evita
+    # que um pedido de outro cliente seja importado por engano.
+    if not cnpj_matriz_presente(extracao.cnpjs_candidatos):
+        cnpjs_encontrados = (
+            ', '.join(extracao.cnpjs_candidatos)
+            if extracao.cnpjs_candidatos else 'nenhum'
+        )
+        flash(
+            f'Arquivo não parece ser pedido HORA. O CNPJ da matriz '
+            f'({CNPJ_MATRIZ_HORA}) não foi encontrado no cabeçalho do XLSX. '
+            f'CNPJs encontrados: {cnpjs_encontrados}.',
+            'danger',
+        )
+        return render_template('hora/pedido_importar.html')
+
+    # Todas as NFs/pedidos HORA usam mesmo CNPJ (matriz). Resolução correta = via apelido.
+    loja_sugerida_id, msg_lookup = resolver_loja_por_apelido(extracao.apelido_detectado)
 
     lojas_ativas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.nome).all()
 
@@ -201,7 +220,7 @@ def pedidos_importar_xlsx():
         extracao=extracao,
         token=token,
         nome_arquivo=arquivo.filename,
-        cnpj_resolvido=cnpj_resolvido,
+        loja_sugerida_id=loja_sugerida_id,
         msg_lookup=msg_lookup,
         lojas_ativas=lojas_ativas,
     )
@@ -212,27 +231,26 @@ def pedidos_importar_xlsx():
 def pedidos_importar_xlsx_confirmar():
     """Confirma a importação: cria HoraPedido a partir da extração preservada."""
     token = request.form.get('token')
-    cnpj_loja = (request.form.get('cnpj_loja') or '').strip()
+    loja_destino_id_str = (request.form.get('loja_destino_id') or '').strip()
 
     if not token:
         flash('Token de extração ausente.', 'danger')
         return redirect(url_for('hora.pedidos_importar_xlsx'))
+    if not loja_destino_id_str.isdigit():
+        flash('Selecione a loja de destino.', 'danger')
+        return redirect(url_for('hora.pedidos_importar_xlsx'))
 
     try:
         extracao = _deserializar_extracao(token)
-        cnpj_override = None
-        if cnpj_loja:
-            cnpj_norm = ''.join(c for c in cnpj_loja if c.isdigit())
-            if len(cnpj_norm) == 14:
-                cnpj_override = cnpj_norm
 
         pedido = pedido_service.criar_pedido_a_partir_de_extracao(
             pedido_extraido=extracao,
-            cnpj_destino_override=cnpj_override,
+            loja_destino_id=int(loja_destino_id_str),
             criado_por=current_user.nome if hasattr(current_user, 'nome') else None,
         )
         flash(
-            f'Pedido {pedido.numero_pedido} criado com {len(pedido.itens)} item(ns).',
+            f'Pedido {pedido.numero_pedido} criado com {len(pedido.itens)} item(ns) '
+            f'para {pedido.loja_destino.rotulo_display}.',
             'success',
         )
         return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))

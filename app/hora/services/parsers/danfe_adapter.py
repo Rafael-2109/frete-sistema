@@ -178,6 +178,11 @@ def parse_danfe_to_hora_payload(
             'data_emissao': data_emissao,
             'valor_total': valor_total_dec,
             'parser_usado': 'danfe_pdf_parser_v1',
+            # Soma da quantidade declarada nos itens produto com NCM 8711*.
+            # Comparado com len(itens) no detalhe da NF para sinalizar
+            # inconsistencia do DANFE (ex: NF 36928 declarou MT-GIGA UN=1
+            # mas listou 2 chassis nos Dados Adicionais).
+            'qtd_declarada_itens': resultado.get('qtd_declarada_itens_veiculo'),
         },
         'itens': itens,
         'meta': {

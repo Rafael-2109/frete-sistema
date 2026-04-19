@@ -19,6 +19,7 @@ def importar_danfe_pdf(
     pdf_bytes: bytes,
     nome_arquivo_origem: Optional[str] = None,
     pedido_id_sugerido: Optional[int] = None,
+    loja_destino_id: Optional[int] = None,
     criado_por: Optional[str] = None,
 ) -> HoraNfEntrada:
     """Parseia PDF e cria HoraNfEntrada + itens + get-or-create de motos.
@@ -55,8 +56,22 @@ def importar_danfe_pdf(
     pedido_id_vinculo = pedido_id_sugerido
     if pedido_id_vinculo:
         # Valida existência
-        if not HoraPedido.query.get(pedido_id_vinculo):
+        pedido = HoraPedido.query.get(pedido_id_vinculo)
+        if not pedido:
             pedido_id_vinculo = None
+        elif loja_destino_id is None and pedido.loja_destino_id:
+            # Herda loja_destino do pedido vinculado
+            loja_destino_id = pedido.loja_destino_id
+
+    # Valida loja_destino
+    if not loja_destino_id:
+        raise ValueError(
+            'Loja de destino é obrigatória para NF. Todas as NFs da HORA são emitidas '
+            'para o CNPJ da matriz; selecione a loja física que receberá as motos.'
+        )
+    from app.hora.models import HoraLoja
+    if not HoraLoja.query.get(loja_destino_id):
+        raise ValueError(f'loja_destino_id={loja_destino_id} inexistente')
 
     nf = HoraNfEntrada(
         chave_44=nf_data['chave_44'],
@@ -65,11 +80,13 @@ def importar_danfe_pdf(
         cnpj_emitente=nf_data['cnpj_emitente'],
         nome_emitente=nf_data.get('nome_emitente'),
         cnpj_destinatario=nf_data.get('cnpj_destinatario') or '',
+        loja_destino_id=loja_destino_id,
         data_emissao=nf_data['data_emissao'],
         valor_total=nf_data['valor_total'],
         pedido_id=pedido_id_vinculo,
         parser_usado=nf_data.get('parser_usado', 'danfe_pdf_parser_v1'),
         parseada_em=agora_utc_naive(),
+        qtd_declarada_itens=nf_data.get('qtd_declarada_itens'),
     )
     db.session.add(nf)
     db.session.flush()
@@ -113,12 +130,16 @@ def vincular_nf_a_pedido(nf_id: int, pedido_id: int) -> None:
     atualizar_status_pedido_por_faturamento(pedido_id)
 
 
-def listar_nfs_entrada(limit: int = 100, cnpjs_permitidos=None):
-    """Lista NFs de entrada. cnpjs_permitidos=None → todas; filtra por cnpj_destinatario."""
+def listar_nfs_entrada(limit: int = 100, lojas_permitidas_ids=None, cnpjs_permitidos=None):
+    """Lista NFs de entrada. lojas_permitidas_ids=None → todas; filtra por loja_destino_id."""
     query = HoraNfEntrada.query.order_by(
         HoraNfEntrada.data_emissao.desc(), HoraNfEntrada.id.desc()
     )
-    if cnpjs_permitidos is not None:
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        query = query.filter(HoraNfEntrada.loja_destino_id.in_(list(lojas_permitidas_ids)))
+    elif cnpjs_permitidos is not None:
         if not cnpjs_permitidos:
             return []
         query = query.filter(HoraNfEntrada.cnpj_destinatario.in_(list(cnpjs_permitidos)))

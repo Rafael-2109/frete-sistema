@@ -1415,12 +1415,25 @@ class DanfePDFParser:
             )
             return None
 
-    def _extrair_veiculos_llm(self, model: str, texto_secao: str) -> Optional[List[Dict]]:
+    def _extrair_veiculos_llm(
+        self,
+        model: str,
+        texto_secao: str,
+        qtd_esperada: Optional[int] = None,
+        ja_extraidos: Optional[List[Dict]] = None,
+    ) -> Optional[List[Dict]]:
         """Extrai dados de veiculos via LLM.
 
         Args:
             model: Model ID (Haiku ou Sonnet)
             texto_secao: Texto da secao DADOS ADICIONAIS
+            qtd_esperada: (opcional) numero de veiculos esperados. Quando
+                informado, o prompt orienta o LLM a retornar exatamente essa
+                quantidade (aviso de que alguns podem estar escondidos atras
+                de rotulos).
+            ja_extraidos: (opcional) lista de veiculos ja extraidos em
+                tentativa anterior. Usada para apontar ao LLM quais chassis
+                faltam (anti-exemplo).
 
         Returns:
             Lista de dicts com chassi/cor/modelo/numero_motor/ano_modelo ou None
@@ -1429,29 +1442,65 @@ class DanfePDFParser:
         if not client:
             return None
 
+        reforco = ''
+        if qtd_esperada is not None:
+            reforco = (
+                f"\n\nATENÇÃO — CONTAGEM OBRIGATÓRIA:\n"
+                f"A NF declara {qtd_esperada} veículo(s) no total (soma das "
+                f"quantidades dos itens com NCM 8711*). Você DEVE retornar "
+                f"EXATAMENTE {qtd_esperada} veículo(s). Se encontrar menos, "
+                f"leia o texto novamente com atenção — veículos podem estar "
+                f"em linhas que começam com rótulos (ex: \"Inf. Contribuinte:\") "
+                f"ou misturados em parágrafos. Cada linha com um chassi é um "
+                f"veículo.\n"
+            )
+            if ja_extraidos:
+                chassis_ja = [v.get('chassi') for v in ja_extraidos if v.get('chassi')]
+                if chassis_ja:
+                    reforco += (
+                        f"Em tentativa anterior, estes chassis FORAM extraídos: "
+                        f"{chassis_ja}. Inclua-os de novo E encontre os "
+                        f"{qtd_esperada - len(chassis_ja)} restante(s) que "
+                        f"faltaram.\n"
+                    )
+
         prompt = (
             "Extraia informações de veículos do texto abaixo (seção DADOS ADICIONAIS "
             "de uma Nota Fiscal brasileira).\n\n"
             "Para cada veículo/unidade encontrado, extraia:\n"
             "- modelo: nome/modelo do veículo (ex: \"JOY SUPER\", \"X11-MINI\", "
-            "\"X11-MINI (RP)\", \"MIA\")\n"
+            "\"X11-MINI (RP)\", \"MIA\", \"RET\", \"JET MAX\")\n"
             "- chassi: código do chassi (alfanumérico)\n"
-            "- numero_motor: número do motor, se presente (alfanumérico, "
-            "diferente do chassi)\n"
+            "- numero_motor: número do motor, se presente (pode ser alfanumérico "
+            "OU puramente numérico, diferente do chassi)\n"
             "- cor: cor do veículo (ex: \"AZUL\", \"BRANCO\", \"PRETA\")\n"
             "- ano_modelo: ano/modelo se presente (ex: \"2025/MOD 2025\")\n\n"
             "REGRAS:\n"
-            "- Nomes de modelo são palavras curtas (DOT, JET, MIA, JOY SUPER, "
-            "X11-MINI, X11-MINI (RP))\n"
+            "- Nomes de modelo são palavras curtas (DOT, JET, MIA, RET, JET MAX, "
+            "JOY SUPER, X11-MINI, X11-MINI (RP))\n"
             "- Códigos alfanuméricos longos (10+ chars misturando letras e "
             "números como LA25860V1000W2087) são chassi ou motor, NUNCA modelo\n"
+            "- Sequências longas de dígitos puros (10+ dígitos como "
+            "\"172922506731512\") também podem ser número de motor, NUNCA modelo\n"
             "- Especificações como \"1000WATTS\" NÃO são número de motor\n"
-            "- Exemplo: 'DOT LA25860V1000W2087 QS60V30H25111101233 CINZA' → "
+            "- Rótulos como \"Inf. Contribuinte:\", \"Informações Complementares\", "
+            "\"Inf. Complementar:\" NÃO são modelos — são cabeçalhos de seção. "
+            "Ignore-os e extraia o veículo que vem logo em seguida na mesma linha "
+            "ou nas próximas linhas.\n"
+            "- Exemplo 1: 'DOT LA25860V1000W2087 QS60V30H25111101233 CINZA' → "
             "modelo=DOT, chassi=LA25860V1000W2087, numero_motor="
             "QS60V30H25111101233, cor=CINZA\n"
+            "- Exemplo 2: 'Inf. Contribuinte: RET 172922506731512 "
+            "LM60V1000W2025062100444 CINZA' → modelo=RET, "
+            "numero_motor=172922506731512, chassi=LM60V1000W2025062100444, "
+            "cor=CINZA (o rótulo \"Inf. Contribuinte:\" é ignorado)\n"
+            "- Exemplo 3: 'JET MAX 1000W LYDAE393XT1204195 CINZA' → "
+            "modelo=JET MAX, chassi=LYDAE393XT1204195, cor=CINZA (1000W é "
+            "especificação de potência, não motor)\n"
             "- Ignore endereços, telefones, CEPs, CNPJs e textos informativos\n"
             "- Se não houver informações de veículos, retorne []\n"
-            "- Retorne APENAS um array JSON válido, sem texto adicional\n\n"
+            "- Retorne APENAS um array JSON válido, sem texto adicional\n"
+            f"{reforco}\n"
             f"Texto:\n{texto_secao}"
         )
 
@@ -1504,11 +1553,48 @@ class DanfePDFParser:
 
         return None
 
+    def _quantidade_esperada_veiculos(self) -> Optional[int]:
+        """Soma a quantidade dos itens de produto com NCM de veiculos (8711*).
+
+        Usada como gabarito para validar extracao do LLM. Se o texto de DADOS
+        ADICIONAIS contem N chassis mas esperamos M > N, o LLM ignorou algum
+        (ex: moto "RET" escondida atras de rotulo "Inf. Contribuinte:").
+
+        Returns:
+            Quantidade total de veiculos esperados (int) ou None se nao
+            conseguir determinar (itens sem NCM/quantidade).
+        """
+        try:
+            itens = self.get_itens_produto()
+        except Exception as e:
+            logger.debug("quantidade_esperada: falha ao ler itens: %s", e)
+            return None
+        if not itens:
+            return None
+        total = 0
+        algum_ncm_veiculo = False
+        for item in itens:
+            ncm = (item.get('ncm') or '').replace('.', '').strip()
+            qtd = item.get('quantidade')
+            if ncm.startswith('8711') and qtd:
+                algum_ncm_veiculo = True
+                try:
+                    total += int(round(float(qtd)))
+                except (TypeError, ValueError):
+                    continue
+        return total if algum_ncm_veiculo and total > 0 else None
+
     def get_veiculos_info(self) -> List[Dict]:
         """Extrai informacoes de veiculos (chassi, motor, cor) da secao
         DADOS ADICIONAIS / INFORMACOES COMPLEMENTARES via LLM.
 
-        Pipeline: gate rapido → Haiku → Sonnet (fallback)
+        Pipeline: gate rapido → Haiku → (se incompleto) Sonnet
+        → (se ainda incompleto) Sonnet com prompt reforcado.
+
+        Validacao de completude: compara len(resultado) com a soma de
+        `quantidade` dos itens com NCM 8711*. Se o LLM retornou MENOS
+        veiculos que o esperado, escala mesmo que Haiku tenha retornado algo
+        — preferimos gastar mais tokens a perder dados de moto.
 
         Gate: NCM 8711* ou keyword CHASSI no texto. Se ausentes, retorna []
         sem chamada API (NFs de alimentos, eletronicos, etc.).
@@ -1524,16 +1610,57 @@ class DanfePDFParser:
         if not texto_secao or len(texto_secao.strip()) < 10:
             return []
 
-        # Camada 1: Haiku (rapido, barato)
-        resultado = self._extrair_veiculos_llm(self.HAIKU_MODEL, texto_secao)
-        if resultado:
-            return resultado
+        esperado = self._quantidade_esperada_veiculos()
 
-        # Camada 2: Sonnet (fallback)
-        logger.info("Haiku nao extraiu veiculos — tentando Sonnet")
+        def _completo(lst: Optional[List[Dict]]) -> bool:
+            if not lst:
+                return False
+            if esperado is None:
+                return True
+            return len(lst) >= esperado
+
+        melhor: Optional[List[Dict]] = None
+
+        # Camada 1: Haiku
+        resultado = self._extrair_veiculos_llm(self.HAIKU_MODEL, texto_secao)
+        if _completo(resultado):
+            return resultado or []
+        melhor = resultado if (resultado and (not melhor or len(resultado) > len(melhor))) else melhor
+
+        logger.info(
+            "Haiku retornou %s veiculo(s) — esperado %s. Escalando para Sonnet",
+            len(resultado) if resultado else 0, esperado,
+        )
+
+        # Camada 2: Sonnet (mesmo prompt)
         resultado = self._extrair_veiculos_llm(self.SONNET_MODEL, texto_secao)
-        if resultado:
-            return resultado
+        if _completo(resultado):
+            return resultado or []
+        melhor = resultado if (resultado and (not melhor or len(resultado) > len(melhor))) else melhor
+
+        # Camada 3: Sonnet com prompt reforcado (informa esperado e chassis ja
+        # extraidos como anti-exemplo para forcar extracao dos que faltam).
+        if esperado is not None and (not melhor or len(melhor) < esperado):
+            logger.info(
+                "Sonnet retornou %s — ainda < %s esperados. Tentativa reforcada",
+                len(melhor) if melhor else 0, esperado,
+            )
+            resultado = self._extrair_veiculos_llm(
+                self.SONNET_MODEL, texto_secao,
+                qtd_esperada=esperado,
+                ja_extraidos=melhor or [],
+            )
+            if _completo(resultado):
+                return resultado or []
+            melhor = resultado if (resultado and (not melhor or len(resultado) > len(melhor))) else melhor
+
+        if melhor:
+            if esperado is not None and len(melhor) < esperado:
+                logger.warning(
+                    "Extracao incompleta apos fallback: %d/%d veiculo(s)",
+                    len(melhor), esperado,
+                )
+            return melhor
 
         return []
 
@@ -1739,6 +1866,10 @@ class DanfePDFParser:
         # --- Itens e veiculos (sempre via mecanismo proprio) ---
         resultado['itens'] = self.get_itens_produto()
         resultado['veiculos'] = self.get_veiculos_info()
+        # Soma da quantidade dos itens com NCM de veiculos (8711*). Serve
+        # como gabarito para sinalizar divergencia entre itens declarados
+        # e chassis efetivamente listados nos Dados Adicionais.
+        resultado['qtd_declarada_itens_veiculo'] = self._quantidade_esperada_veiculos()
         resultado['confianca'] = round(self.confianca, 2)
 
         # Tentar parsear data

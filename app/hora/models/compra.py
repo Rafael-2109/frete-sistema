@@ -14,7 +14,14 @@ class HoraPedido(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     numero_pedido = db.Column(db.String(50), nullable=False, unique=True, index=True)
     cnpj_destino = db.Column(db.String(20), nullable=False, index=True)
-    # CNPJ para o qual a Motochefe deve faturar (uma das lojas HORA).
+    # CNPJ emitido (tipicamente MATRIZ Tatuapé — todos compartilham mesmo CNPJ).
+    # A loja de destino REAL é indicada em loja_destino_id (abaixo).
+    loja_destino_id = db.Column(
+        db.Integer, db.ForeignKey('hora_loja.id'), nullable=True, index=True,
+    )
+    # FK para a loja HORA que receberá fisicamente as motos.
+    # Selecionado manualmente no import (ou auto-sugerido via match do apelido no header).
+
     data_pedido = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='ABERTO', index=True)
     # Valores: ABERTO, PARCIALMENTE_FATURADO, FATURADO, CANCELADO
@@ -22,6 +29,10 @@ class HoraPedido(db.Model):
     arquivo_origem_s3_key = db.Column(db.String(500), nullable=True)
     # Excel original (quando importado do WhatsApp).
     observacoes = db.Column(db.Text, nullable=True)
+    apelido_detectado = db.Column(db.String(100), nullable=True)
+    # Texto do cabeçalho do Excel que foi usado para sugerir loja_destino (auditoria).
+
+    loja_destino = db.relationship('HoraLoja', foreign_keys=[loja_destino_id])
 
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
@@ -90,7 +101,13 @@ class HoraNfEntrada(db.Model):
     # Vira derivável: B2B / LAIOUNS / QPA por CNPJ.
     nome_emitente = db.Column(db.String(200), nullable=True)
     cnpj_destinatario = db.Column(db.String(20), nullable=False, index=True)
-    # CNPJ da loja HORA que recebe a NF.
+    # CNPJ destinatário na NF (tipicamente MATRIZ Tatuapé — compartilhado entre todas lojas).
+    # A loja de destino física é indicada em loja_destino_id.
+    loja_destino_id = db.Column(
+        db.Integer, db.ForeignKey('hora_loja.id'), nullable=True, index=True,
+    )
+    loja_destino = db.relationship('HoraLoja', foreign_keys=[loja_destino_id])
+
     data_emissao = db.Column(db.Date, nullable=False)
     valor_total = db.Column(db.Numeric(15, 2), nullable=False)
 
@@ -104,6 +121,13 @@ class HoraNfEntrada(db.Model):
     parser_usado = db.Column(db.String(50), nullable=True)
     # Ex.: 'danfe_pdf_parser_v1' — referência ao parser CarVia reusado.
 
+    # Soma da quantidade dos itens-produto com NCM de veículos (8711*) no
+    # momento do import. Serve como gabarito para sinalizar NF com
+    # inconsistência interna — DANFE declara N unidades nos itens mas lista
+    # M chassis nos Dados Adicionais. Comparado com len(itens).
+    # Nullable para NFs importadas antes desta coluna existir.
+    qtd_declarada_itens = db.Column(db.Integer, nullable=True)
+
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
 
     pedido = db.relationship('HoraPedido', backref='nfs_entrada')
@@ -112,6 +136,13 @@ class HoraNfEntrada(db.Model):
         backref='nf',
         cascade='all, delete-orphan',
     )
+
+    @property
+    def itens_divergem_declaracao(self) -> bool:
+        """True se a NF tem divergência entre itens-produto e chassis listados."""
+        if self.qtd_declarada_itens is None:
+            return False
+        return len(self.itens) != self.qtd_declarada_itens
 
     def __repr__(self):
         return f'<HoraNfEntrada {self.numero_nf} emit={self.cnpj_emitente}>'

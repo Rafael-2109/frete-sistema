@@ -12,6 +12,23 @@
   </div>
 </div>
 
+{% if nf.itens_divergem_declaracao %}
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+  <i class="fas fa-exclamation-triangle mt-1"></i>
+  <div>
+    <strong>NF com inconsistência interna.</strong>
+    Os itens-produto do DANFE declaram <strong>{{ nf.qtd_declarada_itens }} unidade(s)</strong>
+    (soma das quantidades com NCM 8711*), mas os Dados Adicionais listam
+    <strong>{{ nf.itens|length }} chassi(s)</strong>.
+    {% if nf.itens|length > nf.qtd_declarada_itens %}
+      <span class="text-muted">Mais chassis que o declarado — emissor pode ter errado a quantidade de um item-produto.</span>
+    {% else %}
+      <span class="text-muted">Menos chassis que o declarado — parser pode ter perdido algum, confira o PDF.</span>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 <div class="row g-3 mb-4">
   <div class="col-md-4"><div class="hora-kpi">
     <div class="hora-kpi-label">Chave de acesso</div>
