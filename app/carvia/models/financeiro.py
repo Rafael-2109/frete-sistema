@@ -288,6 +288,12 @@ class CarviaConciliacao(db.Model):
     # considera: valor_alocado + valor_acrescimo - valor_desconto.
     valor_acrescimo = db.Column(db.Numeric(15, 2), nullable=True)
     valor_desconto = db.Column(db.Numeric(15, 2), nullable=True)
+    # F1 (2026-04-19): marca conciliacao como compensacao cross-tipo
+    # (linha DEBITO conciliada contra fatura_cliente CREDITO, ou vice-versa).
+    # Usado apenas em encontro de contas / chargeback. NULL = conciliacao
+    # normal da mesma direcao.
+    eh_compensacao = db.Column(db.Boolean, nullable=False, default=False)
+    compensacao_motivo = db.Column(db.String(255), nullable=True)
     conciliado_por = db.Column(db.String(100), nullable=False)
     conciliado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
 

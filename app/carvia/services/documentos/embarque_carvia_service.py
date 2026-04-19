@@ -728,3 +728,154 @@ class EmbarqueCarViaService:
             'eh_pedido': eh_pedido,
             'observacoes': observacoes,
         }
+
+
+# ==============================================================================
+# F5 (2026-04-19): Propagacao cancelamento Nacom→CarVia
+# ==============================================================================
+
+def cancelar_artefatos_carvia_do_embarque(
+    embarque_id: int, usuario: str, motivo: str,
+) -> Dict:
+    """F5: cancela em cascata artefatos CarVia gerados por um embarque.
+
+    Quando embarque Nacom e cancelado, os artefatos CarVia vinculados
+    (CarviaFrete, CarviaOperacao, CarviaSubcontrato, CTe Comp, CustoEntrega)
+    podem ficar orfaos. Este hook cancela todos os ELEGIVEIS (nao-FATURADOS,
+    nao-CONFERIDOS) usando o service B3 ja atomico e idempotente.
+
+    Apenas itens BLOQUEADOS sao reportados (nao lanca excecao) — operador
+    recebe alerta para tratar manualmente.
+
+    Args:
+        embarque_id: ID do Embarque Nacom cancelado
+        usuario: email do usuario
+        motivo: texto do motivo de cancelamento do embarque
+
+    Returns:
+        dict {
+            'cancelados_total': int,
+            'operacoes_canceladas': list[int],
+            'bloqueados': list[dict],  # artefatos que nao puderam
+            'erros': list[str],
+        }
+    """
+    from app.carvia.models.frete import CarviaFrete
+    from app.carvia.services.documentos.operacao_cancel_service import (
+        listar_dependencias_ativas, executar_cancelamento_cascata,
+    )
+
+    resultado = {
+        'cancelados_total': 0,
+        'operacoes_canceladas': [],
+        'bloqueados': [],
+        'erros': [],
+    }
+
+    try:
+        # Busca CarviaFrete vinculados ao embarque (cada frete pode ter
+        # 1 operacao pai + subcontratos + CTe Comps + CEs).
+        fretes = (
+            CarviaFrete.query
+            .filter(
+                CarviaFrete.embarque_id == embarque_id,
+                CarviaFrete.status != 'CANCELADO',
+            )
+            .all()
+        )
+        if not fretes:
+            return resultado
+
+        operacoes_tocadas = set()
+        for frete in fretes:
+            op_id = getattr(frete, 'operacao_id', None)
+            if op_id is None or op_id in operacoes_tocadas:
+                continue
+            operacoes_tocadas.add(op_id)
+
+            deps = listar_dependencias_ativas(op_id)
+            if deps.get('operacao') is None:
+                continue
+
+            # Coleta bloqueados primeiro (define se pode cancelar operacao)
+            tem_bloqueado = False
+            for cat in ('subcontratos', 'ctes_complementares',
+                        'custos_entrega', 'carvia_fretes'):
+                for item in deps[cat]:
+                    if item['bloqueado']:
+                        tem_bloqueado = True
+                        resultado['bloqueados'].append({
+                            'tipo': cat,
+                            'id': item['id'],
+                            'motivo': item['motivo'],
+                        })
+
+            ids_a_cancelar = {
+                'subcontratos': [
+                    s['id'] for s in deps['subcontratos']
+                    if not s['bloqueado']
+                ],
+                'ctes_complementares': [
+                    c['id'] for c in deps['ctes_complementares']
+                    if not c['bloqueado']
+                ],
+                'custos_entrega': [
+                    ce['id'] for ce in deps['custos_entrega']
+                    if not ce['bloqueado']
+                ],
+                'carvia_fretes': [
+                    f['id'] for f in deps['carvia_fretes']
+                    if not f['bloqueado']
+                ],
+                # SEGURANCA (auto-revisao): cancelar operacao APENAS se
+                # nenhum filho esta bloqueado. Operacao orfa com filhos
+                # FATURADO/CONFERIDO cria inconsistencia pior que o problema
+                # original. Se ha bloqueado, operacao fica viva e
+                # operador resolve manualmente.
+                'cancelar_operacao': not tem_bloqueado,
+            }
+
+            try:
+                res_exec = executar_cancelamento_cascata(
+                    operacao_id=op_id,
+                    ids_a_cancelar=ids_a_cancelar,
+                    usuario=usuario,
+                    motivo=f'F5 cascade Nacom→CarVia: {motivo}',
+                )
+                if res_exec.get('status') in ('OK', 'PARCIAL'):
+                    cancelados_cat = res_exec.get('cancelados', {})
+                    total_item = (
+                        len(cancelados_cat.get('subcontratos') or [])
+                        + len(cancelados_cat.get('ctes_complementares') or [])
+                        + len(cancelados_cat.get('custos_entrega') or [])
+                        + len(cancelados_cat.get('carvia_fretes') or [])
+                        + (1 if cancelados_cat.get('operacao') else 0)
+                    )
+                    resultado['cancelados_total'] += total_item
+                    if cancelados_cat.get('operacao'):
+                        resultado['operacoes_canceladas'].append(op_id)
+                resultado['erros'].extend(res_exec.get('erros') or [])
+            except Exception as e_exec:
+                logger.exception(
+                    'F5 cascade falhou op=%s embarque=%s: %s',
+                    op_id, embarque_id, e_exec,
+                )
+                resultado['erros'].append(f'op_{op_id}: {e_exec}')
+
+        logger.info(
+            'F5 propagacao Nacom→CarVia embarque=%s: %s cancelados, '
+            '%s bloqueados, %s erros',
+            embarque_id,
+            resultado['cancelados_total'],
+            len(resultado['bloqueados']),
+            len(resultado['erros']),
+        )
+        return resultado
+
+    except Exception as e:
+        logger.exception(
+            'F5 propagacao Nacom→CarVia: erro inesperado embarque=%s: %s',
+            embarque_id, e,
+        )
+        resultado['erros'].append(str(e))
+        return resultado

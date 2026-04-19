@@ -314,8 +314,10 @@ class CarviaConciliacaoService:
         # Determinar tipos permitidos pela direcao
         if linha.tipo == 'CREDITO':
             tipos_permitidos = DOCS_CREDITO
+            tipos_opostos = DOCS_DEBITO
         else:
             tipos_permitidos = DOCS_DEBITO
+            tipos_opostos = DOCS_CREDITO
 
         total_alocando = Decimal('0')
 
@@ -323,16 +325,33 @@ class CarviaConciliacaoService:
             tipo_doc = doc_info.get('tipo_documento')
             doc_id = doc_info.get('documento_id')
             valor_alocado = Decimal(str(doc_info.get('valor_alocado', 0)))
+            # F1 (2026-04-19): flag eh_compensacao relaxa gate de direcao.
+            # Caso de uso: encontro de contas — CarVia deve valor ao cliente
+            # que tem fatura aberta (chargeback aparece como DEBITO no extrato
+            # mas se aplica a fatura_cliente CREDITO). Operador marca
+            # explicitamente eh_compensacao=True para documentar que foi
+            # intencional. Registrado em observacoes da conciliacao.
+            eh_compensacao = bool(doc_info.get('eh_compensacao', False))
 
             if valor_alocado <= 0:
                 raise ValueError(f'Valor alocado deve ser positivo: {valor_alocado}')
 
             if tipo_doc not in tipos_permitidos:
-                direcao = 'CREDITO' if linha.tipo == 'CREDITO' else 'DEBITO'
-                raise ValueError(
-                    f'Tipo {tipo_doc} nao permitido para linha {direcao}. '
-                    f'Permitidos: {", ".join(tipos_permitidos)}'
-                )
+                # F1: se flag eh_compensacao e tipo_doc pertence aos
+                # tipos OPOSTOS da linha, permitir com audit no JSON.
+                if eh_compensacao and tipo_doc in tipos_opostos:
+                    logger.info(
+                        'F1 compensacao cross-tipo: linha %s (%s) vs '
+                        'doc %s (%s) — permitido por flag eh_compensacao',
+                        extrato_linha_id, linha.tipo, tipo_doc, doc_id,
+                    )
+                else:
+                    direcao = 'CREDITO' if linha.tipo == 'CREDITO' else 'DEBITO'
+                    raise ValueError(
+                        f'Tipo {tipo_doc} nao permitido para linha {direcao}. '
+                        f'Permitidos: {", ".join(tipos_permitidos)}. '
+                        f'Para encontro de contas, enviar eh_compensacao=True.'
+                    )
 
             # Verificar documento existe e validar saldo
             if tipo_doc == 'fatura_cliente':
@@ -400,6 +419,24 @@ class CarviaConciliacaoService:
                 tipo_documento=doc_info['tipo_documento'],
                 documento_id=int(doc_info['documento_id']),
                 valor_alocado=Decimal(str(doc_info['valor_alocado'])),
+                # F1 (2026-04-19): persiste flag + motivo para audit
+                eh_compensacao=bool(doc_info.get('eh_compensacao', False)),
+                compensacao_motivo=(
+                    doc_info.get('compensacao_motivo')
+                    if doc_info.get('eh_compensacao')
+                    else None
+                ),
+                # E3: opcionais juros/desconto
+                valor_acrescimo=(
+                    Decimal(str(doc_info['valor_acrescimo']))
+                    if doc_info.get('valor_acrescimo')
+                    else None
+                ),
+                valor_desconto=(
+                    Decimal(str(doc_info['valor_desconto']))
+                    if doc_info.get('valor_desconto')
+                    else None
+                ),
                 conciliado_por=usuario,
             )
             db.session.add(conc)

@@ -78,8 +78,13 @@ class CarviaFrete(db.Model):
     valor_venda = db.Column(db.Float)
 
     # --- Vinculacao CUSTO ---
-    # DEPRECATED: usar relationship subcontratos (1:N via CarviaSubcontrato.frete_id)
-    # Mantido temporariamente para backward compat durante transicao.
+    # ⚠ DEPRECATED (Refator 2.4) — NAO escrever novos valores aqui.
+    # Caminho canonical: `frete.subcontratos` (1:N via CarviaSubcontrato.frete_id).
+    # Esta FK singular assume 1 sub por frete e nao funciona para subs
+    # encadeados (A subcontrata B) ou re-cotacoes.
+    # Remocao adiada — 18+ callers em 6 arquivos (ver
+    # scripts/carvia/audit_subcontrato_id_deprecated.py para divergencias).
+    # Quando TODOS callers migrarem, drop via migration dedicada.
     subcontrato_id = db.Column(
         db.Integer, db.ForeignKey('carvia_subcontratos.id'),
         nullable=True, index=True

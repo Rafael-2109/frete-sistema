@@ -1015,20 +1015,57 @@ def cancelar_embarque(id):
         # ✅ NOVO: Cancelar fretes vinculados ao embarque
         try:
             from app.fretes.routes import cancelar_frete_por_embarque
-            
+
             sucesso, mensagem = cancelar_frete_por_embarque(
                 embarque_id=embarque.id,
                 usuario=current_user.nome if current_user.is_authenticated else 'Sistema'
             )
-            
+
             if sucesso:
                 flash(f"✅ Fretes cancelados: {mensagem}", "info")
             else:
                 flash(f"⚠️ Erro ao cancelar fretes: {mensagem}", "warning")
-                
+
         except Exception as e:
             flash(f"⚠️ Erro ao cancelar fretes: {str(e)}", "warning")
-        
+
+        # F5 (2026-04-19): Propagacao cancelamento Nacom→CarVia.
+        # Hook cancela artefatos CarVia (CarviaFrete + CarviaOperacao +
+        # CarviaSubcontrato) gerados por este embarque. Apenas itens
+        # ELEGIVEIS (ja-FATURADOS/CONFERIDOS ficam intocados — geram alerta).
+        # Nao-bloqueante: erro aqui nao impede o cancelamento do embarque.
+        try:
+            from flask import current_app as _app_f5
+            from app.carvia.services.documentos.embarque_carvia_service import (
+                cancelar_artefatos_carvia_do_embarque,
+            )
+            usuario_f5 = (
+                current_user.email if current_user.is_authenticated
+                else 'Sistema'
+            )
+            res_f5 = cancelar_artefatos_carvia_do_embarque(
+                embarque_id=embarque.id,
+                usuario=usuario_f5,
+                motivo=form.motivo_cancelamento.data or '(sem motivo)',
+            )
+            if res_f5.get('cancelados_total', 0) > 0:
+                flash(
+                    f"✅ CarVia: {res_f5['cancelados_total']} artefato(s) "
+                    f"cancelado(s) em cascata.", "info"
+                )
+            if res_f5.get('bloqueados'):
+                flash(
+                    f"⚠️ CarVia: {len(res_f5['bloqueados'])} artefato(s) "
+                    f"nao puderam ser cancelados (FATURADO/CONFERIDO) — "
+                    f"tratar manualmente.", "warning"
+                )
+        except ImportError:
+            # Service nao instalado — ignora (CarVia opcional)
+            pass
+        except Exception as e:
+            # Nao-bloqueante: log + flash, nao rollback
+            flash(f"⚠️ F5 propagacao CarVia falhou: {str(e)}", "warning")
+
         db.session.commit()
         
         flash(f"Embarque #{embarque.numero} cancelado com sucesso!", "success")
