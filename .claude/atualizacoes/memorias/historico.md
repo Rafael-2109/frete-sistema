@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-04-20-1](atualizacao-2026-04-20-1.md) — Quarta auditoria. 1 memoria removida (carvia_auditoria_pendencias — W9 + FC_VIRTUAL->MANUAL concluidos e validados no codigo). MEMORY.md atualizado (skills 23->24, remocao secao "Trabalho em andamento"). 25 memorias, MEMORY.md 67 linhas.
+
 - [2026-04-13-1](atualizacao-2026-04-13-1.md) — Terceira auditoria. 2 memorias atualizadas (skills_inventario 5->23 skills, ssw_operacoes 11->18 scripts). 20 memorias, MEMORY.md 65 linhas.
 
 - [2026-04-06-1](atualizacao-2026-04-06-1.md) — Segunda auditoria. 5 projetos obsoletos removidos, 2 MCP files consolidados em 1, 1 frontmatter corrigido (23->18 arquivos, MEMORY.md 58 linhas).
