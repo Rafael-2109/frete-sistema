@@ -422,7 +422,7 @@ def visualizar_embarque(id):
                             )
                             if sucesso_cd:
                                 messages_entregas.append(f"📦 {resultado_cd}")
-                            
+
                             # Se nf_cd=True, chamamos o script especial
                             sincronizar_nova_entrega_por_nf(
                                 numero_nf=item.nota_fiscal,
@@ -435,6 +435,51 @@ def visualizar_embarque(id):
                     except Exception as e:
                         print(f"Erro na sincronização de entrega {item.nota_fiscal}: {e}")
                         messages_entregas.append(f"⚠️ Erro na entrega {item.nota_fiscal}: {e}")
+
+                # ✅ HOOK CARVIA: NF preenchida via form manual dispara lancamento de frete
+                # CarVia + sincronizacao de EntregaMonitorada (origem='CARVIA').
+                # Necessario porque sincronizar_entrega_por_nf acima filtra origem='NACOM'
+                # e o form de edit era o unico ponto onde CarviaFreteService.lancar_frete_carvia
+                # e sincronizar_entrega_carvia_por_nf NAO eram chamados (outros pontos:
+                # portaria/routes.py:311,815 e embarque_carvia_service.py:256).
+                itens_carvia_com_nf = [
+                    _it for _it in embarque.itens
+                    if _it.status == 'ativo'
+                    and str(_it.separacao_lote_id or '').startswith('CARVIA-')
+                    and _it.nota_fiscal
+                ]
+                if itens_carvia_com_nf:
+                    try:
+                        from app.carvia.services.documentos.carvia_frete_service import CarviaFreteService
+                        from app.utils.sincronizar_entregas_carvia import sincronizar_entrega_carvia_por_nf
+
+                        _usuario_carvia = current_user.email if current_user.is_authenticated else 'Sistema'
+                        _fretes_ids = CarviaFreteService.lancar_frete_carvia(
+                            embarque_id=embarque.id,
+                            usuario=_usuario_carvia,
+                        )
+                        if _fretes_ids:
+                            messages_fretes.append(
+                                f"✅ {len(_fretes_ids)} frete(s) CarVia gerado(s)/atualizado(s)."
+                            )
+
+                        _sync_carvia_ok = 0
+                        for _item_c in itens_carvia_com_nf:
+                            try:
+                                sincronizar_entrega_carvia_por_nf(_item_c.nota_fiscal)
+                                _sync_carvia_ok += 1
+                            except Exception as _e_sync_item:
+                                print(
+                                    f"[AVISO] Sync monitoramento CarVia NF "
+                                    f"{_item_c.nota_fiscal} falhou: {_e_sync_item}"
+                                )
+                        if _sync_carvia_ok:
+                            messages_entregas.append(
+                                f"📦 {_sync_carvia_ok} NF(s) CarVia sincronizada(s) com monitoramento."
+                            )
+                    except Exception as _e_carvia:
+                        print(f"[AVISO] Hook CarVia pos-edit embarque falhou: {_e_carvia}")
+                        messages_entregas.append(f"⚠️ Hook CarVia falhou: {_e_carvia}")
 
                 # ✅ SINCRONIZAÇÃO: Atualizar expedição nas Separacoes quando data_prevista_embarque mudar
                 if embarque.data_prevista_embarque:
