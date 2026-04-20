@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""C5 / A4.3 (2026-04-19): Backfill de enderecos textuais em
+"""C5 / A4.3 (2026-04-19): Backfill de enderecos textuais + ICMS em
 CarviaOperacao via re-parse do XML do CTe.
 
 Cenario: A4.1 adicionou 8 campos de endereco (remetente/destinatario
-logradouro/numero/bairro/cep). NOVOS imports populam automaticamente.
+logradouro/numero/bairro/cep) e D10 adicionou icms_valor/icms_base_calculo.
+NOVOS imports populam automaticamente (parser.get_impostos + importacao_service:2012-2016).
 Este script preenche operacoes IMPORTADO ja existentes que tenham
-`cte_xml_path` mas `destinatario_logradouro IS NULL`.
+`cte_xml_path` mas `destinatario_logradouro IS NULL` OR `icms_valor IS NULL`.
+
+Extensao 2026-04-20: mesmo download S3 popula ICMS junto (evita
+2 passadas sobre os mesmos 143 XMLs).
 
 Fluxo:
   1. Query candidatos
-  2. Para cada (batch de 50): download XML S3 -> parse -> atualiza
-     campos vazios + audit CarviaEnderecoCorrecao (motivo='BACKFILL_XML')
+  2. Para cada (batch de 50): download XML S3 -> parse (enderecos + impostos)
+     -> atualiza campos vazios + audit CarviaEnderecoCorrecao (motivo='BACKFILL_XML')
   3. Commit por batch + sleep entre batches
 
 Dry-run por default. --apply para executar.
@@ -55,13 +59,15 @@ CAMPOS_ENDERECO = [
 
 
 def listar_candidatos(limit=None):
+    # Extensao 2026-04-20: inclui operacoes com icms_valor NULL no filtro.
+    # Endereco OU ICMS faltando -> reprocessar XML (mesmo download S3).
     q = text("""
         SELECT id, cte_numero, cte_xml_path, criado_em
         FROM carvia_operacoes
         WHERE tipo_entrada = 'IMPORTADO'
           AND cte_xml_path IS NOT NULL
-          AND destinatario_logradouro IS NULL
           AND status != 'CANCELADO'
+          AND (destinatario_logradouro IS NULL OR icms_valor IS NULL)
         ORDER BY criado_em DESC
     """)
     rows = db.session.execute(q).fetchall()
@@ -98,6 +104,8 @@ def processar_operacao(op_id, cte_xml_path, apply_changes, audit_file):
         parser = CTeXMLParserCarvia(xml_content=xml_str)
         end_rem = parser.get_endereco_remetente() or {}
         end_dest = parser.get_endereco_destinatario() or {}
+        # Extensao 2026-04-20: extrai impostos no mesmo parse
+        impostos = parser.get_impostos() or {}
 
         op = db.session.get(CarviaOperacao, op_id)
         if not op:
@@ -123,6 +131,24 @@ def processar_operacao(op_id, cte_xml_path, apply_changes, audit_file):
                         motivo='BACKFILL_XML',
                         criado_por='backfill_script',
                     ))
+
+        # Extensao 2026-04-20: popular ICMS no mesmo pass. Campos D10:
+        # icms_valor (vICMS), icms_base_calculo (vBC). icms_aliquota ja
+        # era extraida e persistida desde antes de D10 — se NULL tambem
+        # popular. Sem audit em CarviaEnderecoCorrecao (campo != endereco).
+        ICMS_MAP = [
+            ('icms_valor', 'valor_icms'),
+            ('icms_base_calculo', 'base_icms'),
+            ('icms_aliquota', 'aliquota_icms'),
+        ]
+        for campo_model, campo_parser in ICMS_MAP:
+            if getattr(op, campo_model) is not None:
+                continue
+            valor = impostos.get(campo_parser)
+            if valor is not None:
+                atualizados.append({'campo': campo_model, 'valor_novo': str(valor)})
+                if apply_changes:
+                    setattr(op, campo_model, valor)
 
         if atualizados:
             resultado['status'] = 'ATUALIZADO' if apply_changes else 'DRY_RUN'
