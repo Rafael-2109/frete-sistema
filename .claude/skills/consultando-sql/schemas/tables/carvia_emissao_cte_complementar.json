@@ -104,9 +104,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_emissao_cte_complementar_status",
+      "name": "ix_carvia_emissao_cte_complementar_operacao_id",
       "columns": [
-        "status"
+        "operacao_id"
       ],
       "unique": false
     },
@@ -118,16 +118,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_emissao_cte_complementar_operacao_id",
+      "name": "ix_carvia_emissao_cte_complementar_cte_complementar_id",
       "columns": [
-        "operacao_id"
+        "cte_complementar_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_emissao_cte_complementar_cte_complementar_id",
+      "name": "ix_carvia_emissao_cte_complementar_status",
       "columns": [
-        "cte_complementar_id"
+        "status"
       ],
       "unique": false
     }

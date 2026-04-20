@@ -63,10 +63,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_moto_evento_chassi_timestamp",
+      "name": "ix_hora_moto_evento_numero_chassi",
       "columns": [
-        "numero_chassi",
-        "timestamp"
+        "numero_chassi"
       ],
       "unique": false
     },
@@ -78,16 +77,17 @@
       "unique": false
     },
     {
-      "name": "ix_hora_moto_evento_loja_id",
+      "name": "ix_hora_moto_evento_chassi_timestamp",
       "columns": [
-        "loja_id"
+        "numero_chassi",
+        "timestamp"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_moto_evento_numero_chassi",
+      "name": "ix_hora_moto_evento_loja_id",
       "columns": [
-        "numero_chassi"
+        "loja_id"
       ],
       "unique": false
     }

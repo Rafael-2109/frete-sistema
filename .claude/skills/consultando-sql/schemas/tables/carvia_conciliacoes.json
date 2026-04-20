@@ -72,17 +72,17 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_conciliacoes_extrato_linha_id",
-      "columns": [
-        "extrato_linha_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_conc_doc",
       "columns": [
         "tipo_documento",
         "documento_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conciliacoes_extrato_linha_id",
+      "columns": [
+        "extrato_linha_id"
       ],
       "unique": false
     }

@@ -1,0 +1,35 @@
+{
+  "name": "pessoal_grupos_analise_categorias",
+  "description": "Tabela pessoal_grupos_analise_categorias",
+  "fields": [
+    {
+      "name": "grupo_id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "categoria_id",
+      "type": "integer",
+      "description": "Primary key"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "grupo_id",
+      "references": "pessoal_grupos_analise.id"
+    },
+    {
+      "column": "categoria_id",
+      "references": "pessoal_categorias.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_pessoal_gac_categoria",
+      "columns": [
+        "categoria_id"
+      ],
+      "unique": false
+    }
+  ]
+}
