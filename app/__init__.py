@@ -844,7 +844,6 @@ def create_app(config_name=None):
     from app.producao.routes import producao_bp
     from app.producao.relatorios_bp import relatorios_producao_bp
     from app.manufatura import manufatura_bp
-    from app.permissions.routes import permissions_bp
     from app.permissions.api import permissions_api
 
     # Integrações
@@ -1146,8 +1145,6 @@ def create_app(config_name=None):
     # Registrar blueprints de Pedidos de Compra e Projeção de Estoque
     from app.manufatura.routes import register_blueprints
     register_blueprints(app)
-
-    app.register_blueprint(permissions_bp)
 
     # 📊 Módulo Comercial - Acompanhamento de Vendas
     try:
