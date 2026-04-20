@@ -231,6 +231,12 @@ def register_exportacao_routes(bp):
                 comps_por_op[op_id] = cnt
                 comps_valor_por_op[op_id] = float(val)
 
+        # Cliente comercial via CNPJ DESTINATARIO da NF (batch).
+        import re as _re
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        cnpjs_dest = {nf.cnpj_destinatario for nf in items if nf.cnpj_destinatario}
+        _resolved_dest = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_dest)
+
         data = []
         for nf in items:
             ops = nf_op_map.get(nf.id, set())
@@ -238,12 +244,14 @@ def register_exportacao_routes(bp):
             total_custos = sum(custos_valor_por_op.get(o, 0) for o in ops)
             qtd_comps = sum(comps_por_op.get(o, 0) for o in ops)
             total_comps = sum(comps_valor_por_op.get(o, 0) for o in ops)
+            cli = _resolved_dest.get(_re.sub(r'\D', '', nf.cnpj_destinatario or '')) or {}
 
             data.append({
                 'Numero NF': nf.numero_nf,
                 'Serie': nf.serie_nf or '',
                 'Chave Acesso': nf.chave_acesso_nf or '',
                 'Data Emissao': _fmt_date(nf.data_emissao),
+                'Cliente Comercial': cli.get('nome_comercial') or '',
                 'CNPJ Emitente': nf.cnpj_emitente or '',
                 'Nome Emitente': nf.nome_emitente or '',
                 'UF Emitente': nf.uf_emitente or '',
@@ -375,16 +383,22 @@ def register_exportacao_routes(bp):
                         'dest_cnpj': row[4] or '',
                     }
 
+        # Cliente comercial via CNPJ DESTINATARIO da NF (batch).
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        clientes_por_op = CarviaClienteService.resolver_clientes_por_operacoes(op_ids)
+
         data = []
         for op in items:
             nf_info = primeira_nf_por_op.get(op.id) or {}
             # Fallback para op.cnpj_cliente quando nao ha NF vinculada (manual/freteiro)
             emit_nome = nf_info.get('emit_nome') or op.nome_cliente or ''
             emit_cnpj = nf_info.get('emit_cnpj') or op.cnpj_cliente or ''
+            cli = clientes_por_op.get(op.id) or {}
             data.append({
                 'ID': op.id,
                 'CTe Numero': op.cte_numero or '',
                 'CTRC': op.ctrc_numero or '',
+                'Cliente Comercial': cli.get('nome_comercial') or '',
                 'Emitente': emit_nome,
                 'CNPJ Emitente': emit_cnpj,
                 'Destinatario': nf_info.get('dest_nome', ''),
@@ -720,11 +734,16 @@ def register_exportacao_routes(bp):
         from app.carvia.utils.papeis_frete import batch_papeis_por_cte_complementar
         papeis_por_comp = batch_papeis_por_cte_complementar(comp_item_ids)
 
+        # Cliente comercial via CNPJ DESTINATARIO da NF da operacao pai.
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        clientes_por_comp = CarviaClienteService.resolver_clientes_por_ctes_comp(comp_item_ids)
+
         data = []
         for c in items:
             p = papeis_por_comp.get(c.id) or {}
             emit = p.get('emit') or {}
             dest = p.get('dest') or {}
+            cli = clientes_por_comp.get(c.id) or {}
             # Coluna "Tomador" removida: redundante com tipo_frete (FOB/CIF) da fatura,
             # que ja indica quem paga (FOB=Remetente, CIF=Destinatario).
             data.append({
@@ -733,6 +752,7 @@ def register_exportacao_routes(bp):
                 'CTRC CTe Pai': op_ctrc_map.get(c.operacao_id, ''),
                 'CTRC': c.ctrc_numero or '',
                 'Operacao ID': c.operacao_id,
+                'Cliente Comercial': cli.get('nome_comercial') or '',
                 'Cliente': c.nome_cliente or '',
                 'CNPJ Cliente': c.cnpj_cliente or '',
                 'Emitente': emit.get('nome') or '',
@@ -998,18 +1018,12 @@ def register_exportacao_routes(bp):
         tipo_frete_por_fat = {f.id: f.tipo_frete for f in items if f.tipo_frete}
         papeis_por_fatura = batch_papeis_por_fatura_cliente(fat_ids_all, tipo_frete_por_fat)
 
-        # Batch clientes comerciais por CNPJ do pagador — necessario para cobranca.
-        # Usuario precisa do nome comercial ("ALICE - MOTOCHEFE") no Excel, NAO apenas
-        # a razao social da fatura, para saber a quem cobrar inadimplentes.
-        import re as _re
+        # Batch clientes comerciais via CNPJ DESTINATARIO da NF das operacoes da
+        # fatura (fallback para CTe Complementar). Cliente = quem recebe, nao o
+        # pagador. Usuario usa o nome comercial ("ALICE - MOTOCHEFE") no Excel
+        # para cobrar o cliente final, nao a razao social do pagador.
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        cnpjs_cli = {f.cnpj_cliente for f in items if f.cnpj_cliente}
-        _resolved = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_cli)
-        clientes_por_cnpj = {
-            cnpj: _resolved[_re.sub(r'\D', '', cnpj)]
-            for cnpj in cnpjs_cli
-            if _re.sub(r'\D', '', cnpj) in _resolved
-        }
+        clientes_por_fatura = CarviaClienteService.resolver_clientes_por_faturas_cliente(fat_ids_all)
 
         data = []
         for f in items:
@@ -1018,7 +1032,7 @@ def register_exportacao_routes(bp):
             dest = p.get('dest') or {}
             # Coluna "Tomador" removida: redundante com Tipo Frete (FOB/CIF),
             # que ja indica quem paga (FOB=Remetente, CIF=Destinatario).
-            cli = clientes_por_cnpj.get(f.cnpj_cliente) or {}
+            cli = clientes_por_fatura.get(f.id) or {}
             data.append({
                 'Numero Fatura': f.numero_fatura or '',
                 'Cliente Comercial': cli.get('nome_comercial') or '',

@@ -168,7 +168,7 @@
                                     {{ badge_nf_transferencia(t.num_nf_transf, t.transf_id) }}
                                 </div>
                                 {% endfor %}
-                                {% set cli = clientes_por_cnpj.get(op.cnpj_cliente) %}
+                                {% set cli = clientes_por_op.get(op.id) %}
                                 {% if cli %}
                                 <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}"
                                    class="badge bg-primary text-decoration-none d-block mt-1" style="width:fit-content">

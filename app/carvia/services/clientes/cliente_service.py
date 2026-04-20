@@ -155,6 +155,234 @@ class CarviaClienteService:
                 }
         return result
 
+    # ==================== RESOLUCAO VIA DESTINATARIO DA NF ====================
+    # Regra de negocio: o "cliente comercial" deve ser identificado SEMPRE pelo
+    # CNPJ DESTINATARIO da NF (= quem recebe a mercadoria, ponto fixo do
+    # relacionamento comercial), NAO pelo remetente/pagador da fatura que varia
+    # com o incoterm (FOB=remetente paga, CIF=destinatario paga).
+
+    @staticmethod
+    def resolver_clientes_por_operacoes(operacao_ids) -> Dict[int, Dict]:
+        """Mapeia {operacao_id: {id, nome_comercial, cnpj_destinatario}} via
+        primeira NF da operacao -> CarviaClienteEndereco (cnpj_destinatario,
+        tipo=DESTINO, ativo=True) -> CarviaCliente.
+
+        Primeira NF ganha (ORDER BY op_id, nf_id asc) — em um CTe todas as NFs
+        compartilham o mesmo destinatario (regra de negocio).
+        """
+        from app.carvia.models import (
+            CarviaCliente, CarviaClienteEndereco, CarviaNf,
+            CarviaOperacaoNf,
+        )
+
+        operacao_ids = list(operacao_ids or [])
+        if not operacao_ids:
+            return {}
+
+        rows = db.session.query(
+            CarviaOperacaoNf.operacao_id,
+            CarviaNf.cnpj_destinatario,
+            CarviaCliente.id,
+            CarviaCliente.nome_comercial,
+            CarviaCliente.ativo,
+        ).join(
+            CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id,
+        ).join(
+            CarviaClienteEndereco,
+            CarviaClienteEndereco.cnpj == CarviaNf.cnpj_destinatario,
+        ).join(
+            CarviaCliente,
+            CarviaCliente.id == CarviaClienteEndereco.cliente_id,
+        ).filter(
+            CarviaOperacaoNf.operacao_id.in_(operacao_ids),
+            CarviaClienteEndereco.cliente_id.isnot(None),
+            CarviaClienteEndereco.ativo == True,
+            CarviaClienteEndereco.tipo == 'DESTINO',
+            CarviaNf.cnpj_destinatario.isnot(None),
+        ).order_by(
+            CarviaOperacaoNf.operacao_id,
+            CarviaOperacaoNf.nf_id,
+            CarviaCliente.ativo.desc(),
+            CarviaCliente.id.asc(),
+        ).all()
+
+        result: Dict[int, Dict] = {}
+        for op_id, cnpj_dest, cliente_id, nome, ativo in rows:
+            if op_id in result:
+                continue  # primeira NF/cliente wins
+            result[op_id] = {
+                'id': cliente_id,
+                'nome_comercial': nome,
+                'ativo': ativo,
+                'cnpj_destinatario': cnpj_dest,
+            }
+        return result
+
+    @staticmethod
+    def resolver_clientes_por_ctes_comp(cte_comp_ids) -> Dict[int, Dict]:
+        """Mapeia {cte_comp_id: {id, nome_comercial, ...}} via operacao pai
+        -> primeira NF -> destinatario -> CarviaCliente.
+        """
+        from app.carvia.models import (
+            CarviaCliente, CarviaClienteEndereco, CarviaCteComplementar,
+            CarviaNf, CarviaOperacaoNf,
+        )
+
+        cte_comp_ids = list(cte_comp_ids or [])
+        if not cte_comp_ids:
+            return {}
+
+        rows = db.session.query(
+            CarviaCteComplementar.id,
+            CarviaNf.cnpj_destinatario,
+            CarviaCliente.id,
+            CarviaCliente.nome_comercial,
+            CarviaCliente.ativo,
+        ).join(
+            CarviaOperacaoNf,
+            CarviaOperacaoNf.operacao_id == CarviaCteComplementar.operacao_id,
+        ).join(
+            CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id,
+        ).join(
+            CarviaClienteEndereco,
+            CarviaClienteEndereco.cnpj == CarviaNf.cnpj_destinatario,
+        ).join(
+            CarviaCliente,
+            CarviaCliente.id == CarviaClienteEndereco.cliente_id,
+        ).filter(
+            CarviaCteComplementar.id.in_(cte_comp_ids),
+            CarviaClienteEndereco.cliente_id.isnot(None),
+            CarviaClienteEndereco.ativo == True,
+            CarviaClienteEndereco.tipo == 'DESTINO',
+            CarviaNf.cnpj_destinatario.isnot(None),
+        ).order_by(
+            CarviaCteComplementar.id,
+            CarviaOperacaoNf.nf_id,
+            CarviaCliente.ativo.desc(),
+            CarviaCliente.id.asc(),
+        ).all()
+
+        result: Dict[int, Dict] = {}
+        for comp_id, cnpj_dest, cliente_id, nome, ativo in rows:
+            if comp_id in result:
+                continue
+            result[comp_id] = {
+                'id': cliente_id,
+                'nome_comercial': nome,
+                'ativo': ativo,
+                'cnpj_destinatario': cnpj_dest,
+            }
+        return result
+
+    @staticmethod
+    def resolver_clientes_por_faturas_cliente(fatura_ids) -> Dict[int, Dict]:
+        """Mapeia {fatura_cliente_id: {id, nome_comercial, ...}} via
+        CarviaOperacao.fatura_cliente_id -> primeira NF -> destinatario ->
+        CarviaCliente. Faz fallback via CarviaCteComplementar.fatura_cliente_id
+        quando a fatura so tem CTes complementares (sem operacao direta).
+
+        Uma fatura pode agrupar N operacoes com destinatarios diferentes; a
+        primeira operacao (id asc) ganha. Para cobranca unificada a regra e
+        que o usuario agrupe por destino ao faturar — uso tipico = 1 fatura
+        por cliente final.
+        """
+        from app.carvia.models import (
+            CarviaCliente, CarviaClienteEndereco, CarviaCteComplementar,
+            CarviaNf, CarviaOperacao, CarviaOperacaoNf,
+        )
+
+        fatura_ids = list(fatura_ids or [])
+        if not fatura_ids:
+            return {}
+
+        # 1. Via operacoes diretas
+        rows_op = db.session.query(
+            CarviaOperacao.fatura_cliente_id,
+            CarviaNf.cnpj_destinatario,
+            CarviaCliente.id,
+            CarviaCliente.nome_comercial,
+            CarviaCliente.ativo,
+        ).join(
+            CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id,
+        ).join(
+            CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id,
+        ).join(
+            CarviaClienteEndereco,
+            CarviaClienteEndereco.cnpj == CarviaNf.cnpj_destinatario,
+        ).join(
+            CarviaCliente,
+            CarviaCliente.id == CarviaClienteEndereco.cliente_id,
+        ).filter(
+            CarviaOperacao.fatura_cliente_id.in_(fatura_ids),
+            CarviaClienteEndereco.cliente_id.isnot(None),
+            CarviaClienteEndereco.ativo == True,
+            CarviaClienteEndereco.tipo == 'DESTINO',
+            CarviaNf.cnpj_destinatario.isnot(None),
+        ).order_by(
+            CarviaOperacao.fatura_cliente_id,
+            CarviaOperacao.id,
+            CarviaOperacaoNf.nf_id,
+            CarviaCliente.ativo.desc(),
+            CarviaCliente.id.asc(),
+        ).all()
+
+        result: Dict[int, Dict] = {}
+        for fat_id, cnpj_dest, cliente_id, nome, ativo in rows_op:
+            if fat_id in result:
+                continue
+            result[fat_id] = {
+                'id': cliente_id,
+                'nome_comercial': nome,
+                'ativo': ativo,
+                'cnpj_destinatario': cnpj_dest,
+            }
+
+        # 2. Fallback via CTe Complementares para faturas sem operacao direta
+        faturas_sem = [fid for fid in fatura_ids if fid not in result]
+        if faturas_sem:
+            rows_comp = db.session.query(
+                CarviaCteComplementar.fatura_cliente_id,
+                CarviaNf.cnpj_destinatario,
+                CarviaCliente.id,
+                CarviaCliente.nome_comercial,
+                CarviaCliente.ativo,
+            ).join(
+                CarviaOperacaoNf,
+                CarviaOperacaoNf.operacao_id == CarviaCteComplementar.operacao_id,
+            ).join(
+                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id,
+            ).join(
+                CarviaClienteEndereco,
+                CarviaClienteEndereco.cnpj == CarviaNf.cnpj_destinatario,
+            ).join(
+                CarviaCliente,
+                CarviaCliente.id == CarviaClienteEndereco.cliente_id,
+            ).filter(
+                CarviaCteComplementar.fatura_cliente_id.in_(faturas_sem),
+                CarviaClienteEndereco.cliente_id.isnot(None),
+                CarviaClienteEndereco.ativo == True,
+                CarviaClienteEndereco.tipo == 'DESTINO',
+                CarviaNf.cnpj_destinatario.isnot(None),
+            ).order_by(
+                CarviaCteComplementar.fatura_cliente_id,
+                CarviaCteComplementar.id,
+                CarviaOperacaoNf.nf_id,
+                CarviaCliente.ativo.desc(),
+                CarviaCliente.id.asc(),
+            ).all()
+
+            for fat_id, cnpj_dest, cliente_id, nome, ativo in rows_comp:
+                if fat_id in result:
+                    continue
+                result[fat_id] = {
+                    'id': cliente_id,
+                    'nome_comercial': nome,
+                    'ativo': ativo,
+                    'cnpj_destinatario': cnpj_dest,
+                }
+
+        return result
+
     # ==================== ENDERECOS ====================
 
     @staticmethod

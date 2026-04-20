@@ -213,16 +213,12 @@ def register_operacao_routes(bp):
                     sub_info[op_id] = {'transp_nome': razao, 'sub_cte': cte_num, 'count': 0}
                 sub_info[op_id]['count'] += 1
 
-        # Batch: resolver clientes comerciais por CNPJ cliente
-        import re
+        # Batch: resolver clientes comerciais via CNPJ DESTINATARIO da primeira NF
+        # de cada operacao (regra de negocio — cliente = quem recebe a mercadoria,
+        # nao o remetente/pagador que varia com o incoterm).
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        cnpjs_cli = {op.cnpj_cliente for op, _ in paginacao.items if op.cnpj_cliente}
-        _resolved = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_cli)
-        clientes_por_cnpj = {
-            cnpj: _resolved[re.sub(r'\D', '', cnpj)]
-            for cnpj in cnpjs_cli
-            if re.sub(r'\D', '', cnpj) in _resolved
-        }
+        op_ids_pag = [op.id for op, _ in paginacao.items]
+        clientes_por_op = CarviaClienteService.resolver_clientes_por_operacoes(op_ids_pag)
 
         # NF Triangular: badges de NF transferencia ao lado do emitente
         # Para cada operacao, identificar NFs venda que tem vinculo com
@@ -270,7 +266,7 @@ def register_operacao_routes(bp):
             sub_info=sub_info,
             nfs_por_op=nfs_por_op,
             dest_por_op=dest_por_op,
-            clientes_por_cnpj=clientes_por_cnpj,
+            clientes_por_op=clientes_por_op,
             papeis_por_op=papeis_por_op,
             transferencias_por_op=transferencias_por_op,
             incluir_transferencias=incluir_transferencias,
@@ -316,11 +312,12 @@ def register_operacao_routes(bp):
             CarviaCustoEntrega.operacao_id == operacao_id
         ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
 
-        # Resolver cliente comercial por CNPJ cliente
-        import re
+        # Resolver cliente comercial via CNPJ DESTINATARIO da primeira NF
+        # (regra de negocio — cliente = quem recebe a mercadoria).
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({operacao.cnpj_cliente})
-        cliente_comercial = _clientes.get(re.sub(r'\D', '', operacao.cnpj_cliente or ''))
+        cliente_comercial = CarviaClienteService.resolver_clientes_por_operacoes(
+            [operacao.id],
+        ).get(operacao.id)
 
         # Papeis de frete (Emitente/Destinatario/Tomador) — regra: 1 CTe = 1 par unico.
         # Mantem `tomador_label` (string legada) para listar_operacoes.html e adiciona

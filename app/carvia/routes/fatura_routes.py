@@ -152,16 +152,11 @@ def register_fatura_routes(bp):
 
         today = date.today()
 
-        # Batch: resolver clientes comerciais por CNPJ cliente
-        import re
+        # Batch: resolver clientes comerciais via CNPJ DESTINATARIO da primeira NF
+        # das operacoes da fatura (ou CTe Complementar -> operacao pai quando a
+        # fatura so tem complementares). Cliente = quem recebe, nao o pagador.
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        cnpjs_cli = {f.cnpj_cliente for f, _ in paginacao.items if f.cnpj_cliente}
-        _resolved = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_cli)
-        clientes_por_cnpj = {
-            cnpj: _resolved[re.sub(r'\D', '', cnpj)]
-            for cnpj in cnpjs_cli
-            if re.sub(r'\D', '', cnpj) in _resolved
-        }
+        clientes_por_fatura = CarviaClienteService.resolver_clientes_por_faturas_cliente(fat_ids)
 
         return render_template(
             'carvia/faturas_cliente/listar.html',
@@ -178,7 +173,7 @@ def register_fatura_routes(bp):
             today=today,
             ops_por_fatura=ops_por_fatura,
             comps_por_fatura=comps_por_fatura,
-            clientes_por_cnpj=clientes_por_cnpj,
+            clientes_por_fatura=clientes_por_fatura,
             papeis_por_fatura=papeis_por_fatura,
         )
 
@@ -576,11 +571,12 @@ def register_fatura_routes(bp):
                     'atual': True,
                 })
 
-        # Resolver cliente comercial por CNPJ cliente
-        import re
+        # Resolver cliente comercial via CNPJ DESTINATARIO da NF (regra de
+        # negocio — cliente = quem recebe a mercadoria).
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({fatura.cnpj_cliente})
-        cliente_comercial = _clientes.get(re.sub(r'\D', '', fatura.cnpj_cliente or ''))
+        cliente_comercial = CarviaClienteService.resolver_clientes_por_faturas_cliente(
+            [fatura.id],
+        ).get(fatura.id)
 
         # Papeis de frete via helper centralizado (cobre operacao + CTe Comp fallback + tipo_frete)
         from app.carvia.utils.papeis_frete import resolver_papeis_fatura_cliente
