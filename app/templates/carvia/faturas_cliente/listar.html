@@ -92,8 +92,7 @@
                     <thead>
                         <tr>
                             {{ th_sort('numero_fatura', 'Fatura', sort, direction) }}
-                            {{ th_sort('nome_cliente', 'Cliente', sort, direction) }}
-                            <th>Emitente / Destinatario</th>
+                            {{ th_sort('nome_cliente', 'Pagador', sort, direction) }}
                             <th>CTes</th>
                             <th>Frete</th>
                             {{ th_sort('data_emissao', 'Emissao', sort, direction) }}
@@ -130,20 +129,18 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% set p = papeis_por_fatura.get(f.id) %}
-                                {% if p and (p.emit or p.dest or p.tomador) %}
-                                {% import 'carvia/_macros.html' as carvia_m %}
-                                {{ carvia_m.emitente_destinatario(p.emit, p.dest, p.tomador, compact=True) }}
-                                {% else %}
-                                <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td>
                                 {% set ops = ops_por_fatura.get(f.id, []) %}
-                                {% if ops %}
+                                {% set comps = comps_por_fatura.get(f.id, []) %}
+                                {% if ops or comps %}
                                     {% for o in ops %}
                                     <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=o.id) }}"
-                                       class="badge bg-info text-decoration-none d-block mb-1">{{ o.cte_numero or ('CTe #' ~ o.id) }}</a>
+                                       class="badge bg-info text-decoration-none d-block mb-1"
+                                       title="CTe de frete">{{ o.cte_numero or ('CTe #' ~ o.id) }}</a>
+                                    {% endfor %}
+                                    {% for c in comps %}
+                                    <a href="{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=c.id) }}"
+                                       class="badge bg-warning text-dark text-decoration-none d-block mb-1"
+                                       title="CTe Complementar">{{ c.numero_comp or ('COMP #' ~ c.id) }}{% if c.cte_numero %} <small>({{ c.cte_numero }})</small>{% endif %}</a>
                                     {% endfor %}
                                 {% else %}
                                 <span class="text-muted">-</span>

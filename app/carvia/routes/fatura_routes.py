@@ -109,9 +109,12 @@ def register_fatura_routes(bp):
 
         paginacao = query.paginate(page=page, per_page=25, error_out=False)
 
-        # Batch: CTes vinculados por fatura (numeros + ids para badges inline)
+        # Batch: CTes vinculados por fatura (numeros + ids para badges inline).
+        # Inclui OPERACOES (CTes de frete) E CTes COMPLEMENTARES — ambos aparecem na
+        # coluna "CTes" com badges distintos (info=frete, warning=complementar).
         from collections import defaultdict
         ops_por_fatura = defaultdict(list)
+        comps_por_fatura = defaultdict(list)
         fat_ids = [f.id for f, _ in paginacao.items]
         if fat_ids:
             rows_ops = db.session.query(
@@ -120,9 +123,24 @@ def register_fatura_routes(bp):
                 CarviaOperacao.cte_numero,
             ).filter(
                 CarviaOperacao.fatura_cliente_id.in_(fat_ids)
-            ).all()
+            ).order_by(CarviaOperacao.id.asc()).all()
             for fat_id, op_id, cte_num in rows_ops:
                 ops_por_fatura[fat_id].append({'id': op_id, 'cte_numero': cte_num})
+
+            rows_comps = db.session.query(
+                CarviaCteComplementar.fatura_cliente_id,
+                CarviaCteComplementar.id,
+                CarviaCteComplementar.numero_comp,
+                CarviaCteComplementar.cte_numero,
+            ).filter(
+                CarviaCteComplementar.fatura_cliente_id.in_(fat_ids)
+            ).order_by(CarviaCteComplementar.id.asc()).all()
+            for fat_id, comp_id, num_comp, cte_num in rows_comps:
+                comps_por_fatura[fat_id].append({
+                    'id': comp_id,
+                    'numero_comp': num_comp,
+                    'cte_numero': cte_num,
+                })
 
         # Batch papeis (emit/dest/tomador) via helper centralizado que:
         # - faz join operacao -> NF (caminho principal)
@@ -159,6 +177,7 @@ def register_fatura_routes(bp):
             direction=direction,
             today=today,
             ops_por_fatura=ops_por_fatura,
+            comps_por_fatura=comps_por_fatura,
             clientes_por_cnpj=clientes_por_cnpj,
             papeis_por_fatura=papeis_por_fatura,
         )
