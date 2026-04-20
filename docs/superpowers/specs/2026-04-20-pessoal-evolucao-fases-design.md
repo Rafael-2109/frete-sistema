@@ -273,8 +273,8 @@ class PessoalGastoRecorrente(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
 
-    # Chave hierárquica de identificação
-    chave_tipo = db.Column(db.String(20), nullable=False)  # cnpj|regra|hash
+    # Chave hierárquica de identificação (ver seção "Chave hierárquica")
+    chave_tipo = db.Column(db.String(20), nullable=False)  # regra|cnpj|hash
     chave_valor = db.Column(db.String(200), nullable=False)
 
     categoria_id = db.Column(db.Integer,
@@ -311,16 +311,45 @@ class PessoalGastoRecorrente(db.Model):
 
 ### Chave hierárquica de identificação
 
+**Contexto real (confirmado em 2026-04-20):** a grande maioria das regras
+existentes NÃO tem `cpf_cnpj_padrao` nem `valor_min`/`valor_max` — apenas
+uma pequena fração das transações do extrato traz CNPJ extraído. Portanto
+**regra é a chave primária**, e a granularização fica sob responsabilidade
+do usuário (o próprio trabalho de manter regras específicas para coisas
+que ele quer ver como recorrentes).
+
 Em ordem de preferência (primeira que aplica, ganha):
 
-1. **`chave_tipo='cnpj'`** quando `transacao.cpf_cnpj_parte` está
-   preenchido — chave = CNPJ (mais confiável).
-2. **`chave_tipo='regra'`** quando transação tem `regra_id` E a regra
-   é **específica** (tem `cpf_cnpj_padrao` OU `valor_min` OU `valor_max`).
-   Chave = `str(regra_id)`. Regras genéricas (só padrão textual) NÃO
-   qualificam, pois agrupam dezenas de gastos distintos.
-3. **`chave_tipo='hash'`** fallback: `sha1(historico_normalizado + faixa_valor)`,
-   onde `faixa_valor` = round(valor/10)*10.
+1. **`chave_tipo='regra'`** quando transação tem `regra_id`. Chave =
+   `str(regra_id)`. Sem filtro de especificidade da regra — confia no
+   usuário. Regras muito genéricas são descartadas pelo **filtro
+   estatístico** (abaixo), não por análise sintática da regra.
+2. **`chave_tipo='cnpj'`** quando transação NÃO tem regra mas
+   `cpf_cnpj_parte` está preenchido. Chave = CNPJ. Fallback útil para
+   transações ainda não cobertas por regras.
+3. **`chave_tipo='hash'`** fallback final: `sha1(historico_normalizado +
+   faixa_valor)`, onde `faixa_valor` = round(valor/10)*10.
+
+### Filtro estatístico de qualidade (qualifica como recorrente)
+
+Um grupo (mesma chave) só vira candidato a recorrente quando:
+
+- **≥3 ocorrências** nos últimos `meses` meses
+- **≥3 meses distintos** com pelo menos uma ocorrência
+- **Desvio relativo de valor ≤15%** da mediana:
+  `max(|valor - mediana|) / mediana <= 0.15`
+
+Este último critério descarta automaticamente regras genéricas demais
+(ex: regra "MERCADO" cobrindo R$50 de pão, R$200 de feira, R$800 de
+compra mensal — desvio altíssimo → não vira recorrente). Regras
+granularizadas pelo usuário (ex: "NETFLIX", "ALUGUEL", "SPOTIFY") têm
+valor estável e passam no filtro naturalmente.
+
+Quando uma regra cobre gastos heterogêneos e o usuário quer ver partes
+dela como recorrente, o caminho é o trabalho natural de **quebrar a
+regra em regras mais específicas** (já suportado pelo sistema após o
+fix de 2026-04-20 que permite múltiplas regras com mesmo padrão mas
+escopos distintos).
 
 ### Detecção
 
@@ -397,8 +426,9 @@ Todas as migrations seguem regra do projeto: SQL idempotente +
 |---|---|
 | Migration F3 falha ao detectar ciclo no grupo atual | Query de verificação roda antes do UPDATE; aborta com mensagem clara |
 | Regras apontando para categoria-pai após migração | Permitido tecnicamente; warning no `salvar_regra` ensina usuário a mover para folha |
-| Detecção F4 gera falsos positivos | Status inicial = `sugerido`; usuário confirma manualmente |
-| Recorrente cujo CNPJ muda (fornecedor reestrutura) | Fallback `hash_historico` captura; eventual duplicata tratada em tela |
+| Detecção F4 gera falsos positivos | Status inicial = `sugerido`; usuário confirma manualmente; filtro estatístico (desvio ≤15%) corta regras heterogêneas |
+| Regra muito genérica aparece como recorrente | Filtro estatístico descarta (desvio de valor alto); se ainda passar, usuário granulariza a regra em regras mais específicas |
+| Recorrente cujo identificador muda (fornecedor muda razão social ou regra é editada) | Detecção cria novo recorrente com chave nova; antigo fica inativo após 90 dias; tela permite merge manual |
 | Índice pg_trgm grande | Só criado uma vez; extensão já comum em PostgreSQL moderno (Render suporta) |
 
 ## Abertos para próximo passo (writing-plans)
