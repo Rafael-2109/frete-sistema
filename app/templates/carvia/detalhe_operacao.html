@@ -189,6 +189,51 @@
                             {% endif %}
                         </div>
                     </div>
+
+                    {# D10 (2026-04-20): ICMS inline quando houver #}
+                    {% if operacao.icms_valor is not none or operacao.icms_base_calculo is not none or operacao.icms_aliquota is not none %}
+                    <hr>
+                    <div class="row g-2 small">
+                        <div class="col-12"><small class="text-muted fw-bold">ICMS do CTe</small></div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Aliquota</small>
+                            <strong>{{ operacao.icms_aliquota|numero_br(2) if operacao.icms_aliquota is not none else '-' }}{% if operacao.icms_aliquota is not none %}%{% endif %}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Base Calculo</small>
+                            <strong>{{ operacao.icms_base_calculo|valor_br if operacao.icms_base_calculo is not none else '-' }}</strong>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block">Valor ICMS</small>
+                            <strong class="text-info">{{ operacao.icms_valor|valor_br if operacao.icms_valor is not none else '-' }}</strong>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# A4.2 + 2026-04-20: Botoes Enderecos + Historico #}
+                    {% set tem_enderecos = operacao.remetente_logradouro or operacao.destinatario_logradouro
+                                          or operacao.remetente_cep or operacao.destinatario_cep %}
+                    {% if tem_enderecos or correcoes_endereco %}
+                    <hr>
+                    <div class="d-flex gap-2 flex-wrap">
+                        {% if tem_enderecos %}
+                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                data-bs-toggle="modal" data-bs-target="#modalEnderecosOperacao"
+                                title="Ver enderecos remetente/destinatario">
+                            <i class="fas fa-map-marker-alt"></i> Enderecos
+                        </button>
+                        {% endif %}
+                        {% if correcoes_endereco %}
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal" data-bs-target="#modalHistoricoCorrecoes"
+                                title="Historico de correcoes de endereco (CC-e / manual)">
+                            <i class="fas fa-history"></i> Historico
+                            <span class="badge bg-secondary">{{ correcoes_endereco|length }}</span>
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
                     {% if operacao.observacoes %}
                     <hr>
                     <small class="text-muted d-block">Observacoes</small>
@@ -765,56 +810,131 @@
 </script>
 {% endif %}
 
-{# A4.2 (2026-04-18): Historico de correcoes de endereco (CC-e / manual). #}
-{% if correcoes_endereco %}
-<div class="container-fluid mt-4">
-    <details class="card">
-        <summary class="card-header" style="cursor: pointer;">
-            <i class="fas fa-history text-muted"></i>
-            <strong>Historico de correcoes de endereco</strong>
-            <span class="badge bg-secondary">{{ correcoes_endereco|length }}</span>
-        </summary>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-sm table-striped mb-0">
-                    <thead>
-                        <tr>
-                            <th>Quando</th>
-                            <th>Motivo</th>
-                            <th>CC-e</th>
-                            <th>Campo</th>
-                            <th>De</th>
-                            <th>Para</th>
-                            <th>Por</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for c in correcoes_endereco %}
-                        <tr>
-                            <td class="small text-muted">
-                                {{ c.criado_em|formatar_data_hora_brasil if c.criado_em else '-' }}
-                            </td>
-                            <td>
-                                {% if c.motivo == 'CC-E' %}
-                                <span class="badge bg-warning text-dark">CC-e</span>
-                                {% elif c.motivo == 'CORRECAO_MANUAL' %}
-                                <span class="badge bg-secondary">Manual</span>
-                                {% else %}
-                                <span class="badge bg-light text-dark">{{ c.motivo }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="small">{{ c.numero_cce or '-' }}</td>
-                            <td class="small"><code>{{ c.campo }}</code></td>
-                            <td class="small"><del class="text-muted">{{ c.valor_anterior or '-' }}</del></td>
-                            <td class="small"><strong>{{ c.valor_novo or '-' }}</strong></td>
-                            <td class="small">{{ c.criado_por or '-' }}</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+{# 2026-04-20: Modal Enderecos (Remetente + Destinatario) — read-only #}
+{% if operacao.remetente_logradouro or operacao.destinatario_logradouro
+      or operacao.remetente_cep or operacao.destinatario_cep %}
+<div class="modal fade" id="modalEnderecosOperacao" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-map-marker-alt"></i> Enderecos da Operacao</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-2"><i class="fas fa-arrow-up text-success"></i> Remetente</h6>
+                        <dl class="row mb-0 small">
+                            <dt class="col-4 text-muted">Logradouro</dt>
+                            <dd class="col-8">{{ operacao.remetente_logradouro or '-' }}</dd>
+                            <dt class="col-4 text-muted">Numero</dt>
+                            <dd class="col-8">{{ operacao.remetente_numero or '-' }}</dd>
+                            <dt class="col-4 text-muted">Bairro</dt>
+                            <dd class="col-8">{{ operacao.remetente_bairro or '-' }}</dd>
+                            <dt class="col-4 text-muted">CEP</dt>
+                            <dd class="col-8">{{ operacao.remetente_cep or '-' }}</dd>
+                            {% if operacao.cidade_origem or operacao.uf_origem %}
+                            <dt class="col-4 text-muted">Cidade/UF</dt>
+                            <dd class="col-8">
+                                {{ operacao.cidade_origem or '-' }}{% if operacao.uf_origem %}/{{ operacao.uf_origem }}{% endif %}
+                            </dd>
+                            {% endif %}
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-2"><i class="fas fa-arrow-down text-info"></i> Destinatario</h6>
+                        <dl class="row mb-0 small">
+                            <dt class="col-4 text-muted">Logradouro</dt>
+                            <dd class="col-8">{{ operacao.destinatario_logradouro or '-' }}</dd>
+                            <dt class="col-4 text-muted">Numero</dt>
+                            <dd class="col-8">{{ operacao.destinatario_numero or '-' }}</dd>
+                            <dt class="col-4 text-muted">Bairro</dt>
+                            <dd class="col-8">{{ operacao.destinatario_bairro or '-' }}</dd>
+                            <dt class="col-4 text-muted">CEP</dt>
+                            <dd class="col-8">{{ operacao.destinatario_cep or '-' }}</dd>
+                            {% if operacao.cidade_destino or operacao.uf_destino %}
+                            <dt class="col-4 text-muted">Cidade/UF</dt>
+                            <dd class="col-8">
+                                {{ operacao.cidade_destino or '-' }}{% if operacao.uf_destino %}/{{ operacao.uf_destino }}{% endif %}
+                            </dd>
+                            {% endif %}
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                {% if operacao.status != 'CANCELADO' %}
+                <a href="{{ url_for('carvia.editar_operacao', operacao_id=operacao.id) }}"
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-pencil-alt"></i> Editar / Registrar CC-e
+                </a>
+                {% endif %}
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
-    </details>
+    </div>
+</div>
+{% endif %}
+
+{# A4.2: Historico de correcoes de endereco — em modal (antes era <details>). #}
+{% if correcoes_endereco %}
+<div class="modal fade" id="modalHistoricoCorrecoes" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-history"></i> Historico de correcoes de endereco
+                    <span class="badge bg-secondary">{{ correcoes_endereco|length }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Quando</th>
+                                <th>Motivo</th>
+                                <th>CC-e</th>
+                                <th>Campo</th>
+                                <th>De</th>
+                                <th>Para</th>
+                                <th>Por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for c in correcoes_endereco %}
+                            <tr>
+                                <td class="small text-muted">
+                                    {{ c.criado_em|formatar_data_hora_brasil if c.criado_em else '-' }}
+                                </td>
+                                <td>
+                                    {% if c.motivo == 'CC-E' %}
+                                    <span class="badge bg-warning text-dark">CC-e</span>
+                                    {% elif c.motivo == 'CORRECAO_MANUAL' %}
+                                    <span class="badge bg-secondary">Manual</span>
+                                    {% elif c.motivo == 'BACKFILL_XML' %}
+                                    <span class="badge bg-info">Backfill XML</span>
+                                    {% else %}
+                                    <span class="badge bg-light text-dark">{{ c.motivo }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small">{{ c.numero_cce or '-' }}</td>
+                                <td class="small"><code>{{ c.campo }}</code></td>
+                                <td class="small"><del class="text-muted">{{ c.valor_anterior or '-' }}</del></td>
+                                <td class="small"><strong>{{ c.valor_novo or '-' }}</strong></td>
+                                <td class="small">{{ c.criado_por or '-' }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endif %}
 
