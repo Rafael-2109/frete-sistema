@@ -119,6 +119,43 @@ def registro_motochefe():
 
     return render_template('auth/registro.html', form=form, sistema='motochefe')
 
+@auth_bp.route('/registro-motochefe-sp', methods=['GET', 'POST'])
+def registro_motochefe_sp():
+    """Página pública de registro - Motochefe SP (módulo Lojas HORA)"""
+    form = RegistroForm()
+    # Perfil padrão: financeiro (não afeta acesso às lojas, que depende apenas de sistema_lojas)
+    if not form.is_submitted():
+        form.perfil.data = 'financeiro'
+    if form.validate_on_submit():
+        # Verificar se email já existe
+        usuario_existente = db.session.query(Usuario).filter_by(email=form.email.data).first()
+        if usuario_existente:
+            flash('Este e-mail já está cadastrado.', 'danger')
+            return render_template('auth/registro.html', form=form, sistema='lojas_sp')
+
+        # Criar novo usuário para sistema Lojas HORA (Motochefe SP)
+        usuario = Usuario(
+            nome=form.nome.data,
+            email=form.email.data,
+            empresa=form.empresa.data,
+            cargo=form.cargo.data,
+            telefone=form.telefone.data,
+            perfil=form.perfil.data,
+            status='pendente',
+            sistema_logistica=False,
+            sistema_motochefe=False,
+            sistema_lojas=True
+        )
+        usuario.set_senha(form.senha.data)
+
+        db.session.add(usuario)
+        db.session.commit()
+
+        flash('Solicitação de acesso ao Motochefe SP enviada! Aguarde aprovação da administração.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/registro.html', form=form, sistema='lojas_sp')
+
 @auth_bp.route('/usuarios/pendentes')
 @login_required
 def usuarios_pendentes():

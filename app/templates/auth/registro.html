@@ -8,6 +8,8 @@
                 <i class="fas fa-user-plus"></i> Solicitar Acesso
                 {% if sistema == 'motochefe' %}
                 - Sistema MotoChefe
+                {% elif sistema == 'lojas_sp' %}
+                - Motochefe SP
                 {% else %}
                 - Sistema Logística Nacom Goya
                 {% endif %}
@@ -18,6 +20,8 @@
                 Preencha os dados abaixo para solicitar acesso ao
                 {% if sistema == 'motochefe' %}
                 <strong>Sistema MotoChefe</strong>
+                {% elif sistema == 'lojas_sp' %}
+                <strong>Motochefe SP</strong> (módulo de Lojas)
                 {% else %}
                 <strong>Sistema de Logística</strong>
                 {% endif %}.
@@ -80,9 +84,18 @@
                     {% endif %}
                     <div class="form-text">
                         <small class="text-muted">
+                            {% if sistema == 'motochefe' %}
+                            <strong>Vendedor:</strong> Acesso ao acompanhamento de pedidos e comissões<br>
+                            <strong>Financeiro:</strong> Acesso a títulos, contas a pagar/receber e extratos<br>
+                            <strong>Logística:</strong> Acesso a embarques, pedidos e operação geral
+                            {% elif sistema == 'lojas_sp' %}
+                            <strong>Financeiro:</strong> Acesso padrão ao módulo de Lojas (recomendado)<br>
+                            <strong>Vendedor/Portaria/Logística:</strong> Opções alternativas — o acesso à loja é definido na aprovação
+                            {% else %}
                             <strong>Vendedor:</strong> Acesso apenas ao monitoramento de suas vendas<br>
                             <strong>Portaria:</strong> Acesso aos embarques e controle de portaria<br>
                             <strong>Financeiro/Logística:</strong> Acesso geral ao sistema
+                            {% endif %}
                         </small>
                     </div>
                 </div>
