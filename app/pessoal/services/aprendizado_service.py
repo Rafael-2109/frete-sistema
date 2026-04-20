@@ -284,6 +284,7 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
             match = True
 
         if match:
+            from app.pessoal.services.categorizacao_service import eh_categoria_desconsiderar
             transacao.categoria_id = regra.categoria_id
             transacao.regra_id = regra.id
             transacao.categorizacao_auto = True
@@ -291,6 +292,7 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
             transacao.status = 'CATEGORIZADO'
             transacao.categorizado_em = agora_utc_naive()
             transacao.categorizado_por = 'sistema (propagacao)'
+            transacao.excluir_relatorio = eh_categoria_desconsiderar(regra.categoria_id)
             regra.vezes_usado = (regra.vezes_usado or 0) + 1
             propagados += 1
 
@@ -320,6 +322,9 @@ def propagar_parcelas(transacao: PessoalTransacao) -> int:
         PessoalTransacao.excluir_relatorio.is_(False),
     ).all()
 
+    from app.pessoal.services.categorizacao_service import eh_categoria_desconsiderar
+    desconsiderar = eh_categoria_desconsiderar(transacao.categoria_id)
+
     count = 0
     for irma in irmas:
         # Nao sobrescrever categorizacao manual divergente
@@ -333,6 +338,7 @@ def propagar_parcelas(transacao: PessoalTransacao) -> int:
         irma.status = 'CATEGORIZADO'
         irma.categorizado_em = agora_utc_naive()
         irma.categorizado_por = 'sistema (parcela)'
+        irma.excluir_relatorio = desconsiderar
         if transacao.membro_id and not irma.membro_id:
             irma.membro_id = transacao.membro_id
             irma.membro_auto = True
@@ -403,6 +409,8 @@ def despropagar_regra(regra_id: int) -> int:
         transacao.status = 'PENDENTE'
         transacao.categorizado_em = None
         transacao.categorizado_por = None
+        # Sair de categoria Desconsiderar => volta ao relatorio
+        transacao.excluir_relatorio = False
 
     if count > 0:
         logger.info(

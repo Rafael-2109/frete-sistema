@@ -12,6 +12,7 @@ from app.pessoal.services.aprendizado_service import (
     aprender_de_categorizacao, propagar_para_pendentes, despropagar_regra,
     simular_propagacao, propagar_regra_para_pendentes, propagar_parcelas,
 )
+from app.pessoal.services.categorizacao_service import eh_categoria_desconsiderar
 from app.utils.timezone import agora_utc_naive
 
 transacoes_bp = Blueprint('pessoal_transacoes', __name__)
@@ -219,6 +220,8 @@ def categorizar():
         transacao.status = 'CATEGORIZADO'
         transacao.categorizado_em = agora_utc_naive()
         transacao.categorizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+        # Desconsiderar: exclui do relatorio; remover: volta a entrar
+        transacao.excluir_relatorio = eh_categoria_desconsiderar(categoria_id)
 
         if membro_id:
             transacao.membro_id = membro_id
@@ -319,6 +322,8 @@ def descategorizar():
         transacao.status = 'PENDENTE'
         transacao.categorizado_em = None
         transacao.categorizado_por = None
+        # Sair de Desconsiderar => volta ao relatorio
+        transacao.excluir_relatorio = False
 
         # Re-rodar pipeline em pendentes (inclui esta + as resetadas)
         propagados_info = propagar_para_pendentes()
@@ -341,7 +346,15 @@ def descategorizar():
 @transacoes_bp.route('/api/categorizar-lote', methods=['POST'])
 @login_required
 def categorizar_lote():
-    """Categoriza multiplas transacoes de uma vez (AJAX)."""
+    """Categoriza multiplas transacoes de uma vez (AJAX).
+
+    Aceita os mesmos filtros de regra da rota /api/categorizar:
+    - padrao_historico: padrao editado pelo usuario
+    - cpf_cnpj_padrao (F1): CPF/CNPJ como chave alternativa de match
+    - valor_min / valor_max (F4): range de valor para a regra
+    - tipo_regra: PADRAO | RELATIVO
+    - criar_regra: cria regra apos a primeira transacao (default True)
+    """
     if not pode_acessar_pessoal(current_user):
         return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
 
@@ -352,13 +365,41 @@ def categorizar_lote():
     ids = dados.get('ids', [])
     categoria_id = dados.get('categoria_id')
     membro_id = dados.get('membro_id')
+    criar_regra = dados.get('criar_regra', True)
+    tipo_regra = dados.get('tipo_regra', 'PADRAO')
+    padrao_historico = dados.get('padrao_historico')
+    cpf_cnpj_padrao = dados.get('cpf_cnpj_padrao')
+
+    def _parse_valor(raw):
+        if raw is None or raw == '' or raw == 0:
+            return None
+        try:
+            v = float(raw)
+            return v if v > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    valor_min = _parse_valor(dados.get('valor_min'))
+    valor_max = _parse_valor(dados.get('valor_max'))
 
     if not ids or not categoria_id:
         return jsonify({'sucesso': False, 'mensagem': 'ids e categoria_id obrigatorios.'}), 400
 
+    if tipo_regra not in ('PADRAO', 'RELATIVO'):
+        return jsonify({'sucesso': False, 'mensagem': 'tipo_regra deve ser PADRAO ou RELATIVO.'}), 400
+
+    if valor_min is not None and valor_max is not None and valor_min > valor_max:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'valor_min nao pode ser maior que valor_max.',
+        }), 400
+
     try:
         atualizados = 0
         parcelas_propagadas = 0
+        regra = None
+        desconsiderar = eh_categoria_desconsiderar(categoria_id)
+
         for tid in ids:
             transacao = db.session.get(PessoalTransacao, tid)
             if transacao:
@@ -367,15 +408,35 @@ def categorizar_lote():
                 transacao.status = 'CATEGORIZADO'
                 transacao.categorizado_em = agora_utc_naive()
                 transacao.categorizado_por = current_user.nome if hasattr(current_user, 'nome') else str(current_user.id)
+                transacao.excluir_relatorio = desconsiderar
                 if membro_id:
                     transacao.membro_id = membro_id
                     transacao.membro_auto = False
-                # Aprender regra para a primeira do lote
-                if atualizados == 0:
-                    aprender_de_categorizacao(tid, categoria_id, membro_id)
+                # Aprender regra na primeira transacao, propagando TODOS os filtros
+                if atualizados == 0 and criar_regra:
+                    regra = aprender_de_categorizacao(
+                        tid, categoria_id, membro_id,
+                        tipo_regra=tipo_regra,
+                        padrao_historico=padrao_historico,
+                        cpf_cnpj_padrao=cpf_cnpj_padrao,
+                        valor_min=valor_min,
+                        valor_max=valor_max,
+                    )
+                    if regra:
+                        transacao.regra_id = regra.id
+                elif regra:
+                    # Demais transacoes do lote herdam a regra criada
+                    transacao.regra_id = regra.id
                 # F2: propagar para outras parcelas da mesma compra
                 parcelas_propagadas += propagar_parcelas(transacao)
                 atualizados += 1
+
+        # Propagar para PENDENTES respeitando cpf_cnpj/valor_min/valor_max da regra
+        propagados_info = {'propagados': 0, 'total_pendentes': 0}
+        if regra and regra.tipo_regra == 'PADRAO':
+            propagados_info = propagar_regra_para_pendentes(
+                regra, padrao_override=padrao_historico,
+            )
 
         db.session.commit()
 
@@ -384,6 +445,8 @@ def categorizar_lote():
             'mensagem': f'{atualizados} transacoes categorizadas.',
             'atualizados': atualizados,
             'parcelas_propagadas': parcelas_propagadas,
+            'regra_criada': regra.to_dict() if regra else None,
+            'propagados': propagados_info['propagados'],
         })
 
     except Exception as e:

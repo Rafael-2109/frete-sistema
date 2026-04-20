@@ -84,6 +84,9 @@ def salvar_categoria():
             db.session.add(cat)
 
         db.session.commit()
+        # Invalida cache de IDs do grupo 'Desconsiderar' (grupo pode ter mudado)
+        from app.pessoal.services.categorizacao_service import invalidar_cache_desconsiderar
+        invalidar_cache_desconsiderar()
         return jsonify({'sucesso': True, 'categoria': cat.to_dict()})
 
     except Exception as e:

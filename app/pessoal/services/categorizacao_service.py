@@ -48,6 +48,30 @@ class ResultadoCategorizacao:
     sugestao_categorias: Optional[list] = None  # For RELATIVO rules
 
 
+_CACHE_IDS_DESCONSIDERAR: Optional[set] = None
+
+
+def _ids_desconsiderar() -> set:
+    """Cache de IDs de categorias no grupo 'Desconsiderar' (invalida no reload)."""
+    global _CACHE_IDS_DESCONSIDERAR
+    if _CACHE_IDS_DESCONSIDERAR is None:
+        _CACHE_IDS_DESCONSIDERAR = {
+            c.id for c in PessoalCategoria.query.filter_by(grupo='Desconsiderar').all()
+        }
+    return _CACHE_IDS_DESCONSIDERAR
+
+
+def invalidar_cache_desconsiderar() -> None:
+    """Forca re-leitura do cache (chamar apos editar categoria no grupo Desconsiderar)."""
+    global _CACHE_IDS_DESCONSIDERAR
+    _CACHE_IDS_DESCONSIDERAR = None
+
+
+def eh_categoria_desconsiderar(categoria_id) -> bool:
+    """True se a categoria pertence ao grupo 'Desconsiderar'."""
+    return bool(categoria_id) and categoria_id in _ids_desconsiderar()
+
+
 def _valor_no_range(valor, valor_min, valor_max) -> bool:
     """F4: Verifica se valor da transacao esta no range da regra.
 
@@ -75,6 +99,8 @@ def _aplicar_regra(resultado: ResultadoCategorizacao,
     resultado.categorizacao_auto = True
     resultado.categorizacao_confianca = confianca
     resultado.status = 'CATEGORIZADO'
+    if eh_categoria_desconsiderar(regra.categoria_id):
+        resultado.excluir_relatorio = True
     regra.vezes_usado = (regra.vezes_usado or 0) + 1
     return resultado
 
@@ -112,6 +138,8 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
             resultado.categorizacao_auto = True
             resultado.categorizacao_confianca = 100.0
             resultado.status = 'CATEGORIZADO'
+            if eh_categoria_desconsiderar(irma.categoria_id):
+                resultado.excluir_relatorio = True
             return resultado
 
     # Carregar regras PADRAO ativas ordenadas (compartilhado por F1, Layer 1, Layer 2)

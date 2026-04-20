@@ -104,19 +104,35 @@ def obter_orcamento():
         ~PessoalCategoria.grupo.in_(GRUPOS_EXCLUIDOS),
     ).order_by(PessoalCategoria.grupo, PessoalCategoria.nome).all()
 
+    categorias_payload = [{
+        'id': cat.id,
+        'nome': cat.nome,
+        'grupo': cat.grupo,
+        'icone': cat.icone,
+        'gasto_atual': float(gastos_atual.get(cat.id, 0) or 0),
+        'gasto_anterior': float(gastos_anterior.get(cat.id, 0) or 0),
+        'limite': limites_categoria.get(cat.id),
+    } for cat in categorias]
+
+    # Adiciona linha sintetica "A definir" (despesas sem categoria)
+    gasto_atual_sem_cat = float(gastos_atual.get(None, 0) or 0)
+    gasto_anterior_sem_cat = float(gastos_anterior.get(None, 0) or 0)
+    if gasto_atual_sem_cat > 0 or gasto_anterior_sem_cat > 0:
+        categorias_payload.append({
+            'id': None,
+            'nome': 'A definir',
+            'grupo': 'A definir',
+            'icone': 'fa-question-circle',
+            'gasto_atual': gasto_atual_sem_cat,
+            'gasto_anterior': gasto_anterior_sem_cat,
+            'limite': None,
+        })
+
     resultado = {
         'sucesso': True,
         'ano_mes': ano_mes.isoformat(),
         'limite_global': limite_global,
-        'categorias': [{
-            'id': cat.id,
-            'nome': cat.nome,
-            'grupo': cat.grupo,
-            'icone': cat.icone,
-            'gasto_atual': float(gastos_atual.get(cat.id, 0) or 0),
-            'gasto_anterior': float(gastos_anterior.get(cat.id, 0) or 0),
-            'limite': limites_categoria.get(cat.id),
-        } for cat in categorias],
+        'categorias': categorias_payload,
     }
 
     return jsonify(resultado)

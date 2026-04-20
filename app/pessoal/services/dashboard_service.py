@@ -190,6 +190,19 @@ def gastos_por_categoria(ano, mes):
             'percentual': percentual,
         })
 
+    # Adiciona linha sintetica "A definir" para despesas sem categoria
+    gasto_sem_categoria = float(gastos.get(None, 0) or 0)
+    if gasto_sem_categoria > 0:
+        resultado.append({
+            'categoria_id': None,
+            'categoria': 'A definir',
+            'grupo': 'A definir',
+            'icone': 'fa-question-circle',
+            'gasto': gasto_sem_categoria,
+            'limite': None,
+            'percentual': None,
+        })
+
     # Ordenar por gasto (maior primeiro)
     resultado.sort(key=lambda x: x['gasto'], reverse=True)
     return resultado
@@ -282,7 +295,7 @@ def evolucao_por_categoria(ano_ref, mes_ref, meses=6, categoria_ids=None, top_n=
     primeiro_dia = janela[0]['inicio']
     apos_ultimo = janela[-1]['proximo']
 
-    # Query unica agregada por (mes, categoria_id)
+    # Query unica agregada por (mes, categoria_id). NULL = "A definir".
     mes_col = func.date_trunc('month', PessoalTransacao.data)
     rows = db.session.query(
         mes_col.label('mes'),
@@ -293,7 +306,6 @@ def evolucao_por_categoria(ano_ref, mes_ref, meses=6, categoria_ids=None, top_n=
         PessoalTransacao.excluir_relatorio.is_(False),
         PessoalTransacao.data >= primeiro_dia,
         PessoalTransacao.data < apos_ultimo,
-        PessoalTransacao.categoria_id.isnot(None),
     ).group_by(mes_col, PessoalTransacao.categoria_id).all()
 
     # Organiza {categoria_id: {mes_str: valor}}
@@ -307,9 +319,14 @@ def evolucao_por_categoria(ano_ref, mes_ref, meses=6, categoria_ids=None, top_n=
 
     # Determinar categorias alvo
     if categoria_ids:
-        categoria_ids = [int(c) for c in categoria_ids if c]
+        # Mantem None ("A definir"); converte demais para int
+        categoria_ids = [
+            (None if (c is None or c == '' or c == 'null' or c == 0) else int(c))
+            for c in categoria_ids
+        ]
     else:
-        # Top N por gasto total no periodo (excluindo grupos fora do orcamento)
+        # Top N por gasto total no periodo (excluindo grupos fora do orcamento).
+        # Inclui None (A definir) como candidato valido.
         ids_validos = set(
             db.session.scalars(
                 select(PessoalCategoria.id).where(
@@ -317,6 +334,7 @@ def evolucao_por_categoria(ano_ref, mes_ref, meses=6, categoria_ids=None, top_n=
                 )
             ).all()
         )
+        ids_validos.add(None)
         top = sorted(
             ((cid, t) for cid, t in totais_cat.items() if cid in ids_validos),
             key=lambda x: x[1], reverse=True,
@@ -329,15 +347,31 @@ def evolucao_por_categoria(ano_ref, mes_ref, meses=6, categoria_ids=None, top_n=
             'series': [],
         }
 
-    # Metadata das categorias
+    # Metadata das categorias (IDs reais, excluindo None/"A definir")
+    ids_reais = [cid for cid in categoria_ids if cid is not None]
     categorias = {
         c.id: c for c in PessoalCategoria.query.filter(
-            PessoalCategoria.id.in_(categoria_ids),
+            PessoalCategoria.id.in_(ids_reais),
         ).all()
-    }
+    } if ids_reais else {}
 
     series = []
     for cat_id in categoria_ids:
+        if cat_id is None:
+            # Serie sintetica "A definir" (despesas sem categoria)
+            valores = [
+                gastos.get(None, {}).get(m['mes_str'], 0.0)
+                for m in janela
+            ]
+            series.append({
+                'categoria_id': None,
+                'categoria': 'A definir',
+                'grupo': 'A definir',
+                'icone': 'fa-question-circle',
+                'total': sum(valores),
+                'valores': valores,
+            })
+            continue
         cat = categorias.get(cat_id)
         if not cat:
             continue

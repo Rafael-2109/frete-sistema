@@ -155,7 +155,9 @@
                 <i class="fas fa-robot text-info ms-1" title="Auto ({{ t.categorizacao_confianca }}%)"></i>
                 {% endif %}
                 {% else %}
-                <span class="text-muted">-</span>
+                <span class="text-muted">
+                  <i class="fas fa-question-circle me-1"></i>A definir
+                </span>
                 {% endif %}
               </td>
               <td class="small">
@@ -193,6 +195,7 @@
                         data-id="{{ t.id }}" data-historico="{{ t.historico }}"
                         data-descricao="{{ t.descricao or '' }}"
                         data-hist-completo="{{ t.historico_completo or '' }}"
+                        data-cpf-cnpj="{{ t.cpf_cnpj_parte or '' }}"
                         title="Categorizar">
                   <i class="fas fa-tag"></i>
                 </button>
@@ -307,6 +310,27 @@
           </div>
         </div>
 
+        {# F1: CPF/CNPJ (match alternativo mais estavel que nome) #}
+        <div id="divCpfCnpj" class="mt-2">
+          <label class="form-label small">CPF/CNPJ <span class="text-muted">(opcional — match por CPF/CNPJ)</span></label>
+          <input type="text" id="modalCpfCnpj" class="form-control form-control-sm" placeholder="00.000.000/0000-00 ou 000.000.000-00">
+          <div class="form-text">Quando preenchido, a regra tambem casa quando o CPF/CNPJ aparece na transacao.</div>
+        </div>
+
+        {# F4: Range de valor #}
+        <div id="divValorRange" class="mt-2">
+          <label class="form-label small">Range de valor <span class="text-muted">(opcional)</span></label>
+          <div class="row g-2">
+            <div class="col">
+              <input type="number" step="0.01" min="0" id="modalValorMin" class="form-control form-control-sm" placeholder="Valor min">
+            </div>
+            <div class="col">
+              <input type="number" step="0.01" min="0" id="modalValorMax" class="form-control form-control-sm" placeholder="Valor max">
+            </div>
+          </div>
+          <div class="form-text">Se preenchido, regra so casa quando o valor da transacao estiver no range.</div>
+        </div>
+
         {# Preview de propagacao #}
         <div id="divPreview" class="mt-3 d-none">
           <hr>
@@ -380,6 +404,50 @@
             {% endfor %}
           </select>
         </div>
+
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" id="modalLoteCriarRegra" checked>
+          <label class="form-check-label" for="modalLoteCriarRegra">
+            Criar regra para futuras transacoes similares
+          </label>
+        </div>
+
+        <div id="divLoteTipoRegra" class="ms-4 mb-2">
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="loteTipoRegra" id="loteTipoRegraPadrao" value="PADRAO" checked>
+            <label class="form-check-label small" for="loteTipoRegraPadrao">
+              Padrao <span class="text-muted">(auto-categoriza similares)</span>
+            </label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="loteTipoRegra" id="loteTipoRegraRelativo" value="RELATIVO">
+            <label class="form-check-label small" for="loteTipoRegraRelativo">
+              Relativo <span class="text-muted">(sugere, nao aplica)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label small">Padrao da regra <span class="text-muted">(opcional — usa historico da 1a transacao se vazio)</span></label>
+          <input type="text" id="modalLotePadrao" class="form-control form-control-sm" placeholder="Texto para match (substring)">
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label small">CPF/CNPJ <span class="text-muted">(opcional)</span></label>
+          <input type="text" id="modalLoteCpfCnpj" class="form-control form-control-sm" placeholder="00.000.000/0000-00 ou 000.000.000-00">
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label small">Range de valor <span class="text-muted">(opcional)</span></label>
+          <div class="row g-2">
+            <div class="col">
+              <input type="number" step="0.01" min="0" id="modalLoteValorMin" class="form-control form-control-sm" placeholder="Valor min">
+            </div>
+            <div class="col">
+              <input type="number" step="0.01" min="0" id="modalLoteValorMax" class="form-control form-control-sm" placeholder="Valor max">
+            </div>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -423,15 +491,10 @@ $(function() {
     }
   }
 
-  // Toggle tipo regra e padrao visibilidade
+  // Toggle tipo regra e padrao visibilidade (inclui F1 CPF/CNPJ e F4 valor range)
   $('#modalCriarRegra').on('change', function() {
-    if ($(this).is(':checked')) {
-      $('#divTipoRegra').show();
-      $('#divPadrao').show();
-    } else {
-      $('#divTipoRegra').hide();
-      $('#divPadrao').hide();
-    }
+    const show = $(this).is(':checked');
+    $('#divTipoRegra, #divPadrao, #divCpfCnpj, #divValorRange').toggle(show);
   });
 
   // Quando mudar tipo regra RELATIVO, esconder preview (nao propaga)
@@ -469,11 +532,14 @@ $(function() {
     $('#modalCategoria').val('');
     $('#modalMembro').val('');
     $('#modalCriarRegra').prop('checked', true);
-    $('#divTipoRegra').show();
-    $('#divPadrao').show();
+    $('#divTipoRegra, #divPadrao, #divCpfCnpj, #divValorRange').show();
     $('#tipoRegraPadrao').prop('checked', true);
     // Pre-popular padrao com historico_completo (ja normalizado, contem descricao)
     $('#modalPadrao').val(histCompleto || (historico || '').toUpperCase());
+    // Pre-popular CPF/CNPJ se houver na transacao (F1)
+    $('#modalCpfCnpj').val($(this).data('cpf-cnpj') || '');
+    $('#modalValorMin').val('');
+    $('#modalValorMax').val('');
     resetPreview();
     new bootstrap.Modal('#modalCategorizar').show();
   });
@@ -554,6 +620,14 @@ $(function() {
     });
   });
 
+  // Helper: parsea valor numerico (retorna null se invalido/vazio)
+  function parseValorInput($el) {
+    const raw = ($el.val() || '').trim();
+    if (!raw) return null;
+    const v = parseFloat(raw.replace(',', '.'));
+    return (isFinite(v) && v > 0) ? v : null;
+  }
+
   // Confirmar categorizacao (Passo 2)
   $('#btnSalvarCategoria').on('click', function() {
     const data = {
@@ -563,10 +637,18 @@ $(function() {
       criar_regra: $('#modalCriarRegra').is(':checked'),
       tipo_regra: $('input[name="tipoRegra"]:checked').val() || 'PADRAO',
       padrao_historico: $('#modalPadrao').val(),
+      cpf_cnpj_padrao: ($('#modalCpfCnpj').val() || '').trim() || null,
+      valor_min: parseValorInput($('#modalValorMin')),
+      valor_max: parseValorInput($('#modalValorMax')),
     };
 
     if (!data.categoria_id) {
       toastr.warning('Selecione uma categoria.');
+      return;
+    }
+
+    if (data.valor_min !== null && data.valor_max !== null && data.valor_min > data.valor_max) {
+      toastr.warning('Valor minimo nao pode ser maior que o maximo.');
       return;
     }
 
@@ -607,6 +689,13 @@ $(function() {
     new bootstrap.Modal('#modalLote').show();
   });
 
+  // Toggle: ocultar campos de regra quando "criar regra" desmarcado (modal lote)
+  $('#modalLoteCriarRegra').on('change', function() {
+    const show = $(this).is(':checked');
+    $('#divLoteTipoRegra, #modalLotePadrao, #modalLoteCpfCnpj, #modalLoteValorMin, #modalLoteValorMax')
+      .closest('.mb-2, .ms-4').toggle(show);
+  });
+
   // Salvar lote
   $('#btnSalvarLote').on('click', function() {
     const ids = [];
@@ -619,23 +708,52 @@ $(function() {
       return;
     }
 
+    const data = {
+      ids: ids,
+      categoria_id: catId,
+      membro_id: membroId,
+      criar_regra: $('#modalLoteCriarRegra').is(':checked'),
+      tipo_regra: $('input[name="loteTipoRegra"]:checked').val() || 'PADRAO',
+      padrao_historico: ($('#modalLotePadrao').val() || '').trim() || null,
+      cpf_cnpj_padrao: ($('#modalLoteCpfCnpj').val() || '').trim() || null,
+      valor_min: parseValorInput($('#modalLoteValorMin')),
+      valor_max: parseValorInput($('#modalLoteValorMax')),
+    };
+
+    if (data.valor_min !== null && data.valor_max !== null && data.valor_min > data.valor_max) {
+      toastr.warning('Valor minimo nao pode ser maior que o maximo.');
+      return;
+    }
+
+    const $btn = $(this);
+    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Salvando...');
+
     $.ajax({
       url: '{{ url_for("pessoal.pessoal_transacoes.categorizar_lote") }}',
       method: 'POST',
       contentType: 'application/json',
       headers: {'X-CSRFToken': csrfToken},
-      data: JSON.stringify({ids: ids, categoria_id: catId, membro_id: membroId}),
+      data: JSON.stringify(data),
       success: function(resp) {
         if (resp.sucesso) {
-          toastr.success(resp.mensagem);
+          let msg = resp.mensagem;
+          if (resp.propagados > 0) {
+            msg += ' (' + resp.propagados + ' similares auto-categorizadas)';
+          }
+          if (resp.parcelas_propagadas > 0) {
+            msg += ' (' + resp.parcelas_propagadas + ' parcelas propagadas)';
+          }
+          toastr.success(msg);
           bootstrap.Modal.getInstance('#modalLote').hide();
           location.reload();
         } else {
           toastr.error(resp.mensagem);
+          $btn.prop('disabled', false).html('<i class="fas fa-check-double"></i> Salvar Lote');
         }
       },
       error: function(xhr) {
-        toastr.error('Erro ao categorizar lote.');
+        toastr.error('Erro ao categorizar lote: ' + (xhr.responseJSON?.mensagem || xhr.statusText));
+        $btn.prop('disabled', false).html('<i class="fas fa-check-double"></i> Salvar Lote');
       }
     });
   });
