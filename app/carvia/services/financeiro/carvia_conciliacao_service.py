@@ -1148,88 +1148,36 @@ class CarviaConciliacaoService:
             return {'sucesso': False, 'erro': str(e)}
 
     # ===================================================================
-    # E6 (2026-04-19): Calcular valor atualizado de fatura com juros/multa
+    # E10 (2026-04-19): Sugestao manual FIFO c/ histórico de conciliacoes
     # ===================================================================
-
-    @staticmethod
-    def calcular_valor_atualizado_fatura(
-        fatura_id, data_pagamento=None,
-        multa_percentual=2.0, juros_mes=1.0,
-    ):
-        """E6: retorna valor_total ajustado para fatura cliente em atraso.
-
-        Formula:
-          valor_atualizado = valor_total * (1 + multa% + juros_mensal% * meses_atraso)
-        Se data_pagamento < vencimento: retorna valor_total original (sem acrescimo).
-
-        Args:
-            fatura_id: int
-            data_pagamento: date — default hoje
-            multa_percentual: multa fixa aplicada quando ha atraso
-            juros_mes: juros ao mes (pro rata diario: mes/30)
-
-        Returns dict com valores calculados. Nao muta o banco.
-        """
-        from app.carvia.models import CarviaFaturaCliente
-        from datetime import date as _date
-        from decimal import Decimal as _D
-
-        if data_pagamento is None:
-            data_pagamento = _date.today()
-
-        f = db.session.get(CarviaFaturaCliente, fatura_id)
-        if not f:
-            return {'sucesso': False, 'erro': 'fatura_nao_encontrada'}
-        if not f.vencimento:
-            return {'sucesso': False, 'erro': 'fatura_sem_vencimento'}
-
-        valor_original = float(f.valor_total or 0)
-        dias_atraso = (data_pagamento - f.vencimento).days
-
-        if dias_atraso <= 0:
-            return {
-                'sucesso': True,
-                'fatura_id': fatura_id,
-                'vencimento': f.vencimento.isoformat(),
-                'dias_atraso': 0,
-                'valor_original': valor_original,
-                'valor_atualizado': valor_original,
-                'multa': 0.0,
-                'juros': 0.0,
-            }
-
-        multa = valor_original * (multa_percentual / 100)
-        juros_diario = (juros_mes / 100) / 30
-        juros = valor_original * juros_diario * dias_atraso
-
-        valor_atualizado = valor_original + multa + juros
-        return {
-            'sucesso': True,
-            'fatura_id': fatura_id,
-            'vencimento': f.vencimento.isoformat(),
-            'data_pagamento': data_pagamento.isoformat(),
-            'dias_atraso': dias_atraso,
-            'valor_original': valor_original,
-            'valor_atualizado': valor_atualizado,
-            'multa': multa,
-            'juros': juros,
-            'multa_percentual': multa_percentual,
-            'juros_mes': juros_mes,
-        }
-
-    # ===================================================================
-    # E10 (2026-04-19): Distribuicao FIFO de pagamento parcial
+    # Semantica: SUGESTAO APENAS — retorna distribuicao proposta, NAO muta
+    # o banco. Operador confirma alocacao manualmente via UI de conciliacao.
+    # Integra CarviaHistoricoMatchExtrato (R17): se `linha_extrato_id` for
+    # fornecido, consulta cnpjs aprendidos da descricao e retorna-os junto,
+    # para o operador validar se o cnpj_cliente passado bate com o historico.
     # ===================================================================
 
     @staticmethod
     def sugerir_distribuicao_fifo(
         cnpj_cliente, valor_disponivel, tipo_documento='fatura_cliente',
+        linha_extrato_id=None,
     ):
-        """E10: sugere distribuicao de um valor entre faturas pendentes do
-        mesmo cliente, ordenadas por vencimento (FIFO — mais antigas primeiro).
+        """E10: sugere distribuicao FIFO entre faturas pendentes do cliente.
 
-        Retorna lista de dicts {fatura_id, numero_fatura, vencimento,
-        saldo_pendente, valor_sugerido} ate esgotar `valor_disponivel`.
+        Ordena por vencimento ASC (mais antigas primeiro). NAO persiste —
+        operador confirma via UI.
+
+        Args:
+            cnpj_cliente: CNPJ do pagador
+            valor_disponivel: valor total a distribuir
+            tipo_documento: apenas 'fatura_cliente' suportado
+            linha_extrato_id: opcional — se fornecido, enriquece resposta
+                com cnpjs_aprendidos do historico R17 (aviso se cnpj_cliente
+                diverge dos cnpjs aprendidos para aquela descricao)
+
+        Returns:
+            dict com 'distribuicao' (lista ordem FIFO) e 'historico_match'
+            (cnpjs aprendidos + consistencia_historico se linha_extrato_id).
         """
         from app.carvia.models import CarviaFaturaCliente
         if tipo_documento != 'fatura_cliente':
@@ -1266,6 +1214,35 @@ class CarviaConciliacaoService:
             })
             restante -= alocado
 
+        # Integracao R17: consulta historico se linha fornecida
+        historico_match = None
+        if linha_extrato_id:
+            try:
+                from app.carvia.models import CarviaExtratoLinha
+                from app.carvia.services.financeiro.carvia_historico_match_service import (
+                    CarviaHistoricoMatchService,
+                )
+                linha = db.session.get(CarviaExtratoLinha, linha_extrato_id)
+                if linha:
+                    cnpjs_aprendidos = (
+                        CarviaHistoricoMatchService.cnpjs_aprendidos(linha)
+                    )
+                    cnpj_norm = (cnpj_cliente or '').strip()
+                    consistente = (
+                        cnpj_norm in cnpjs_aprendidos
+                        if cnpjs_aprendidos else None
+                    )
+                    historico_match = {
+                        'linha_extrato_id': linha_extrato_id,
+                        'cnpjs_aprendidos': cnpjs_aprendidos,
+                        'consistente_com_historico': consistente,
+                    }
+            except Exception as e:
+                logger.warning(
+                    'E10 consulta historico R17 falhou (nao-bloqueante): %s', e,
+                )
+                historico_match = None
+
         return {
             'sucesso': True,
             'cnpj_cliente': cnpj_cliente,
@@ -1274,6 +1251,8 @@ class CarviaConciliacaoService:
             'valor_restante': restante,
             'distribuicao': distribuicao,
             'faturas_alocadas': len(distribuicao),
+            'historico_match': historico_match,  # None se linha nao informada
+            'metodo': 'SUGESTAO_MANUAL',  # deixa explicito para caller
         }
 
     # ===================================================================

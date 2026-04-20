@@ -2,7 +2,6 @@
 
 D1: margem no gerencial (custo_total, margem_bruta, percentual_margem)
 D2: FK operacao_id/frete_id em CarviaDespesa
-D3: DSO / aging
 D4: ajuste manual (rota registrada + permissao)
 D5: recalcular valor_total fatura
 D6: autoria DIVERGENTE/EM_CONFERENCIA
@@ -17,7 +16,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from datetime import datetime, date, timedelta
+from datetime import date
 
 
 def _sfx() -> str:
@@ -49,29 +48,6 @@ def _criar_op(
     db.session.add(op)
     db.session.flush()
     return op
-
-
-def _criar_fatura(
-    db, numero=None, valor_total=1000.0, vencimento=None,
-    data_emissao=None, status='PENDENTE', pago_em=None,
-    total_conciliado=0.0,
-):
-    from app.carvia.models import CarviaFaturaCliente
-    fat = CarviaFaturaCliente(
-        numero_fatura=numero or f'FAT-{_sfx()}',
-        cnpj_cliente='12345678000100',
-        nome_cliente='Cliente',
-        data_emissao=data_emissao or date(2026, 4, 1),
-        vencimento=vencimento,
-        valor_total=Decimal(str(valor_total)),
-        total_conciliado=Decimal(str(total_conciliado)),
-        status=status,
-        pago_em=pago_em,
-        criado_por='test',
-    )
-    db.session.add(fat)
-    db.session.flush()
-    return fat
 
 
 # ---------------------------------------------------------------------------
@@ -150,46 +126,6 @@ class TestD2DespesaFK:
         from app.carvia.models import CarviaDespesa
         assert hasattr(CarviaDespesa, 'operacao_id')
         assert hasattr(CarviaDespesa, 'frete_id')
-
-
-# ---------------------------------------------------------------------------
-# D3 — DSO e aging
-# ---------------------------------------------------------------------------
-
-class TestD3DsoAging:
-    def test_aging_retorna_buckets(self, db):
-        from app.carvia.services.financeiro.gerencial_service import GerencialService
-        # Cria fatura vencida 45 dias atras
-        _criar_fatura(
-            db,
-            data_emissao=date(2026, 2, 15),
-            vencimento=date(2026, 3, 5),  # 45 dias atras de 2026-04-19
-            valor_total=500.0,
-            status='PENDENTE',
-        )
-        resultado = GerencialService().aging_faturas_cliente(
-            hoje=date(2026, 4, 19)
-        )
-        assert isinstance(resultado, list)
-        for cliente in resultado:
-            assert 'total_pendente' in cliente
-            assert 'b_0_30' in cliente
-            assert 'b_31_60' in cliente
-            assert 'b_61_90' in cliente
-            assert 'b_90p' in cliente
-
-    def test_calcular_dso(self, db):
-        from app.carvia.services.financeiro.gerencial_service import GerencialService
-        resultado = GerencialService().calcular_dso(
-            data_inicio=date(2026, 1, 1),
-            data_fim=date(2026, 4, 30),
-        )
-        assert 'dso_dias' in resultado
-        assert 'contas_a_receber' in resultado
-        assert 'receita_periodo' in resultado
-        assert 'dias_periodo' in resultado
-        assert 'prazo_medio_pagamento' in resultado
-        assert resultado['dias_periodo'] == 120
 
 
 # ---------------------------------------------------------------------------

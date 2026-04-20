@@ -68,7 +68,16 @@ def pontuar_documentos(linha, docs, cnpjs_historico=None):
     """
     valor_extrato = abs(float(linha.valor or 0))
     data_extrato = linha.data  # date ou None
-    texto_extrato = linha.razao_social or linha.descricao or linha.memo or ''
+    # REFINO 2026-04-19: priorizar razao_social se setada; senao extrair
+    # nome do pagador do prefixo " - " antes de "Pix recebido"/"Transferencia"/etc.
+    # Analise de 178 linhas OFX reais: 100% seguem esse padrao.
+    if linha.razao_social:
+        texto_extrato = linha.razao_social
+    else:
+        texto_extrato = (
+            extrair_nome_pagador(linha.descricao or linha.memo or '')
+            or linha.descricao or linha.memo or ''
+        )
 
     cnpjs_historico = cnpjs_historico or {}
 
@@ -88,21 +97,25 @@ def pontuar_documentos(linha, docs, cnpjs_historico=None):
         ocorrencias_hist = cnpjs_historico.get(cnpj_doc, 0) if cnpj_doc else 0
         if ocorrencias_hist > 0:
             score_pre_boost = score
-            # FIX M1: floor 0.30 garante que docs com CNPJ aprendido mas com
-            # score base < 0.30 (sem match de valor/data/nome — PIX generico,
-            # descricao pobre, valor parcial fora da margem) ainda atinjam
-            # pelo menos BAIXO (>= 0.30 apos boost), ganhando a primeira
-            # estrela visual. Sem floor, 0 * 1.4 = 0 e o historico seria
-            # completamente inutil exatamente quando mais importa.
-            # - score base 0.0 → max(0, 0.30)*1.4 = 0.42 → BAIXO
-            # - score base 0.3 → max(0.3, 0.30)*1.4 = 0.42 → BAIXO (igual)
-            # - score base 0.57 → max(0.57, 0.30)*1.4 = 0.798 → MEDIO
-            # - score base 0.65 → max(0.65, 0.30)*1.4 = 0.91 → ALTO
-            # Floor nao altera scores ja >= 0.30 (preserva calibracao).
+            # REFINO 2026-04-19: BOOST ADAPTATIVO por volume de evidencia.
+            # Antes: fator fixo 1.4x (ate com 1 unica ocorrencia no historico).
+            # Problema real: base com apenas 16 eventos globais e 3 descricoes
+            # com CNPJs ambiguos — boost 1.4x era agressivo demais com pouca
+            # massa critica.
+            # Agora: fator = 1 + min(0.4, ocorrencias * 0.15)
+            #   1 ocorrencia  -> 1.15x (cautela)
+            #   2 ocorrencias -> 1.30x
+            #   3 ocorrencias -> 1.45x (cap em 1.40x via min)
+            # Preserva semantica: historico confirma, mas nao atropela sinais
+            # de valor/data/nome quando evidencia e rasa.
+            fator_boost = 1.0 + min(0.4, ocorrencias_hist * 0.15)
+            # Floor 0.30 preservado (garante tier BAIXO em descricoes pobres
+            # mas com historico).
             base_boost = max(score, 0.30)
-            score = min(1.0, base_boost * 1.4)
+            score = min(1.0, base_boost * fator_boost)
             doc['score_historico'] = True
             doc['score_historico_ocorrencias'] = ocorrencias_hist
+            doc['score_historico_fator'] = round(fator_boost, 3)
             doc['score_pre_boost'] = round(score_pre_boost, 4)
         else:
             doc['score_historico'] = False
@@ -215,6 +228,12 @@ def _normalizar(texto):
 
     Remove acentos, lowercase, pontuacao, stopwords juridicas.
     Retorna set de tokens.
+
+    REFINO 2026-04-19 (baseado em analise de 178 linhas reais OFX):
+    - Filtra tokens NUMERICOS com 5+ digitos (IDs transacionais: "474055892",
+      "08561701"). Numeros curtos (< 5 digitos) como "2026" ainda vazam,
+      mas sao raros o suficiente e podem ser uteis em contextos de numero
+      de fatura curto.
     """
     if not texto:
         return set()
@@ -227,11 +246,47 @@ def _normalizar(texto):
     limpo = re.sub(r'[^a-z0-9\s]', ' ', ascii_str)
 
     # Tokenize + filtrar
-    tokens = {
-        t for t in limpo.split()
-        if len(t) > 2 and t not in _STOPWORDS
-    }
+    # - descartar tokens com <= 2 chars
+    # - descartar stopwords
+    # - descartar IDs transacionais (numero puro com 5+ digitos)
+    tokens = set()
+    for t in limpo.split():
+        if len(t) <= 2:
+            continue
+        if t in _STOPWORDS:
+            continue
+        if t.isdigit() and len(t) >= 5:
+            continue  # ID transacional, nao semantica
+        tokens.add(t)
     return tokens
+
+
+def extrair_nome_pagador(descricao):
+    """Extrai o NOME do pagador do prefixo antes do primeiro " - ".
+
+    REFINO 2026-04-19: analise de 178 linhas OFX reais mostra que 100%
+    seguem o padrao: `<Nome Pagador> - <Tipo Operacao>: "<detalhes>"`.
+    Exemplos:
+      "D.a. De Mattos & Cia Ltda - Pix recebido: ..." -> "D.a. De Mattos & Cia Ltda"
+      "CAZAN TRANSPORTES LTDA - Pagamento efetuado: ..." -> "CAZAN TRANSPORTES LTDA"
+      "Rafael Nascimento - Transferencia recebida: ..." -> "Rafael Nascimento"
+
+    Se nao ha " - ", retorna a descricao completa (fallback seguro).
+
+    Args:
+        descricao: str|None
+
+    Returns:
+        str: nome extraido ou string vazia
+    """
+    if not descricao:
+        return ''
+    # Limita busca aos primeiros 200 chars (nome raramente ultrapassa 80)
+    head = descricao[:200]
+    idx = head.find(' - ')
+    if idx <= 0:
+        return descricao.strip()
+    return head[:idx].strip()
 
 
 def _parse_data_br(data_str):
