@@ -78,6 +78,29 @@ def run_migration():
     print("DDL concluido.")
     print()
 
+    # GUARD: backfills usam carvia_subcontratos.status_conferencia/valor_considerado/valor_pago.
+    # Apos migration 4/4 (carvia_drop_sub_conferencia_fields), essas colunas foram droppadas.
+    # Em re-execucoes (cada deploy roda este script), pular backfills se ja nao existem.
+    # Sentry PYTHON-FLASK-MD rastreava esse erro em deploys subsequentes.
+    if not campo_existe:
+        print("  (campos sub.status_conferencia/valor_considerado/valor_pago ja removidos — skip backfills)")
+        print()
+        # Pular para verificacao final
+        fretes_aprovados = db.session.execute(text(
+            "SELECT COUNT(*) FROM carvia_fretes "
+            "WHERE status_conferencia = 'APROVADO'"
+        )).scalar() or 0
+        fretes_divergentes = db.session.execute(text(
+            "SELECT COUNT(*) FROM carvia_fretes "
+            "WHERE status_conferencia = 'DIVERGENTE'"
+        )).scalar() or 0
+        print("=" * 70)
+        print("RESULTADO (sem backfills — re-execucao pos drop)")
+        print("=" * 70)
+        print(f"Fretes APROVADO: {fretes_aprovados}")
+        print(f"Fretes DIVERGENTE: {fretes_divergentes}")
+        return
+
     # Backfill 1: consolidar status_conferencia
     print("Backfill 1: consolidar status_conferencia sub -> frete")
     result = db.session.execute(text("""

@@ -263,6 +263,18 @@ def register_cliente_routes(bp):
 
         except Exception as e:
             db.session.rollback()
+            # Race condition: outra request criou duplicado entre validacao e commit.
+            # Sentry PYTHON-FLASK-JA rastreava esse erro como 500.
+            from sqlalchemy.exc import IntegrityError
+            if isinstance(e, IntegrityError) and 'uq_carvia_end_cliente_cnpj_tipo' in str(e):
+                logger.warning(
+                    "Race UniqueViolation atualizar endereco #%s (concorrencia): %s",
+                    endereco_id, str(e)[:200]
+                )
+                return jsonify({
+                    'erro': 'Endereco duplicado: ja existe outro endereco identico para este cliente. Recarregue a pagina.',
+                    'acao_sugerida': 'mesclar',
+                }), 409
             logger.error("Erro ao atualizar endereco #%s: %s", endereco_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
@@ -298,6 +310,18 @@ def register_cliente_routes(bp):
 
         except Exception as e:
             db.session.rollback()
+            # FK race: cotacao foi criada referenciando este endereco entre
+            # check do service e DELETE. Sentry PYTHON-FLASK-J9 rastreava como 500.
+            from sqlalchemy.exc import IntegrityError
+            if isinstance(e, IntegrityError) and 'foreign key constraint' in str(e).lower():
+                logger.warning(
+                    "Race FK violation remover endereco #%s (cotacao concorrente): %s",
+                    endereco_id, str(e)[:200]
+                )
+                return jsonify({
+                    'erro': 'Endereco em uso: foi vinculado a uma cotacao apos voce abrir esta tela. Recarregue para ver opcoes de migracao.',
+                    'acao_sugerida': 'recarregar',
+                }), 409
             logger.error("Erro ao remover endereco #%s: %s", endereco_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 

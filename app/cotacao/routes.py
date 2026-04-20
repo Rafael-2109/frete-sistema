@@ -1231,19 +1231,22 @@ def fechar_frete():
         print(f"[DEBUG] Dados da tabela finais: {dados_tabela}")
 
         # ✅ CORREÇÃO: Buscar dados corretos do banco para calcular totais
-        # Em vez de usar pedidos_data do frontend, buscar do banco
-        pedidos_db = []
-        lote_ids_processados = set()  # Para evitar duplicação
-
+        # Em vez de usar pedidos_data do frontend, buscar do banco.
+        # Sentry PYTHON-FLASK-EM: batch IN(...) elimina N+1 (N queries por pedido).
+        lote_ids_unicos = []
+        seen = set()
         for pedido_data in pedidos_data:
-            # Tenta pegar o separacao_lote_id de várias formas
             lote_id = pedido_data.get('separacao_lote_id') or pedido_data.get('id')
+            if lote_id and lote_id not in seen:
+                lote_ids_unicos.append(lote_id)
+                seen.add(lote_id)
 
-            if lote_id and lote_id not in lote_ids_processados:
-                pedido_db = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
-                if pedido_db:
-                    pedidos_db.append(pedido_db)
-                    lote_ids_processados.add(lote_id)
+        pedidos_db = []
+        if lote_ids_unicos:
+            # 1 query batch em vez de N queries
+            pedidos_db = Pedido.query.filter(
+                Pedido.separacao_lote_id.in_(lote_ids_unicos)
+            ).all()
 
         # Calcula totais das mercadorias usando dados do banco
         if pedidos_db:

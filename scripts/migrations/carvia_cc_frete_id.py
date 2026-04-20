@@ -30,31 +30,45 @@ def run_migration():
     """))
     db.session.commit()
 
-    print("Step 2: Backfill frete_id via sub")
-    result = db.session.execute(text("""
-        UPDATE carvia_conta_corrente_transportadoras cc
-        SET frete_id = s.frete_id
-        FROM carvia_subcontratos s
-        WHERE cc.subcontrato_id = s.id
-          AND cc.frete_id IS NULL
-          AND s.frete_id IS NOT NULL
-    """))
-    print(f"  Backfill: {result.rowcount} linhas")
-    db.session.commit()
+    # GUARD: cc.subcontrato_id pode ter sido droppado por migration posterior.
+    # Em re-execucoes (cada deploy roda este script), pular Step 2 e Step 3
+    # se a coluna source ja nao existe. Sentry PYTHON-FLASK-HS rastreava esse erro.
+    sub_col_existe = db.session.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'carvia_conta_corrente_transportadoras'
+              AND column_name = 'subcontrato_id'
+        )
+    """)).scalar()
 
-    orfaos = db.session.execute(text(
-        "SELECT COUNT(*) FROM carvia_conta_corrente_transportadoras WHERE frete_id IS NULL"
-    )).scalar() or 0
-    if orfaos > 0:
-        print(f"AVISO: {orfaos} movimentacoes sem frete_id (legado pre-CarviaFrete).")
-        print("  Nao bloqueante: listar_extrato usa OUTER JOIN.")
+    if sub_col_existe:
+        print("Step 2: Backfill frete_id via sub")
+        result = db.session.execute(text("""
+            UPDATE carvia_conta_corrente_transportadoras cc
+            SET frete_id = s.frete_id
+            FROM carvia_subcontratos s
+            WHERE cc.subcontrato_id = s.id
+              AND cc.frete_id IS NULL
+              AND s.frete_id IS NOT NULL
+        """))
+        print(f"  Backfill: {result.rowcount} linhas")
+        db.session.commit()
 
-    print("Step 3: Afrouxar subcontrato_id NOT NULL (model ja afrouxado em Phase 5)")
-    db.session.execute(text("""
-        ALTER TABLE carvia_conta_corrente_transportadoras
-          ALTER COLUMN subcontrato_id DROP NOT NULL
-    """))
-    db.session.commit()
+        orfaos = db.session.execute(text(
+            "SELECT COUNT(*) FROM carvia_conta_corrente_transportadoras WHERE frete_id IS NULL"
+        )).scalar() or 0
+        if orfaos > 0:
+            print(f"AVISO: {orfaos} movimentacoes sem frete_id (legado pre-CarviaFrete).")
+            print("  Nao bloqueante: listar_extrato usa OUTER JOIN.")
+
+        print("Step 3: Afrouxar subcontrato_id NOT NULL (model ja afrouxado em Phase 5)")
+        db.session.execute(text("""
+            ALTER TABLE carvia_conta_corrente_transportadoras
+              ALTER COLUMN subcontrato_id DROP NOT NULL
+        """))
+        db.session.commit()
+    else:
+        print("Step 2/3: skip — cc.subcontrato_id ja foi droppado (migration finalizada)")
 
     print("Step 4: Index (idempotent)")
     db.session.execute(text("""

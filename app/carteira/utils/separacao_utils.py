@@ -171,18 +171,38 @@ def buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade):
     Usa remover_acentos() em ambos os lados para garantir match
     mesmo quando nome_cidade vem normalizado (UPPER sem acento)
     e cadastro_sub_rota armazena nome canônico com acento.
+
+    Cache por requisicao Flask para evitar N+1 (Sentry PYTHON-FLASK-M0):
+    candidatos_subrotas[uf] sao reutilizados entre chamadas no mesmo request.
     """
     if not cod_uf or not nome_cidade:
         return None
     try:
         nome_normalizado = remover_acentos(nome_cidade)
 
-        # Carrega candidatos por UF (tipicamente ~20-50 registros)
-        # e compara em Python com ambos os lados normalizados
-        subrotas = CadastroSubRota.query.filter(
-            CadastroSubRota.cod_uf == cod_uf,
-            CadastroSubRota.ativa == True
-        ).all()
+        # Cache de candidatos por UF (escopo: requisicao Flask).
+        subrotas = None
+        try:
+            from flask import g, has_request_context
+            if has_request_context():
+                cache = getattr(g, '_subrotas_uf_cache', None)
+                if cache is None:
+                    cache = {}
+                    g._subrotas_uf_cache = cache
+                if cod_uf not in cache:
+                    cache[cod_uf] = CadastroSubRota.query.filter(
+                        CadastroSubRota.cod_uf == cod_uf,
+                        CadastroSubRota.ativa == True
+                    ).all()
+                subrotas = cache[cod_uf]
+        except Exception:
+            subrotas = None
+
+        if subrotas is None:
+            subrotas = CadastroSubRota.query.filter(
+                CadastroSubRota.cod_uf == cod_uf,
+                CadastroSubRota.ativa == True
+            ).all()
 
         for sr in subrotas:
             sr_nome = remover_acentos(sr.nome_cidade) if sr.nome_cidade else ''

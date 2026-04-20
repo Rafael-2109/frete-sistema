@@ -18,16 +18,44 @@ def run_migration():
     print("MIGRATION: Rename aprovacoes_subcontrato → aprovacoes_frete")
     print("=" * 70)
 
-    # Idempotency guard: skip se tabela ja foi renomeada
-    tabela_existe = db.session.execute(text("""
+    # Idempotency guard: skip se tabela DESTINO ja existe (rename ja ocorreu).
+    # Sentry PYTHON-FLASK-HR: ambas tabelas podem coexistir se outra migration
+    # (ex: carvia_aprovacao_conta_corrente.py com CREATE TABLE IF NOT EXISTS)
+    # recriou a source. Cleanup automatico da source vazia.
+    destino_existe = db.session.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_name = 'carvia_aprovacoes_frete'
+        )
+    """)).scalar()
+
+    source_existe = db.session.execute(text("""
         SELECT EXISTS (
             SELECT 1 FROM information_schema.tables
             WHERE table_name = 'carvia_aprovacoes_subcontrato'
         )
     """)).scalar()
-    if not tabela_existe:
-        print("Migration ja aplicada (tabela carvia_aprovacoes_subcontrato nao existe).")
+
+    if destino_existe:
+        print("Migration ja aplicada (tabela carvia_aprovacoes_frete existe).")
+        if source_existe:
+            # Cleanup: source orfa recriada por outra migration. Drop se vazia.
+            count_source = db.session.execute(text(
+                "SELECT COUNT(*) FROM carvia_aprovacoes_subcontrato"
+            )).scalar() or 0
+            if count_source == 0:
+                print("Source carvia_aprovacoes_subcontrato existe vazia — DROP cleanup.")
+                db.session.execute(text(
+                    "DROP TABLE IF EXISTS carvia_aprovacoes_subcontrato CASCADE"
+                ))
+                db.session.commit()
+            else:
+                print(f"AVISO: source tem {count_source} registros — investigar manualmente.")
         print("Saltando.")
+        return 0
+
+    if not source_existe:
+        print("Nem source nem destino existem — nada a fazer.")
         return 0
 
     total = db.session.execute(text(

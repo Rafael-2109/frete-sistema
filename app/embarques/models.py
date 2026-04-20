@@ -369,22 +369,44 @@ class EmbarqueItem(db.Model):
     # Para carga FRACIONADA: Uma cotação -> Um item do embarque
     cotacao = db.relationship('Cotacao', backref='embarque_item', foreign_keys=[cotacao_id])
 
+    def _get_contato_agendamento_cached(self):
+        """
+        Cache por requisicao de ContatoAgendamento por CNPJ.
+        Evita N+1 quando properties cliente_aceita_nf_pallet/forma_agendamento
+        sao chamadas em loop no template (um item por linha).
+        Sentry PYTHON-FLASK-E6.
+        """
+        if not self.cnpj_cliente:
+            return None
+        try:
+            from flask import g, has_request_context
+            from app.cadastros_agendamento.models import ContatoAgendamento
+            if has_request_context():
+                cache = getattr(g, '_contato_agendamento_cache', None)
+                if cache is None:
+                    cache = {}
+                    g._contato_agendamento_cache = cache
+                if self.cnpj_cliente not in cache:
+                    cache[self.cnpj_cliente] = ContatoAgendamento.query.filter_by(
+                        cnpj=self.cnpj_cliente
+                    ).first()
+                return cache[self.cnpj_cliente]
+            return ContatoAgendamento.query.filter_by(cnpj=self.cnpj_cliente).first()
+        except Exception:
+            return None
+
     @property
     def cliente_aceita_nf_pallet(self):
         """Verifica se o cliente aceita NF de pallet (via ContatoAgendamento)"""
-        if self.cnpj_cliente:
-            from app.cadastros_agendamento.models import ContatoAgendamento
-            contato = ContatoAgendamento.query.filter_by(cnpj=self.cnpj_cliente).first()
-            if contato:
-                return not contato.nao_aceita_nf_pallet
+        contato = self._get_contato_agendamento_cached()
+        if contato:
+            return not contato.nao_aceita_nf_pallet
         return True
 
     @property
     def forma_agendamento(self):
         """Retorna a forma de agendamento do cliente (via ContatoAgendamento)"""
-        if self.cnpj_cliente:
-            from app.cadastros_agendamento.models import ContatoAgendamento
-            contato = ContatoAgendamento.query.filter_by(cnpj=self.cnpj_cliente).first()
-            if contato and contato.forma:
-                return contato.forma
+        contato = self._get_contato_agendamento_cached()
+        if contato and contato.forma:
+            return contato.forma
         return None

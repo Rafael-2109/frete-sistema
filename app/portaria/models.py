@@ -140,11 +140,14 @@ class ControlePortaria(db.Model):
 
         from sqlalchemy.orm import joinedload
         from sqlalchemy import or_
+        from app.embarques.models import Embarque
 
-        # Veículos que chegaram hoje OU que não finalizaram (sem saída registrada)
+        # Veículos que chegaram hoje OU que não finalizaram (sem saída registrada).
+        # Cadeia 2 niveis: embarque.transportadora — template acessa
+        # registro.embarque.transportadora.razao_social. Sentry PYTHON-FLASK-J1.
         registros = ControlePortaria.query.options(
             joinedload(ControlePortaria.motorista_obj),
-            joinedload(ControlePortaria.embarque),
+            joinedload(ControlePortaria.embarque).joinedload(Embarque.transportadora),
             joinedload(ControlePortaria.tipo_veiculo),
         ).filter(
             or_(

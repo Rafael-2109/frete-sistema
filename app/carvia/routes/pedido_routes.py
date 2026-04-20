@@ -621,6 +621,18 @@ def register_pedido_routes(bp):
             vol_devolver = 0
             embarque_id_ref = None
 
+            # Helper: delete EntregaRastreada vinculada ANTES do EmbarqueItem.
+            # EntregaRastreada.embarque_item_id e NOT NULL sem ondelete=CASCADE,
+            # entao autoflush tentaria SET NULL e violaria constraint.
+            # Sentry PYTHON-FLASK-JC rastreava esse erro.
+            from app.rastreamento.models import EntregaRastreada
+
+            def _delete_embarque_item_com_rastreio(ei_obj):
+                EntregaRastreada.query.filter_by(
+                    embarque_item_id=ei_obj.id
+                ).delete(synchronize_session='fetch')
+                db.session.delete(ei_obj)
+
             for nf_id in nf_ids:
                 lote_nf = f'CARVIA-NF-{nf_id}'
                 ei = EmbarqueItem.query.filter_by(
@@ -631,7 +643,7 @@ def register_pedido_routes(bp):
                     valor_devolver += float(ei.valor or 0)
                     vol_devolver += int(ei.volumes or 0)
                     embarque_id_ref = ei.embarque_id
-                    db.session.delete(ei)
+                    _delete_embarque_item_com_rastreio(ei)
 
             # Remover EmbarqueItem antigo (CARVIA-PED-*)
             lote_ped = f'CARVIA-PED-{pedido_id}'
@@ -643,7 +655,7 @@ def register_pedido_routes(bp):
                 valor_devolver += float(ei_ped.valor or 0)
                 vol_devolver += int(ei_ped.volumes or 0)
                 embarque_id_ref = ei_ped.embarque_id
-                db.session.delete(ei_ped)
+                _delete_embarque_item_com_rastreio(ei_ped)
 
             # 2. Devolver saldo ao provisorio
             if embarque_id_ref and cotacao_id:

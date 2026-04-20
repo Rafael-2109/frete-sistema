@@ -362,9 +362,11 @@ async def emitir_cte_complementar(args):
             except Exception:
                 count_submit = 0
 
-            # Click no ► — usar evaluate para forcar click JS
+            # Click no ► — timeout curto evita 30s aguardando errorpanel
+            # (Sentry PYTHON-FLASK-DE/DF: <div id="errorpanel"> intercepta
+            # pointer events; fallback evaluate JS abaixo bypassa o overlay).
             try:
-                await page2.get_by_role("link", name="►").first.click()
+                await page2.get_by_role("link", name="►").first.click(timeout=3000)
                 logger.info("Click ► via get_by_role ok")
             except Exception as e:
                 logger.warning("Click ► falhou: %s — tentando via evaluate", e)
