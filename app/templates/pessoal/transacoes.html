@@ -85,6 +85,73 @@
             <i class="fas fa-search"></i> Filtrar
           </button>
         </div>
+
+        {# Toggle filtros avançados #}
+        <div class="col-12 mt-2">
+          <button class="btn btn-sm btn-link p-0" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#filtrosAvancados"
+                  aria-expanded="false">
+            <i class="fas fa-sliders-h"></i> Filtros avançados
+          </button>
+          <button class="btn btn-sm btn-outline-success ms-2" type="button" id="btnSalvarBusca">
+            <i class="fas fa-bookmark"></i> Salvar busca
+          </button>
+          <div class="btn-group ms-1" role="group">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                    type="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="fas fa-list"></i> Presets
+            </button>
+            <ul class="dropdown-menu" id="presetsMenu"></ul>
+          </div>
+          <a href="{{ url_for('pessoal.pessoal_transacoes.listar') }}"
+             class="btn btn-sm btn-outline-secondary ms-1">
+            <i class="fas fa-eraser"></i> Limpar filtros
+          </a>
+        </div>
+
+        {# Linha colapsavel com filtros avançados #}
+        <div class="collapse col-12 {% if filtros.valor_min or filtros.valor_max or filtros.tipo or filtros.membro_id or filtros.tem_categoria %}show{% endif %}"
+             id="filtrosAvancados">
+          <div class="row g-2 mt-1">
+            <div class="col-md-2">
+              <label class="form-label small mb-0">Valor mín (R$)</label>
+              <input type="number" step="0.01" min="0" name="valor_min"
+                     class="form-control form-control-sm"
+                     value="{{ filtros.valor_min if filtros.valor_min is not none else '' }}">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-0">Valor máx (R$)</label>
+              <input type="number" step="0.01" min="0" name="valor_max"
+                     class="form-control form-control-sm"
+                     value="{{ filtros.valor_max if filtros.valor_max is not none else '' }}">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-0">Tipo</label>
+              <select name="tipo" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                <option value="debito" {{ 'selected' if filtros.tipo == 'debito' }}>Débito</option>
+                <option value="credito" {{ 'selected' if filtros.tipo == 'credito' }}>Crédito</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-0">Membro</label>
+              <select name="membro_id" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for m in membros %}
+                <option value="{{ m.id }}" {{ 'selected' if filtros.membro_id == m.id }}>{{ m.nome }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-0">Categoria</label>
+              <select name="tem_categoria" class="form-select form-select-sm">
+                <option value="">Qualquer</option>
+                <option value="sim" {{ 'selected' if filtros.tem_categoria == 'sim' }}>Categorizada</option>
+                <option value="nao" {{ 'selected' if filtros.tem_categoria == 'nao' }}>Sem categoria</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </form>
     </div>
   </div>
@@ -862,6 +929,74 @@ $(function() {
       }
     });
   });
+
+  // ===== Presets de busca em localStorage =====
+  const PRESETS_KEY = 'pessoal_transacoes_presets';
+
+  function carregarPresets() {
+    try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]'); }
+    catch (e) { return []; }
+  }
+  function salvarPresets(lista) {
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(lista));
+  }
+  function urlAtualComoQuery() {
+    // Preset limpo: ignora paginacao e ordenacao transitorias
+    const p = new URLSearchParams(window.location.search);
+    p.delete('page');
+    p.delete('sort_by');
+    p.delete('sort_order');
+    return p.toString();
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[c]);
+  }
+  function renderMenuPresets() {
+    const menu = document.getElementById('presetsMenu');
+    if (!menu) return;
+    const lista = carregarPresets();
+    menu.innerHTML = '';
+    if (!lista.length) {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="dropdown-item-text small text-muted">Nenhum preset salvo.</span>';
+      menu.appendChild(li);
+      return;
+    }
+    lista.forEach((p, idx) => {
+      const li = document.createElement('li');
+      li.className = 'd-flex align-items-center ps-2 pe-2';
+      li.innerHTML =
+        '<a class="dropdown-item flex-grow-1 small" href="?' + p.query + '">' +
+          escapeHtml(p.nome) +
+        '</a>' +
+        '<button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" data-idx="' + idx + '" title="Remover">' +
+          '<i class="fas fa-times"></i>' +
+        '</button>';
+      menu.appendChild(li);
+    });
+  }
+  $(document).on('click', '#presetsMenu button[data-idx]', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const idx = parseInt($(this).data('idx'));
+    const atual = carregarPresets();
+    atual.splice(idx, 1);
+    salvarPresets(atual);
+    renderMenuPresets();
+  });
+  $('#btnSalvarBusca').on('click', function() {
+    const nome = prompt('Nome do preset:');
+    if (!nome || !nome.trim()) return;
+    const lista = carregarPresets();
+    lista.push({ nome: nome.trim(), query: urlAtualComoQuery() });
+    salvarPresets(lista);
+    renderMenuPresets();
+    if (typeof toastr !== 'undefined') toastr.success('Preset salvo.');
+    else alert('Preset salvo.');
+  });
+  renderMenuPresets();
 });
 </script>
 {% endblock %}
