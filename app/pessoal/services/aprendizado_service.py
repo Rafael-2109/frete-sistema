@@ -29,6 +29,28 @@ from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 
+def _mesmo_escopo_regra(regra: 'PessoalRegraCategorizacao',
+                         cpf_cnpj_norm, valor_min, valor_max) -> bool:
+    """Retorna True se a regra tem o mesmo escopo (cpf_cnpj + range de valor).
+
+    Regras com mesmo padrao textual mas escopos diferentes sao consideradas
+    distintas (ex: ">=100" vs "<100"), permitindo coexistencia.
+    None == None; senao compara valor numerico.
+    """
+    def _num(v):
+        return float(v) if v is not None else None
+
+    regra_cpf = regra.cpf_cnpj_padrao or None
+    novo_cpf = cpf_cnpj_norm or None
+    if regra_cpf != novo_cpf:
+        return False
+    if _num(regra.valor_min) != _num(valor_min):
+        return False
+    if _num(regra.valor_max) != _num(valor_max):
+        return False
+    return True
+
+
 def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
                                membro_id: int = None,
                                tipo_regra: str = 'PADRAO',
@@ -78,7 +100,9 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
     if not historico_norm:
         historico_norm = cpf_cnpj_norm  # fallback — CPF/CNPJ tambem e texto
 
-    # 2. Buscar regra existente (fuzzy >= 90)
+    # 2. Buscar regra existente (fuzzy >= 90) — MESMO ESCOPO
+    # Regras com mesmo padrao mas cpf_cnpj ou range de valor diferentes
+    # sao tratadas como regras DISTINTAS (ex: ">=100=X" + "<100=Y" coexistem).
     regras = PessoalRegraCategorizacao.query.filter_by(ativo=True).all()
     melhor_regra = None
     melhor_score = 0
@@ -88,7 +112,11 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
         if not padrao_norm:
             continue
         score = fuzz.token_set_ratio(padrao_norm, historico_norm)
-        if score >= 90 and score > melhor_score:
+        if score < 90:
+            continue
+        if not _mesmo_escopo_regra(regra, cpf_cnpj_norm, valor_min, valor_max):
+            continue
+        if score > melhor_score:
             melhor_score = score
             melhor_regra = regra
 
@@ -103,13 +131,8 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
             if historico_norm != padrao_existente:
                 melhor_regra.padrao_historico = historico_norm
 
-        # F1/F4: atualizar campos novos se explicitos (None mantem valor anterior)
-        if cpf_cnpj_norm is not None:
-            melhor_regra.cpf_cnpj_padrao = cpf_cnpj_norm
-        if valor_min is not None:
-            melhor_regra.valor_min = valor_min
-        if valor_max is not None:
-            melhor_regra.valor_max = valor_max
+        # F1/F4: cpf_cnpj/valor ja batem (filtrados em _mesmo_escopo_regra).
+        # Nao sobrescrever — regras de escopo diferente seguem caminho "nova".
 
         # 5. Verificar se mesmo padrao aponta para multiplas categorias
         if melhor_regra.categoria_id and melhor_regra.categoria_id != categoria_id:
