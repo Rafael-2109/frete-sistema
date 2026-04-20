@@ -141,6 +141,33 @@
                             <input type="date" id="filtroDataFimDocs" class="form-control form-control-sm"
                                    style="width:120px;font-size:0.7rem" title="Data fim">
                         </div>
+                        {# REFINO 2026-04-20: filtros server-side CTe / NF / CNPJ / Numero #}
+                        <div class="d-flex gap-1 flex-wrap">
+                            <input type="text" id="filtroCteDocs" class="form-control form-control-sm"
+                                   placeholder="CTe..." style="width:90px;font-size:0.7rem"
+                                   title="Filtra por numero de CTe (CTe-001, 12345)">
+                            <input type="text" id="filtroNfDocs" class="form-control form-control-sm"
+                                   placeholder="NF..." style="width:90px;font-size:0.7rem"
+                                   title="Filtra por numero de Nota Fiscal">
+                            <input type="text" id="filtroCnpjDocs" class="form-control form-control-sm"
+                                   placeholder="CNPJ..." style="width:120px;font-size:0.7rem"
+                                   title="Filtra por CNPJ do cliente ou transportadora">
+                            <input type="text" id="filtroNumeroDocs" class="form-control form-control-sm"
+                                   placeholder="Num doc..." style="width:110px;font-size:0.7rem"
+                                   title="Filtra por numero de fatura/despesa/custo">
+                            <button type="button" id="btnAplicarFiltrosDocs"
+                                    class="btn btn-sm btn-outline-primary py-0 px-2"
+                                    style="font-size:0.7rem"
+                                    title="Aplicar filtros server-side">
+                                <i class="fas fa-filter"></i>
+                            </button>
+                            <button type="button" id="btnLimparFiltrosDocs"
+                                    class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                    style="font-size:0.7rem"
+                                    title="Limpar filtros server-side">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="carvia-conciliacao-panel" id="panelDocs">

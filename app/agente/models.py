@@ -13,6 +13,8 @@ Arquitetura:
 from typing import List, Dict, Any, Optional, Tuple
 import uuid
 
+from sqlalchemy.exc import IntegrityError
+
 from app import db
 from app.utils.timezone import agora_utc_naive
 
@@ -372,6 +374,11 @@ class AgentSession(db.Model):
         if session:
             return session, False
 
+        # Race condition guard: duas threads/coroutines podem entrar aqui
+        # simultaneamente (query passou em ambas, INSERT colide na unique constraint
+        # session_id_key). Usar SAVEPOINT (begin_nested) + flush para detectar
+        # antes do commit final, e re-buscar a sessao criada pela outra thread.
+        # Sentry PYTHON-FLASK-M4 rastreava ocorrencias deste erro.
         session = cls(
             session_id=session_id,
             user_id=user_id,
@@ -383,8 +390,18 @@ class AgentSession(db.Model):
                 'channel': channel,
             },
         )
-        db.session.add(session)
-        return session, True
+        try:
+            with db.session.begin_nested():
+                db.session.add(session)
+                db.session.flush()
+            return session, True
+        except IntegrityError:
+            db.session.rollback()
+            existing = cls.query.filter_by(session_id=session_id).first()
+            if existing:
+                return existing, False
+            # Re-raise se IntegrityError nao foi por session_id duplicado
+            raise
 
     @classmethod
     def get_by_session_id(cls, session_id: str) -> Optional['AgentSession']:

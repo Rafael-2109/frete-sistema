@@ -599,6 +599,7 @@ REGRAS OBRIGATORIAS:
 14. Responda APENAS com a query SQL, sem explicacoes, sem markdown, sem ```
 15. Para UNION/UNION ALL: TODOS os SELECT devem ter EXATAMENTE o mesmo numero e ordem de colunas com tipos compativeis. NUNCA misturar colunas diferentes entre os SELECTs.
 16. Para UNION/UNION ALL com LIMIT em sub-SELECTs individuais: SEMPRE usar parenteses: (SELECT ... LIMIT N) UNION ALL (SELECT ... LIMIT N). NUNCA colocar LIMIT entre SELECTs sem parenteses.
+17. Para diferenca de DATAS em DIAS: NUNCA use EXTRACT(DAY FROM date1 - date2) — Postgres nao aceita EXTRACT em interval implicito (erro: function pg_catalog.extract(unknown, integer) does not exist). Use SUBTRACAO DIRETA: (date1 - date2) ja retorna integer com numero de dias quando ambos sao DATE. Para TIMESTAMP use EXTRACT(EPOCH FROM (ts1 - ts2))/86400. Sentry PYTHON-FLASK-M5 rastreava esse erro.
 
 PERGUNTA: {question}
 

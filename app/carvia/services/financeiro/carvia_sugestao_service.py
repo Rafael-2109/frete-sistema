@@ -63,7 +63,9 @@ def pontuar_documentos(linha, docs, cnpjs_historico=None):
             score (float 0-1), score_label (str|None),
             score_detalhes (dict com valor/data/nome),
             score_historico (bool), score_historico_ocorrencias (int),
-            score_pre_boost (float, apenas se boost aplicado)
+            score_pre_boost (float, apenas se boost aplicado),
+            score_cnpj_direto (bool) — True se CNPJ literal da descricao
+              bate com o CNPJ do doc (sinal deterministico).
         Ordenada por score descrescente.
     """
     valor_extrato = abs(float(linha.valor or 0))
@@ -78,6 +80,14 @@ def pontuar_documentos(linha, docs, cnpjs_historico=None):
             extrair_nome_pagador(linha.descricao or linha.memo or '')
             or linha.descricao or linha.memo or ''
         )
+    # REFINO 2026-04-20: extracao deterministica de CNPJ/raizes da descricao
+    # completa (nao so do prefixo — "Cp :08561701" tem a raiz 08561701).
+    texto_completo = (
+        (linha.descricao or '') + ' ' + (linha.memo or '')
+        + ' ' + (linha.razao_social or '')
+    )
+    cnpjs_extraidos = extrair_cnpjs_da_descricao(texto_completo)
+    raizes_extraidas = extrair_raizes_cnpj_da_descricao(texto_completo)
 
     cnpjs_historico = cnpjs_historico or {}
 
@@ -92,8 +102,34 @@ def pontuar_documentos(linha, docs, cnpjs_historico=None):
             + sn * PESOS['nome']
         )
 
+        # REFINO 2026-04-20: sinal DETERMINISTICO de CNPJ direto na descricao
+        # Prioridade ABSOLUTA se casar — score minimo 0.95 (quase match).
+        # Compara contra ambos os campos (cnpj_cliente e cnpj_transportadora
+        # quando presentes no doc, para cobrir fatura_transportadora).
+        cnpj_doc = (doc.get('cnpj_cliente') or doc.get('cnpj_transportadora') or '').strip()
+        cnpj_doc_limpo = re.sub(r'\D', '', cnpj_doc) if cnpj_doc else ''
+        cnpj_match_direto = False
+        raiz_match_direto = False
+        if cnpj_doc_limpo:
+            if cnpj_doc_limpo in cnpjs_extraidos:
+                cnpj_match_direto = True
+            elif cnpj_doc_limpo[:8] in raizes_extraidas:
+                raiz_match_direto = True
+
+        if cnpj_match_direto:
+            # Match exato de CNPJ — score minimo 0.95 (supera boost historico)
+            doc['score_cnpj_direto'] = True
+            doc['score_cnpj_direto_tipo'] = 'CNPJ_COMPLETO'
+            score = max(score, 0.95)
+        elif raiz_match_direto:
+            # Raiz de CNPJ (8 primeiros digitos) — score minimo 0.80
+            doc['score_cnpj_direto'] = True
+            doc['score_cnpj_direto_tipo'] = 'RAIZ_CNPJ'
+            score = max(score, 0.80)
+        else:
+            doc['score_cnpj_direto'] = False
+
         # R17: boost por historico aprendido (padrao descricao+CNPJ)
-        cnpj_doc = (doc.get('cnpj_cliente') or '').strip()
         ocorrencias_hist = cnpjs_historico.get(cnpj_doc, 0) if cnpj_doc else 0
         if ocorrencias_hist > 0:
             score_pre_boost = score
@@ -259,6 +295,79 @@ def _normalizar(texto):
             continue  # ID transacional, nao semantica
         tokens.add(t)
     return tokens
+
+
+# REFINO 2026-04-20: regex para CNPJ literal na descricao.
+# Formatos aceitos:
+#   - 14 digitos contiguos (ex: "18467441000123")
+#   - Formatado (ex: "18.467.441/0001-23")
+# Nao captura sequencias gigantes (>14 digitos) — limita com lookarounds.
+_RE_CNPJ_FORMATADO = re.compile(
+    r'(?<!\d)(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})(?!\d)'
+)
+_RE_CNPJ_14_DIGITOS = re.compile(r'(?<!\d)(\d{14})(?!\d)')
+# Raiz de CNPJ: 8 digitos isolados (padrao "Cp :08561701-..." visto em OFX).
+# Requer nao-digito antes (ou inicio) E depois (para nao pegar metade de ID).
+_RE_RAIZ_CNPJ_8 = re.compile(r'(?<!\d)(\d{8})(?!\d)')
+
+
+def extrair_cnpjs_da_descricao(texto):
+    """Extrai CNPJs completos (14 digitos) da descricao.
+
+    REFINO 2026-04-20: quando extrato traz CNPJ literal (raro mas
+    determinante), devemos usar DIRETO em vez de depender de scoring
+    fuzzy de nome. CNPJ unico na base = match garantido.
+
+    Args:
+        texto: str — descricao completa (descricao + memo + razao_social)
+
+    Returns:
+        set[str] — CNPJs normalizados (apenas digitos, 14 chars).
+    """
+    if not texto:
+        return set()
+    cnpjs = set()
+    # Formatado (prioritario, mais confiavel — separadores cerram dupla
+    # leitura de outros IDs numericos)
+    for m in _RE_CNPJ_FORMATADO.finditer(texto):
+        cnpjs.add(re.sub(r'\D', '', m.group(1)))
+    # 14 digitos puros — pode dar falso positivo com IDs contabeis longos,
+    # mas limitado a 14 reduz ruido.
+    for m in _RE_CNPJ_14_DIGITOS.finditer(texto):
+        cnpjs.add(m.group(1))
+    return cnpjs
+
+
+def extrair_raizes_cnpj_da_descricao(texto):
+    """Extrai raizes de CNPJ (8 digitos) da descricao.
+
+    OFX de PIX frequentemente vem com padrao "Cp :08561701-..." onde
+    08561701 e a RAIZ do CNPJ do pagador (8 primeiros digitos).
+    Analise real: 147/178 linhas reais (82%) tem padrao "Cp :".
+
+    Args:
+        texto: str
+
+    Returns:
+        set[str] — raizes (8 digitos cada).
+    """
+    if not texto:
+        return set()
+    # Exclui CNPJs completos ja extraidos (evita dupla contagem)
+    cnpjs_completos = extrair_cnpjs_da_descricao(texto)
+    texto_limpo = texto
+    for cnpj in cnpjs_completos:
+        texto_limpo = texto_limpo.replace(cnpj, '')
+    raizes = set()
+    for m in _RE_RAIZ_CNPJ_8.finditer(texto_limpo):
+        digito8 = m.group(1)
+        # Descartar "00000000" e datas tipo "20260420" (comecando 19/20)
+        if digito8 == '00000000':
+            continue
+        if digito8.startswith('19') or digito8.startswith('20'):
+            continue
+        raizes.add(digito8)
+    return raizes
 
 
 def extrair_nome_pagador(descricao):

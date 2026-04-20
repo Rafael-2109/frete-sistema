@@ -241,7 +241,15 @@ def register_conciliacao_routes(bp):
     @bp.route('/api/conciliacao/documentos-elegiveis') # type: ignore
     @login_required
     def api_documentos_elegiveis(): # type: ignore
-        """Retorna documentos elegiveis para conciliacao."""
+        """Retorna documentos elegiveis para conciliacao.
+
+        REFINO 2026-04-20: aceita filtros server-side (query string):
+          - cte: filtra por cte_numero ou cte_numeros (ILIKE parcial)
+          - nf: filtra por nf_numero (quando doc for fatura_cliente — via
+            junction CTe->NF — a listagem ja expoe em fatura.operacoes)
+          - cnpj: filtra por cnpj_cliente ou cnpj_transportadora
+          - numero: filtra por numero do documento (fatura, despesa, etc.)
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
 
@@ -249,9 +257,51 @@ def register_conciliacao_routes(bp):
         if tipo_match not in ('receber', 'pagar'):
             return jsonify({'erro': 'Tipo deve ser receber ou pagar'}), 400
 
+        # Filtros (case-insensitive, aplicados sobre dicts enriquecidos)
+        filtro_cte = (request.args.get('cte') or '').strip().upper()
+        filtro_nf = (request.args.get('nf') or '').strip().upper()
+        filtro_cnpj_raw = (request.args.get('cnpj') or '').strip()
+        filtro_cnpj = ''.join(c for c in filtro_cnpj_raw if c.isdigit())
+        filtro_numero = (request.args.get('numero') or '').strip().upper()
+
         from app.carvia.services.financeiro.carvia_conciliacao_service import CarviaConciliacaoService
 
         docs = CarviaConciliacaoService.obter_documentos_elegiveis(tipo_match)
+
+        # Filtragem server-side (ILIKE parcial, case-insensitive)
+        def _doc_passa_filtros(d):
+            if filtro_cte:
+                # cte_numeros (fatura_transp), cte_numero (via enrichment de fatura_cliente)
+                ctes = d.get('cte_numeros') or []
+                cte_unico = d.get('cte_numero') or ''
+                if isinstance(ctes, list):
+                    tokens = ' '.join(str(c or '') for c in ctes).upper()
+                else:
+                    tokens = str(ctes or '').upper()
+                hay = tokens + ' ' + str(cte_unico).upper()
+                if filtro_cte not in hay:
+                    return False
+            if filtro_nf:
+                # enrichment de fatura_cliente traz lista de NFs (campo nf_numeros)
+                nfs = d.get('nf_numeros') or d.get('nfs') or []
+                if isinstance(nfs, list):
+                    tokens = ' '.join(str(n or '') for n in nfs).upper()
+                else:
+                    tokens = str(nfs or '').upper()
+                if filtro_nf not in tokens:
+                    return False
+            if filtro_cnpj:
+                cnpj_c = ''.join(c for c in (d.get('cnpj_cliente') or '') if c.isdigit())
+                cnpj_t = ''.join(c for c in (d.get('cnpj_transportadora') or '') if c.isdigit())
+                if filtro_cnpj not in cnpj_c and filtro_cnpj not in cnpj_t:
+                    return False
+            if filtro_numero:
+                if filtro_numero not in str(d.get('numero') or '').upper():
+                    return False
+            return True
+
+        if filtro_cte or filtro_nf or filtro_cnpj or filtro_numero:
+            docs = [d for d in docs if _doc_passa_filtros(d)]
 
         # Scoring sugestivo (opcional — quando linha_id informado)
         linha_id = request.args.get('linha_id', type=int)
@@ -268,7 +318,15 @@ def register_conciliacao_routes(bp):
                 cnpjs_hist = CarviaHistoricoMatchService.cnpjs_aprendidos(linha)
                 docs = pontuar_documentos(linha, docs, cnpjs_historico=cnpjs_hist)
 
-        return jsonify({'documentos': docs})
+        return jsonify({
+            'documentos': docs,
+            'filtros_aplicados': {
+                'cte': filtro_cte or None,
+                'nf': filtro_nf or None,
+                'cnpj': filtro_cnpj or None,
+                'numero': filtro_numero or None,
+            },
+        })
 
     # ===================================================================
     # API: Conciliar

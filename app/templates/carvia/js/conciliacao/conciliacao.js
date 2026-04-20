@@ -199,7 +199,19 @@
         // Scoring sugestivo: passa linha_id quando 1 unica linha selecionada
         const linhaParam = linhasSelecionadas.length === 1
             ? `&linha_id=${linhasSelecionadas[0].id}` : '';
-        fetch(`/carvia/api/conciliacao/documentos-elegiveis?tipo=${tipoMatchAtual}${linhaParam}`)
+
+        // REFINO 2026-04-20: filtros server-side CTe / NF / CNPJ / Numero
+        const filtroCte = document.getElementById('filtroCteDocs')?.value?.trim() || '';
+        const filtroNf = document.getElementById('filtroNfDocs')?.value?.trim() || '';
+        const filtroCnpj = document.getElementById('filtroCnpjDocs')?.value?.trim() || '';
+        const filtroNumero = document.getElementById('filtroNumeroDocs')?.value?.trim() || '';
+        let filtrosServer = '';
+        if (filtroCte) filtrosServer += `&cte=${encodeURIComponent(filtroCte)}`;
+        if (filtroNf) filtrosServer += `&nf=${encodeURIComponent(filtroNf)}`;
+        if (filtroCnpj) filtrosServer += `&cnpj=${encodeURIComponent(filtroCnpj)}`;
+        if (filtroNumero) filtrosServer += `&numero=${encodeURIComponent(filtroNumero)}`;
+
+        fetch(`/carvia/api/conciliacao/documentos-elegiveis?tipo=${tipoMatchAtual}${linhaParam}${filtrosServer}`)
         .then(r => r.json())
         .then(data => {
             todosDocs = data.documentos || [];
@@ -210,6 +222,7 @@
             docsPlaceholder.classList.remove('d-none');
         });
     }
+
 
     // ===== Construir secondary HTML enriquecido =====
     function buildSecondaryHTML(d) {
@@ -575,5 +588,22 @@
     });
     ['filtroBuscaExtrato', 'filtroValorMinExtrato', 'filtroValorMaxExtrato'].forEach(id => {
         document.getElementById(id)?.addEventListener('input', aplicarFiltrosExtrato);
+    });
+
+    // REFINO 2026-04-20: bind dos filtros server-side de documentos
+    document.getElementById('btnAplicarFiltrosDocs')
+        ?.addEventListener('click', carregarDocumentos);
+    document.getElementById('btnLimparFiltrosDocs')
+        ?.addEventListener('click', () => {
+            ['filtroCteDocs','filtroNfDocs','filtroCnpjDocs','filtroNumeroDocs'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            carregarDocumentos();
+        });
+    ['filtroCteDocs','filtroNfDocs','filtroCnpjDocs','filtroNumeroDocs'].forEach(id => {
+        document.getElementById(id)?.addEventListener('keypress', e => {
+            if (e.key === 'Enter') { e.preventDefault(); carregarDocumentos(); }
+        });
     });
 })();

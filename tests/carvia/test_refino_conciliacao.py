@@ -164,6 +164,163 @@ class TestScoringUsaNomePagador:
         assert r[0]['score'] >= 0.7
 
 
+class TestExtrairCnpjsDaDescricao:
+    def test_cnpj_formatado(self):
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            extrair_cnpjs_da_descricao,
+        )
+        r = extrair_cnpjs_da_descricao(
+            'Fornecedor X (18.467.441/0001-23) recebido'
+        )
+        assert '18467441000123' in r
+
+    def test_cnpj_14_digitos(self):
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            extrair_cnpjs_da_descricao,
+        )
+        r = extrair_cnpjs_da_descricao(
+            'Pix 12345678000190 concluido'
+        )
+        assert '12345678000190' in r
+
+    def test_cnpj_nao_captura_digitos_maiores(self):
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            extrair_cnpjs_da_descricao,
+        )
+        # ID de 16 digitos nao deve virar "CNPJ" de 14
+        r = extrair_cnpjs_da_descricao('ID: 1234567890123456')
+        assert not any(c in r for c in ('12345678901234', '34567890123456'))
+
+    def test_sem_cnpj_retorna_vazio(self):
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            extrair_cnpjs_da_descricao,
+        )
+        assert extrair_cnpjs_da_descricao('TED XYZ') == set()
+
+
+class TestExtrairRaizesCnpjDaDescricao:
+    def test_padrao_cp_de_ofx_real(self):
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            extrair_raizes_cnpj_da_descricao,
+        )
+        r = extrair_raizes_cnpj_da_descricao(
+            'D.a. De Mattos Ltda - Pix recebido: "Cp :08561701-D.A."'
+        )
+        assert '08561701' in r
+
+    def test_descarta_data_anocomeco20(self):
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            extrair_raizes_cnpj_da_descricao,
+        )
+        # "20260420" vira data, nao raiz CNPJ
+        r = extrair_raizes_cnpj_da_descricao('transferencia em 20260420')
+        assert '20260420' not in r
+
+    def test_descarta_zerado(self):
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            extrair_raizes_cnpj_da_descricao,
+        )
+        # "00000000" = CPF mascarado, nao raiz real
+        r = extrair_raizes_cnpj_da_descricao('Cp :00000000-V G C')
+        assert '00000000' not in r
+
+
+class TestScoreCnpjDireto:
+    def test_cnpj_completo_eleva_score_para_095(self):
+        from datetime import date
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            pontuar_documentos,
+        )
+
+        class _L:
+            valor = 500.0  # nao bate com saldo
+            razao_social = None
+            descricao = 'Pagamento 18.467.441/0001-23 efetuado'
+            memo = None
+            data = date(2026, 1, 1)  # nao bate com vencimento
+
+        docs = [{
+            'tipo_documento': 'fatura_cliente', 'id': 1,
+            'saldo': 5000.0, 'nome': 'OUTRO NOME',
+            'vencimento': '31/12/2026', 'data': '01/12/2026',
+            'cnpj_cliente': '18467441000123',
+        }]
+        r = pontuar_documentos(_L(), docs)
+        assert r[0]['score_cnpj_direto'] is True
+        assert r[0]['score_cnpj_direto_tipo'] == 'CNPJ_COMPLETO'
+        assert r[0]['score'] >= 0.95
+
+    def test_raiz_cnpj_eleva_score_para_080(self):
+        from datetime import date
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            pontuar_documentos,
+        )
+
+        class _L:
+            valor = 500.0
+            razao_social = None
+            descricao = 'D.a. Mattos - Pix recebido: "Cp :18467441-D.A."'
+            memo = None
+            data = date(2026, 1, 1)
+
+        docs = [{
+            'tipo_documento': 'fatura_cliente', 'id': 1,
+            'saldo': 5000.0, 'nome': 'OUTRO',
+            'vencimento': '31/12/2026', 'data': '01/12/2026',
+            'cnpj_cliente': '18467441000123',  # raiz bate
+        }]
+        r = pontuar_documentos(_L(), docs)
+        assert r[0]['score_cnpj_direto'] is True
+        assert r[0]['score_cnpj_direto_tipo'] == 'RAIZ_CNPJ'
+        assert r[0]['score'] >= 0.80
+
+    def test_cnpj_nao_bate_nao_eleva(self):
+        from datetime import date
+        from app.carvia.services.financeiro.carvia_sugestao_service import (
+            pontuar_documentos,
+        )
+
+        class _L:
+            valor = 500.0
+            razao_social = None
+            descricao = 'Pagamento 99.999.999/9999-99'
+            memo = None
+            data = date(2026, 1, 1)
+
+        docs = [{
+            'tipo_documento': 'fatura_cliente', 'id': 1,
+            'saldo': 5000.0, 'nome': 'OUTRO',
+            'vencimento': '31/12/2026', 'data': '01/12/2026',
+            'cnpj_cliente': '18467441000123',
+        }]
+        r = pontuar_documentos(_L(), docs)
+        assert r[0]['score_cnpj_direto'] is False
+
+
+class TestFiltrosServerSide:
+    """Testa que rota api_documentos_elegiveis aceita filtros CTe/NF/CNPJ."""
+
+    def test_rota_registrada(self, app):
+        with app.app_context():
+            rule = [r for r in app.url_map.iter_rules()
+                    if r.endpoint.endswith('api_documentos_elegiveis')]
+            assert len(rule) == 1
+
+    def test_source_aceita_filtros(self):
+        """Integridade: rota processa os 4 filtros CTe/NF/CNPJ/Numero."""
+        import inspect
+        from app.carvia.routes import conciliacao_routes
+        # Pega o arquivo-fonte do modulo
+        src = inspect.getsource(conciliacao_routes)
+        # Confirma que filtros sao extraidos da request
+        assert "request.args.get('cte'" in src
+        assert "request.args.get('nf'" in src
+        assert "request.args.get('cnpj'" in src
+        assert "request.args.get('numero'" in src
+        # Confirma que filtros_aplicados vai no response
+        assert "'filtros_aplicados'" in src
+
+
 class TestE10ManualComHistorico:
     def test_sugestao_sem_linha_extrato_funciona(self, db):
         """E10 continua funcionando sem linha_extrato_id (backward compat)."""
