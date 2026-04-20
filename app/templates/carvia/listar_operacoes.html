@@ -110,18 +110,16 @@
                     <thead>
                         <tr>
                             <th>NFs</th>
+                            {{ th_sort('cte_data_emissao', 'Data Emissão', sort, direction) }}
                             {{ th_sort('cte_numero', 'CTe CarVia', sort, direction) }}
+                            <th>Fatura</th>
                             {{ th_sort('nome_cliente', 'Emitente', sort, direction) }}
                             <th>Destinatario</th>
-                            <th>Destino</th>
-                            {{ th_sort('peso_utilizado', 'Peso (kg)', sort, direction, 'text-end') }}
+                            {{ th_sort('peso_utilizado', 'Info Merc.', sort, direction, 'text-end') }}
                             {{ th_sort('cte_valor', 'Valor CTe', sort, direction, 'text-end') }}
-                            <th>Fatura</th>
-                            <th>Transp. Sub.</th>
                             <th>CTe Sub.</th>
-                            <th>Tipo</th>
+                            <th>Transp. Sub.</th>
                             {{ th_sort('status', 'Status', sort, direction) }}
-                            {{ th_sort('cte_data_emissao', 'Data Emissão', sort, direction) }}
                             <th></th>
                         </tr>
                     </thead>
@@ -139,10 +137,23 @@
                                 <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
+                            <td title="Importado em: {{ op.criado_em|formatar_data_hora_brasil if op.criado_em else '-' }}">
+                                <small>{{ op.cte_data_emissao.strftime('%d/%m/%Y') if op.cte_data_emissao else op.criado_em.strftime('%d/%m/%Y') if op.criado_em else '-' }}</small>
+                            </td>
                             <td>
                                 <strong>{{ op.cte_numero or '-' }}</strong>
                                 {% if op.ctrc_numero %}
                                 <small class="text-muted d-block">{{ op.ctrc_numero }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if op.fatura_cliente %}
+                                <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=op.fatura_cliente.id) }}"
+                                   class="text-decoration-none">
+                                    {{ op.fatura_cliente.numero_fatura }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -161,6 +172,13 @@
                                     {{ op.nome_cliente or op.cnpj_cliente }}
                                 </span>
                                 {% endif %}
+                                {% set cli = clientes_por_op.get(op.id) %}
+                                {% if cli %}
+                                <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}"
+                                   class="badge bg-primary text-decoration-none ms-1">
+                                    <i class="fas fa-building"></i> {{ cli.nome_comercial }}
+                                </a>
+                                {% endif %}
                                 {# NF Triangular — badges de transferencia vinculada #}
                                 {% set transfs = transferencias_por_op.get(op.id, []) %}
                                 {% for t in transfs %}
@@ -168,12 +186,8 @@
                                     {{ badge_nf_transferencia(t.num_nf_transf, t.transf_id) }}
                                 </div>
                                 {% endfor %}
-                                {% set cli = clientes_por_op.get(op.id) %}
-                                {% if cli %}
-                                <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}"
-                                   class="badge bg-primary text-decoration-none d-block mt-1" style="width:fit-content">
-                                    <i class="fas fa-building"></i> {{ cli.nome_comercial }}
-                                </a>
+                                {% if op.cidade_origem or op.uf_origem %}
+                                <small class="text-muted d-block">{{ op.cidade_origem or '' }}/{{ op.uf_origem or '' }}</small>
                                 {% endif %}
                             </td>
                             <td>
@@ -195,27 +209,24 @@
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
-                            </td>
-                            <td>
-                                {% if op.cidade_origem or op.uf_origem %}
-                                <small class="text-muted">{{ op.cidade_origem or '' }}/{{ op.uf_origem or '' }}</small>
-                                <i class="fas fa-arrow-right fa-xs text-muted"></i>
+                                {% if op.cidade_destino or op.uf_destino %}
+                                <small class="text-muted d-block">{{ op.cidade_destino or '' }}/{{ op.uf_destino or '' }}</small>
                                 {% endif %}
-                                {{ op.cidade_destino }}/{{ op.uf_destino }}
                             </td>
-                            <td class="valor-col">{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }}</td>
+                            <td class="valor-col">
+                                {% if op.valor_mercadoria %}
+                                <small class="text-muted d-block">{{ op.valor_mercadoria|valor_br }}</small>
+                                {% endif %}
+                                <small>{{ op.peso_utilizado|numero_br(1) if op.peso_utilizado else '-' }}{% if op.peso_utilizado %} KG{% endif %}</small>
+                            </td>
                             <td class="valor-col">
                                 {{ op.cte_valor|valor_br if op.cte_valor else '-' }}
-                                {% if op.valor_mercadoria %}
-                                <small class="text-muted d-block">Merc: {{ op.valor_mercadoria|valor_br }}</small>
-                                {% endif %}
                             </td>
                             <td>
-                                {% if op.fatura_cliente %}
-                                <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=op.fatura_cliente.id) }}"
-                                   class="text-decoration-none">
-                                    {{ op.fatura_cliente.numero_fatura }}
-                                </a>
+                                {% set sub = sub_info.get(op.id) %}
+                                {% if sub and sub.sub_cte %}
+                                <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=sub.sub_id) }}"
+                                   class="text-decoration-none">{{ sub.sub_cte }}</a>
                                 {% else %}
                                 <span class="text-muted">&mdash;</span>
                                 {% endif %}
@@ -230,20 +241,9 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% set sub = sub_info.get(op.id) %}
-                                {{ sub.sub_cte if sub and sub.sub_cte else '&mdash;'|safe }}
-                            </td>
-                            <td>
-                                {% set tipo_map = {'IMPORTADO': 'IMP', 'MANUAL_SEM_CTE': 'MAN', 'MANUAL_FRETEIRO': 'FRE'} %}
-                                <span class="badge bg-secondary" title="{{ op.tipo_entrada }}">{{ tipo_map.get(op.tipo_entrada, op.tipo_entrada) }}</span>
-                            </td>
-                            <td>
                                 <span class="badge carvia-badge-{{ op.status|lower }}">
                                     {{ op.status }}
                                 </span>
-                            </td>
-                            <td title="Importado em: {{ op.criado_em|formatar_data_hora_brasil if op.criado_em else '-' }}">
-                                <small>{{ op.cte_data_emissao.strftime('%d/%m/%Y') if op.cte_data_emissao else op.criado_em.strftime('%d/%m/%Y') if op.criado_em else '-' }}</small>
                             </td>
                             <td>
                                 <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=op.id) }}"

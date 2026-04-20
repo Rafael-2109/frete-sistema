@@ -199,6 +199,7 @@ def register_operacao_routes(bp):
         if op_ids:
             sub_info_raw = db.session.query(
                 CarviaSubcontrato.operacao_id,
+                CarviaSubcontrato.id,
                 Transportadora.razao_social,
                 CarviaSubcontrato.cte_numero,
             ).join(
@@ -208,9 +209,14 @@ def register_operacao_routes(bp):
                 CarviaSubcontrato.operacao_id.in_(op_ids),
             ).order_by(CarviaSubcontrato.operacao_id, CarviaSubcontrato.id).all()
 
-            for op_id, razao, cte_num in sub_info_raw:
+            for op_id, sub_id, razao, cte_num in sub_info_raw:
                 if op_id not in sub_info:
-                    sub_info[op_id] = {'transp_nome': razao, 'sub_cte': cte_num, 'count': 0}
+                    sub_info[op_id] = {
+                        'sub_id': sub_id,
+                        'transp_nome': razao,
+                        'sub_cte': cte_num,
+                        'count': 0,
+                    }
                 sub_info[op_id]['count'] += 1
 
         # Batch: resolver clientes comerciais via CNPJ DESTINATARIO da primeira NF
@@ -320,21 +326,12 @@ def register_operacao_routes(bp):
         ).get(operacao.id)
 
         # Papeis de frete (Emitente/Destinatario/Tomador) — regra: 1 CTe = 1 par unico.
-        # Mantem `tomador_label` (string legada) para listar_operacoes.html e adiciona
-        # `tomador` (dict novo) para exibir EXPEDIDOR/RECEBEDOR/TERCEIRO e marca `inferido`.
-        from app.carvia.utils.tomador import (
-            resolver_tomador_com_fallback, tomador_label,
-        )
+        # Tomador vem EXCLUSIVAMENTE de cte_tomador (XML CTe ou wizard manual).
+        # Removido fallback FOB/CIF em 2026-04-20 — SOT e o CTe, nao a fatura.
+        from app.carvia.utils.tomador import resolver_tomador, tomador_label
         papeis = None
         if nfs:
             primeira = nfs[0]
-            # tipo_frete via fatura_cliente vinculada (se houver) para fallback FOB/CIF
-            tipo_frete_fallback = None
-            if operacao.fatura_cliente_id:
-                try:
-                    tipo_frete_fallback = operacao.fatura_cliente.tipo_frete
-                except Exception:
-                    pass
             papeis = {
                 'emit': {
                     'nome': primeira.nome_emitente,
@@ -349,9 +346,7 @@ def register_operacao_routes(bp):
                     'uf': primeira.uf_destinatario,
                 },
                 'tomador_label': tomador_label(operacao.cte_tomador),
-                'tomador': resolver_tomador_com_fallback(
-                    operacao.cte_tomador, tipo_frete_fallback,
-                ),
+                'tomador': resolver_tomador(operacao.cte_tomador),
             }
 
         # A4.2 (2026-04-18): Historico de correcoes de endereco (CC-e / manual).
@@ -454,7 +449,7 @@ def register_operacao_routes(bp):
         nf_ids_raw = request.form.getlist('nf_ids')
         cte_valor_raw = request.form.get('cte_valor', '').strip()
         observacoes = request.form.get('observacoes', '').strip()
-        # Tomador do frete (opcional). Valida contra whitelist; invalido → None.
+        # Tomador do frete (OBRIGATORIO 2026-04-20). Valida contra whitelist SEFAZ.
         _tomador_raw = (request.form.get('cte_tomador') or '').strip().upper()
         _TOMADORES_VALIDOS = {
             'REMETENTE', 'EXPEDIDOR', 'RECEBEDOR', 'DESTINATARIO', 'TERCEIRO',
@@ -468,6 +463,11 @@ def register_operacao_routes(bp):
             'observacoes': observacoes,
             'cte_tomador': cte_tomador or '',
         }
+
+        # Validar tomador obrigatorio — SOT do tomador para CTes sem XML.
+        if not cte_tomador:
+            flash('Tomador do frete e obrigatorio (Remetente/Expedidor/Recebedor/Destinatario/Terceiro).', 'warning')
+            return render_template('carvia/criar_manual.html', form_data=form_data)
 
         # Validar NFs
         if not nf_ids_raw:
