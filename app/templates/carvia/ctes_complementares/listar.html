@@ -77,6 +77,7 @@
                             <th>CTe Complementar</th>
                             <th>CTe do Frete</th>
                             <th>Cliente</th>
+                            <th>Emitente / Destinatario</th>
                             {{ th_sort('cte_valor', 'Valor', sort, direction, 'text-end') }}
                             {{ th_sort('status', 'Status', sort, direction) }}
                             {{ th_sort('cte_data_emissao', 'Data Emissão', sort, direction) }}
@@ -100,6 +101,15 @@
                                 </a>
                             </td>
                             <td>{{ comp.nome_cliente or comp.cnpj_cliente or '-' }}</td>
+                            <td>
+                                {% set p = papeis_por_comp.get(comp.id) %}
+                                {% if p and (p.emit or p.dest or p.tomador) %}
+                                {% import 'carvia/_macros.html' as carvia_m %}
+                                {{ carvia_m.emitente_destinatario(p.emit, p.dest, p.tomador, compact=True) }}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td class="valor-col">{{ comp.cte_valor|valor_br }}</td>
                             <td>
                                 <span class="badge carvia-badge-{{ comp.status|lower }}">

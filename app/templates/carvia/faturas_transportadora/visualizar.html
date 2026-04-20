@@ -141,6 +141,20 @@
                     </table>
                 </div>
             </div>
+            {% if papeis and (papeis.emit or papeis.dest or papeis.tomador) %}
+            <hr>
+            <h6 class="mb-2"><i class="fas fa-exchange-alt"></i> Emitente / Destinatario da mercadoria</h6>
+            {% import 'carvia/_macros.html' as carvia_m %}
+            {{ carvia_m.emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador) }}
+            <small class="text-muted d-block mt-1">
+                Dados extraidos do primeiro subcontrato vinculado → operacao → primeira NF.
+                A CarVia e tomadora do frete desta fatura; o badge <strong>TOMADOR</strong>, quando presente,
+                reflete o tomador declarado no CTe original emitido ao cliente final
+                {% if papeis.tomador and papeis.tomador.inferido %}
+                (<em>inferido pelo tipo de frete — nao ha cte_tomador no XML original</em>)
+                {% endif %}.
+            </small>
+            {% endif %}
             {% if fatura.observacoes %}
             <hr>
             <p><strong>Observacoes:</strong> {{ fatura.observacoes }}</p>

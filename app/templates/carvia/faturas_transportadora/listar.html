@@ -119,6 +119,7 @@
                             {{ th_sort('id', 'ID', sort, direction) }}
                             {{ th_sort('numero_fatura', 'Numero Fatura', sort, direction) }}
                             <th>Transportadora</th>
+                            <th>Emitente / Destinatario</th>
                             {{ th_sort('data_emissao', 'Data Emissao', sort, direction) }}
                             {{ th_sort('valor_total', 'Valor Total', sort, direction, 'text-end') }}
                             {{ th_sort('vencimento', 'Vencimento', sort, direction) }}
@@ -142,6 +143,15 @@
                                 {{ f.transportadora.razao_social[:30] if f.transportadora else '-' }}{% if f.transportadora %}...{% endif %}
                                 {% if f.transportadora and f.transportadora.cnpj %}
                                 <br><small class="text-muted">{{ f.transportadora.cnpj }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set p = papeis_por_fatura.get(f.id) %}
+                                {% if p and (p.emit or p.dest or p.tomador) %}
+                                {% import 'carvia/_macros.html' as carvia_m %}
+                                {{ carvia_m.emitente_destinatario(p.emit, p.dest, p.tomador, compact=True) }}
+                                {% else %}
+                                <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td>{{ f.data_emissao|formatar_data_segura if f.data_emissao else '-' }}</td>

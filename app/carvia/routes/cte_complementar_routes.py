@@ -97,11 +97,17 @@ def register_cte_complementar_routes(bp):
             ).filter(CarviaOperacao.id.in_(op_ids)).all()
             op_info_map = {o_id: {'cte_numero': cte, 'ctrc_numero': ctrc} for o_id, cte, ctrc in ops}
 
+        # Batch papeis (emit/dest/tomador) via operacao pai -> NFs
+        from app.carvia.utils.papeis_frete import batch_papeis_por_cte_complementar
+        comp_ids = [c.id for c in paginacao.items]
+        papeis_por_comp = batch_papeis_por_cte_complementar(comp_ids)
+
         return render_template(
             'carvia/ctes_complementares/listar.html',
             ctes_complementares=paginacao.items,
             paginacao=paginacao,
             op_info_map=op_info_map,
+            papeis_por_comp=papeis_por_comp,
             operacao_filtro=operacao_filtro,
             status_filtro=status_filtro,
             busca=busca,
@@ -225,11 +231,17 @@ def register_cte_complementar_routes(bp):
             c for c in custos_vinculados if c.status != 'CANCELADO'
         ]
 
+        # Papeis (emit/dest/tomador) via operacao pai -> primeira NF.
+        # CTe Comp herda do CTe original porque nao tem emit/dest proprios.
+        from app.carvia.utils.papeis_frete import resolver_papeis_cte_complementar
+        papeis = resolver_papeis_cte_complementar(cte_comp)
+
         return render_template(
             'carvia/ctes_complementares/detalhe.html',
             cte_comp=cte_comp,
             custos_vinculados=custos_vinculados,
             despesas_extras=despesas_extras,
+            papeis=papeis,
         )
 
     @bp.route('/ctes-complementares/<int:cte_comp_id>/editar', methods=['GET', 'POST']) # type: ignore

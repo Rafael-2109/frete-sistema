@@ -14,7 +14,7 @@ from app import db
 from app.carvia.models import (
     CarviaFaturaCliente, CarviaFaturaTransportadora,
     CarviaFaturaTransportadoraItem,
-    CarviaOperacao, CarviaOperacaoNf, CarviaNf, CarviaSubcontrato,
+    CarviaOperacao, CarviaSubcontrato,
     CarviaCteComplementar, CarviaFrete,
 )
 from app.carvia.services.financeiro.rateio_conciliacao_helper import (
@@ -124,44 +124,13 @@ def register_fatura_routes(bp):
             for fat_id, op_id, cte_num in rows_ops:
                 ops_por_fatura[fat_id].append({'id': op_id, 'cte_numero': cte_num})
 
-        # Batch: papeis de frete (emit/dest/tomador) por fatura via join triplo
-        from app.carvia.utils.tomador import tomador_label as _tomador_label
-        papeis_por_fatura = {}
-        if fat_ids:
-            rows_papeis = db.session.query(
-                CarviaOperacao.fatura_cliente_id,
-                CarviaOperacao.cte_tomador,
-                CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
-                CarviaNf.cidade_emitente, CarviaNf.uf_emitente,
-                CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
-                CarviaNf.cidade_destinatario, CarviaNf.uf_destinatario,
-            ).join(
-                CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
-            ).join(
-                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
-            ).filter(
-                CarviaOperacao.fatura_cliente_id.in_(fat_ids)
-            ).all()
-            for row in rows_papeis:
-                (fid, cte_tom,
-                 emit_nome, emit_cnpj, emit_cidade, emit_uf,
-                 dest_nome, dest_cnpj, dest_cidade, dest_uf) = row
-                if fid in papeis_por_fatura:
-                    # Se ja ha papeis mas o tomador_label e None, atualiza com um operacao que tenha cte_tomador
-                    if not papeis_por_fatura[fid]['tomador_label'] and cte_tom:
-                        papeis_por_fatura[fid]['tomador_label'] = _tomador_label(cte_tom)
-                    continue
-                papeis_por_fatura[fid] = {
-                    'emit': {
-                        'nome': emit_nome, 'cnpj': emit_cnpj,
-                        'cidade': emit_cidade, 'uf': emit_uf,
-                    },
-                    'dest': {
-                        'nome': dest_nome, 'cnpj': dest_cnpj,
-                        'cidade': dest_cidade, 'uf': dest_uf,
-                    },
-                    'tomador_label': _tomador_label(cte_tom),
-                }
+        # Batch papeis (emit/dest/tomador) via helper centralizado que:
+        # - faz join operacao -> NF (caminho principal)
+        # - faz fallback via CTe Complementar -> operacao pai -> NF
+        # - faz fallback final via tipo_frete (FOB/CIF) quando nao ha NF
+        from app.carvia.utils.papeis_frete import batch_papeis_por_fatura_cliente
+        tipo_frete_por_fat = {f.id: f.tipo_frete for f, _ in paginacao.items if f.tipo_frete}
+        papeis_por_fatura = batch_papeis_por_fatura_cliente(fat_ids, tipo_frete_por_fat)
 
         today = date.today()
 
@@ -589,32 +558,9 @@ def register_fatura_routes(bp):
         _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({fatura.cnpj_cliente})
         cliente_comercial = _clientes.get(re.sub(r'\D', '', fatura.cnpj_cliente or ''))
 
-        # Papeis de frete — primeira NF + primeira operacao com cte_tomador
-        from app.carvia.utils.tomador import tomador_label
-        papeis = None
-        if nfs:
-            primeira_nf = nfs[0]
-            # Primeira operacao com cte_tomador populado (se houver)
-            tomador_raw = None
-            for op in operacoes or []:
-                if getattr(op, 'cte_tomador', None):
-                    tomador_raw = op.cte_tomador
-                    break
-            papeis = {
-                'emit': {
-                    'nome': primeira_nf.nome_emitente,
-                    'cnpj': primeira_nf.cnpj_emitente,
-                    'cidade': primeira_nf.cidade_emitente,
-                    'uf': primeira_nf.uf_emitente,
-                },
-                'dest': {
-                    'nome': primeira_nf.nome_destinatario,
-                    'cnpj': primeira_nf.cnpj_destinatario,
-                    'cidade': primeira_nf.cidade_destinatario,
-                    'uf': primeira_nf.uf_destinatario,
-                },
-                'tomador_label': tomador_label(tomador_raw),
-            }
+        # Papeis de frete via helper centralizado (cobre operacao + CTe Comp fallback + tipo_frete)
+        from app.carvia.utils.papeis_frete import resolver_papeis_fatura_cliente
+        papeis = resolver_papeis_fatura_cliente(fatura)
 
         return render_template(
             'carvia/faturas_cliente/detalhe.html',
@@ -1362,6 +1308,13 @@ def register_fatura_routes(bp):
 
         today = date.today()
 
+        # Batch papeis (emit/dest/tomador) para coluna Emitente/Destinatario
+        from app.carvia.utils.papeis_frete import (
+            batch_papeis_por_fatura_transportadora,
+        )
+        fat_ids = [f.id for f, _qtd, _val in paginacao.items]
+        papeis_por_fatura = batch_papeis_por_fatura_transportadora(fat_ids)
+
         return render_template(
             'carvia/faturas_transportadora/listar.html',
             faturas=paginacao.items,
@@ -1370,6 +1323,7 @@ def register_fatura_routes(bp):
             sort=sort,
             direction=direction,
             today=today,
+            papeis_por_fatura=papeis_por_fatura,
         )
 
     @bp.route('/faturas-transportadora/nova', methods=['GET', 'POST']) # type: ignore
@@ -1894,6 +1848,14 @@ def register_fatura_routes(bp):
         }
         valor_total_conciliado = float(rateio_conc['total'])
 
+        # Papeis (emitente/destinatario/tomador) via primeiro subcontrato → operacao → NFs.
+        # CarVia e tomadora do subcontrato, mas o relatorio mostra emit/dest da mercadoria
+        # transportada e o cte_tomador do CTe original emitido ao cliente final (quando houver).
+        from app.carvia.utils.papeis_frete import (
+            resolver_papeis_fatura_transportadora,
+        )
+        papeis = resolver_papeis_fatura_transportadora(fatura)
+
         return render_template(
             'carvia/faturas_transportadora/visualizar.html',
             fatura=fatura,
@@ -1914,6 +1876,7 @@ def register_fatura_routes(bp):
             operacoes=operacoes,
             custos_entrega=custos_entrega_ft,
             ctes_complementares=ctes_complementares_ft,
+            papeis=papeis,
         )
 
     @bp.route('/faturas-transportadora/<int:fatura_id>/editar-vencimento', methods=['POST']) # type: ignore

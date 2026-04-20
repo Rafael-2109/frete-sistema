@@ -715,8 +715,20 @@ def register_exportacao_routes(bp):
                 custos_por_comp[comp_id] = cnt
                 custos_valor_por_comp[comp_id] = float(val)
 
+        # Batch papeis (emit/dest/tomador) via operacao pai -> NFs.
+        # CTe Comp herda do CTe original porque nao tem emit/dest proprios.
+        from app.carvia.utils.papeis_frete import batch_papeis_por_cte_complementar
+        papeis_por_comp = batch_papeis_por_cte_complementar(comp_item_ids)
+
         data = []
         for c in items:
+            p = papeis_por_comp.get(c.id) or {}
+            emit = p.get('emit') or {}
+            dest = p.get('dest') or {}
+            tom = p.get('tomador') or {}
+            tom_label = tom.get('label_completo') or ''
+            if tom.get('inferido'):
+                tom_label = f"{tom_label} (inferido)"
             data.append({
                 'Numero Comp': c.numero_comp or '',
                 'CTe Numero': op_map.get(c.operacao_id, ''),
@@ -725,6 +737,11 @@ def register_exportacao_routes(bp):
                 'Operacao ID': c.operacao_id,
                 'Cliente': c.nome_cliente or '',
                 'CNPJ Cliente': c.cnpj_cliente or '',
+                'Emitente': emit.get('nome') or '',
+                'CNPJ Emitente': emit.get('cnpj') or '',
+                'Destinatario': dest.get('nome') or '',
+                'CNPJ Destinatario': dest.get('cnpj') or '',
+                'Tomador': tom_label,
                 'Valor CTe': float(c.cte_valor or 0),
                 'Data Emissao': _fmt_date(c.cte_data_emissao),
                 'Status': c.status or '',
@@ -979,48 +996,27 @@ def register_exportacao_routes(bp):
                         fat_custos[fc_id] += op_custo_cnt.get(o_id, 0)
                         fat_custos_valor[fc_id] += op_custo_val.get(o_id, 0)
 
-        # Batch: primeira (nf + cte_tomador) por fatura via join triplo
-        # fatura -> operacao -> junction -> nf
-        from app.carvia.utils.tomador import tomador_label_para_export
-        primeira_nf_por_fatura = {}
-        if fat_ids_all:
-            rows_papeis = db.session.query(
-                CarviaOperacao.fatura_cliente_id,
-                CarviaOperacao.cte_tomador,
-                CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
-                CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
-            ).join(
-                CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
-            ).join(
-                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
-            ).filter(
-                CarviaOperacao.fatura_cliente_id.in_(fat_ids_all)
-            ).all()
-            for row in rows_papeis:
-                fid, cte_tom, emit_nome, emit_cnpj, dest_nome, dest_cnpj = row
-                if fid in primeira_nf_por_fatura:
-                    # Atualiza tomador se ainda nao setado
-                    if not primeira_nf_por_fatura[fid]['tomador'] and cte_tom:
-                        primeira_nf_por_fatura[fid]['tomador'] = cte_tom
-                    continue
-                primeira_nf_por_fatura[fid] = {
-                    'emit_nome': emit_nome or '',
-                    'emit_cnpj': emit_cnpj or '',
-                    'dest_nome': dest_nome or '',
-                    'dest_cnpj': dest_cnpj or '',
-                    'tomador': cte_tom,
-                }
+        # Batch papeis via helper: cobre operacao + CTe Comp fallback + tipo_frete
+        from app.carvia.utils.papeis_frete import batch_papeis_por_fatura_cliente
+        tipo_frete_por_fat = {f.id: f.tipo_frete for f in items if f.tipo_frete}
+        papeis_por_fatura = batch_papeis_por_fatura_cliente(fat_ids_all, tipo_frete_por_fat)
 
         data = []
         for f in items:
-            papeis = primeira_nf_por_fatura.get(f.id) or {}
+            p = papeis_por_fatura.get(f.id) or {}
+            emit = p.get('emit') or {}
+            dest = p.get('dest') or {}
+            tom = p.get('tomador') or {}
+            tom_label = tom.get('label_completo') or ''
+            if tom.get('inferido'):
+                tom_label = f"{tom_label} (inferido)"
             data.append({
                 'Numero Fatura': f.numero_fatura or '',
-                'Emitente': papeis.get('emit_nome', ''),
-                'CNPJ Emitente': papeis.get('emit_cnpj', ''),
-                'Destinatario': papeis.get('dest_nome', ''),
-                'CNPJ Destinatario': papeis.get('dest_cnpj', ''),
-                'Tomador': tomador_label_para_export(papeis.get('tomador')),
+                'Emitente': emit.get('nome') or '',
+                'CNPJ Emitente': emit.get('cnpj') or '',
+                'Destinatario': dest.get('nome') or '',
+                'CNPJ Destinatario': dest.get('cnpj') or '',
+                'Tomador': tom_label,
                 'Data Emissao': _fmt_date(f.data_emissao),
                 'Vencimento': _fmt_date(f.vencimento),
                 'Valor Total': float(f.valor_total or 0),
@@ -1181,11 +1177,27 @@ def register_exportacao_routes(bp):
                         ft_comps[ft_id] += op_comp_cnt.get(o_id, 0)
                         ft_comps_valor[ft_id] += op_comp_val.get(o_id, 0)
 
+        # Batch papeis (emitente/destinatario/tomador) via subcontratos -> operacoes -> NFs
+        from app.carvia.utils.papeis_frete import batch_papeis_por_fatura_transportadora
+        papeis_por_fatura = batch_papeis_por_fatura_transportadora(ft_ids_all)
+
         data = []
         for f in items:
+            p = papeis_por_fatura.get(f.id) or {}
+            emit = p.get('emit') or {}
+            dest = p.get('dest') or {}
+            tom = p.get('tomador') or {}
+            tom_label = tom.get('label_completo') or ''
+            if tom.get('inferido'):
+                tom_label = f"{tom_label} (inferido)"
             data.append({
                 'Numero Fatura': f.numero_fatura or '',
                 'Transportadora': f.transportadora.razao_social if f.transportadora else '',
+                'Emitente': emit.get('nome') or '',
+                'CNPJ Emitente': emit.get('cnpj') or '',
+                'Destinatario': dest.get('nome') or '',
+                'CNPJ Destinatario': dest.get('cnpj') or '',
+                'Tomador': tom_label,
                 'Data Emissao': _fmt_date(f.data_emissao),
                 'Vencimento': _fmt_date(f.vencimento),
                 'Valor Total': float(f.valor_total or 0),

@@ -270,11 +270,22 @@ def register_operacao_routes(bp):
         _clientes = CarviaClienteService.resolver_clientes_por_cnpjs({operacao.cnpj_cliente})
         cliente_comercial = _clientes.get(re.sub(r'\D', '', operacao.cnpj_cliente or ''))
 
-        # Papeis de frete (Emitente/Destinatario/Tomador) — regra: 1 CTe = 1 par unico
-        from app.carvia.utils.tomador import tomador_label
+        # Papeis de frete (Emitente/Destinatario/Tomador) — regra: 1 CTe = 1 par unico.
+        # Mantem `tomador_label` (string legada) para listar_operacoes.html e adiciona
+        # `tomador` (dict novo) para exibir EXPEDIDOR/RECEBEDOR/TERCEIRO e marca `inferido`.
+        from app.carvia.utils.tomador import (
+            resolver_tomador_com_fallback, tomador_label,
+        )
         papeis = None
         if nfs:
             primeira = nfs[0]
+            # tipo_frete via fatura_cliente vinculada (se houver) para fallback FOB/CIF
+            tipo_frete_fallback = None
+            if operacao.fatura_cliente_id:
+                try:
+                    tipo_frete_fallback = operacao.fatura_cliente.tipo_frete
+                except Exception:
+                    pass
             papeis = {
                 'emit': {
                     'nome': primeira.nome_emitente,
@@ -289,6 +300,9 @@ def register_operacao_routes(bp):
                     'uf': primeira.uf_destinatario,
                 },
                 'tomador_label': tomador_label(operacao.cte_tomador),
+                'tomador': resolver_tomador_com_fallback(
+                    operacao.cte_tomador, tipo_frete_fallback,
+                ),
             }
 
         # A4.2 (2026-04-18): Historico de correcoes de endereco (CC-e / manual).

@@ -124,9 +124,9 @@
                             </td>
                             <td>
                                 {% set p = papeis_por_fatura.get(f.id) %}
-                                {% if p %}
+                                {% if p and (p.emit or p.dest or p.tomador) %}
                                 {% import 'carvia/_macros.html' as carvia_m %}
-                                {{ carvia_m.emitente_destinatario(p.emit, p.dest, p.tomador_label, compact=True) }}
+                                {{ carvia_m.emitente_destinatario(p.emit, p.dest, p.tomador, compact=True) }}
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}

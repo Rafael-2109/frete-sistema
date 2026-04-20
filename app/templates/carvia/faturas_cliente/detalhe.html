@@ -107,10 +107,15 @@
                             {% endif %}
                         </div>
                     </div>
-                    {% if papeis %}
+                    {% if papeis and (papeis.emit or papeis.dest or papeis.tomador) %}
                     <hr>
                     {% import 'carvia/_macros.html' as carvia_m %}
-                    {{ carvia_m.emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador_label) }}
+                    {{ carvia_m.emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador) }}
+                    {% if papeis.tomador and papeis.tomador.inferido %}
+                    <small class="text-muted d-block mt-1">
+                        <em>Tomador inferido pelo tipo de frete (FOB/CIF) — CTe original sem campo explicito.</em>
+                    </small>
+                    {% endif %}
                     {% endif %}
                     {% if fatura.observacoes %}
                     <hr>

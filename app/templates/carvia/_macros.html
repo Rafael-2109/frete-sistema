@@ -63,50 +63,70 @@
   no tomador do frete.
 
   Params:
-    emit          - dict com {nome, cnpj, cidade, uf} ou None
-    dest          - dict com {nome, cnpj, cidade, uf} ou None
-    tomador_label - 'emitente' | 'destinatario' | None (quem paga o frete)
-    compact       - True para celula de listagem (linha unica com seta)
-                    False para card de detalhe (col-6/col-6)
+    emit    - dict com {nome, cnpj, cidade, uf} ou None
+    dest    - dict com {nome, cnpj, cidade, uf} ou None
+    tomador - pode ser:
+              (a) string 'emitente' | 'destinatario' | None (legado — compat)
+              (b) dict {codigo, label_visual, label_completo, inferido} (novo)
+    compact - True para celula de listagem; False para card de detalhe
 
   Comportamento:
-    - tomador_label='emitente'    → badge TOM no emitente + border warning
-    - tomador_label='destinatario' → badge TOM no destinatario + border warning
-    - tomador_label=None           → sem destaque visual
-
-  Exemplos:
-    {{ emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador_label) }}
-    {{ emitente_destinatario(emit, dest, 'emitente', compact=True) }}
+    - tomador aponta para emitente   → badge "TOM" no emitente
+    - tomador aponta para destinatario → badge "TOM" no destinatario
+    - tomador = EXPEDIDOR/RECEBEDOR/TERCEIRO → linha adicional "Tomador: <nome>"
+    - tomador.inferido=True         → title="Inferido pelo tipo de frete"
+                                        (em vez de "Extraido do CTe")
 #}
-{% macro emitente_destinatario(emit, dest, tomador_label, compact=False) %}
+{% macro emitente_destinatario(emit, dest, tomador, compact=False) %}
+  {# Normalizar tomador: aceita string legada ou dict novo #}
+  {% if tomador is string %}
+    {% set _tom_visual = tomador %}
+    {% set _tom_completo = None %}
+    {% set _tom_inferido = False %}
+  {% elif tomador is mapping %}
+    {% set _tom_visual = tomador.label_visual %}
+    {% set _tom_completo = tomador.label_completo %}
+    {% set _tom_inferido = tomador.inferido %}
+  {% else %}
+    {% set _tom_visual = None %}
+    {% set _tom_completo = None %}
+    {% set _tom_inferido = False %}
+  {% endif %}
+  {% set _tom_title = 'Tomador inferido pelo tipo de frete (FOB/CIF)' if _tom_inferido else 'Tomador do Frete (extraido do CTe)' %}
+  {% set _tom_extra = _tom_completo and not _tom_visual %}
   {% if compact %}
     <div class="small carvia-emit-dest-compact">
       <span class="cnpj-col" title="{{ emit.cnpj if emit else '' }}">
         <strong>{{ emit.nome if emit else '-' }}</strong>
-        {% if tomador_label == 'emitente' %}
-          <span class="badge bg-warning text-dark ms-1" title="Tomador do Frete">
-            <i class="fas fa-dollar-sign"></i> TOM
+        {% if _tom_visual == 'emitente' %}
+          <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
+            <i class="fas fa-dollar-sign"></i> TOM{% if _tom_inferido %}*{% endif %}
           </span>
         {% endif %}
       </span>
       <i class="fas fa-arrow-right fa-xs text-muted mx-1"></i>
       <span class="cnpj-col" title="{{ dest.cnpj if dest else '' }}">
         <strong>{{ dest.nome if dest else '-' }}</strong>
-        {% if tomador_label == 'destinatario' %}
-          <span class="badge bg-warning text-dark ms-1" title="Tomador do Frete">
-            <i class="fas fa-dollar-sign"></i> TOM
+        {% if _tom_visual == 'destinatario' %}
+          <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
+            <i class="fas fa-dollar-sign"></i> TOM{% if _tom_inferido %}*{% endif %}
           </span>
         {% endif %}
       </span>
+      {% if _tom_extra %}
+      <div class="small text-muted mt-1" title="{{ _tom_title }}">
+        <i class="fas fa-dollar-sign"></i> Tomador: {{ _tom_completo }}{% if _tom_inferido %} <em>(inferido)</em>{% endif %}
+      </div>
+      {% endif %}
     </div>
   {% else %}
     <div class="row g-3 carvia-emit-dest-full">
-      <div class="col-6 {% if tomador_label == 'emitente' %}carvia-tomador-highlight{% endif %}">
+      <div class="col-6 {% if _tom_visual == 'emitente' %}carvia-tomador-highlight{% endif %}">
         <small class="text-muted d-block">
           Emitente
-          {% if tomador_label == 'emitente' %}
-            <span class="badge bg-warning text-dark ms-1">
-              <i class="fas fa-dollar-sign"></i> TOMADOR
+          {% if _tom_visual == 'emitente' %}
+            <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
+              <i class="fas fa-dollar-sign"></i> TOMADOR{% if _tom_inferido %}*{% endif %}
             </span>
           {% endif %}
         </small>
@@ -120,12 +140,12 @@
           <span class="text-muted">-</span>
         {% endif %}
       </div>
-      <div class="col-6 {% if tomador_label == 'destinatario' %}carvia-tomador-highlight{% endif %}">
+      <div class="col-6 {% if _tom_visual == 'destinatario' %}carvia-tomador-highlight{% endif %}">
         <small class="text-muted d-block">
           Destinatario
-          {% if tomador_label == 'destinatario' %}
-            <span class="badge bg-warning text-dark ms-1">
-              <i class="fas fa-dollar-sign"></i> TOMADOR
+          {% if _tom_visual == 'destinatario' %}
+            <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
+              <i class="fas fa-dollar-sign"></i> TOMADOR{% if _tom_inferido %}*{% endif %}
             </span>
           {% endif %}
         </small>
@@ -139,6 +159,15 @@
           <span class="text-muted">-</span>
         {% endif %}
       </div>
+      {% if _tom_extra %}
+      <div class="col-12">
+        <small class="text-muted d-block" title="{{ _tom_title }}">
+          <span class="badge bg-secondary">
+            <i class="fas fa-dollar-sign"></i> Tomador: {{ _tom_completo }}{% if _tom_inferido %} <em>(inferido)</em>{% endif %}
+          </span>
+        </small>
+      </div>
+      {% endif %}
     </div>
   {% endif %}
 {% endmacro %}

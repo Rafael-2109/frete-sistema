@@ -114,7 +114,7 @@
                 <div class="card-body">
                     {% import 'carvia/_macros.html' as carvia_m %}
                     {% if papeis %}
-                    {{ carvia_m.emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador_label) }}
+                    {{ carvia_m.emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador) }}
                     {% if cliente_comercial %}
                     <div class="mt-2">
                         <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cliente_comercial.id) }}"

@@ -127,6 +127,14 @@
                     <small class="text-muted d-block">Observacoes</small>
                     <p class="mb-0">{{ cte_comp.observacoes }}</p>
                     {% endif %}
+                    {% if papeis and (papeis.emit or papeis.dest or papeis.tomador) %}
+                    <hr>
+                    <small class="text-muted d-block mb-1">
+                        Emitente / Destinatario <em>(herdado do CTe original)</em>
+                    </small>
+                    {% import 'carvia/_macros.html' as carvia_m %}
+                    {{ carvia_m.emitente_destinatario(papeis.emit, papeis.dest, papeis.tomador) }}
+                    {% endif %}
                     {% if cte_comp.atualizado_em and cte_comp.atualizado_em != cte_comp.criado_em %}
                     <hr>
                     <small class="text-muted">
