@@ -48,7 +48,8 @@ class HoraMotoEvento(db.Model):
         index=True,
     )
     tipo = db.Column(db.String(20), nullable=False, index=True)
-    # Valores: RECEBIDA, CONFERIDA, TRANSFERIDA, RESERVADA, VENDIDA, DEVOLVIDA, AVARIADA
+    # Valores: RECEBIDA, CONFERIDA, TRANSFERIDA, RESERVADA, VENDIDA,
+    #          DEVOLVIDA, AVARIADA, FALTANDO_PECA
 
     origem_tabela = db.Column(db.String(50), nullable=True)
     # Ex.: 'hora_recebimento_conferencia', 'hora_venda_item'

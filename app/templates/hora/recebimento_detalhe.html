@@ -3,7 +3,16 @@
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h2>Recebimento #{{ recebimento.id }}</h2>
-  <span class="badge fs-6 badge-status-{{ recebimento.status|lower }}">{{ recebimento.status }}</span>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="badge fs-6 badge-status-{{ recebimento.status|lower }}">{{ recebimento.status }}</span>
+    {% set divs = recebimento.conferencias|selectattr('tipo_divergencia')|list %}
+    {% if divs|length > 0 %}
+      <a href="{{ url_for('hora.recebimentos_resolver', recebimento_id=recebimento.id) }}"
+         class="btn btn-sm btn-warning">
+        <i class="fas fa-tools"></i> Resolver divergências ({{ divs|length }})
+      </a>
+    {% endif %}
+  </div>
 </div>
 
 <div class="row g-3 mb-4">
@@ -13,7 +22,7 @@
   </div></div>
   <div class="col-md-3"><div class="hora-kpi">
     <div class="hora-kpi-label">Loja</div>
-    <div>{{ recebimento.loja.nome }}</div>
+    <div>{{ recebimento.loja.rotulo_display }}</div>
   </div></div>
   <div class="col-md-3"><div class="hora-kpi">
     <div class="hora-kpi-label">Data</div>
@@ -45,7 +54,7 @@
   <form method="post" action="{{ url_for('hora.recebimentos_conferir', recebimento_id=recebimento.id) }}"
         id="form-conferencia">
     <div class="row g-2">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label">Chassi (QR Code) <span class="text-danger">*</span></label>
         <input type="text" name="numero_chassi" id="input-chassi"
                class="form-control chassi-mono" required autofocus
@@ -66,12 +75,28 @@
           <option value="COR_DIFERENTE">Cor diferente</option>
           <option value="MOTOR_DIFERENTE">Motor diferente</option>
           <option value="AVARIA_FISICA">Avaria física</option>
+          <option value="MOTO_FALTANDO">Moto faltando</option>
           <option value="CHASSI_EXTRA">Chassi extra (não está na NF)</option>
         </select>
       </div>
-      <div class="col-md-3">
+      <div class="col-md-4">
         <label class="form-label">Detalhe</label>
         <input type="text" name="detalhe_divergencia" class="form-control">
+      </div>
+    </div>
+
+    <!-- Sugestoes de modelo/cor (preenchidas dinamicamente) -->
+    <div id="sugestoes" class="mt-2 small d-none">
+      <div>
+        <strong>Modelos no contexto:</strong>
+        <span id="sug-modelos"></span>
+        <button type="button" class="btn btn-link btn-sm p-0 ms-2" id="btn-criar-modelo">
+          <i class="fas fa-plus"></i> criar novo
+        </button>
+      </div>
+      <div>
+        <strong>Cores no contexto:</strong>
+        <span id="sug-cores"></span>
       </div>
     </div>
 
@@ -103,28 +128,34 @@
   const feedbackMensagem = document.getElementById('feedback-mensagem');
   const feedbackEsperado = document.getElementById('feedback-esperado');
   const selectDiv = document.getElementById('select-divergencia');
-  const btnRegistrar = document.getElementById('btn-registrar');
+  const sugBox = document.getElementById('sugestoes');
+  const sugModelos = document.getElementById('sug-modelos');
+  const sugCores = document.getElementById('sug-cores');
+  const btnCriarModelo = document.getElementById('btn-criar-modelo');
   const url = input.dataset.validateUrl;
+
+  // Escape HTML para prevenir XSS quando injetamos dados do backend via innerHTML.
+  // Dados de modelo/cor podem vir de DANFE manipulado com <script> embutido.
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
 
   let debounce;
 
   function limparFeedback() {
     feedback.style.display = 'none';
     feedbackAlert.className = 'alert d-flex align-items-start gap-2 mb-0';
+    sugBox.classList.add('d-none');
   }
 
   function setFeedback(tipo, titulo, mensagem, esperado) {
     feedback.style.display = 'block';
     feedbackAlert.className = 'alert d-flex align-items-start gap-2 mb-0';
     const mapClasse = {
-      ok: 'alert-success',
-      aviso: 'alert-warning',
-      erro: 'alert-danger',
+      ok: 'alert-success', aviso: 'alert-warning', erro: 'alert-danger',
     };
     const mapIcone = {
-      ok: 'fa-check-circle',
-      aviso: 'fa-exclamation-triangle',
-      erro: 'fa-times-circle',
+      ok: 'fa-check-circle', aviso: 'fa-exclamation-triangle', erro: 'fa-times-circle',
     };
     feedbackAlert.classList.add(mapClasse[tipo] || 'alert-info');
     feedbackIcon.className = 'fas ' + (mapIcone[tipo] || 'fa-info-circle') + ' mt-1';
@@ -133,48 +164,71 @@
     feedbackEsperado.innerHTML = esperado || '';
   }
 
-  async function validar() {
-    const chassi = input.value.trim().toUpperCase();
-    if (!chassi || chassi.length < 5) {
-      limparFeedback();
+  function renderSugestoes(data) {
+    if (!data.modelos_sugeridos?.length && !data.cores_sugeridas?.length) {
+      sugBox.classList.add('d-none');
       return;
     }
+    sugBox.classList.remove('d-none');
+    sugModelos.innerHTML = (data.modelos_sugeridos || [])
+      .map(m => `<span class="badge bg-light text-dark border me-1">${esc(m)}</span>`)
+      .join('');
+    sugCores.innerHTML = (data.cores_sugeridas || [])
+      .map(c => `<span class="badge bg-light text-dark border me-1">${esc(c)}</span>`)
+      .join('');
+  }
+
+  async function validar() {
+    const chassi = input.value.trim().toUpperCase();
+    if (!chassi || chassi.length < 5) { limparFeedback(); return; }
 
     try {
       const resp = await fetch(url + '?chassi=' + encodeURIComponent(chassi));
       if (!resp.ok) { limparFeedback(); return; }
       const data = await resp.json();
 
-      // Esperado: modelo/cor da NF (ou cadastro)
       let esperadoHtml = '';
       if (data.modelo_esperado || data.cor_esperada) {
         esperadoHtml = '<strong>Esperado (NF):</strong> ';
-        if (data.modelo_esperado) esperadoHtml += 'Modelo <code>' + data.modelo_esperado + '</code> ';
-        if (data.cor_esperada) esperadoHtml += 'Cor <code>' + data.cor_esperada + '</code>';
+        if (data.modelo_esperado) esperadoHtml += 'Modelo <code>' + esc(data.modelo_esperado) + '</code> ';
+        if (data.cor_esperada) esperadoHtml += 'Cor <code>' + esc(data.cor_esperada) + '</code>';
       }
 
-      // Decidir tipo + auto-select divergência
       if (!data.na_nf) {
         setFeedback('erro', 'CHASSI EXTRA', data.mensagem, esperadoHtml);
         selectDiv.value = 'CHASSI_EXTRA';
       } else if (data.ja_conferido) {
         setFeedback('aviso', 'Já conferido', data.mensagem, esperadoHtml);
       } else {
-        setFeedback('ok', 'Chassi OK', data.mensagem + ' Compare modelo/cor e marque divergência se houver.', esperadoHtml);
+        setFeedback('ok', 'Chassi OK', data.mensagem + ' Compare modelo/cor.', esperadoHtml);
         if (selectDiv.value === 'CHASSI_EXTRA') selectDiv.value = '';
       }
+      renderSugestoes(data);
     } catch (err) {
       console.error(err);
       limparFeedback();
     }
   }
 
-  input.addEventListener('input', function() {
-    clearTimeout(debounce);
-    debounce = setTimeout(validar, 250);
-  });
+  input.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(validar, 250); });
   input.addEventListener('blur', validar);
   input.addEventListener('change', validar);
+
+  // Criar modelo rapido (inline)
+  btnCriarModelo.addEventListener('click', async () => {
+    const nome = prompt('Nome do novo modelo:');
+    if (!nome) return;
+    const fd = new FormData();
+    fd.append('nome_modelo', nome.trim());
+    try {
+      const r = await fetch("{{ url_for('hora.modelos_criar_rapido') }}",
+                            { method: 'POST', body: fd });
+      const data = await r.json();
+      if (!data.ok) { alert('Erro: ' + (data.erro || 'falha')); return; }
+      const novo = `<span class="badge bg-success border me-1">${esc(data.nome_modelo)} (novo)</span>`;
+      sugModelos.innerHTML = novo + sugModelos.innerHTML;
+    } catch (e) { alert('Erro: ' + e); }
+  });
 })();
 </script>
 {% endif %}
@@ -216,6 +270,14 @@
 {% if recebimento.status == 'EM_CONFERENCIA' %}
 <form method="post" action="{{ url_for('hora.recebimentos_finalizar', recebimento_id=recebimento.id) }}"
       onsubmit="return confirm('Finalizar este recebimento? Não será possível registrar novas conferências.');">
+  <div class="form-check mb-2">
+    <input type="checkbox" name="marcar_faltantes_em_batch" id="batch" class="form-check-input"
+           {% if chassis_esperados_nao_conferidos %}checked{% endif %}>
+    <label for="batch" class="form-check-label">
+      Marcar chassis esperados não conferidos como <strong>MOTO_FALTANDO</strong> em batch
+      ({{ chassis_esperados_nao_conferidos|length }})
+    </label>
+  </div>
   <button type="submit" class="btn btn-primary">
     <i class="fas fa-check"></i> Finalizar recebimento
   </button>

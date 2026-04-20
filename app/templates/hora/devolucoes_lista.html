@@ -1,0 +1,62 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Devoluções ao fornecedor</h2>
+  <a href="{{ url_for('hora.devolucoes_novo') }}" class="btn btn-primary btn-sm">
+    <i class="fas fa-plus"></i> Nova devolução
+  </a>
+</div>
+
+<form method="get" class="card p-3 mb-3">
+  <div class="row g-2">
+    <div class="col-md-3">
+      <label class="form-label">Loja</label>
+      <select name="loja_id" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for l in lojas %}
+          <option value="{{ l.id }}" {% if filtro_loja_id == l.id %}selected{% endif %}>
+            {{ l.rotulo_display }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for s in ['ABERTA', 'ENVIADA', 'CONFIRMADA', 'CANCELADA'] %}
+          <option value="{{ s }}" {% if filtro_status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3 d-flex align-items-end">
+      <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+    </div>
+  </div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead><tr>
+      <th>#</th><th>Data</th><th>Loja</th><th>Motivo</th>
+      <th>Itens</th><th>Status</th><th>NF saída</th>
+    </tr></thead>
+    <tbody>
+      {% for d in devolucoes %}
+        <tr>
+          <td><a href="{{ url_for('hora.devolucoes_detalhe', devolucao_id=d.id) }}">#{{ d.id }}</a></td>
+          <td>{{ d.data_devolucao.strftime('%d/%m/%Y') }}</td>
+          <td>{{ d.loja.rotulo_display }}</td>
+          <td><small>{{ d.motivo }}</small></td>
+          <td>{{ d.itens|length }}</td>
+          <td><span class="badge hora-badge-{{ d.status|lower }}">{{ d.status }}</span></td>
+          <td>{{ d.nf_saida_numero or '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-3">Nenhuma devolução.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

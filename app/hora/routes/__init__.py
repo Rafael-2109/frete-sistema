@@ -13,7 +13,17 @@ hora_bp = Blueprint(
 )
 
 # Imports das rotas APÓS criar blueprint (evita import circular).
-from . import dashboard, cadastros, pedidos, nfs, recebimentos, permissoes  # noqa: E402, F401
+from . import (  # noqa: E402, F401
+    dashboard,
+    cadastros,
+    pedidos,
+    nfs,
+    recebimentos,
+    permissoes,
+    estoque,
+    devolucoes,
+    pecas,
+)
 
 
 __all__ = ['hora_bp']

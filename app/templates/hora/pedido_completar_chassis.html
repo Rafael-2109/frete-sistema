@@ -168,6 +168,11 @@
   const pedIdsUsados = new Set();
   const nfIdsUsados = new Set();
 
+  // Escape HTML para prevenir XSS quando interpolamos textContent em innerHTML
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+
   function atualizarCount() {
     const n = tbodyPares.querySelectorAll('tr.par-row').length;
     countEl.textContent = n;
@@ -226,16 +231,16 @@
     tr.dataset.nfId = nfId;
     tr.innerHTML = `
       <td></td>
-      <td>#${pedId} ${modeloPed} / ${corPed}${warning}</td>
-      <td class="chassi-mono">${chassi}</td>
-      <td>${modeloNf}</td>
-      <td>${corNf}</td>
+      <td>#${esc(pedId)} ${esc(modeloPed)} / ${esc(corPed)}${warning}</td>
+      <td class="chassi-mono">${esc(chassi)}</td>
+      <td>${esc(modeloNf)}</td>
+      <td>${esc(corNf)}</td>
       <td>
         <button type="button" class="btn btn-sm btn-outline-danger btn-remover">
           <i class="fas fa-times"></i>
         </button>
-        <input type="hidden" name="pedido_item_id[]" value="${pedId}">
-        <input type="hidden" name="nf_item_id[]" value="${nfId}">
+        <input type="hidden" name="pedido_item_id[]" value="${esc(pedId)}">
+        <input type="hidden" name="nf_item_id[]" value="${esc(nfId)}">
       </td>
     `;
     tbodyPares.appendChild(tr);

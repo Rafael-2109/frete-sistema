@@ -1,7 +1,7 @@
 """Service de recebimento físico: conferência por chassi + emissão de eventos."""
 from __future__ import annotations
 
-from datetime import date
+from app.utils.timezone import agora_utc_naive
 from typing import List, Optional
 
 from app import db
@@ -56,6 +56,9 @@ def validar_chassi_contra_recebimento(
         'motor_esperado': None,
         'divergencia_sugerida': None,
         'mensagem': '',
+        # Sugestoes: listas agregadas da NF + pedido + cadastro
+        'modelos_sugeridos': [],
+        'cores_sugeridas': [],
     }
 
     if not chassi_norm:
@@ -104,6 +107,27 @@ def validar_chassi_contra_recebimento(
     ).first()
     resultado['ja_conferido'] = existente is not None
 
+    # Sugestoes de modelo/cor para UI: agrega NF + pedido (contexto proximo).
+    # NAO consulta o catalogo geral (hora_modelo) aqui — essa query e chamada
+    # a cada keystroke no input de chassi. Se o operador precisar de um modelo
+    # fora do contexto, usa o botao "criar novo" que faz uma chamada dedicada.
+    modelos = set()
+    cores = set()
+    for item_nf_rec in rec.nf.itens:
+        if item_nf_rec.modelo_texto_original:
+            modelos.add(item_nf_rec.modelo_texto_original.strip())
+        if item_nf_rec.cor_texto_original:
+            cores.add(item_nf_rec.cor_texto_original.strip().upper())
+    if rec.nf.pedido_id:
+        for item_ped in rec.nf.pedido.itens:
+            if item_ped.modelo and item_ped.modelo.nome_modelo:
+                modelos.add(item_ped.modelo.nome_modelo.strip())
+            if item_ped.cor:
+                cores.add(item_ped.cor.strip().upper())
+
+    resultado['modelos_sugeridos'] = sorted(m for m in modelos if m)
+    resultado['cores_sugeridas'] = sorted(c for c in cores if c)
+
     # Divergência sugerida
     if not resultado['na_nf']:
         resultado['divergencia_sugerida'] = 'CHASSI_EXTRA'
@@ -151,7 +175,7 @@ def iniciar_recebimento(
     rec = HoraRecebimento(
         nf_id=nf_id,
         loja_id=loja_id,
-        data_recebimento=date.today(),
+        data_recebimento=agora_utc_naive().date(),
         operador=operador,
         status='EM_CONFERENCIA',
     )
@@ -295,6 +319,56 @@ def chassis_conferidos_nao_na_nf(recebimento_id: int) -> List[str]:
     chassis_nf = {item.numero_chassi for item in rec.nf.itens}
     chassis_conferidos = {c.numero_chassi for c in rec.conferencias}
     return sorted(chassis_conferidos - chassis_nf)
+
+
+def marcar_faltantes_em_batch(
+    recebimento_id: int,
+    operador: Optional[str] = None,
+    detalhe: Optional[str] = None,
+) -> int:
+    """Cria 1 conferencia MOTO_FALTANDO para cada chassi da NF que ainda
+    nao foi conferido. Retorna quantidade criada. Idempotente.
+    """
+    rec = HoraRecebimento.query.get(recebimento_id)
+    if not rec:
+        raise ValueError(f'recebimento {recebimento_id} nao encontrado')
+    if rec.status != 'EM_CONFERENCIA':
+        raise ValueError(f'recebimento nao esta EM_CONFERENCIA (status={rec.status})')
+
+    faltantes = chassis_esperados_mas_nao_conferidos(recebimento_id)
+    total = 0
+    for chassi in faltantes:
+        conferencia = HoraRecebimentoConferencia(
+            recebimento_id=recebimento_id,
+            numero_chassi=chassi,
+            qr_code_lido=False,
+            tipo_divergencia='MOTO_FALTANDO',
+            detalhe_divergencia=detalhe or 'Marcado em batch no finalizar',
+            operador=operador,
+        )
+        db.session.add(conferencia)
+        db.session.flush()
+        registrar_evento(
+            numero_chassi=chassi,
+            tipo='CONFERIDA',
+            origem_tabela='hora_recebimento_conferencia',
+            origem_id=conferencia.id,
+            loja_id=rec.loja_id,
+            operador=operador,
+            detalhe='Divergencia: MOTO_FALTANDO (batch)',
+        )
+        total += 1
+    db.session.commit()
+    return total
+
+
+def finalizar_com_faltantes_em_batch(
+    recebimento_id: int,
+    operador: Optional[str] = None,
+) -> HoraRecebimento:
+    """Marca faltantes em batch E finaliza em uma chamada."""
+    marcar_faltantes_em_batch(recebimento_id, operador=operador)
+    return finalizar_recebimento(recebimento_id)
 
 
 def listar_recebimentos(

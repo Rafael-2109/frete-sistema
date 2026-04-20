@@ -1,0 +1,145 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Peça faltando #{{ peca.id }}</h2>
+  <span class="badge fs-6 hora-badge-{{ peca.status|lower }}">{{ peca.status }}</span>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="hora-kpi">
+    <div class="hora-kpi-label">Chassi</div>
+    <div class="chassi-mono">{{ peca.numero_chassi }}</div>
+    <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=peca.numero_chassi) }}"
+       class="small">ver histórico</a>
+  </div></div>
+  <div class="col-md-5"><div class="hora-kpi">
+    <div class="hora-kpi-label">Peça</div>
+    <div>{{ peca.descricao }}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Doador (canibalização)</div>
+    <div class="chassi-mono">{{ peca.chassi_doador or '—' }}</div>
+  </div></div>
+</div>
+
+{% if peca.observacoes %}
+<div class="alert alert-info"><strong>Obs:</strong>
+  <pre class="mb-0 small">{{ peca.observacoes }}</pre>
+</div>
+{% endif %}
+
+{% if peca.status == 'ABERTA' %}
+<div class="row mb-4">
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5>Resolver com canibalização</h5>
+      <form method="post" action="{{ url_for('hora.pecas_canibalizar', peca_id=peca.id) }}">
+        <div class="mb-2">
+          <label class="form-label">Chassi doador</label>
+          <input type="text" name="chassi_doador" class="form-control chassi-mono"
+                 list="datalist-chassis" id="input-doador" required maxlength="30"
+                 placeholder="digite 3+ chars para autocomplete">
+          <datalist id="datalist-chassis"></datalist>
+          <div class="form-text">
+            Cria nova pendência <strong>no doador</strong> com a mesma descrição.
+          </div>
+        </div>
+        <button class="btn btn-warning btn-sm">Aplicar canibalização</button>
+      </form>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5>Resolver sem canibalização</h5>
+      <form method="post" action="{{ url_for('hora.pecas_resolver', peca_id=peca.id) }}">
+        <div class="mb-2">
+          <label class="form-label small">Observação (peça chegou, foi comprada, etc.)</label>
+          <textarea name="observacoes" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <button class="btn btn-success btn-sm">Marcar resolvida</button>
+      </form>
+      <hr>
+      <form method="post" action="{{ url_for('hora.pecas_cancelar', peca_id=peca.id) }}"
+            onsubmit="return confirm('Cancelar a pendência?');">
+        <button class="btn btn-sm btn-outline-danger">Cancelar pendência</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card p-3 mb-3">
+  <h5>Fotos ({{ fotos|length }})</h5>
+  <form method="post" action="{{ url_for('hora.pecas_upload_foto', peca_id=peca.id) }}"
+        enctype="multipart/form-data" class="row g-2 mb-3 align-items-end">
+    <div class="col-md-5">
+      <label class="form-label small">Arquivo</label>
+      <input type="file" name="foto" accept="image/*" class="form-control form-control-sm" required>
+    </div>
+    <div class="col-md-5">
+      <label class="form-label small">Legenda (opcional)</label>
+      <input type="text" name="legenda" class="form-control form-control-sm" maxlength="255">
+    </div>
+    <div class="col-md-2">
+      <button class="btn btn-sm btn-primary"><i class="fas fa-upload"></i> Enviar</button>
+    </div>
+  </form>
+
+  <div class="row g-2">
+    {% for f in fotos %}
+    <div class="col-md-3">
+      <div class="card">
+        {% if f.url %}
+          <img src="{{ f.url }}" class="card-img-top" style="object-fit: cover; max-height: 180px;" alt="foto">
+        {% else %}
+          <div class="bg-light p-3 text-muted small text-center">URL indisponível</div>
+        {% endif %}
+        <div class="card-body p-2">
+          <p class="small mb-1"><strong>{{ f.legenda or '—' }}</strong></p>
+          <p class="text-muted small mb-1">{{ f.criado_em.strftime('%d/%m %H:%M') }}</p>
+          <form method="post"
+                action="{{ url_for('hora.pecas_remover_foto', peca_id=peca.id, foto_id=f.id) }}"
+                onsubmit="return confirm('Remover foto?');">
+            <button class="btn btn-sm btn-outline-danger w-100">Remover</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-muted text-center py-3"><em>Sem fotos.</em></div>
+    {% endfor %}
+  </div>
+</div>
+
+<a href="{{ url_for('hora.pecas_lista') }}" class="btn btn-secondary">Voltar</a>
+
+<script>
+(function() {
+  const input = document.getElementById('input-doador');
+  if (!input) return;
+  const datalist = document.getElementById('datalist-chassis');
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim().toUpperCase();
+    if (q.length < 3) return;
+    timer = setTimeout(async () => {
+      try {
+        const r = await fetch(
+          "{{ url_for('hora.pecas_autocomplete_chassi') }}" + '?q=' + encodeURIComponent(q));
+        const data = await r.json();
+        datalist.innerHTML = '';
+        data.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.chassi;
+          opt.label = `${d.modelo} ${d.cor}`;
+          datalist.appendChild(opt);
+        });
+      } catch (e) { console.error(e); }
+    }, 200);
+  });
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Peças faltando</h2>
+  <a href="{{ url_for('hora.pecas_novo') }}" class="btn btn-sm btn-primary">
+    <i class="fas fa-plus"></i> Nova pendência
+  </a>
+</div>
+
+<form method="get" class="card p-3 mb-3">
+  <div class="row g-2">
+    <div class="col-md-3">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for s in ['ABERTA', 'RESOLVIDA', 'CANCELADA'] %}
+          <option value="{{ s }}" {% if filtro_status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Chassi</label>
+      <input type="text" name="chassi" class="form-control form-control-sm chassi-mono"
+             value="{{ filtro_chassi or '' }}">
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button class="btn btn-sm btn-primary">Filtrar</button>
+    </div>
+  </div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead><tr>
+      <th>#</th><th>Chassi</th><th>Peça</th><th>Status</th><th>Doador</th>
+      <th>Fotos</th><th>Aberta em</th>
+    </tr></thead>
+    <tbody>
+      {% for p in pecas %}
+        <tr>
+          <td><a href="{{ url_for('hora.pecas_detalhe', peca_id=p.id) }}">#{{ p.id }}</a></td>
+          <td class="chassi-mono">{{ p.numero_chassi }}</td>
+          <td>{{ p.descricao }}</td>
+          <td><span class="badge hora-badge-{{ p.status|lower }}">{{ p.status }}</span></td>
+          <td class="chassi-mono">{{ p.chassi_doador or '—' }}</td>
+          <td>{{ p.fotos|length }}</td>
+          <td><small>{{ p.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-3">Nenhuma pendência.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Devolução #{{ devolucao.id }}</h2>
+  <span class="badge fs-6 hora-badge-{{ devolucao.status|lower }}">{{ devolucao.status }}</span>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Loja</div><div>{{ devolucao.loja.rotulo_display }}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Motivo</div><div>{{ devolucao.motivo }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Aberta em</div>
+    <div><small>{{ devolucao.data_devolucao.strftime('%d/%m/%Y') }}</small></div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Enviada em</div>
+    <div><small>{{ devolucao.data_envio.strftime('%d/%m/%Y') if devolucao.data_envio else '—' }}</small></div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Confirmada em</div>
+    <div><small>{{ devolucao.data_confirmacao.strftime('%d/%m/%Y') if devolucao.data_confirmacao else '—' }}</small></div>
+  </div></div>
+</div>
+
+{% if devolucao.observacoes %}
+<div class="alert alert-info"><strong>Obs:</strong> {{ devolucao.observacoes }}</div>
+{% endif %}
+
+<h4>Chassis ({{ devolucao.itens|length }})</h4>
+{% if devolucao.status == 'ABERTA' %}
+<form method="post" action="{{ url_for('hora.devolucoes_adicionar_item', devolucao_id=devolucao.id) }}"
+      class="card p-2 mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label small">Chassi</label>
+      <input type="text" name="numero_chassi" class="form-control form-control-sm chassi-mono" required>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small">Motivo específico</label>
+      <input type="text" name="motivo_especifico" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-sm btn-success">Adicionar</button>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+<div class="table-responsive mb-3">
+  <table class="table table-sm">
+    <thead><tr>
+      <th>Chassi</th><th>Motivo específico</th><th>Conferência ref</th><th>Adicionado em</th>
+      {% if devolucao.status == 'ABERTA' %}<th></th>{% endif %}
+    </tr></thead>
+    <tbody>
+      {% for it in devolucao.itens %}
+        <tr>
+          <td class="chassi-mono">{{ it.numero_chassi }}</td>
+          <td><small>{{ it.motivo_especifico or '' }}</small></td>
+          <td>{% if it.recebimento_conferencia_id %}#{{ it.recebimento_conferencia_id }}{% else %}—{% endif %}</td>
+          <td><small>{{ it.criado_em.strftime('%d/%m %H:%M') }}</small></td>
+          {% if devolucao.status == 'ABERTA' %}
+          <td>
+            <form method="post"
+                  action="{{ url_for('hora.devolucoes_remover_item', devolucao_id=devolucao.id, item_id=it.id) }}"
+                  onsubmit="return confirm('Remover {{ it.numero_chassi }}?');">
+              <button class="btn btn-sm btn-outline-danger"><i class="fas fa-times"></i></button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-muted text-center py-3">Sem chassis. Adicione acima.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="d-flex gap-2 flex-wrap">
+  {% if devolucao.status == 'ABERTA' and devolucao.itens %}
+  <form method="post" action="{{ url_for('hora.devolucoes_enviar', devolucao_id=devolucao.id) }}"
+        class="card p-2" style="min-width: 600px;">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small">NF saída número</label>
+        <input type="text" name="nf_saida_numero" class="form-control form-control-sm">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small">Chave 44 (opcional)</label>
+        <input type="text" name="nf_saida_chave_44" class="form-control form-control-sm chassi-mono"
+               maxlength="44" minlength="44" pattern="\d{44}">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-warning btn-sm"
+                onclick="return confirm('Enviar devolução? As motos sairão do estoque.');">
+          Enviar
+        </button>
+      </div>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if devolucao.status == 'ENVIADA' %}
+  <form method="post" action="{{ url_for('hora.devolucoes_confirmar', devolucao_id=devolucao.id) }}">
+    <button class="btn btn-success btn-sm">Confirmar recebimento pelo fornecedor</button>
+  </form>
+  {% endif %}
+
+  {% if devolucao.status in ['ABERTA', 'ENVIADA', 'CONFIRMADA'] %}
+  <form method="post" action="{{ url_for('hora.devolucoes_cancelar', devolucao_id=devolucao.id) }}"
+        onsubmit="return confirm('Cancelar devolução? Se já enviada, motos voltam ao estoque.');">
+    <button class="btn btn-outline-danger btn-sm">Cancelar devolução</button>
+  </form>
+  {% endif %}
+
+  <a href="{{ url_for('hora.devolucoes_lista') }}" class="btn btn-secondary btn-sm">Voltar</a>
+</div>
+{% endblock %}

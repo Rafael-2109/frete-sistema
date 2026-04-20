@@ -1,0 +1,53 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3">Nova devolução ao fornecedor</h2>
+
+<form method="post" class="card p-3" style="max-width: 700px;">
+  <div class="mb-3">
+    <label class="form-label">Loja <span class="text-danger">*</span></label>
+    <select name="loja_id" class="form-select" required>
+      <option value="">— Selecione —</option>
+      {% for l in lojas %}
+        <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Motivo <span class="text-danger">*</span></label>
+    <select name="motivo" class="form-select" required>
+      <option value="">— Selecione —</option>
+      <option value="CHASSI_EXTRA">CHASSI_EXTRA</option>
+      <option value="MODELO_DIFERENTE">MODELO_DIFERENTE</option>
+      <option value="COR_DIFERENTE">COR_DIFERENTE</option>
+      <option value="MOTOR_DIFERENTE">MOTOR_DIFERENTE</option>
+      <option value="AVARIA_FISICA">AVARIA_FISICA</option>
+      <option value="OUTROS">OUTROS</option>
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">NF de entrada de referência (opcional)</label>
+    <select name="nf_entrada_id" class="form-select">
+      <option value="">— Nenhuma —</option>
+      {% for n in nfs %}
+        <option value="{{ n.id }}">
+          NF {{ n.numero_nf }} — {{ n.data_emissao.strftime('%d/%m/%Y') }}
+          {% if n.loja_destino %}({{ n.loja_destino.rotulo_display }}){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Observações</label>
+    <textarea name="observacoes" class="form-control" rows="3"></textarea>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Criar devolução</button>
+    <a href="{{ url_for('hora.devolucoes_lista') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

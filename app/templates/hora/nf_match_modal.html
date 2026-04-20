@@ -151,6 +151,11 @@
   // Mapa chassi -> tr na tabela da NF (lado esquerdo)
   const nfTable = document.getElementById('nf-items-table');
 
+  // Escape HTML contra XSS em dados vindos do backend via innerHTML
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+
   function resetarPinturaNF() {
     nfTable.querySelectorAll('tbody tr').forEach(tr => {
       tr.classList.remove('table-success', 'table-danger', 'selecionavel', 'selecionado');
@@ -180,11 +185,11 @@
       const r = await fetch(`${URL_PREVIEW}?pedido_id=${pedidoId}`);
       data = await r.json();
     } catch (e) {
-      body.innerHTML = `<tr><td colspan="4" class="text-danger p-3">Erro: ${e}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="4" class="text-danger p-3">Erro: ${esc(e)}</td></tr>`;
       return;
     }
     if (!data.ok) {
-      body.innerHTML = `<tr><td colspan="4" class="text-danger p-3">${data.erro || 'Erro'}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="4" class="text-danger p-3">${esc(data.erro || 'Erro')}</td></tr>`;
       return;
     }
 
@@ -200,14 +205,16 @@
       } else {
         tr.classList.add(pi.match ? 'table-success' : 'table-danger');
       }
+      // pedidoId e pi.id sao inteiros (do backend); chassi/modelo/cor vem de
+      // texto livre do DANFE e precisam ser escapados.
       tr.innerHTML = `
         <td class="text-center">
           <input type="radio" name="ped_item_selected_${pedidoId}" value="${pi.id}"
                  class="form-check-input ped-select-radio" disabled>
         </td>
-        <td class="chassi-mono">${pi.chassi || '<em class="text-muted">pendente</em>'}</td>
-        <td>${pi.modelo || '—'}</td>
-        <td>${pi.cor || '—'}</td>
+        <td class="chassi-mono">${pi.chassi ? esc(pi.chassi) : '<em class="text-muted">pendente</em>'}</td>
+        <td>${esc(pi.modelo || '—')}</td>
+        <td>${esc(pi.cor || '—')}</td>
       `;
       body.appendChild(tr);
     });

@@ -1,0 +1,120 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3">Estoque por loja</h2>
+
+<div class="row g-3 mb-4">
+  {% for k in kpis_loja %}
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">{{ k.loja_nome }}</div>
+      <div class="hora-kpi-valor">{{ k.total }}</div>
+      <div class="small text-muted">
+        Disp.: <strong>{{ k.disponivel }}</strong>
+        · Avariada: <strong class="text-warning">{{ k.avariada }}</strong>
+        · Falt.peça: <strong class="text-info">{{ k.faltando_peca }}</strong>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12">
+    <div class="alert alert-warning">Nenhuma moto em estoque.</div>
+  </div>
+  {% endfor %}
+</div>
+
+<form method="get" class="card p-3 mb-3">
+  <div class="row g-2">
+    <div class="col-md-3">
+      <label class="form-label">Loja</label>
+      <select name="loja_id" class="form-select">
+        <option value="">Todas</option>
+        {% for l in lojas %}
+          <option value="{{ l.id }}" {% if filtro_loja_id == l.id %}selected{% endif %}>
+            {{ l.rotulo_display }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Modelo</label>
+      <select name="modelo_id" class="form-select">
+        <option value="">Todos</option>
+        {% for m in modelos %}
+          <option value="{{ m.id }}" {% if filtro_modelo_id == m.id %}selected{% endif %}>
+            {{ m.nome_modelo }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Cor</label>
+      <input type="text" name="cor" class="form-control" value="{{ filtro_cor or '' }}">
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <div class="form-check">
+        <input type="checkbox" name="incluir_avariadas" id="ia" class="form-check-input"
+               value="1" {% if incluir_avariadas %}checked{% endif %}>
+        <label for="ia" class="form-check-label">Incluir avariadas</label>
+      </div>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <div class="form-check">
+        <input type="checkbox" name="incluir_faltando_peca" id="ifp" class="form-check-input"
+               value="1" {% if incluir_faltando_peca %}checked{% endif %}>
+        <label for="ifp" class="form-check-label">Incluir faltando peça</label>
+      </div>
+    </div>
+  </div>
+  <div class="mt-2">
+    <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+    <a href="{{ url_for('hora.estoque_lista') }}" class="btn btn-outline-secondary btn-sm">Limpar</a>
+  </div>
+</form>
+
+<h5 class="mt-3">Por modelo + cor</h5>
+<div class="table-responsive mb-3">
+  <table class="table table-sm">
+    <thead><tr><th>Modelo</th><th>Cor</th><th>Total</th></tr></thead>
+    <tbody>
+      {% for k in kpis_modelo %}
+        <tr>
+          <td>{{ k.modelo_nome }}</td>
+          <td>{{ k.cor }}</td>
+          <td><strong>{{ k.total }}</strong></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="text-muted text-center">—</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h5>Motos chassi-a-chassi ({{ motos|length }})</h5>
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead><tr>
+      <th>Chassi</th><th>Modelo</th><th>Cor</th><th>Loja</th>
+      <th>Status</th><th>Desde</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for m in motos %}
+      <tr class="{% if m.ultimo_evento == 'AVARIADA' %}table-warning{% elif m.ultimo_evento == 'FALTANDO_PECA' %}table-info{% endif %}">
+        <td class="chassi-mono">{{ m.chassi }}</td>
+        <td>{{ m.modelo_nome }}</td>
+        <td>{{ m.cor }}</td>
+        <td>{{ m.loja_nome or '—' }}</td>
+        <td><span class="badge hora-badge-{{ m.ultimo_evento|lower }}">{{ m.ultimo_evento }}</span></td>
+        <td><small>{{ m.ultimo_evento_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+        <td>
+          <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=m.chassi) }}"
+             class="btn btn-sm btn-outline-secondary">Ver</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-muted text-center py-3">Nenhuma moto com os filtros atuais.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

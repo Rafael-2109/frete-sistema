@@ -41,8 +41,8 @@ def pedidos_detalhe(pedido_id: int):
     pedido = HoraPedido.query.get_or_404(pedido_id)
     # Autorização por loja_destino
     if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
     nfs_vinculadas = HoraNfEntrada.query.filter_by(pedido_id=pedido.id).all()
     chassis_pedido = {i.numero_chassi for i in pedido.itens}
     chassis_faturados = {
@@ -269,8 +269,8 @@ def pedidos_completar_chassis(pedido_id: int):
     """Tela-wizard: pareia item_pedido (chassi=NULL) com nf_item da mesma loja."""
     pedido = HoraPedido.query.get_or_404(pedido_id)
     if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
 
     if not pedido.loja_destino_id:
         flash(
@@ -304,8 +304,8 @@ def pedidos_completar_chassis_aplicar(pedido_id: int):
     """Recebe pares pedido_item_id + nf_item_id e aplica em transacao."""
     pedido = HoraPedido.query.get_or_404(pedido_id)
     if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
 
     pedido_item_ids = request.form.getlist('pedido_item_id[]')
     nf_item_ids = request.form.getlist('nf_item_id[]')
@@ -353,15 +353,16 @@ def pedidos_completar_chassis_aplicar(pedido_id: int):
 @login_required
 def pedidos_editar_item(pedido_id: int, item_id: int):
     pedido = HoraPedido.query.get_or_404(pedido_id)
+    is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'
     if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
-        from flask import abort
-        abort(403)
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': 'acesso negado'}), 403
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
 
     numero_chassi = (request.form.get('numero_chassi') or '').strip() or None
     modelo_nome = (request.form.get('modelo_nome') or '').strip() or None
     cor = (request.form.get('cor') or '').strip() or None
-
-    is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'
     try:
         res = matching_service.editar_pedido_item_manual(
             pedido_id=pedido.id,

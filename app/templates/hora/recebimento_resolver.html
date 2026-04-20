@@ -1,0 +1,112 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-0">Resolver divergências — Recebimento #{{ recebimento.id }}</h2>
+    <small class="text-muted">
+      NF {{ recebimento.nf.numero_nf }}
+      · Loja {{ recebimento.loja.rotulo_display }}
+      · {{ divergencias|length }} divergência(s)
+    </small>
+  </div>
+  <a href="{{ url_for('hora.recebimentos_detalhe', recebimento_id=recebimento.id) }}"
+     class="btn btn-sm btn-secondary">Voltar ao recebimento</a>
+</div>
+
+{% if not divergencias %}
+<div class="alert alert-success">Nenhuma divergência neste recebimento.</div>
+{% else %}
+
+<div class="alert alert-info small">
+  Para cada divergência abaixo, escolha uma ação. Mesmo apos resolver, o registro
+  da conferência fica para auditoria.
+</div>
+
+<div class="accordion" id="acc-divergencias">
+{% for c in divergencias %}
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+              data-bs-target="#div-{{ c.id }}">
+        <div class="d-flex flex-wrap gap-2 align-items-center w-100">
+          <strong class="chassi-mono">{{ c.numero_chassi }}</strong>
+          <span class="badge hora-badge-divergencia">{{ c.tipo_divergencia }}</span>
+          <small class="text-muted">{{ c.detalhe_divergencia or '' }}</small>
+        </div>
+      </button>
+    </h2>
+    <div id="div-{{ c.id }}" class="accordion-collapse collapse"
+         data-bs-parent="#acc-divergencias">
+      <div class="accordion-body">
+        <form method="post"
+              action="{{ url_for('hora.recebimentos_resolver_aplicar', recebimento_id=recebimento.id, conferencia_id=c.id) }}">
+          <div class="row g-2">
+            <div class="col-md-3">
+              <label class="form-label small">Ação</label>
+              <select name="acao" class="form-select form-select-sm acao-select" required>
+                <option value="">— Selecione —</option>
+                <option value="ACEITAR">Aceitar (sem mudança)</option>
+                <option value="MARCAR_AVARIA">Marcar AVARIADA</option>
+                <option value="PECA_FALTANDO">Registrar peça faltando</option>
+                <option value="DEVOLVER">Devolver ao fornecedor</option>
+                <option value="DESCARTAR">Descartar (sai do estoque)</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">Motivo (rótulo)</label>
+              <input type="text" name="motivo" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">Observações</label>
+              <input type="text" name="observacoes" class="form-control form-control-sm">
+            </div>
+          </div>
+
+          <!-- Subform: PECA_FALTANDO -->
+          <div class="row g-2 mt-1 sub-pecafaltando d-none">
+            <div class="col-md-12">
+              <label class="form-label small">Descrição da peça <span class="text-danger">*</span></label>
+              <input type="text" name="descricao_peca" class="form-control form-control-sm">
+            </div>
+          </div>
+
+          <!-- Subform: DEVOLVER -->
+          <div class="row g-2 mt-1 sub-devolver d-none">
+            <div class="col-md-6">
+              <label class="form-label small">Adicionar a devolução existente</label>
+              <select name="devolucao_id" class="form-select form-select-sm">
+                <option value="">— Criar nova —</option>
+                {% for d in devolucoes_abertas %}
+                  <option value="{{ d.id }}">
+                    #{{ d.id }} {{ d.motivo }} ({{ d.itens|length }} itens)
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-2">
+            <button class="btn btn-sm btn-primary">Aplicar ação</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+</div>
+
+<script>
+(function() {
+  document.querySelectorAll('.acao-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const card = sel.closest('form');
+      card.querySelector('.sub-pecafaltando').classList.toggle('d-none', sel.value !== 'PECA_FALTANDO');
+      card.querySelector('.sub-devolver').classList.toggle('d-none', sel.value !== 'DEVOLVER');
+    });
+  });
+})();
+</script>
+
+{% endif %}
+{% endblock %}

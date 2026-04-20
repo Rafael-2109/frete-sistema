@@ -65,6 +65,7 @@ def registrar_evento(
     TIPOS_VALIDOS = {
         'RECEBIDA', 'CONFERIDA', 'TRANSFERIDA',
         'RESERVADA', 'VENDIDA', 'DEVOLVIDA', 'AVARIADA',
+        'FALTANDO_PECA',
     }
     if tipo not in TIPOS_VALIDOS:
         raise ValueError(f"Tipo de evento inválido: {tipo}. Aceitos: {TIPOS_VALIDOS}")

@@ -65,8 +65,8 @@ def nfs_lista():
 def nfs_detalhe(nf_id: int):
     nf = HoraNfEntrada.query.get_or_404(nf_id)
     if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
 
     # Lojas permitidas para o caso de a NF estar sem loja_destino_id
     lojas_ativas = _lojas_ativas_permitidas() if not nf.loja_destino_id else []
@@ -214,8 +214,8 @@ def nfs_definir_loja(nf_id: int):
 def nfs_vincular_pedido(nf_id: int):
     nf = HoraNfEntrada.query.get_or_404(nf_id)
     if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
 
     pedido_id_str = request.form.get('pedido_id') or ''
     if not pedido_id_str.isdigit():
@@ -232,8 +232,8 @@ def nfs_vincular_pedido(nf_id: int):
         flash('Pedido e de loja diferente da NF.', 'danger')
         return redirect(url_for('hora.nfs_detalhe', nf_id=nf_id))
     if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado ao pedido selecionado.', 'danger')
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf_id))
 
     try:
         nf_entrada_service.vincular_nf_a_pedido(nf_id, pedido_id)
@@ -253,8 +253,8 @@ def nfs_match(nf_id: int):
     """Modal/tela de vinculo NF -> Pedido com candidatos ordenados por match."""
     nf = HoraNfEntrada.query.get_or_404(nf_id)
     if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
 
     # Se NF nao tem loja, nao da pra casar
     if not nf.loja_destino_id:
@@ -379,8 +379,8 @@ def nfs_match_confirmar(nf_id: int):
     """Confirma vinculo final (depois de corrigir divergencias)."""
     nf = HoraNfEntrada.query.get_or_404(nf_id)
     if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
 
     pedido_id_str = (request.form.get('pedido_id') or '').strip()
     if not pedido_id_str.isdigit():
@@ -396,8 +396,8 @@ def nfs_match_confirmar(nf_id: int):
         flash('Pedido de outra loja.', 'danger')
         return redirect(url_for('hora.nfs_match', nf_id=nf.id))
     if not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
-        from flask import abort
-        abort(403)
+        flash('Acesso negado ao pedido selecionado.', 'danger')
+        return redirect(url_for('hora.nfs_match', nf_id=nf.id))
 
     try:
         nf_entrada_service.vincular_nf_a_pedido(nf.id, pedido.id)
