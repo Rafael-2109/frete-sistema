@@ -960,6 +960,20 @@
     padding-left: 0.75rem !important;
 }
 
+/* Mascara verde transparente sobre o nome quando for tomador do frete
+   (mesmo tom do table-success do Bootstrap, porem mais transparente) */
+.carvia-tomador-mask {
+    background-color: hsla(145 65% 45% / 0.10);
+    border-radius: 3px;
+    padding: 1px 5px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+[data-bs-theme="light"] .carvia-tomador-mask {
+    background-color: hsla(145 65% 38% / 0.12);
+}
+
 .carvia-emit-dest-compact {
     line-height: 1.3;
 }

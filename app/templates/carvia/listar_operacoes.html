@@ -158,26 +158,16 @@
                             </td>
                             <td>
                                 {% set p = papeis_por_op.get(op.id) %}
+                                {% set is_tomador_emit = p and p.tomador_label == 'emitente' %}
                                 {% if p %}
-                                <span title="{{ p.emit.cnpj or op.cnpj_cliente }}" class="cnpj-col">
+                                <span title="{{ p.emit.cnpj or op.cnpj_cliente }}"
+                                      class="cnpj-col{% if is_tomador_emit %} carvia-tomador-mask{% endif %}">
                                     {{ p.emit.nome or op.nome_cliente or op.cnpj_cliente }}
                                 </span>
-                                {% if p.tomador_label == 'emitente' %}
-                                <span class="badge bg-warning text-dark ms-1" title="Tomador do Frete">
-                                    <i class="fas fa-dollar-sign"></i> TOM
-                                </span>
-                                {% endif %}
                                 {% else %}
                                 <span title="{{ op.cnpj_cliente }}" class="cnpj-col">
                                     {{ op.nome_cliente or op.cnpj_cliente }}
                                 </span>
-                                {% endif %}
-                                {% set cli = clientes_por_op.get(op.id) %}
-                                {% if cli %}
-                                <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}"
-                                   class="badge bg-primary text-decoration-none ms-1">
-                                    <i class="fas fa-building"></i> {{ cli.nome_comercial }}
-                                </a>
                                 {% endif %}
                                 {# NF Triangular — badges de transferencia vinculada #}
                                 {% set transfs = transferencias_por_op.get(op.id, []) %}
@@ -186,22 +176,30 @@
                                     {{ badge_nf_transferencia(t.num_nf_transf, t.transf_id) }}
                                 </div>
                                 {% endfor %}
-                                {% if op.cidade_origem or op.uf_origem %}
-                                <small class="text-muted d-block">{{ op.cidade_origem or '' }}/{{ op.uf_origem or '' }}</small>
+                                {% set cli = clientes_por_op.get(op.id) %}
+                                {% if cli or op.cidade_origem or op.uf_origem %}
+                                <div class="d-flex align-items-center flex-wrap gap-1 mt-1">
+                                    {% if cli %}
+                                    <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}"
+                                       class="badge bg-primary text-decoration-none">
+                                        <i class="fas fa-building"></i> {{ cli.nome_comercial }}
+                                    </a>
+                                    {% endif %}
+                                    {% if op.cidade_origem or op.uf_origem %}
+                                    <small class="text-muted">{{ op.cidade_origem or '' }}/{{ op.uf_origem or '' }}</small>
+                                    {% endif %}
+                                </div>
                                 {% endif %}
                             </td>
                             <td>
                                 {% set p = papeis_por_op.get(op.id) %}
                                 {% set dest_info = dest_por_op.get(op.id) %}
+                                {% set is_tomador_dest = p and p.tomador_label == 'destinatario' %}
                                 {% if p and p.dest.nome %}
-                                <span class="cnpj-col" title="{{ p.dest.cnpj or '' }}">
+                                <span class="cnpj-col{% if is_tomador_dest %} carvia-tomador-mask{% endif %}"
+                                      title="{{ p.dest.cnpj or '' }}">
                                     {{ p.dest.nome }}
                                 </span>
-                                {% if p.tomador_label == 'destinatario' %}
-                                <span class="badge bg-warning text-dark ms-1" title="Tomador do Frete">
-                                    <i class="fas fa-dollar-sign"></i> TOM
-                                </span>
-                                {% endif %}
                                 {% elif dest_info and dest_info.destinatario %}
                                 <span class="cnpj-col" title="Embarcador: {{ dest_info.embarcador or '-' }}">
                                     {{ dest_info.destinatario }}
