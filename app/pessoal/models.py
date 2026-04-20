@@ -381,3 +381,61 @@ class PessoalOrcamento(db.Model):
             'categoria_id': self.categoria_id,
             'valor_limite': float(self.valor_limite) if self.valor_limite else 0,
         }
+
+
+# =============================================================================
+# 9. GRUPOS DE ANALISE (seleção de categorias salva pelo usuário)
+# =============================================================================
+class PessoalGrupoAnalise(db.Model):
+    """Agrupamento customizado de categorias para analise cruzada.
+
+    Permite ao usuario salvar uma selecao de categorias (ex: "Alimentacao fora"
+    = restaurante + delivery + lanche) e analisar/expandir o extrato delas em
+    conjunto.
+    """
+    __tablename__ = 'pessoal_grupos_analise'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    descricao = db.Column(db.String(300))
+    cor = db.Column(db.String(20))  # ex: '#3b82f6' (opcional, para grafico)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
+
+    categorias = db.relationship(
+        'PessoalCategoria',
+        secondary='pessoal_grupos_analise_categorias',
+        backref='grupos_analise',
+    )
+
+    def __repr__(self):
+        return f'<PessoalGrupoAnalise {self.nome}>'
+
+    def to_dict(self, incluir_categorias=True):
+        d = {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'cor': self.cor,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+        }
+        if incluir_categorias:
+            d['categorias'] = [
+                {'id': c.id, 'nome': c.nome, 'grupo': c.grupo, 'icone': c.icone}
+                for c in self.categorias
+            ]
+            d['categoria_ids'] = [c.id for c in self.categorias]
+        return d
+
+
+# Tabela de ligacao N:N grupo <-> categoria
+pessoal_grupos_analise_categorias = db.Table(
+    'pessoal_grupos_analise_categorias',
+    db.Column('grupo_id', db.Integer,
+              db.ForeignKey('pessoal_grupos_analise.id', ondelete='CASCADE'),
+              primary_key=True),
+    db.Column('categoria_id', db.Integer,
+              db.ForeignKey('pessoal_categorias.id', ondelete='CASCADE'),
+              primary_key=True),
+    Index('idx_pessoal_gac_categoria', 'categoria_id'),
+)

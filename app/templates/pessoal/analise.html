@@ -1,0 +1,676 @@
+{% extends 'base.html' %}
+
+{% block title %}Analise de Categorias{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="fas fa-chart-line"></i> Analise de Categorias</h4>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0">Mes-ref:</label>
+      <input type="month" id="mesRef" class="form-control form-control-sm" style="width:150px">
+      <label class="small text-muted mb-0 ms-2">Meses:</label>
+      <select id="nMeses" class="form-select form-select-sm" style="width:90px">
+        <option value="3">3</option>
+        <option value="6" selected>6</option>
+        <option value="12">12</option>
+        <option value="24">24</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- ============================= COLUNA ESQUERDA ============================= -->
+    <div class="col-lg-4">
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong><i class="fas fa-search"></i> Buscar categorias</strong>
+          <span class="badge bg-primary" id="selCount">0</span>
+        </div>
+        <div class="card-body">
+          <input type="text" id="catBusca" class="form-control form-control-sm mb-2"
+                 placeholder="Digite grupo ou nome (fuzzy)">
+          <div class="d-flex gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-secondary" id="btnLimparSelecao">
+              <i class="fas fa-times"></i> Limpar
+            </button>
+            <button class="btn btn-sm btn-success ms-auto" id="btnSalvarGrupo" disabled>
+              <i class="fas fa-save"></i> Salvar como grupo
+            </button>
+          </div>
+          <div id="listaCategorias" class="list-group list-group-flush"
+               style="max-height:500px;overflow-y:auto">
+            <div class="text-muted small p-2">Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= COLUNA DIREITA ============================= -->
+    <div class="col-lg-8">
+      <!-- KPIs -->
+      <div class="row g-2 mb-3">
+        <div class="col-md-3">
+          <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Total Despesas</div>
+            <div class="fs-5 fw-bold" id="kpiDespesas">R$ 0</div>
+          </div></div>
+        </div>
+        <div class="col-md-3">
+          <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Total Receitas</div>
+            <div class="fs-5 fw-bold text-success" id="kpiReceitas">R$ 0</div>
+          </div></div>
+        </div>
+        <div class="col-md-3">
+          <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Liquido no periodo</div>
+            <div class="fs-5 fw-bold" id="kpiTotal">R$ 0</div>
+          </div></div>
+        </div>
+        <div class="col-md-3">
+          <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Media mensal</div>
+            <div class="fs-5 fw-bold" id="kpiMedia">R$ 0</div>
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Grafico -->
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong><i class="fas fa-chart-bar"></i> Evolucao (ultimos N meses)</strong>
+          <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-secondary active" data-grafico="barras">Barras</button>
+            <button class="btn btn-outline-secondary" data-grafico="linhas">Linhas</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="graficoVazio" class="text-muted text-center py-4">
+            Selecione categorias a esquerda para visualizar.
+          </div>
+          <canvas id="graficoAnalise" height="110" class="d-none"></canvas>
+        </div>
+      </div>
+
+      <!-- Extrato -->
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong><i class="fas fa-list"></i> Extrato das selecionadas</strong>
+          <button class="btn btn-sm btn-outline-primary" id="btnCarregarExtrato" disabled>
+            <i class="fas fa-download"></i> Carregar
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div id="extratoVazio" class="text-muted text-center py-3 small">
+            Clique em "Carregar" para ver as transacoes.
+          </div>
+          <div class="table-responsive d-none" id="extratoWrap">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Data</th>
+                  <th>Conta</th>
+                  <th>Historico</th>
+                  <th>Categoria</th>
+                  <th class="text-end">Valor</th>
+                </tr>
+              </thead>
+              <tbody id="extratoBody"></tbody>
+            </table>
+          </div>
+          <div class="small text-muted p-2" id="extratoInfo"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================= GRUPOS SALVOS (largura total) ============================= -->
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong><i class="fas fa-layer-group"></i> Grupos salvos</strong>
+          <button class="btn btn-sm btn-outline-primary" id="btnAtualizarGrupos">
+            <i class="fas fa-sync"></i>
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div id="gruposVazio" class="text-muted text-center py-3 small">
+            Nenhum grupo salvo ainda. Selecione categorias e clique em "Salvar como grupo".
+          </div>
+          <div id="gruposAccordion" class="accordion accordion-flush"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: salvar/editar grupo -->
+<div class="modal fade" id="modalGrupo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalGrupoTitulo">Novo grupo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="grupoIdEdit">
+        <div class="mb-2">
+          <label class="form-label small">Nome *</label>
+          <input type="text" id="grupoNome" class="form-control" maxlength="100">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">Descricao</label>
+          <textarea id="grupoDescricao" class="form-control" rows="2" maxlength="300"></textarea>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">Cor (hex)</label>
+          <input type="color" id="grupoCor" class="form-control form-control-color" value="#3b82f6">
+        </div>
+        <div class="small text-muted">
+          <span id="grupoCategoriasResumo">0 categorias</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmarGrupo">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+(function() {
+  'use strict';
+  const csrfToken = $('meta[name="csrf-token"]').attr('content');
+
+  const URLS = {
+    buscar: '{{ url_for("pessoal.pessoal_analise.api_buscar_categorias") }}',
+    dados: '{{ url_for("pessoal.pessoal_analise.api_dados") }}',
+    transacoes: '{{ url_for("pessoal.pessoal_analise.api_transacoes") }}',
+    grupos: '{{ url_for("pessoal.pessoal_analise.api_listar_grupos") }}',
+  };
+
+  // ESTADO
+  const state = {
+    selecionadas: new Set(),  // ids numericos
+    metaCategorias: new Map(),  // id -> {nome, grupo, icone}
+    ultimaBusca: null,  // array
+    chart: null,
+    tipoGrafico: 'barras',
+    editGrupoId: null,  // se setado, modal salva como update
+  };
+
+  // Mes default = atual
+  const hoje = new Date();
+  const mesDefault = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  $('#mesRef').val(mesDefault);
+
+  // ============ UTIL ============
+  function brl(v) {
+    const n = Number(v) || 0;
+    return n.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+  }
+  function debounce(fn, ms) {
+    let t; return function(...args) {
+      clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
+  function corPaleta(i) {
+    const cores = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#f43f5e','#6366f1','#84cc16','#f97316'];
+    return cores[i % cores.length];
+  }
+  function cuidarMeta(cat) {
+    state.metaCategorias.set(cat.id, {
+      nome: cat.nome, grupo: cat.grupo, icone: cat.icone || 'fa-tag',
+    });
+  }
+
+  // ============ BUSCA DE CATEGORIAS ============
+  function renderListaCategorias(categorias) {
+    const $lista = $('#listaCategorias').empty();
+    if (!categorias.length) {
+      $lista.append('<div class="text-muted small p-2">Nenhuma encontrada.</div>');
+      return;
+    }
+    // Adicionar tambem as ja selecionadas que nao vieram na busca
+    const vistosIds = new Set(categorias.map(c => c.id));
+    const extras = [];
+    state.selecionadas.forEach(id => {
+      if (!vistosIds.has(id) && state.metaCategorias.has(id)) {
+        const m = state.metaCategorias.get(id);
+        extras.push({id, nome: m.nome, grupo: m.grupo, icone: m.icone, score: 0});
+      }
+    });
+    const todas = extras.concat(categorias);
+
+    todas.forEach(cat => {
+      cuidarMeta(cat);
+      const sel = state.selecionadas.has(cat.id);
+      const $item = $(`
+        <label class="list-group-item d-flex align-items-start gap-2 py-2" style="cursor:pointer">
+          <input type="checkbox" class="form-check-input cat-check mt-1"
+                 data-id="${cat.id}" ${sel ? 'checked' : ''}>
+          <div class="flex-grow-1">
+            <div class="small fw-semibold">
+              <i class="fas ${cat.icone}"></i>
+              ${$('<div>').text(cat.nome).html()}
+            </div>
+            <div class="text-muted" style="font-size:0.75rem">${$('<div>').text(cat.grupo).html()}</div>
+          </div>
+        </label>
+      `);
+      $lista.append($item);
+    });
+  }
+
+  function buscarCategorias() {
+    const q = ($('#catBusca').val() || '').trim();
+    $.get(URLS.buscar, { q, limit: 80 }, function(resp) {
+      if (resp.sucesso) {
+        state.ultimaBusca = resp.categorias;
+        renderListaCategorias(resp.categorias);
+      }
+    });
+  }
+  const buscarCategoriasDebounced = debounce(buscarCategorias, 220);
+
+  $(document).on('input', '#catBusca', buscarCategoriasDebounced);
+
+  $(document).on('change', '.cat-check', function() {
+    const id = parseInt($(this).data('id'));
+    if (this.checked) state.selecionadas.add(id);
+    else state.selecionadas.delete(id);
+    atualizarContadorSelecao();
+    recarregarDados();
+  });
+
+  $('#btnLimparSelecao').on('click', function() {
+    state.selecionadas.clear();
+    $('.cat-check').prop('checked', false);
+    atualizarContadorSelecao();
+    recarregarDados();
+  });
+
+  function atualizarContadorSelecao() {
+    const n = state.selecionadas.size;
+    $('#selCount').text(n);
+    $('#btnSalvarGrupo').prop('disabled', n === 0);
+    $('#btnCarregarExtrato').prop('disabled', n === 0);
+  }
+
+  // ============ DADOS + GRAFICO ============
+  function recarregarDados() {
+    if (state.selecionadas.size === 0) {
+      $('#graficoVazio').removeClass('d-none');
+      $('#graficoAnalise').addClass('d-none');
+      $('#kpiDespesas,#kpiReceitas,#kpiTotal,#kpiMedia').text('R$ 0');
+      return;
+    }
+    const ids = Array.from(state.selecionadas).join(',');
+    $.get(URLS.dados, {
+      categorias: ids,
+      mes: $('#mesRef').val(),
+      meses: $('#nMeses').val(),
+    }, function(resp) {
+      if (!resp.sucesso) return;
+      $('#kpiDespesas').text(brl(resp.consolidado.despesas));
+      $('#kpiReceitas').text(brl(resp.consolidado.receitas));
+      $('#kpiTotal').text(brl(resp.consolidado.total));
+      $('#kpiMedia').text(brl(resp.consolidado.media_mensal));
+      desenharGrafico(resp);
+    });
+  }
+
+  function desenharGrafico(dados) {
+    $('#graficoVazio').addClass('d-none');
+    $('#graficoAnalise').removeClass('d-none');
+
+    const labels = dados.meses.map(m => m.mes_label);
+    const datasets = dados.series.map((s, i) => {
+      const cor = corPaleta(i);
+      return {
+        label: `${s.grupo} / ${s.categoria}`,
+        data: s.valores,
+        backgroundColor: state.tipoGrafico === 'barras' ? cor + 'CC' : cor + '33',
+        borderColor: cor,
+        borderWidth: state.tipoGrafico === 'linhas' ? 2 : 1,
+        fill: state.tipoGrafico === 'linhas' ? false : true,
+        tension: 0.25,
+      };
+    });
+
+    if (state.chart) state.chart.destroy();
+    const ctx = document.getElementById('graficoAnalise').getContext('2d');
+    state.chart = new Chart(ctx, {
+      type: state.tipoGrafico === 'linhas' ? 'line' : 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return `${ctx.dataset.label}: ${brl(ctx.parsed.y)}`;
+              },
+            },
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: v => brl(v).replace('R$','R$ ') },
+          },
+        },
+      },
+    });
+  }
+
+  $(document).on('click', '[data-grafico]', function() {
+    $('[data-grafico]').removeClass('active');
+    $(this).addClass('active');
+    state.tipoGrafico = $(this).data('grafico');
+    recarregarDados();
+  });
+
+  $('#mesRef, #nMeses').on('change', function() {
+    recarregarDados();
+    // Se ha extrato renderizado, recarrega tambem
+    if (!$('#extratoWrap').hasClass('d-none')) carregarExtrato();
+  });
+
+  // ============ EXTRATO ============
+  function carregarExtrato() {
+    if (state.selecionadas.size === 0) return;
+    const ids = Array.from(state.selecionadas).join(',');
+    $.get(URLS.transacoes, {
+      categorias: ids,
+      mes: $('#mesRef').val(),
+      meses: $('#nMeses').val(),
+      limit: 300,
+    }, function(resp) {
+      if (!resp.sucesso) return;
+      renderExtrato(resp);
+    });
+  }
+
+  function renderExtrato(resp) {
+    const $body = $('#extratoBody').empty();
+    if (!resp.transacoes.length) {
+      $('#extratoVazio').removeClass('d-none').text('Nenhuma transacao no periodo.');
+      $('#extratoWrap').addClass('d-none');
+      $('#extratoInfo').text('');
+      return;
+    }
+    $('#extratoVazio').addClass('d-none');
+    $('#extratoWrap').removeClass('d-none');
+    resp.transacoes.forEach(t => {
+      const cls = t.tipo === 'credito' ? 'text-success' : 'text-danger';
+      const catLabel = t.categoria_grupo
+        ? `${$('<div>').text(t.categoria_grupo).html()} / ${$('<div>').text(t.categoria_nome || '').html()}`
+        : '<span class="text-muted">—</span>';
+      $body.append(`
+        <tr>
+          <td class="small">${t.data}</td>
+          <td class="small">${$('<div>').text(t.conta_nome || '').html()}</td>
+          <td class="small">${$('<div>').text(t.historico || '').html()}
+            ${t.descricao ? `<div class="text-muted" style="font-size:0.7rem">${$('<div>').text(t.descricao).html()}</div>` : ''}
+          </td>
+          <td class="small">${catLabel}</td>
+          <td class="text-end small ${cls}">${brl(t.valor)}</td>
+        </tr>
+      `);
+    });
+    $('#extratoInfo').text(
+      `Mostrando ${resp.transacoes.length} de ${resp.total} transacoes no periodo.`
+    );
+  }
+
+  $('#btnCarregarExtrato').on('click', carregarExtrato);
+
+  // ============ SALVAR GRUPO ============
+  $('#btnSalvarGrupo').on('click', function() {
+    if (state.selecionadas.size === 0) return;
+    state.editGrupoId = null;
+    $('#modalGrupoTitulo').text('Novo grupo');
+    $('#grupoIdEdit').val('');
+    $('#grupoNome').val('');
+    $('#grupoDescricao').val('');
+    $('#grupoCor').val('#3b82f6');
+    $('#grupoCategoriasResumo').text(state.selecionadas.size + ' categorias selecionadas');
+    new bootstrap.Modal('#modalGrupo').show();
+  });
+
+  $('#btnConfirmarGrupo').on('click', function() {
+    const nome = ($('#grupoNome').val() || '').trim();
+    if (!nome) { toastr.warning('Nome obrigatorio.'); return; }
+    const catIds = Array.from(state.selecionadas);
+    const payload = {
+      nome,
+      descricao: ($('#grupoDescricao').val() || '').trim(),
+      cor: $('#grupoCor').val(),
+      categoria_ids: catIds,
+    };
+    const isEdit = !!state.editGrupoId;
+    $.ajax({
+      url: isEdit
+        ? `{{ url_for('pessoal.pessoal_analise.api_atualizar_grupo', grupo_id=0) }}`.replace(/0$/, state.editGrupoId)
+        : URLS.grupos,
+      method: isEdit ? 'PUT' : 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify(payload),
+      success: function(resp) {
+        if (resp.sucesso) {
+          toastr.success(isEdit ? 'Grupo atualizado.' : 'Grupo criado.');
+          bootstrap.Modal.getInstance('#modalGrupo').hide();
+          carregarGrupos();
+        } else {
+          toastr.error(resp.mensagem || 'Erro.');
+        }
+      },
+      error: function(xhr) {
+        toastr.error((xhr.responseJSON && xhr.responseJSON.mensagem) || 'Erro ao salvar.');
+      },
+    });
+  });
+
+  // ============ LISTAR GRUPOS ============
+  function carregarGrupos() {
+    $.get(URLS.grupos, function(resp) {
+      if (!resp.sucesso) return;
+      renderGrupos(resp.grupos || []);
+    });
+  }
+
+  function renderGrupos(grupos) {
+    const $acc = $('#gruposAccordion').empty();
+    if (!grupos.length) {
+      $('#gruposVazio').removeClass('d-none');
+      return;
+    }
+    $('#gruposVazio').addClass('d-none');
+    grupos.forEach((g, i) => {
+      const cor = g.cor || '#6c757d';
+      const cats = (g.categorias || [])
+        .map(c => `<span class="badge rounded-pill" style="background:${cor};font-weight:500">
+                     <i class="fas ${c.icone || 'fa-tag'}"></i> ${$('<div>').text(c.grupo).html()} / ${$('<div>').text(c.nome).html()}
+                   </span>`)
+        .join(' ');
+      const item = `
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#grupoCol${g.id}">
+              <span class="me-2" style="display:inline-block;width:12px;height:12px;background:${cor};border-radius:50%"></span>
+              <strong>${$('<div>').text(g.nome).html()}</strong>
+              <span class="text-muted ms-2 small">(${(g.categorias || []).length} categorias)</span>
+              ${g.descricao ? `<span class="text-muted ms-2 small fst-italic">— ${$('<div>').text(g.descricao).html()}</span>` : ''}
+            </button>
+          </h2>
+          <div id="grupoCol${g.id}" class="accordion-collapse collapse" data-grupo-id="${g.id}">
+            <div class="accordion-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="small">${cats}</div>
+                <div class="btn-group btn-group-sm">
+                  <button class="btn btn-outline-primary btn-aplicar-grupo" data-grupo-id="${g.id}">
+                    <i class="fas fa-check"></i> Aplicar na analise
+                  </button>
+                  <button class="btn btn-outline-secondary btn-editar-grupo" data-grupo-id="${g.id}">
+                    <i class="fas fa-pen"></i>
+                  </button>
+                  <button class="btn btn-outline-danger btn-excluir-grupo" data-grupo-id="${g.id}">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="small text-muted mb-2 grupo-kpis" id="grupoKpis${g.id}">Expanda para carregar dados...</div>
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Data</th><th>Conta</th><th>Historico</th>
+                      <th>Categoria</th><th class="text-end">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody id="grupoExtrato${g.id}">
+                    <tr><td colspan="5" class="text-muted small text-center">Aguardando expansao...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="small text-muted mt-2" id="grupoInfo${g.id}"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      $acc.append(item);
+    });
+  }
+
+  // Lazy load ao expandir grupo
+  $(document).on('show.bs.collapse', '[id^="grupoCol"]', function() {
+    const $div = $(this);
+    const grupoId = parseInt($div.data('grupo-id'));
+    if ($div.data('loaded')) return;
+    carregarDadosGrupo(grupoId);
+    $div.data('loaded', true);
+  });
+
+  function carregarDadosGrupo(grupoId) {
+    $.get(`{{ url_for('pessoal.pessoal_analise.api_obter_grupo', grupo_id=0) }}`.replace(/0$/, grupoId), function(resp) {
+      if (!resp.sucesso) return;
+      const ids = (resp.grupo.categoria_ids || []).join(',');
+      if (!ids) return;
+      // KPIs + extrato em paralelo
+      $.get(URLS.dados, {
+        categorias: ids,
+        mes: $('#mesRef').val(),
+        meses: $('#nMeses').val(),
+      }, function(d) {
+        if (!d.sucesso) return;
+        $(`#grupoKpis${grupoId}`).html(
+          `<strong>Despesas:</strong> ${brl(d.consolidado.despesas)} · ` +
+          `<strong>Receitas:</strong> ${brl(d.consolidado.receitas)} · ` +
+          `<strong>Liquido:</strong> ${brl(d.consolidado.total)} · ` +
+          `<strong>Media/mes:</strong> ${brl(d.consolidado.media_mensal)}`
+        );
+      });
+      $.get(URLS.transacoes, {
+        categorias: ids,
+        mes: $('#mesRef').val(),
+        meses: $('#nMeses').val(),
+        limit: 200,
+      }, function(tr) {
+        if (!tr.sucesso) return;
+        const $body = $(`#grupoExtrato${grupoId}`).empty();
+        if (!tr.transacoes.length) {
+          $body.append('<tr><td colspan="5" class="text-muted small text-center">Sem transacoes no periodo.</td></tr>');
+          return;
+        }
+        tr.transacoes.forEach(t => {
+          const cls = t.tipo === 'credito' ? 'text-success' : 'text-danger';
+          const catLabel = t.categoria_grupo
+            ? `${$('<div>').text(t.categoria_grupo).html()} / ${$('<div>').text(t.categoria_nome || '').html()}`
+            : '<span class="text-muted">—</span>';
+          $body.append(`
+            <tr>
+              <td class="small">${t.data}</td>
+              <td class="small">${$('<div>').text(t.conta_nome || '').html()}</td>
+              <td class="small">${$('<div>').text(t.historico || '').html()}</td>
+              <td class="small">${catLabel}</td>
+              <td class="text-end small ${cls}">${brl(t.valor)}</td>
+            </tr>
+          `);
+        });
+        $(`#grupoInfo${grupoId}`).text(`Mostrando ${tr.transacoes.length} de ${tr.total}.`);
+      });
+    });
+  }
+
+  $(document).on('click', '.btn-aplicar-grupo', function(e) {
+    e.stopPropagation();
+    const grupoId = parseInt($(this).data('grupo-id'));
+    $.get(`{{ url_for('pessoal.pessoal_analise.api_obter_grupo', grupo_id=0) }}`.replace(/0$/, grupoId), function(resp) {
+      if (!resp.sucesso) return;
+      state.selecionadas.clear();
+      (resp.grupo.categoria_ids || []).forEach(id => state.selecionadas.add(id));
+      (resp.grupo.categorias || []).forEach(c => cuidarMeta(c));
+      buscarCategorias();  // re-renderiza lista com marcadas
+      atualizarContadorSelecao();
+      recarregarDados();
+      toastr.info(`Grupo "${resp.grupo.nome}" aplicado na analise.`);
+    });
+  });
+
+  $(document).on('click', '.btn-editar-grupo', function(e) {
+    e.stopPropagation();
+    const grupoId = parseInt($(this).data('grupo-id'));
+    $.get(`{{ url_for('pessoal.pessoal_analise.api_obter_grupo', grupo_id=0) }}`.replace(/0$/, grupoId), function(resp) {
+      if (!resp.sucesso) return;
+      const g = resp.grupo;
+      state.editGrupoId = g.id;
+      state.selecionadas.clear();
+      (g.categoria_ids || []).forEach(id => state.selecionadas.add(id));
+      (g.categorias || []).forEach(c => cuidarMeta(c));
+      atualizarContadorSelecao();
+      $('#modalGrupoTitulo').text('Editar grupo');
+      $('#grupoIdEdit').val(g.id);
+      $('#grupoNome').val(g.nome);
+      $('#grupoDescricao').val(g.descricao || '');
+      $('#grupoCor').val(g.cor || '#3b82f6');
+      $('#grupoCategoriasResumo').text(state.selecionadas.size + ' categorias (edite a selecao no painel esquerdo antes de salvar, se quiser)');
+      buscarCategorias();
+      recarregarDados();
+      new bootstrap.Modal('#modalGrupo').show();
+    });
+  });
+
+  $(document).on('click', '.btn-excluir-grupo', function(e) {
+    e.stopPropagation();
+    const grupoId = parseInt($(this).data('grupo-id'));
+    if (!confirm('Excluir este grupo? (as categorias nao sao apagadas)')) return;
+    $.ajax({
+      url: `{{ url_for('pessoal.pessoal_analise.api_excluir_grupo', grupo_id=0) }}`.replace(/0$/, grupoId),
+      method: 'DELETE',
+      headers: {'X-CSRFToken': csrfToken},
+      success: function(resp) {
+        if (resp.sucesso) {
+          toastr.success('Grupo excluido.');
+          carregarGrupos();
+        } else {
+          toastr.error(resp.mensagem || 'Erro.');
+        }
+      },
+    });
+  });
+
+  $('#btnAtualizarGrupos').on('click', carregarGrupos);
+
+  // ============ INIT ============
+  buscarCategorias();
+  carregarGrupos();
+})();
+</script>
+{% endblock %}

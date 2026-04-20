@@ -42,9 +42,11 @@ from app.pessoal.routes.transacoes import transacoes_bp  # noqa: E402
 from app.pessoal.routes.configuracao import configuracao_bp  # noqa: E402
 from app.pessoal.routes.dashboard import dashboard_bp  # noqa: E402
 from app.pessoal.routes.orcamento import orcamento_bp  # noqa: E402
+from app.pessoal.routes.analise import analise_bp  # noqa: E402
 
 pessoal_bp.register_blueprint(importacao_bp)
 pessoal_bp.register_blueprint(transacoes_bp)
 pessoal_bp.register_blueprint(configuracao_bp)
 pessoal_bp.register_blueprint(dashboard_bp)
 pessoal_bp.register_blueprint(orcamento_bp)
+pessoal_bp.register_blueprint(analise_bp)
