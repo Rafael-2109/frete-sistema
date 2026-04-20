@@ -52,10 +52,34 @@ class CarviaFreteService:
         try:
             return CarviaFreteService._processar(embarque_id, usuario)
         except Exception as e:
-            logger.error(
-                "Erro ao lancar frete CarVia para embarque %s: %s",
-                embarque_id, e, exc_info=True
-            )
+            # PostgreSQL: se houve erro SQL anterior na mesma transacao,
+            # a session fica em estado "aborted" e qualquer query falha
+            # com InFailedSqlTransaction. Rollback aqui destrava a session
+            # para que hooks seguintes e o commit final da rota nao falhem
+            # em cascata. (fix PYTHON-FLASK-MF)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+            # InFailedSqlTransaction indica que outro hook anterior falhou
+            # silenciosamente sem rollback — nao e bug do CarVia. Logar
+            # como warning para nao inundar Sentry com errors handled.
+            msg_erro = str(e)
+            if (
+                'InFailedSqlTransaction' in msg_erro
+                or 'current transaction is aborted' in msg_erro
+            ):
+                logger.warning(
+                    "Frete CarVia nao gerado para embarque %s — transaction "
+                    "abortada por erro SQL anterior no mesmo request: %s",
+                    embarque_id, e,
+                )
+            else:
+                logger.error(
+                    "Erro ao lancar frete CarVia para embarque %s: %s",
+                    embarque_id, e, exc_info=True,
+                )
             return []
 
     # ------------------------------------------------------------------
