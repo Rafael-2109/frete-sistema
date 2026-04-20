@@ -336,8 +336,8 @@ Um grupo (mesma chave) só vira candidato a recorrente quando:
 
 - **≥3 ocorrências** nos últimos `meses` meses
 - **≥3 meses distintos** com pelo menos uma ocorrência
-- **Desvio relativo de valor ≤15%** da mediana:
-  `max(|valor - mediana|) / mediana <= 0.15`
+- **Desvio relativo de valor ≤40%** da mediana:
+  `max(|valor - mediana|) / mediana <= 0.40`
 
 Este último critério descarta automaticamente regras genéricas demais
 (ex: regra "MERCADO" cobrindo R$50 de pão, R$200 de feira, R$800 de
@@ -361,7 +361,7 @@ def detectar_recorrentes(meses=6):
     1. Pega transações debito dos últimos `meses` meses (excluir_relatorio=False).
     2. Agrupa por chave hierárquica.
     3. Para cada grupo com >=3 ocorrências em >=3 meses distintos E
-       desvio de valor <=15% da mediana:
+       desvio de valor <=40% da mediana:
        - Infere frequência pela distância média entre datas consecutivas:
          * 25-35 dias => mensal
          * 10-20 dias => quinzenal
@@ -384,7 +384,7 @@ Função `alertas_recorrentes()` retorna:
 - **"faltando este mês"**: `proxima_prevista < hoje` AND nenhuma transação
   casou a chave neste mês.
 - **"variação de valor"**: última transação casada teve
-  `|valor - valor_tipico| / valor_tipico > 0.15`.
+  `|valor - valor_tipico| / valor_tipico > 0.40`.
 - **"frequência quebrada"**: última ocorrência > 2x o delta esperado.
 
 ### Tela `/pessoal/recorrentes`
@@ -426,7 +426,7 @@ Todas as migrations seguem regra do projeto: SQL idempotente +
 |---|---|
 | Migration F3 falha ao detectar ciclo no grupo atual | Query de verificação roda antes do UPDATE; aborta com mensagem clara |
 | Regras apontando para categoria-pai após migração | Permitido tecnicamente; warning no `salvar_regra` ensina usuário a mover para folha |
-| Detecção F4 gera falsos positivos | Status inicial = `sugerido`; usuário confirma manualmente; filtro estatístico (desvio ≤15%) corta regras heterogêneas |
+| Detecção F4 gera falsos positivos | Status inicial = `sugerido`; usuário confirma manualmente; filtro estatístico (desvio ≤40%) corta regras heterogêneas |
 | Regra muito genérica aparece como recorrente | Filtro estatístico descarta (desvio de valor alto); se ainda passar, usuário granulariza a regra em regras mais específicas |
 | Recorrente cujo identificador muda (fornecedor muda razão social ou regra é editada) | Detecção cria novo recorrente com chave nova; antigo fica inativo após 90 dias; tela permite merge manual |
 | Índice pg_trgm grande | Só criado uma vez; extensão já comum em PostgreSQL moderno (Render suporta) |
