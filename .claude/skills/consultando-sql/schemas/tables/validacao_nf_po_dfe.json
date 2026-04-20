@@ -1,6 +1,6 @@
 {
   "name": "validacao_nf_po_dfe",
-  "description": "Match de NF de compra × PO no Odoo.",
+  "description": "Match de NF de compra × PO no Odoo. ATENCAO: campo do numero da NF e 'numero_nf' (NAO 'nf_numero' — esse nome existe em pedido_compras/carvia_fatura_*, NAO aqui). Sentry PYTHON-FLASK-N rastreia ocorrencias do erro.",
   "fields": [
     {
       "name": "id",

@@ -439,7 +439,7 @@
                                             <p><strong>Tipo:</strong> <span class="badge bg-secondary">Carga Geral</span></p>
                                             {% if frete.peso_total and frete.peso_total > 0 and cotacao_venda.valor_final_aprovado %}
                                             <p><strong>Valor por KG:</strong>
-                                                {{ (cotacao_venda.valor_final_aprovado / frete.peso_total)|valor_br(4) }}
+                                                {{ (cotacao_venda.valor_final_aprovado | float / frete.peso_total | float)|valor_br(4) }}
                                             </p>
                                             {% endif %}
                                             {% endif %}
