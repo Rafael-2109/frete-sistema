@@ -165,6 +165,31 @@ def pendentes():
     return listar()  # Reusa com filtro de status
 
 
+@transacoes_bp.route('/api/categorias/buscar', methods=['GET'])
+@login_required
+def buscar_categorias():
+    """Autocomplete de categorias — ILIKE em grupo OU nome (categorias ativas)."""
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    q = (request.args.get('q') or '').strip()
+    query = PessoalCategoria.query.filter_by(ativa=True)
+    if q:
+        like = f'%{q}%'
+        query = query.filter(or_(
+            PessoalCategoria.grupo.ilike(like),
+            PessoalCategoria.nome.ilike(like),
+        ))
+    categorias = query.order_by(PessoalCategoria.grupo, PessoalCategoria.nome).limit(30).all()
+    return jsonify({
+        'sucesso': True,
+        'categorias': [
+            {'id': c.id, 'grupo': c.grupo, 'nome': c.nome, 'label': f'{c.grupo} / {c.nome}'}
+            for c in categorias
+        ],
+    })
+
+
 @transacoes_bp.route('/api/categorizar', methods=['POST'])
 @login_required
 def categorizar():

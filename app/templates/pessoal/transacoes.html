@@ -258,14 +258,14 @@
         <p class="small text-muted mb-2" id="modalHistorico"></p>
         <input type="hidden" id="modalTransacaoId">
 
-        <div class="mb-3">
+        <div class="mb-3 position-relative">
           <label class="form-label">Categoria</label>
-          <select id="modalCategoria" class="form-select">
-            <option value="">Selecione...</option>
-            {% for cat in categorias %}
-            <option value="{{ cat.id }}">{{ cat.grupo }} / {{ cat.nome }}</option>
-            {% endfor %}
-          </select>
+          <input type="text" id="modalCategoriaBusca" class="form-control cat-autocomplete"
+                 data-target="modalCategoria" autocomplete="off"
+                 placeholder="Digite grupo ou nome...">
+          <input type="hidden" id="modalCategoria">
+          <div class="cat-autocomplete-dropdown dropdown-menu w-100 shadow-sm"
+               data-owner="modalCategoriaBusca"></div>
         </div>
 
         <div class="mb-3">
@@ -386,14 +386,14 @@
       </div>
       <div class="modal-body">
         <p id="modalLoteCount" class="small text-muted"></p>
-        <div class="mb-3">
+        <div class="mb-3 position-relative">
           <label class="form-label">Categoria</label>
-          <select id="modalLoteCategoria" class="form-select">
-            <option value="">Selecione...</option>
-            {% for cat in categorias %}
-            <option value="{{ cat.id }}">{{ cat.grupo }} / {{ cat.nome }}</option>
-            {% endfor %}
-          </select>
+          <input type="text" id="modalLoteCategoriaBusca" class="form-control cat-autocomplete"
+                 data-target="modalLoteCategoria" autocomplete="off"
+                 placeholder="Digite grupo ou nome...">
+          <input type="hidden" id="modalLoteCategoria">
+          <div class="cat-autocomplete-dropdown dropdown-menu w-100 shadow-sm"
+               data-owner="modalLoteCategoriaBusca"></div>
         </div>
         <div class="mb-3">
           <label class="form-label">Membro (opcional)</label>
@@ -491,6 +491,105 @@ $(function() {
     }
   }
 
+  // ===== Autocomplete de categorias (ILIKE grupo | nome) =====
+  const CATEGORIA_BUSCA_URL = '{{ url_for("pessoal.pessoal_transacoes.buscar_categorias") }}';
+  let catBuscaTimer = null;
+  let catBuscaReq = null;
+
+  function renderCategoriaDropdown($dropdown, categorias) {
+    $dropdown.empty();
+    if (!categorias.length) {
+      $dropdown.append('<span class="dropdown-item-text small text-muted">Nenhuma categoria encontrada.</span>');
+    } else {
+      categorias.forEach(function(c, idx) {
+        const $item = $('<a href="#" class="dropdown-item cat-item"></a>')
+          .attr('data-id', c.id)
+          .attr('data-label', c.label)
+          .text(c.label);
+        if (idx === 0) $item.addClass('active');
+        $dropdown.append($item);
+      });
+    }
+    $dropdown.addClass('show');
+  }
+
+  function buscarCategoriasAjax($input, $dropdown) {
+    const q = ($input.val() || '').trim();
+    if (catBuscaReq) { catBuscaReq.abort(); catBuscaReq = null; }
+    catBuscaReq = $.ajax({
+      url: CATEGORIA_BUSCA_URL,
+      method: 'GET',
+      data: { q: q },
+      success: function(resp) {
+        if (resp.sucesso) renderCategoriaDropdown($dropdown, resp.categorias || []);
+      },
+    });
+  }
+
+  $(document).on('input', '.cat-autocomplete', function() {
+    const $input = $(this);
+    const targetId = $input.data('target');
+    const $hidden = $('#' + targetId);
+    const $dropdown = $('.cat-autocomplete-dropdown[data-owner="' + $input.attr('id') + '"]');
+    $hidden.val('');  // limpa id selecionado ao editar texto
+    clearTimeout(catBuscaTimer);
+    catBuscaTimer = setTimeout(function() {
+      buscarCategoriasAjax($input, $dropdown);
+    }, 200);
+  });
+
+  $(document).on('focus', '.cat-autocomplete', function() {
+    const $input = $(this);
+    const $dropdown = $('.cat-autocomplete-dropdown[data-owner="' + $input.attr('id') + '"]');
+    buscarCategoriasAjax($input, $dropdown);
+  });
+
+  $(document).on('click', '.cat-item', function(e) {
+    e.preventDefault();
+    const $item = $(this);
+    const $dropdown = $item.closest('.cat-autocomplete-dropdown');
+    const ownerId = $dropdown.data('owner');
+    const $input = $('#' + ownerId);
+    const $hidden = $('#' + $input.data('target'));
+    $input.val($item.data('label'));
+    $hidden.val($item.data('id'));
+    $dropdown.removeClass('show').empty();
+  });
+
+  $(document).on('keydown', '.cat-autocomplete', function(e) {
+    const $dropdown = $('.cat-autocomplete-dropdown[data-owner="' + $(this).attr('id') + '"]');
+    if (!$dropdown.hasClass('show')) return;
+    const $items = $dropdown.find('.cat-item');
+    if (!$items.length) return;
+    const $active = $items.filter('.active');
+    let idx = $items.index($active);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idx = (idx + 1) % $items.length;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idx = (idx - 1 + $items.length) % $items.length;
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      ($active.length ? $active : $items.first()).trigger('click');
+      return;
+    } else if (e.key === 'Escape') {
+      $dropdown.removeClass('show').empty();
+      return;
+    } else {
+      return;
+    }
+    $items.removeClass('active');
+    $items.eq(idx).addClass('active');
+  });
+
+  // Fechar dropdown ao clicar fora
+  $(document).on('click', function(e) {
+    if (!$(e.target).closest('.cat-autocomplete, .cat-autocomplete-dropdown').length) {
+      $('.cat-autocomplete-dropdown').removeClass('show').empty();
+    }
+  });
+
   // Toggle tipo regra e padrao visibilidade (inclui F1 CPF/CNPJ e F4 valor range)
   $('#modalCriarRegra').on('change', function() {
     const show = $(this).is(':checked');
@@ -530,6 +629,7 @@ $(function() {
     $('#modalHistorico').text(displayText);
     // Reset estado do modal
     $('#modalCategoria').val('');
+    $('#modalCategoriaBusca').val('');
     $('#modalMembro').val('');
     $('#modalCriarRegra').prop('checked', true);
     $('#divTipoRegra, #divPadrao, #divCpfCnpj, #divValorRange').show();
@@ -689,6 +789,8 @@ $(function() {
   $('#btnAbrirLote').on('click', function() {
     const count = $('.check-item:checked').length;
     $('#modalLoteCount').text(count + ' transacoes selecionadas');
+    $('#modalLoteCategoria').val('');
+    $('#modalLoteCategoriaBusca').val('');
     new bootstrap.Modal('#modalLote').show();
   });
 
