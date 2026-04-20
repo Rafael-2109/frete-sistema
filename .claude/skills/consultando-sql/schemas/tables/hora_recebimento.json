@@ -68,6 +68,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_recebimento_nf_id",
+      "columns": [
+        "nf_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_recebimento_loja_id",
       "columns": [
         "loja_id"
@@ -78,13 +85,6 @@
       "name": "ix_hora_recebimento_status",
       "columns": [
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_recebimento_nf_id",
-      "columns": [
-        "nf_id"
       ],
       "unique": false
     }

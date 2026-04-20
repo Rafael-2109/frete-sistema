@@ -176,16 +176,16 @@
   ],
   "indices": [
     {
-      "name": "idx_pessoal_transacoes_data",
+      "name": "idx_pessoal_transacoes_conta",
       "columns": [
-        "data"
+        "conta_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_pessoal_transacoes_conta",
+      "name": "idx_pessoal_transacoes_data",
       "columns": [
-        "conta_id"
+        "data"
       ],
       "unique": false
     },

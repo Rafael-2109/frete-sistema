@@ -40,16 +40,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_histmatch_conciliacao_id",
+      "name": "ix_carvia_historico_match_extrato_cnpj_pagador",
       "columns": [
-        "conciliacao_id"
+        "cnpj_pagador"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_historico_match_extrato_descricao_tokens",
+      "name": "ix_carvia_histmatch_conciliacao_id",
       "columns": [
-        "descricao_tokens"
+        "conciliacao_id"
       ],
       "unique": false
     },
@@ -61,9 +61,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_historico_match_extrato_cnpj_pagador",
+      "name": "ix_carvia_historico_match_extrato_descricao_tokens",
       "columns": [
-        "cnpj_pagador"
+        "descricao_tokens"
       ],
       "unique": false
     },

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 287,
+  "total_relationships": 294,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -120,6 +120,12 @@
       "from_table": "carvia_conciliacoes",
       "from_column": "extrato_linha_id",
       "to_table": "carvia_extrato_linhas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_conferencia_historico",
+      "from_column": "frete_id",
+      "to_table": "carvia_fretes",
       "to_column": "id"
     },
     {
@@ -249,6 +255,18 @@
       "to_column": "id"
     },
     {
+      "from_table": "carvia_despesas",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_despesas",
+      "from_column": "frete_id",
+      "to_table": "carvia_fretes",
+      "to_column": "id"
+    },
+    {
       "from_table": "carvia_emissao_cte",
       "from_column": "nf_id",
       "to_table": "carvia_nfs",
@@ -276,6 +294,18 @@
       "from_table": "carvia_emissao_cte_complementar",
       "from_column": "operacao_id",
       "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_endereco_correcoes",
+      "from_column": "operacao_id",
+      "to_table": "carvia_operacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_extrato_linhas",
+      "from_column": "linha_original_id",
+      "to_table": "carvia_extrato_linhas",
       "to_column": "id"
     },
     {
@@ -1024,6 +1054,12 @@
     },
     {
       "from_table": "hora_nf_entrada",
+      "from_column": "loja_destino_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_nf_entrada",
       "from_column": "pedido_id",
       "to_table": "hora_pedido",
       "to_column": "id"
@@ -1039,6 +1075,12 @@
       "from_column": "numero_chassi",
       "to_table": "hora_moto",
       "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_pedido",
+      "from_column": "loja_destino_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
     },
     {
       "from_table": "hora_pedido_item",

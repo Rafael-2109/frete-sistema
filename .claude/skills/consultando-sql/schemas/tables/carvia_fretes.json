@@ -282,6 +282,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_fretes_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
       "name": "uq_carvia_frete_embarque_cnpj_notnull",
       "columns": [
         "embarque_id",
@@ -329,13 +336,6 @@
       "name": "ix_carvia_fretes_embarque_id",
       "columns": [
         "embarque_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_fretes_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
       ],
       "unique": false
     }

@@ -79,6 +79,11 @@
       "type": "varchar(100)"
     },
     {
+      "name": "linha_original_id",
+      "type": "integer",
+      "description": "FK → carvia_extrato_linhas.id"
+    },
+    {
       "name": "criado_por",
       "type": "varchar(100)",
       "nullable": false
@@ -98,7 +103,20 @@
       "type": "text"
     }
   ],
+  "foreign_keys": [
+    {
+      "column": "linha_original_id",
+      "references": "carvia_extrato_linhas.id"
+    }
+  ],
   "indices": [
+    {
+      "name": "ix_carvia_extrato_linhas_linha_original_id",
+      "columns": [
+        "linha_original_id"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_carvia_extrato_linhas_arquivo_ofx",
       "columns": [
@@ -114,16 +132,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_data",
+      "name": "ix_carvia_extrato_linhas_status_conciliacao",
       "columns": [
-        "data"
+        "status_conciliacao"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_status_conciliacao",
+      "name": "ix_carvia_extrato_linhas_data",
       "columns": [
-        "status_conciliacao"
+        "data"
       ],
       "unique": false
     }

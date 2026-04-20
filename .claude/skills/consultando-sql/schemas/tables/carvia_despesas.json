@@ -72,9 +72,43 @@
       "name": "atualizado_em",
       "type": "timestamp",
       "description": "Última atualização"
+    },
+    {
+      "name": "operacao_id",
+      "type": "integer",
+      "description": "FK → carvia_operacoes.id"
+    },
+    {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → carvia_fretes.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "operacao_id",
+      "references": "carvia_operacoes.id"
+    },
+    {
+      "column": "frete_id",
+      "references": "carvia_fretes.id"
     }
   ],
   "indices": [
+    {
+      "name": "ix_carvia_despesas_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_despesas_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_carvia_despesas_tipo_despesa",
       "columns": [
@@ -83,9 +117,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_despesas_status",
+      "name": "ix_carvia_despesas_operacao_id",
       "columns": [
-        "status"
+        "operacao_id"
       ],
       "unique": false
     }

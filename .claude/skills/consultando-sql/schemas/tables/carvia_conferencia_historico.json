@@ -1,0 +1,78 @@
+{
+  "name": "carvia_conferencia_historico",
+  "description": "Tabela carvia_conferencia_historico",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "frete_id",
+      "type": "integer",
+      "description": "FK → carvia_fretes.id",
+      "nullable": false
+    },
+    {
+      "name": "status_antes",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "status_depois",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "valor_considerado_antes",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "valor_considerado_depois",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "usuario",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "data",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "detalhes_json",
+      "type": "json"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "frete_id",
+      "references": "carvia_fretes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_conf_historico_frete_data",
+      "columns": [
+        "frete_id",
+        "data"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conferencia_historico_frete_id",
+      "columns": [
+        "frete_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conferencia_historico_data",
+      "columns": [
+        "data"
+      ],
+      "unique": false
+    }
+  ]
+}

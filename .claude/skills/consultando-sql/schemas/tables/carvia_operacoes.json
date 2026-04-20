@@ -44,6 +44,14 @@
       "type": "numeric(5,2)"
     },
     {
+      "name": "icms_valor",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "icms_base_calculo",
+      "type": "numeric(15,2)"
+    },
+    {
       "name": "cnpj_cliente",
       "type": "varchar(20)",
       "nullable": false
@@ -69,6 +77,38 @@
       "name": "cidade_destino",
       "type": "varchar(100)",
       "nullable": false
+    },
+    {
+      "name": "remetente_logradouro",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "remetente_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "remetente_bairro",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "remetente_cep",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "destinatario_logradouro",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "destinatario_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "destinatario_bairro",
+      "type": "varchar(150)"
+    },
+    {
+      "name": "destinatario_cep",
+      "type": "varchar(10)"
     },
     {
       "name": "peso_bruto",
@@ -178,13 +218,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_operacoes_cte_numero",
-      "columns": [
-        "cte_numero"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_operacoes_ctrc_numero",
       "columns": [
         "ctrc_numero"
@@ -192,16 +225,23 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_fatura_cliente_id",
+      "name": "ix_carvia_operacoes_cnpj_cliente",
       "columns": [
-        "fatura_cliente_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_cnpj_cliente",
+      "name": "ix_carvia_operacoes_cte_numero",
       "columns": [
-        "cnpj_cliente"
+        "cte_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_operacoes_fatura_cliente_id",
+      "columns": [
+        "fatura_cliente_id"
       ],
       "unique": false
     }

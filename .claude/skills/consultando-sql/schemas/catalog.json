@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 193,
+  "total_tabelas": 195,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -322,6 +322,15 @@
       ]
     },
     {
+      "name": "carvia_conferencia_historico",
+      "description": "Tabela carvia_conferencia_historico",
+      "key_fields": [
+        "frete_id",
+        "status_antes",
+        "status_depois"
+      ]
+    },
+    {
       "name": "carvia_config",
       "description": "Tabela carvia_config",
       "key_fields": [
@@ -427,6 +436,15 @@
         "cnpj_empresa",
         "nome_empresa",
         "considerar_cubagem"
+      ]
+    },
+    {
+      "name": "carvia_endereco_correcoes",
+      "description": "Tabela carvia_endereco_correcoes",
+      "key_fields": [
+        "operacao_id",
+        "campo",
+        "valor_anterior"
       ]
     },
     {
@@ -1018,8 +1036,8 @@
       "description": "Tabela hora_loja",
       "key_fields": [
         "cnpj",
-        "nome",
-        "endereco"
+        "apelido",
+        "nome"
       ]
     },
     {
@@ -1073,7 +1091,7 @@
       "key_fields": [
         "numero_pedido",
         "cnpj_destino",
-        "data_pedido"
+        "loja_destino_id"
       ]
     },
     {

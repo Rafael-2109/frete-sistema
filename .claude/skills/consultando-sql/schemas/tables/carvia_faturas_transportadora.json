@@ -54,6 +54,22 @@
       "type": "timestamp"
     },
     {
+      "name": "divergente_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "divergente_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "em_conferencia_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "em_conferencia_em",
+      "type": "timestamp"
+    },
+    {
       "name": "observacoes_conferencia",
       "type": "text"
     },

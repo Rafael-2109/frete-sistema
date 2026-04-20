@@ -64,16 +64,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_recebimento_conferencia_recebimento_id",
+      "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
       "columns": [
-        "recebimento_id"
+        "tipo_divergencia"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
+      "name": "ix_hora_recebimento_conferencia_recebimento_id",
       "columns": [
-        "tipo_divergencia"
+        "recebimento_id"
       ],
       "unique": false
     },
