@@ -725,10 +725,8 @@ def register_exportacao_routes(bp):
             p = papeis_por_comp.get(c.id) or {}
             emit = p.get('emit') or {}
             dest = p.get('dest') or {}
-            tom = p.get('tomador') or {}
-            tom_label = tom.get('label_completo') or ''
-            if tom.get('inferido'):
-                tom_label = f"{tom_label} (inferido)"
+            # Coluna "Tomador" removida: redundante com tipo_frete (FOB/CIF) da fatura,
+            # que ja indica quem paga (FOB=Remetente, CIF=Destinatario).
             data.append({
                 'Numero Comp': c.numero_comp or '',
                 'CTe Numero': op_map.get(c.operacao_id, ''),
@@ -741,7 +739,6 @@ def register_exportacao_routes(bp):
                 'CNPJ Emitente': emit.get('cnpj') or '',
                 'Destinatario': dest.get('nome') or '',
                 'CNPJ Destinatario': dest.get('cnpj') or '',
-                'Tomador': tom_label,
                 'Valor CTe': float(c.cte_valor or 0),
                 'Data Emissao': _fmt_date(c.cte_data_emissao),
                 'Status': c.status or '',
@@ -1019,10 +1016,8 @@ def register_exportacao_routes(bp):
             p = papeis_por_fatura.get(f.id) or {}
             emit = p.get('emit') or {}
             dest = p.get('dest') or {}
-            tom = p.get('tomador') or {}
-            tom_label = tom.get('label_completo') or ''
-            if tom.get('inferido'):
-                tom_label = f"{tom_label} (inferido)"
+            # Coluna "Tomador" removida: redundante com Tipo Frete (FOB/CIF),
+            # que ja indica quem paga (FOB=Remetente, CIF=Destinatario).
             cli = clientes_por_cnpj.get(f.cnpj_cliente) or {}
             data.append({
                 'Numero Fatura': f.numero_fatura or '',
@@ -1033,7 +1028,6 @@ def register_exportacao_routes(bp):
                 'CNPJ Emitente': emit.get('cnpj') or '',
                 'Destinatario': dest.get('nome') or '',
                 'CNPJ Destinatario': dest.get('cnpj') or '',
-                'Tomador': tom_label,
                 'Data Emissao': _fmt_date(f.data_emissao),
                 'Vencimento': _fmt_date(f.vencimento),
                 'Valor Total': float(f.valor_total or 0),
@@ -1203,10 +1197,8 @@ def register_exportacao_routes(bp):
             p = papeis_por_fatura.get(f.id) or {}
             emit = p.get('emit') or {}
             dest = p.get('dest') or {}
-            tom = p.get('tomador') or {}
-            tom_label = tom.get('label_completo') or ''
-            if tom.get('inferido'):
-                tom_label = f"{tom_label} (inferido)"
+            # Coluna "Tomador" removida: redundante com Tipo Frete (FOB/CIF) da
+            # fatura cliente, que ja indica quem paga (FOB=Remetente, CIF=Destinatario).
             data.append({
                 'Numero Fatura': f.numero_fatura or '',
                 'Transportadora': f.transportadora.razao_social if f.transportadora else '',
@@ -1214,7 +1206,6 @@ def register_exportacao_routes(bp):
                 'CNPJ Emitente': emit.get('cnpj') or '',
                 'Destinatario': dest.get('nome') or '',
                 'CNPJ Destinatario': dest.get('cnpj') or '',
-                'Tomador': tom_label,
                 'Data Emissao': _fmt_date(f.data_emissao),
                 'Vencimento': _fmt_date(f.vencimento),
                 'Valor Total': float(f.valor_total or 0),
