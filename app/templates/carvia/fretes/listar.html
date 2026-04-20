@@ -154,6 +154,18 @@
                                 <span title="{{ frete.nome_emitente or '' }}">
                                     {{ frete.nome_emitente[:20] ~ '...' if frete.nome_emitente and frete.nome_emitente|length > 20 else frete.nome_emitente or '-' }}
                                 </span>
+                                {# NF Triangular — marker se alguma NF do frete e transf efetiva #}
+                                {% if frete.numeros_nfs and nums_transf_efetivas %}
+                                  {% set frete_nums = frete.numeros_nfs.split(',') | map('trim') | list %}
+                                  {% set transfs_no_frete = frete_nums | select('in', nums_transf_efetivas) | list %}
+                                  {% if transfs_no_frete %}
+                                    <span class="badge carvia-badge-transferencia mt-1 d-inline-flex"
+                                          title="Este frete inclui NF(s) de Transferencia: {{ transfs_no_frete|join(', ') }}">
+                                      <i class="fas fa-exchange-alt"></i>
+                                      Transf. {{ transfs_no_frete|join(', ') }}
+                                    </span>
+                                  {% endif %}
+                                {% endif %}
                             </td>
                             <td>
                                 <span title="{{ frete.nome_destino or '' }}">

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "carvia/_macros.html" import badge_nf_transferencia %}
 {# modal_admin_excluir removido (Sprint 0 — NF nao suporta hard delete) #}
 
 {% block content %}
@@ -27,6 +28,16 @@
                 {% elif faturas_cliente %}
                 <span class="badge bg-warning text-dark" title="Fatura cliente pendente de pagamento">
                     <i class="fas fa-clock"></i> Fatura Pendente
+                </span>
+                {% endif %}
+                {# NF Triangular: badges de transferencia #}
+                {% if eh_transf_efetiva %}
+                {{ badge_nf_transferencia(nf.numero_nf, nf.id, size='lg') }}
+                {% elif transf_vinculada %}
+                {{ badge_nf_transferencia(transf_vinculada.numero_nf, transf_vinculada.id) }}
+                {% elif eh_candidata_transf %}
+                <span class="badge bg-secondary" title="NF e candidata a transferencia (mesma raiz CNPJ emit/dest) — ainda sem vinculo">
+                    <i class="fas fa-exchange-alt"></i> Candidata Transf.
                 </span>
                 {% endif %}
             </h2>
@@ -69,6 +80,15 @@
                     data-bs-target="#modalCriarCte" title="Criar CTe CarVia a partir desta NF">
                 <i class="fas fa-plus"></i> Criar CTe CarVia
             </button>
+            {# NF Triangular — botao de vincular (apenas para NFs que nao sao transferencia efetiva) #}
+            {% if not eh_transf_efetiva %}
+            <button type="button" class="btn btn-outline-primary btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#modalInserirNfTransferencia"
+                    title="Vincular NF de transferencia intercompany (operacao triangular)">
+                <i class="fas fa-exchange-alt"></i>
+                {% if transf_vinculada %}Alterar NF Transf.{% else %}Inserir NF Transf.{% endif %}
+            </button>
+            {% endif %}
             <a href="{{ url_for('carvia.backfill_frete_carvia', nf_id=nf.id) }}"
                class="btn btn-warning btn-sm" title="Criar Frete Backfill (sem embarque)">
                 <i class="fas fa-history"></i> Criar Frete
@@ -244,6 +264,127 @@
             </div>
         </div>
     </div>
+
+    {# ===== NF Triangular: vinculo de transferencia ===== #}
+    {% if transf_vinculada or eh_transf_efetiva %}
+    <div class="card mt-4 border-primary">
+        <div class="card-header bg-primary-subtle">
+            <h5 class="mb-0">
+                <i class="fas fa-exchange-alt text-primary"></i>
+                {% if eh_transf_efetiva %}
+                    NFs de Venda vinculadas a esta NF Transferencia ({{ vendas_da_transf|length }})
+                {% else %}
+                    NF Transferencia vinculada (Op. Triangular)
+                {% endif %}
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if transf_vinculada %}
+            {# Esta NF e VENDA de uma op triangular — exibe a NF transferencia #}
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <p class="mb-2">
+                        Esta NF Venda foi transportada em <strong>operacao triangular</strong>
+                        (filial intercompany). A NF de transferencia correspondente e:
+                    </p>
+                    <ul class="list-unstyled mb-0 small">
+                        <li>
+                            <i class="fas fa-file-alt text-muted"></i>
+                            NF: {{ badge_nf_transferencia(transf_vinculada.numero_nf, transf_vinculada.id) }}
+                            {% if transf_vinculada.serie_nf %}serie {{ transf_vinculada.serie_nf }}{% endif %}
+                        </li>
+                        <li>
+                            <i class="fas fa-building text-muted"></i>
+                            Emitente: <strong>{{ transf_vinculada.nome_emitente or '-' }}</strong>
+                            (<code>{{ transf_vinculada.cnpj_emitente }}</code>)
+                        </li>
+                        <li>
+                            <i class="fas fa-truck-loading text-muted"></i>
+                            Destinatario: <strong>{{ transf_vinculada.nome_destinatario or '-' }}</strong>
+                            (<code>{{ transf_vinculada.cnpj_destinatario }}</code>)
+                        </li>
+                        <li>
+                            <i class="fas fa-weight text-muted"></i>
+                            Peso bruto transf: <strong>{{ transf_vinculada.peso_bruto or '-' }}</strong> kg
+                            | Venda: <strong>{{ nf.peso_bruto or '-' }}</strong> kg
+                        </li>
+                        {% if vinculo_transf_obj and vinculo_transf_obj.vinculado_retroativamente %}
+                        <li class="mt-2">
+                            <span class="badge bg-warning text-dark">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Vinculo retroativo — NF venda ja estava em frete/fatura no momento do vinculo
+                            </span>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <button type="button" class="btn btn-outline-danger btn-sm"
+                        id="btnDesvincularTransf" data-nf-id="{{ nf.id }}"
+                        title="Remover este vinculo (bloqueado se venda em frete CONFERIDO/fatura)">
+                    <i class="fas fa-unlink"></i> Desvincular
+                </button>
+            </div>
+            {% endif %}
+
+            {% if eh_transf_efetiva %}
+            {# Esta NF e TRANSFERENCIA efetiva — exibe lista de vendas #}
+            <p class="mb-2">
+                Esta NF foi vinculada como <strong>NF de Transferencia</strong> (op. triangular)
+                e alimenta as seguintes NFs de Venda ao cliente final:
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>NF Venda</th>
+                            <th>Destinatario (cliente)</th>
+                            <th>CNPJ</th>
+                            <th class="text-end">Peso bruto</th>
+                            <th class="text-end">Peso no vinculo</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set ns = namespace(soma=0) %}
+                        {% for v in vendas_da_transf %}
+                        {% set ns.soma = ns.soma + (v.peso_bruto or 0)|float %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('carvia.detalhe_nf', nf_id=v.id) }}"
+                                   class="text-decoration-none">
+                                    <strong>{{ v.numero_nf }}</strong>
+                                </a>
+                            </td>
+                            <td>{{ v.nome_destinatario or '-' }}</td>
+                            <td><code class="small">{{ v.cnpj_destinatario or '-' }}</code></td>
+                            <td class="text-end">{{ v.peso_bruto or '-' }}</td>
+                            <td class="text-end small text-muted">—</td>
+                            <td><span class="badge carvia-badge-{{ v.status|lower }}">{{ v.status }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="3" class="text-end">Soma vendas:</th>
+                            <th class="text-end">
+                                {{ '%.3f'|format(ns.soma) }}
+                                {% if nf.peso_bruto and ns.soma > nf.peso_bruto|float %}
+                                <span class="badge bg-danger">Excede {{ '%.3f'|format(ns.soma - nf.peso_bruto|float) }} kg</span>
+                                {% else %}
+                                <span class="badge bg-success">OK</span>
+                                {% endif %}
+                            </th>
+                            <th colspan="2" class="text-end small text-muted">
+                                Transf: {{ nf.peso_bruto or '-' }} kg
+                            </th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Fretes CarVia Vinculados -->
     {% if fretes_nf %}
@@ -792,6 +933,11 @@
 {% endif %}
 
 {% include 'carvia/_cotacao_modal_partial.html' %}
+
+{# Modal NF Triangular — somente se NF pode receber vinculo de transferencia #}
+{% if not eh_transf_efetiva %}
+  {% include 'carvia/nfs/_modal_inserir_nf_transferencia.html' %}
+{% endif %}
 
 {# modal_admin_excluir removido (Sprint 0) #}
 {% endblock %}
@@ -1464,6 +1610,39 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(r => r.json())
         .then(data => renderBanner(data.emissao))
         .catch(() => {});
+})();
+</script>
+
+{# NF Triangular — desvincular transferencia #}
+<script>
+(function() {
+    const btn = document.getElementById('btnDesvincularTransf');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        if (!confirm('Remover o vinculo de NF Transferencia desta NF Venda?')) return;
+        const nfId = btn.dataset.nfId;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Desvinculando...';
+        fetch(`/carvia/nfs/${nfId}/transferencia`, {
+            method: 'DELETE',
+            headers: {'Accept': 'application/json'},
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                window.location.reload();
+            } else {
+                alert('Nao foi possivel desvincular: ' + (data.mensagem || 'erro'));
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-unlink"></i> Desvincular';
+            }
+        })
+        .catch(e => {
+            alert('Erro: ' + e.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-unlink"></i> Desvincular';
+        });
+    });
 })();
 </script>
 {% endblock %}

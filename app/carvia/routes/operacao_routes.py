@@ -40,6 +40,11 @@ def register_operacao_routes(bp):
         data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'cte_data_emissao')
         direction = request.args.get('direction', 'desc')
+        # NF Triangular: oculta operacoes cujas NFs sao TODAS transferencias
+        # efetivas (o CTe SP->RJ some quando a triangular esta fechada).
+        incluir_transferencias = request.args.get(
+            'incluir_transferencias', '0'
+        ) == '1'
 
         # Subquery: contar NFs vinculadas a cada operacao
         subq_nfs = db.session.query(
@@ -103,6 +108,21 @@ def register_operacao_routes(bp):
                     CarviaOperacao.id.in_(nf_match_subq),
                 )
             )
+
+        # NF Triangular: filtra operacoes 100% de transferencia
+        if not incluir_transferencias:
+            from app.carvia.models.documentos import CarviaNfVinculoTransferencia
+            # op_ids que tem pelo menos 1 NF NAO transferencia (= devem aparecer)
+            op_ids_com_nf_venda = db.session.query(
+                CarviaOperacaoNf.operacao_id
+            ).filter(
+                ~CarviaOperacaoNf.nf_id.in_(
+                    db.session.query(
+                        CarviaNfVinculoTransferencia.nf_transferencia_id
+                    )
+                )
+            ).distinct().subquery()
+            query = query.filter(CarviaOperacao.id.in_(op_ids_com_nf_venda))
 
         # Ordenacao dinamica
         sortable_columns = {
@@ -204,6 +224,36 @@ def register_operacao_routes(bp):
             if re.sub(r'\D', '', cnpj) in _resolved
         }
 
+        # NF Triangular: badges de NF transferencia ao lado do emitente
+        # Para cada operacao, identificar NFs venda que tem vinculo com
+        # NF transf e coletar os dados dessa transferencia.
+        transferencias_por_op = defaultdict(list)
+        if op_ids:
+            from app.carvia.models.documentos import CarviaNfVinculoTransferencia
+            rows_transf = db.session.query(
+                CarviaOperacaoNf.operacao_id,
+                CarviaNfVinculoTransferencia.nf_transferencia_id,
+                CarviaNf.numero_nf,
+            ).join(
+                CarviaNfVinculoTransferencia,
+                CarviaNfVinculoTransferencia.nf_venda_id == CarviaOperacaoNf.nf_id,
+            ).join(
+                CarviaNf,
+                CarviaNf.id == CarviaNfVinculoTransferencia.nf_transferencia_id,
+            ).filter(
+                CarviaOperacaoNf.operacao_id.in_(op_ids),
+            ).distinct().all()
+            seen = set()
+            for op_id, transf_id, num_nf in rows_transf:
+                key = (op_id, transf_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                transferencias_por_op[op_id].append({
+                    'transf_id': transf_id,
+                    'num_nf_transf': num_nf,
+                })
+
         return render_template(
             'carvia/listar_operacoes.html',
             operacoes=paginacao.items,
@@ -222,6 +272,8 @@ def register_operacao_routes(bp):
             dest_por_op=dest_por_op,
             clientes_por_cnpj=clientes_por_cnpj,
             papeis_por_op=papeis_por_op,
+            transferencias_por_op=transferencias_por_op,
+            incluir_transferencias=incluir_transferencias,
         )
 
     @bp.route('/operacoes/<int:operacao_id>')

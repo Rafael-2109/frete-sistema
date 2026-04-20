@@ -151,6 +151,29 @@ class CarviaNf(db.Model):
                 extra = f" (+{len(fretes_ativos)-3})" if len(fretes_ativos) > 3 else ""
                 bloqueios.append(f"{len(fretes_ativos)} Frete(s) CarVia: {ids}{extra}")
 
+        # 5. Vinculos de NF Triangular (NF transferencia ou venda)
+        #    Nao permitir cancelar NF que participa de vinculo triangular ativo.
+        vinc_transf = CarviaNfVinculoTransferencia.query.filter_by(
+            nf_transferencia_id=self.id
+        ).all()
+        if vinc_transf:
+            vendas = ', '.join(
+                f"#{v.nf_venda_id}" for v in vinc_transf[:3]
+            )
+            extra = f" (+{len(vinc_transf)-3})" if len(vinc_transf) > 3 else ""
+            bloqueios.append(
+                f"{len(vinc_transf)} vinculo(s) como NF Transferencia "
+                f"(vendas: {vendas}{extra})"
+            )
+        vinc_venda = CarviaNfVinculoTransferencia.query.filter_by(
+            nf_venda_id=self.id
+        ).first()
+        if vinc_venda:
+            bloqueios.append(
+                f"vinculo como NF Venda de transferencia "
+                f"#{vinc_venda.nf_transferencia_id}"
+            )
+
         if bloqueios:
             return (
                 False,
@@ -811,4 +834,69 @@ class CarviaConferenciaHistorico(db.Model):
         return (
             f'<CarviaConferenciaHistorico {self.id} frete={self.frete_id} '
             f'{self.status_antes}->{self.status_depois}>'
+        )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# NF Triangular (2026-04-20): Vinculo NF Transferencia (intercompany,
+# mesma raiz CNPJ emit==dest) -> NF Venda ao cliente final.
+# Operacao triangular: 1 NF transf pode alimentar N NFs venda (1:N). NF
+# venda e vinculada a NO MAXIMO 1 NF transf (UNIQUE em nf_venda_id).
+# Sem vinculo ativo, a NF transf continua sendo frete comum.
+# ────────────────────────────────────────────────────────────────────────────
+
+class CarviaNfVinculoTransferencia(db.Model):
+    """Vinculo NF Transferencia -> NF Venda para operacao triangular.
+
+    Regra de candidatura: NF com `cnpj_emitente[:8] == cnpj_destinatario[:8]`
+    (mesma empresa, filiais diferentes) pode ser NF de transferencia.
+    So vira transferencia EFETIVA ao ser vinculada a uma NF venda.
+    """
+    __tablename__ = 'carvia_nf_vinculos_transferencia'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nf_transferencia_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_nfs.id', ondelete='RESTRICT'),
+        nullable=False, index=True,
+    )
+    nf_venda_id = db.Column(
+        db.Integer,
+        db.ForeignKey('carvia_nfs.id', ondelete='CASCADE'),
+        nullable=False, unique=True,
+    )
+    # Snapshot no momento do vinculo (audit + comparativo pos-fatos)
+    peso_bruto_venda_snapshot = db.Column(db.Numeric(15, 3))
+    peso_bruto_transf_snapshot = db.Column(db.Numeric(15, 3))
+
+    # Alerta retroativo: venda estava em frete CONFIRMADO/fatura ao vincular
+    vinculado_retroativamente = db.Column(
+        db.Boolean, nullable=False, default=False,
+    )
+    # JSON texto: {frete_id, frete_status, faturas_cliente, faturas_transp}
+    contexto_retroativo = db.Column(db.Text)
+
+    criado_em = db.Column(
+        db.DateTime, nullable=False, default=agora_utc_naive, index=True,
+    )
+    criado_por = db.Column(db.String(100), nullable=False)
+
+    nf_transferencia = db.relationship(
+        'CarviaNf', foreign_keys=[nf_transferencia_id]
+    )
+    nf_venda = db.relationship(
+        'CarviaNf', foreign_keys=[nf_venda_id]
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            'nf_transferencia_id != nf_venda_id',
+            name='ck_nfvt_nf_distintas',
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<CarviaNfVinculoTransferencia {self.id} '
+            f'transf={self.nf_transferencia_id}->venda={self.nf_venda_id}>'
         )

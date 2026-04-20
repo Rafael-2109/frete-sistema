@@ -142,6 +142,47 @@
     --_badge-color: hsl(0 0% 100%);
 }
 
+/* NF Triangular — transferencia intercompany vinculada a NF venda.
+   Cor roxa distinta das existentes (success/info/warning) para sinalizar
+   "documento fiscal especial" com relacao 1:N. */
+.carvia-badge-transferencia {
+    --_badge-bg: hsl(262 85% 58%);
+    --_badge-color: hsl(0 0% 100%);
+    --_badge-border: hsl(262 85% 45%);
+}
+
+[data-bs-theme="light"] .carvia-badge-transferencia {
+    --_badge-bg: hsl(262 85% 94%);
+    --_badge-color: hsl(262 85% 30%);
+    --_badge-border: hsl(262 60% 70%);
+    border: 1px solid var(--_badge-border);
+}
+
+[data-bs-theme="dark"] .carvia-badge-transferencia {
+    --_badge-bg: hsla(262 85% 60% / 0.18);
+    --_badge-color: hsl(262 85% 82%);
+    --_badge-border: hsla(262 85% 60% / 0.4);
+    border: 1px solid var(--_badge-border);
+}
+
+/* Header grande (detalhe NF transferencia) — versao destacada */
+.carvia-badge-transferencia-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: var(--radius-md, 0.5rem);
+    background: hsl(262 85% 58%);
+    color: hsl(0 0% 100%);
+}
+[data-bs-theme="light"] .carvia-badge-transferencia-lg {
+    background: hsl(262 85% 94%);
+    color: hsl(262 85% 30%);
+    border: 1px solid hsl(262 60% 70%);
+}
+
 /* NF cancelada — opacidade reduzida na tabela */
 .carvia-nf-cancelada {
     opacity: 0.55;

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "carvia/_macros.html" import th_sort %}
+{% from "carvia/_macros.html" import th_sort, badge_nf_transferencia %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -78,7 +78,19 @@
                         <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if status_filtro or tipo_filtro or uf_filtro or uf_origem_filtro or busca or data_emissao_de or data_emissao_ate %}
+                <div class="col-md-12">
+                    <div class="form-check form-check-inline small mt-1">
+                        <input class="form-check-input" type="checkbox"
+                               id="incluirTransferenciasChk" name="incluir_transferencias" value="1"
+                               {{ 'checked' if incluir_transferencias }}
+                               onchange="this.form.submit()">
+                        <label class="form-check-label" for="incluirTransferenciasChk">
+                            <i class="fas fa-exchange-alt text-primary"></i>
+                            Incluir operacoes de NF Transferencia triangular (default: ocultas)
+                        </label>
+                    </div>
+                </div>
+                {% if status_filtro or tipo_filtro or uf_filtro or uf_origem_filtro or busca or data_emissao_de or data_emissao_ate or incluir_transferencias %}
                 <div class="col-md-12 mt-1">
                     <a href="{{ url_for('carvia.listar_operacoes') }}" class="btn btn-sm btn-outline-secondary">
                         <i class="fas fa-times"></i> Limpar Filtros
@@ -149,6 +161,13 @@
                                     {{ op.nome_cliente or op.cnpj_cliente }}
                                 </span>
                                 {% endif %}
+                                {# NF Triangular — badges de transferencia vinculada #}
+                                {% set transfs = transferencias_por_op.get(op.id, []) %}
+                                {% for t in transfs %}
+                                <div class="mt-1">
+                                    {{ badge_nf_transferencia(t.num_nf_transf, t.transf_id) }}
+                                </div>
+                                {% endfor %}
                                 {% set cli = clientes_por_cnpj.get(op.cnpj_cliente) %}
                                 {% if cli %}
                                 <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}"

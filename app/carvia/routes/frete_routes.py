@@ -147,7 +147,18 @@ def register_frete_routes(bp):
                 )
             )
         if filtro_nf:
-            query = query.filter(CarviaFrete.numeros_nfs.ilike(f'%{filtro_nf}%'))
+            # NF Triangular: busca expandida — inclui transf <-> venda vinculadas
+            from app.carvia.services.documentos.nf_transferencia_service import (
+                CarviaNfTransferenciaService as _NFTS,
+            )
+            nums_expandidos = _NFTS.expandir_nfs_relacionadas([filtro_nf])
+            or_conds = []
+            for num in nums_expandidos:
+                or_conds.append(CarviaFrete.numeros_nfs == num)
+                or_conds.append(CarviaFrete.numeros_nfs.like(f"{num},%"))
+                or_conds.append(CarviaFrete.numeros_nfs.like(f"%,{num},%"))
+                or_conds.append(CarviaFrete.numeros_nfs.like(f"%,{num}"))
+            query = query.filter(db.or_(*or_conds))
         if filtro_status:
             query = query.filter(CarviaFrete.status == filtro_status)
         transportadora_id_param = request.args.get('transportadora_id', type=int)
@@ -174,6 +185,17 @@ def register_frete_routes(bp):
         # Agregacao CTe por frete (evita N+1 do template)
         cte_por_frete = _build_cte_por_frete([f.id for f in paginacao.items])
 
+        # NF Triangular: marker de numeros_nf que sao transferencia efetiva
+        # (para prefixar visualmente no template)
+        nums_transf_efetivas = set()
+        try:
+            from app.carvia.services.documentos.nf_transferencia_service import (
+                CarviaNfTransferenciaService as _NFTS2,
+            )
+            nums_transf_efetivas = _NFTS2.get_nums_transferencia_efetiva()
+        except Exception:
+            nums_transf_efetivas = set()
+
         return render_template(
             'carvia/fretes/listar.html',
             fretes=paginacao.items,
@@ -188,6 +210,7 @@ def register_frete_routes(bp):
             filtro_transportadora=filtro_transportadora,
             filtro_data_de=filtro_data_de,
             filtro_data_ate=filtro_data_ate,
+            nums_transf_efetivas=nums_transf_efetivas,
         )
 
     # ------------------------------------------------------------------

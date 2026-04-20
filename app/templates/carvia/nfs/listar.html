@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "carvia/_macros.html" import th_sort %}
+{% from "carvia/_macros.html" import th_sort, badge_nf_transferencia %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -76,13 +76,25 @@
                         <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if busca or tipo_filtro or status_filtro or cte_filtro or uf_filtro or data_emissao_de or data_emissao_ate %}
+                {% if busca or tipo_filtro or status_filtro or cte_filtro or uf_filtro or data_emissao_de or data_emissao_ate or mostrar_transferencias %}
                 <div class="col-md-1">
                     <a href="{{ url_for('carvia.listar_nfs') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i>
                     </a>
                 </div>
                 {% endif %}
+                <div class="col-md-12">
+                    <div class="form-check form-check-inline small mt-1">
+                        <input class="form-check-input" type="checkbox"
+                               id="mostrarTransferenciasChk" name="mostrar_transferencias" value="1"
+                               {{ 'checked' if mostrar_transferencias }}
+                               onchange="this.form.submit()">
+                        <label class="form-check-label" for="mostrarTransferenciasChk">
+                            <i class="fas fa-exchange-alt text-primary"></i>
+                            Mostrar NFs de Transferencia triangular (default: ocultas)
+                        </label>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
@@ -112,6 +124,11 @@
                         <tr{% if nf.status == 'CANCELADA' %} class="carvia-nf-cancelada"{% endif %}>
                             <td>
                                 <strong>{{ nf.numero_nf }}</strong>
+                                {% if nf.id in ids_transf_efetivas %}
+                                <div class="mt-1">
+                                    {{ badge_nf_transferencia(nf.numero_nf, nf.id) }}
+                                </div>
+                                {% endif %}
                                 <small class="text-muted d-block">{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</small>
                             </td>
                             <td>

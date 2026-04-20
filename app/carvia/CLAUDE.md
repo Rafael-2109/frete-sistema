@@ -138,6 +138,23 @@ Aplicar em TODOS os workers que chamam Playwright: `ssw_cte_jobs.py`, `ssw_cte_c
 ### R16 + R17: Pre-vinculo e historico de match
 Fluxos financeiros avancados (frete pre-pago, aprendizado de match bancario). Detalhes: [FINANCEIRO.md](FINANCEIRO.md).
 
+### R18: NF Triangular (2026-04-20) — vinculo NF Transferencia -> NF Venda
+Operacao triangular (industria SP -> filial RJ -> cliente final) emite 2 CTes mas transporta 1 mercadoria. A feature vincula `NF Transferencia -> NF Venda(s)` (1:N) para a UI tratar a operacao como uma unidade.
+
+- **Candidatura**: `cnpj_emitente[:8] == cnpj_destinatario[:8]` (mesma empresa, filiais).
+- **Match**: `nf_venda.cnpj_emitente == nf_transf.cnpj_destinatario` (a filial que recebeu a transferencia emite a venda).
+- **Peso bruto**: `sum(peso_bruto NFs venda) <= peso_bruto NF transf` — bloqueia se excede.
+- **Efetivo vs Candidato**: NF so vira "transferencia efetiva" com pelo menos 1 vinculo ativo. Sem vinculo, e frete comum.
+- **Retroatividade**: NF venda em frete CONFERIDO/FATURADO ou fatura -> vinculo permitido com alerta + flag `vinculado_retroativamente` + contexto em JSON.
+- **Desvinculo**: bloqueado se NF venda em frete CONFERIDO/FATURADO ou em item de fatura.
+- **Impacto nas telas** (default oculta transf efetivas; toggle via query):
+  - `/carvia/nfs`: `mostrar_transferencias=1`
+  - `/carvia/operacoes`: `incluir_transferencias=1`
+  - `/carvia/fretes`: sempre aparece, com badge "Transf. ####" na coluna Emitente. Busca por NF expande para o grupo (transf <-> vendas).
+  - `/carvia/pedidos-carvia`: filtra numeros_nf que sao transferencia efetiva.
+- **Bloqueio `pode_cancelar`**: NF com vinculos ativos (transf ou venda) nao pode ser cancelada.
+- **Arquivos**: `services/documentos/nf_transferencia_service.py`, `routes/nf_transferencia_routes.py`, `templates/carvia/nfs/_modal_inserir_nf_transferencia.html`. Model `CarviaNfVinculoTransferencia` em `models/documentos.py`.
+
 ---
 
 ## Modelos

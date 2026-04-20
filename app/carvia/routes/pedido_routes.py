@@ -84,9 +84,22 @@ def register_pedido_routes(bp):
                 qtd_por_pedido[pid] = int(qtd or 0)
                 valor_por_pedido[pid] = float(valor or 0)
 
+        # NF Triangular: pegar numeros_nf que sao transferencia efetiva
+        # para filtra-los da listagem de pedidos
+        try:
+            from app.carvia.services.documentos.nf_transferencia_service import (
+                CarviaNfTransferenciaService as _NFTS3,
+            )
+            nums_transf_efetivas = _NFTS3.get_nums_transferencia_efetiva()
+        except Exception:
+            nums_transf_efetivas = set()
+
         for ped in pedidos:
             itens = ped.itens.all()
-            nf_nums = sorted({i.numero_nf for i in itens if i.numero_nf})
+            nf_nums = sorted({
+                i.numero_nf for i in itens
+                if i.numero_nf and i.numero_nf not in nums_transf_efetivas
+            })
             nfs_por_pedido[ped.id] = nf_nums
 
             # Peso: somar peso_bruto das CarviaNfs vinculadas; se nenhuma, fallback 0

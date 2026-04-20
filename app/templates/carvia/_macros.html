@@ -77,6 +77,33 @@
     - tomador.inferido=True         → title="Inferido pelo tipo de frete"
                                         (em vez de "Extraido do CTe")
 #}
+{#
+  badge_nf_transferencia — Renderiza badge "NF Transf. ####" com link
+  para a detalhe da NF transferencia. Usado em listagens (operacoes,
+  fretes, pedidos, nfs) e detalhes.
+
+  Params:
+    num_nf    - numero da NF transferencia (string ou None)
+    transf_id - id da CarviaNf transferencia (int)
+    size      - 'sm' (default, inline) ou 'lg' (destaque no header)
+    icon      - bool, exibir icone fas fa-exchange-alt (default True)
+#}
+{% macro badge_nf_transferencia(num_nf, transf_id, size='sm', icon=True) -%}
+  {%- if size == 'lg' -%}
+    <span class="carvia-badge-transferencia-lg">
+      {%- if icon %}<i class="fas fa-exchange-alt"></i>{% endif -%}
+      NF de Transferencia{% if num_nf %} #{{ num_nf }}{% endif %}
+    </span>
+  {%- else -%}
+    <a href="{{ url_for('carvia.detalhe_nf', nf_id=transf_id) }}"
+       class="badge carvia-badge-transferencia text-decoration-none"
+       title="NF de Transferencia (operacao triangular) — clique para abrir">
+      {%- if icon %}<i class="fas fa-exchange-alt"></i> {% endif -%}
+      NF Transf. {{ num_nf or ('#' ~ transf_id) }}
+    </a>
+  {%- endif -%}
+{%- endmacro %}
+
 {% macro emitente_destinatario(emit, dest, tomador, compact=False) %}
   {# Normalizar tomador: aceita string legada ou dict novo #}
   {% if tomador is string %}

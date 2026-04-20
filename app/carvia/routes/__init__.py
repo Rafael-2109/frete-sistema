@@ -8,6 +8,9 @@ def register_routes(bp):
     from app.carvia.routes.dashboard_routes import register_dashboard_routes
     from app.carvia.routes.importacao_routes import register_importacao_routes
     from app.carvia.routes.nf_routes import register_nf_routes
+    from app.carvia.routes.nf_transferencia_routes import (
+        register_nf_transferencia_routes,
+    )
     from app.carvia.routes.operacao_routes import register_operacao_routes
     from app.carvia.routes.subcontrato_routes import register_subcontrato_routes
     from app.carvia.routes.fatura_routes import register_fatura_routes
@@ -37,6 +40,7 @@ def register_routes(bp):
     register_dashboard_routes(bp)
     register_importacao_routes(bp)
     register_nf_routes(bp)
+    register_nf_transferencia_routes(bp)
     register_operacao_routes(bp)
     register_subcontrato_routes(bp)
     register_fatura_routes(bp)

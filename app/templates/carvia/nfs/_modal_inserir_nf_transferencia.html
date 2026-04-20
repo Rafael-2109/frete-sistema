@@ -1,0 +1,481 @@
+{#
+  Modal "Inserir NF Transferencia" — vincula NF transferencia (intercompany)
+  a esta NF de venda. Operacao triangular (SP -> Filial -> Cliente).
+
+  Contexto necessario:
+    nf               — CarviaNf da venda (contexto atual)
+
+  Fluxo:
+    1. Escolher origem: Upload XML novo OU Selecionar NF ja importada
+    2. Exibir preview (candidatura, CNPJ, peso)
+    3. Exibir comparativo peso (1-1) e, se transf > venda, opcao 1-N
+    4. Alerta retroativo (se NF venda esta em frete CONFERIDO/FATURADO)
+    5. Confirmar vinculo
+#}
+<div class="modal fade" id="modalInserirNfTransferencia" tabindex="-1"
+     aria-hidden="true" data-venda-id="{{ nf.id }}">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-exchange-alt text-primary"></i>
+          Inserir NF de Transferencia — Op. Triangular
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-info small mb-3">
+          <strong>NF Venda atual:</strong>
+          {{ nf.numero_nf }} — {{ nf.nome_emitente or 'Emitente?' }}
+          (CNPJ {{ nf.cnpj_emitente }})
+          <span class="text-muted">|</span>
+          Peso bruto: <strong>{{ nf.peso_bruto or '0' }}</strong> kg.
+          Vamos buscar uma NF de transferencia cujo destinatario seja o
+          emitente desta venda (CNPJ <code>{{ nf.cnpj_emitente }}</code>).
+        </div>
+
+        {# ====== TABS origem ====== #}
+        <ul class="nav nav-tabs" id="nftTabs" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab"
+                    data-bs-target="#nftTabExistente" type="button">
+              <i class="fas fa-list"></i> Selecionar ja importada
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab"
+                    data-bs-target="#nftTabUpload" type="button">
+              <i class="fas fa-upload"></i> Upload XML
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content border-start border-end border-bottom p-3" style="border-top:none">
+          {# ===== Tab 1: Existente ===== #}
+          <div class="tab-pane fade show active" id="nftTabExistente">
+            <div id="nftListaExistente">
+              <div class="text-center text-muted py-3">
+                <div class="spinner-border spinner-border-sm"></div>
+                Carregando candidatas...
+              </div>
+            </div>
+          </div>
+
+          {# ===== Tab 2: Upload ===== #}
+          <div class="tab-pane fade" id="nftTabUpload">
+            <div id="nftUploadArea" class="carvia-upload-area">
+              <i class="fas fa-cloud-upload-alt upload-icon"></i>
+              <p class="mb-1">Arraste o XML da NF-e aqui</p>
+              <p class="text-muted small">ou clique para selecionar (.xml, max 50MB)</p>
+              <input type="file" id="nftFileInput" accept=".xml" class="d-none">
+            </div>
+            <div id="nftUploadProgress" class="d-none mt-3 text-center">
+              <div class="spinner-border spinner-border-sm"></div>
+              <span class="ms-2">Processando XML...</span>
+            </div>
+            <div id="nftUploadResultado" class="d-none mt-3"></div>
+          </div>
+        </div>
+
+        {# ====== Preview + Comparativo ====== #}
+        <div id="nftPreview" class="d-none mt-4">
+          <h6 class="border-bottom pb-2">
+            <i class="fas fa-balance-scale text-primary"></i> Comparativo de Pesos
+          </h6>
+          <div id="nftPreviewConteudo"></div>
+
+          <div id="nftAlertaRetroativo" class="alert alert-warning mt-3 d-none">
+            <strong><i class="fas fa-exclamation-triangle"></i> Atencao — Vinculo retroativo</strong>
+            <div id="nftAlertaRetroativoConteudo" class="small mt-1"></div>
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="nftConfirmaRetroativo">
+              <label class="form-check-label small" for="nftConfirmaRetroativo">
+                Confirmo o vinculo retroativo
+              </label>
+            </div>
+          </div>
+
+          <div id="nftPeso1N" class="mt-3 d-none">
+            <div class="alert alert-info small mb-2">
+              <i class="fas fa-info-circle"></i>
+              Peso da transferencia e maior que o da venda atual — voce pode
+              vincular a esta transferencia outras NFs venda do mesmo emitente
+              (ate o limite do peso da transf).
+            </div>
+            <div id="nftOutrasCandidatas"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="me-auto small text-muted" id="nftMensagemErro"></div>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="nftBtnConfirmar" disabled>
+          <i class="fas fa-link"></i> Confirmar vinculo
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  const modal = document.getElementById('modalInserirNfTransferencia');
+  if (!modal) return;
+
+  const vendaId = Number(modal.dataset.vendaId);
+  const URL_BASE = `/carvia/nfs/${vendaId}/transferencia`;
+
+  // ---------- Estado ----------
+  const state = {
+    nfTransfSelecionada: null,  // {id, numero_nf, peso_bruto, ...}
+    vendasIds: [vendaId],        // venda alvo + extras (1-N)
+    peso: null,
+    retroativos: {},
+  };
+
+  // ---------- Elementos ----------
+  const listaExistente = modal.querySelector('#nftListaExistente');
+  const uploadArea = modal.querySelector('#nftUploadArea');
+  const uploadInput = modal.querySelector('#nftFileInput');
+  const uploadProgress = modal.querySelector('#nftUploadProgress');
+  const uploadResultado = modal.querySelector('#nftUploadResultado');
+  const preview = modal.querySelector('#nftPreview');
+  const previewConteudo = modal.querySelector('#nftPreviewConteudo');
+  const alertaRetro = modal.querySelector('#nftAlertaRetroativo');
+  const alertaRetroConteudo = modal.querySelector('#nftAlertaRetroativoConteudo');
+  const confirmaRetro = modal.querySelector('#nftConfirmaRetroativo');
+  const peso1N = modal.querySelector('#nftPeso1N');
+  const outrasCandidatas = modal.querySelector('#nftOutrasCandidatas');
+  const btnConfirmar = modal.querySelector('#nftBtnConfirmar');
+  const msgErro = modal.querySelector('#nftMensagemErro');
+
+  // ---------- Helpers ----------
+  function fmtPeso(v) {
+    if (v === null || v === undefined) return '—';
+    return Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3}) + ' kg';
+  }
+  function setErro(msg) { msgErro.textContent = msg || ''; msgErro.style.color = msg ? 'var(--semantic-danger, #dc3545)' : ''; }
+  function setSucesso(msg) { msgErro.textContent = msg || ''; msgErro.style.color = 'var(--semantic-success, #198754)'; }
+
+  // ---------- Carregar candidatas existentes ----------
+  function carregarCandidatas() {
+    listaExistente.innerHTML = '<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div> Carregando...</div>';
+    fetch(`${URL_BASE}/candidatas`, {headers: {'Accept': 'application/json'}})
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) { listaExistente.innerHTML = `<div class="alert alert-danger small">${data.erro}</div>`; return; }
+
+        if (data.transferencia_atual) {
+          const t = data.transferencia_atual;
+          listaExistente.innerHTML = `
+            <div class="alert alert-success small">
+              <i class="fas fa-check-circle"></i> Esta NF venda ja tem transferencia vinculada:
+              <strong>NF ${t.numero_nf}</strong> — ${t.nome_emitente}
+              (peso ${fmtPeso(t.peso_bruto)}).
+              <div class="mt-2">
+                Para alterar, primeiro desvincule na tela de detalhe da NF venda.
+              </div>
+            </div>`;
+          return;
+        }
+
+        if (!data.candidatas.length) {
+          listaExistente.innerHTML = `
+            <div class="alert alert-warning small">
+              Nenhuma NF de transferencia ja importada e candidata para esta venda.
+              <br>Criterio: destinatario = CNPJ ${data.nf_venda.cnpj_emitente}
+              + raiz CNPJ emit == dest (mesma empresa).
+              <br>Use a aba <strong>Upload XML</strong> para importar uma nova.
+            </div>`;
+          return;
+        }
+
+        const linhas = data.candidatas.map(n => `
+          <tr data-nf-id="${n.id}" style="cursor:pointer">
+            <td><input type="radio" name="nftExistente" value="${n.id}"></td>
+            <td><strong>${n.numero_nf}</strong></td>
+            <td>${n.nome_emitente || ''}<br><small class="text-muted">${n.cnpj_emitente}</small></td>
+            <td>${n.nome_destinatario || ''}<br><small class="text-muted">${n.cnpj_destinatario}</small></td>
+            <td class="text-end">${fmtPeso(n.peso_bruto)}</td>
+            <td>${n.data_emissao || '-'}</td>
+          </tr>`).join('');
+
+        listaExistente.innerHTML = `
+          <div class="table-responsive" style="max-height:260px;overflow:auto">
+            <table class="table table-sm table-hover align-middle">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th></th><th>NF</th><th>Emitente</th><th>Destinatario</th>
+                  <th class="text-end">Peso</th><th>Emissao</th>
+                </tr>
+              </thead>
+              <tbody>${linhas}</tbody>
+            </table>
+          </div>`;
+
+        listaExistente.querySelectorAll('tr[data-nf-id]').forEach(tr => {
+          tr.addEventListener('click', () => {
+            const id = Number(tr.dataset.nfId);
+            tr.querySelector('input[type=radio]').checked = true;
+            escolherTransferencia(id);
+          });
+        });
+      })
+      .catch(e => { listaExistente.innerHTML = `<div class="alert alert-danger small">Erro: ${e.message}</div>`; });
+  }
+
+  // ---------- Upload XML ----------
+  uploadArea.addEventListener('click', () => uploadInput.click());
+  uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+  uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+  uploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    if (e.dataTransfer.files.length) enviarXML(e.dataTransfer.files[0]);
+  });
+  uploadInput.addEventListener('change', () => { if (uploadInput.files.length) enviarXML(uploadInput.files[0]); });
+
+  function enviarXML(file) {
+    if (!file.name.toLowerCase().endsWith('.xml')) { alert('Selecione um arquivo .xml'); return; }
+    uploadArea.classList.add('d-none');
+    uploadProgress.classList.remove('d-none');
+    uploadResultado.classList.add('d-none');
+
+    const fd = new FormData();
+    fd.append('arquivo', file);
+    fetch(`${URL_BASE}/upload`, {method: 'POST', body: fd})
+      .then(r => r.json())
+      .then(data => {
+        uploadProgress.classList.add('d-none');
+        uploadResultado.classList.remove('d-none');
+        if (!data.ok) {
+          uploadResultado.innerHTML = `<div class="alert alert-danger small">${data.erro}</div>`;
+          uploadArea.classList.remove('d-none');
+          return;
+        }
+        if (!data.candidata) {
+          uploadResultado.innerHTML = `
+            <div class="alert alert-danger small">
+              <strong>XML nao e candidata a transferencia.</strong>
+              CNPJ emitente e destinatario devem ter mesma raiz (8 digitos).
+              <br>Emit: ${data.info.cnpj_emitente} / Dest: ${data.info.cnpj_destinatario}
+            </div>`;
+          uploadArea.classList.remove('d-none');
+          return;
+        }
+        if (data.existente_id) {
+          uploadResultado.innerHTML = `
+            <div class="alert alert-info small">
+              <i class="fas fa-info-circle"></i>
+              Esta NF ja esta importada no sistema — selecionando para vinculo.
+            </div>`;
+          escolherTransferencia(data.existente_id);
+          return;
+        }
+        // Persistir
+        fetch(`${URL_BASE}/importar`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({info: data.info}),
+        })
+          .then(r => r.json())
+          .then(impData => {
+            if (!impData.ok) {
+              uploadResultado.innerHTML = `<div class="alert alert-danger small">${impData.erro}</div>`;
+              uploadArea.classList.remove('d-none');
+              return;
+            }
+            uploadResultado.innerHTML = `
+              <div class="alert alert-success small">
+                <i class="fas fa-check-circle"></i> NF importada — carregando comparativo...
+              </div>`;
+            escolherTransferencia(impData.nf_transferencia.id);
+          });
+      })
+      .catch(e => {
+        uploadProgress.classList.add('d-none');
+        uploadArea.classList.remove('d-none');
+        uploadResultado.classList.remove('d-none');
+        uploadResultado.innerHTML = `<div class="alert alert-danger small">Erro: ${e.message}</div>`;
+      });
+  }
+
+  // ---------- Escolher transferencia -> preview ----------
+  function escolherTransferencia(nfTransfId) {
+    state.nfTransfSelecionada = {id: nfTransfId};
+    state.vendasIds = [vendaId];
+    carregarPreview();
+  }
+
+  function carregarPreview() {
+    preview.classList.remove('d-none');
+    previewConteudo.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm"></div></div>';
+    fetch(`${URL_BASE}/preview`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        nf_transf_id: state.nfTransfSelecionada.id,
+        nf_venda_ids: state.vendasIds,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) {
+          previewConteudo.innerHTML = `<div class="alert alert-danger small">${data.erro}</div>`;
+          btnConfirmar.disabled = true;
+          return;
+        }
+        state.peso = data.peso;
+        state.retroativos = data.retroativos || {};
+        renderPreview(data);
+      })
+      .catch(e => { previewConteudo.innerHTML = `<div class="alert alert-danger small">Erro: ${e.message}</div>`; });
+  }
+
+  function renderPreview(data) {
+    const t = data.nf_transferencia;
+    const p = data.peso;
+    const excede = p.excede;
+
+    const vendasLinhas = p.detalhes_vendas.map(v => `
+      <tr>
+        <td><strong>${v.numero_nf}</strong></td>
+        <td class="text-end">${fmtPeso(v.peso_bruto)}</td>
+      </tr>`).join('');
+
+    previewConteudo.innerHTML = `
+      <div class="row g-2 mb-2">
+        <div class="col-md-6">
+          <div class="border rounded p-2 bg-light">
+            <small class="text-muted d-block">NF Transferencia #${t.numero_nf}</small>
+            <strong>${t.nome_emitente || ''}</strong>
+            <div class="small text-muted">${t.cnpj_emitente} ${t.uf_emitente || ''} -> ${t.uf_destinatario || ''}</div>
+            <div class="mt-1"><strong>Peso bruto:</strong> ${fmtPeso(t.peso_bruto)}</div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="border rounded p-2 ${excede ? 'bg-danger-subtle' : 'bg-success-subtle'}">
+            <small class="text-muted d-block">Soma NFs Venda selecionadas</small>
+            <table class="table table-sm mb-0">${vendasLinhas}</table>
+            <div class="mt-1 border-top pt-1">
+              <strong>Total:</strong> ${fmtPeso(p.peso_vendas_soma)} —
+              <strong>Delta:</strong> ${fmtPeso(p.delta)}
+              ${excede ? '<span class="badge bg-danger ms-1">EXCEDE</span>' : '<span class="badge bg-success ms-1">OK</span>'}
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    // Alerta retroativo
+    const idsRetro = Object.keys(state.retroativos);
+    if (idsRetro.length) {
+      alertaRetro.classList.remove('d-none');
+      const partes = idsRetro.map(vid => {
+        const ctx = state.retroativos[vid];
+        const fretes = (ctx.fretes || []).map(f => `#${f.frete_id} (${f.status})`).join(', ');
+        const fatC = (ctx.faturas_cliente || []).map(f => `FC ${f.numero_fatura}`).join(', ');
+        const fatT = (ctx.faturas_transp || []).map(f => `FT ${f.numero_fatura}`).join(', ');
+        const doc = [fretes, fatC, fatT].filter(Boolean).join(' | ');
+        return `<div>NF venda <strong>#${vid}</strong>: ${doc}</div>`;
+      }).join('');
+      alertaRetroConteudo.innerHTML = partes;
+    } else {
+      alertaRetro.classList.add('d-none');
+      confirmaRetro.checked = false;
+    }
+
+    // Opcao 1-N: exibir outras candidatas se transf > venda alvo
+    if (data.candidatas_1_n && data.candidatas_1_n.length > 1 && !excede) {
+      peso1N.classList.remove('d-none');
+      const outras = data.candidatas_1_n.filter(c => c.id !== vendaId);
+      if (outras.length) {
+        const linhas = outras.map(n => {
+          const checked = state.vendasIds.includes(n.id) ? 'checked' : '';
+          return `
+            <div class="form-check">
+              <input class="form-check-input nft-extra-venda" type="checkbox"
+                     value="${n.id}" id="nftExtra${n.id}" ${checked}>
+              <label class="form-check-label small" for="nftExtra${n.id}">
+                <strong>${n.numero_nf}</strong> —
+                ${n.nome_destinatario || ''}
+                (<code>${n.cnpj_destinatario}</code>)
+                — peso <strong>${fmtPeso(n.peso_bruto)}</strong>
+              </label>
+            </div>`;
+        }).join('');
+        outrasCandidatas.innerHTML = linhas;
+        outrasCandidatas.querySelectorAll('.nft-extra-venda').forEach(cb => {
+          cb.addEventListener('change', () => {
+            const ids = [vendaId];
+            outrasCandidatas.querySelectorAll('.nft-extra-venda:checked').forEach(c => ids.push(Number(c.value)));
+            state.vendasIds = ids;
+            carregarPreview();
+          });
+        });
+      } else {
+        outrasCandidatas.innerHTML = '<div class="text-muted small">Nenhuma NF venda extra candidata.</div>';
+      }
+    } else {
+      peso1N.classList.add('d-none');
+    }
+
+    // Habilita/desabilita botao Confirmar
+    btnConfirmar.disabled = excede;
+    setErro(excede ? 'Soma dos pesos excede peso da transferencia' : '');
+  }
+
+  // ---------- Confirmar ----------
+  btnConfirmar.addEventListener('click', () => {
+    if (!state.nfTransfSelecionada) { setErro('Selecione uma NF transferencia'); return; }
+    const payload = {
+      nf_transf_id: state.nfTransfSelecionada.id,
+      nf_venda_ids: state.vendasIds,
+      confirma_retroativo: confirmaRetro.checked,
+    };
+    btnConfirmar.disabled = true;
+    btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Vinculando...';
+    fetch(`${URL_BASE}/confirmar`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) {
+          setErro(data.erro || 'Erro ao vincular');
+          btnConfirmar.disabled = false;
+          btnConfirmar.innerHTML = '<i class="fas fa-link"></i> Confirmar vinculo';
+          return;
+        }
+        setSucesso(`Vinculo criado (${data.vinculos_criados} NF(s) venda).`);
+        setTimeout(() => window.location.reload(), 900);
+      })
+      .catch(e => {
+        setErro('Erro: ' + e.message);
+        btnConfirmar.disabled = false;
+        btnConfirmar.innerHTML = '<i class="fas fa-link"></i> Confirmar vinculo';
+      });
+  });
+
+  // ---------- Boot on modal show ----------
+  modal.addEventListener('shown.bs.modal', () => {
+    carregarCandidatas();
+    state.nfTransfSelecionada = null;
+    state.vendasIds = [vendaId];
+    preview.classList.add('d-none');
+    peso1N.classList.add('d-none');
+    alertaRetro.classList.add('d-none');
+    uploadArea.classList.remove('d-none');
+    uploadProgress.classList.add('d-none');
+    uploadResultado.classList.add('d-none');
+    btnConfirmar.disabled = true;
+    btnConfirmar.innerHTML = '<i class="fas fa-link"></i> Confirmar vinculo';
+    setErro('');
+  });
+})();
+</script>

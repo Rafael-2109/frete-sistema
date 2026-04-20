@@ -43,6 +43,10 @@ def register_nf_routes(bp):
         data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'data_emissao')
         direction = request.args.get('direction', 'desc')
+        # NF Triangular: oculta transferencias efetivas por default
+        mostrar_transferencias = request.args.get(
+            'mostrar_transferencias', '0'
+        ) == '1'
 
         # Subquery: contar CTes vinculados a cada NF
         subq_ctes = db.session.query(
@@ -95,6 +99,14 @@ def register_nf_routes(bp):
                     CarviaNf.id.in_(cte_match_subq),
                 )
             )
+
+        # NF Triangular: filtra transferencias efetivas (default oculta)
+        if not mostrar_transferencias:
+            from app.carvia.models.documentos import CarviaNfVinculoTransferencia
+            subq_transf_efetivas = db.session.query(
+                CarviaNfVinculoTransferencia.nf_transferencia_id
+            ).distinct().subquery()
+            query = query.filter(~CarviaNf.id.in_(subq_transf_efetivas))
 
         # Filtro CTe: com/sem CTe vinculado
         if cte_filtro == 'COM':
@@ -278,6 +290,18 @@ def register_nf_routes(bp):
             if re.sub(r'\D', '', cnpj) in _resolved
         }
 
+        # NF Triangular: marker de NFs que sao transferencia efetiva
+        # (so eh util quando mostrar_transferencias=True)
+        from app.carvia.models.documentos import CarviaNfVinculoTransferencia
+        ids_transf_efetivas = set()
+        if nf_ids:
+            rows_vt = db.session.query(
+                CarviaNfVinculoTransferencia.nf_transferencia_id
+            ).filter(
+                CarviaNfVinculoTransferencia.nf_transferencia_id.in_(nf_ids)
+            ).distinct().all()
+            ids_transf_efetivas = {r[0] for r in rows_vt}
+
         return render_template(
             'carvia/nfs/listar.html',
             nfs=paginacao.items,
@@ -299,6 +323,8 @@ def register_nf_routes(bp):
             clientes_por_cnpj=clientes_por_cnpj,
             frete_id_por_nf=frete_id_por_nf,
             cotacao_id_por_nf=cotacao_id_por_nf,
+            mostrar_transferencias=mostrar_transferencias,
+            ids_transf_efetivas=ids_transf_efetivas,
         )
 
     # ==================== HELPER: ÚLTIMOS FRETES ====================
@@ -514,6 +540,16 @@ def register_nf_routes(bp):
         # Indicador: fatura cliente paga?
         fat_cliente_paga = any(f.status == 'PAGA' for f in faturas_cliente)
 
+        # NF Triangular: vinculo de transferencia (ambos os lados)
+        from app.carvia.services.documentos.nf_transferencia_service import (
+            CarviaNfTransferenciaService as _NFTS,
+        )
+        transf_vinculada = _NFTS.get_transferencia_de(nf.id)
+        vendas_da_transf = _NFTS.get_vendas_de(nf.id)
+        eh_transf_efetiva = bool(vendas_da_transf)
+        eh_candidata_transf = _NFTS.eh_candidata_transferencia(nf)
+        vinculo_transf_obj = _NFTS.get_vinculo_por_venda(nf.id)
+
         # Tomador do frete: primeira CarviaOperacao vinculada com cte_tomador populado
         from app.carvia.utils.tomador import tomador_label
         tomador_label_val = None
@@ -547,6 +583,11 @@ def register_nf_routes(bp):
             fat_cliente_paga=fat_cliente_paga,
             tomador_label=tomador_label_val,
             cte_por_frete=cte_por_frete,
+            transf_vinculada=transf_vinculada,
+            vendas_da_transf=vendas_da_transf,
+            eh_transf_efetiva=eh_transf_efetiva,
+            eh_candidata_transf=eh_candidata_transf,
+            vinculo_transf_obj=vinculo_transf_obj,
         )
 
     # ==================== CRIAR CTE VIA NF ====================
