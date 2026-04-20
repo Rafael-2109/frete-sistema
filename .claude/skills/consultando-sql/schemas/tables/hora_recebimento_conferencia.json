@@ -71,16 +71,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_conferencia_recebimento_id",
+      "name": "ix_hora_recebimento_conferencia_numero_chassi",
       "columns": [
-        "recebimento_id"
+        "numero_chassi"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_conferencia_numero_chassi",
+      "name": "ix_hora_recebimento_conferencia_recebimento_id",
       "columns": [
-        "numero_chassi"
+        "recebimento_id"
       ],
       "unique": false
     }

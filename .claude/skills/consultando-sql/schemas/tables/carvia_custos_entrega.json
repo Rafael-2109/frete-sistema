@@ -157,6 +157,27 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_custos_entrega_numero_custo",
+      "columns": [
+        "numero_custo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_subcontrato_id",
+      "columns": [
+        "subcontrato_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_custos_entrega_tipo_custo",
+      "columns": [
+        "tipo_custo"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_custos_entrega_transportadora_id",
       "columns": [
         "transportadora_id"
@@ -178,9 +199,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_operacao_id",
+      "name": "ix_carvia_custos_entrega_status",
       "columns": [
-        "operacao_id"
+        "status"
       ],
       "unique": false
     },
@@ -192,30 +213,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_custos_entrega_numero_custo",
+      "name": "ix_carvia_custos_entrega_operacao_id",
       "columns": [
-        "numero_custo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_tipo_custo",
-      "columns": [
-        "tipo_custo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_custos_entrega_subcontrato_id",
-      "columns": [
-        "subcontrato_id"
+        "operacao_id"
       ],
       "unique": false
     }

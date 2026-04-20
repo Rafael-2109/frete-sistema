@@ -76,11 +76,11 @@
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_numero_pedido",
+      "name": "ix_hora_pedido_loja_destino_id",
       "columns": [
-        "numero_pedido"
+        "loja_destino_id"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "ix_hora_pedido_status",
@@ -90,11 +90,11 @@
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_loja_destino_id",
+      "name": "ix_hora_pedido_numero_pedido",
       "columns": [
-        "loja_destino_id"
+        "numero_pedido"
       ],
-      "unique": false
+      "unique": true
     }
   ]
 }

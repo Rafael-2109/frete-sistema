@@ -92,13 +92,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_loja_id",
-      "columns": [
-        "loja_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_venda_data_venda",
       "columns": [
         "data_venda"
@@ -123,6 +116,13 @@
       "name": "ix_hora_venda_nf_saida_numero",
       "columns": [
         "nf_saida_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_loja_id",
+      "columns": [
+        "loja_id"
       ],
       "unique": false
     }
