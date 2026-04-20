@@ -32,8 +32,6 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 
-from app import db
-
 logger = logging.getLogger(__name__)
 
 
@@ -522,35 +520,97 @@ def parse_pedido_xlsx(
     )
 
 
+# Tokens genericos que NAO discriminam loja — removidos antes do match para
+# evitar "empate por ruido" quando o banco tem "MOTOCHEFE BRAGANCA" e o XLSX
+# tem "HORA BRAGANCA". A parte discriminante e o bairro/cidade.
+TOKENS_GENERICOS_LOJA = frozenset({
+    'MOTOCHEFE', 'HORA', 'LOJA', 'FRANQUIA', 'MATRIZ', 'FILIAL',
+    'UNIDADE', 'FILIA',
+})
+
+
+def _remover_tokens_genericos(texto_norm: str) -> str:
+    """Remove tokens genericos ('MOTOCHEFE', 'HORA', 'LOJA', ...) da string normalizada.
+
+    Input deve estar ja normalizado (upper, sem acento, sem pontuacao).
+    """
+    if not texto_norm:
+        return ''
+    palavras = [p for p in texto_norm.split() if p and p not in TOKENS_GENERICOS_LOJA]
+    return ' '.join(palavras)
+
+
 def resolver_loja_por_apelido(apelido_detectado: Optional[str]) -> Tuple[Optional[int], str]:
     """Tenta casar apelido detectado no header do XLSX contra HoraLoja.apelido/nome.
 
-    Match case-insensitive contra apelido, nome_fantasia, razao_social e cidade.
+    Match accent+case+pontuacao-insensitive contra apelido, nome_fantasia,
+    razao_social, nome e cidade. A normalizacao e feita em Python (nao depende
+    da extensao `unaccent` do PostgreSQL), aplicando NFD + remocao de combining
+    marks + colapso de espacos + remocao de tokens genericos nao-discriminantes
+    ('MOTOCHEFE', 'HORA', 'LOJA', 'FRANQUIA', 'MATRIZ', 'FILIAL'). Cobre:
+
+        "BRAGANÇA" vs "Braganca"                   -> match
+        "TATUAPÉ"  vs "Tatuape"                    -> match
+        "SÃO PAULO" vs "Sao Paulo"                 -> match
+        "HORA BRAGANÇA" vs "MOTOCHEFE BRAGANÇA"    -> match (so "BRAGANCA" discrimina)
+        "MOTOCHEFE TATUAPE" vs "Tatuape"           -> match
+
     Retorna (loja_id, mensagem).
     """
     if not apelido_detectado:
         return None, 'Nenhum apelido/cidade identificado no cabeçalho.'
 
-    from app.hora.models import HoraLoja
-    alvo = apelido_detectado.upper().strip()
-
-    # Busca em ordem de prioridade: apelido → nome_fantasia → razão → cidade
-    for campo in (HoraLoja.apelido, HoraLoja.nome_fantasia,
-                  HoraLoja.razao_social, HoraLoja.nome, HoraLoja.cidade):
-        candidatas = (
-            HoraLoja.query
-            .filter(HoraLoja.ativa.is_(True))
-            .filter(db.func.upper(campo).like(f'%{alvo}%'))
-            .all()
+    alvo_norm_bruto = _normalizar_token(apelido_detectado)
+    alvo_norm = _remover_tokens_genericos(alvo_norm_bruto)
+    if len(alvo_norm) < 3:
+        return None, (
+            f'Apelido "{apelido_detectado}" curto demais para auto-match apos '
+            f'remocao de tokens genericos (restou "{alvo_norm}") — selecione '
+            f'a loja manualmente.'
         )
+
+    from app.hora.models import HoraLoja
+
+    # Carrega todas as lojas ativas uma unica vez e compara em Python.
+    # Volume esperado e pequeno (dezenas de lojas), entao o custo e irrelevante.
+    lojas_ativas = HoraLoja.query.filter(HoraLoja.ativa.is_(True)).all()
+
+    # Ordem de prioridade: apelido -> nome_fantasia -> razao_social -> nome -> cidade.
+    # Per-loja, guardamos os valores normalizados em cada campo (ou '').
+    campos_prioridade = ('apelido', 'nome_fantasia', 'razao_social', 'nome', 'cidade')
+
+    def _valor_norm(loja: 'HoraLoja', nome_campo: str) -> str:
+        raw = getattr(loja, nome_campo, None)
+        if not raw:
+            return ''
+        return _remover_tokens_genericos(_normalizar_token(raw))
+
+    def _casa(alvo: str, valor: str) -> bool:
+        """Match bidirecional: alvo contido no valor OU valor contido no alvo."""
+        if not valor:
+            return False
+        return alvo in valor or valor in alvo
+
+    for campo in campos_prioridade:
+        candidatas = [
+            loja for loja in lojas_ativas
+            if _casa(alvo_norm, _valor_norm(loja, campo))
+        ]
         if len(candidatas) == 1:
             loja = candidatas[0]
-            return loja.id, f'Loja sugerida: {loja.rotulo_display} (match em {campo.key})'
-        elif len(candidatas) > 1:
+            return loja.id, f'Loja sugerida: {loja.rotulo_display} (match em {campo})'
+        if len(candidatas) > 1:
             nomes = ', '.join(l.rotulo_display for l in candidatas[:3])
-            return None, f'{len(candidatas)} lojas casam com "{alvo}": {nomes}... — selecione manualmente.'
+            extra = '...' if len(candidatas) > 3 else ''
+            return None, (
+                f'{len(candidatas)} lojas casam com "{apelido_detectado}" '
+                f'(campo {campo}): {nomes}{extra} — selecione manualmente.'
+            )
 
-    return None, f'Nenhuma loja ativa casa com "{alvo}". Cadastre a loja ou selecione manualmente.'
+    return None, (
+        f'Nenhuma loja ativa casa com "{apelido_detectado}" '
+        f'(normalizado: "{alvo_norm}"). Cadastre a loja ou selecione manualmente.'
+    )
 
 
 def cnpj_matriz_presente(cnpjs_candidatos: List[str]) -> bool:
