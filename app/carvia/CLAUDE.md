@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**96 arquivos** | **~55.5K LOC** | **103 templates** | **Atualizado**: 2026-04-15
+**99 arquivos** | **~60.3K LOC** | **103 templates** | **Atualizado**: 2026-04-20
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -31,17 +31,29 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 
 ```
 app/carvia/
-  routes/          # 22 sub-rotas (dashboard, importacao, nf, operacao, subcontrato,
+  routes/          # 28 sub-rotas (dashboard, importacao, nf, operacao, subcontrato,
                    #   fatura, despesa, fluxo_caixa, conciliacao, cte_complementar,
-                   #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial, ...)
-  services/        # 26+ services (parsers, importacao, cotacao, conferencia, linking,
-                   #   carvia_frete, embarque_carvia, dacte_generator, ...)
-                   # + documentos/ssw_emissao_service.py
-                   # + financeiro/{previnculo_service.py, carvia_historico_match_service.py}
-  workers/         # 3 workers RQ com SSL-drop resilience (R15):
-                   #   ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs
-  models/          # Pacote 11 arquivos: documentos, cte_custos, frete, faturas, cotacao,
-                   #   financeiro, config_moto, clientes, admin, tabelas, comissao
+                   #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
+                   #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
+                   #   scanner, simulador, tabela_carvia, importacao_config, api)
+  services/        # 46 services em 6 sub-pacotes:
+                   #   admin/ (admin_service)
+                   #   clientes/ (cliente_service)
+                   #   documentos/ (carvia_frete, conferencia, dacte_generator,
+                   #                embarque_carvia, linking, matching, operacao_cancel,
+                   #                ssw_emissao, aprovacao_frete)
+                   #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
+                   #                sugestao, comissao, conta_corrente, custo_entrega*,
+                   #                fluxo_caixa, gerencial, previnculo, rateio_helper)
+                   #   parsers/ (importacao, cte_xml, danfe_pdf, dacte_pdf, fatura_pdf, nfe_xml)
+                   #   pricing/ (cotacao, cotacao_v2, margem, moto_recognition, tabela, config)
+                   # + cte_complementar_persistencia.py (root)
+  workers/         # 4 workers RQ com SSL-drop resilience (R15):
+                   #   _ssw_helpers, ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs
+  utils/           # tomador.py, upload_policies.py
+  models/          # Pacote 13 modulos: admin, aprovacao, clientes, comissao, config_moto,
+                   #   conta_corrente, cotacao, cte_custos, documentos, faturas, financeiro,
+                   #   frete, tabelas
   forms.py         # 4 forms WTForms
 
 app/templates/carvia/  # 103 templates (dashboard, listagens, detalhes, wizards, modais)

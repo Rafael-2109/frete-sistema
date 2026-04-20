@@ -1,6 +1,6 @@
 # Carteira — Guia de Desenvolvimento
 
-**LOC**: ~17.6K | **Arquivos**: 50 | **22 JS** | **Atualizado**: 13/04/2026
+**LOC**: ~18.1K | **Arquivos**: 50 | **22 JS** | **Atualizado**: 20/04/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -26,7 +26,7 @@ app/carteira/
 ```
 
 **Templates**: 13 HTML em `app/templates/carteira/`
-**JavaScript**: 22 arquivos em `app/templates/carteira/js/`
+**JavaScript**: 22 arquivos em `app/templates/carteira/js/` + 1 em `app/static/carteira/js/` (modal-relatorios)
 **CSS**: `app/static/css/modules/_carteira.css` + `carteira/carteira-simples.css`
 
 ---

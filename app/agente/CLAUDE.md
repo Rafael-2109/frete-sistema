@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~29.8K | **Arquivos**: 58 | **Atualizado**: 15/04/2026
+**LOC**: ~33.3K | **Arquivos**: 67 | **Atualizado**: 20/04/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -14,13 +14,15 @@ app/agente/                          # Root ��� 4 arquivos
 ├── CLAUDE.md                        # Este arquivo (guia dev)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
-├── routes/                          # Flask routes modularizadas — 15 arquivos
+├── routes/                          # Flask routes modularizadas — 17 arquivos
 │   ├── __init__.py                  # agente_bp + imports sub-modulos + re-exports Teams
 │   ├── _constants.py                # Constantes (timeouts, thresholds, upload)
 │   ├── _helpers.py                  # Helpers compartilhados (Teams + cross-module)
 │   ├── chat.py                      # Core SSE: api_chat, streaming, interrupt, user_answer
 │   ├── sessions.py                  # CRUD sessoes: list, messages, delete, rename, summaries
 │   ├── admin_learning.py            # Admin: session messages, generate/save correction
+│   ├── admin_subagents.py           # Admin forense: list/messages + smoketest (SDK 0.1.60 fase 2)
+│   ├── subagents.py                 # API UI-inline: summary/messages lazy-fetch
 │   ├── files.py                     # Upload/download/list/delete + helpers arquivo
 │   ├── health.py                    # api_health com cache
 │   ├── feedback.py                  # api_feedback 4 tipos
@@ -44,20 +46,27 @@ app/agente/                          # Root ��� 4 arquivos
 │   ├── __init__.py
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
-├── sdk/                             # Integracao com Claude Agent SDK — 9 arquivos
+├── sdk/                             # Integracao com Claude Agent SDK — 14 arquivos
 │   ├── __init__.py
+│   ├── _sanitization.py             # Helpers de sanitizacao PII cross-modulo
 │   ├── client.py                    # Client principal (streaming, build_options, parse)
 │   ├── client_pool.py               # Pool de clients reutilizaveis
 │   ├── cost_tracker.py              # Rastreamento de custos por sessao
 │   ├── hooks.py                     # 8 SDK hook closures (build_hooks() factory)
 │   ├── memory_injection.py          # Pipeline multi-tier de injecao de memorias
+│   ├── memory_injection_rules.py    # Regras declarativas de injecao (paths + filtros)
 │   ├── pending_questions.py         # AskUserQuestion (dual event: sync + async)
+│   ├── pricing.py                   # Tabela precos por modelo (input/output/cache_creation/cache_read)
+│   ├── session_archive.py           # Archive tar.gz S3 de sessoes expiradas
 │   ├── session_persistence.py       # Persistencia JSONL de sessoes SDK
-│   └── stream_parser.py             # Dataclasses + classificacao de erros de tool
-├── services/                        # Servicos de inteligencia — 13 arquivos (ver services/CLAUDE.md)
+│   ├── stream_parser.py             # Dataclasses + classificacao de erros de tool
+│   └── subagent_reader.py           # Wrapper list_subagents + get_subagent_messages (SDK 0.1.60)
+├── services/                        # Servicos de inteligencia — 14 arquivos (ver services/CLAUDE.md)
 │   ├── __init__.py
 │   ├── CLAUDE.md                    # Sub-guia com regras R1-R5 dos services
+│   ├── _utils.py                    # Helpers compartilhados (parse_llm_json_response)
 │   ├── friction_analyzer.py         # Analise de friccao de uso
+│   ├── improvement_suggester.py     # Dialogo D8 melhoria (batch + real-time)
 │   ├── insights_service.py          # Gerador de insights pos-sessao
 │   ├── intersession_briefing.py     # Briefing entre sessoes
 │   ├── knowledge_graph_service.py   # Grafo de conhecimento (memorias)
@@ -71,16 +80,20 @@ app/agente/                          # Root ��� 4 arquivos
 ├── templates/agente/                # Templates Jinja2 — 2 arquivos
 │   ├── chat.html                    # Interface de chat web
 │   └── insights.html                # Dashboard de insights
-└── tools/                           # MCP tools (NAO callables) — 9 arquivos
-    ├── __init__.py
-    ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
-    ├── memory_mcp_tool.py           # 11 operacoes de memoria (Enhanced v2.0.0)
-    ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
-    ├── render_logs_tool.py          # Consulta logs Render
-    ├── routes_search_tool.py        # Busca em rotas Flask
-    ├── schema_mcp_tool.py           # Consulta schemas de tabelas
-    ├── session_search_tool.py       # 4 operacoes de busca em sessoes (Enhanced v4.0.0)
-    └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
+├── tools/                           # MCP tools (NAO callables) — 9 arquivos
+│   ├── __init__.py
+│   ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
+│   ├── memory_mcp_tool.py           # 12 operacoes de memoria (Enhanced v2.1.0)
+│   ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
+│   ├── render_logs_tool.py          # Consulta logs Render
+│   ├── routes_search_tool.py        # Busca em rotas Flask
+│   ├── schema_mcp_tool.py           # Consulta schemas de tabelas
+│   ├── session_search_tool.py       # 4 operacoes de busca em sessoes (Enhanced v4.0.0)
+│   └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
+├── utils/                           # Helpers de modulo — 2 arquivos
+│   └── pii_masker.py                # Mascaramento regex CPF/CNPJ/email (SDK 0.1.60 fase 2)
+└── workers/                         # Workers RQ locais — 2 arquivos
+    └── subagent_validator.py        # Haiku anti-alucinacao (SDK 0.1.60 fase 4, queue agent_validation)
 ```
 
 ---
@@ -274,7 +287,7 @@ Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoe
 |---------|--------|
 | `historia.md` (76K) | Apenas referencia historica |
 
-### Services (12 arquivos, 8.0K LOC)
+### Services (14 arquivos, ~8.6K LOC)
 Guia completo de regras, gotchas e interdependencias: **`services/CLAUDE.md`**
 Todos controlados por feature flags em `config/feature_flags.py`.
 
@@ -294,7 +307,7 @@ Todos controlados por feature flags em `config/feature_flags.py`.
 | `log_system_pitfall` | Registra armadilha/gotcha do sistema (max 20, category=structural) |
 | `register_improvement` | Registra sugestao de melhoria real-time para Claude Code (skill_bug, skill_suggestion, etc.) |
 
-**Admin (debug mode)**: TODAS as 11 tools aceitam `target_user_id=N` para acesso cross-user.
+**Admin (debug mode)**: TODAS as 12 tools aceitam `target_user_id=N` para acesso cross-user.
 Validacao: `_resolve_user_id(args)` — requer `get_debug_mode() == True`. Todo acesso logado.
 
 ### MCP Tools de sessao (session_search_tool.py v4.0.0 Enhanced, 4 operacoes)

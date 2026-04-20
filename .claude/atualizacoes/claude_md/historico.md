@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-04-20-1](atualizacao-2026-04-20-1.md) — 9 auditados, 8 modificados. Corrigidos contagens/estruturas em agente (+5 sdk, +utils, +workers), carvia (services em 6 sub-pacotes), financeiro (models.py erro chars->linhas). Datas de todos atualizadas.
+
 - [2026-04-06-1](atualizacao-2026-04-06-1.md) — 9 auditados, 7 modificados (contagens LOC/arquivos). Modulos: raiz, agente, carteira, carvia, odoo, teams.
 
 - [2026-03-28-1](atualizacao-2026-03-28-1.md) — Primeira auditoria. 7/9 CLAUDE.md atualizados (LOC + contagens).
