@@ -278,7 +278,15 @@ def preview_propagacao():
     try:
         dados = request.get_json() or {}
         padrao_historico = dados.get('padrao_historico')
-        afetadas = simular_propagacao(padrao_historico=padrao_historico)
+        cpf_cnpj_padrao = dados.get('cpf_cnpj_padrao')
+        valor_min = dados.get('valor_min')
+        valor_max = dados.get('valor_max')
+        afetadas = simular_propagacao(
+            padrao_historico=padrao_historico,
+            cpf_cnpj_padrao=cpf_cnpj_padrao,
+            valor_min=valor_min,
+            valor_max=valor_max,
+        )
         return jsonify({
             'sucesso': True,
             'transacoes': afetadas,

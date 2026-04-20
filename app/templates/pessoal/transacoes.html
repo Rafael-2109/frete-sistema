@@ -584,6 +584,9 @@ $(function() {
         transacao_id: parseInt($('#modalTransacaoId').val()),
         categoria_id: categoriaId,
         padrao_historico: $('#modalPadrao').val(),
+        cpf_cnpj_padrao: ($('#modalCpfCnpj').val() || '').trim() || null,
+        valor_min: parseValorInput($('#modalValorMin')),
+        valor_max: parseValorInput($('#modalValorMax')),
       }),
       success: function(resp) {
         $('#previewLoading').addClass('d-none');

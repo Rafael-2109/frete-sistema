@@ -420,17 +420,23 @@ def despropagar_regra(regra_id: int) -> int:
     return count
 
 
-def simular_propagacao(padrao_historico: str = None) -> list[dict]:
+def simular_propagacao(padrao_historico: str = None,
+                       cpf_cnpj_padrao: str = None,
+                       valor_min=None,
+                       valor_max=None) -> list[dict]:
     """Simula propagacao — retorna transacoes PENDENTES que seriam afetadas.
 
-    Quando padrao_historico fornecido: faz match substring direto do padrao
-    normalizado contra cada transacao pendente (preview de regra nova/editada).
+    Quando padrao_historico ou cpf_cnpj_padrao fornecido: replica a logica de
+    `propagar_regra_para_pendentes` (match substring OU CPF/CNPJ, filtro por
+    range de valor, exclusao Layer 0) para preview fiel da regra nova/editada.
 
-    Quando padrao_historico NAO fornecido: roda pipeline completo de
-    categorizacao em PENDENTES (comportamento original).
+    Quando nenhum fornecido: roda pipeline completo de categorizacao em
+    PENDENTES (comportamento original).
 
     Returns: lista de dicts com {id, data, historico, valor, tipo}
     """
+    from app.pessoal.services.categorizacao_service import _valor_no_range
+
     pendentes = PessoalTransacao.query.filter_by(
         status='PENDENTE',
         excluir_relatorio=False,
@@ -438,16 +444,41 @@ def simular_propagacao(padrao_historico: str = None) -> list[dict]:
 
     afetadas = []
 
-    if padrao_historico:
-        # Simular match do novo padrao especifico (substring)
-        padrao_norm = _normalizar(padrao_historico)
-        if not padrao_norm:
+    # Preview de regra nova/editada: ha pelo menos um criterio de match
+    tem_match_criterio = bool(padrao_historico) or bool(cpf_cnpj_padrao)
+
+    if tem_match_criterio:
+        padrao_norm = _normalizar(padrao_historico or '')
+        cpf_cnpj_norm = (cpf_cnpj_padrao or '').strip() or None
+
+        if not padrao_norm and not cpf_cnpj_norm:
             return []
+
+        # Pre-load exclusoes uma unica vez (Layer 0 do pipeline)
+        exclusoes = PessoalExclusaoEmpresa.query.filter_by(ativo=True).all()
+        exclusoes_norm = [_normalizar(e.padrao) for e in exclusoes if e.padrao]
+
         for transacao in pendentes:
             historico = _normalizar(
                 transacao.historico_completo or transacao.historico or ''
             )
-            if padrao_norm in historico:
+
+            # Layer 0: pular se excluida
+            if any(exc in historico for exc in exclusoes_norm if exc):
+                continue
+
+            # F4: filtro de valor (range aberto nao restringe)
+            if not _valor_no_range(transacao.valor, valor_min, valor_max):
+                continue
+
+            # Match por CPF/CNPJ (F1) OU substring de padrao
+            match = False
+            if cpf_cnpj_norm and transacao.cpf_cnpj_parte == cpf_cnpj_norm:
+                match = True
+            elif padrao_norm and padrao_norm in historico:
+                match = True
+
+            if match:
                 afetadas.append({
                     'id': transacao.id,
                     'data': transacao.data.strftime('%d/%m/%Y') if transacao.data else '-',
