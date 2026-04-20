@@ -135,11 +135,43 @@ def salvar_regra():
     categoria_id = dados.get('categoria_id')
     categorias_restritas = dados.get('categorias_restritas_ids', [])
 
-    if not padrao:
-        return jsonify({'sucesso': False, 'mensagem': 'Padrao obrigatorio.'}), 400
+    # F1: CPF/CNPJ (opcional) — normaliza para so digitos
+    cpf_cnpj_raw = (dados.get('cpf_cnpj_padrao') or '').strip()
+    cpf_cnpj_padrao = ''.join(ch for ch in cpf_cnpj_raw if ch.isdigit()) or None
+    if cpf_cnpj_padrao and len(cpf_cnpj_padrao) not in (11, 14):
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'CPF/CNPJ deve ter 11 ou 14 digitos.',
+        }), 400
+
+    # F4: Range de valor (opcional)
+    def _parse_valor(raw):
+        if raw is None or raw == '' or raw == 0:
+            return None
+        try:
+            v = float(raw)
+            return v if v > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    valor_min = _parse_valor(dados.get('valor_min'))
+    valor_max = _parse_valor(dados.get('valor_max'))
+    if valor_min is not None and valor_max is not None and valor_min > valor_max:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'valor_min nao pode ser maior que valor_max.',
+        }), 400
+
+    # Precisa ter padrao textual OU CPF/CNPJ
+    if not padrao and not cpf_cnpj_padrao:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Informe padrao textual ou CPF/CNPJ.',
+        }), 400
 
     # Normalizar padrao antes de salvar (consistencia com matching)
-    padrao = normalizar_padrao(padrao)
+    if padrao:
+        padrao = normalizar_padrao(padrao)
 
     try:
         afetadas = 0
@@ -154,28 +186,36 @@ def salvar_regra():
             tipo_anterior = regra.tipo_regra
             padrao_anterior = regra.padrao_historico
             categoria_anterior = regra.categoria_id
+            cpf_anterior = regra.cpf_cnpj_padrao
+            vmin_anterior = regra.valor_min
+            vmax_anterior = regra.valor_max
 
             # Atualizar campos
             regra.padrao_historico = padrao
             regra.tipo_regra = tipo_regra
             regra.categoria_id = categoria_id if tipo_regra == 'PADRAO' else None
             regra.set_categorias_restritas(categorias_restritas if tipo_regra == 'RELATIVO' else [])
+            regra.cpf_cnpj_padrao = cpf_cnpj_padrao
+            regra.valor_min = valor_min
+            regra.valor_max = valor_max
             regra.atualizado_em = agora_utc_naive()
 
             # Detectar se precisa repropagar
             mudou_padrao = (padrao != padrao_anterior)
             mudou_categoria = (categoria_id != categoria_anterior)
             mudou_tipo = (tipo_anterior != tipo_regra)
+            mudou_cpf = (cpf_cnpj_padrao != cpf_anterior)
+            mudou_valor = (valor_min != (float(vmin_anterior) if vmin_anterior is not None else None)
+                           or valor_max != (float(vmax_anterior) if vmax_anterior is not None else None))
 
             needs_repropagation = (
                 (tipo_anterior == 'PADRAO' and mudou_tipo) or  # PADRAO→RELATIVO
-                (tipo_regra == 'PADRAO' and (mudou_padrao or mudou_categoria))  # Padrao/Categoria editados
+                (tipo_regra == 'PADRAO' and (mudou_padrao or mudou_categoria or mudou_cpf or mudou_valor))
             )
 
             if needs_repropagation:
                 afetadas = despropagar_regra(regra.id)
                 if tipo_regra == 'PADRAO':
-                    # Usa propagacao targetada (2 queries) vs full pipeline (3*N queries)
                     propagados_info = propagar_regra_para_pendentes(regra)
         else:
             # Nova regra
@@ -183,6 +223,9 @@ def salvar_regra():
                 padrao_historico=padrao,
                 tipo_regra=tipo_regra,
                 categoria_id=categoria_id if tipo_regra == 'PADRAO' else None,
+                cpf_cnpj_padrao=cpf_cnpj_padrao,
+                valor_min=valor_min,
+                valor_max=valor_max,
                 origem='manual',
             )
             if tipo_regra == 'RELATIVO':

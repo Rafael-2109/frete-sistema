@@ -69,6 +69,43 @@ def parse_data_brasileira(texto: str, ano_referencia: int = None) -> Optional[da
     return None
 
 
+def extrair_cpf_cnpj(texto: str) -> Optional[str]:
+    """Extrai CPF (11 digitos) ou CNPJ (14 digitos) de um texto.
+
+    Aceita formatos com ou sem mascara:
+    - CPF: "123.456.789-00", "12345678900"
+    - CNPJ: "12.345.678/0001-99", "12345678000199"
+
+    Retorna so digitos (11 ou 14 chars) ou None. CNPJ tem prioridade sobre CPF
+    quando ambos aparecerem no mesmo texto (mais especifico).
+
+    Nao valida digitos verificadores — so extrai o formato.
+    """
+    if not texto:
+        return None
+
+    # CNPJ primeiro (mais especifico, 14 digitos)
+    match = re.search(
+        r'\b(\d{2})\.?(\d{3})\.?(\d{3})/?(\d{4})-?(\d{2})\b',
+        texto,
+    )
+    if match:
+        return ''.join(match.groups())
+
+    # CPF (11 digitos)
+    match = re.search(
+        r'\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b',
+        texto,
+    )
+    if match:
+        digitos = ''.join(match.groups())
+        # Evitar falsos positivos: sequencia de 11 digitos iguais (ex: 00000000000)
+        if len(set(digitos)) > 1:
+            return digitos
+
+    return None
+
+
 def gerar_hash_transacao(conta_id: int, data: date, historico: str, valor: Decimal, tipo: str, documento: str = '', sequencia: int = 0) -> str:
     """Gera hash SHA256 para deduplicacao.
 

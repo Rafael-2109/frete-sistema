@@ -32,7 +32,10 @@ logger = logging.getLogger(__name__)
 def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
                                membro_id: int = None,
                                tipo_regra: str = 'PADRAO',
-                               padrao_historico: str = None) -> Optional[PessoalRegraCategorizacao]:
+                               padrao_historico: str = None,
+                               cpf_cnpj_padrao: str = None,
+                               valor_min=None,
+                               valor_max=None) -> Optional[PessoalRegraCategorizacao]:
     """Aprende uma nova regra a partir de categorizacao manual.
 
     Args:
@@ -41,6 +44,9 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
                     criada com categoria_id=None e categoria nas restritas.
         padrao_historico: padrao editado pelo usuario (ex: sem datas).
                          Se None, auto-gera do historico da transacao.
+        cpf_cnpj_padrao (F1): CPF/CNPJ como chave alternativa de match.
+                              Se None e a transacao tem cpf_cnpj_parte, usa esse.
+        valor_min / valor_max (F4): range opcional de valor para a regra.
 
     Returns: regra criada ou atualizada, ou None se nao aplicavel.
     """
@@ -52,6 +58,11 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
     if not categoria:
         return None
 
+    # F1: normalizar CPF/CNPJ enviado, fallback para o extraido da transacao
+    cpf_cnpj_norm = None
+    if cpf_cnpj_padrao:
+        cpf_cnpj_norm = ''.join(ch for ch in cpf_cnpj_padrao if ch.isdigit()) or None
+
     # 1. Normalizar historico — usa padrao editado se fornecido
     #    Senao, usa historico_completo (historico + descricao normalizado)
     #    para capturar contexto completo (ex: "TRANSF PIX | JOAO SILVA")
@@ -61,8 +72,11 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
         historico_norm = _normalizar(
             transacao.historico_completo or transacao.historico or ''
         )
-    if not historico_norm or len(historico_norm) < 3:
+    # Regra precisa de pelo menos um criterio: padrao textual OU CPF/CNPJ
+    if (not historico_norm or len(historico_norm) < 3) and not cpf_cnpj_norm:
         return None
+    if not historico_norm:
+        historico_norm = cpf_cnpj_norm  # fallback — CPF/CNPJ tambem e texto
 
     # 2. Buscar regra existente (fuzzy >= 90)
     regras = PessoalRegraCategorizacao.query.filter_by(ativo=True).all()
@@ -89,6 +103,14 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
             if historico_norm != padrao_existente:
                 melhor_regra.padrao_historico = historico_norm
 
+        # F1/F4: atualizar campos novos se explicitos (None mantem valor anterior)
+        if cpf_cnpj_norm is not None:
+            melhor_regra.cpf_cnpj_padrao = cpf_cnpj_norm
+        if valor_min is not None:
+            melhor_regra.valor_min = valor_min
+        if valor_max is not None:
+            melhor_regra.valor_max = valor_max
+
         # 5. Verificar se mesmo padrao aponta para multiplas categorias
         if melhor_regra.categoria_id and melhor_regra.categoria_id != categoria_id:
             # Potencial RELATIVO — contar categorias distintas
@@ -113,6 +135,9 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
             tipo_regra='RELATIVO',
             categoria_id=None,
             membro_id=membro_id,
+            cpf_cnpj_padrao=cpf_cnpj_norm,
+            valor_min=valor_min,
+            valor_max=valor_max,
             vezes_usado=1,
             confianca=80,
             origem='aprendido',
@@ -124,6 +149,9 @@ def aprender_de_categorizacao(transacao_id: int, categoria_id: int,
             tipo_regra='PADRAO',
             categoria_id=categoria_id,
             membro_id=membro_id,
+            cpf_cnpj_padrao=cpf_cnpj_norm,
+            valor_min=valor_min,
+            valor_max=valor_max,
             vezes_usado=1,
             confianca=80,
             origem='aprendido',
@@ -194,24 +222,33 @@ def propagar_para_pendentes() -> dict:
 
 def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
                                    padrao_override: str = None) -> dict:
-    """Propaga UMA regra PADRAO para transacoes PENDENTES (via substring).
+    """Propaga UMA regra PADRAO para transacoes PENDENTES.
+
+    Match usa tres criterios (qualquer um serve):
+    - F1: cpf_cnpj_padrao == transacao.cpf_cnpj_parte
+    - Substring: padrao_norm in historico normalizado
+    - F4: range valor_min/valor_max e aplicado como filtro em ambos
 
     Muito mais rapido que propagar_para_pendentes() porque:
     - 2 queries (pendentes + exclusoes) vs 3*N do pipeline completo
-    - Match substring em memoria pura, sem queries por transacao
+    - Match em memoria pura, sem queries por transacao
 
     Args:
         regra: regra PADRAO ativa a propagar.
         padrao_override: padrao editado pelo usuario (usa no lugar de regra.padrao_historico).
-                         Garante consistencia entre Preview e Confirmar.
 
     Returns: {'propagados': N, 'total_pendentes': M}
     """
+    from app.pessoal.services.categorizacao_service import _valor_no_range
+
     if not regra or regra.tipo_regra != 'PADRAO' or not regra.ativo:
         return {'propagados': 0, 'total_pendentes': 0}
 
     padrao_norm = _normalizar(padrao_override or regra.padrao_historico or '')
-    if not padrao_norm:
+    cpf_cnpj_regra = regra.cpf_cnpj_padrao
+
+    # Regra precisa ter pelo menos um criterio de match
+    if not padrao_norm and not cpf_cnpj_regra:
         return {'propagados': 0, 'total_pendentes': 0}
 
     pendentes = PessoalTransacao.query.filter_by(
@@ -235,8 +272,18 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
         if any(exc in historico for exc in exclusoes_norm if exc):
             continue
 
-        # Layer 1: substring match
-        if padrao_norm in historico:
+        # F4: filtro de valor
+        if not _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max):
+            continue
+
+        # Match por CPF/CNPJ (F1) ou substring
+        match = False
+        if cpf_cnpj_regra and transacao.cpf_cnpj_parte == cpf_cnpj_regra:
+            match = True
+        elif padrao_norm and padrao_norm in historico:
+            match = True
+
+        if match:
             transacao.categoria_id = regra.categoria_id
             transacao.regra_id = regra.id
             transacao.categorizacao_auto = True
@@ -252,6 +299,51 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
         regra.id, regra.padrao_historico, propagados, total_pendentes,
     )
     return {'propagados': propagados, 'total_pendentes': total_pendentes}
+
+
+def propagar_parcelas(transacao: PessoalTransacao) -> int:
+    """F2: Aplica categoria da transacao em todas as outras parcelas ja importadas.
+
+    Usa `identificador_parcela` para achar compras parceladas (mesma compra,
+    parcelas 1/12, 2/12... no mesmo cartao/conta).
+
+    Returns: quantidade de parcelas atualizadas (nao inclui a transacao original).
+    """
+    if (not transacao.identificador_parcela or not transacao.categoria_id
+            or not transacao.conta_id):
+        return 0
+
+    irmas = PessoalTransacao.query.filter(
+        PessoalTransacao.identificador_parcela == transacao.identificador_parcela,
+        PessoalTransacao.conta_id == transacao.conta_id,
+        PessoalTransacao.id != transacao.id,
+        PessoalTransacao.excluir_relatorio.is_(False),
+    ).all()
+
+    count = 0
+    for irma in irmas:
+        # Nao sobrescrever categorizacao manual divergente
+        if (irma.categoria_id and not irma.categorizacao_auto
+                and irma.categoria_id != transacao.categoria_id):
+            continue
+        irma.categoria_id = transacao.categoria_id
+        irma.regra_id = transacao.regra_id
+        irma.categorizacao_auto = True
+        irma.categorizacao_confianca = 100.0
+        irma.status = 'CATEGORIZADO'
+        irma.categorizado_em = agora_utc_naive()
+        irma.categorizado_por = 'sistema (parcela)'
+        if transacao.membro_id and not irma.membro_id:
+            irma.membro_id = transacao.membro_id
+            irma.membro_auto = True
+        count += 1
+
+    if count > 0:
+        logger.info(
+            'Propagacao parcela id_parcela="%s": %d parcelas atualizadas',
+            transacao.identificador_parcela, count,
+        )
+    return count
 
 
 def contar_matches_por_regra(regras: list[PessoalRegraCategorizacao]) -> dict[int, int]:

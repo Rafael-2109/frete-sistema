@@ -125,6 +125,11 @@ class PessoalRegraCategorizacao(db.Model):
     categoria_id = db.Column(db.Integer, db.ForeignKey('pessoal_categorias.id'))
     membro_id = db.Column(db.Integer, db.ForeignKey('pessoal_membros.id'))
     categorias_restritas_ids = db.Column(db.Text)  # JSON array de IDs
+    # F1: CPF/CNPJ como chave alternativa de match (so digitos, 11 ou 14 chars)
+    cpf_cnpj_padrao = db.Column(db.String(20))
+    # F4: Condicoes por valor (NULL = sem restricao)
+    valor_min = db.Column(db.Numeric(15, 2))
+    valor_max = db.Column(db.Numeric(15, 2))
     vezes_usado = db.Column(db.Integer, default=0)
     confianca = db.Column(db.Numeric(5, 2), default=100)
     origem = db.Column(db.String(30), default='semente')  # semente | manual | aprendido
@@ -160,6 +165,9 @@ class PessoalRegraCategorizacao(db.Model):
             'categoria_id': self.categoria_id,
             'membro_id': self.membro_id,
             'categorias_restritas_ids': self.get_categorias_restritas(),
+            'cpf_cnpj_padrao': self.cpf_cnpj_padrao,
+            'valor_min': float(self.valor_min) if self.valor_min is not None else None,
+            'valor_max': float(self.valor_max) if self.valor_max is not None else None,
             'vezes_usado': self.vezes_usado,
             'confianca': float(self.confianca) if self.confianca else 100,
             'origem': self.origem,
@@ -280,6 +288,9 @@ class PessoalTransacao(db.Model):
     observacao = db.Column(db.Text)
     status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE | CATEGORIZADO | REVISADO
 
+    # F1: CPF/CNPJ extraido do historico/descricao (so digitos, 11 ou 14 chars)
+    cpf_cnpj_parte = db.Column(db.String(20))
+
     # Deduplicacao
     hash_transacao = db.Column(db.String(64), nullable=False, unique=True)
 
@@ -296,6 +307,11 @@ class PessoalTransacao(db.Model):
         Index('idx_pessoal_transacoes_membro', 'membro_id'),
         Index('idx_pessoal_transacoes_status', 'status'),
         Index('idx_pessoal_transacoes_excluir', 'excluir_relatorio'),
+        Index(
+            'idx_pessoal_transacoes_cpf_cnpj',
+            'cpf_cnpj_parte',
+            postgresql_where=db.text('cpf_cnpj_parte IS NOT NULL'),
+        ),
     )
 
     def __repr__(self):
@@ -335,6 +351,7 @@ class PessoalTransacao(db.Model):
             'eh_transferencia_propria': self.eh_transferencia_propria,
             'observacao': self.observacao,
             'status': self.status,
+            'cpf_cnpj_parte': self.cpf_cnpj_parte,
         }
 
 

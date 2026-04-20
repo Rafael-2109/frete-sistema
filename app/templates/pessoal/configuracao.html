@@ -128,8 +128,19 @@
                     data-regra-padrao="{{ regra.padrao_historico }}"
                     data-regra-tipo="{{ regra.tipo_regra }}"
                     data-regra-categoria="{{ regra.categoria_id or '' }}"
-                    data-regra-restritas="{{ regra.get_categorias_restritas()|tojson }}">
-                  <td class="small fw-bold" data-val="{{ regra.padrao_historico }}">{{ regra.padrao_historico }}</td>
+                    data-regra-restritas="{{ regra.get_categorias_restritas()|tojson }}"
+                    data-regra-cpfcnpj="{{ regra.cpf_cnpj_padrao or '' }}"
+                    data-regra-vmin="{{ regra.valor_min if regra.valor_min is not none else '' }}"
+                    data-regra-vmax="{{ regra.valor_max if regra.valor_max is not none else '' }}">
+                  <td class="small fw-bold" data-val="{{ regra.padrao_historico }}">
+                    {{ regra.padrao_historico }}
+                    {% if regra.cpf_cnpj_padrao %}
+                    <i class="fas fa-id-card text-info ms-1" title="CPF/CNPJ: {{ regra.cpf_cnpj_padrao }}"></i>
+                    {% endif %}
+                    {% if regra.valor_min is not none or regra.valor_max is not none %}
+                    <i class="fas fa-dollar-sign text-warning ms-1" title="Restrito por valor ({{ regra.valor_min or '∞' }} — {{ regra.valor_max or '∞' }})"></i>
+                    {% endif %}
+                  </td>
                   <td data-val="{{ regra.tipo_regra }}">
                     {% if regra.tipo_regra == 'PADRAO' %}
                     <span class="badge bg-primary">Padrao</span>
@@ -333,6 +344,30 @@
             {% endfor %}
           </select>
           <small class="text-muted">Segure Ctrl para selecionar multiplas</small>
+        </div>
+
+        <hr>
+        <p class="text-muted small mb-2"><i class="fas fa-filter"></i> Criterios adicionais (opcionais)</p>
+
+        <div class="mb-3">
+          <label class="form-label">
+            CPF/CNPJ
+            <i class="fas fa-info-circle text-muted" title="Match alternativo mais estavel que nome. Aceita com ou sem mascara. 11 ou 14 digitos."></i>
+          </label>
+          <input type="text" id="regraCpfCnpj" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0000-00">
+          <small class="text-muted">Se preenchido, match por CPF/CNPJ tem prioridade sobre padrao textual.</small>
+        </div>
+
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">Valor minimo (R$)</label>
+            <input type="number" step="0.01" min="0" id="regraValorMin" class="form-control" placeholder="ex: 2000.00">
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Valor maximo (R$)</label>
+            <input type="number" step="0.01" min="0" id="regraValorMax" class="form-control" placeholder="ex: 5000.00">
+          </div>
+          <small class="text-muted ps-2">Restringe a aplicacao da regra a transacoes dentro do range. Deixe vazio para sem restricao.</small>
         </div>
       </div>
       <div class="modal-footer">
@@ -685,6 +720,9 @@ $(function() {
     $('#regraTipo').val('PADRAO').trigger('change');
     $('#regraCategoria').val('');
     $('#regraRestritas').val([]);
+    $('#regraCpfCnpj').val('');
+    $('#regraValorMin').val('');
+    $('#regraValorMax').val('');
     $('#modalRegraTitulo').text('Nova Regra');
   });
 
@@ -703,6 +741,9 @@ $(function() {
     } catch(e) {
       $('#regraRestritas').val([]);
     }
+    $('#regraCpfCnpj').val(tr.data('regra-cpfcnpj') || '');
+    $('#regraValorMin').val(tr.data('regra-vmin') || '');
+    $('#regraValorMax').val(tr.data('regra-vmax') || '');
     $('#modalRegraTitulo').text('Editar Regra');
     new bootstrap.Modal('#modalRegra').show();
   });
@@ -710,6 +751,9 @@ $(function() {
   // Salvar regra (criar ou editar)
   $('#btnSalvarRegra').on('click', function() {
     const tipo = $('#regraTipo').val();
+    const cpfCnpjRaw = ($('#regraCpfCnpj').val() || '').trim();
+    const cpfCnpjDigits = cpfCnpjRaw.replace(/\D/g, '');
+
     const data = {
       padrao_historico: $('#regraPadrao').val().trim(),
       tipo_regra: tipo,
@@ -717,6 +761,9 @@ $(function() {
       categorias_restritas_ids: tipo === 'RELATIVO'
         ? ($('#regraRestritas').val() || []).map(Number)
         : [],
+      cpf_cnpj_padrao: cpfCnpjDigits || null,
+      valor_min: parseFloat($('#regraValorMin').val()) || null,
+      valor_max: parseFloat($('#regraValorMax').val()) || null,
     };
 
     // Incluir ID para edicao
@@ -725,8 +772,18 @@ $(function() {
       data.id = parseInt(regraId);
     }
 
-    if (!data.padrao_historico) {
-      toastr.warning('Informe o padrao.');
+    if (!data.padrao_historico && !data.cpf_cnpj_padrao) {
+      toastr.warning('Informe o padrao textual ou um CPF/CNPJ.');
+      return;
+    }
+
+    if (cpfCnpjDigits && cpfCnpjDigits.length !== 11 && cpfCnpjDigits.length !== 14) {
+      toastr.warning('CPF/CNPJ deve ter 11 ou 14 digitos.');
+      return;
+    }
+
+    if (data.valor_min !== null && data.valor_max !== null && data.valor_min > data.valor_max) {
+      toastr.warning('Valor minimo nao pode ser maior que valor maximo.');
       return;
     }
 

@@ -1,10 +1,12 @@
 """
 Motor de categorizacao automatica para transacoes pessoais.
 
-Pipeline de 5 camadas executado na importacao:
+Pipeline executado na importacao:
 - Layer 0: Exclusao empresarial (La Famiglia, etc.)
-- Layer 1: Match exato PADRAO (substring case-insensitive)
-- Layer 2: Match fuzzy PADRAO (rapidfuzz token_set_ratio >= 85)
+- Layer 0.5 (F2): Parcela — herda categoria de outra parcela ja categorizada
+- Layer 1 (F1): Match por CPF/CNPJ (quando transacao e regra tem cpf_cnpj)
+- Layer 1 (F4): Match exato PADRAO (substring, respeita valor_min/valor_max)
+- Layer 2 (F4): Match fuzzy PADRAO (rapidfuzz >= 85, respeita valor_min/valor_max)
 - Layer 3: Match RELATIVO (identifica regra, NAO aplica categoria)
 - Layer 4: Heuristicas de contexto (pagamento cartao, investimento, etc.)
 - Layer 5: Nao resolvido -> PENDENTE
@@ -15,6 +17,7 @@ Atribuicao de membro (separada):
 3. Sem info: NULL, requer manual
 """
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Optional
 from rapidfuzz import fuzz
 from unidecode import unidecode
@@ -45,6 +48,37 @@ class ResultadoCategorizacao:
     sugestao_categorias: Optional[list] = None  # For RELATIVO rules
 
 
+def _valor_no_range(valor, valor_min, valor_max) -> bool:
+    """F4: Verifica se valor da transacao esta no range da regra.
+
+    Range aberto (NULL em min ou max) nao restringe aquele lado.
+    Retorna True se regra nao tem nenhuma restricao de valor.
+    """
+    if valor_min is None and valor_max is None:
+        return True
+    if valor is None:
+        return False
+    v = Decimal(str(valor))
+    if valor_min is not None and v < Decimal(str(valor_min)):
+        return False
+    if valor_max is not None and v > Decimal(str(valor_max)):
+        return False
+    return True
+
+
+def _aplicar_regra(resultado: ResultadoCategorizacao,
+                    regra: PessoalRegraCategorizacao,
+                    confianca: float) -> ResultadoCategorizacao:
+    """Popula resultado com os dados de uma regra vencedora e incrementa vezes_usado."""
+    resultado.categoria_id = regra.categoria_id
+    resultado.regra_id = regra.id
+    resultado.categorizacao_auto = True
+    resultado.categorizacao_confianca = confianca
+    resultado.status = 'CATEGORIZADO'
+    regra.vezes_usado = (regra.vezes_usado or 0) + 1
+    return resultado
+
+
 def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao:
     """Executa pipeline completo de categorizacao."""
     resultado = ResultadoCategorizacao()
@@ -58,9 +92,29 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
             resultado.status = 'CATEGORIZADO'
             return resultado
 
-    # Layer 1: Match exato PADRAO (substring)
-    # Ordenar por comprimento DESC: padroes mais longos = mais especificos = testados primeiro
-    # Ex: "IFD DROGARIA" (14 chars) antes de "IFD" (3 chars)
+    # Layer 0.5 (F2): Parcela — herdar categoria de outra parcela da mesma compra.
+    # Se esta transacao tem identificador_parcela, procura OUTRA transacao na mesma
+    # conta com mesmo identificador ja CATEGORIZADA e copia categoria/membro.
+    if transacao.identificador_parcela:
+        irma = PessoalTransacao.query.filter(
+            PessoalTransacao.identificador_parcela == transacao.identificador_parcela,
+            PessoalTransacao.conta_id == transacao.conta_id,
+            PessoalTransacao.id != transacao.id,
+            PessoalTransacao.categoria_id.isnot(None),
+            PessoalTransacao.status == 'CATEGORIZADO',
+            PessoalTransacao.excluir_relatorio.is_(False),
+        ).order_by(PessoalTransacao.data.asc()).first()
+        if irma and irma.categoria_id:
+            resultado.categoria_id = irma.categoria_id
+            resultado.regra_id = irma.regra_id
+            resultado.membro_id = irma.membro_id
+            resultado.membro_auto = True if irma.membro_id else False
+            resultado.categorizacao_auto = True
+            resultado.categorizacao_confianca = 100.0
+            resultado.status = 'CATEGORIZADO'
+            return resultado
+
+    # Carregar regras PADRAO ativas ordenadas (compartilhado por F1, Layer 1, Layer 2)
     regras_padrao = PessoalRegraCategorizacao.query.filter_by(
         tipo_regra='PADRAO', ativo=True
     ).order_by(
@@ -69,17 +123,22 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
         PessoalRegraCategorizacao.vezes_usado.desc(),
     ).all()
 
+    # Layer 1 (F1): Match por CPF/CNPJ — mais estavel que nome
+    if transacao.cpf_cnpj_parte:
+        for regra in regras_padrao:
+            if (regra.cpf_cnpj_padrao
+                    and regra.cpf_cnpj_padrao == transacao.cpf_cnpj_parte
+                    and _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max)):
+                return _aplicar_regra(resultado, regra, 100.0)
+
+    # Layer 1: Match exato PADRAO (substring)
+    # Ordenar por comprimento DESC: padroes mais longos = mais especificos = testados primeiro
+    # Ex: "IFD DROGARIA" (14 chars) antes de "IFD" (3 chars)
     for regra in regras_padrao:
         padrao_norm = _normalizar(regra.padrao_historico)
-        if padrao_norm and padrao_norm in historico:
-            resultado.categoria_id = regra.categoria_id
-            resultado.regra_id = regra.id
-            resultado.categorizacao_auto = True
-            resultado.categorizacao_confianca = 100.0
-            resultado.status = 'CATEGORIZADO'
-            # Incrementar uso
-            regra.vezes_usado = (regra.vezes_usado or 0) + 1
-            return resultado
+        if (padrao_norm and padrao_norm in historico
+                and _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max)):
+            return _aplicar_regra(resultado, regra, 100.0)
 
     # Layer 2: Match fuzzy PADRAO (rapidfuzz >= 85)
     melhor_score = 0
@@ -88,19 +147,15 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
         padrao_norm = _normalizar(regra.padrao_historico)
         if not padrao_norm:
             continue
+        if not _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max):
+            continue
         score = fuzz.token_set_ratio(padrao_norm, historico)
         if score >= 85 and score > melhor_score:
             melhor_score = score
             melhor_regra = regra
 
     if melhor_regra:
-        resultado.categoria_id = melhor_regra.categoria_id
-        resultado.regra_id = melhor_regra.id
-        resultado.categorizacao_auto = True
-        resultado.categorizacao_confianca = float(melhor_score)
-        resultado.status = 'CATEGORIZADO'
-        melhor_regra.vezes_usado = (melhor_regra.vezes_usado or 0) + 1
-        return resultado
+        return _aplicar_regra(resultado, melhor_regra, float(melhor_score))
 
     # Layer 3: Match RELATIVO (sugere, nao aplica)
     regras_relativo = PessoalRegraCategorizacao.query.filter_by(

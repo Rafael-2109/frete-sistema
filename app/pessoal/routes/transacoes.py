@@ -10,7 +10,7 @@ from app.pessoal.models import (
 )
 from app.pessoal.services.aprendizado_service import (
     aprender_de_categorizacao, propagar_para_pendentes, despropagar_regra,
-    simular_propagacao, propagar_regra_para_pendentes,
+    simular_propagacao, propagar_regra_para_pendentes, propagar_parcelas,
 )
 from app.utils.timezone import agora_utc_naive
 
@@ -182,11 +182,32 @@ def categorizar():
     tipo_regra = dados.get('tipo_regra', 'PADRAO')  # PADRAO | RELATIVO
     padrao_historico = dados.get('padrao_historico')  # padrao editado pelo usuario
 
+    # F1 / F4 (opcionais) vindos do modal de categorizacao
+    cpf_cnpj_padrao = dados.get('cpf_cnpj_padrao')
+
+    def _parse_valor(raw):
+        if raw is None or raw == '' or raw == 0:
+            return None
+        try:
+            v = float(raw)
+            return v if v > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    valor_min = _parse_valor(dados.get('valor_min'))
+    valor_max = _parse_valor(dados.get('valor_max'))
+
     if not transacao_id or not categoria_id:
         return jsonify({'sucesso': False, 'mensagem': 'transacao_id e categoria_id obrigatorios.'}), 400
 
     if tipo_regra not in ('PADRAO', 'RELATIVO'):
         return jsonify({'sucesso': False, 'mensagem': 'tipo_regra deve ser PADRAO ou RELATIVO.'}), 400
+
+    if valor_min is not None and valor_max is not None and valor_min > valor_max:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'valor_min nao pode ser maior que valor_max.',
+        }), 400
 
     transacao = db.session.get(PessoalTransacao, transacao_id)
     if not transacao:
@@ -209,9 +230,14 @@ def categorizar():
             regra = aprender_de_categorizacao(
                 transacao_id, categoria_id, membro_id,
                 tipo_regra=tipo_regra, padrao_historico=padrao_historico,
+                cpf_cnpj_padrao=cpf_cnpj_padrao,
+                valor_min=valor_min, valor_max=valor_max,
             )
             if regra:
                 transacao.regra_id = regra.id
+
+        # F2: propagar categoria para outras parcelas da mesma compra
+        parcelas_propagadas = propagar_parcelas(transacao)
 
         # Propagar para transacoes PENDENTES similares
         # Regras RELATIVO nao propagam (usuario deve escolher)
@@ -231,6 +257,7 @@ def categorizar():
             'transacao': transacao.to_dict(),
             'regra_criada': regra.to_dict() if regra else None,
             'propagados': propagados_info['propagados'],
+            'parcelas_propagadas': parcelas_propagadas,
         })
 
     except Exception as e:
@@ -331,6 +358,7 @@ def categorizar_lote():
 
     try:
         atualizados = 0
+        parcelas_propagadas = 0
         for tid in ids:
             transacao = db.session.get(PessoalTransacao, tid)
             if transacao:
@@ -345,6 +373,8 @@ def categorizar_lote():
                 # Aprender regra para a primeira do lote
                 if atualizados == 0:
                     aprender_de_categorizacao(tid, categoria_id, membro_id)
+                # F2: propagar para outras parcelas da mesma compra
+                parcelas_propagadas += propagar_parcelas(transacao)
                 atualizados += 1
 
         db.session.commit()
@@ -353,6 +383,7 @@ def categorizar_lote():
             'sucesso': True,
             'mensagem': f'{atualizados} transacoes categorizadas.',
             'atualizados': atualizados,
+            'parcelas_propagadas': parcelas_propagadas,
         })
 
     except Exception as e:

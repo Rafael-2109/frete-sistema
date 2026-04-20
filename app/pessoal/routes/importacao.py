@@ -8,6 +8,7 @@ from app.pessoal.models import PessoalConta, PessoalImportacao, PessoalTransacao
 from app.pessoal.forms import ImportarCSVForm
 from app.pessoal.services.parsers.base_parser import (
     gerar_hash_transacao, detectar_tipo_csv, resolver_conta, normalizar_historico,
+    extrair_cpf_cnpj,
 )
 from app.pessoal.services.parsers.bradesco_cc_parser import BradescoExtratoCC
 from app.pessoal.services.parsers.bradesco_cartao_parser import BradescoFaturaCartao
@@ -254,6 +255,12 @@ def _importar_transacoes(nome_arquivo: str, tipo_arquivo: str, conta, transacoes
             duplicadas += 1
             continue
 
+        # F1: extrair CPF/CNPJ do historico + descricao (fonte mais ampla)
+        fonte_cpf = ' '.join(filter(None, [
+            t_raw.historico_completo, t_raw.historico, t_raw.descricao,
+        ]))
+        cpf_cnpj = extrair_cpf_cnpj(fonte_cpf) if fonte_cpf else None
+
         # Criar transacao
         transacao = PessoalTransacao(
             importacao_id=importacao.id,
@@ -270,6 +277,7 @@ def _importar_transacoes(nome_arquivo: str, tipo_arquivo: str, conta, transacoes
             parcela_atual=t_raw.parcela_atual,
             parcela_total=t_raw.parcela_total,
             identificador_parcela=t_raw.identificador_parcela,
+            cpf_cnpj_parte=cpf_cnpj,
             hash_transacao=hash_t,
         )
 
