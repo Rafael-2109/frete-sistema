@@ -23,7 +23,6 @@ Campos extraidos (base):
 - ctes_referenciados (opcional)
 
 Campos SSW adicionais:
-- tipo_frete (CIF/FOB)
 - quantidade_documentos
 - valor_mercadoria, valor_icms, aliquota_icms, valor_pedagio
 - vencimento_original
@@ -256,8 +255,7 @@ class FaturaPDFParser:
             'valor_total': None,
             'vencimento': None,
             'ctes_referenciados': [],
-            # Campos SSW adicionais
-            'tipo_frete': None,
+            # Campos SSW adicionais (tipo_frete removido — campo dropado da fatura)
             'quantidade_documentos': None,
             'valor_mercadoria': None,
             'valor_icms': None,
@@ -365,12 +363,8 @@ class FaturaPDFParser:
             resultado['fonte_campos']['ctes_referenciados'] = 'REGEX'
             self.confianca += 0.05
 
-        # Campos SSW adicionais
-        tipo = self._regex_tipo_frete(texto)
-        if tipo:
-            resultado['tipo_frete'] = tipo
-            resultado['fonte_campos']['tipo_frete'] = 'REGEX'
-
+        # Campos SSW adicionais (tipo_frete removido 2026-04-20: campo dropado
+        # da fatura — SOT do tomador e o CTe).
         qtd = self._regex_quantidade_documentos(texto)
         if qtd is not None:
             resultado['quantidade_documentos'] = qtd
@@ -984,17 +978,6 @@ class FaturaPDFParser:
     # ------------------------------------------------------------------
     # Regex: Campos SSW adicionais
     # ------------------------------------------------------------------
-
-    def _regex_tipo_frete(self, texto: str) -> Optional[str]:
-        """Extrai tipo de frete: CIF ou FOB"""
-        match = re.search(r'FRETE\s+(CIF|FOB)', texto, re.IGNORECASE)
-        if match:
-            return match.group(1).upper()
-        # Fallback: "Tipo Frete: CIF"
-        match2 = re.search(r'(?:Tipo\s+(?:de\s+)?Frete)\s*[:.]?\s*(CIF|FOB)', texto, re.IGNORECASE)
-        if match2:
-            return match2.group(1).upper()
-        return None
 
     def _regex_quantidade_documentos(self, texto: str) -> Optional[int]:
         """Extrai quantidade de documentos (CTes)"""

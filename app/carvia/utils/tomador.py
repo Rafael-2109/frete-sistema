@@ -1,19 +1,13 @@
 """Helper para traduzir CarviaOperacao.cte_tomador em label visual.
 
-O campo `cte_tomador` e persistido com valores extraidos do CTe XML
-(<ide>/<toma3> ou <toma4>):
-    REMETENTE | EXPEDIDOR | RECEBEDOR | DESTINATARIO | TERCEIRO
+SOT (Source of Truth) do tomador = XML do CTe.
+  - Se o CTe foi importado via XML: <ide>/<toma3> ou <toma4> -> cte_tomador
+  - Se o CTe foi criado manualmente (wizard freteiro): selecao obrigatoria no form
 
-tomador_label(): mantido para compatibilidade — so destaca REMETENTE/
-DESTINATARIO (usado pelo badge "TOM" ao lado da coluna emit/dest).
-
-tomador_label_completo(): retorna dict {label, aparece_em} para TODOS
-os codigos, permitindo badge informativo mesmo em EXPEDIDOR/RECEBEDOR/
-TERCEIRO (aparecem como 3a linha "Tomador: Terceiro" no macro).
-
-Fallback FOB/CIF: quando cte_tomador nao esta populado, resolver_tomador_com_fallback()
-infere a partir do tipo_frete da fatura (FOB->REMETENTE, CIF->DESTINATARIO)
-e marca inferido=True.
+Nao existe mais fallback FOB/CIF -> tomador (removido 2026-04-20).
+Granularidade errada: FOB/CIF e da NF/fatura, tomador e do CTe. Alem disso o
+CTe tem 5 codigos de tomador (REMETENTE/EXPEDIDOR/RECEBEDOR/DESTINATARIO/TERCEIRO)
+e so 2 seriam cobertos pelo mapeamento simplista.
 """
 
 _LABEL_MAP = {
@@ -27,11 +21,6 @@ _LABEL_COMPLETO = {
     'RECEBEDOR': 'Recebedor',
     'DESTINATARIO': 'Destinatario',
     'TERCEIRO': 'Terceiro',
-}
-
-_TIPO_FRETE_TO_TOMADOR = {
-    'FOB': 'REMETENTE',
-    'CIF': 'DESTINATARIO',
 }
 
 
@@ -53,33 +42,19 @@ def tomador_label_para_export(cte_tomador):
     return label_completo or ''
 
 
-def resolver_tomador_com_fallback(cte_tomador, tipo_frete=None):
-    """Resolve o tomador com fallback por tipo_frete.
+def resolver_tomador(cte_tomador):
+    """Resolve o tomador a partir EXCLUSIVAMENTE do cte_tomador (SOT = XML CTe).
 
     Args:
-        cte_tomador: valor de CarviaOperacao.cte_tomador (do XML)
-        tipo_frete: 'FOB' | 'CIF' | None (de CarviaFaturaCliente.tipo_frete)
+        cte_tomador: valor de CarviaOperacao.cte_tomador (do XML ou wizard manual)
 
     Returns:
-        dict com {'codigo': 'REMETENTE'|..., 'label_visual': 'emitente'|'destinatario'|None,
-                  'label_completo': 'Remetente'|..., 'inferido': bool}
-        ou None se nao foi possivel resolver.
+        dict com {'codigo', 'label_visual', 'label_completo'} ou None se nao informado.
     """
-    if cte_tomador:
-        return {
-            'codigo': cte_tomador,
-            'label_visual': tomador_label(cte_tomador),
-            'label_completo': tomador_label_completo(cte_tomador),
-            'inferido': False,
-        }
-    # Fallback via tipo_frete (FOB/CIF)
-    if tipo_frete:
-        inferido_codigo = _TIPO_FRETE_TO_TOMADOR.get(tipo_frete.upper())
-        if inferido_codigo:
-            return {
-                'codigo': inferido_codigo,
-                'label_visual': tomador_label(inferido_codigo),
-                'label_completo': tomador_label_completo(inferido_codigo),
-                'inferido': True,
-            }
-    return None
+    if not cte_tomador:
+        return None
+    return {
+        'codigo': cte_tomador,
+        'label_visual': tomador_label(cte_tomador),
+        'label_completo': tomador_label_completo(cte_tomador),
+    }

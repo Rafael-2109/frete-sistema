@@ -121,18 +121,18 @@
                         <div class="form-text">Valor que a CarVia cobra do cliente</div>
                     </div>
                     <div class="col-md-3">
-                        <label for="cte_tomador" class="form-label" title="Quem paga o frete. Aparece no Excel exportado como 'Tomador'.">
-                            Tomador do Frete
+                        <label for="cte_tomador" class="form-label" title="Quem contrata o frete (SOT = cte_tomador). Obrigatorio: CTe manual nao tem XML para inferir.">
+                            Tomador do Frete <span class="text-danger">*</span>
                         </label>
-                        <select class="form-select" name="cte_tomador" id="cte_tomador">
-                            <option value="">—</option>
+                        <select class="form-select" name="cte_tomador" id="cte_tomador" required>
+                            <option value="">— selecione —</option>
                             <option value="REMETENTE">Remetente</option>
                             <option value="EXPEDIDOR">Expedidor</option>
                             <option value="RECEBEDOR">Recebedor</option>
                             <option value="DESTINATARIO">Destinatario</option>
                             <option value="TERCEIRO">Terceiro</option>
                         </select>
-                        <div class="form-text">CTe manual nao extrai do XML — informe aqui.</div>
+                        <div class="form-text">CTe manual nao extrai do XML — SOT obrigatoria aqui.</div>
                     </div>
                     <div class="col-md-6">
                         <label for="observacoes" class="form-label">Observacoes</label>

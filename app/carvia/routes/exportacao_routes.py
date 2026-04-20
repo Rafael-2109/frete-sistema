@@ -3,6 +3,7 @@ Rotas de Exportacao Excel CarVia — Todas as entidades
 """
 
 import logging
+from collections import defaultdict
 from datetime import datetime
 from io import BytesIO
 
@@ -13,7 +14,7 @@ from sqlalchemy import func
 
 from app import db
 from app.carvia.models import (
-    CarviaNf, CarviaOperacao, CarviaOperacaoNf,
+    CarviaNf, CarviaNfItem, CarviaOperacao, CarviaOperacaoNf,
     CarviaSubcontrato, CarviaCteComplementar,
     CarviaCustoEntrega, CarviaFaturaCliente,
     CarviaFaturaTransportadora, CarviaDespesa,
@@ -22,10 +23,72 @@ from app.carvia.models import (
     CarviaCidadeAtendida, CarviaTabelaFrete,
     CarviaGrupoCliente, CarviaPrecoCategoriaMoto,
     CarviaComissaoFechamento, CarviaComissaoFechamentoCte,
+    CarviaConciliacao, CarviaExtratoLinha,
 )
+from app.carvia.utils.excel_export_helper import (
+    Campo, ColunaGrupo, gerar_excel_duplo_cabecalho, grupo_dinamico,
+)
+from app.carvia.utils.tomador import tomador_label_para_export
 from app.utils.timezone import agora_utc_naive
 
 logger = logging.getLogger(__name__)
+
+
+# Mapa modFrete SEFAZ -> label curto para Excel
+_MOD_FRETE_LABEL = {
+    '0': 'CIF',
+    '1': 'FOB',
+    '2': 'Terceiros',
+    '3': 'Proprio-Rem',
+    '4': 'Proprio-Dest',
+    '9': 'Sem Transp',
+}
+
+
+def _modalidade_frete_label(codigo):
+    """Converte '0'..'9' em label curto; None/'' -> ''."""
+    if not codigo:
+        return ''
+    return _MOD_FRETE_LABEL.get(str(codigo), str(codigo))
+
+
+def _coletar_conciliacoes(tipo_documento, documento_ids):
+    """Retorna dict {doc_id: [(data, valor_alocado, descricao), ...]} ordenado por data.
+
+    Busca carvia_conciliacoes + join carvia_extrato_linhas para data/descricao.
+    """
+    if not documento_ids:
+        return {}
+    rows = db.session.query(
+        CarviaConciliacao.documento_id,
+        CarviaExtratoLinha.data,
+        CarviaConciliacao.valor_alocado,
+        CarviaExtratoLinha.descricao,
+        CarviaExtratoLinha.memo,
+    ).join(
+        CarviaExtratoLinha,
+        CarviaExtratoLinha.id == CarviaConciliacao.extrato_linha_id,
+    ).filter(
+        CarviaConciliacao.tipo_documento == tipo_documento,
+        CarviaConciliacao.documento_id.in_(list(documento_ids)),
+    ).order_by(
+        CarviaConciliacao.documento_id,
+        CarviaExtratoLinha.data.asc(),
+        CarviaConciliacao.conciliado_em.asc(),
+    ).all()
+
+    resultado = defaultdict(list)
+    for doc_id, data, valor, descricao, memo in rows:
+        desc = (descricao or memo or '').strip()
+        resultado[doc_id].append((data, float(valor or 0), desc))
+    return resultado
+
+
+def _max_len(lista_de_listas):
+    """Retorna maior comprimento entre listas (0 se vazio)."""
+    if not lista_de_listas:
+        return 0
+    return max((len(x) for x in lista_de_listas), default=0)
 
 
 def _fmt_date(val):
@@ -86,12 +149,18 @@ def _check_access():
 def register_exportacao_routes(bp):
 
     # =====================================================================
-    # 1. NFs
+    # 1. NFs — granularidade: 1 linha por ITEM DE PRODUTO
+    # Agrupamentos superiores: NF -> CTe -> CTe Comp (N x 3) -> Fatura -> Conciliacao (N x 3)
     # =====================================================================
     @bp.route('/api/exportar/nfs')
     @login_required
     def exportar_nfs():
-        """Exporta NFs para Excel com mesmos filtros da listagem"""
+        """Exporta NFs com duplo cabecalho hierarquico (1 linha por item).
+
+        Regra: campos da propria entidade (produto + NF) + agrupamentos SUPERIORES
+        (CTe, CTe Complementares, Fatura, Conciliacoes). Nenhuma NF faz agregacao
+        de produtos — a granularidade da linha JA e o produto.
+        """
         if _check_access():
             return redirect(url_for('main.dashboard'))
 
@@ -129,7 +198,6 @@ def register_exportacao_routes(bp):
 
         if busca:
             busca_like = f'%{busca}%'
-            # Subquery: NF ids vinculadas a CTe com numero ou CTRC matching
             cte_match_subq = db.session.query(
                 CarviaOperacaoNf.nf_id
             ).join(
@@ -155,7 +223,6 @@ def register_exportacao_routes(bp):
                 )
             )
 
-        # Filtro UF destinatario (exact match)
         if uf_filtro:
             query = query.filter(CarviaNf.uf_destinatario == uf_filtro.upper())
 
@@ -172,109 +239,178 @@ def register_exportacao_routes(bp):
         else:
             query = query.order_by(sort_col.desc().nullslast())
 
-        items = query.all()
-
-        if not items:
+        nfs = query.all()
+        if not nfs:
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_nfs'))
 
-        # Cross-links: custos e ctes comp por NF (via operacoes)
-        nf_ids_all = [nf.id for nf in items]
-        # Mapa nf_id -> [operacao_ids]
-        from collections import defaultdict
-        nf_op_map = defaultdict(set)
-        if nf_ids_all:
-            junctions = db.session.query(
-                CarviaOperacaoNf.nf_id, CarviaOperacaoNf.operacao_id
-            ).filter(CarviaOperacaoNf.nf_id.in_(nf_ids_all)).all()
-            for j_nf_id, j_op_id in junctions:
-                nf_op_map[j_nf_id].add(j_op_id)
+        nf_ids = [nf.id for nf in nfs]
 
-        all_op_ids = set()
-        for ops in nf_op_map.values():
-            all_op_ids.update(ops)
+        # ---- Itens de produto (1 por linha do Excel) ----
+        itens = db.session.query(CarviaNfItem).filter(
+            CarviaNfItem.nf_id.in_(nf_ids)
+        ).order_by(CarviaNfItem.nf_id, CarviaNfItem.id).all()
 
-        # Buscar CTe + CTRC das operacoes vinculadas
-        cte_por_op = {}
-        ctrc_por_op = {}
-        if all_op_ids:
-            op_rows = db.session.query(
-                CarviaOperacao.id, CarviaOperacao.cte_numero, CarviaOperacao.ctrc_numero
-            ).filter(CarviaOperacao.id.in_(all_op_ids)).all()
-            cte_por_op = {o_id: cte for o_id, cte, _ in op_rows}
-            ctrc_por_op = {o_id: ctrc for o_id, _, ctrc in op_rows}
+        # Se alguma NF nao tem item, ainda assim exibir 1 linha com campos de produto vazios
+        itens_por_nf = defaultdict(list)
+        for it in itens:
+            itens_por_nf[it.nf_id].append(it)
 
-        custos_por_op = defaultdict(int)
-        custos_valor_por_op = defaultdict(float)
-        comps_por_op = defaultdict(int)
-        comps_valor_por_op = defaultdict(float)
-        if all_op_ids:
-            custos_rows = db.session.query(
-                CarviaCustoEntrega.operacao_id,
-                func.count(CarviaCustoEntrega.id),
-                func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
-            ).filter(
-                CarviaCustoEntrega.operacao_id.in_(all_op_ids)
-            ).group_by(CarviaCustoEntrega.operacao_id).all()
-            for op_id, cnt, val in custos_rows:
-                custos_por_op[op_id] = cnt
-                custos_valor_por_op[op_id] = float(val)
+        # ---- Operacao (CTe) pai por NF (join via junction) ----
+        junctions = db.session.query(
+            CarviaOperacaoNf.nf_id, CarviaOperacaoNf.operacao_id
+        ).filter(CarviaOperacaoNf.nf_id.in_(nf_ids)).all()
+        nf_to_op = {j_nf: j_op for j_nf, j_op in junctions}  # 1:1 (primeira op)
+        op_ids = list({op_id for op_id in nf_to_op.values() if op_id})
+        operacoes = {
+            op.id: op for op in db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.id.in_(op_ids)
+            ).all()
+        } if op_ids else {}
 
-            comps_rows = db.session.query(
-                CarviaCteComplementar.operacao_id,
-                func.count(CarviaCteComplementar.id),
-                func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0),
-            ).filter(
-                CarviaCteComplementar.operacao_id.in_(all_op_ids)
-            ).group_by(CarviaCteComplementar.operacao_id).all()
-            for op_id, cnt, val in comps_rows:
-                comps_por_op[op_id] = cnt
-                comps_valor_por_op[op_id] = float(val)
+        # ---- CTe Complementares por operacao ----
+        comps_por_op = defaultdict(list)
+        if op_ids:
+            for c in db.session.query(CarviaCteComplementar).filter(
+                CarviaCteComplementar.operacao_id.in_(op_ids)
+            ).order_by(CarviaCteComplementar.id).all():
+                comps_por_op[c.operacao_id].append(c)
 
-        # Cliente comercial via CNPJ DESTINATARIO da NF (batch).
-        import re as _re
-        from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        cnpjs_dest = {nf.cnpj_destinatario for nf in items if nf.cnpj_destinatario}
-        _resolved_dest = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_dest)
+        max_comps = _max_len(comps_por_op.values())
 
-        data = []
-        for nf in items:
-            ops = nf_op_map.get(nf.id, set())
-            qtd_custos = sum(custos_por_op.get(o, 0) for o in ops)
-            total_custos = sum(custos_valor_por_op.get(o, 0) for o in ops)
-            qtd_comps = sum(comps_por_op.get(o, 0) for o in ops)
-            total_comps = sum(comps_valor_por_op.get(o, 0) for o in ops)
-            cli = _resolved_dest.get(_re.sub(r'\D', '', nf.cnpj_destinatario or '')) or {}
+        # ---- Fatura cliente pelos CTes pai ----
+        fat_ids = list({op.fatura_cliente_id for op in operacoes.values() if op.fatura_cliente_id})
+        faturas = {
+            f.id: f for f in db.session.query(CarviaFaturaCliente).filter(
+                CarviaFaturaCliente.id.in_(fat_ids)
+            ).all()
+        } if fat_ids else {}
 
-            data.append({
-                'Numero NF': nf.numero_nf,
-                'Serie': nf.serie_nf or '',
-                'Chave Acesso': nf.chave_acesso_nf or '',
-                'Data Emissao': _fmt_date(nf.data_emissao),
-                'Cliente Comercial': cli.get('nome_comercial') or '',
-                'CNPJ Emitente': nf.cnpj_emitente or '',
-                'Nome Emitente': nf.nome_emitente or '',
-                'UF Emitente': nf.uf_emitente or '',
-                'CNPJ Destinatario': nf.cnpj_destinatario or '',
-                'Nome Destinatario': nf.nome_destinatario or '',
-                'UF Destino': nf.uf_destinatario or '',
-                'Valor Total': float(nf.valor_total or 0),
-                'Peso Bruto': float(nf.peso_bruto or 0),
-                'Qtd Volumes': nf.quantidade_volumes or 0,
-                'CTe': ', '.join(filter(None, [cte_por_op.get(o) for o in ops])),
-                'CTRC': ', '.join(filter(None, [ctrc_por_op.get(o) for o in ops])),
-                'Tipo Fonte': nf.tipo_fonte or '',
-                'Status': nf.status or '',
-                'Qtd Custos Entrega': qtd_custos,
-                'Valor Custos Entrega': total_custos,
-                'Qtd CTes Complementares': qtd_comps,
-                'Valor CTes Complementares': total_comps,
-                'Criado Em': _fmt_datetime(nf.criado_em),
-                'Criado Por': nf.criado_por or '',
-            })
+        # ---- Conciliacoes da fatura (tipo_documento = 'FATURA_CLIENTE') ----
+        concil_por_fat = _coletar_conciliacoes('fatura_cliente', fat_ids)
+        max_concil = _max_len(concil_por_fat.values())
 
-        df = pd.DataFrame(data)
-        return _gerar_excel(df, 'NFs', 'nfs')
+        # ---- Montar dados ----
+        linhas = []
+        for nf in nfs:
+            op = operacoes.get(nf_to_op.get(nf.id))
+            fatura = faturas.get(op.fatura_cliente_id) if op else None
+            comps = comps_por_op.get(op.id, []) if op else []
+            concils = concil_por_fat.get(fatura.id, []) if fatura else []
+
+            itens_nf = itens_por_nf.get(nf.id) or [None]  # garante 1 linha mesmo sem item
+            for item in itens_nf:
+                linha = {
+                    # PRODUTO
+                    'produto_codigo': (item.codigo_produto if item else '') or '',
+                    'produto_desc': (item.descricao if item else '') or '',
+                    'produto_ncm': (item.ncm if item else '') or '',
+                    'produto_cfop': (item.cfop if item else '') or '',
+                    'produto_un': (item.unidade if item else '') or '',
+                    'produto_qtd': float(item.quantidade or 0) if item else '',
+                    'produto_vunit': float(item.valor_unitario or 0) if item else '',
+                    'produto_vtotal': float(item.valor_total_item or 0) if item else '',
+                    # NF
+                    'nf_numero': nf.numero_nf or '',
+                    'nf_serie': nf.serie_nf or '',
+                    'nf_chave': nf.chave_acesso_nf or '',
+                    'nf_data': nf.data_emissao,
+                    'nf_emitente': nf.nome_emitente or '',
+                    'nf_cnpj_emit': nf.cnpj_emitente or '',
+                    'nf_dest': nf.nome_destinatario or '',
+                    'nf_cnpj_dest': nf.cnpj_destinatario or '',
+                    'nf_uf_dest': nf.uf_destinatario or '',
+                    'nf_valor': float(nf.valor_total or 0),
+                    'nf_peso': float(nf.peso_bruto or 0),
+                    'nf_vol': nf.quantidade_volumes or 0,
+                    'nf_modfrete': _modalidade_frete_label(getattr(nf, 'modalidade_frete', None)),
+                    'nf_status': nf.status or '',
+                    # CTe
+                    'cte_numero': (op.cte_numero if op else '') or '',
+                    'cte_ctrc': (op.ctrc_numero if op else '') or '',
+                    'cte_valor': float(op.cte_valor or 0) if op else '',
+                    'cte_tomador': tomador_label_para_export(op.cte_tomador) if op else '',
+                    'cte_data': op.cte_data_emissao if op else None,
+                    # FATURA
+                    'fat_numero': (fatura.numero_fatura if fatura else '') or '',
+                    'fat_cnpj_pagador': (fatura.cnpj_cliente if fatura else '') or '',
+                    'fat_pagador': (fatura.nome_cliente if fatura else '') or '',
+                    'fat_destino': (f'{fatura.pagador_cidade or ""}/{fatura.pagador_uf or ""}').strip('/') if fatura else '',
+                    'fat_data': fatura.data_emissao if fatura else None,
+                    'fat_valor': float(fatura.valor_total or 0) if fatura else '',
+                    'fat_status': (fatura.status if fatura else '') or '',
+                }
+                # CTe Complementares (N slots)
+                for i in range(1, max_comps + 1):
+                    c = comps[i - 1] if i - 1 < len(comps) else None
+                    linha[f'comp_numero_{i}'] = (c.numero_comp if c else '') or ''
+                    linha[f'comp_valor_{i}'] = float(c.cte_valor or 0) if c else ''
+                    linha[f'comp_motivo_{i}'] = (getattr(c, 'motivo', None) or getattr(c, 'observacoes', None) or '') if c else ''
+                # Conciliacoes (N slots)
+                for i in range(1, max_concil + 1):
+                    k = concils[i - 1] if i - 1 < len(concils) else None
+                    linha[f'concil_data_{i}'] = k[0] if k else None
+                    linha[f'concil_valor_{i}'] = k[1] if k else ''
+                    linha[f'concil_desc_{i}'] = k[2] if k else ''
+                linhas.append(linha)
+
+        # ---- Colunas com duplo cabecalho ----
+        colunas = [
+            ColunaGrupo('PRODUTO', [
+                Campo('produto_codigo', 'Codigo'),
+                Campo('produto_desc', 'Descricao'),
+                Campo('produto_ncm', 'NCM'),
+                Campo('produto_cfop', 'CFOP'),
+                Campo('produto_un', 'Un'),
+                Campo('produto_qtd', 'Qtd', fmt='money'),
+                Campo('produto_vunit', 'V.Unit', fmt='money'),
+                Campo('produto_vtotal', 'V.Total', fmt='money'),
+            ]),
+            ColunaGrupo('NF', [
+                Campo('nf_numero', 'Numero'),
+                Campo('nf_serie', 'Serie'),
+                Campo('nf_chave', 'Chave'),
+                Campo('nf_data', 'Data', fmt='date'),
+                Campo('nf_emitente', 'Emitente'),
+                Campo('nf_cnpj_emit', 'CNPJ Emit'),
+                Campo('nf_dest', 'Destinatario'),
+                Campo('nf_cnpj_dest', 'CNPJ Dest'),
+                Campo('nf_uf_dest', 'UF'),
+                Campo('nf_valor', 'Valor', fmt='money'),
+                Campo('nf_peso', 'Peso', fmt='money'),
+                Campo('nf_vol', 'Vol', fmt='int'),
+                Campo('nf_modfrete', 'modFrete'),
+                Campo('nf_status', 'Status'),
+            ]),
+            ColunaGrupo('CTe', [
+                Campo('cte_numero', 'Numero'),
+                Campo('cte_ctrc', 'CTRC'),
+                Campo('cte_valor', 'Valor', fmt='money'),
+                Campo('cte_tomador', 'Tomador'),
+                Campo('cte_data', 'Data', fmt='date'),
+            ]),
+        ]
+        colunas += grupo_dinamico('CTE COMP', max_comps, [
+            Campo('comp_numero_{i}', 'Numero'),
+            Campo('comp_valor_{i}', 'Valor', fmt='money'),
+            Campo('comp_motivo_{i}', 'Motivo'),
+        ])
+        colunas.append(ColunaGrupo('FATURA', [
+            Campo('fat_numero', 'Numero'),
+            Campo('fat_cnpj_pagador', 'CNPJ Pagador'),
+            Campo('fat_pagador', 'Pagador'),
+            Campo('fat_destino', 'End. Pagador'),
+            Campo('fat_data', 'Data', fmt='date'),
+            Campo('fat_valor', 'Valor', fmt='money'),
+            Campo('fat_status', 'Status'),
+        ]))
+        colunas += grupo_dinamico('CONCILIACAO', max_concil, [
+            Campo('concil_data_{i}', 'Data', fmt='date'),
+            Campo('concil_valor_{i}', 'Valor', fmt='money'),
+            Campo('concil_desc_{i}', 'Descricao'),
+        ])
+
+        return gerar_excel_duplo_cabecalho(colunas, linhas, 'NFs', 'nfs')
 
     # =====================================================================
     # 2. Operacoes
@@ -349,77 +485,146 @@ def register_exportacao_routes(bp):
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_operacoes'))
 
-        # Buscar faturas vinculadas para coluna Fatura
-        fat_map = {}
-        fat_ids = [op.fatura_cliente_id for op in items if op.fatura_cliente_id]
-        if fat_ids:
-            faturas = db.session.query(
-                CarviaFaturaCliente.id, CarviaFaturaCliente.numero_fatura
-            ).filter(CarviaFaturaCliente.id.in_(fat_ids)).all()
-            fat_map = {f_id: num for f_id, num in faturas}
-
-        # Batch: primeira NF por operacao (regra CTe = 1 par unico) para
-        # preencher colunas Emitente / Destinatario
-        from app.carvia.utils.tomador import tomador_label_para_export
         op_ids = [op.id for op in items]
-        primeira_nf_por_op = {}
-        if op_ids:
-            rows = db.session.query(
-                CarviaOperacaoNf.operacao_id,
-                CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
-                CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
-            ).join(
-                CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
-            ).filter(
-                CarviaOperacaoNf.operacao_id.in_(op_ids)
+
+        # ---- NFs vinculadas por operacao (granularidade do Excel) ----
+        nfs_rows = db.session.query(
+            CarviaOperacaoNf.operacao_id,
+            CarviaNf,
+        ).join(
+            CarviaNf, CarviaNf.id == CarviaOperacaoNf.nf_id
+        ).filter(
+            CarviaOperacaoNf.operacao_id.in_(op_ids)
+        ).order_by(
+            CarviaOperacaoNf.operacao_id, CarviaNf.id
+        ).all()
+        nfs_por_op = defaultdict(list)
+        for op_id, nf in nfs_rows:
+            nfs_por_op[op_id].append(nf)
+
+        # ---- CTes Complementares por operacao ----
+        comps_por_op = defaultdict(list)
+        for c in db.session.query(CarviaCteComplementar).filter(
+            CarviaCteComplementar.operacao_id.in_(op_ids)
+        ).order_by(CarviaCteComplementar.id).all():
+            comps_por_op[c.operacao_id].append(c)
+        max_comps = _max_len(comps_por_op.values())
+
+        # ---- Fatura cliente pelos CTes ----
+        fat_ids = list({op.fatura_cliente_id for op in items if op.fatura_cliente_id})
+        faturas = {
+            f.id: f for f in db.session.query(CarviaFaturaCliente).filter(
+                CarviaFaturaCliente.id.in_(fat_ids)
             ).all()
-            for row in rows:
-                oid = row[0]
-                if oid not in primeira_nf_por_op:
-                    primeira_nf_por_op[oid] = {
-                        'emit_nome': row[1] or '',
-                        'emit_cnpj': row[2] or '',
-                        'dest_nome': row[3] or '',
-                        'dest_cnpj': row[4] or '',
-                    }
+        } if fat_ids else {}
 
-        # Cliente comercial via CNPJ DESTINATARIO da NF (batch).
-        from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        clientes_por_op = CarviaClienteService.resolver_clientes_por_operacoes(op_ids)
+        concil_por_fat = _coletar_conciliacoes('fatura_cliente', fat_ids)
+        max_concil = _max_len(concil_por_fat.values())
 
-        data = []
+        # ---- Montar dados: 1 linha por NF vinculada (1 linha vazia se sem NF) ----
+        linhas = []
         for op in items:
-            nf_info = primeira_nf_por_op.get(op.id) or {}
-            # Fallback para op.cnpj_cliente quando nao ha NF vinculada (manual/freteiro)
-            emit_nome = nf_info.get('emit_nome') or op.nome_cliente or ''
-            emit_cnpj = nf_info.get('emit_cnpj') or op.cnpj_cliente or ''
-            cli = clientes_por_op.get(op.id) or {}
-            data.append({
-                'ID': op.id,
-                'CTe Numero': op.cte_numero or '',
-                'CTRC': op.ctrc_numero or '',
-                'Cliente Comercial': cli.get('nome_comercial') or '',
-                'Emitente': emit_nome,
-                'CNPJ Emitente': emit_cnpj,
-                'Destinatario': nf_info.get('dest_nome', ''),
-                'CNPJ Destinatario': nf_info.get('dest_cnpj', ''),
-                'Tomador': tomador_label_para_export(op.cte_tomador),
-                'Origem': f'{op.cidade_origem or ""}/{op.uf_origem or ""}',
-                'Destino': f'{op.cidade_destino or ""}/{op.uf_destino or ""}',
-                'Peso Bruto': float(op.peso_bruto or 0),
-                'Peso Cubado': float(op.peso_cubado or 0),
-                'Peso Utilizado': float(op.peso_utilizado or 0),
-                'Valor CTe': float(op.cte_valor or 0),
-                'Valor Mercadoria': float(op.valor_mercadoria or 0),
-                'Tipo Entrada': op.tipo_entrada or '',
-                'Status': op.status or '',
-                'Fatura': fat_map.get(op.fatura_cliente_id, ''),
-                'Criado Em': _fmt_datetime(op.criado_em),
-                'Criado Por': op.criado_por or '',
-            })
+            nfs = nfs_por_op.get(op.id) or [None]  # 1 linha vazia quando manual/freteiro
+            comps = comps_por_op.get(op.id, [])
+            fatura = faturas.get(op.fatura_cliente_id)
+            concils = concil_por_fat.get(fatura.id, []) if fatura else []
 
-        df = pd.DataFrame(data)
-        return _gerar_excel(df, 'Operacoes', 'operacoes')
+            for nf in nfs:
+                linha = {
+                    # NF
+                    'nf_numero': (nf.numero_nf if nf else '') or '',
+                    'nf_serie': (nf.serie_nf if nf else '') or '',
+                    'nf_chave': (nf.chave_acesso_nf if nf else '') or '',
+                    'nf_data': nf.data_emissao if nf else None,
+                    'nf_emitente': (nf.nome_emitente if nf else op.nome_cliente or '') or '',
+                    'nf_cnpj_emit': (nf.cnpj_emitente if nf else op.cnpj_cliente or '') or '',
+                    'nf_dest': (nf.nome_destinatario if nf else '') or '',
+                    'nf_cnpj_dest': (nf.cnpj_destinatario if nf else '') or '',
+                    'nf_uf_dest': (nf.uf_destinatario if nf else op.uf_destino or '') or '',
+                    'nf_valor': float(nf.valor_total or 0) if nf else '',
+                    'nf_peso': float(nf.peso_bruto or 0) if nf else '',
+                    'nf_modfrete': _modalidade_frete_label(getattr(nf, 'modalidade_frete', None)) if nf else '',
+                    # CTe
+                    'cte_numero': op.cte_numero or '',
+                    'cte_ctrc': op.ctrc_numero or '',
+                    'cte_valor': float(op.cte_valor or 0),
+                    'cte_tomador': tomador_label_para_export(op.cte_tomador),
+                    'cte_origem': f'{op.cidade_origem or ""}/{op.uf_origem or ""}'.strip('/'),
+                    'cte_destino': f'{op.cidade_destino or ""}/{op.uf_destino or ""}'.strip('/'),
+                    'cte_peso_util': float(op.peso_utilizado or 0),
+                    'cte_data': op.cte_data_emissao,
+                    'cte_tipo': op.tipo_entrada or '',
+                    'cte_status': op.status or '',
+                    # FATURA
+                    'fat_numero': (fatura.numero_fatura if fatura else '') or '',
+                    'fat_cnpj_pagador': (fatura.cnpj_cliente if fatura else '') or '',
+                    'fat_pagador': (fatura.nome_cliente if fatura else '') or '',
+                    'fat_destino': (f'{fatura.pagador_cidade or ""}/{fatura.pagador_uf or ""}').strip('/') if fatura else '',
+                    'fat_data': fatura.data_emissao if fatura else None,
+                    'fat_valor': float(fatura.valor_total or 0) if fatura else '',
+                    'fat_status': (fatura.status if fatura else '') or '',
+                }
+                for i in range(1, max_comps + 1):
+                    c = comps[i - 1] if i - 1 < len(comps) else None
+                    linha[f'comp_numero_{i}'] = (c.numero_comp if c else '') or ''
+                    linha[f'comp_valor_{i}'] = float(c.cte_valor or 0) if c else ''
+                    linha[f'comp_motivo_{i}'] = (getattr(c, 'motivo', None) or getattr(c, 'observacoes', None) or '') if c else ''
+                for i in range(1, max_concil + 1):
+                    k = concils[i - 1] if i - 1 < len(concils) else None
+                    linha[f'concil_data_{i}'] = k[0] if k else None
+                    linha[f'concil_valor_{i}'] = k[1] if k else ''
+                    linha[f'concil_desc_{i}'] = k[2] if k else ''
+                linhas.append(linha)
+
+        colunas = [
+            ColunaGrupo('NF', [
+                Campo('nf_numero', 'Numero'),
+                Campo('nf_serie', 'Serie'),
+                Campo('nf_chave', 'Chave'),
+                Campo('nf_data', 'Data', fmt='date'),
+                Campo('nf_emitente', 'Emitente'),
+                Campo('nf_cnpj_emit', 'CNPJ Emit'),
+                Campo('nf_dest', 'Destinatario'),
+                Campo('nf_cnpj_dest', 'CNPJ Dest'),
+                Campo('nf_uf_dest', 'UF'),
+                Campo('nf_valor', 'Valor', fmt='money'),
+                Campo('nf_peso', 'Peso', fmt='money'),
+                Campo('nf_modfrete', 'modFrete'),
+            ]),
+            ColunaGrupo('CTe', [
+                Campo('cte_numero', 'Numero'),
+                Campo('cte_ctrc', 'CTRC'),
+                Campo('cte_valor', 'Valor', fmt='money'),
+                Campo('cte_tomador', 'Tomador'),
+                Campo('cte_origem', 'Origem'),
+                Campo('cte_destino', 'Destino'),
+                Campo('cte_peso_util', 'Peso Util', fmt='money'),
+                Campo('cte_data', 'Data', fmt='date'),
+                Campo('cte_tipo', 'Tipo Entrada'),
+                Campo('cte_status', 'Status'),
+            ]),
+        ]
+        colunas += grupo_dinamico('CTE COMP', max_comps, [
+            Campo('comp_numero_{i}', 'Numero'),
+            Campo('comp_valor_{i}', 'Valor', fmt='money'),
+            Campo('comp_motivo_{i}', 'Motivo'),
+        ])
+        colunas.append(ColunaGrupo('FATURA', [
+            Campo('fat_numero', 'Numero'),
+            Campo('fat_cnpj_pagador', 'CNPJ Pagador'),
+            Campo('fat_pagador', 'Pagador'),
+            Campo('fat_destino', 'End. Pagador'),
+            Campo('fat_data', 'Data', fmt='date'),
+            Campo('fat_valor', 'Valor', fmt='money'),
+            Campo('fat_status', 'Status'),
+        ]))
+        colunas += grupo_dinamico('CONCILIACAO', max_concil, [
+            Campo('concil_data_{i}', 'Data', fmt='date'),
+            Campo('concil_valor_{i}', 'Valor', fmt='money'),
+            Campo('concil_desc_{i}', 'Descricao'),
+        ])
+
+        return gerar_excel_duplo_cabecalho(colunas, linhas, 'Operacoes', 'operacoes')
 
     # =====================================================================
     # 3. Subcontratos
@@ -693,84 +898,96 @@ def register_exportacao_routes(bp):
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_ctes_complementares'))
 
-        # Buscar faturas vinculadas
-        fat_map = {}
-        fat_ids = [c.fatura_cliente_id for c in items if c.fatura_cliente_id]
-        if fat_ids:
-            faturas = db.session.query(
-                CarviaFaturaCliente.id, CarviaFaturaCliente.numero_fatura
-            ).filter(CarviaFaturaCliente.id.in_(fat_ids)).all()
-            fat_map = {f_id: num for f_id, num in faturas}
-
-        # Buscar CTe numero + CTRC da operacao pai
+        # ---- Granularidade: 1 linha por CTe Complementar ----
+        # Agrupamentos superiores: CTe Pai -> Fatura -> Conciliacoes
         op_ids = list({c.operacao_id for c in items})
-        op_map = {}
-        op_ctrc_map = {}
-        if op_ids:
-            ops = db.session.query(
-                CarviaOperacao.id, CarviaOperacao.cte_numero, CarviaOperacao.ctrc_numero
-            ).filter(CarviaOperacao.id.in_(op_ids)).all()
-            op_map = {o_id: cte for o_id, cte, _ in ops}
-            op_ctrc_map = {o_id: ctrc for o_id, _, ctrc in ops}
+        operacoes = {
+            o.id: o for o in db.session.query(CarviaOperacao).filter(
+                CarviaOperacao.id.in_(op_ids)
+            ).all()
+        } if op_ids else {}
 
-        # Custos vinculados por cte_complementar_id
-        from collections import defaultdict
-        custos_por_comp = defaultdict(int)
-        custos_valor_por_comp = defaultdict(float)
-        comp_item_ids = [c.id for c in items]
-        if comp_item_ids:
-            for comp_id, cnt, val in db.session.query(
-                CarviaCustoEntrega.cte_complementar_id,
-                func.count(CarviaCustoEntrega.id),
-                func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
-            ).filter(
-                CarviaCustoEntrega.cte_complementar_id.in_(comp_item_ids)
-            ).group_by(CarviaCustoEntrega.cte_complementar_id).all():
-                custos_por_comp[comp_id] = cnt
-                custos_valor_por_comp[comp_id] = float(val)
+        fat_ids = list({c.fatura_cliente_id for c in items if c.fatura_cliente_id})
+        faturas = {
+            f.id: f for f in db.session.query(CarviaFaturaCliente).filter(
+                CarviaFaturaCliente.id.in_(fat_ids)
+            ).all()
+        } if fat_ids else {}
 
-        # Batch papeis (emit/dest/tomador) via operacao pai -> NFs.
-        # CTe Comp herda do CTe original porque nao tem emit/dest proprios.
-        from app.carvia.utils.papeis_frete import batch_papeis_por_cte_complementar
-        papeis_por_comp = batch_papeis_por_cte_complementar(comp_item_ids)
+        concil_por_fat = _coletar_conciliacoes('fatura_cliente', fat_ids)
+        max_concil = _max_len(concil_por_fat.values())
 
-        # Cliente comercial via CNPJ DESTINATARIO da NF da operacao pai.
-        from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        clientes_por_comp = CarviaClienteService.resolver_clientes_por_ctes_comp(comp_item_ids)
-
-        data = []
+        linhas = []
         for c in items:
-            p = papeis_por_comp.get(c.id) or {}
-            emit = p.get('emit') or {}
-            dest = p.get('dest') or {}
-            cli = clientes_por_comp.get(c.id) or {}
-            # Coluna "Tomador" removida: redundante com tipo_frete (FOB/CIF) da fatura,
-            # que ja indica quem paga (FOB=Remetente, CIF=Destinatario).
-            data.append({
-                'Numero Comp': c.numero_comp or '',
-                'CTe Numero': op_map.get(c.operacao_id, ''),
-                'CTRC CTe Pai': op_ctrc_map.get(c.operacao_id, ''),
-                'CTRC': c.ctrc_numero or '',
-                'Operacao ID': c.operacao_id,
-                'Cliente Comercial': cli.get('nome_comercial') or '',
-                'Cliente': c.nome_cliente or '',
-                'CNPJ Cliente': c.cnpj_cliente or '',
-                'Emitente': emit.get('nome') or '',
-                'CNPJ Emitente': emit.get('cnpj') or '',
-                'Destinatario': dest.get('nome') or '',
-                'CNPJ Destinatario': dest.get('cnpj') or '',
-                'Valor CTe': float(c.cte_valor or 0),
-                'Data Emissao': _fmt_date(c.cte_data_emissao),
-                'Status': c.status or '',
-                'Fatura': fat_map.get(c.fatura_cliente_id, ''),
-                'Qtd Custos Entrega': custos_por_comp.get(c.id, 0),
-                'Valor Custos Entrega': custos_valor_por_comp.get(c.id, 0),
-                'Criado Em': _fmt_datetime(c.criado_em),
-                'Criado Por': c.criado_por or '',
-            })
+            op = operacoes.get(c.operacao_id)
+            fatura = faturas.get(c.fatura_cliente_id)
+            concils = concil_por_fat.get(fatura.id, []) if fatura else []
 
-        df = pd.DataFrame(data)
-        return _gerar_excel(df, 'CTe Complementares', 'ctes_complementares')
+            linha = {
+                # CTE COMP (entidade propria)
+                'comp_numero': c.numero_comp or '',
+                'comp_cte_numero': c.cte_numero or '',
+                'comp_ctrc': c.ctrc_numero or '',
+                'comp_cliente': c.nome_cliente or '',
+                'comp_cnpj_cliente': c.cnpj_cliente or '',
+                'comp_valor': float(c.cte_valor or 0),
+                'comp_data': c.cte_data_emissao,
+                'comp_motivo': getattr(c, 'motivo', None) or getattr(c, 'observacoes', None) or '',
+                'comp_status': c.status or '',
+                # CTE PAI (agrupamento superior)
+                'cte_numero': (op.cte_numero if op else '') or '',
+                'cte_ctrc': (op.ctrc_numero if op else '') or '',
+                'cte_valor': float(op.cte_valor or 0) if op else '',
+                'cte_tomador': tomador_label_para_export(op.cte_tomador) if op else '',
+                # FATURA (agrupamento superior)
+                'fat_numero': (fatura.numero_fatura if fatura else '') or '',
+                'fat_cnpj_pagador': (fatura.cnpj_cliente if fatura else '') or '',
+                'fat_pagador': (fatura.nome_cliente if fatura else '') or '',
+                'fat_destino': (f'{fatura.pagador_cidade or ""}/{fatura.pagador_uf or ""}').strip('/') if fatura else '',
+                'fat_valor': float(fatura.valor_total or 0) if fatura else '',
+                'fat_status': (fatura.status if fatura else '') or '',
+            }
+            for i in range(1, max_concil + 1):
+                k = concils[i - 1] if i - 1 < len(concils) else None
+                linha[f'concil_data_{i}'] = k[0] if k else None
+                linha[f'concil_valor_{i}'] = k[1] if k else ''
+                linha[f'concil_desc_{i}'] = k[2] if k else ''
+            linhas.append(linha)
+
+        colunas = [
+            ColunaGrupo('CTE COMPLEMENTAR', [
+                Campo('comp_numero', 'Numero Comp'),
+                Campo('comp_cte_numero', 'CTe Numero'),
+                Campo('comp_ctrc', 'CTRC'),
+                Campo('comp_cliente', 'Cliente'),
+                Campo('comp_cnpj_cliente', 'CNPJ Cliente'),
+                Campo('comp_valor', 'Valor', fmt='money'),
+                Campo('comp_data', 'Data', fmt='date'),
+                Campo('comp_motivo', 'Motivo'),
+                Campo('comp_status', 'Status'),
+            ]),
+            ColunaGrupo('CTe PAI', [
+                Campo('cte_numero', 'Numero'),
+                Campo('cte_ctrc', 'CTRC'),
+                Campo('cte_valor', 'Valor', fmt='money'),
+                Campo('cte_tomador', 'Tomador'),
+            ]),
+            ColunaGrupo('FATURA', [
+                Campo('fat_numero', 'Numero'),
+                Campo('fat_cnpj_pagador', 'CNPJ Pagador'),
+                Campo('fat_pagador', 'Pagador'),
+                Campo('fat_destino', 'End. Pagador'),
+                Campo('fat_valor', 'Valor', fmt='money'),
+                Campo('fat_status', 'Status'),
+            ]),
+        ]
+        colunas += grupo_dinamico('CONCILIACAO', max_concil, [
+            Campo('concil_data_{i}', 'Data', fmt='date'),
+            Campo('concil_valor_{i}', 'Valor', fmt='money'),
+            Campo('concil_desc_{i}', 'Descricao'),
+        ])
+
+        return gerar_excel_duplo_cabecalho(colunas, linhas, 'CTe Comp', 'ctes_complementares')
 
     # =====================================================================
     # 5. Custos Entrega
@@ -909,14 +1126,18 @@ def register_exportacao_routes(bp):
     @bp.route('/api/exportar/faturas-cliente')
     @login_required
     def exportar_faturas_cliente():
-        """Exporta faturas cliente para Excel com mesmos filtros da listagem"""
+        """Exporta faturas cliente — 1 linha por fatura.
+
+        Campos da propria entidade (pagador + destino) + conciliacoes (N x 3).
+        NAO inclui CTes ou NFs (granularidade inferior). Para ver CTes, usar
+        export de Operacoes.
+        """
         if _check_access():
             return redirect(url_for('main.dashboard'))
 
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
         cliente_filtro = request.args.get('cliente', '')
-        tipo_frete_filtro = request.args.get('tipo_frete', '')
         data_emissao_de = request.args.get('data_emissao_de', '')
         data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'data_emissao')
@@ -926,8 +1147,6 @@ def register_exportacao_routes(bp):
 
         if status_filtro:
             query = query.filter(CarviaFaturaCliente.status == status_filtro)
-        if tipo_frete_filtro:
-            query = query.filter(CarviaFaturaCliente.tipo_frete == tipo_frete_filtro)
         if cliente_filtro:
             cliente_like = f'%{cliente_filtro}%'
             query = query.filter(
@@ -973,92 +1192,64 @@ def register_exportacao_routes(bp):
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_faturas_cliente'))
 
-        # Custos de entrega via operacoes vinculadas a fatura
-        from collections import defaultdict
-        fat_ids_all = [f.id for f in items]
-        fat_custos = defaultdict(int)
-        fat_custos_valor = defaultdict(float)
-        if fat_ids_all:
-            # operacoes por fatura
-            fat_op_rows = db.session.query(
-                CarviaOperacao.fatura_cliente_id,
-                CarviaOperacao.id,
-            ).filter(
-                CarviaOperacao.fatura_cliente_id.in_(fat_ids_all)
-            ).all()
+        fat_ids = [f.id for f in items]
+        concil_por_fat = _coletar_conciliacoes('fatura_cliente', fat_ids)
+        max_concil = _max_len(concil_por_fat.values())
 
-            fat_op_map = defaultdict(set)
-            all_fc_op_ids = set()
-            for fc_id, o_id in fat_op_rows:
-                fat_op_map[fc_id].add(o_id)
-                all_fc_op_ids.add(o_id)
-
-            if all_fc_op_ids:
-                custos_rows = db.session.query(
-                    CarviaCustoEntrega.operacao_id,
-                    func.count(CarviaCustoEntrega.id),
-                    func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
-                ).filter(
-                    CarviaCustoEntrega.operacao_id.in_(all_fc_op_ids)
-                ).group_by(CarviaCustoEntrega.operacao_id).all()
-
-                op_custo_cnt = {}
-                op_custo_val = {}
-                for o_id, cnt, val in custos_rows:
-                    op_custo_cnt[o_id] = cnt
-                    op_custo_val[o_id] = float(val)
-
-                for fc_id, op_set in fat_op_map.items():
-                    for o_id in op_set:
-                        fat_custos[fc_id] += op_custo_cnt.get(o_id, 0)
-                        fat_custos_valor[fc_id] += op_custo_val.get(o_id, 0)
-
-        # Batch papeis via helper: cobre operacao + CTe Comp fallback + tipo_frete
-        from app.carvia.utils.papeis_frete import batch_papeis_por_fatura_cliente
-        tipo_frete_por_fat = {f.id: f.tipo_frete for f in items if f.tipo_frete}
-        papeis_por_fatura = batch_papeis_por_fatura_cliente(fat_ids_all, tipo_frete_por_fat)
-
-        # Batch clientes comerciais via CNPJ DESTINATARIO da NF das operacoes da
-        # fatura (fallback para CTe Complementar). Cliente = quem recebe, nao o
-        # pagador. Usuario usa o nome comercial ("ALICE - MOTOCHEFE") no Excel
-        # para cobrar o cliente final, nao a razao social do pagador.
+        # Cliente comercial via CNPJ DESTINATARIO da NF (para ajudar cobranca).
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
-        clientes_por_fatura = CarviaClienteService.resolver_clientes_por_faturas_cliente(fat_ids_all)
+        clientes_por_fatura = CarviaClienteService.resolver_clientes_por_faturas_cliente(fat_ids)
 
-        data = []
+        linhas = []
         for f in items:
-            p = papeis_por_fatura.get(f.id) or {}
-            emit = p.get('emit') or {}
-            dest = p.get('dest') or {}
-            # Coluna "Tomador" removida: redundante com Tipo Frete (FOB/CIF),
-            # que ja indica quem paga (FOB=Remetente, CIF=Destinatario).
             cli = clientes_por_fatura.get(f.id) or {}
-            data.append({
-                'Numero Fatura': f.numero_fatura or '',
-                'Cliente Comercial': cli.get('nome_comercial') or '',
-                'Razao Social (Fatura)': f.nome_cliente or '',
-                'CNPJ Pagador': f.cnpj_cliente or '',
-                'Emitente': emit.get('nome') or '',
-                'CNPJ Emitente': emit.get('cnpj') or '',
-                'Destinatario': dest.get('nome') or '',
-                'CNPJ Destinatario': dest.get('cnpj') or '',
-                'Data Emissao': _fmt_date(f.data_emissao),
-                'Vencimento': _fmt_date(f.vencimento),
-                'Valor Total': float(f.valor_total or 0),
-                'Tipo Frete': f.tipo_frete or '',
-                'Status': f.status or '',
-                'Qtd Custos Entrega': fat_custos.get(f.id, 0),
-                'Valor Custos Entrega': fat_custos_valor.get(f.id, 0),
-                'Pago Em': _fmt_datetime(f.pago_em),
-                'Pago Por': f.pago_por or '',
-                'Conciliado': _fmt_bool(f.conciliado),
-                'Total Conciliado': float(f.total_conciliado or 0),
-                'Criado Em': _fmt_datetime(f.criado_em),
-                'Criado Por': f.criado_por or '',
-            })
+            concils = concil_por_fat.get(f.id, [])
+            destino = '/'.join(filter(None, [f.pagador_cidade, f.pagador_uf]))
 
-        df = pd.DataFrame(data)
-        return _gerar_excel(df, 'Faturas Cliente', 'faturas_cliente')
+            linha = {
+                'fat_numero': f.numero_fatura or '',
+                'fat_cliente_comercial': cli.get('nome_comercial') or '',
+                'fat_cnpj_pagador': f.cnpj_cliente or '',
+                'fat_pagador': f.nome_cliente or '',
+                'fat_destino': destino,
+                'fat_data': f.data_emissao,
+                'fat_vencimento': f.vencimento,
+                'fat_valor': float(f.valor_total or 0),
+                'fat_status': f.status or '',
+                'fat_total_conciliado': float(f.total_conciliado or 0),
+                'fat_pago_em': f.pago_em,
+                'fat_pago_por': f.pago_por or '',
+            }
+            for i in range(1, max_concil + 1):
+                k = concils[i - 1] if i - 1 < len(concils) else None
+                linha[f'concil_data_{i}'] = k[0] if k else None
+                linha[f'concil_valor_{i}'] = k[1] if k else ''
+                linha[f'concil_desc_{i}'] = k[2] if k else ''
+            linhas.append(linha)
+
+        colunas = [
+            ColunaGrupo('FATURA', [
+                Campo('fat_numero', 'Numero'),
+                Campo('fat_cliente_comercial', 'Cliente Comercial'),
+                Campo('fat_cnpj_pagador', 'CNPJ Pagador'),
+                Campo('fat_pagador', 'Pagador'),
+                Campo('fat_destino', 'End. Pagador'),
+                Campo('fat_data', 'Emissao', fmt='date'),
+                Campo('fat_vencimento', 'Vencimento', fmt='date'),
+                Campo('fat_valor', 'Valor Total', fmt='money'),
+                Campo('fat_status', 'Status'),
+                Campo('fat_total_conciliado', 'Total Conciliado', fmt='money'),
+                Campo('fat_pago_em', 'Pago Em', fmt='datetime'),
+                Campo('fat_pago_por', 'Pago Por'),
+            ]),
+        ]
+        colunas += grupo_dinamico('CONCILIACAO', max_concil, [
+            Campo('concil_data_{i}', 'Data', fmt='date'),
+            Campo('concil_valor_{i}', 'Valor', fmt='money'),
+            Campo('concil_desc_{i}', 'Descricao'),
+        ])
+
+        return gerar_excel_duplo_cabecalho(colunas, linhas, 'Faturas Cliente', 'faturas_cliente')
 
     # =====================================================================
     # 7. Faturas Transportadora
@@ -1148,99 +1339,57 @@ def register_exportacao_routes(bp):
             flash('Nenhum dado para exportar.', 'warning')
             return redirect(url_for('carvia.listar_faturas_transportadora'))
 
-        # Custos e CTes comp via subcontratos -> operacoes
-        from collections import defaultdict
-        ft_ids_all = [f.id for f in items]
-        ft_custos = defaultdict(int)
-        ft_custos_valor = defaultdict(float)
-        ft_comps = defaultdict(int)
-        ft_comps_valor = defaultdict(float)
-        if ft_ids_all:
-            sub_rows = db.session.query(
-                CarviaSubcontrato.fatura_transportadora_id,
-                CarviaSubcontrato.operacao_id,
-            ).filter(
-                CarviaSubcontrato.fatura_transportadora_id.in_(ft_ids_all),
-                CarviaSubcontrato.operacao_id.isnot(None),
-            ).all()
+        ft_ids = [f.id for f in items]
+        concil_por_ft = _coletar_conciliacoes('fatura_transportadora', ft_ids)
+        max_concil = _max_len(concil_por_ft.values())
 
-            ft_op_map = defaultdict(set)
-            all_ft_op_ids = set()
-            for ft_id, o_id in sub_rows:
-                ft_op_map[ft_id].add(o_id)
-                all_ft_op_ids.add(o_id)
-
-            if all_ft_op_ids:
-                op_custo_cnt = {}
-                op_custo_val = {}
-                for o_id, cnt, val in db.session.query(
-                    CarviaCustoEntrega.operacao_id,
-                    func.count(CarviaCustoEntrega.id),
-                    func.coalesce(func.sum(CarviaCustoEntrega.valor), 0),
-                ).filter(
-                    CarviaCustoEntrega.operacao_id.in_(all_ft_op_ids)
-                ).group_by(CarviaCustoEntrega.operacao_id).all():
-                    op_custo_cnt[o_id] = cnt
-                    op_custo_val[o_id] = float(val)
-
-                op_comp_cnt = {}
-                op_comp_val = {}
-                for o_id, cnt, val in db.session.query(
-                    CarviaCteComplementar.operacao_id,
-                    func.count(CarviaCteComplementar.id),
-                    func.coalesce(func.sum(CarviaCteComplementar.cte_valor), 0),
-                ).filter(
-                    CarviaCteComplementar.operacao_id.in_(all_ft_op_ids)
-                ).group_by(CarviaCteComplementar.operacao_id).all():
-                    op_comp_cnt[o_id] = cnt
-                    op_comp_val[o_id] = float(val)
-
-                for ft_id, op_set in ft_op_map.items():
-                    for o_id in op_set:
-                        ft_custos[ft_id] += op_custo_cnt.get(o_id, 0)
-                        ft_custos_valor[ft_id] += op_custo_val.get(o_id, 0)
-                        ft_comps[ft_id] += op_comp_cnt.get(o_id, 0)
-                        ft_comps_valor[ft_id] += op_comp_val.get(o_id, 0)
-
-        # Batch papeis (emitente/destinatario/tomador) via subcontratos -> operacoes -> NFs
-        from app.carvia.utils.papeis_frete import batch_papeis_por_fatura_transportadora
-        papeis_por_fatura = batch_papeis_por_fatura_transportadora(ft_ids_all)
-
-        data = []
+        linhas = []
         for f in items:
-            p = papeis_por_fatura.get(f.id) or {}
-            emit = p.get('emit') or {}
-            dest = p.get('dest') or {}
-            # Coluna "Tomador" removida: redundante com Tipo Frete (FOB/CIF) da
-            # fatura cliente, que ja indica quem paga (FOB=Remetente, CIF=Destinatario).
-            data.append({
-                'Numero Fatura': f.numero_fatura or '',
-                'Transportadora': f.transportadora.razao_social if f.transportadora else '',
-                'Emitente': emit.get('nome') or '',
-                'CNPJ Emitente': emit.get('cnpj') or '',
-                'Destinatario': dest.get('nome') or '',
-                'CNPJ Destinatario': dest.get('cnpj') or '',
-                'Data Emissao': _fmt_date(f.data_emissao),
-                'Vencimento': _fmt_date(f.vencimento),
-                'Valor Total': float(f.valor_total or 0),
-                'Status Conferencia': f.status_conferencia or '',
-                'Conferido Por': f.conferido_por or '',
-                'Conferido Em': _fmt_datetime(f.conferido_em),
-                'Status Pagamento': f.status_pagamento or '',
-                'Qtd Custos Entrega': ft_custos.get(f.id, 0),
-                'Valor Custos Entrega': ft_custos_valor.get(f.id, 0),
-                'Qtd CTes Comp': ft_comps.get(f.id, 0),
-                'Valor CTes Comp': ft_comps_valor.get(f.id, 0),
-                'Pago Em': _fmt_datetime(f.pago_em),
-                'Pago Por': f.pago_por or '',
-                'Conciliado': _fmt_bool(f.conciliado),
-                'Total Conciliado': float(f.total_conciliado or 0),
-                'Criado Em': _fmt_datetime(f.criado_em),
-                'Criado Por': f.criado_por or '',
-            })
+            concils = concil_por_ft.get(f.id, [])
+            linha = {
+                'ft_numero': f.numero_fatura or '',
+                'ft_transportadora': f.transportadora.razao_social if f.transportadora else '',
+                'ft_data': f.data_emissao,
+                'ft_vencimento': f.vencimento,
+                'ft_valor': float(f.valor_total or 0),
+                'ft_status_conf': f.status_conferencia or '',
+                'ft_conf_por': f.conferido_por or '',
+                'ft_conf_em': f.conferido_em,
+                'ft_status_pag': f.status_pagamento or '',
+                'ft_total_conciliado': float(f.total_conciliado or 0),
+                'ft_pago_em': f.pago_em,
+                'ft_pago_por': f.pago_por or '',
+            }
+            for i in range(1, max_concil + 1):
+                k = concils[i - 1] if i - 1 < len(concils) else None
+                linha[f'concil_data_{i}'] = k[0] if k else None
+                linha[f'concil_valor_{i}'] = k[1] if k else ''
+                linha[f'concil_desc_{i}'] = k[2] if k else ''
+            linhas.append(linha)
 
-        df = pd.DataFrame(data)
-        return _gerar_excel(df, 'Faturas Transportadora', 'faturas_transportadora')
+        colunas = [
+            ColunaGrupo('FATURA TRANSPORTADORA', [
+                Campo('ft_numero', 'Numero'),
+                Campo('ft_transportadora', 'Transportadora'),
+                Campo('ft_data', 'Emissao', fmt='date'),
+                Campo('ft_vencimento', 'Vencimento', fmt='date'),
+                Campo('ft_valor', 'Valor Total', fmt='money'),
+                Campo('ft_status_conf', 'Status Conferencia'),
+                Campo('ft_conf_por', 'Conferido Por'),
+                Campo('ft_conf_em', 'Conferido Em', fmt='datetime'),
+                Campo('ft_status_pag', 'Status Pagamento'),
+                Campo('ft_total_conciliado', 'Total Conciliado', fmt='money'),
+                Campo('ft_pago_em', 'Pago Em', fmt='datetime'),
+                Campo('ft_pago_por', 'Pago Por'),
+            ]),
+        ]
+        colunas += grupo_dinamico('CONCILIACAO', max_concil, [
+            Campo('concil_data_{i}', 'Data', fmt='date'),
+            Campo('concil_valor_{i}', 'Valor', fmt='money'),
+            Campo('concil_desc_{i}', 'Descricao'),
+        ])
+
+        return gerar_excel_duplo_cabecalho(colunas, linhas, 'Faturas Transp', 'faturas_transportadora')
 
     # =====================================================================
     # 8. Despesas

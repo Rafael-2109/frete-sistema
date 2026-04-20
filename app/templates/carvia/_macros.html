@@ -67,15 +67,13 @@
     dest    - dict com {nome, cnpj, cidade, uf} ou None
     tomador - pode ser:
               (a) string 'emitente' | 'destinatario' | None (legado — compat)
-              (b) dict {codigo, label_visual, label_completo, inferido} (novo)
+              (b) dict {codigo, label_visual, label_completo} (novo — SOT cte_tomador)
     compact - True para celula de listagem; False para card de detalhe
 
   Comportamento:
     - tomador aponta para emitente   → badge "TOM" no emitente
     - tomador aponta para destinatario → badge "TOM" no destinatario
     - tomador = EXPEDIDOR/RECEBEDOR/TERCEIRO → linha adicional "Tomador: <nome>"
-    - tomador.inferido=True         → title="Inferido pelo tipo de frete"
-                                        (em vez de "Extraido do CTe")
 #}
 {#
   badge_nf_transferencia — Renderiza badge "NF Transf. ####" com link
@@ -105,21 +103,19 @@
 {%- endmacro %}
 
 {% macro emitente_destinatario(emit, dest, tomador, compact=False) %}
-  {# Normalizar tomador: aceita string legada ou dict novo #}
+  {# Normalizar tomador: aceita string legada ou dict novo.
+     SOT = cte_tomador do XML (ou wizard manual). Nao ha mais fallback FOB/CIF. #}
   {% if tomador is string %}
     {% set _tom_visual = tomador %}
     {% set _tom_completo = None %}
-    {% set _tom_inferido = False %}
   {% elif tomador is mapping %}
     {% set _tom_visual = tomador.label_visual %}
     {% set _tom_completo = tomador.label_completo %}
-    {% set _tom_inferido = tomador.inferido %}
   {% else %}
     {% set _tom_visual = None %}
     {% set _tom_completo = None %}
-    {% set _tom_inferido = False %}
   {% endif %}
-  {% set _tom_title = 'Tomador inferido pelo tipo de frete (FOB/CIF)' if _tom_inferido else 'Tomador do Frete (extraido do CTe)' %}
+  {% set _tom_title = 'Tomador do Frete (extraido do CTe)' %}
   {% set _tom_extra = _tom_completo and not _tom_visual %}
   {% if compact %}
     <div class="small carvia-emit-dest-compact">
@@ -127,7 +123,7 @@
         <strong>{{ emit.nome if emit else '-' }}</strong>
         {% if _tom_visual == 'emitente' %}
           <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
-            <i class="fas fa-dollar-sign"></i> TOM{% if _tom_inferido %}*{% endif %}
+            <i class="fas fa-dollar-sign"></i> TOM
           </span>
         {% endif %}
       </span>
@@ -136,13 +132,13 @@
         <strong>{{ dest.nome if dest else '-' }}</strong>
         {% if _tom_visual == 'destinatario' %}
           <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
-            <i class="fas fa-dollar-sign"></i> TOM{% if _tom_inferido %}*{% endif %}
+            <i class="fas fa-dollar-sign"></i> TOM
           </span>
         {% endif %}
       </span>
       {% if _tom_extra %}
       <div class="small text-muted mt-1" title="{{ _tom_title }}">
-        <i class="fas fa-dollar-sign"></i> Tomador: {{ _tom_completo }}{% if _tom_inferido %} <em>(inferido)</em>{% endif %}
+        <i class="fas fa-dollar-sign"></i> Tomador: {{ _tom_completo }}
       </div>
       {% endif %}
     </div>
@@ -153,7 +149,7 @@
           Emitente
           {% if _tom_visual == 'emitente' %}
             <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
-              <i class="fas fa-dollar-sign"></i> TOMADOR{% if _tom_inferido %}*{% endif %}
+              <i class="fas fa-dollar-sign"></i> TOMADOR
             </span>
           {% endif %}
         </small>
@@ -172,7 +168,7 @@
           Destinatario
           {% if _tom_visual == 'destinatario' %}
             <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
-              <i class="fas fa-dollar-sign"></i> TOMADOR{% if _tom_inferido %}*{% endif %}
+              <i class="fas fa-dollar-sign"></i> TOMADOR
             </span>
           {% endif %}
         </small>
@@ -190,7 +186,7 @@
       <div class="col-12">
         <small class="text-muted d-block" title="{{ _tom_title }}">
           <span class="badge bg-secondary">
-            <i class="fas fa-dollar-sign"></i> Tomador: {{ _tom_completo }}{% if _tom_inferido %} <em>(inferido)</em>{% endif %}
+            <i class="fas fa-dollar-sign"></i> Tomador: {{ _tom_completo }}
           </span>
         </small>
       </div>

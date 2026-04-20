@@ -55,6 +55,10 @@ class CarviaCteComplementar(db.Model):
     # Status: RASCUNHO | EMITIDO | FATURADO | CANCELADO
     status = db.Column(db.String(20), nullable=False, default='RASCUNHO', index=True)
 
+    # Motivo extraido de <compl>/<ObsCont>/<xTexto> iniciando com "MOTIVO:".
+    # Texto livre preservado (descarga, reentrega, pedagio, etc).
+    motivo = db.Column(db.String(500))
+
     # Auditoria
     observacoes = db.Column(db.Text)
     criado_por = db.Column(db.String(100), nullable=False)

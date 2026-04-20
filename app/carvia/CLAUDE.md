@@ -155,6 +155,17 @@ Operacao triangular (industria SP -> filial RJ -> cliente final) emite 2 CTes ma
 - **Bloqueio `pode_cancelar`**: NF com vinculos ativos (transf ou venda) nao pode ser cancelada.
 - **Arquivos**: `services/documentos/nf_transferencia_service.py`, `routes/nf_transferencia_routes.py`, `templates/carvia/nfs/_modal_inserir_nf_transferencia.html`. Model `CarviaNfVinculoTransferencia` em `models/documentos.py`.
 
+### R19: SOT Tomador/Incoterm = XML do CTe (2026-04-20)
+Tomador do frete tem fonte unica: `CarviaOperacao.cte_tomador` (extraido de `<ide>/<toma3>` ou `<toma4>` pelo parser CTe, ou preenchido obrigatoriamente no wizard manual). Campo `tipo_frete` (CIF/FOB) REMOVIDO de `CarviaFaturaCliente` — granularidade errada (fatura agrupa N CTes potencialmente com incoterms diferentes).
+
+- **Fallback FOB/CIF -> tomador removido** (`utils/tomador.py`). Se `cte_tomador=NULL`, UI/Excel exibem vazio — nunca inferem.
+- **NF-e `modFrete` capturado** em `carvia_nfs.modalidade_frete` (parser `nfe_xml_parser.get_transporte()`) — exibido na coluna "modFrete" do export NFs, mas nao usado para derivar tomador (SOT = CTe).
+- **CTe Comp `motivo`** extraido de `<compl>/<ObsCont>/<xTexto>` com padrao `MOTIVO: ...` (parser `cte_xml_parser_carvia.get_motivo()`). Texto livre preservado (descarga, reentrega, pedagio, etc).
+
+**Exports Excel com DUPLO CABECALHO hierarquico** (linha 1 = grupo mesclado, linha 2 = campos). Helper: `app/carvia/utils/excel_export_helper.py` (`ColunaGrupo`, `Campo`, `grupo_dinamico`).
+  - Granularidade: NF=1 linha/item, CTe=1 linha/NF vinculada, CTe Comp=1 linha/comp, Faturas=1 linha/fatura.
+  - Agrupamentos: cada export mostra campos da PROPRIA entidade + agrupamentos SUPERIORES (ex.: Fatura aparece no export CTe). NUNCA agrupamento inferior.
+
 ---
 
 ## Modelos

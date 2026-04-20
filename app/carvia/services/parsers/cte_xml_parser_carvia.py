@@ -350,6 +350,29 @@ class CTeXMLParserCarvia(CTeXMLParser):
 
         return obs_list
 
+    def get_motivo(self) -> Optional[str]:
+        """Extrai texto apos 'MOTIVO:' de qualquer <ObsCont>/<xTexto>.
+
+        Usado principalmente em CTes Complementares. O <xCampo> costuma ser '2'
+        mas nao e garantia — o padrao e o texto comecar com 'MOTIVO:'. Retorna
+        apenas o conteudo apos 'MOTIVO:' (trimmed), preservando o texto livre
+        (descarga, reentrega, pedagio, etc — nao interpretado).
+
+        Exemplo XML:
+            <ObsCont xCampo="2"><xTexto>- MOTIVO: descarga</xTexto></ObsCont>
+        Retorna: 'descarga'
+        """
+        import re as _re
+        for obs in self.get_observacoes_contribuinte():
+            texto = (obs.get('texto') or '').strip()
+            match = _re.search(r'MOTIVO\s*:\s*(.+)', texto, _re.IGNORECASE)
+            if match:
+                motivo = match.group(1).strip()
+                # Remove prefixos comuns de formatacao (-, *, :)
+                motivo = _re.sub(r'^[\-\*:\s]+', '', motivo).strip()
+                return motivo[:500] if motivo else None
+        return None
+
     def get_previsao_entrega(self) -> Optional[str]:
         """Extrai data de previsao de entrega de <compl>/<Entrega>/<comData>/<dProg>"""
         entrega = self._find_tag('Entrega')
@@ -745,6 +768,9 @@ class CTeXMLParserCarvia(CTeXMLParser):
             'impostos': self.get_impostos(),
             # Tomador do servico (<ide>/<toma3> ou <toma4>)
             'tomador': self.get_tomador(),
+            # Motivo extraido de <compl>/<ObsCont>/<xTexto> "MOTIVO: ..."
+            # (principalmente para CTes Complementares)
+            'motivo': self.get_motivo(),
         }
 
     def _get_tag_text_in(self, tag_name: str, root) -> Optional[str]:

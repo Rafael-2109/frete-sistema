@@ -40,7 +40,6 @@ def register_fatura_routes(bp):
         status_filtro = request.args.get('status', '')
         busca = request.args.get('busca', '')
         cliente_filtro = request.args.get('cliente', '')
-        tipo_frete_filtro = request.args.get('tipo_frete', '')
         data_emissao_de = request.args.get('data_emissao_de', '')
         data_emissao_ate = request.args.get('data_emissao_ate', '')
         sort = request.args.get('sort', 'data_emissao')
@@ -62,8 +61,6 @@ def register_fatura_routes(bp):
 
         if status_filtro:
             query = query.filter(CarviaFaturaCliente.status == status_filtro)
-        if tipo_frete_filtro:
-            query = query.filter(CarviaFaturaCliente.tipo_frete == tipo_frete_filtro)
         if cliente_filtro:
             cliente_like = f'%{cliente_filtro}%'
             query = query.filter(
@@ -142,13 +139,12 @@ def register_fatura_routes(bp):
                     'cte_numero': cte_num,
                 })
 
-        # Batch papeis (emit/dest/tomador) via helper centralizado que:
-        # - faz join operacao -> NF (caminho principal)
-        # - faz fallback via CTe Complementar -> operacao pai -> NF
-        # - faz fallback final via tipo_frete (FOB/CIF) quando nao ha NF
+        # Batch papeis (emit/dest/tomador) via helper centralizado:
+        # - join operacao -> NF (caminho principal)
+        # - fallback via CTe Complementar -> operacao pai -> NF
+        # Tomador vem de cte_tomador (SOT = XML do CTe).
         from app.carvia.utils.papeis_frete import batch_papeis_por_fatura_cliente
-        tipo_frete_por_fat = {f.id: f.tipo_frete for f, _ in paginacao.items if f.tipo_frete}
-        papeis_por_fatura = batch_papeis_por_fatura_cliente(fat_ids, tipo_frete_por_fat)
+        papeis_por_fatura = batch_papeis_por_fatura_cliente(fat_ids)
 
         today = date.today()
 
@@ -163,7 +159,6 @@ def register_fatura_routes(bp):
             faturas=paginacao.items,
             paginacao=paginacao,
             status_filtro=status_filtro,
-            tipo_frete_filtro=tipo_frete_filtro,
             busca=busca,
             cliente_filtro=cliente_filtro,
             data_emissao_de=data_emissao_de,
@@ -194,10 +189,6 @@ def register_fatura_routes(bp):
             cte_comp_ids = request.form.getlist('cte_comp_ids', type=int)
             pagador_cnpj = request.form.get('pagador_cnpj', '').strip()
             pagador_nome = request.form.get('pagador_nome', '').strip()
-            # tipo_frete: FOB/CIF para habilitar fallback do Tomador no Excel
-            # quando o CTe e criado manualmente (cte_tomador NULL na operacao).
-            tipo_frete_raw = (request.form.get('tipo_frete') or '').strip().upper()
-            tipo_frete = tipo_frete_raw if tipo_frete_raw in ('FOB', 'CIF') else None
 
             if not cnpj_cliente or not data_emissao_str:
                 flash('CNPJ e data de emissao sao obrigatorios.', 'warning')
@@ -266,7 +257,6 @@ def register_fatura_routes(bp):
                     valor_total=valor_total,
                     vencimento=vencimento,
                     status='PENDENTE',
-                    tipo_frete=tipo_frete,
                     observacoes=observacoes or None,
                     criado_por=current_user.email,
                 )
@@ -578,7 +568,8 @@ def register_fatura_routes(bp):
             [fatura.id],
         ).get(fatura.id)
 
-        # Papeis de frete via helper centralizado (cobre operacao + CTe Comp fallback + tipo_frete)
+        # Papeis de frete via helper centralizado (operacao + CTe Comp fallback).
+        # Tomador vem de cte_tomador (SOT = XML CTe).
         from app.carvia.utils.papeis_frete import resolver_papeis_fatura_cliente
         papeis = resolver_papeis_fatura_cliente(fatura)
 
@@ -702,51 +693,8 @@ def register_fatura_routes(bp):
 
         return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
-    @bp.route('/faturas-cliente/<int:fatura_id>/editar-tipo-frete', methods=['POST']) # type: ignore
-    @login_required
-    def editar_tipo_frete_fatura_cliente(fatura_id): # type: ignore
-        """Edita o incoterm (FOB/CIF) de uma fatura cliente existente.
-
-        Permite corrigir faturas historicas criadas sem tipo_frete (FAT-### antigas)
-        para que o Excel exportado mostre quem paga o frete.
-        """
-        if not getattr(current_user, 'sistema_carvia', False):
-            flash('Acesso negado.', 'danger')
-            return redirect(url_for('main.dashboard'))
-
-        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
-        if not fatura:
-            flash('Fatura nao encontrada.', 'warning')
-            return redirect(url_for('carvia.listar_faturas_cliente'))
-
-        if fatura.status in ('PAGA', 'CANCELADA'):
-            flash(f'Nao e possivel editar tipo de frete de fatura {fatura.status.lower()}.', 'warning')
-            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
-
-        if fatura.status_conferencia == 'CONFERIDO':
-            flash(
-                'Fatura conferida nao pode ter tipo de frete alterado. '
-                'Reabra a conferencia antes de editar.',
-                'warning',
-            )
-            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
-
-        tipo_frete_raw = (request.form.get('tipo_frete') or '').strip().upper()
-        tipo_frete = tipo_frete_raw if tipo_frete_raw in ('FOB', 'CIF') else None
-
-        try:
-            fatura.tipo_frete = tipo_frete
-            db.session.commit()
-            if tipo_frete:
-                flash(f'Tipo de frete atualizado para {tipo_frete}.', 'success')
-            else:
-                flash('Tipo de frete removido.', 'success')
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro ao editar tipo_frete fatura cliente {fatura_id}: {e}")
-            flash(f'Erro: {e}', 'danger')
-
-        return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+    # Rota editar-tipo-frete removida em 2026-04-20 — campo tipo_frete dropado.
+    # SOT do tomador/incoterm e o CTe (cte_tomador).
 
     @bp.route('/faturas-cliente/<int:fatura_id>/alterar-pagador', methods=['POST']) # type: ignore
     @login_required
@@ -1175,9 +1123,6 @@ def register_fatura_routes(bp):
         data_emissao_str = request.form.get('data_emissao', '')
         vencimento_str = request.form.get('vencimento', '')
         observacoes = request.form.get('observacoes', '')
-        # Incoterm (FOB/CIF): referencia quem paga o frete no Excel exportado.
-        tipo_frete_raw = (request.form.get('tipo_frete') or '').strip().upper()
-        tipo_frete = tipo_frete_raw if tipo_frete_raw in ('FOB', 'CIF') else None
 
         if not operacao_id or not data_emissao_str:
             flash('Operacao e data de emissao sao obrigatorios.', 'warning')
@@ -1213,7 +1158,6 @@ def register_fatura_routes(bp):
                 valor_total=valor_total,
                 vencimento=vencimento,
                 status='PENDENTE',
-                tipo_frete=tipo_frete,
                 observacoes=observacoes or None,
                 criado_por=current_user.email,
             )

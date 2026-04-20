@@ -6,7 +6,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-file-invoice-dollar"></i> Faturas CarVia</h2>
         <div class="d-flex gap-2">
-            <a href="{{ url_for('carvia.exportar_faturas_cliente', status=status_filtro, busca=busca, cliente=cliente_filtro, tipo_frete=tipo_frete_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}"
+            <a href="{{ url_for('carvia.exportar_faturas_cliente', status=status_filtro, busca=busca, cliente=cliente_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}"
                class="btn btn-outline-success btn-sm" title="Exportar Excel">
                 <i class="fas fa-file-excel"></i> Excel
             </a>
@@ -50,14 +50,6 @@
                         <option value="CANCELADA" {{ 'selected' if status_filtro == 'CANCELADA' }}>Cancelada</option>
                     </select>
                 </div>
-                <div class="col-md-1">
-                    <label class="form-label small">Frete</label>
-                    <select name="tipo_frete" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        <option value="CIF" {{ 'selected' if tipo_frete_filtro == 'CIF' }}>CIF</option>
-                        <option value="FOB" {{ 'selected' if tipo_frete_filtro == 'FOB' }}>FOB</option>
-                    </select>
-                </div>
                 <div class="col-md-2">
                     <label class="form-label small">Emissao De</label>
                     <input type="date" name="data_emissao_de" class="form-control form-control-sm"
@@ -73,7 +65,7 @@
                         <i class="fas fa-search"></i>
                     </button>
                 </div>
-                {% if busca or status_filtro or tipo_frete_filtro or cliente_filtro or data_emissao_de or data_emissao_ate %}
+                {% if busca or status_filtro or cliente_filtro or data_emissao_de or data_emissao_ate %}
                 <div class="col-md-1">
                     <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-sm btn-outline-secondary w-100">
                         <i class="fas fa-times"></i>
@@ -94,7 +86,7 @@
                             {{ th_sort('numero_fatura', 'Fatura', sort, direction) }}
                             {{ th_sort('nome_cliente', 'Pagador', sort, direction) }}
                             <th>CTes</th>
-                            <th>Frete</th>
+                            <th>Tomador</th>
                             {{ th_sort('data_emissao', 'Emissao', sort, direction) }}
                             {{ th_sort('vencimento', 'Vencimento', sort, direction) }}
                             {{ th_sort('valor_total', 'Valor', sort, direction, 'text-end') }}
@@ -147,8 +139,9 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if f.tipo_frete %}
-                                <span class="badge bg-secondary">{{ f.tipo_frete }}</span>
+                                {% set papeis = papeis_por_fatura.get(f.id) %}
+                                {% if papeis and papeis.tomador %}
+                                <span class="badge bg-secondary">{{ papeis.tomador.label_completo }}</span>
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
@@ -174,7 +167,7 @@
                 <ul class="pagination pagination-sm mb-0">
                     {% if paginacao.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=paginacao.prev_num, status=status_filtro, tipo_frete=tipo_frete_filtro, busca=busca, cliente=cliente_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=paginacao.prev_num, status=status_filtro, busca=busca, cliente=cliente_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -182,7 +175,7 @@
                     {% for p in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                     {% if p %}
                     <li class="page-item {{ 'active' if p == paginacao.page }}">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=p, status=status_filtro, tipo_frete=tipo_frete_filtro, busca=busca, cliente=cliente_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">{{ p }}</a>
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=p, status=status_filtro, busca=busca, cliente=cliente_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">{{ p }}</a>
                     </li>
                     {% else %}
                     <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -190,7 +183,7 @@
                     {% endfor %}
                     {% if paginacao.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=paginacao.next_num, status=status_filtro, tipo_frete=tipo_frete_filtro, busca=busca, cliente=cliente_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">
+                        <a class="page-link" href="{{ url_for('carvia.listar_faturas_cliente', page=paginacao.next_num, status=status_filtro, busca=busca, cliente=cliente_filtro, data_emissao_de=data_emissao_de, data_emissao_ate=data_emissao_ate, sort=sort, direction=direction) }}">
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

@@ -468,7 +468,6 @@
                             <th>Pagador</th>
                             <th>CNPJ Pagador</th>
                             <th>Valor</th>
-                            <th>Frete</th>
                             <th>Emissao</th>
                             <th>Vencimento</th>
                             <th>CTes Ref.</th>
@@ -506,14 +505,6 @@
                             </td>
                             <td class="valor-col carvia-editable-cell" data-campo="valor_total">
                                 {% if fat.valor_total is not none %}R$ {{ "%.2f"|format(fat.valor_total) }}{% else %}-{% endif %}
-                            </td>
-                            <td class="carvia-editable-cell" data-campo="tipo_frete">
-                                {% set tf = fat.get('tipo_frete') %}
-                                {% if tf == 'CIF' %}
-                                    <span class="badge bg-success">CIF</span>
-                                {% elif tf == 'FOB' %}
-                                    <span class="badge bg-primary">FOB</span>
-                                {% else %}-{% endif %}
                             </td>
                             <td class="carvia-editable-cell" data-campo="data_emissao">{{ fat.data_emissao or '-' }}</td>
                             <td class="carvia-editable-cell" data-campo="vencimento">

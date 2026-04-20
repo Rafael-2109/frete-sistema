@@ -404,7 +404,9 @@ def register_operacao_routes(bp):
 
             if form.validate_on_submit():
                 try:
-                    # cte_tomador: opcional (SelectField com choice vazio). Normaliza '' → None.
+                    # cte_tomador: obrigatorio (DataRequired no form.cte_tomador — forms.py:104).
+                    # SOT do tomador quando o CTe e manual (sem XML). Defesa em profundidade:
+                    # normalizamos aqui tambem caso o DataRequired seja removido no futuro.
                     tomador_valor = (form.cte_tomador.data or '').strip().upper() or None
                     operacao = CarviaOperacao(
                         cnpj_cliente=form.cnpj_cliente.data.strip(),

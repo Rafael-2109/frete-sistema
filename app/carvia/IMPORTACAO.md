@@ -68,10 +68,12 @@ PDFs SSW (`ssw.inf.br`) contem N faturas por arquivo (1 por pagina).
 - `cnpj_pagador` / `nome_pagador` = cliente (quem paga) — usado como `cnpj_cliente`
 - Bug anterior: `cnpj_emissor` era gravado como `cnpj_cliente` (CNPJ da CarVia em TODAS as faturas)
 
-**Campos SSW extras** (14 novos em CarviaFaturaCliente):
-- `tipo_frete` (CIF/FOB), `quantidade_documentos`, `valor_mercadoria`, `valor_icms`, `aliquota_icms`, `valor_pedagio`
+**Campos SSW extras em CarviaFaturaCliente**:
+- `quantidade_documentos`, `valor_mercadoria`, `valor_icms`, `aliquota_icms`, `valor_pedagio`
 - `vencimento_original` (antes de reprogramacao), `cancelada` (flag FATURA CANCELADA → status=CANCELADA)
 - `pagador_endereco`, `pagador_cep`, `pagador_cidade`, `pagador_uf`, `pagador_ie`, `pagador_telefone`
+
+**NOTA (R19, 2026-04-20)**: `tipo_frete` (CIF/FOB) REMOVIDO de CarviaFaturaCliente — SOT do tomador/incoterm e `CarviaOperacao.cte_tomador` (XML CTe ou wizard manual obrigatorio). Modalidade do frete por NF persistida em `CarviaNf.modalidade_frete` (campo SEFAZ `<transp>/<modFrete>`).
 
 ---
 

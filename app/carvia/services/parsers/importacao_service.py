@@ -980,6 +980,12 @@ class ImportacaoService:
                             else 'RASCUNHO'
                         )
 
+                        # Motivo: prioridade cte_data['motivo'] (novo parser — extrai
+                        # de <ObsCont>/<xTexto>) com fallback em info_complementar.
+                        # observacoes: campo livre para edicao manual (nao duplica motivo).
+                        motivo_extraido = (
+                            cte_data.get('motivo') or info_comp.get('motivo')
+                        )
                         cte_comp = CarviaCteComplementar(
                             numero_comp=numero_comp,
                             operacao_id=operacao_original.id,
@@ -993,7 +999,7 @@ class ImportacaoService:
                             cnpj_cliente=operacao_original.cnpj_cliente,
                             nome_cliente=operacao_original.nome_cliente,
                             status=status_inicial,
-                            observacoes=info_comp.get('motivo'),
+                            motivo=motivo_extraido,
                             criado_por=criado_por,
                         )
 
@@ -1714,8 +1720,7 @@ class ImportacaoService:
             vencimento=vencimento,
             arquivo_nome_original=fat_data.get('arquivo_nome_original'),
             arquivo_pdf_path=fat_data.get('arquivo_pdf_path'),
-            # Campos SSW adicionais
-            tipo_frete=fat_data.get('tipo_frete'),
+            # Campos SSW adicionais (tipo_frete removido 2026-04-20 — SOT no CTe)
             quantidade_documentos=fat_data.get('quantidade_documentos'),
             valor_mercadoria=fat_data.get('valor_mercadoria'),
             valor_icms=fat_data.get('valor_icms'),
@@ -1734,7 +1739,7 @@ class ImportacaoService:
         )
         logger.info(
             f"Fatura cliente criada: {numero} cnpj_pagador={cnpj_pagador} "
-            f"cancelada={cancelada} tipo_frete={fat_data.get('tipo_frete')}"
+            f"cancelada={cancelada}"
         )
         return fatura
 
@@ -1901,6 +1906,7 @@ class ImportacaoService:
         nf.peso_bruto = data.get('peso_bruto') or nf.peso_bruto
         nf.peso_liquido = data.get('peso_liquido') or nf.peso_liquido
         nf.quantidade_volumes = data.get('quantidade_volumes') or nf.quantidade_volumes
+        nf.modalidade_frete = data.get('modalidade_frete') or nf.modalidade_frete
         nf.arquivo_nome_original = data.get('arquivo_nome_original') or nf.arquivo_nome_original
         nf.arquivo_pdf_path = data.get('arquivo_pdf_path') or nf.arquivo_pdf_path
         nf.arquivo_xml_path = data.get('arquivo_xml_path') or nf.arquivo_xml_path
@@ -1930,6 +1936,7 @@ class ImportacaoService:
             peso_bruto=data.get('peso_bruto'),
             peso_liquido=data.get('peso_liquido'),
             quantidade_volumes=data.get('quantidade_volumes'),
+            modalidade_frete=data.get('modalidade_frete'),
             arquivo_nome_original=data.get('arquivo_nome_original'),
             arquivo_xml_path=data.get('arquivo_xml_path'),
             arquivo_pdf_path=data.get('arquivo_pdf_path'),

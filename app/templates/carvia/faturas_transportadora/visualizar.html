@@ -149,10 +149,7 @@
             <small class="text-muted d-block mt-1">
                 Dados extraidos do primeiro subcontrato vinculado → operacao → primeira NF.
                 A CarVia e tomadora do frete desta fatura; o badge <strong>TOMADOR</strong>, quando presente,
-                reflete o tomador declarado no CTe original emitido ao cliente final
-                {% if papeis.tomador and papeis.tomador.inferido %}
-                (<em>inferido pelo tipo de frete — nao ha cte_tomador no XML original</em>)
-                {% endif %}.
+                reflete o tomador declarado no CTe original emitido ao cliente final.
             </small>
             {% endif %}
             {% if fatura.observacoes %}

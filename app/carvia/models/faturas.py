@@ -27,7 +27,8 @@ class CarviaFaturaCliente(db.Model):
     arquivo_nome_original = db.Column(db.String(255))
 
     # Campos adicionais extraidos do PDF SSW
-    tipo_frete = db.Column(db.String(10))  # CIF ou FOB
+    # NOTA (2026-04-20): tipo_frete REMOVIDO — SOT do incoterm/tomador esta no
+    # CTe (cte_tomador em CarviaOperacao). Granularidade errada na fatura.
     quantidade_documentos = db.Column(db.Integer)
     valor_mercadoria = db.Column(db.Numeric(15, 2))
     valor_icms = db.Column(db.Numeric(15, 2))

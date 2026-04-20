@@ -4,19 +4,23 @@ documento CarVia: Fatura Cliente, Fatura Transportadora, CTe Complementar.
 Centraliza logica que antes estava duplicada em rotas/templates e garante
 que CTe Complementar (sem emit/dest proprios) use a operacao pai como fonte.
 
+SOT do tomador = XML do CTe (cte_tomador em CarviaOperacao). Nao ha mais
+fallback FOB/CIF -> tomador (removido 2026-04-20): granularidade errada e
+cobertura parcial das 5 categorias SEFAZ.
+
 Todos os helpers retornam dicionarios com a mesma estrutura:
     {
         'emit': {'nome', 'cnpj', 'cidade', 'uf'} | None,
         'dest': {'nome', 'cnpj', 'cidade', 'uf'} | None,
-        'tomador': {'codigo', 'label_visual', 'label_completo', 'inferido'} | None,
-        'origem': str  # 'operacao' | 'cte_comp_pai' | 'subcontrato' | 'fallback_tipo_frete'
+        'tomador': {'codigo', 'label_visual', 'label_completo'} | None,
+        'origem': str  # 'operacao' | 'cte_comp_pai' | 'subcontrato'
     }
 
 O template consome via macro `emitente_destinatario_v2` em _macros.html.
 """
 
 from app import db
-from app.carvia.utils.tomador import resolver_tomador_com_fallback
+from app.carvia.utils.tomador import resolver_tomador
 
 
 # ---------------------------------------------------------------------- #
@@ -47,23 +51,19 @@ def _primeira_nf_da_operacao(operacao):
     if operacao is None:
         return None
     try:
-        # operacao.nfs e lazy='dynamic' — usa .first()
         return operacao.nfs.first()
     except Exception:
         return None
 
 
-def resolver_papeis_operacao(operacao, tipo_frete_fallback=None):
+def resolver_papeis_operacao(operacao):
     """Papeis a partir de uma CarviaOperacao: primeira NF + cte_tomador."""
     if operacao is None:
         return None
     primeira_nf = _primeira_nf_da_operacao(operacao)
     emit = _nf_para_papel(primeira_nf, 'emit')
     dest = _nf_para_papel(primeira_nf, 'dest')
-    tomador = resolver_tomador_com_fallback(
-        getattr(operacao, 'cte_tomador', None),
-        tipo_frete_fallback,
-    )
+    tomador = resolver_tomador(getattr(operacao, 'cte_tomador', None))
     if emit is None and dest is None and tomador is None:
         return None
     return {
@@ -74,44 +74,26 @@ def resolver_papeis_operacao(operacao, tipo_frete_fallback=None):
     }
 
 
-def resolver_papeis_cte_complementar(cte_comp, tipo_frete_fallback=None):
+def resolver_papeis_cte_complementar(cte_comp):
     """Papeis de CTe Complementar via operacao pai."""
     if cte_comp is None or cte_comp.operacao is None:
         return None
-    papeis = resolver_papeis_operacao(
-        cte_comp.operacao,
-        tipo_frete_fallback=tipo_frete_fallback,
-    )
+    papeis = resolver_papeis_operacao(cte_comp.operacao)
     if papeis:
         papeis['origem'] = 'cte_comp_pai'
     return papeis
 
 
 def resolver_papeis_fatura_cliente(fatura):
-    """Papeis de Fatura Cliente (single-record, sem N+1).
-
-    Reusa o batch helper que ja resolve em uma unica query agregada cobrindo:
-    1. Operacao direta da fatura -> NFs
-    2. Fallback via CTe Complementar -> operacao pai -> NFs
-    3. Fallback final via tipo_frete (FOB/CIF)
-
-    Evita loop com lazy .nfs.first() (B2 do code review).
-    """
+    """Papeis de Fatura Cliente (single-record, sem N+1)."""
     if fatura is None:
         return None
-
-    tipo_frete = getattr(fatura, 'tipo_frete', None)
-    tipo_frete_map = {fatura.id: tipo_frete} if tipo_frete else {}
-    resultado = batch_papeis_por_fatura_cliente([fatura.id], tipo_frete_map)
+    resultado = batch_papeis_por_fatura_cliente([fatura.id])
     return resultado.get(fatura.id)
 
 
 def resolver_papeis_fatura_transportadora(fatura):
-    """Papeis de Fatura Transportadora (single-record, sem N+1).
-
-    Reusa o batch helper (1 query agregada cobrindo subcontratos -> operacoes -> NFs
-    + LEFT JOIN FaturaCliente para fallback FOB/CIF).
-    """
+    """Papeis de Fatura Transportadora (single-record, sem N+1)."""
     if fatura is None:
         return None
     resultado = batch_papeis_por_fatura_transportadora([fatura.id])
@@ -144,16 +126,18 @@ def _row_to_papel(emit_nome, emit_cnpj, emit_cidade, emit_uf,
     return emit, dest
 
 
-def batch_papeis_por_fatura_cliente(fatura_ids, tipo_frete_por_fatura=None):
+def batch_papeis_por_fatura_cliente(fatura_ids):
     """Batch papeis para lista de Faturas Cliente.
 
-    Faz 2 joins:
+    Resolve via 2 joins:
     1. fatura -> operacao -> OperacaoNf -> Nf (primeira NF + cte_tomador)
     2. fatura -> CteComplementar -> operacao -> OperacaoNf -> Nf (fallback)
 
+    SEM fallback FOB/CIF: se operacao nao tem cte_tomador nem NF, a fatura
+    fica sem papeis e a UI exibe vazio (correto — SOT e o CTe).
+
     Args:
         fatura_ids: iteravel de ids
-        tipo_frete_por_fatura: dict {fatura_id: 'FOB'|'CIF'} para fallback tomador
 
     Returns:
         {fatura_id: papeis_dict}
@@ -166,11 +150,9 @@ def batch_papeis_por_fatura_cliente(fatura_ids, tipo_frete_por_fatura=None):
     if not fatura_ids:
         return {}
 
-    tipo_frete_por_fatura = tipo_frete_por_fatura or {}
     resultado = {}
 
     # 1. Via operacoes diretas. ORDER BY garante determinismo do "primeira NF wins"
-    #    (operacao.id asc → NF.id asc, consistente entre page loads — P1 code review).
     rows_op = db.session.query(
         CarviaOperacao.fatura_cliente_id,
         CarviaOperacao.cte_tomador,
@@ -200,19 +182,15 @@ def batch_papeis_por_fatura_cliente(fatura_ids, tipo_frete_por_fatura=None):
         )
         existente = resultado.get(fid)
         if existente is None:
-            tomador = resolver_tomador_com_fallback(
-                cte_tom, tipo_frete_por_fatura.get(fid)
-            )
             resultado[fid] = {
-                'emit': emit, 'dest': dest, 'tomador': tomador,
+                'emit': emit, 'dest': dest,
+                'tomador': resolver_tomador(cte_tom),
                 'origem': 'operacao',
             }
         else:
             # Atualiza tomador se ainda nao resolveu e este tem cte_tomador
-            if (existente['tomador'] is None or existente['tomador'].get('inferido')) and cte_tom:
-                existente['tomador'] = resolver_tomador_com_fallback(
-                    cte_tom, tipo_frete_por_fatura.get(fid)
-                )
+            if existente['tomador'] is None and cte_tom:
+                existente['tomador'] = resolver_tomador(cte_tom)
 
     # 2. Fallback via CTe Complementares (so para faturas ainda sem papeis)
     faturas_sem_papeis = [fid for fid in fatura_ids if fid not in resultado]
@@ -248,23 +226,10 @@ def batch_papeis_por_fatura_cliente(fatura_ids, tipo_frete_por_fatura=None):
                 emit_nome, emit_cnpj, emit_cidade, emit_uf,
                 dest_nome, dest_cnpj, dest_cidade, dest_uf,
             )
-            tomador = resolver_tomador_com_fallback(
-                cte_tom, tipo_frete_por_fatura.get(fid)
-            )
             resultado[fid] = {
-                'emit': emit, 'dest': dest, 'tomador': tomador,
+                'emit': emit, 'dest': dest,
+                'tomador': resolver_tomador(cte_tom),
                 'origem': 'cte_comp_pai',
-            }
-
-    # 3. Fallback puro por tipo_frete (fatura sem NF nem Comp)
-    for fid in fatura_ids:
-        if fid in resultado:
-            continue
-        tomador = resolver_tomador_com_fallback(None, tipo_frete_por_fatura.get(fid))
-        if tomador:
-            resultado[fid] = {
-                'emit': None, 'dest': None, 'tomador': tomador,
-                'origem': 'fallback_tipo_frete',
             }
 
     return resultado
@@ -274,11 +239,10 @@ def batch_papeis_por_fatura_transportadora(fatura_ids):
     """Batch papeis para Faturas Transportadora.
 
     fatura_transp -> subcontrato -> operacao -> OperacaoNf -> Nf.
-    tipo_frete vem via operacao.fatura_cliente.tipo_frete (join extra).
+    Tomador vem diretamente de CarviaOperacao.cte_tomador (SOT).
     """
     from app.carvia.models import (
-        CarviaFaturaCliente, CarviaNf, CarviaOperacao, CarviaOperacaoNf,
-        CarviaSubcontrato,
+        CarviaNf, CarviaOperacao, CarviaOperacaoNf, CarviaSubcontrato,
     )
 
     fatura_ids = list(fatura_ids or [])
@@ -288,15 +252,12 @@ def batch_papeis_por_fatura_transportadora(fatura_ids):
     rows = db.session.query(
         CarviaSubcontrato.fatura_transportadora_id,
         CarviaOperacao.cte_tomador,
-        CarviaFaturaCliente.tipo_frete,
         CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
         CarviaNf.cidade_emitente, CarviaNf.uf_emitente,
         CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
         CarviaNf.cidade_destinatario, CarviaNf.uf_destinatario,
     ).join(
         CarviaOperacao, CarviaOperacao.id == CarviaSubcontrato.operacao_id
-    ).outerjoin(
-        CarviaFaturaCliente, CarviaFaturaCliente.id == CarviaOperacao.fatura_cliente_id
     ).join(
         CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
     ).join(
@@ -311,7 +272,7 @@ def batch_papeis_por_fatura_transportadora(fatura_ids):
 
     resultado = {}
     for row in rows:
-        (fid, cte_tom, tipo_frete,
+        (fid, cte_tom,
          emit_nome, emit_cnpj, emit_cidade, emit_uf,
          dest_nome, dest_cnpj, dest_cidade, dest_uf) = row
         emit, dest = _row_to_papel(
@@ -322,20 +283,19 @@ def batch_papeis_por_fatura_transportadora(fatura_ids):
         if existente is None:
             resultado[fid] = {
                 'emit': emit, 'dest': dest,
-                'tomador': resolver_tomador_com_fallback(cte_tom, tipo_frete),
+                'tomador': resolver_tomador(cte_tom),
                 'origem': 'subcontrato',
             }
         else:
-            if (existente['tomador'] is None or existente['tomador'].get('inferido')) and cte_tom:
-                existente['tomador'] = resolver_tomador_com_fallback(cte_tom, tipo_frete)
+            if existente['tomador'] is None and cte_tom:
+                existente['tomador'] = resolver_tomador(cte_tom)
     return resultado
 
 
 def batch_papeis_por_cte_complementar(cte_comp_ids):
     """Batch papeis para CTes Complementares via operacao pai -> NFs."""
     from app.carvia.models import (
-        CarviaCteComplementar, CarviaFaturaCliente, CarviaNf, CarviaOperacao,
-        CarviaOperacaoNf,
+        CarviaCteComplementar, CarviaNf, CarviaOperacao, CarviaOperacaoNf,
     )
 
     cte_comp_ids = list(cte_comp_ids or [])
@@ -345,15 +305,12 @@ def batch_papeis_por_cte_complementar(cte_comp_ids):
     rows = db.session.query(
         CarviaCteComplementar.id,
         CarviaOperacao.cte_tomador,
-        CarviaFaturaCliente.tipo_frete,
         CarviaNf.nome_emitente, CarviaNf.cnpj_emitente,
         CarviaNf.cidade_emitente, CarviaNf.uf_emitente,
         CarviaNf.nome_destinatario, CarviaNf.cnpj_destinatario,
         CarviaNf.cidade_destinatario, CarviaNf.uf_destinatario,
     ).join(
         CarviaOperacao, CarviaOperacao.id == CarviaCteComplementar.operacao_id
-    ).outerjoin(
-        CarviaFaturaCliente, CarviaFaturaCliente.id == CarviaCteComplementar.fatura_cliente_id
     ).join(
         CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id
     ).join(
@@ -367,13 +324,13 @@ def batch_papeis_por_cte_complementar(cte_comp_ids):
 
     resultado = {}
     for row in rows:
-        (cid, cte_tom, tipo_frete,
+        (cid, cte_tom,
          emit_nome, emit_cnpj, emit_cidade, emit_uf,
          dest_nome, dest_cnpj, dest_cidade, dest_uf) = row
         if cid in resultado:
             existente = resultado[cid]
-            if (existente['tomador'] is None or existente['tomador'].get('inferido')) and cte_tom:
-                existente['tomador'] = resolver_tomador_com_fallback(cte_tom, tipo_frete)
+            if existente['tomador'] is None and cte_tom:
+                existente['tomador'] = resolver_tomador(cte_tom)
             continue
         emit, dest = _row_to_papel(
             emit_nome, emit_cnpj, emit_cidade, emit_uf,
@@ -381,7 +338,7 @@ def batch_papeis_por_cte_complementar(cte_comp_ids):
         )
         resultado[cid] = {
             'emit': emit, 'dest': dest,
-            'tomador': resolver_tomador_com_fallback(cte_tom, tipo_frete),
+            'tomador': resolver_tomador(cte_tom),
             'origem': 'cte_comp_pai',
         }
     return resultado

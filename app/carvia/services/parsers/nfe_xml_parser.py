@@ -187,16 +187,35 @@ class NFeXMLParser:
         }
 
     def get_transporte(self) -> Dict:
-        """Extrai dados de transporte (transp/vol)"""
+        """Extrai dados de transporte (<transp>).
+
+        Campos:
+          - modalidade_frete: <transp>/<modFrete> — SEFAZ oficial do incoterm:
+              '0' = CIF (Contratacao por conta do Remetente)
+              '1' = FOB (Contratacao por conta do Destinatario)
+              '2' = Contratacao por conta de Terceiros
+              '3' = Transporte Proprio por conta do Remetente
+              '4' = Transporte Proprio por conta do Destinatario
+              '9' = Sem Transporte
+          - peso_bruto/peso_liquido/quantidade_volumes: <transp>/<vol>
+        """
+        transp = self._find_tag('transp')
+        mod_frete = self._get_tag_text('modFrete', root=transp) if transp is not None else None
+
         vol = self._find_tag('vol')
-        if vol is None:
+        if vol is None and transp is None:
             return {}
 
-        return {
-            'peso_bruto': self._to_float(self._get_tag_text('pesoB', root=vol)),
-            'peso_liquido': self._to_float(self._get_tag_text('pesoL', root=vol)),
-            'quantidade_volumes': self._to_int(self._get_tag_text('qVol', root=vol)),
+        result = {
+            'modalidade_frete': mod_frete,
         }
+        if vol is not None:
+            result.update({
+                'peso_bruto': self._to_float(self._get_tag_text('pesoB', root=vol)),
+                'peso_liquido': self._to_float(self._get_tag_text('pesoL', root=vol)),
+                'quantidade_volumes': self._to_int(self._get_tag_text('qVol', root=vol)),
+            })
+        return result
 
     def get_itens(self) -> List[Dict]:
         """Extrai itens de produto (<det><prod>)
@@ -259,6 +278,7 @@ class NFeXMLParser:
             'peso_bruto': transp.get('peso_bruto'),
             'peso_liquido': transp.get('peso_liquido'),
             'quantidade_volumes': transp.get('quantidade_volumes'),
+            'modalidade_frete': transp.get('modalidade_frete'),
             'itens': self.get_itens(),
             'tipo_fonte': 'XML_NFE',
         }

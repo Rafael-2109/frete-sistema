@@ -36,6 +36,10 @@ class CarviaNf(db.Model):
     peso_liquido = db.Column(db.Numeric(15, 3))
     quantidade_volumes = db.Column(db.Integer)
 
+    # Modalidade de frete (SEFAZ <transp>/<modFrete>):
+    # '0'=CIF, '1'=FOB, '2'=Terceiros, '3'=Proprio Rem, '4'=Proprio Dest, '9'=Sem transporte
+    modalidade_frete = db.Column(db.String(1))
+
     # Arquivos
     arquivo_pdf_path = db.Column(db.String(500))
     arquivo_xml_path = db.Column(db.String(500))
