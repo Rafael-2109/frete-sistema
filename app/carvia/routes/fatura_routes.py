@@ -706,6 +706,52 @@ def register_fatura_routes(bp):
 
         return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
 
+    @bp.route('/faturas-cliente/<int:fatura_id>/editar-tipo-frete', methods=['POST']) # type: ignore
+    @login_required
+    def editar_tipo_frete_fatura_cliente(fatura_id): # type: ignore
+        """Edita o incoterm (FOB/CIF) de uma fatura cliente existente.
+
+        Permite corrigir faturas historicas criadas sem tipo_frete (FAT-### antigas)
+        para que o Excel exportado mostre quem paga o frete.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_cliente'))
+
+        if fatura.status in ('PAGA', 'CANCELADA'):
+            flash(f'Nao e possivel editar tipo de frete de fatura {fatura.status.lower()}.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        if fatura.status_conferencia == 'CONFERIDO':
+            flash(
+                'Fatura conferida nao pode ter tipo de frete alterado. '
+                'Reabra a conferencia antes de editar.',
+                'warning',
+            )
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        tipo_frete_raw = (request.form.get('tipo_frete') or '').strip().upper()
+        tipo_frete = tipo_frete_raw if tipo_frete_raw in ('FOB', 'CIF') else None
+
+        try:
+            fatura.tipo_frete = tipo_frete
+            db.session.commit()
+            if tipo_frete:
+                flash(f'Tipo de frete atualizado para {tipo_frete}.', 'success')
+            else:
+                flash('Tipo de frete removido.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao editar tipo_frete fatura cliente {fatura_id}: {e}")
+            flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
     @bp.route('/faturas-cliente/<int:fatura_id>/alterar-pagador', methods=['POST']) # type: ignore
     @login_required
     def alterar_pagador_fatura_cliente(fatura_id): # type: ignore
@@ -1133,6 +1179,9 @@ def register_fatura_routes(bp):
         data_emissao_str = request.form.get('data_emissao', '')
         vencimento_str = request.form.get('vencimento', '')
         observacoes = request.form.get('observacoes', '')
+        # Incoterm (FOB/CIF): referencia quem paga o frete no Excel exportado.
+        tipo_frete_raw = (request.form.get('tipo_frete') or '').strip().upper()
+        tipo_frete = tipo_frete_raw if tipo_frete_raw in ('FOB', 'CIF') else None
 
         if not operacao_id or not data_emissao_str:
             flash('Operacao e data de emissao sao obrigatorios.', 'warning')
@@ -1168,6 +1217,7 @@ def register_fatura_routes(bp):
                 valor_total=valor_total,
                 vencimento=vencimento,
                 status='PENDENTE',
+                tipo_frete=tipo_frete,
                 observacoes=observacoes or None,
                 criado_por=current_user.email,
             )
