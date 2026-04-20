@@ -26,7 +26,11 @@ def register_cliente_routes(bp):
         from app.carvia.services.clientes.cliente_service import CarviaClienteService
 
         busca = request.args.get('busca', '').strip()
-        apenas_ativos = request.args.get('ativos', '1') == '1'
+        # Checkbox desmarcado nao envia param. Hidden `ativos=0` (template) garante
+        # que o form sempre envia algo ao submeter. Lista vazia = primeira carga
+        # (URL sem querystring) -> default True (esconde inativos).
+        ativos_values = request.args.getlist('ativos')
+        apenas_ativos = ('1' in ativos_values) if ativos_values else True
 
         clientes = CarviaClienteService.listar_clientes(
             apenas_ativos=apenas_ativos,
@@ -141,10 +145,14 @@ def register_cliente_routes(bp):
             return render_template('carvia/clientes/editar.html', cliente=cliente)
 
         try:
+            # Hidden `ativo=0` + checkbox `ativo=1` no template. getlist captura os
+            # dois. Marcado -> ['0','1'] -> True. Desmarcado -> ['0'] -> False.
+            # (request.form.get retornaria o PRIMEIRO valor, sempre '0' -> bug.)
+            ativo_values = request.form.getlist('ativo')
             sucesso, erro = CarviaClienteService.atualizar_cliente(cliente_id, {
                 'nome_comercial': request.form.get('nome_comercial', ''),
                 'observacoes': request.form.get('observacoes', '').strip() or None,
-                'ativo': request.form.get('ativo') == '1',
+                'ativo': '1' in ativo_values,
             })
             if not sucesso:
                 flash(erro, 'danger')

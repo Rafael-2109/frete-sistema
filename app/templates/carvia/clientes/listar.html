@@ -22,6 +22,8 @@
                 </div>
                 <div class="col-md-3">
                     <div class="form-check">
+                        {# Hidden garante que desmarcado envia ativos=0 (getlist captura). #}
+                        <input type="hidden" name="ativos" value="0">
                         <input type="checkbox" class="form-check-input" name="ativos" value="1"
                                id="chkAtivos" {{ 'checked' if apenas_ativos }}>
                         <label class="form-check-label" for="chkAtivos">Apenas ativos</label>
