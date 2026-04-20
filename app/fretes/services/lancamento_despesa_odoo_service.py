@@ -41,6 +41,29 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
     Herda de LancamentoOdooService e adapta para despesas.
     """
 
+    def _audit_etapa6(
+        self,
+        *,
+        frete_id: Optional[int],
+        cte_id: Optional[int],
+        chave_cte: str,
+        despesa_extra_id: Optional[int] = None,
+        **kwargs,
+    ):
+        """Override: ETAPA 6 da despesa escreve em LancamentoFreteOdooAuditoria com despesa_extra_id."""
+        if despesa_extra_id:
+            return self._registrar_auditoria_despesa(
+                despesa_extra_id=despesa_extra_id,
+                cte_id=cte_id,
+                chave_cte=chave_cte,
+                **kwargs,
+            )
+        # Fallback para o comportamento do pai se despesa_extra_id nao estiver definido
+        return super()._audit_etapa6(
+            frete_id=frete_id, cte_id=cte_id, chave_cte=chave_cte,
+            despesa_extra_id=despesa_extra_id, **kwargs,
+        )
+
     def _registrar_auditoria_despesa(
         self,
         despesa_extra_id: int,
@@ -513,6 +536,18 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             po_id = lancamento_existente.get('purchase_order_id')
             invoice_id = lancamento_existente.get('invoice_id')
 
+            # Reconciliar auditorias ERRO da ETAPA 6 — se ha PO, o fire/polling anterior
+            # teve o timeout de upstream mas a acao completou no Odoo.
+            if po_id:
+                self._reconciliar_auditoria_etapa6(
+                    frete_id=None,
+                    cte_id=None,
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id,
+                    motivo='Detectado na retomada',
+                    despesa_extra_id=despesa_id,
+                )
+
             # ========================================
             # VALIDAÇÃO DE STATUS (considera retomada)
             # ========================================
@@ -600,13 +635,18 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
             # ========================================
             # ETAPA 2: Atualizar data de entrada no DFe
             # ========================================
-            if continuar_de_etapa < 3:  # Só executa se não está retomando de etapa posterior
-                data_entrada = agora_utc_naive().strftime('%Y-%m-%d')
+            # 🔧 CORREÇÃO 2026-04-20: l10n_br_data_entrada é atualizado SEMPRE (mesmo em retomada)
+            #    para refletir a data real do lançamento no Odoo. Antes, retomadas em
+            #    dia posterior mantinham a data da tentativa original.
+            #    Em retomada, o write é opcional (não trava o lançamento se o DFe
+            #    estiver concluído/bloqueado no Odoo).
+            data_entrada = agora_utc_naive().strftime('%Y-%m-%d')
 
-                # Preparar dados para atualização
+            if continuar_de_etapa < 3:
+                # Lançamento novo: atualização completa e bloqueante
                 dados_dfe = {'l10n_br_data_entrada': data_entrada}
 
-                # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+                # ✅ ADICIONAR payment_reference com número da fatura (só em lançamento novo)
                 # 🔧 CORREÇÃO 05/01/2026: Usar variáveis locais extraídas no início
                 if despesa_fatura_id and despesa_numero_fatura:
                     referencia_fatura = f"FATURA-{despesa_numero_fatura}"
@@ -641,7 +681,56 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 )
                 resultado['etapas_concluidas'] = 2
             else:
-                current_app.logger.info(f"⏭️ ETAPA 2 PULADA - Retomando de etapa {continuar_de_etapa}")
+                # Retomada: atualização apenas de l10n_br_data_entrada, não bloqueante
+                # (DFe pode estar em status '06' Concluído que bloqueia writes)
+                current_app.logger.info(
+                    f"🔄 RETOMADA: tentando atualizar l10n_br_data_entrada={data_entrada} no DFe {dfe_id}"
+                )
+                inicio = time.time()
+                try:
+                    self.odoo.write(
+                        'l10n_br_ciel_it_account.dfe',
+                        [dfe_id],
+                        {'l10n_br_data_entrada': data_entrada}
+                    )
+                    tempo_ms = int((time.time() - inicio) * 1000)
+                    self._registrar_auditoria_despesa(
+                        despesa_extra_id=despesa_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=2,
+                        etapa_descricao="Atualizar data de entrada (retomada)",
+                        modelo_odoo='l10n_br_ciel_it_account.dfe',
+                        acao='write',
+                        status='SUCESSO',
+                        mensagem=f"l10n_br_data_entrada atualizada para {data_entrada}",
+                        campos_alterados=['l10n_br_data_entrada'],
+                        tempo_execucao_ms=tempo_ms,
+                        dfe_id=dfe_id
+                    )
+                    current_app.logger.info(
+                        f"✅ l10n_br_data_entrada atualizada para {data_entrada}"
+                    )
+                except Exception as e:
+                    current_app.logger.warning(
+                        f"⚠️ Falha ao atualizar l10n_br_data_entrada em retomada (não crítico): "
+                        f"{e.__class__.__name__}: {e}"
+                    )
+                    try:
+                        self._registrar_auditoria_despesa(
+                            despesa_extra_id=despesa_id,
+                            cte_id=cte_id,
+                            chave_cte=cte_chave,
+                            etapa=2,
+                            etapa_descricao="Atualizar data de entrada (retomada)",
+                            modelo_odoo='l10n_br_ciel_it_account.dfe',
+                            acao='write',
+                            status='ERRO',
+                            mensagem=f"Falha não crítica: {str(e)[:200]}",
+                            dfe_id=dfe_id
+                        )
+                    except Exception:
+                        pass
 
             # ========================================
             # ETAPA 3: Definir tipo pedido = 'servico'
@@ -749,8 +838,8 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 current_app.logger.info(f"⏭️ ETAPA 5 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
-            # ETAPA 6: Gerar Purchase Order
-            # ⏱️ TIMEOUT ESTENDIDO: 90 segundos (operação pode demorar no Odoo)
+            # ETAPA 6: Gerar Purchase Order (fire_and_poll — resiliente a timeout upstream)
+            # Ver app/fretes/services/lancamento_odoo_service.py::_gerar_po_dfe_fire_and_poll
             # ========================================
             if continuar_de_etapa < 7:  # Só executa se não está retomando de etapa posterior
                 # 🔧 CORREÇÃO 05/01/2026: Forçar leitura do DFE antes de gerar PO
@@ -770,57 +859,22 @@ class LancamentoDespesaOdooService(LancamentoOdooService):
                 except Exception as e:
                     current_app.logger.warning(f"⚠️ Erro ao recarregar DFE antes de gerar PO: {e}")
 
-                contexto = {'validate_analytic': True}
-
-                # 🔧 CORRECAO 24/01/2026: Timeout aumentado de 90s para 180s
-                # A etapa action_gerar_po_dfe é a mais pesada do processo:
-                # - Cria Purchase Order
-                # - Configura linhas do PO
-                # - Calcula impostos automaticamente
-                # - Pode demorar 60-90s quando Odoo está ocupado
-                # O timeout de 90s estava causando falhas intermitentes
-                TIMEOUT_GERAR_PO = 180
-
-                inicio = time.time()
-                self.odoo.execute_kw(
-                    'l10n_br_ciel_it_account.dfe',
-                    'action_gerar_po_dfe',
-                    [[dfe_id]],
-                    {'context': contexto},
-                    timeout_override=TIMEOUT_GERAR_PO
-                )
-                tempo_ms = int((time.time() - inicio) * 1000)
-
-                self._registrar_auditoria_despesa(
-                    despesa_extra_id=despesa_id,
+                sucesso_po, po_id_novo, erro_po = self._gerar_po_dfe_fire_and_poll(
+                    dfe_id=dfe_id,
+                    frete_id=None,
                     cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=6,
-                    etapa_descricao=f"Gerar Purchase Order (action_gerar_po_dfe) [timeout: {TIMEOUT_GERAR_PO}s]",
-                    modelo_odoo='l10n_br_ciel_it_account.dfe',
-                    metodo_odoo='action_gerar_po_dfe',
-                    acao='execute_method / action_gerar_po_dfe',
-                    status='SUCESSO',
-                    mensagem="Purchase Order gerado",
-                    tempo_execucao_ms=tempo_ms,
-                    dfe_id=dfe_id
-                )
-                resultado['etapas_concluidas'] = 6
-
-                # Buscar PO gerado
-                dfe_atualizado = self.odoo.read(
-                    'l10n_br_ciel_it_account.dfe',
-                    [dfe_id],
-                    ['purchase_fiscal_id']
+                    cte_chave=cte_chave,
+                    despesa_extra_id=despesa_id,
                 )
 
-                if not dfe_atualizado or not dfe_atualizado[0].get('purchase_fiscal_id'):
-                    resultado['erro'] = "Purchase Order não foi gerado"
-                    resultado['mensagem'] = "Erro na etapa 6: PO não foi criado"
+                if not sucesso_po:
+                    resultado['erro'] = erro_po
+                    resultado['mensagem'] = f"Erro na etapa 6: {erro_po}"
                     resultado['rollback_executado'] = self._rollback_despesa_odoo(despesa_id, resultado['etapas_concluidas'])
                     return resultado
 
-                po_id = dfe_atualizado[0]['purchase_fiscal_id'][0]
+                po_id = po_id_novo
+                resultado['etapas_concluidas'] = 6
                 resultado['purchase_order_id'] = po_id
             else:
                 # RETOMADA: Usar PO existente

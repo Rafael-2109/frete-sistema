@@ -398,6 +398,294 @@ class LancamentoOdooService:
             db.session.rollback()
             return False
 
+    # ========================================
+    # Fire-and-Poll (resiliencia ETAPA 6)
+    # ========================================
+    # Cloudflare/nginx upstream do Odoo mata conexao em ~120s (Sentry 9H/9J).
+    # Mas action_gerar_po_dfe normalmente conclui no backend, so o retorno e que nao chega.
+    # Padrao portado de app/recebimento/services/recebimento_lf_odoo_service.py::_fire_and_poll
+    FIRE_TIMEOUT_PO = 90       # segundos para o fire (chamada XML-RPC)
+    POLL_INTERVAL_PO = 10      # segundos entre polls
+    MAX_POLL_TIME_PO = 600     # segundos maximos aguardando PO aparecer (10 min)
+
+    def _buscar_po_por_dfe(self, dfe_id: int, include_cancelled: bool = False) -> Optional[int]:
+        """Busca purchase.order vinculado a um DFe. Retorna po_id ou None."""
+        try:
+            # Tenta via DFe.purchase_id (caminho primario do Odoo)
+            dfe_data = self.odoo.read(
+                'l10n_br_ciel_it_account.dfe',
+                [dfe_id],
+                ['purchase_id']
+            )
+            if dfe_data and dfe_data[0].get('purchase_id'):
+                po_ref = dfe_data[0]['purchase_id']
+                return po_ref[0] if isinstance(po_ref, (list, tuple)) else po_ref
+
+            # Fallback: search_read na purchase.order por dfe_id (exclui canceladas)
+            domain = [('dfe_id', '=', dfe_id)]
+            if not include_cancelled:
+                domain.append(('state', '!=', 'cancel'))
+            po_search = self.odoo.search_read(
+                'purchase.order',
+                domain,
+                fields=['id'],
+                limit=1
+            )
+            if po_search:
+                return po_search[0]['id']
+        except Exception as e:
+            current_app.logger.debug(f"_buscar_po_por_dfe({dfe_id}): {e}")
+        return None
+
+    def _audit_etapa6(
+        self,
+        *,
+        frete_id: Optional[int],
+        cte_id: Optional[int],
+        chave_cte: str,
+        despesa_extra_id: Optional[int] = None,
+        **kwargs,
+    ):
+        """Hook de auditoria da ETAPA 6 — subclasse sobrescreve para despesa_extra."""
+        return self._registrar_auditoria(
+            frete_id=frete_id, cte_id=cte_id, chave_cte=chave_cte, **kwargs
+        )
+
+    def _reconciliar_auditoria_etapa6(
+        self,
+        frete_id: Optional[int],
+        cte_id: Optional[int],
+        dfe_id: Optional[int],
+        purchase_order_id: int,
+        motivo: str = 'Recuperado via polling',
+        despesa_extra_id: Optional[int] = None,
+    ) -> int:
+        """Converte auditorias ERRO da ETAPA 6 em SUCESSO quando PO foi de fato criado.
+
+        Util quando socket timeout / 502 / cancel de upstream interromperam o retorno
+        do action_gerar_po_dfe, mas o Odoo efetivou a operacao do lado dele.
+        """
+        if not frete_id and not cte_id and not dfe_id and not despesa_extra_id:
+            return 0
+
+        try:
+            query = db.session.query(LancamentoFreteOdooAuditoria).filter(
+                LancamentoFreteOdooAuditoria.etapa == 6,
+                LancamentoFreteOdooAuditoria.status == 'ERRO',
+                LancamentoFreteOdooAuditoria.metodo_odoo == 'action_gerar_po_dfe',
+            )
+            if despesa_extra_id:
+                query = query.filter(LancamentoFreteOdooAuditoria.despesa_extra_id == despesa_extra_id)
+            elif frete_id:
+                query = query.filter(LancamentoFreteOdooAuditoria.frete_id == frete_id)
+            elif cte_id:
+                query = query.filter(LancamentoFreteOdooAuditoria.cte_id == cte_id)
+            elif dfe_id:
+                query = query.filter(LancamentoFreteOdooAuditoria.dfe_id == dfe_id)
+
+            atualizados = 0
+            for aud in query.all():
+                aud.status = 'SUCESSO'
+                aud.purchase_order_id = purchase_order_id
+                aud.mensagem = (
+                    (aud.mensagem or '')
+                    + f' | {motivo}: PO {purchase_order_id} confirmado no Odoo'
+                ).strip(' |')
+                atualizados += 1
+
+            if atualizados:
+                db.session.commit()
+                current_app.logger.info(
+                    f"[RECONCILIAR] ETAPA 6: {atualizados} auditoria(s) ERRO -> SUCESSO "
+                    f"(frete={frete_id}, cte={cte_id}, dfe={dfe_id}, "
+                    f"despesa={despesa_extra_id}, po={purchase_order_id})"
+                )
+            return atualizados
+        except Exception as e:
+            current_app.logger.warning(f"[RECONCILIAR] falha: {e}")
+            db.session.rollback()
+            return 0
+
+    def _gerar_po_dfe_fire_and_poll(
+        self,
+        dfe_id: int,
+        frete_id: Optional[int],
+        cte_id: Optional[int],
+        cte_chave: str,
+        despesa_extra_id: Optional[int] = None,
+    ) -> Tuple[bool, Optional[int], Optional[str]]:
+        """Dispara action_gerar_po_dfe e polla DFe.purchase_id ate obter po_id.
+
+        Tolera: socket.timeout, 'cannot marshal None', 502 Bad Gateway, ProtocolError.
+        Escreve auditoria SUCESSO ao obter po_id (inclui campo 'recuperado_via_polling'
+        no contexto_odoo para rastreabilidade). Se ja havia ERRO para o mesmo DFe,
+        reconcilia via _reconciliar_auditoria_etapa6.
+
+        Returns:
+            (sucesso, purchase_order_id, mensagem_erro)
+        """
+        import socket
+        current_app.logger.info(f"⏳ [ETAPA 06] action_gerar_po_dfe (fire_and_poll, fire={self.FIRE_TIMEOUT_PO}s)...")
+
+        # Idempotencia: DFe ja tem PO?
+        po_existente = self._buscar_po_por_dfe(dfe_id)
+        if po_existente:
+            current_app.logger.info(f"[ETAPA 06] DFe {dfe_id} ja tem PO {po_existente} — pulando geracao")
+            self._reconciliar_auditoria_etapa6(
+                frete_id, cte_id, dfe_id, po_existente,
+                motivo='PO ja existia', despesa_extra_id=despesa_extra_id,
+            )
+            self._audit_etapa6(
+                frete_id=frete_id, cte_id=cte_id, chave_cte=cte_chave,
+                despesa_extra_id=despesa_extra_id,
+                etapa=6,
+                etapa_descricao='Gerar Purchase Order (action_gerar_po_dfe) [idempotencia]',
+                modelo_odoo='l10n_br_ciel_it_account.dfe',
+                metodo_odoo='action_gerar_po_dfe',
+                acao='execute_method / action_gerar_po_dfe',
+                status='SUCESSO',
+                mensagem=f'PO {po_existente} ja existia para DFe {dfe_id}',
+                dfe_id=dfe_id,
+                purchase_order_id=po_existente,
+                tempo_execucao_ms=0,
+            )
+            return True, po_existente, None
+
+        contexto = {'validate_analytic': True}
+        inicio = time.time()
+        needs_polling = False
+        erro_fire = None
+
+        # 1) FIRE — dispara com timeout curto
+        try:
+            self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe',
+                'action_gerar_po_dfe',
+                [[dfe_id]],
+                {'context': contexto},
+                timeout_override=self.FIRE_TIMEOUT_PO,
+            )
+        except Exception as e:
+            erro_str = str(e)
+            transient_markers = (
+                'timeout', 'timed out',
+                '502', '503', '504', 'bad gateway', 'gateway time-out',
+                'cannot marshal none',
+                'connection reset', 'connection aborted',
+                'eof occurred', 'violation of protocol',
+            )
+            if isinstance(e, socket.timeout) or any(m in erro_str.lower() for m in transient_markers):
+                needs_polling = True
+                erro_fire = erro_str
+                current_app.logger.info(
+                    f"[ETAPA 06] fire interrompido ({erro_str[:120]}) — entrando em polling"
+                )
+            else:
+                tempo_ms = int((time.time() - inicio) * 1000)
+                self._audit_etapa6(
+                    frete_id=frete_id, cte_id=cte_id, chave_cte=cte_chave,
+                    despesa_extra_id=despesa_extra_id,
+                    etapa=6,
+                    etapa_descricao='Gerar Purchase Order (action_gerar_po_dfe)',
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
+                    metodo_odoo='action_gerar_po_dfe',
+                    acao='execute_method / action_gerar_po_dfe',
+                    status='ERRO',
+                    mensagem=f'Erro na etapa 6: {erro_str}',
+                    erro_detalhado=traceback.format_exc(),
+                    tempo_execucao_ms=tempo_ms,
+                    dfe_id=dfe_id,
+                )
+                return False, None, erro_str
+
+        # 2) Se fire retornou, confirmar imediatamente se PO existe
+        if not needs_polling:
+            po_id = self._buscar_po_por_dfe(dfe_id)
+            if po_id:
+                tempo_ms = int((time.time() - inicio) * 1000)
+                self._reconciliar_auditoria_etapa6(
+                    frete_id, cte_id, dfe_id, po_id,
+                    motivo='Confirmado apos fire', despesa_extra_id=despesa_extra_id,
+                )
+                self._audit_etapa6(
+                    frete_id=frete_id, cte_id=cte_id, chave_cte=cte_chave,
+                    despesa_extra_id=despesa_extra_id,
+                    etapa=6,
+                    etapa_descricao='Gerar Purchase Order (action_gerar_po_dfe)',
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
+                    metodo_odoo='action_gerar_po_dfe',
+                    acao='execute_method / action_gerar_po_dfe',
+                    status='SUCESSO',
+                    mensagem=f'PO {po_id} gerado',
+                    tempo_execucao_ms=tempo_ms,
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id,
+                )
+                return True, po_id, None
+            # fire retornou sem excecao mas DFe ainda nao tem PO — polla
+            needs_polling = True
+
+        # 3) POLL — aguarda ate MAX_POLL_TIME_PO
+        elapsed_poll = 0
+        poll_count = 0
+        while elapsed_poll < self.MAX_POLL_TIME_PO:
+            time.sleep(self.POLL_INTERVAL_PO)
+            elapsed_poll += self.POLL_INTERVAL_PO
+            poll_count += 1
+
+            po_id = self._buscar_po_por_dfe(dfe_id)
+            if po_id:
+                tempo_total_ms = int((time.time() - inicio) * 1000)
+                current_app.logger.info(
+                    f"[ETAPA 06] poll #{poll_count} ({elapsed_poll}s): PO {po_id} localizado"
+                )
+                self._reconciliar_auditoria_etapa6(
+                    frete_id, cte_id, dfe_id, po_id,
+                    motivo='Recuperado via polling', despesa_extra_id=despesa_extra_id,
+                )
+                self._audit_etapa6(
+                    frete_id=frete_id, cte_id=cte_id, chave_cte=cte_chave,
+                    despesa_extra_id=despesa_extra_id,
+                    etapa=6,
+                    etapa_descricao=f'Gerar Purchase Order (recuperado via polling apos {elapsed_poll}s)',
+                    modelo_odoo='l10n_br_ciel_it_account.dfe',
+                    metodo_odoo='action_gerar_po_dfe',
+                    acao='execute_method / action_gerar_po_dfe',
+                    status='SUCESSO',
+                    mensagem=(
+                        f'PO {po_id} localizado via polling apos fire interrompido'
+                        + (f' ({erro_fire[:120]})' if erro_fire else '')
+                    ),
+                    tempo_execucao_ms=tempo_total_ms,
+                    dfe_id=dfe_id,
+                    purchase_order_id=po_id,
+                )
+                return True, po_id, None
+
+            if poll_count % 3 == 0:
+                current_app.logger.info(f"[ETAPA 06] poll #{poll_count} ({elapsed_poll}s): ainda sem PO, aguardando...")
+
+        # 4) Polling esgotado sem PO — registra ERRO
+        tempo_total_ms = int((time.time() - inicio) * 1000)
+        msg_final = (
+            f'PO nao foi criado apos fire + {self.MAX_POLL_TIME_PO}s de polling'
+            + (f' | fire: {erro_fire[:120]}' if erro_fire else '')
+        )
+        self._audit_etapa6(
+            frete_id=frete_id, cte_id=cte_id, chave_cte=cte_chave,
+            despesa_extra_id=despesa_extra_id,
+            etapa=6,
+            etapa_descricao=f'Gerar Purchase Order (polling esgotado em {self.MAX_POLL_TIME_PO}s)',
+            modelo_odoo='l10n_br_ciel_it_account.dfe',
+            metodo_odoo='action_gerar_po_dfe',
+            acao='execute_method / action_gerar_po_dfe',
+            status='ERRO',
+            mensagem=f'Erro na etapa 6: {msg_final}',
+            tempo_execucao_ms=tempo_total_ms,
+            dfe_id=dfe_id,
+        )
+        return False, None, msg_final
+
     def _verificar_lancamento_existente(self, dfe_id: int, cte_chave: str, company_id_esperado: int = None) -> Dict[str, Any]:
         """
         Verifica se já existe um lançamento parcial para este DFe e determina
@@ -454,6 +742,16 @@ class LancamentoOdooService:
             current_app.logger.info(
                 f"🔍 PO existente encontrado: ID {po['id']} ({po['name']}), "
                 f"Estado: {po['state']}, Company: {resultado['po_company_id']}"
+            )
+
+            # Reconciliar auditorias ERRO da ETAPA 6 — se ha PO, o fire/polling anterior
+            # teve o timeout de upstream mas a acao completou no Odoo.
+            self._reconciliar_auditoria_etapa6(
+                frete_id=None,
+                cte_id=None,
+                dfe_id=dfe_id,
+                purchase_order_id=po['id'],
+                motivo='Detectado na retomada',
             )
 
             # Verificar se o PO está em draft e precisa ser configurado/confirmado
@@ -973,13 +1271,18 @@ class LancamentoOdooService:
             # ========================================
             # ETAPA 2: Atualizar data de entrada E payment_reference
             # ========================================
-            if continuar_de_etapa < 3:  # Só executa se não está retomando de etapa posterior
-                hoje = date.today().strftime('%Y-%m-%d')
+            # 🔧 CORREÇÃO 2026-04-20: l10n_br_data_entrada é atualizado SEMPRE (mesmo em retomada)
+            #    para refletir a data real do lançamento no Odoo. Antes, retomadas em
+            #    dia posterior mantinham a data da tentativa original.
+            #    Em retomada, o write é opcional (não trava o lançamento se o DFe
+            #    estiver concluído/bloqueado no Odoo).
+            hoje = date.today().strftime('%Y-%m-%d')
 
-                # Preparar dados para atualização
+            if continuar_de_etapa < 3:
+                # Lançamento novo: atualização completa e bloqueante
                 dados_atualizacao = {'l10n_br_data_entrada': hoje}
 
-                # ✅ ADICIONAR payment_reference com número da fatura (se houver)
+                # ✅ ADICIONAR payment_reference com número da fatura (só em lançamento novo)
                 # 🔧 CORREÇÃO 17/12/2025: Usar variáveis locais extraídas no início
                 if frete_fatura_id and frete_numero_fatura:
                     referencia_fatura = f"FATURA-{frete_numero_fatura}"
@@ -1033,7 +1336,53 @@ class LancamentoOdooService:
 
                 resultado['etapas_concluidas'] = 2
             else:
-                current_app.logger.info(f"⏭️ ETAPA 2 PULADA - Retomando de etapa {continuar_de_etapa}")
+                # Retomada: atualização apenas de l10n_br_data_entrada, não bloqueante
+                # (DFe pode estar em status '06' Concluído que bloqueia writes)
+                current_app.logger.info(
+                    f"🔄 RETOMADA: tentando atualizar l10n_br_data_entrada={hoje} no DFe {dfe_id}"
+                )
+                try:
+                    self.odoo.write(
+                        'l10n_br_ciel_it_account.dfe',
+                        [dfe_id],
+                        {'l10n_br_data_entrada': hoje}
+                    )
+                    self._registrar_auditoria(
+                        frete_id=frete_id,
+                        cte_id=cte_id,
+                        chave_cte=cte_chave,
+                        etapa=2,
+                        etapa_descricao="Atualizar data de entrada (retomada)",
+                        modelo_odoo='l10n_br_ciel_it_account.dfe',
+                        acao='write',
+                        status='SUCESSO',
+                        mensagem=f"l10n_br_data_entrada atualizada para {hoje}",
+                        dfe_id=dfe_id,
+                        campos_alterados=['l10n_br_data_entrada']
+                    )
+                    current_app.logger.info(
+                        f"✅ l10n_br_data_entrada atualizada para {hoje}"
+                    )
+                except Exception as e:
+                    current_app.logger.warning(
+                        f"⚠️ Falha ao atualizar l10n_br_data_entrada em retomada (não crítico): "
+                        f"{e.__class__.__name__}: {e}"
+                    )
+                    try:
+                        self._registrar_auditoria(
+                            frete_id=frete_id,
+                            cte_id=cte_id,
+                            chave_cte=cte_chave,
+                            etapa=2,
+                            etapa_descricao="Atualizar data de entrada (retomada)",
+                            modelo_odoo='l10n_br_ciel_it_account.dfe',
+                            acao='write',
+                            status='ERRO',
+                            mensagem=f"Falha não crítica: {str(e)[:200]}",
+                            dfe_id=dfe_id
+                        )
+                    except Exception:
+                        pass
 
             # ========================================
             # ETAPA 3: Atualizar tipo pedido
@@ -1148,43 +1497,16 @@ class LancamentoOdooService:
                 current_app.logger.info(f"⏭️ ETAPA 5 PULADA - Retomando de etapa {continuar_de_etapa}")
 
             # ========================================
-            # ETAPA 6: Gerar Purchase Order
-            # ⏱️ TIMEOUT ESTENDIDO: 180 segundos (operação pode demorar MUITO no Odoo)
+            # ETAPA 6: Gerar Purchase Order (fire_and_poll — resiliente a timeout upstream)
+            # Proxy do Odoo mata conexao em ~120s (Sentry 9H/9J). Padrao fire_and_poll
+            # dispara a acao e pollea DFe.purchase_id ate obter po_id (max 10 min).
             # ========================================
             if continuar_de_etapa < 7:  # Só executa se não está retomando de etapa posterior
-                contexto = {'validate_analytic': True}
-
-                # 🔧 CORREÇÃO 15/12/2025: Timeout aumentado para 180s
-                # A etapa action_gerar_po_dfe é a mais pesada do processo:
-                # - Cria Purchase Order
-                # - Configura linhas do PO
-                # - Calcula impostos automaticamente
-                # - Pode demorar 60-90s quando Odoo está ocupado
-                # O timeout de 90s estava causando falhas intermitentes
-                TIMEOUT_GERAR_PO = 180
-
-                current_app.logger.info(
-                    f"⏱️ [ETAPA 06] Iniciando geração de PO com timeout de {TIMEOUT_GERAR_PO}s..."
-                )
-
-                sucesso, po_result, erro = self._executar_com_auditoria(
-                    funcao=lambda: self.odoo.execute_kw(
-                        'l10n_br_ciel_it_account.dfe',
-                        'action_gerar_po_dfe',
-                        [[dfe_id]],
-                        {'context': contexto},
-                        timeout_override=TIMEOUT_GERAR_PO
-                    ),
+                sucesso, purchase_order_id_novo, erro = self._gerar_po_dfe_fire_and_poll(
+                    dfe_id=dfe_id,
                     frete_id=frete_id,
                     cte_id=cte_id,
-                    chave_cte=cte_chave,
-                    etapa=6,
-                    etapa_descricao=f"Gerar Purchase Order (action_gerar_po_dfe) [timeout: {TIMEOUT_GERAR_PO}s]",
-                    modelo_odoo='l10n_br_ciel_it_account.dfe',
-                    metodo_odoo='action_gerar_po_dfe',
-                    acao='execute_method / action_gerar_po_dfe',
-                    contexto_odoo=contexto,
-                    dfe_id=dfe_id
+                    cte_chave=cte_chave,
                 )
 
                 if not sucesso:
@@ -1193,29 +1515,8 @@ class LancamentoOdooService:
                     resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
                     return resultado
 
+                purchase_order_id = purchase_order_id_novo
                 resultado['etapas_concluidas'] = 6
-
-                # Extrair ID do PO
-                if po_result and isinstance(po_result, dict):
-                    purchase_order_id = po_result.get('res_id')
-
-                if not purchase_order_id:
-                    # Tentar buscar pelo DFe
-                    po_search = self.odoo.search_read(
-                        'purchase.order',
-                        [('dfe_id', '=', dfe_id)],
-                        fields=['id'],
-                        limit=1
-                    )
-                    if po_search:
-                        purchase_order_id = po_search[0]['id']
-
-                if not purchase_order_id:
-                    resultado['erro'] = "Purchase Order não foi criado"
-                    resultado['mensagem'] = "Erro: PO não foi criado após executar action_gerar_po_dfe"
-                    resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
-                    return resultado
-
                 resultado['purchase_order_id'] = purchase_order_id
                 current_app.logger.info(f"Purchase Order criado: ID {purchase_order_id}")
             else:

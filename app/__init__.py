@@ -51,8 +51,26 @@ if _sentry_dsn:
         import sentry_sdk  # type: ignore[import-untyped]
         from sentry_sdk.integrations.flask import FlaskIntegration
 
+        _sentry_env = os.getenv("ENVIRONMENT", "development")
+
         def _before_send(event, hint):
-            """Enriquece eventos do agente com component tag."""
+            """Enriquece eventos do agente com component tag.
+
+            Filtra "Task was destroyed but it is pending!" do logger asyncio
+            em environment=development — sao falsos-positivos de teardown
+            do pytest (pool persistente nao tem shutdown limpo em testes).
+            """
+            # Filtro: asyncio warnings em dev (pytest teardown)
+            if _sentry_env == "development":
+                logger_name = event.get("logger", "")
+                message = (event.get("message") or "") if isinstance(event.get("message"), str) else ""
+                # Fallback: logentry.message (asyncio usa logentry)
+                logentry = event.get("logentry") or {}
+                if isinstance(logentry, dict):
+                    message = message or logentry.get("message", "") or logentry.get("formatted", "")
+                if logger_name == "asyncio" and "Task was destroyed but it is pending" in message:
+                    return None
+
             tags = event.get("tags", {})
             if tags.get("agent.active") == "true":
                 event.setdefault("tags", {})["component"] = "agent"
