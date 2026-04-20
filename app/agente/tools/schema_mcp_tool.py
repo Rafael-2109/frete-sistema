@@ -279,6 +279,7 @@ try:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
+            maxResultSizeChars=300_000,  # SDK 0.1.55+ — schemas com FKs/indices grandes
         ),
     )
     async def consultar_schema(args: dict[str, Any]) -> dict[str, Any]:

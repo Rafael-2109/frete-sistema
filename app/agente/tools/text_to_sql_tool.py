@@ -405,7 +405,7 @@ try:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
-            maxResultSizeChars=200_000,
+            maxResultSizeChars=500_000,  # SDK 0.1.55+ / CLI 2.1.91 — teto MCP por tool
         ),
         output_schema=SQL_OUTPUT_SCHEMA,
     )

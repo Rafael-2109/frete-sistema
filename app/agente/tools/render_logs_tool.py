@@ -380,6 +380,7 @@ try:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=True,
+            maxResultSizeChars=500_000,  # SDK 0.1.55+ — 100 logs * stacktraces grandes
         ),
     )
     async def consultar_logs(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -503,6 +504,7 @@ try:
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=True,
+            maxResultSizeChars=500_000,  # SDK 0.1.55+ — stacktraces longas
         ),
     )
     async def consultar_erros(args: Dict[str, Any]) -> Dict[str, Any]:

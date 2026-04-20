@@ -25,7 +25,13 @@
       "Edit(/home/rafaelnascimento/projetos/frete_sistema/.claude/atualizacoes/**)",
       "Bash(curl:*)",
       "Bash(echo:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate)",
+      "Bash(python .claude/skills/acessando-ssw/scripts/consultar_documentacao_ssw.py:*)",
+      "Bash(python .claude/skills/acessando-ssw/scripts/resolver_opcao_ssw.py:*)",
+      "Bash(python3 .claude/hooks/validar-estrutura.py)",
+      "mcp__sentry__search_issue_events"
     ],
     "deny": [
       "Bash(rm -rf /)",
