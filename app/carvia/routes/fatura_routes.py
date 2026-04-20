@@ -180,6 +180,10 @@ def register_fatura_routes(bp):
             cte_comp_ids = request.form.getlist('cte_comp_ids', type=int)
             pagador_cnpj = request.form.get('pagador_cnpj', '').strip()
             pagador_nome = request.form.get('pagador_nome', '').strip()
+            # tipo_frete: FOB/CIF para habilitar fallback do Tomador no Excel
+            # quando o CTe e criado manualmente (cte_tomador NULL na operacao).
+            tipo_frete_raw = (request.form.get('tipo_frete') or '').strip().upper()
+            tipo_frete = tipo_frete_raw if tipo_frete_raw in ('FOB', 'CIF') else None
 
             if not cnpj_cliente or not data_emissao_str:
                 flash('CNPJ e data de emissao sao obrigatorios.', 'warning')
@@ -248,6 +252,7 @@ def register_fatura_routes(bp):
                     valor_total=valor_total,
                     vencimento=vencimento,
                     status='PENDENTE',
+                    tipo_frete=tipo_frete,
                     observacoes=observacoes or None,
                     criado_por=current_user.email,
                 )

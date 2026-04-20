@@ -125,10 +125,14 @@ class CarviaClienteService:
         if not cnpjs_limpos:
             return {}
 
+        # ORDER BY determinístico: cliente ATIVO primeiro, depois id asc.
+        # Evita pegar cliente INATIVO (ex: "GUILHERME - MOTOCHEFE (INATIVO)") quando
+        # multiplos clientes compartilham o mesmo CNPJ (grupo empresarial / filiais).
         rows = db.session.query(
             CarviaClienteEndereco.cnpj,
             CarviaCliente.id,
             CarviaCliente.nome_comercial,
+            CarviaCliente.ativo,
         ).join(
             CarviaCliente,
             CarviaClienteEndereco.cliente_id == CarviaCliente.id,
@@ -136,12 +140,19 @@ class CarviaClienteService:
             CarviaClienteEndereco.cnpj.in_(cnpjs_limpos),
             CarviaClienteEndereco.cliente_id.isnot(None),
             CarviaClienteEndereco.ativo == True,
+        ).order_by(
+            CarviaCliente.ativo.desc(),
+            CarviaCliente.id.asc(),
         ).all()
 
         result: Dict[str, Dict] = {}
-        for cnpj, cliente_id, nome_comercial in rows:
+        for cnpj, cliente_id, nome_comercial, cliente_ativo in rows:
             if cnpj and cnpj not in result:
-                result[cnpj] = {'id': cliente_id, 'nome_comercial': nome_comercial}
+                result[cnpj] = {
+                    'id': cliente_id,
+                    'nome_comercial': nome_comercial,
+                    'ativo': cliente_ativo,
+                }
         return result
 
     # ==================== ENDERECOS ====================

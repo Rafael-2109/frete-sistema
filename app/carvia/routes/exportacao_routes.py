@@ -1001,6 +1001,19 @@ def register_exportacao_routes(bp):
         tipo_frete_por_fat = {f.id: f.tipo_frete for f in items if f.tipo_frete}
         papeis_por_fatura = batch_papeis_por_fatura_cliente(fat_ids_all, tipo_frete_por_fat)
 
+        # Batch clientes comerciais por CNPJ do pagador — necessario para cobranca.
+        # Usuario precisa do nome comercial ("ALICE - MOTOCHEFE") no Excel, NAO apenas
+        # a razao social da fatura, para saber a quem cobrar inadimplentes.
+        import re as _re
+        from app.carvia.services.clientes.cliente_service import CarviaClienteService
+        cnpjs_cli = {f.cnpj_cliente for f in items if f.cnpj_cliente}
+        _resolved = CarviaClienteService.resolver_clientes_por_cnpjs(cnpjs_cli)
+        clientes_por_cnpj = {
+            cnpj: _resolved[_re.sub(r'\D', '', cnpj)]
+            for cnpj in cnpjs_cli
+            if _re.sub(r'\D', '', cnpj) in _resolved
+        }
+
         data = []
         for f in items:
             p = papeis_por_fatura.get(f.id) or {}
@@ -1010,8 +1023,12 @@ def register_exportacao_routes(bp):
             tom_label = tom.get('label_completo') or ''
             if tom.get('inferido'):
                 tom_label = f"{tom_label} (inferido)"
+            cli = clientes_por_cnpj.get(f.cnpj_cliente) or {}
             data.append({
                 'Numero Fatura': f.numero_fatura or '',
+                'Cliente Comercial': cli.get('nome_comercial') or '',
+                'Razao Social (Fatura)': f.nome_cliente or '',
+                'CNPJ Pagador': f.cnpj_cliente or '',
                 'Emitente': emit.get('nome') or '',
                 'CNPJ Emitente': emit.get('cnpj') or '',
                 'Destinatario': dest.get('nome') or '',

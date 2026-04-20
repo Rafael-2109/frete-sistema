@@ -88,6 +88,21 @@ class OperacaoManualForm(FlaskForm):
     )
     peso_bruto = DecimalField('Peso Bruto (kg)', validators=[Optional()], places=3)
     valor_mercadoria = DecimalField('Valor Mercadoria (R$)', validators=[Optional()], places=2)
+    # Tomador do frete (para CTe manual sem XML). Persiste em CarviaOperacao.cte_tomador
+    # e alimenta a coluna "Tomador" no Excel exportado de faturas.
+    cte_tomador = SelectField(
+        'Tomador do Frete',
+        choices=[
+            ('', '—'),
+            ('REMETENTE', 'Remetente'),
+            ('EXPEDIDOR', 'Expedidor'),
+            ('RECEBEDOR', 'Recebedor'),
+            ('DESTINATARIO', 'Destinatario'),
+            ('TERCEIRO', 'Terceiro'),
+        ],
+        default='',
+        validators=[Optional()],
+    )
     observacoes = TextAreaField('Observacoes', validators=[Optional()])
 
 

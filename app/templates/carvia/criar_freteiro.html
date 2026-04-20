@@ -90,6 +90,13 @@
                         <label for="valor_mercadoria" class="form-label">Valor Mercadoria (R$)</label>
                         {{ form.valor_mercadoria(class="form-control", placeholder="0.00", step="0.01") }}
                     </div>
+                    <div class="col-md-4">
+                        <label for="cte_tomador" class="form-label" title="Quem paga o frete. Aparece no Excel exportado como 'Tomador'.">
+                            Tomador do Frete
+                        </label>
+                        {{ form.cte_tomador(class="form-select") }}
+                        <div class="form-text">CTe manual nao extrai do XML — informe aqui.</div>
+                    </div>
                 </div>
 
                 <h5 class="mb-3"><i class="fas fa-sticky-note"></i> Observacoes</h5>

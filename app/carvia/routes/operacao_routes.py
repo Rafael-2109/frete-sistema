@@ -412,6 +412,8 @@ def register_operacao_routes(bp):
 
             if form.validate_on_submit():
                 try:
+                    # cte_tomador: opcional (SelectField com choice vazio). Normaliza '' → None.
+                    tomador_valor = (form.cte_tomador.data or '').strip().upper() or None
                     operacao = CarviaOperacao(
                         cnpj_cliente=form.cnpj_cliente.data.strip(),
                         nome_cliente=form.nome_cliente.data.strip(),
@@ -423,6 +425,7 @@ def register_operacao_routes(bp):
                         peso_utilizado=form.peso_bruto.data,
                         valor_mercadoria=form.valor_mercadoria.data,
                         cte_numero=CarviaOperacao.gerar_numero_cte(),
+                        cte_tomador=tomador_valor,
                         tipo_entrada='MANUAL_FRETEIRO',
                         status='RASCUNHO',
                         observacoes=form.observacoes.data,
@@ -454,12 +457,19 @@ def register_operacao_routes(bp):
         nf_ids_raw = request.form.getlist('nf_ids')
         cte_valor_raw = request.form.get('cte_valor', '').strip()
         observacoes = request.form.get('observacoes', '').strip()
+        # Tomador do frete (opcional). Valida contra whitelist; invalido → None.
+        _tomador_raw = (request.form.get('cte_tomador') or '').strip().upper()
+        _TOMADORES_VALIDOS = {
+            'REMETENTE', 'EXPEDIDOR', 'RECEBEDOR', 'DESTINATARIO', 'TERCEIRO',
+        }
+        cte_tomador = _tomador_raw if _tomador_raw in _TOMADORES_VALIDOS else None
 
         # GAP-18: Preservar dados do formulario para re-render apos erro
         form_data = {
             'nf_ids': nf_ids_raw,
             'cte_valor': cte_valor_raw,
             'observacoes': observacoes,
+            'cte_tomador': cte_tomador or '',
         }
 
         # Validar NFs
@@ -552,6 +562,7 @@ def register_operacao_routes(bp):
                 cte_valor=cte_valor,
                 cte_numero=CarviaOperacao.gerar_numero_cte(),
                 cte_data_emissao=data_emissao_cte,
+                cte_tomador=cte_tomador,
                 tipo_entrada='MANUAL_SEM_CTE',
                 status='RASCUNHO',
                 observacoes=observacoes or None,

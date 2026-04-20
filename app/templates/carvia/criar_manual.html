@@ -111,7 +111,7 @@
             </div>
             <div class="card-body">
                 <div class="row g-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="cte_valor" class="form-label">Valor do CTe (R$) *</label>
                         <div class="input-group">
                             <span class="input-group-text">R$</span>
@@ -120,7 +120,21 @@
                         </div>
                         <div class="form-text">Valor que a CarVia cobra do cliente</div>
                     </div>
-                    <div class="col-md-8">
+                    <div class="col-md-3">
+                        <label for="cte_tomador" class="form-label" title="Quem paga o frete. Aparece no Excel exportado como 'Tomador'.">
+                            Tomador do Frete
+                        </label>
+                        <select class="form-select" name="cte_tomador" id="cte_tomador">
+                            <option value="">—</option>
+                            <option value="REMETENTE">Remetente</option>
+                            <option value="EXPEDIDOR">Expedidor</option>
+                            <option value="RECEBEDOR">Recebedor</option>
+                            <option value="DESTINATARIO">Destinatario</option>
+                            <option value="TERCEIRO">Terceiro</option>
+                        </select>
+                        <div class="form-text">CTe manual nao extrai do XML — informe aqui.</div>
+                    </div>
+                    <div class="col-md-6">
                         <label for="observacoes" class="form-label">Observacoes</label>
                         <input type="text" class="form-control" name="observacoes" id="observacoes"
                                placeholder="Observacoes opcionais...">
@@ -371,10 +385,15 @@
         const savedNfIds = {{ form_data.nf_ids|tojson }};
         const savedCteValor = {{ form_data.cte_valor|tojson }};
         const savedObservacoes = {{ form_data.observacoes|tojson }};
+        const savedTomador = {{ (form_data.cte_tomador or '')|tojson }};
 
-        // Restaurar valor CTe e observacoes
+        // Restaurar valor CTe, tomador e observacoes
         if (savedCteValor) cteValorInput.value = savedCteValor;
         if (savedObservacoes) document.getElementById('observacoes').value = savedObservacoes;
+        if (savedTomador) {
+            const tomadorEl = document.getElementById('cte_tomador');
+            if (tomadorEl) tomadorEl.value = savedTomador;
+        }
 
         // Restaurar NFs selecionadas apos carregamento AJAX
         if (savedNfIds && savedNfIds.length) {

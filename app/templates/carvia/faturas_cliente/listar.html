@@ -117,8 +117,15 @@
                                 {% set cli = clientes_por_cnpj.get(f.cnpj_cliente) %}
                                 {% if cli %}
                                 <a href="{{ url_for('carvia.detalhe_cliente', cliente_id=cli.id) }}"
-                                   class="badge bg-primary text-decoration-none d-block mt-1" style="width:fit-content">
+                                   class="badge bg-primary text-decoration-none d-block mt-1" style="width:fit-content"
+                                   title="Cliente comercial vinculado">
                                     <i class="fas fa-building"></i> {{ cli.nome_comercial }}
+                                </a>
+                                {% else %}
+                                <a href="{{ url_for('carvia.listar_clientes') }}"
+                                   class="badge bg-secondary text-decoration-none d-block mt-1" style="width:fit-content"
+                                   title="CNPJ sem cliente comercial cadastrado. Clique para cadastrar.">
+                                    <i class="fas fa-plus-circle"></i> Cadastrar cliente
                                 </a>
                                 {% endif %}
                             </td>
