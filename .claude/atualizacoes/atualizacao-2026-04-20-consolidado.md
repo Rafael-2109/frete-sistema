@@ -2,14 +2,14 @@
 
 **Data**: 2026-04-20
 **Dominios executados**: 7
-**Dominios OK**: 2 | **PARCIAL**: 4 | **FAILED**: 1
+**Dominios OK**: 3 | **PARCIAL**: 3 | **FAILED**: 1 (apos revisao humana das correcoes D2)
 
 ## Resumo por Dominio
 
 | # | Dominio | Status | Resumo |
 |---|---------|--------|--------|
 | 1 | CLAUDE.md Audit | OK | 9 auditados, 5 modificados (agente, agente/services, carteira, carvia, financeiro). Contagens LOC/arquivos sincronizadas. |
-| 2 | References Audit | PARCIAL | 30 revisados, 7 divergencias documentadas. Correcoes bloqueadas (sensitive file). 0 caminhos quebrados. |
+| 2 | References Audit | OK | 30 revisados, 7 divergencias. **6 aplicadas** apos revisao humana; 1 pendente (IDS_FIXOS product_tmpl_id — MCP Odoo). 0 caminhos quebrados. |
 | 3 | Memorias Cleanup | OK | 26 topic files auditados, 1 removida (carvia pendencias resolvidas), MEMORY.md 66 linhas (limite 150). |
 | 4 | Sentry Triage | FAILED | MCP Sentry token expirado — reautorizacao manual urgente. |
 | 5 | Test Runner | PARCIAL | 569/569 tests (100%) em 41.2s. +281 testes desde 2026-04-06. Relatorio reconstruido pelo orquestrador. |
@@ -26,7 +26,7 @@
 - Revisados: 30 (P0 root + P1 modelos/negocio + P2 odoo + P3 scan)
 - Caminhos quebrados: 0
 - Divergencias: 7 (BEST_PRACTICES SDK 0.1.55→0.1.63, MCP_CAPABILITIES idem, MEMORY_PROTOCOL linha 157→173, ROUTING_SKILLS 31→25, MAPEAMENTO_CORES bootstrap path, INDEX faltando AGENT_DESIGN_GUIDE/TEMPLATES, IDS_FIXOS product_tmpl_id flag aberta)
-- Aplicadas: 0 (sensitive files)
+- Aplicadas: **6/7** (todas exceto IDS_FIXOS product_tmpl_id — requer MCP Odoo)
 
 ### D3 — Memorias
 - Auditadas: 26, removidas: 1 (carvia_auditoria_pendencias — W9 + FC_VIRTUAL→MANUAL ja implementados)
@@ -67,7 +67,7 @@
 - Acao: reautorizar MCP Sentry antes do proximo ciclo
 
 ### D2/D5 — PARCIAL (sensitive file)
-- D2: 7 correcoes documentadas mas nao aplicadas
+- D2: 7 correcoes documentadas; **6 aplicadas** em sessao subsequente apos revisao humana (20/04/2026). 1 pendente (IDS_FIXOS).
 - D5: relatorio reconstruido pelo orquestrador (cp via shell)
 
 ### D7 — PARCIAL (CRON_API_KEY ausente)
@@ -77,10 +77,11 @@
 ## Acoes de Follow-up Prioritarias
 
 1. **URGENTE**: reautorizar MCP Sentry (bloqueia D4 desde esta semana)
-2. **IMPORTANTE**: aplicar manualmente as 7 divergencias de D2 (references)
+2. ~~**IMPORTANTE**: aplicar manualmente as 7 divergencias de D2 (references)~~ — **RESOLVIDA 2026-04-20**: 6/7 aplicadas, 1 pendente (IDS_FIXOS product_tmpl_id requer MCP Odoo)
 3. **ATENCAO**: REC-2026-04-13-001 (circuit breaker user 18) escalou — 2a semana aberta
 4. **MONITORAR**: cold tier dobrou em 7d (15→32), KG coverage regrediu
 5. **CONFIG**: definir `CRON_API_KEY` local para persistencia D7 no banco
+6. **VERIFICAR**: `product_tmpl_id ~34~` em `odoo/IDS_FIXOS.md` via MCP Odoo (flag aberto desde 31/Jan)
 
 ## Artefatos
 

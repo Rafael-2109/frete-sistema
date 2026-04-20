@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 14/04/2026
+**Ultima Atualizacao**: 20/04/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -120,39 +120,38 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (31 total)
+## Skills — Inventario Completo (25 invocaveis em `.claude/skills/`)
 
-Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`.
+Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 
 ### MCP Custom Tools (agente web, in-process)
 `mcp__sql__consultar_sql`, `mcp__memory__*` (6 tools), `mcp__schema__*` (2 tools),
 `mcp__sessions__*` (2 tools), `mcp__render__*` (3 tools: logs, erros, status),
 `mcp__routes__search_routes` (1 tool: busca semantica rotas)
 
-### Skills Odoo (Claude Code)
+### Skills Odoo (9)
 `rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
-`integracao-odoo`, `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`,
+`validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`,
 `conciliando-transferencias-internas`, `gerando-baseline-conciliacao`
 
-### Skills Dev (Claude Code)
-`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`
-
-### Skills SSW (Claude Code)
+### Skills SSW (2)
 `acessando-ssw`, `operando-ssw`
 
-### Skills Portal Atacadao (Claude Code)
+### Skills Portal Atacadao (1)
 `operando-portal-atacadao`
 
-### Skills CarVia (Claude Code)
+### Skills CarVia (1)
 `gerindo-carvia`
 
-### Agente (gestao do sistema de agente)
+### Agente — gestao do sistema (1)
 `gerindo-agente` (substitui `memoria-usuario` — deprecated)
 
-### Sentry (monitoramento de erros)
+### Sentry — monitoramento de erros (1)
 `consultando-sentry` (MCP-first, 20 tools, Seer AI)
 
-### Utilitarios (compartilhados)
+### Utilitarios compartilhados (10)
 `exportando-arquivos`, `lendo-arquivos`, `lendo-documentos`, `consultando-sql`,
 `cotando-frete`, `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`,
 `monitorando-entregas`, `diagnosticando-banco`
+
+> Skills dev (`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`, `integracao-odoo`) NAO existem em `.claude/skills/` — sao invocaveis apenas via Claude Code global (fora do escopo deste inventario).

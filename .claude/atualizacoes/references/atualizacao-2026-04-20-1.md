@@ -1,10 +1,10 @@
-# Atualizacao References 2026-04-20-1 (COPIA /tmp — destino .claude/ bloqueado)
+# Atualizacao References 2026-04-20-1
 
-**Data**: 2026-04-20
+**Data**: 2026-04-20 (correcoes aplicadas em sessao subsequente no mesmo dia)
 **Escopo**: Auditoria completa de `.claude/references/` (30 arquivos)
-**Status**: PARCIAL — divergencias documentadas, correcoes NAO aplicadas (permissao bloqueada em arquivos sensiveis sob `.claude/`, incluindo este proprio relatorio em seu destino final)
+**Status**: OK — 6/7 divergencias corrigidas; 1 pendente (IDS_FIXOS `product_tmpl_id ~34~` requer MCP Odoo)
 
-> Destino original: `.claude/atualizacoes/references/atualizacao-2026-04-20-1.md` — WRITE bloqueado como "sensitive file". Relatorio escrito em `/tmp/manutencao-2026-04-20/` para registro; mover manualmente para `.claude/atualizacoes/references/` quando autorizado.
+> Relatorio originalmente escrito em `/tmp/manutencao-2026-04-20/` por bloqueio de sensitive file; movido e atualizado em `.claude/atualizacoes/references/` apos revisao humana das correcoes.
 
 ---
 
@@ -78,24 +78,26 @@ Scan rapido — sem anomalias evidentes.
 
 ---
 
-## Divergencias NAO Corrigidas — Motivo
+## Correcoes Aplicadas (2026-04-20 — sessao subsequente)
 
-Tentativa de `Edit`/`Write` em arquivos `.claude/references/*.md` e no proprio destino do relatorio foi bloqueada com:
+| # | Arquivo | Acao | Status |
+|---|---------|------|--------|
+| 1 | `BEST_PRACTICES_2026.md` | Header 23/03 -> 20/04 + SDK 0.1.55 -> 0.1.63 (nota 0.1.60/0.1.62/0.1.63) | APLICADA |
+| 2 | `MCP_CAPABILITIES_2026.md` | Header 2026-03-23 -> 2026-04-20 + SDK 0.1.55 -> 0.1.63 (idem) | APLICADA |
+| 3 | `MEMORY_PROTOCOL.md` | Linha 157 -> 173 + path completo `app/agente/sdk/memory_injection.py` | APLICADA |
+| 4 | `ROUTING_SKILLS.md` | Contagem 31 -> 25; inventario reescrito; removidas 6 skills inexistentes | APLICADA |
+| 5 | `design/MAPEAMENTO_CORES.md` | Path `bootstrap-overrides.css` -> `base/_bootstrap-overrides.css` (2 ocorrencias) | APLICADA |
+| 6 | `odoo/IDS_FIXOS.md` | Flag `product_tmpl_id ~34~ VERIFICAR` | **PENDENTE** (requer MCP Odoo) |
+| 7 | `INDEX.md` | +2 entradas (AGENT_DESIGN_GUIDE, AGENT_TEMPLATES) + header 12/04 -> 20/04 | APLICADA |
 
-> Claude requested permissions to edit ... which is a sensitive file.
-
-Mesmo comportamento da auditoria 2026-04-06 (6 divergencias encontradas, nao corrigidas — permissao). Convencao: **documentar divergencias sem aplicar edits**, liberando para revisao humana.
+### Pendencia #6 (product_tmpl_id)
+Flag `~34~ VERIFICAR` aberto desde 31/Jan/2026 em `odoo/IDS_FIXOS.md`. Requer consulta MCP Odoo ao modelo `product.product` para confirmar `product_tmpl_id` real do produto vinculado. Nao aplicado nesta sessao por falta de evidencia concreta (regra "zero invencao" do precision-engineer).
 
 ---
 
-## Recomendacoes para proxima sessao (com permissao)
+## Historico
 
-1. Atualizar `claude-agent-sdk` 0.1.55 -> 0.1.63 em `BEST_PRACTICES_2026.md` e `MCP_CAPABILITIES_2026.md` + carimbar data 2026-04-20. Nota: instalado em `.venv` e 0.1.60 (rodar `pip install -U -r requirements.txt` para alinhar)
-2. Atualizar referencia de linha em `MEMORY_PROTOCOL.md` (157 -> 173) ou remover numero de linha para reduzir drift
-3. Atualizar contagem de skills em `ROUTING_SKILLS.md` (31 -> 24 invocaveis + 1 data folder) e reescrever o inventario das linhas 132-154 (remove `frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`, `integracao-odoo` que nao existem em `.claude/skills/`)
-4. Atualizar caminho CSS em `design/MAPEAMENTO_CORES.md` (remover referencia a `bootstrap-theme-override.css` e apontar para `base/_bootstrap-overrides.css`)
-5. Adicionar 2 entradas em `INDEX.md` Consulta Rapida para `AGENT_DESIGN_GUIDE.md` e `AGENT_TEMPLATES.md`
-6. Verificar `product_tmpl_id ~34~` em `odoo/IDS_FIXOS.md` via MCP Odoo ou remover flag (aberto desde 31/Jan/2026)
-7. Mover este relatorio de `/tmp/manutencao-2026-04-20/` para `.claude/atualizacoes/references/` e adicionar entrada em `historico.md`
+- Auditoria 2026-04-06 encontrou 6 divergencias, nao corrigidas (mesmo motivo sensitive file).
+- Auditoria 2026-04-20 encontrou 7 divergencias, **6 corrigidas** apos revisao humana liberar sensitive files, 1 pendente (MCP Odoo).
 
 Nenhum caminho quebrado critico. Sem deletar ou renomear arquivos.

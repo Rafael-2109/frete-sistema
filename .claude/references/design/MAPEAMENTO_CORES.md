@@ -14,7 +14,7 @@ O sistema agora possui uma arquitetura de Design Tokens centralizada e consisten
 |---------|--------|--------|
 | `_design-tokens.css` | Fonte única de verdade para cores | IMPLEMENTADO |
 | `_utilities.css` | Classes utilitárias baseadas em tokens | IMPLEMENTADO |
-| `bootstrap-overrides.css` | Importa tokens e sobrescreve Bootstrap | ATUALIZADO |
+| `base/_bootstrap-overrides.css` | Importa tokens e sobrescreve Bootstrap | ATUALIZADO |
 | `_variables.css` | OBSOLETO - removido | REMOVIDO |
 
 ---
@@ -44,9 +44,9 @@ Fundo cinza médio, elementos elevados flutuam em direção ao branco.
 
 ```
 app/static/css/
-├── tokens/_design-tokens.css  # FONTE ÚNICA - Todos os tokens
-├── _utilities.css        # Classes utilitárias
-├── bootstrap-overrides.css # Importa tokens + override Bootstrap
+├── tokens/_design-tokens.css       # FONTE ÚNICA - Todos os tokens
+├── _utilities.css                  # Classes utilitárias
+├── base/_bootstrap-overrides.css   # Importa tokens + override Bootstrap
 └── modules/
     └── carteira/
         ├── agrupados.css # Usa var(--token)
@@ -55,7 +55,7 @@ app/static/css/
 
 ### Ordem de Carregamento (base.html)
 1. Bootstrap CSS
-2. bootstrap-overrides.css (que importa _design-tokens.css e _utilities.css)
+2. base/_bootstrap-overrides.css (que importa _design-tokens.css e _utilities.css)
 3. Módulos específicos
 
 ---

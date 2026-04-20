@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 12/04/2026
+**Ultima atualizacao**: 20/04/2026
 
 ---
 
@@ -24,6 +24,8 @@
 | **Infraestrutura Render e Odoo** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
 | **S3 storage (14+ modulos, todos os folders e triggers)** | [S3_STORAGE.md](S3_STORAGE.md) |
 | **Confiabilidade de subagentes** | [SUBAGENT_RELIABILITY.md](SUBAGENT_RELIABILITY.md) |
+| **Manual para criar/editar subagents** | [AGENT_DESIGN_GUIDE.md](AGENT_DESIGN_GUIDE.md) |
+| **Blocos reusaveis (pre-mortem, self-critique, output format)** | [AGENT_TEMPLATES.md](AGENT_TEMPLATES.md) |
 | **Manual para CLAUDE.md de modulo** | [MANUAL_CLAUDE_MD.md](MANUAL_CLAUDE_MD.md) |
 | **Capacidades MCP (versoes, features, gaps)** | [MCP_CAPABILITIES_2026.md](MCP_CAPABILITIES_2026.md) |
 | **Protocolo de memoria do agente** | [MEMORY_PROTOCOL.md](MEMORY_PROTOCOL.md) |

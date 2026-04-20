@@ -1,6 +1,6 @@
 # MCP Capabilities — Estado do Sistema (Mar/2026)
 
-**Atualizado**: 2026-03-23
+**Atualizado**: 2026-04-20
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.1.55 | CLI 2.1.91. Annotated params (0.1.52), agent_id permissions (0.1.52), disallowedTools/maxTurns (0.1.51), session_id nativo (0.1.52), SIGKILL nativo (0.1.51), is_error MCP (0.1.51), fix maxResultSizeChars MCP large results (0.1.55) |
+| `claude-agent-sdk` | 0.1.63 | CLI 2.1.114. 0.1.60: `list_subagents()`, `get_subagent_messages()`, `setting_sources=[]` fix, TRACEPARENT propagation. 0.1.62: top-level `skills=` em ClaudeAgentOptions. 0.1.63: atual |
 | `mcp` | 1.26.0 | MCP Python SDK (spec 2025-11-25). **Pin recomendado: `>=1.25,<2`** |
 
 ---
