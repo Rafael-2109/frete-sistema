@@ -3,7 +3,16 @@
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h2>Pedido {{ pedido.numero_pedido }}</h2>
-  <span class="badge fs-6 badge-status-{{ pedido.status|lower }}">{{ pedido.status }}</span>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="badge fs-6 badge-status-{{ pedido.status|lower }}">{{ pedido.status }}</span>
+    {% set pendentes = pedido.itens|selectattr('numero_chassi', 'none')|list %}
+    {% if pendentes|length > 0 %}
+      <a href="{{ url_for('hora.pedidos_completar_chassis', pedido_id=pedido.id) }}"
+         class="btn btn-sm btn-warning">
+        <i class="fas fa-magic"></i> Completar chassis ({{ pendentes|length }})
+      </a>
+    {% endif %}
+  </div>
 </div>
 
 <div class="row g-3 mb-4">
@@ -12,8 +21,8 @@
     <div>{{ pedido.data_pedido.strftime('%d/%m/%Y') }}</div>
   </div></div>
   <div class="col-md-3"><div class="hora-kpi">
-    <div class="hora-kpi-label">CNPJ destino</div>
-    <div class="chassi-mono">{{ pedido.cnpj_destino }}</div>
+    <div class="hora-kpi-label">Loja destino</div>
+    <div>{{ pedido.loja_destino.rotulo_display if pedido.loja_destino else '—' }}</div>
   </div></div>
   <div class="col-md-3"><div class="hora-kpi">
     <div class="hora-kpi-label">Itens</div>
@@ -43,15 +52,36 @@
 <div class="table-responsive mb-4">
   <table class="table table-sm table-hover">
     <thead><tr>
-      <th>Chassi</th><th>Modelo</th><th>Cor</th><th>Preço esperado</th>
+      <th>#</th>
+      <th>Chassi</th>
+      <th>Modelo</th>
+      <th>Cor</th>
+      <th>Preço esperado</th>
+      <th style="width:120px;"></th>
     </tr></thead>
     <tbody>
       {% for item in pedido.itens %}
-        <tr>
-          <td class="chassi-mono">{{ item.numero_chassi }}</td>
+        <tr {% if not item.numero_chassi %}class="table-warning"{% endif %}>
+          <td>{{ item.id }}</td>
+          <td class="chassi-mono">
+            {{ item.numero_chassi or '' }}
+            {% if not item.numero_chassi %}
+              <em class="text-muted">pendente</em>
+            {% endif %}
+          </td>
           <td>{{ item.modelo.nome_modelo if item.modelo else '—' }}</td>
           <td>{{ item.cor or '—' }}</td>
           <td>R$ {{ "%.2f"|format(item.preco_compra_esperado) }}</td>
+          <td>
+            <button type="button" class="btn btn-sm btn-outline-secondary btn-editar-item"
+                    data-bs-toggle="modal" data-bs-target="#modalEditarItem"
+                    data-item-id="{{ item.id }}"
+                    data-chassi="{{ item.numero_chassi or '' }}"
+                    data-modelo="{{ item.modelo.nome_modelo if item.modelo else '' }}"
+                    data-cor="{{ item.cor or '' }}">
+              Editar
+            </button>
+          </td>
         </tr>
       {% endfor %}
     </tbody>
@@ -82,4 +112,56 @@
 {% endif %}
 
 <a href="{{ url_for('hora.pedidos_lista') }}" class="btn btn-secondary">Voltar</a>
+
+<!-- Modal editar item (exceção da exceção) -->
+<div class="modal fade" id="modalEditarItem" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" id="form-editar-item" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar item do pedido</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning small">
+          Edição manual — use apenas como <strong>exceção da exceção</strong>.
+          Para preencher chassi pendente, prefira <em>Completar chassis</em> (pareia com NF).
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Chassi</label>
+          <input type="text" name="numero_chassi" id="edt-chassi" class="form-control chassi-mono"
+                 maxlength="30" placeholder="deixe vazio para limpar">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Modelo</label>
+          <input type="text" name="modelo_nome" id="edt-modelo" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Cor</label>
+          <input type="text" name="cor" id="edt-cor" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function() {
+  const form = document.getElementById('form-editar-item');
+  const URL_TEMPLATE = "{{ url_for('hora.pedidos_editar_item', pedido_id=pedido.id, item_id=0) }}";
+  document.querySelectorAll('.btn-editar-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const itemId = btn.dataset.itemId;
+      form.action = URL_TEMPLATE.replace(/\/0\/editar$/, '/' + itemId + '/editar');
+      document.getElementById('edt-chassi').value = btn.dataset.chassi || '';
+      document.getElementById('edt-modelo').value = btn.dataset.modelo || '';
+      document.getElementById('edt-cor').value = btn.dataset.cor || '';
+    });
+  });
+})();
+</script>
+
 {% endblock %}

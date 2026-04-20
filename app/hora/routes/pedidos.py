@@ -6,13 +6,13 @@ import json
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 from app.hora.decorators import require_lojas as login_required
 
 from app.hora.models import HoraLoja, HoraPedido, HoraNfEntrada
 from app.hora.routes import hora_bp
-from app.hora.services import pedido_service
+from app.hora.services import matching_service, pedido_service
 from app.hora.services.auth_helper import lojas_permitidas_ids, usuario_tem_acesso_a_loja
 from app.hora.services.parsers import (
     CNPJ_MATRIZ_HORA,
@@ -257,3 +257,126 @@ def pedidos_importar_xlsx_confirmar():
     except ValueError as exc:
         flash(f'Erro ao criar pedido: {exc}', 'danger')
         return redirect(url_for('hora.pedidos_importar_xlsx'))
+
+
+# ========================================================================
+# Wizard: completar chassis pendentes
+# ========================================================================
+
+@hora_bp.route('/pedidos/<int:pedido_id>/completar-chassis', methods=['GET'])
+@login_required
+def pedidos_completar_chassis(pedido_id: int):
+    """Tela-wizard: pareia item_pedido (chassi=NULL) com nf_item da mesma loja."""
+    pedido = HoraPedido.query.get_or_404(pedido_id)
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
+        from flask import abort
+        abort(403)
+
+    if not pedido.loja_destino_id:
+        flash(
+            'Pedido sem loja definida. Defina a loja antes de completar chassis.',
+            'warning',
+        )
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    pendentes = [i for i in pedido.itens if not i.numero_chassi]
+    if not pendentes:
+        flash('Pedido nao tem itens pendentes.', 'info')
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    try:
+        disponiveis = matching_service.chassis_nf_disponiveis_para_pedido(pedido.id)
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    return render_template(
+        'hora/pedido_completar_chassis.html',
+        pedido=pedido,
+        itens_pendentes=pendentes,
+        chassis_disponiveis=disponiveis,
+    )
+
+
+@hora_bp.route('/pedidos/<int:pedido_id>/completar-chassis', methods=['POST'])
+@login_required
+def pedidos_completar_chassis_aplicar(pedido_id: int):
+    """Recebe pares pedido_item_id + nf_item_id e aplica em transacao."""
+    pedido = HoraPedido.query.get_or_404(pedido_id)
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
+        from flask import abort
+        abort(403)
+
+    pedido_item_ids = request.form.getlist('pedido_item_id[]')
+    nf_item_ids = request.form.getlist('nf_item_id[]')
+
+    if len(pedido_item_ids) != len(nf_item_ids):
+        flash('Quantidade de pares invalida.', 'danger')
+        return redirect(url_for('hora.pedidos_completar_chassis', pedido_id=pedido.id))
+
+    pares = []
+    for pi, ni in zip(pedido_item_ids, nf_item_ids):
+        pi_s = (pi or '').strip()
+        ni_s = (ni or '').strip()
+        if not pi_s or not ni_s:
+            continue
+        if not pi_s.isdigit() or not ni_s.isdigit():
+            flash(f'Par invalido: {pi}, {ni}', 'danger')
+            return redirect(url_for('hora.pedidos_completar_chassis', pedido_id=pedido.id))
+        pares.append({'pedido_item_id': int(pi_s), 'nf_item_id': int(ni_s)})
+
+    if not pares:
+        flash('Nenhum par selecionado.', 'warning')
+        return redirect(url_for('hora.pedidos_completar_chassis', pedido_id=pedido.id))
+
+    try:
+        res = matching_service.aplicar_pares_completar_chassis(
+            pedido_id=pedido.id,
+            pares=pares,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        flash(f'{res["total"]} chassi(s) preenchido(s).', 'success')
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+
+    return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+
+# ========================================================================
+# Edicao manual de item (excecao da excecao)
+# ========================================================================
+
+@hora_bp.route(
+    '/pedidos/<int:pedido_id>/itens/<int:item_id>/editar',
+    methods=['POST'],
+)
+@login_required
+def pedidos_editar_item(pedido_id: int, item_id: int):
+    pedido = HoraPedido.query.get_or_404(pedido_id)
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
+        from flask import abort
+        abort(403)
+
+    numero_chassi = (request.form.get('numero_chassi') or '').strip() or None
+    modelo_nome = (request.form.get('modelo_nome') or '').strip() or None
+    cor = (request.form.get('cor') or '').strip() or None
+
+    is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'
+    try:
+        res = matching_service.editar_pedido_item_manual(
+            pedido_id=pedido.id,
+            pedido_item_id=item_id,
+            numero_chassi=numero_chassi,
+            modelo_nome=modelo_nome,
+            cor=cor,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        if is_ajax:
+            return jsonify(res)
+        flash('Item atualizado.', 'success')
+    except ValueError as exc:
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': str(exc)}), 400
+        flash(f'Erro: {exc}', 'danger')
+
+    return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))

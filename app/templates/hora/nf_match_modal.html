@@ -1,0 +1,394 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h2 class="mb-0">Vincular NF {{ nf.numero_nf }} a um pedido</h2>
+    <small class="text-muted">
+      Loja destino: <strong>{{ nf.loja_destino.rotulo_display }}</strong>
+      · Itens NF: <strong>{{ nf.itens|length }}</strong>
+      · Data: {{ nf.data_emissao.strftime('%d/%m/%Y') }}
+    </small>
+  </div>
+  <a href="{{ url_for('hora.nfs_detalhe', nf_id=nf.id) }}" class="btn btn-sm btn-secondary">
+    <i class="fas fa-arrow-left"></i> Voltar
+  </a>
+</div>
+
+{% if not candidatos %}
+  <div class="alert alert-warning">
+    Nenhum pedido ABERTO ou PARCIALMENTE_FATURADO para a loja
+    <strong>{{ nf.loja_destino.rotulo_display }}</strong>.
+    <a href="{{ url_for('hora.pedidos_novo') }}">Cadastre um pedido</a>
+    ou volte e use vinculação manual.
+  </div>
+{% else %}
+
+<div class="row">
+  <!-- Coluna esquerda: itens da NF -->
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Itens da NF</strong>
+        <span class="badge bg-secondary">{{ nf.itens|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" id="nf-items-table">
+          <thead><tr>
+            <th style="width:36px;"></th>
+            <th>Chassi</th>
+            <th>Modelo</th>
+            <th>Cor</th>
+          </tr></thead>
+          <tbody>
+            {% for item in nf.itens %}
+            <tr data-nf-item-id="{{ item.id }}"
+                data-chassi="{{ item.numero_chassi }}"
+                class="nf-row">
+              <td class="text-center">
+                <input type="radio" name="nf_item_selected" value="{{ item.id }}"
+                       class="form-check-input nf-select-radio" disabled>
+              </td>
+              <td class="chassi-mono">{{ item.numero_chassi }}</td>
+              <td>{{ item.modelo_texto_original or '—' }}</td>
+              <td>{{ item.cor_texto_original or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coluna direita: pedidos candidatos -->
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header">
+        <strong>Pedidos da loja ({{ candidatos|length }})</strong>
+        <small class="text-muted">Ordenado por match</small>
+      </div>
+      <div class="accordion" id="acc-candidatos">
+        {% for c in candidatos %}
+          {% set suggested = (c.pedido_id == sugerido_id) %}
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed" type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#ped-{{ c.pedido_id }}"
+                      data-pedido-id="{{ c.pedido_id }}"
+                      data-numero-pedido="{{ c.numero_pedido }}">
+                <div class="d-flex flex-wrap gap-2 align-items-center w-100">
+                  <strong>{{ c.numero_pedido }}</strong>
+                  <small class="text-muted">{{ c.data_pedido_iso }}</small>
+                  <span class="badge bg-secondary">Total {{ c.total_pedido + c.total_pedido_pendente }}</span>
+                  <span class="badge bg-warning text-dark">Sem NF {{ c.sem_nf + c.total_pedido_pendente }}</span>
+                  <span class="badge bg-success">Match {{ c.match }}</span>
+                  {% if suggested %}
+                    <span class="badge bg-primary ms-auto">Sugerido</span>
+                  {% endif %}
+                </div>
+              </button>
+            </h2>
+            <div id="ped-{{ c.pedido_id }}" class="accordion-collapse collapse"
+                 data-bs-parent="#acc-candidatos">
+              <div class="accordion-body p-0">
+                <div class="p-2 bg-light border-bottom d-flex flex-wrap gap-2 align-items-center">
+                  <span>Total NF = <strong>{{ nf.itens|length }}</strong></span>
+                  <span class="ms-2">Match Pedido = <strong class="match-count">0</strong></span>
+                  <span class="match-pct text-muted">0%</span>
+                  <div class="ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary btn-corrigir-pedido">
+                      Corrigir Pedido
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-corrigir-nf">
+                      Corrigir NF
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary btn-cancelar-correcao d-none">
+                      Cancelar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success btn-aplicar d-none">
+                      Aplicar
+                    </button>
+                    <form method="post"
+                          action="{{ url_for('hora.nfs_match_confirmar', nf_id=nf.id) }}"
+                          class="d-inline m-0">
+                      <input type="hidden" name="pedido_id" value="{{ c.pedido_id }}">
+                      <button type="submit" class="btn btn-sm btn-primary">
+                        Vincular este pedido
+                      </button>
+                    </form>
+                  </div>
+                </div>
+                <table class="table table-sm mb-0 ped-items-table">
+                  <thead><tr>
+                    <th style="width:36px;"></th>
+                    <th>Chassi</th>
+                    <th>Modelo</th>
+                    <th>Cor</th>
+                  </tr></thead>
+                  <tbody class="ped-items-body">
+                    <tr><td colspan="4" class="text-center text-muted py-3">
+                      <em>Carregando…</em>
+                    </td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const NF_ID = {{ nf.id }};
+  const URL_PREVIEW = "{{ url_for('hora.nfs_match_preview', nf_id=nf.id) }}";
+  const URL_CORRIGIR_PEDIDO = "{{ url_for('hora.nfs_match_corrigir_pedido', nf_id=nf.id) }}";
+  const URL_CORRIGIR_NF = "{{ url_for('hora.nfs_match_corrigir_nf', nf_id=nf.id) }}";
+
+  // Mapa chassi -> tr na tabela da NF (lado esquerdo)
+  const nfTable = document.getElementById('nf-items-table');
+
+  function resetarPinturaNF() {
+    nfTable.querySelectorAll('tbody tr').forEach(tr => {
+      tr.classList.remove('table-success', 'table-danger', 'selecionavel', 'selecionado');
+      const radio = tr.querySelector('.nf-select-radio');
+      if (radio) { radio.checked = false; radio.disabled = true; }
+    });
+  }
+
+  function pintarNF(nf_itens) {
+    resetarPinturaNF();
+    nf_itens.forEach(ni => {
+      const tr = nfTable.querySelector(`tr[data-nf-item-id="${ni.id}"]`);
+      if (!tr) return;
+      tr.classList.add(ni.match ? 'table-success' : 'table-danger');
+    });
+  }
+
+  async function carregarPreview(accordionItem, pedidoId) {
+    const body = accordionItem.querySelector('.ped-items-body');
+    const matchCount = accordionItem.querySelector('.match-count');
+    const matchPct = accordionItem.querySelector('.match-pct');
+
+    body.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3"><em>Carregando…</em></td></tr>`;
+
+    let data;
+    try {
+      const r = await fetch(`${URL_PREVIEW}?pedido_id=${pedidoId}`);
+      data = await r.json();
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="4" class="text-danger p-3">Erro: ${e}</td></tr>`;
+      return;
+    }
+    if (!data.ok) {
+      body.innerHTML = `<tr><td colspan="4" class="text-danger p-3">${data.erro || 'Erro'}</td></tr>`;
+      return;
+    }
+
+    // Render itens do pedido
+    body.innerHTML = '';
+    data.pedido_itens.forEach(pi => {
+      const tr = document.createElement('tr');
+      tr.dataset.pedidoItemId = pi.id;
+      tr.dataset.chassi = pi.chassi || '';
+      tr.dataset.pendente = pi.pendente ? '1' : '0';
+      if (pi.pendente) {
+        tr.classList.add('table-warning');
+      } else {
+        tr.classList.add(pi.match ? 'table-success' : 'table-danger');
+      }
+      tr.innerHTML = `
+        <td class="text-center">
+          <input type="radio" name="ped_item_selected_${pedidoId}" value="${pi.id}"
+                 class="form-check-input ped-select-radio" disabled>
+        </td>
+        <td class="chassi-mono">${pi.chassi || '<em class="text-muted">pendente</em>'}</td>
+        <td>${pi.modelo || '—'}</td>
+        <td>${pi.cor || '—'}</td>
+      `;
+      body.appendChild(tr);
+    });
+
+    matchCount.textContent = data.totais.match;
+    matchPct.textContent = `${data.totais.pct_match}%`;
+
+    // Pinta NF (esquerda) com base no match deste pedido
+    pintarNF(data.nf_itens);
+
+    // Reset modo correção
+    accordionItem._modoCorrecao = null;
+    accordionItem.querySelector('.btn-aplicar').classList.add('d-none');
+    accordionItem.querySelector('.btn-cancelar-correcao').classList.add('d-none');
+  }
+
+  function entrarModoCorrecaoPedido(accordionItem, pedidoId) {
+    accordionItem._modoCorrecao = 'CORRIGIR_PEDIDO';
+    // NF: habilita radio apenas nas linhas SEM match (table-danger)
+    nfTable.querySelectorAll('tbody tr').forEach(tr => {
+      const radio = tr.querySelector('.nf-select-radio');
+      if (!radio) return;
+      if (tr.classList.contains('table-danger')) {
+        radio.disabled = false;
+        tr.classList.add('selecionavel');
+      } else {
+        radio.disabled = true;
+      }
+    });
+    // Pedido: habilita radio nas linhas pendentes (table-warning) ou sem match (table-danger)
+    const body = accordionItem.querySelector('.ped-items-body');
+    body.querySelectorAll('tr').forEach(tr => {
+      const radio = tr.querySelector('.ped-select-radio');
+      if (!radio) return;
+      const elegivel = tr.classList.contains('table-warning') || tr.classList.contains('table-danger');
+      if (elegivel) {
+        radio.disabled = false;
+        tr.classList.add('selecionavel');
+      } else {
+        radio.disabled = true;
+      }
+    });
+    accordionItem.querySelector('.btn-aplicar').classList.remove('d-none');
+    accordionItem.querySelector('.btn-cancelar-correcao').classList.remove('d-none');
+  }
+
+  function entrarModoCorrecaoNF(accordionItem, pedidoId) {
+    accordionItem._modoCorrecao = 'CORRIGIR_NF';
+    // NF: habilita radio apenas nas linhas SEM match
+    nfTable.querySelectorAll('tbody tr').forEach(tr => {
+      const radio = tr.querySelector('.nf-select-radio');
+      if (!radio) return;
+      if (tr.classList.contains('table-danger')) {
+        radio.disabled = false;
+        tr.classList.add('selecionavel');
+      } else {
+        radio.disabled = true;
+      }
+    });
+    // Pedido: habilita radio apenas nas linhas SEM match que tenham chassi preenchido
+    const body = accordionItem.querySelector('.ped-items-body');
+    body.querySelectorAll('tr').forEach(tr => {
+      const radio = tr.querySelector('.ped-select-radio');
+      if (!radio) return;
+      const chassi = tr.dataset.chassi;
+      const pendente = tr.dataset.pendente === '1';
+      const elegivel = !pendente && tr.classList.contains('table-danger') && chassi;
+      if (elegivel) {
+        radio.disabled = false;
+        tr.classList.add('selecionavel');
+      } else {
+        radio.disabled = true;
+      }
+    });
+    accordionItem.querySelector('.btn-aplicar').classList.remove('d-none');
+    accordionItem.querySelector('.btn-cancelar-correcao').classList.remove('d-none');
+  }
+
+  function cancelarCorrecao(accordionItem) {
+    accordionItem._modoCorrecao = null;
+    // Desabilita todos radios
+    nfTable.querySelectorAll('.nf-select-radio').forEach(r => { r.disabled = true; r.checked = false; });
+    nfTable.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('selecionavel'));
+    const body = accordionItem.querySelector('.ped-items-body');
+    body.querySelectorAll('.ped-select-radio').forEach(r => { r.disabled = true; r.checked = false; });
+    body.querySelectorAll('tr').forEach(tr => tr.classList.remove('selecionavel'));
+    accordionItem.querySelector('.btn-aplicar').classList.add('d-none');
+    accordionItem.querySelector('.btn-cancelar-correcao').classList.add('d-none');
+  }
+
+  async function aplicarCorrecao(accordionItem, pedidoId, numeroPedido) {
+    const modo = accordionItem._modoCorrecao;
+    if (!modo) return;
+
+    const nfRadio = nfTable.querySelector('.nf-select-radio:checked');
+    const pedRadio = accordionItem.querySelector('.ped-select-radio:checked');
+    if (!nfRadio || !pedRadio) {
+      alert('Selecione 1 item na NF e 1 item no Pedido.');
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('pedido_id', pedidoId);
+    fd.append('nf_item_id', nfRadio.value);
+    fd.append('pedido_item_id', pedRadio.value);
+
+    const url = (modo === 'CORRIGIR_PEDIDO') ? URL_CORRIGIR_PEDIDO : URL_CORRIGIR_NF;
+    let data;
+    try {
+      const r = await fetch(url, { method: 'POST', body: fd });
+      data = await r.json();
+    } catch (e) {
+      alert('Erro de rede: ' + e);
+      return;
+    }
+    if (!data.ok) {
+      alert('Erro: ' + (data.erro || 'falha na correcao'));
+      return;
+    }
+
+    // Recarrega preview para refletir novo match
+    await carregarPreview(accordionItem, pedidoId);
+  }
+
+  // Carrega preview quando accordion abre
+  document.querySelectorAll('#acc-candidatos .accordion-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pid = btn.dataset.pedidoId;
+      const accItem = btn.closest('.accordion-item');
+      // Bootstrap demora uns ms pra expandir; carregamos de qualquer forma
+      setTimeout(() => {
+        if (!accItem._carregado) {
+          carregarPreview(accItem, pid);
+          accItem._carregado = true;
+        }
+      }, 150);
+    });
+  });
+
+  // Botões de corrigir
+  document.querySelectorAll('.btn-corrigir-pedido').forEach(b => {
+    b.addEventListener('click', () => {
+      const accItem = b.closest('.accordion-item');
+      const btn = accItem.querySelector('.accordion-button');
+      entrarModoCorrecaoPedido(accItem, btn.dataset.pedidoId);
+    });
+  });
+  document.querySelectorAll('.btn-corrigir-nf').forEach(b => {
+    b.addEventListener('click', () => {
+      const accItem = b.closest('.accordion-item');
+      const btn = accItem.querySelector('.accordion-button');
+      entrarModoCorrecaoNF(accItem, btn.dataset.pedidoId);
+    });
+  });
+  document.querySelectorAll('.btn-cancelar-correcao').forEach(b => {
+    b.addEventListener('click', () => {
+      const accItem = b.closest('.accordion-item');
+      cancelarCorrecao(accItem);
+    });
+  });
+  document.querySelectorAll('.btn-aplicar').forEach(b => {
+    b.addEventListener('click', () => {
+      const accItem = b.closest('.accordion-item');
+      const btn = accItem.querySelector('.accordion-button');
+      aplicarCorrecao(accItem, btn.dataset.pedidoId, btn.dataset.numeroPedido);
+    });
+  });
+
+  // Auto-abre o sugerido
+  const sugerido = {{ sugerido_id or 'null' }};
+  if (sugerido) {
+    const btn = document.querySelector(`.accordion-button[data-pedido-id="${sugerido}"]`);
+    if (btn) { btn.click(); }
+  }
+})();
+</script>
+
+<style>
+tr.selecionavel { cursor: pointer; }
+tr.selecionavel:hover { outline: 2px solid var(--bs-primary); }
+</style>
+
+{% endif %}
+{% endblock %}

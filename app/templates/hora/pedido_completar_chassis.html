@@ -1,0 +1,286 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h2 class="mb-0">Completar chassis — Pedido {{ pedido.numero_pedido }}</h2>
+    <small class="text-muted">
+      Loja: <strong>{{ pedido.loja_destino.rotulo_display }}</strong>
+      · Pendentes: <strong>{{ itens_pendentes|length }}</strong>
+      · Chassis NF disponíveis: <strong>{{ chassis_disponiveis|length }}</strong>
+    </small>
+  </div>
+  <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=pedido.id) }}" class="btn btn-sm btn-secondary">
+    <i class="fas fa-arrow-left"></i> Voltar
+  </a>
+</div>
+
+{% if not chassis_disponiveis %}
+  <div class="alert alert-warning">
+    Não há chassis de NF disponíveis para esta loja. Importe uma NF da loja
+    <strong>{{ pedido.loja_destino.rotulo_display }}</strong> primeiro.
+  </div>
+{% else %}
+
+<form method="post" action="{{ url_for('hora.pedidos_completar_chassis_aplicar', pedido_id=pedido.id) }}"
+      id="form-pares">
+  <div class="alert alert-info small">
+    Selecione exatamente <strong>1 item do pedido</strong> (esquerda) e <strong>1 chassi NF</strong> (direita).
+    Clique em <em>Adicionar par</em>. Repita para cada item a completar. Depois <em>Salvar</em>.
+  </div>
+
+  <div class="row mb-3">
+    <!-- Pedido: itens pendentes -->
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between">
+          <strong>Itens do pedido (pendentes)</strong>
+          <span class="badge bg-warning text-dark">{{ itens_pendentes|length }}</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" id="tbl-pedido">
+            <thead><tr>
+              <th style="width:36px;"></th>
+              <th>#</th>
+              <th>Modelo</th>
+              <th>Cor</th>
+              <th>Preço esperado</th>
+            </tr></thead>
+            <tbody>
+              {% for i in itens_pendentes %}
+              <tr data-pedido-item-id="{{ i.id }}" class="pedido-row">
+                <td class="text-center">
+                  <input type="radio" name="sel_ped" value="{{ i.id }}"
+                         class="form-check-input sel-ped-radio">
+                </td>
+                <td>{{ i.id }}</td>
+                <td>{{ i.modelo.nome_modelo if i.modelo else '—' }}</td>
+                <td>{{ i.cor or '—' }}</td>
+                <td>R$ {{ "%.2f"|format(i.preco_compra_esperado) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- NF: chassis disponíveis -->
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between">
+          <strong>Chassis disponíveis em NFs</strong>
+          <span class="badge bg-info text-dark">{{ chassis_disponiveis|length }}</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" id="tbl-nf">
+            <thead><tr>
+              <th style="width:36px;"></th>
+              <th>Chassi</th>
+              <th>Modelo</th>
+              <th>Cor</th>
+              <th>NF</th>
+            </tr></thead>
+            <tbody>
+              {% for d in chassis_disponiveis %}
+              <tr data-nf-item-id="{{ d.nf_item_id }}" class="nf-row">
+                <td class="text-center">
+                  <input type="radio" name="sel_nf" value="{{ d.nf_item_id }}"
+                         class="form-check-input sel-nf-radio">
+                </td>
+                <td class="chassi-mono">{{ d.chassi }}</td>
+                <td>{{ d.modelo or '—' }}</td>
+                <td>{{ d.cor or '—' }}</td>
+                <td class="small">
+                  <a href="{{ url_for('hora.nfs_detalhe', nf_id=d.nf_id) }}" target="_blank">
+                    {{ d.nf_numero }}
+                  </a>
+                  {% if d.vinculada_a_este_pedido %}
+                    <span class="badge bg-success">vinc</span>
+                  {% elif d.nf_pedido_id is none %}
+                    <span class="badge bg-secondary">sem vinc</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">outro ped</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-3 d-flex gap-2">
+    <button type="button" class="btn btn-outline-primary" id="btn-adicionar-par">
+      <i class="fas fa-plus"></i> Adicionar par
+    </button>
+    <button type="button" class="btn btn-outline-secondary" id="btn-limpar-pares">
+      Limpar todos
+    </button>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <strong>Pares selecionados (<span id="count-pares">0</span>)</strong>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0" id="tbl-pares">
+        <thead><tr>
+          <th>#</th>
+          <th>Item Pedido</th>
+          <th>Chassi NF</th>
+          <th>Modelo NF</th>
+          <th>Cor NF</th>
+          <th style="width:80px;"></th>
+        </tr></thead>
+        <tbody id="tbody-pares">
+          <tr id="row-empty"><td colspan="6" class="text-muted text-center py-3">
+            <em>Nenhum par ainda.</em>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-success" id="btn-salvar" disabled>
+    <i class="fas fa-save"></i> Salvar pares
+  </button>
+  <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=pedido.id) }}" class="btn btn-secondary">
+    Cancelar
+  </a>
+</form>
+
+<script>
+(function() {
+  const pedidoRows = document.querySelectorAll('#tbl-pedido tbody tr');
+  const nfRows = document.querySelectorAll('#tbl-nf tbody tr');
+  const tbodyPares = document.getElementById('tbody-pares');
+  const countEl = document.getElementById('count-pares');
+  const btnAdd = document.getElementById('btn-adicionar-par');
+  const btnClear = document.getElementById('btn-limpar-pares');
+  const btnSalvar = document.getElementById('btn-salvar');
+  const rowEmpty = document.getElementById('row-empty');
+  const form = document.getElementById('form-pares');
+
+  // Conjuntos usados
+  const pedIdsUsados = new Set();
+  const nfIdsUsados = new Set();
+
+  function atualizarCount() {
+    const n = tbodyPares.querySelectorAll('tr.par-row').length;
+    countEl.textContent = n;
+    btnSalvar.disabled = n === 0;
+    if (n === 0) { rowEmpty.style.display = ''; }
+    else { rowEmpty.style.display = 'none'; }
+  }
+
+  function atualizarDisponibilidade() {
+    pedidoRows.forEach(tr => {
+      const usado = pedIdsUsados.has(tr.dataset.pedidoItemId);
+      const radio = tr.querySelector('.sel-ped-radio');
+      tr.classList.toggle('text-muted', usado);
+      tr.classList.toggle('table-active', usado);
+      if (radio) { radio.disabled = usado; if (usado) radio.checked = false; }
+    });
+    nfRows.forEach(tr => {
+      const usado = nfIdsUsados.has(tr.dataset.nfItemId);
+      const radio = tr.querySelector('.sel-nf-radio');
+      tr.classList.toggle('text-muted', usado);
+      tr.classList.toggle('table-active', usado);
+      if (radio) { radio.disabled = usado; if (usado) radio.checked = false; }
+    });
+  }
+
+  btnAdd.addEventListener('click', () => {
+    const pedRadio = document.querySelector('input[name="sel_ped"]:checked');
+    const nfRadio = document.querySelector('input[name="sel_nf"]:checked');
+    if (!pedRadio || !nfRadio) {
+      alert('Selecione 1 item do pedido + 1 chassi NF.');
+      return;
+    }
+    const pedId = pedRadio.value;
+    const nfId = nfRadio.value;
+    if (pedIdsUsados.has(pedId) || nfIdsUsados.has(nfId)) {
+      alert('Item ja usado em outro par.');
+      return;
+    }
+
+    const pedTr = document.querySelector(`#tbl-pedido tr[data-pedido-item-id="${pedId}"]`);
+    const nfTr = document.querySelector(`#tbl-nf tr[data-nf-item-id="${nfId}"]`);
+
+    const modeloPed = pedTr.cells[2].textContent.trim();
+    const corPed = pedTr.cells[3].textContent.trim();
+    const chassi = nfTr.cells[1].textContent.trim();
+    const modeloNf = nfTr.cells[2].textContent.trim();
+    const corNf = nfTr.cells[3].textContent.trim();
+
+    const warning = (modeloPed && modeloPed !== '—' && modeloNf && modeloNf !== '—'
+                     && modeloPed.toUpperCase() !== modeloNf.toUpperCase())
+      ? ` <span class="badge bg-warning text-dark" title="Modelo diverge">!</span>` : '';
+
+    const tr = document.createElement('tr');
+    tr.classList.add('par-row');
+    tr.dataset.pedId = pedId;
+    tr.dataset.nfId = nfId;
+    tr.innerHTML = `
+      <td></td>
+      <td>#${pedId} ${modeloPed} / ${corPed}${warning}</td>
+      <td class="chassi-mono">${chassi}</td>
+      <td>${modeloNf}</td>
+      <td>${corNf}</td>
+      <td>
+        <button type="button" class="btn btn-sm btn-outline-danger btn-remover">
+          <i class="fas fa-times"></i>
+        </button>
+        <input type="hidden" name="pedido_item_id[]" value="${pedId}">
+        <input type="hidden" name="nf_item_id[]" value="${nfId}">
+      </td>
+    `;
+    tbodyPares.appendChild(tr);
+    pedIdsUsados.add(pedId);
+    nfIdsUsados.add(nfId);
+
+    tr.querySelector('.btn-remover').addEventListener('click', () => {
+      pedIdsUsados.delete(pedId);
+      nfIdsUsados.delete(nfId);
+      tr.remove();
+      atualizarDisponibilidade();
+      atualizarCount();
+      // Renumera
+      tbodyPares.querySelectorAll('tr.par-row').forEach((r, idx) => {
+        r.cells[0].textContent = idx + 1;
+      });
+    });
+
+    pedRadio.checked = false;
+    nfRadio.checked = false;
+    atualizarDisponibilidade();
+    atualizarCount();
+    // Renumera
+    tbodyPares.querySelectorAll('tr.par-row').forEach((r, idx) => {
+      r.cells[0].textContent = idx + 1;
+    });
+  });
+
+  btnClear.addEventListener('click', () => {
+    tbodyPares.querySelectorAll('tr.par-row').forEach(r => r.remove());
+    pedIdsUsados.clear();
+    nfIdsUsados.clear();
+    atualizarDisponibilidade();
+    atualizarCount();
+  });
+
+  form.addEventListener('submit', (e) => {
+    const n = tbodyPares.querySelectorAll('tr.par-row').length;
+    if (n === 0) {
+      e.preventDefault();
+      alert('Adicione pelo menos 1 par.');
+    }
+  });
+})();
+</script>
+
+{% endif %}
+{% endblock %}
