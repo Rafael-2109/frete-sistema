@@ -36,6 +36,16 @@ def dashboard():
     """Dashboard principal — dados carregados via AJAX pelos endpoints /api/dashboard/*"""
     if current_user.perfil == 'vendedor':
         return redirect(url_for('comercial.dashboard_diretoria'))
+    # Sistema e 100% Nacom exceto 5 dominios isolados. Quem nao tem Nacom cai
+    # direto no dashboard do dominio ao qual pertence.
+    if not getattr(current_user, 'sistema_logistica', False) and current_user.perfil != 'administrador':
+        from app.auth.utils import url_primeiro_dashboard_disponivel
+        url_destino = url_primeiro_dashboard_disponivel(current_user)
+        if url_destino:
+            return redirect(url_destino)
+        from flask import flash
+        flash('Seu usuario nao tem acesso a nenhum modulo. Contate o administrador.', 'danger')
+        return redirect(url_for('auth.logout'))
     return render_template('main/dashboard.html', usuario=current_user)
 
 @main_bp.route('/relatorio_gerencial')

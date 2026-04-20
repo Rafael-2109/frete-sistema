@@ -31,9 +31,17 @@ def login():
                 if usuario.perfil == 'vendedor':
                     # Vendedores vão direto para o dashboard comercial
                     return redirect(url_for('comercial.dashboard_diretoria'))
-                else:
-                    # Outros perfis vão para o dashboard principal
-                    return redirect(url_for('main.dashboard'))
+                # Sistema e 100% Nacom exceto 5 dominios isolados. Quem nao tem
+                # Nacom cai direto no dashboard do dominio ao qual pertence.
+                if not usuario.sistema_logistica and usuario.perfil != 'administrador':
+                    from app.auth.utils import url_primeiro_dashboard_disponivel
+                    url_destino = url_primeiro_dashboard_disponivel(usuario)
+                    if url_destino:
+                        return redirect(url_destino)
+                    flash('Seu usuario nao tem acesso a nenhum modulo. Contate o administrador.', 'danger')
+                    return redirect(url_for('auth.logout'))
+                # Outros perfis vão para o dashboard principal
+                return redirect(url_for('main.dashboard'))
             else:
                 flash('Sua conta ainda não foi aprovada ou está bloqueada.', 'warning')
         else:
