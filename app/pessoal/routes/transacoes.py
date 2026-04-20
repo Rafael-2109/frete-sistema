@@ -18,6 +18,33 @@ from app.utils.timezone import agora_utc_naive
 transacoes_bp = Blueprint('pessoal_transacoes', __name__)
 
 
+def aplicar_filtros_extras(query, valor_min=None, valor_max=None,
+                            tem_categoria=None):
+    """Aplica filtros F1 de valor e presenca de categoria.
+
+    Separado para permitir teste direto sem HTTP. Espelhado no teste
+    tests/pessoal/test_transacoes_filtros.py.
+
+    Args:
+        query: PessoalTransacao.query (ou derivado).
+        valor_min: float, filtra transacoes com valor >= min.
+        valor_max: float, filtra transacoes com valor <= max.
+        tem_categoria: 'sim' filtra categorizadas; 'nao' filtra sem
+                       categoria; qualquer outro valor e ignorado.
+
+    Returns: query com filtros aplicados.
+    """
+    if valor_min is not None:
+        query = query.filter(PessoalTransacao.valor >= valor_min)
+    if valor_max is not None:
+        query = query.filter(PessoalTransacao.valor <= valor_max)
+    if tem_categoria == 'sim':
+        query = query.filter(PessoalTransacao.categoria_id.isnot(None))
+    elif tem_categoria == 'nao':
+        query = query.filter(PessoalTransacao.categoria_id.is_(None))
+    return query
+
+
 @transacoes_bp.route('/transacoes')
 @login_required
 def listar():
@@ -34,6 +61,9 @@ def listar():
     status = request.args.get('status')
     tipo = request.args.get('tipo')
     busca = request.args.get('busca', '').strip()
+    valor_min = request.args.get('valor_min', type=float)
+    valor_max = request.args.get('valor_max', type=float)
+    tem_categoria = request.args.get('tem_categoria')  # 'sim' | 'nao' | None
     excluir_filtradas = request.args.get('excluir_filtradas', '1')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
@@ -63,6 +93,13 @@ def listar():
             PessoalTransacao.descricao.ilike(busca_like),
             PessoalTransacao.historico_completo.ilike(busca_like),
         ))
+    # Filtros F1 extras (valor + presenca de categoria)
+    query = aplicar_filtros_extras(
+        query,
+        valor_min=valor_min,
+        valor_max=valor_max,
+        tem_categoria=tem_categoria,
+    )
     if excluir_filtradas == '1':
         query = query.filter_by(excluir_relatorio=False)
 
@@ -148,6 +185,9 @@ def listar():
             'status': status,
             'tipo': tipo,
             'busca': busca,
+            'valor_min': valor_min,
+            'valor_max': valor_max,
+            'tem_categoria': tem_categoria,
             'excluir_filtradas': excluir_filtradas,
             'sort_by': sort_by,
             'sort_order': sort_order,
