@@ -111,11 +111,32 @@
     {# ===== REGRAS ===== #}
     <div class="tab-pane fade" id="tabRegras">
       <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
           <span>Regras de Categorizacao</span>
-          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRegra">
-            <i class="fas fa-plus"></i> Nova Regra
-          </button>
+          <div class="d-flex align-items-center gap-2">
+            <div class="input-group input-group-sm" style="width: 280px">
+              <span class="input-group-text"><i class="fas fa-search"></i></span>
+              <input type="text" id="filtroRegras" class="form-control form-control-sm"
+                     placeholder="Filtrar padrao, categoria, tipo...">
+              <button class="btn btn-outline-secondary" type="button" id="btnLimparFiltroRegras" title="Limpar">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <select id="filtroRegrasTipo" class="form-select form-select-sm" style="width: auto">
+              <option value="">Todos tipos</option>
+              <option value="PADRAO">Padrao</option>
+              <option value="RELATIVO">Relativo</option>
+            </select>
+            <select id="filtroRegrasAtivo" class="form-select form-select-sm" style="width: auto">
+              <option value="">Todos status</option>
+              <option value="sim">Ativas</option>
+              <option value="nao">Inativas</option>
+            </select>
+            <small class="text-muted" id="filtroRegrasInfo"></small>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRegra">
+              <i class="fas fa-plus"></i> Nova Regra
+            </button>
+          </div>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -129,38 +150,45 @@
                   <th class="sortable" data-sort="number" data-col="4" role="button">Conf. <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
                   <th class="sortable" data-sort="number" data-col="5" role="button" title="Transacoes PENDENTES cujo historico contem este padrao hoje. Indica quantas seriam categorizadas automaticamente em um re-processamento. 0 = sem pendentes matchando (normal se a regra ja foi aplicada).">Match <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
                   <th>Ativo</th>
-                  <th style="width:120px">Acoes</th>
+                  <th style="width:150px">Acoes</th>
                 </tr>
               </thead>
               <tbody>
                 {% for regra in regras %}
                 {% set match_count = contagem_match.get(regra.id, 0) %}
-                <tr class="{{ '' if regra.ativo else 'text-muted' }}"
+                {% set cat_label = (regra.categoria.grupo ~ ' / ' ~ regra.categoria.nome) if regra.categoria else '' %}
+                {% set filtro_key = (regra.padrao_historico ~ ' ' ~ regra.tipo_regra ~ ' ' ~ cat_label ~ ' ' ~ (regra.cpf_cnpj_padrao or '') ~ ' ' ~ regra.origem)|lower %}
+                <tr class="regra-row {{ '' if regra.ativo else 'text-muted' }}"
                     data-regra-id="{{ regra.id }}"
                     data-regra-padrao="{{ regra.padrao_historico }}"
                     data-regra-tipo="{{ regra.tipo_regra }}"
                     data-regra-categoria="{{ regra.categoria_id or '' }}"
+                    data-regra-ativo="{{ 'sim' if regra.ativo else 'nao' }}"
+                    data-regra-filtro="{{ filtro_key }}"
                     data-regra-restritas="{{ regra.get_categorias_restritas()|tojson }}"
                     data-regra-cpfcnpj="{{ regra.cpf_cnpj_padrao or '' }}"
                     data-regra-vmin="{{ regra.valor_min if regra.valor_min is not none else '' }}"
                     data-regra-vmax="{{ regra.valor_max if regra.valor_max is not none else '' }}">
-                  <td class="small fw-bold" data-val="{{ regra.padrao_historico }}">
-                    {{ regra.padrao_historico }}
+                  <td class="small fw-bold cel-padrao" data-val="{{ regra.padrao_historico }}">
+                    <button class="btn btn-link btn-sm btn-toggle-transacoes p-0 me-1" title="Ver transacoes categorizadas por esta regra">
+                      <i class="fas fa-chevron-right toggle-icon"></i>
+                    </button>
+                    <span class="padrao-text">{{ regra.padrao_historico }}</span>
                     {% if regra.cpf_cnpj_padrao %}
-                    <i class="fas fa-id-card text-info ms-1" title="CPF/CNPJ: {{ regra.cpf_cnpj_padrao }}"></i>
+                    <i class="fas fa-id-card text-info ms-1 icon-cpfcnpj" title="CPF/CNPJ: {{ regra.cpf_cnpj_padrao }}"></i>
                     {% endif %}
                     {% if regra.valor_min is not none or regra.valor_max is not none %}
-                    <i class="fas fa-dollar-sign text-warning ms-1" title="Restrito por valor ({{ regra.valor_min or '∞' }} — {{ regra.valor_max or '∞' }})"></i>
+                    <i class="fas fa-dollar-sign text-warning ms-1 icon-valor" title="Restrito por valor ({{ regra.valor_min or '∞' }} — {{ regra.valor_max or '∞' }})"></i>
                     {% endif %}
                   </td>
-                  <td data-val="{{ regra.tipo_regra }}">
+                  <td class="cel-tipo" data-val="{{ regra.tipo_regra }}">
                     {% if regra.tipo_regra == 'PADRAO' %}
                     <span class="badge bg-primary">Padrao</span>
                     {% else %}
                     <span class="badge bg-info">Relativo</span>
                     {% endif %}
                   </td>
-                  <td class="small" data-val="{{ (regra.categoria.grupo ~ ' / ' ~ regra.categoria.nome) if regra.categoria else '' }}">
+                  <td class="small cel-categoria" data-val="{{ cat_label }}">
                     {% if regra.categoria %}
                     <span class="text-muted">{{ regra.categoria.grupo }}</span>
                     <span class="mx-1">/</span>
@@ -169,16 +197,16 @@
                     <span class="text-muted">-</span>
                     {% endif %}
                   </td>
-                  <td data-val="{{ regra.vezes_usado }}">{{ regra.vezes_usado }}</td>
-                  <td data-val="{{ regra.confianca }}">{{ regra.confianca }}%</td>
-                  <td data-val="{{ match_count }}">
+                  <td class="cel-usos" data-val="{{ regra.vezes_usado }}">{{ regra.vezes_usado }}</td>
+                  <td class="cel-confianca" data-val="{{ regra.confianca }}">{{ regra.confianca }}%</td>
+                  <td class="cel-match" data-val="{{ match_count }}">
                     {% if match_count > 0 %}
                     <span class="badge bg-warning text-dark" title="{{ match_count }} pendentes matcham este padrao">{{ match_count }}</span>
                     {% else %}
                     <span class="text-muted">0</span>
                     {% endif %}
                   </td>
-                  <td>
+                  <td class="cel-ativo">
                     {% if regra.ativo %}
                     <span class="badge bg-success">Sim</span>
                     {% else %}
@@ -196,6 +224,13 @@
                     <button class="btn btn-outline-danger btn-sm btn-remover-regra py-0 px-1" title="Desativar regra">
                       <i class="fas fa-trash"></i>
                     </button>
+                  </td>
+                </tr>
+                <tr class="regra-detail-row d-none" data-detail-of="{{ regra.id }}">
+                  <td colspan="8" class="p-0 bg-light">
+                    <div class="p-3" id="detalheRegra{{ regra.id }}">
+                      <div class="text-muted small">Carregando transacoes...</div>
+                    </div>
                   </td>
                 </tr>
                 {% endfor %}
@@ -678,7 +713,7 @@ $(function() {
     $('#catGrupo').val(tr.data('cat-grupo'));
     selecionarIcone(tr.data('cat-icone') || 'fa-tag');
     $('#modalCategoriaTitulo').text('Editar Categoria');
-    new bootstrap.Modal('#modalCategoria').show();
+    openModal('#modalCategoria');
   });
 
   // Salvar categoria (criar ou editar)
@@ -706,7 +741,7 @@ $(function() {
       success: function(resp) {
         if (resp.sucesso) {
           toastr.success('Categoria salva com sucesso.');
-          bootstrap.Modal.getInstance('#modalCategoria').hide();
+          closeModal('#modalCategoria');
           location.reload();
         } else {
           toastr.error(resp.mensagem);
@@ -743,6 +778,26 @@ $(function() {
     });
   });
 
+  // Helpers de modal: usa getOrCreateInstance com elemento DOM (evita dupla instancia
+  // e backdrop orfao). Bootstrap 5.x nao suporta seletor string no construtor.
+  function openModal(sel) {
+    const el = document.querySelector(sel);
+    if (!el) { console.error('Modal nao encontrado:', sel); return null; }
+    // Limpa eventuais backdrops orfaos de modais anteriores
+    document.querySelectorAll('.modal-backdrop').forEach(function(b) {
+      if (!document.querySelector('.modal.show')) b.remove();
+    });
+    const m = bootstrap.Modal.getOrCreateInstance(el);
+    m.show();
+    return m;
+  }
+  function closeModal(sel) {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    const m = bootstrap.Modal.getInstance(el);
+    if (m) m.hide();
+  }
+
   // Helper: renderiza vinculos no formato "N regras, N transacoes, ..."
   function fmtVinculos(v) {
     const parts = [];
@@ -768,7 +823,7 @@ $(function() {
     $('#migrarDestinoId option').prop('disabled', false);
     $('#migrarDestinoId option[value="' + catId + '"]').prop('disabled', true);
 
-    new bootstrap.Modal('#modalMigrarCat').show();
+    openModal('#modalMigrarCat');
 
     // Carregar vinculos via AJAX
     $.get('/pessoal/api/categorias/' + catId + '/vinculos', function(r) {
@@ -801,7 +856,7 @@ $(function() {
       success: function(r) {
         if (r.sucesso) {
           toastr.success(r.mensagem);
-          bootstrap.Modal.getInstance('#modalMigrarCat').hide();
+          closeModal('#modalMigrarCat');
           location.reload();
         } else {
           toastr.error(r.mensagem);
@@ -846,7 +901,7 @@ $(function() {
     $('#removerDestinoId option').prop('disabled', false);
     $('#removerDestinoId option[value="' + catId + '"]').prop('disabled', true);
 
-    new bootstrap.Modal('#modalRemoverCat').show();
+    openModal('#modalRemoverCat');
 
     // Carregar vinculos via AJAX
     $.get('/pessoal/api/categorias/' + catId + '/vinculos', function(r) {
@@ -906,7 +961,7 @@ $(function() {
       success: function(r) {
         if (r.sucesso) {
           toastr.success(r.mensagem);
-          bootstrap.Modal.getInstance('#modalRemoverCat').hide();
+          closeModal('#modalRemoverCat');
           location.reload();
         } else {
           toastr.error(r.mensagem);
@@ -1003,6 +1058,206 @@ $(function() {
     $('#modalRegraTitulo').text('Nova Regra');
   });
 
+  // ===== REFRESH DINAMICO DE LINHA DE REGRA =====
+  // Atualiza a linha DOM com o payload retornado por _regra_payload (backend)
+  function refreshLinhaRegra(payload) {
+    if (!payload || !payload.id) return;
+    const tr = $('#tblRegras tbody tr.regra-row[data-regra-id="' + payload.id + '"]');
+    if (!tr.length) return;
+
+    // data-* attrs
+    tr.attr('data-regra-padrao', payload.padrao_historico);
+    tr.attr('data-regra-tipo', payload.tipo_regra);
+    tr.attr('data-regra-categoria', payload.categoria_id || '');
+    tr.attr('data-regra-ativo', payload.ativo ? 'sim' : 'nao');
+    tr.attr('data-regra-restritas', JSON.stringify(payload.categorias_restritas_ids || []));
+    tr.attr('data-regra-cpfcnpj', payload.cpf_cnpj_padrao || '');
+    tr.attr('data-regra-vmin', payload.valor_min !== null && payload.valor_min !== undefined ? payload.valor_min : '');
+    tr.attr('data-regra-vmax', payload.valor_max !== null && payload.valor_max !== undefined ? payload.valor_max : '');
+    tr.attr('data-regra-filtro', [
+      payload.padrao_historico, payload.tipo_regra, payload.categoria_label || '',
+      payload.cpf_cnpj_padrao || '', payload.origem,
+    ].join(' ').toLowerCase());
+
+    // Padrao + icones
+    const celPadrao = tr.find('.cel-padrao');
+    celPadrao.find('.padrao-text').text(payload.padrao_historico);
+    celPadrao.attr('data-val', payload.padrao_historico);
+    celPadrao.find('.icon-cpfcnpj, .icon-valor').remove();
+    if (payload.cpf_cnpj_padrao) {
+      celPadrao.append(` <i class="fas fa-id-card text-info icon-cpfcnpj" title="CPF/CNPJ: ${esc(payload.cpf_cnpj_padrao)}"></i>`);
+    }
+    if (payload.valor_min !== null || payload.valor_max !== null) {
+      const lo = payload.valor_min !== null ? payload.valor_min : '∞';
+      const hi = payload.valor_max !== null ? payload.valor_max : '∞';
+      celPadrao.append(` <i class="fas fa-dollar-sign text-warning icon-valor" title="Restrito por valor (${lo} — ${hi})"></i>`);
+    }
+
+    // Tipo
+    const celTipo = tr.find('.cel-tipo');
+    celTipo.attr('data-val', payload.tipo_regra);
+    celTipo.html(payload.tipo_regra === 'PADRAO'
+      ? '<span class="badge bg-primary">Padrao</span>'
+      : '<span class="badge bg-info">Relativo</span>');
+
+    // Categoria
+    const celCat = tr.find('.cel-categoria');
+    celCat.attr('data-val', payload.categoria_label || '');
+    if (payload.categoria_grupo && payload.categoria_nome) {
+      celCat.html(`<span class="text-muted">${esc(payload.categoria_grupo)}</span><span class="mx-1">/</span>${esc(payload.categoria_nome)}`);
+    } else {
+      celCat.html('<span class="text-muted">-</span>');
+    }
+
+    // Usos / Conf / Match
+    tr.find('.cel-usos').attr('data-val', payload.vezes_usado).text(payload.vezes_usado);
+    tr.find('.cel-confianca').attr('data-val', payload.confianca).text(payload.confianca + '%');
+    const match = payload.match_count || 0;
+    tr.find('.cel-match').attr('data-val', match).html(
+      match > 0
+        ? `<span class="badge bg-warning text-dark" title="${match} pendentes matcham este padrao">${match}</span>`
+        : '<span class="text-muted">0</span>'
+    );
+
+    // Ativo
+    tr.find('.cel-ativo').html(payload.ativo
+      ? '<span class="badge bg-success">Sim</span>'
+      : '<span class="badge bg-secondary">Nao</span>');
+    tr.toggleClass('text-muted', !payload.ativo);
+
+    // Fecha linha de detalhes (transacoes podem ter mudado — usuario pode re-expandir)
+    tr.next('.regra-detail-row').addClass('d-none');
+    tr.find('.toggle-icon').removeClass('fa-chevron-down').addClass('fa-chevron-right');
+
+    // Reaplica filtro
+    aplicarFiltroRegras();
+  }
+
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function removeLinhaRegra(regraId) {
+    const tr = $('#tblRegras tbody tr.regra-row[data-regra-id="' + regraId + '"]');
+    tr.next('.regra-detail-row').remove();
+    tr.remove();
+    aplicarFiltroRegras();
+  }
+
+  // ===== FILTRO DE REGRAS (client-side) =====
+  function aplicarFiltroRegras() {
+    const q = ($('#filtroRegras').val() || '').toLowerCase().trim();
+    const tipo = $('#filtroRegrasTipo').val();
+    const ativoFiltro = $('#filtroRegrasAtivo').val();
+    let visiveis = 0;
+    let totais = 0;
+    $('#tblRegras tbody tr.regra-row').each(function() {
+      totais++;
+      const tr = $(this);
+      const filtroKey = tr.attr('data-regra-filtro') || '';
+      const rTipo = tr.attr('data-regra-tipo');
+      const rAtivo = tr.attr('data-regra-ativo');
+      let match = true;
+      if (q && filtroKey.indexOf(q) === -1) match = false;
+      if (tipo && rTipo !== tipo) match = false;
+      if (ativoFiltro && rAtivo !== ativoFiltro) match = false;
+      tr.toggle(match);
+      // Esconde tambem a linha de detalhes se a regra for escondida
+      const detailRow = tr.next('.regra-detail-row');
+      if (!match) {
+        detailRow.addClass('d-none');
+        tr.find('.toggle-icon').removeClass('fa-chevron-down').addClass('fa-chevron-right');
+      }
+      if (match) visiveis++;
+    });
+    $('#filtroRegrasInfo').text(visiveis < totais ? `${visiveis} de ${totais}` : `${totais} regras`);
+  }
+
+  $('#filtroRegras').on('input', aplicarFiltroRegras);
+  $('#filtroRegrasTipo, #filtroRegrasAtivo').on('change', aplicarFiltroRegras);
+  $('#btnLimparFiltroRegras').on('click', function() {
+    $('#filtroRegras').val('');
+    $('#filtroRegrasTipo').val('');
+    $('#filtroRegrasAtivo').val('');
+    aplicarFiltroRegras();
+  });
+  aplicarFiltroRegras();  // Inicializa contador
+
+  // ===== EXPANDIR: Transacoes categorizadas por esta regra =====
+  $(document).on('click', '.btn-toggle-transacoes', function(e) {
+    e.stopPropagation();
+    const tr = $(this).closest('tr.regra-row');
+    const regraId = tr.data('regra-id');
+    const detailRow = tr.next('.regra-detail-row');
+    const icon = tr.find('.toggle-icon');
+
+    const aberto = !detailRow.hasClass('d-none');
+    if (aberto) {
+      detailRow.addClass('d-none');
+      icon.removeClass('fa-chevron-down').addClass('fa-chevron-right');
+      return;
+    }
+
+    // Abrir: carrega transacoes
+    detailRow.removeClass('d-none');
+    icon.removeClass('fa-chevron-right').addClass('fa-chevron-down');
+    const container = $('#detalheRegra' + regraId);
+    container.html('<div class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Carregando transacoes...</div>');
+
+    $.get('/pessoal/api/regras/' + regraId + '/transacoes', function(r) {
+      if (!r.sucesso) {
+        container.html('<div class="text-danger small">' + esc(r.mensagem || 'Erro.') + '</div>');
+        return;
+      }
+      if (!r.transacoes.length) {
+        container.html('<div class="text-muted small"><i class="fas fa-info-circle"></i> Nenhuma transacao vinculada a esta regra ainda.</div>');
+        return;
+      }
+      const linkTx = '/pessoal/transacoes';
+      const rows = r.transacoes.map(function(t) {
+        const val = (t.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const divergenteBadge = t.divergente
+          ? ' <span class="badge bg-warning text-dark" title="Categoria da transacao != categoria atual da regra">divergente</span>'
+          : '';
+        const autoBadge = t.categorizacao_auto
+          ? '<span class="badge bg-info" title="Categorizacao automatica">auto</span>'
+          : '<span class="badge bg-secondary" title="Categorizacao manual">manual</span>';
+        return `<tr>
+          <td class="small">${esc(t.data || '-')}</td>
+          <td class="small">${esc(t.historico || '')}</td>
+          <td class="small text-muted">${esc(t.descricao || '')}</td>
+          <td class="small text-end">${val}</td>
+          <td class="small">${esc(t.categoria_label || '-')} ${divergenteBadge}</td>
+          <td class="small">${autoBadge}</td>
+          <td class="small">${esc(t.status)}</td>
+        </tr>`;
+      }).join('');
+      container.html(`
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong class="small">Transacoes vinculadas a esta regra: ${r.total}${r.total >= 500 ? ' (limite 500)' : ''}</strong>
+          <a class="btn btn-outline-primary btn-sm" href="${linkTx}?regra_id=${regraId}" target="_blank">
+            <i class="fas fa-external-link-alt"></i> Abrir no extrato
+          </a>
+        </div>
+        <div class="table-responsive" style="max-height: 360px">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th>Data</th><th>Historico</th><th>Descricao</th>
+                <th class="text-end">Valor</th><th>Categoria</th><th>Auto?</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `);
+    }).fail(function(xhr) {
+      container.html('<div class="text-danger small">' + esc(xhr.responseJSON?.mensagem || 'Erro ao carregar.') + '</div>');
+    });
+  });
+
   // Propagar regra — forca aplicacao em vinculadas + pendentes
   $(document).on('click', '.btn-propagar-regra', function() {
     const tr = $(this).closest('tr');
@@ -1022,9 +1277,7 @@ $(function() {
       success: function(r) {
         if (r.sucesso) {
           toastr.success(r.mensagem);
-          if (r.resultado && (r.resultado.reatribuidas_vinculadas || r.resultado.propagados_pendentes)) {
-            location.reload();
-          }
+          if (r.regra) refreshLinhaRegra(r.regra);
         } else {
           toastr.error(r.mensagem);
         }
@@ -1049,7 +1302,10 @@ $(function() {
       success: function(r) {
         if (r.sucesso) {
           toastr.success(r.mensagem);
-          location.reload();
+          // A regra fica ativo=false — atualiza via GET (badge vira "Nao")
+          $.get('/pessoal/api/regras/' + regraId, function(rr) {
+            if (rr.sucesso && rr.regra) refreshLinhaRegra(rr.regra);
+          });
         } else {
           toastr.error(r.mensagem);
         }
@@ -1080,7 +1336,7 @@ $(function() {
     $('#regraValorMin').val(tr.data('regra-vmin') || '');
     $('#regraValorMax').val(tr.data('regra-vmax') || '');
     $('#modalRegraTitulo').text('Editar Regra');
-    new bootstrap.Modal('#modalRegra').show();
+    openModal('#modalRegra');
   });
 
   // Salvar regra (criar ou editar)
@@ -1143,8 +1399,19 @@ $(function() {
             msg += ' ' + resp.propagados + ' re-categorizadas.';
           }
           toastr.success(msg);
-          bootstrap.Modal.getInstance('#modalRegra').hide();
-          location.reload();
+          closeModal('#modalRegra');
+          // Refresh dinamico: se edicao, atualiza a linha; se criacao, adiciona ao topo
+          if (resp.regra && resp.regra.id) {
+            const existente = $('#tblRegras tbody tr.regra-row[data-regra-id="' + resp.regra.id + '"]');
+            if (existente.length) {
+              refreshLinhaRegra(resp.regra);
+            } else {
+              // Insere nova linha via reload pontual da aba (mais simples que reconstruir TR do zero)
+              setTimeout(function() { location.reload(); }, 400);
+            }
+          } else {
+            setTimeout(function() { location.reload(); }, 400);
+          }
         } else {
           toastr.error(resp.mensagem);
         }

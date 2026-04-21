@@ -273,6 +273,46 @@ def migrar_categoria_route(origem_id):
 # =============================================================================
 # CRUD REGRAS
 # =============================================================================
+def _regra_payload(regra):
+    """Payload enriquecido de uma regra para refresh dinamico da UI.
+
+    Inclui metadados da categoria e match_count atualizado (0 ou preview de pendentes).
+    """
+    cat = db.session.get(PessoalCategoria, regra.categoria_id) if regra.categoria_id else None
+    contagem = contar_matches_por_regra([regra])
+    return {
+        'id': regra.id,
+        'padrao_historico': regra.padrao_historico,
+        'tipo_regra': regra.tipo_regra,
+        'categoria_id': regra.categoria_id,
+        'categoria_grupo': cat.grupo if cat else None,
+        'categoria_nome': cat.nome if cat else None,
+        'categoria_label': f"{cat.grupo} / {cat.nome}" if cat else None,
+        'cpf_cnpj_padrao': regra.cpf_cnpj_padrao,
+        'valor_min': float(regra.valor_min) if regra.valor_min is not None else None,
+        'valor_max': float(regra.valor_max) if regra.valor_max is not None else None,
+        'vezes_usado': regra.vezes_usado or 0,
+        'confianca': float(regra.confianca) if regra.confianca else 100,
+        'origem': regra.origem,
+        'ativo': regra.ativo,
+        'match_count': contagem.get(regra.id, 0),
+        'categorias_restritas_ids': regra.get_categorias_restritas(),
+    }
+
+
+@configuracao_bp.route('/api/regras/<int:regra_id>', methods=['GET'])
+@login_required
+def buscar_regra(regra_id):
+    """Retorna payload enriquecido de uma regra (para refresh da UI)."""
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+    regra = db.session.get(PessoalRegraCategorizacao, regra_id)
+    if not regra:
+        return jsonify({'sucesso': False, 'mensagem': 'Regra nao encontrada.'}), 404
+    return jsonify({'sucesso': True, 'regra': _regra_payload(regra)})
+
+
+
 @configuracao_bp.route('/api/regras', methods=['POST'])
 @login_required
 def salvar_regra():
@@ -370,9 +410,12 @@ def salvar_regra():
 
             if needs_repropagation:
                 afetadas = despropagar_regra(regra.id)
-                # Se a categoria mudou, zerar regra_id em transacoes MANUAIS que apontavam
-                # para esta regra (preserva categoria_id manual, remove referencia obsoleta)
+                # Flush pendente antes do bulk UPDATE de desvincular_manuais_da_regra:
+                # despropagar_regra mexe em ORM objects (sem flush); desvincular emite
+                # SQL direto com synchronize_session=False — sem flush explicito, o bulk
+                # executaria contra estado pre-flush.
                 if mudou_categoria and tipo_regra == 'PADRAO':
+                    db.session.flush()
                     desvincular_manuais_da_regra(regra.id)
                 if tipo_regra == 'PADRAO':
                     propagados_info = propagar_regra_para_pendentes(regra)
@@ -398,7 +441,7 @@ def salvar_regra():
 
         db.session.commit()
 
-        resp = {'sucesso': True, 'regra': regra.to_dict()}
+        resp = {'sucesso': True, 'regra': _regra_payload(regra)}
         if afetadas > 0:
             resp['afetadas'] = afetadas
         if propagados_info:
@@ -408,6 +451,161 @@ def salvar_regra():
     except Exception as e:
         db.session.rollback()
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@configuracao_bp.route('/api/regras/<int:regra_id>/transacoes', methods=['GET'])
+@login_required
+def transacoes_por_regra(regra_id):
+    """Lista transacoes vinculadas a uma regra (regra_id = <esta>).
+
+    Ordena por data DESC. Limita a 500 registros para evitar payloads gigantes.
+    """
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    regra = db.session.get(PessoalRegraCategorizacao, regra_id)
+    if not regra:
+        return jsonify({'sucesso': False, 'mensagem': 'Regra nao encontrada.'}), 404
+
+    transacoes = db.session.query(PessoalTransacao).filter_by(
+        regra_id=regra_id,
+    ).order_by(PessoalTransacao.data.desc(), PessoalTransacao.id.desc()).limit(500).all()
+
+    # Load categorias atuais
+    cat_ids = {t.categoria_id for t in transacoes if t.categoria_id}
+    cats = {c.id: c for c in PessoalCategoria.query.filter(PessoalCategoria.id.in_(cat_ids)).all()} if cat_ids else {}
+
+    return jsonify({
+        'sucesso': True,
+        'regra': regra.to_dict(),
+        'total': len(transacoes),
+        'transacoes': [{
+            'id': t.id,
+            'data': t.data.strftime('%Y-%m-%d') if t.data else None,
+            'historico': t.historico,
+            'descricao': t.descricao,
+            'valor': float(t.valor) if t.valor is not None else None,
+            'tipo': t.tipo,
+            'status': t.status,
+            'categoria_id': t.categoria_id,
+            'categoria_label': (
+                f"{cats[t.categoria_id].grupo} / {cats[t.categoria_id].nome}"
+                if t.categoria_id in cats else None
+            ),
+            'categorizacao_auto': t.categorizacao_auto,
+            'excluir_relatorio': t.excluir_relatorio,
+            'divergente': t.categoria_id != regra.categoria_id,
+        } for t in transacoes],
+    })
+
+
+@configuracao_bp.route('/api/transacoes/<int:transacao_id>/regras-aplicaveis', methods=['GET'])
+@login_required
+def regras_aplicaveis_transacao(transacao_id):
+    """Retorna regras PADRAO ativas aplicaveis a uma transacao.
+
+    Replica a ordem do pipeline em `categorizacao_service.categorizar_transacao`:
+    1. F1 (CPF/CNPJ exato)
+    2. PADRAO substring (ordenado por comprimento DESC)
+    3. Fuzzy >= 85
+    Marca a top-level (primeira que o pipeline aplicaria).
+    """
+    from rapidfuzz import fuzz
+    from app.pessoal.services.aprendizado_service import _normalizar
+    from app.pessoal.services.categorizacao_service import _valor_no_range
+
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    t = db.session.get(PessoalTransacao, transacao_id)
+    if not t:
+        return jsonify({'sucesso': False, 'mensagem': 'Transacao nao encontrada.'}), 404
+
+    historico = _normalizar(t.historico_completo or t.historico or '')
+
+    regras_padrao = PessoalRegraCategorizacao.query.filter_by(
+        tipo_regra='PADRAO', ativo=True,
+    ).order_by(
+        db.func.length(PessoalRegraCategorizacao.padrao_historico).desc(),
+        PessoalRegraCategorizacao.confianca.desc(),
+        PessoalRegraCategorizacao.vezes_usado.desc(),
+    ).all()
+
+    aplicaveis = []
+    top_level_id = None
+
+    # Layer 1 F1: CPF/CNPJ
+    if t.cpf_cnpj_parte:
+        for r in regras_padrao:
+            if (r.cpf_cnpj_padrao and r.cpf_cnpj_padrao == t.cpf_cnpj_parte
+                    and _valor_no_range(t.valor, r.valor_min, r.valor_max)):
+                aplicaveis.append({'regra_id': r.id, 'layer': 'F1-CPF', 'score': 100.0})
+                if top_level_id is None:
+                    top_level_id = r.id
+
+    # Layer 1: substring
+    for r in regras_padrao:
+        padrao_norm = _normalizar(r.padrao_historico or '')
+        if (padrao_norm and padrao_norm in historico
+                and _valor_no_range(t.valor, r.valor_min, r.valor_max)):
+            if not any(a['regra_id'] == r.id for a in aplicaveis):
+                aplicaveis.append({'regra_id': r.id, 'layer': 'PADRAO-substring', 'score': 100.0})
+            if top_level_id is None:
+                top_level_id = r.id
+
+    # Layer 2: fuzzy
+    for r in regras_padrao:
+        padrao_norm = _normalizar(r.padrao_historico or '')
+        if not padrao_norm or not _valor_no_range(t.valor, r.valor_min, r.valor_max):
+            continue
+        score = fuzz.token_set_ratio(padrao_norm, historico)
+        if score >= 85 and not any(a['regra_id'] == r.id for a in aplicaveis):
+            aplicaveis.append({'regra_id': r.id, 'layer': 'PADRAO-fuzzy', 'score': float(score)})
+            # NAO altera top_level_id aqui — fuzzy e usada apenas na AUSENCIA de substring match
+
+    # Load metadata das regras aplicaveis
+    regra_ids = [a['regra_id'] for a in aplicaveis]
+    regras_map = {r.id: r for r in regras_padrao if r.id in regra_ids}
+
+    # Enrich
+    out = []
+    cat_ids = {regras_map[rid].categoria_id for rid in regra_ids if regras_map[rid].categoria_id}
+    cats = {c.id: c for c in PessoalCategoria.query.filter(PessoalCategoria.id.in_(cat_ids)).all()} if cat_ids else {}
+    for a in aplicaveis:
+        r = regras_map[a['regra_id']]
+        cat = cats.get(r.categoria_id) if r.categoria_id else None
+        out.append({
+            'regra_id': r.id,
+            'padrao_historico': r.padrao_historico,
+            'categoria_id': r.categoria_id,
+            'categoria_label': f"{cat.grupo} / {cat.nome}" if cat else None,
+            'cpf_cnpj_padrao': r.cpf_cnpj_padrao,
+            'valor_min': float(r.valor_min) if r.valor_min is not None else None,
+            'valor_max': float(r.valor_max) if r.valor_max is not None else None,
+            'origem': r.origem,
+            'vezes_usado': r.vezes_usado,
+            'layer': a['layer'],
+            'score': a['score'],
+            'is_top_level': (r.id == top_level_id),
+            'is_atual': (r.id == t.regra_id),
+        })
+
+    return jsonify({
+        'sucesso': True,
+        'transacao': {
+            'id': t.id,
+            'data': t.data.strftime('%Y-%m-%d') if t.data else None,
+            'historico': t.historico,
+            'descricao': t.descricao,
+            'historico_completo': t.historico_completo,
+            'valor': float(t.valor) if t.valor is not None else None,
+            'cpf_cnpj_parte': t.cpf_cnpj_parte,
+            'regra_id_atual': t.regra_id,
+            'categoria_id_atual': t.categoria_id,
+        },
+        'top_level_regra_id': top_level_id,
+        'aplicaveis': out,
+    })
 
 
 @configuracao_bp.route('/api/regras/<int:regra_id>/propagar', methods=['POST'])
@@ -457,6 +655,7 @@ def propagar_regra(regra_id):
             'sucesso': True,
             'mensagem': 'Propagacao concluida: ' + ', '.join(partes) + '.',
             'resultado': resultado,
+            'regra': _regra_payload(regra),
         })
     except Exception as e:
         db.session.rollback()

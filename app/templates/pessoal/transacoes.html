@@ -267,6 +267,13 @@
                   <i class="fas fa-tag"></i>
                 </button>
                 {% endif %}
+                <button class="btn btn-outline-secondary btn-sm py-0 px-1 btn-regras-transacao"
+                        data-id="{{ t.id }}"
+                        data-historico="{{ t.historico }}"
+                        data-regra-atual="{{ t.regra_id or '' }}"
+                        title="Ver regras aplicaveis / editar / remover">
+                  <i class="fas fa-sliders-h"></i>
+                </button>
               </td>
             </tr>
             {% else %}
@@ -526,6 +533,78 @@
   </div>
 </div>
 
+{# ===== MODAL REGRAS APLICAVEIS DA TRANSACAO ===== #}
+<div class="modal fade" id="modalRegrasTransacao" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-sliders-h"></i> Regras aplicaveis a esta transacao</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="mrtCabecalho" class="mb-3 p-2 bg-light border rounded small"></div>
+        <div id="mrtLista">
+          <div class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('pessoal.pessoal_configuracao.index') }}#tabRegras" target="_blank">
+          <i class="fas fa-external-link-alt"></i> Abrir Configuracao
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ===== MODAL EDITAR REGRA (inline, reaproveita POST /api/regras) ===== #}
+<div class="modal fade" id="modalEditarRegra" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-edit"></i> Editar regra</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="merId">
+        <div class="mb-3">
+          <label class="form-label">Padrao</label>
+          <input type="text" id="merPadrao" class="form-control">
+        </div>
+        <div class="mb-3 position-relative">
+          <label class="form-label">Categoria</label>
+          <input type="text" id="merCategoriaBusca" class="form-control cat-autocomplete"
+                 data-target="merCategoria" autocomplete="off"
+                 placeholder="Digite grupo ou nome...">
+          <input type="hidden" id="merCategoria">
+          <div class="cat-autocomplete-dropdown dropdown-menu w-100 shadow-sm"
+               data-target="merCategoria" style="max-height: 240px; overflow-y: auto"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">CPF/CNPJ (opcional)</label>
+          <input type="text" id="merCpfCnpj" class="form-control" placeholder="000.000.000-00">
+        </div>
+        <div class="row">
+          <div class="col-6 mb-3">
+            <label class="form-label">Valor minimo</label>
+            <input type="number" step="0.01" min="0" id="merValorMin" class="form-control">
+          </div>
+          <div class="col-6 mb-3">
+            <label class="form-label">Valor maximo</label>
+            <input type="number" step="0.01" min="0" id="merValorMax" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnSalvarEditarRegra">
+          <i class="fas fa-check"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {# ===== BARRA DE ACOES EM LOTE ===== #}
 <div id="barraLote" class="fixed-bottom bg-primary text-white p-2 d-none">
   <div class="container-fluid d-flex justify-content-between align-items-center">
@@ -708,7 +787,7 @@ $(function() {
     $('#modalValorMin').val('');
     $('#modalValorMax').val('');
     resetPreview();
-    new bootstrap.Modal('#modalCategorizar').show();
+    openModal('#modalCategorizar');
   });
 
   // Preview de propagacao (Passo 1)
@@ -761,12 +840,19 @@ $(function() {
           if (resp.total > 0) {
             $('#previewCount').text(resp.total);
             const tbody = $('#previewBody').empty();
+            // Escape: historico/descricao vem de dados de extrato bancario importado —
+            // se algum banco incluir '<' em descritivo, evita XSS via innerHTML.
+            function escTx(s) {
+              if (s === null || s === undefined) return '';
+              return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
             resp.transacoes.forEach(function(t) {
               const cls = t.tipo === 'credito' ? 'text-success' : 'text-danger';
               tbody.append(
-                '<tr><td>' + t.data + '</td>' +
-                '<td>' + t.historico + '</td>' +
-                '<td class="text-muted">' + (t.descricao || '') + '</td>' +
+                '<tr><td>' + escTx(t.data) + '</td>' +
+                '<td>' + escTx(t.historico) + '</td>' +
+                '<td class="text-muted">' + escTx(t.descricao || '') + '</td>' +
                 '<td class="text-end ' + cls + '">' +
                   parseFloat(t.valor).toLocaleString('pt-BR', {style:'currency', currency:'BRL'}) +
                 '</td></tr>'
@@ -838,7 +924,7 @@ $(function() {
             msg += ' (' + resp.propagados + ' similares auto-categorizadas)';
           }
           toastr.success(msg);
-          bootstrap.Modal.getInstance('#modalCategorizar').hide();
+          closeModal('#modalCategorizar');
           location.reload();
         } else {
           toastr.error(resp.mensagem);
@@ -858,7 +944,7 @@ $(function() {
     $('#modalLoteCount').text(count + ' transacoes selecionadas');
     $('#modalLoteCategoria').val('');
     $('#modalLoteCategoriaBusca').val('');
-    new bootstrap.Modal('#modalLote').show();
+    openModal('#modalLote');
   });
 
   // Toggle: ocultar campos de regra quando "criar regra" desmarcado (modal lote)
@@ -916,7 +1002,7 @@ $(function() {
             msg += ' (' + resp.parcelas_propagadas + ' parcelas propagadas)';
           }
           toastr.success(msg);
-          bootstrap.Modal.getInstance('#modalLote').hide();
+          closeModal('#modalLote');
           location.reload();
         } else {
           toastr.error(resp.mensagem);
@@ -997,6 +1083,235 @@ $(function() {
     else alert('Preset salvo.');
   });
   renderMenuPresets();
+
+  // ===== REGRAS DA TRANSACAO (abrir modal, listar aplicaveis, editar, remover) =====
+  // Bootstrap 5.x exige elemento DOM (nao seletor string) no construtor do Modal.
+  // Uso getOrCreateInstance para evitar dupla instancia + remove backdrops orfaos.
+  function openModal(sel) {
+    const el = document.querySelector(sel);
+    if (!el) { console.error('Modal nao encontrado:', sel); return null; }
+    document.querySelectorAll('.modal-backdrop').forEach(function(b) {
+      if (!document.querySelector('.modal.show')) b.remove();
+    });
+    const m = bootstrap.Modal.getOrCreateInstance(el);
+    m.show();
+    return m;
+  }
+  function closeModal(sel) {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    const m = bootstrap.Modal.getInstance(el);
+    if (m) m.hide();
+  }
+
+  function escHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function fmtBRL(v) {
+    if (v === null || v === undefined) return '-';
+    return 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  function carregarRegrasAplicaveis(transacaoId) {
+    const lista = $('#mrtLista');
+    const cab = $('#mrtCabecalho');
+    lista.html('<div class="text-muted small"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>');
+    cab.html('');
+    $.get('/pessoal/api/transacoes/' + transacaoId + '/regras-aplicaveis', function(r) {
+      if (!r.sucesso) {
+        lista.html('<div class="text-danger small">' + escHtml(r.mensagem || 'Erro.') + '</div>');
+        return;
+      }
+      const tx = r.transacao;
+      const topId = r.top_level_regra_id;
+      cab.html(
+        `<div><strong>${escHtml(tx.historico || '')}</strong> ${escHtml(tx.descricao ? '— ' + tx.descricao : '')}</div>` +
+        `<div class="text-muted">${escHtml(tx.data || '')} &middot; ${fmtBRL(tx.valor)}` +
+        (tx.cpf_cnpj_parte ? ` &middot; CPF/CNPJ: ${escHtml(tx.cpf_cnpj_parte)}` : '') + `</div>` +
+        `<div class="mt-1">` +
+          `<span class="badge bg-secondary">regra atual: ${tx.regra_id_atual || '—'}</span> ` +
+          `<span class="badge bg-success">top-level: ${topId || '—'}</span>` +
+        `</div>`
+      );
+
+      if (!r.aplicaveis || !r.aplicaveis.length) {
+        lista.html('<div class="text-muted small"><i class="fas fa-info-circle"></i> Nenhuma regra PADRAO ativa matcha esta transacao.</div>');
+        return;
+      }
+      const rows = r.aplicaveis.map(function(a) {
+        const badges = [];
+        if (a.is_top_level) badges.push('<span class="badge bg-success">TOP-LEVEL</span>');
+        if (a.is_atual && !a.is_top_level) badges.push('<span class="badge bg-info">REGRA ATUAL</span>');
+        if (a.is_atual && a.is_top_level) badges.push('<span class="badge bg-info">REGRA ATUAL</span>');
+        badges.push(`<span class="badge bg-light text-dark border">${escHtml(a.layer)}</span>`);
+        if (a.score < 100) badges.push(`<span class="badge bg-warning text-dark">fuzzy ${a.score.toFixed(0)}</span>`);
+        const restricoes = [];
+        if (a.cpf_cnpj_padrao) restricoes.push(`<i class="fas fa-id-card text-info" title="CPF/CNPJ: ${escHtml(a.cpf_cnpj_padrao)}"></i>`);
+        if (a.valor_min !== null || a.valor_max !== null) {
+          const lo = a.valor_min !== null ? a.valor_min : '∞';
+          const hi = a.valor_max !== null ? a.valor_max : '∞';
+          restricoes.push(`<i class="fas fa-dollar-sign text-warning" title="${lo} — ${hi}"></i>`);
+        }
+        return `<tr data-regra-id="${a.regra_id}">
+          <td class="small">${badges.join(' ')}</td>
+          <td class="small fw-bold">${escHtml(a.padrao_historico)} ${restricoes.join(' ')}</td>
+          <td class="small">${escHtml(a.categoria_label || '-')}</td>
+          <td class="small text-end">${a.vezes_usado}</td>
+          <td class="text-end" style="white-space: nowrap">
+            <button class="btn btn-outline-primary btn-sm py-0 px-1 btn-mrt-editar"
+                    data-regra-id="${a.regra_id}"
+                    data-padrao="${escHtml(a.padrao_historico)}"
+                    data-categoria-id="${a.categoria_id || ''}"
+                    data-categoria-label="${escHtml(a.categoria_label || '')}"
+                    data-cpf="${escHtml(a.cpf_cnpj_padrao || '')}"
+                    data-vmin="${a.valor_min !== null ? a.valor_min : ''}"
+                    data-vmax="${a.valor_max !== null ? a.valor_max : ''}"
+                    title="Editar esta regra">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn btn-outline-danger btn-sm py-0 px-1 btn-mrt-remover"
+                    data-regra-id="${a.regra_id}"
+                    data-padrao="${escHtml(a.padrao_historico)}"
+                    title="Desativar esta regra">
+              <i class="fas fa-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+      lista.html(`
+        <table class="table table-sm table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>Classificacao</th>
+              <th>Padrao</th>
+              <th>Categoria</th>
+              <th class="text-end">Usos</th>
+              <th class="text-end">Acoes</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="small text-muted">
+          <strong>TOP-LEVEL</strong> = regra que o pipeline aplicaria primeiro a esta transacao (ordem: F1 CPF/CNPJ &gt; PADRAO substring por comprimento &gt; fuzzy &gt;= 85).
+          Ao editar uma regra top-level, outras regras aplicaveis permanecem intactas.
+        </div>
+      `);
+    }).fail(function(xhr) {
+      lista.html('<div class="text-danger small">' + escHtml(xhr.responseJSON?.mensagem || 'Erro ao carregar.') + '</div>');
+    });
+  }
+
+  let transacaoModalCtx = null;  // Preserva transacao_id para refresh apos editar
+
+  $(document).on('click', '.btn-regras-transacao', function() {
+    const tid = $(this).data('id');
+    transacaoModalCtx = tid;
+    openModal('#modalRegrasTransacao');
+    carregarRegrasAplicaveis(tid);
+  });
+
+  // Editar regra: abre modal de edicao preenchido.
+  // IMPORTANTE: esperar hidden.bs.modal do modal anterior antes de abrir o proximo —
+  // caso contrario o backdrop do primeiro ainda nao foi removido (animacao async) e
+  // fica orfao sobreposto ao novo modal.
+  $(document).on('click', '.btn-mrt-editar', function() {
+    $('#merId').val($(this).data('regra-id'));
+    $('#merPadrao').val($(this).data('padrao'));
+    $('#merCategoria').val($(this).data('categoria-id') || '');
+    $('#merCategoriaBusca').val($(this).data('categoria-label') || '');
+    $('#merCpfCnpj').val($(this).data('cpf') || '');
+    $('#merValorMin').val($(this).data('vmin') || '');
+    $('#merValorMax').val($(this).data('vmax') || '');
+
+    const el = document.querySelector('#modalRegrasTransacao');
+    const jaAberto = el && el.classList.contains('show');
+    if (jaAberto) {
+      el.addEventListener('hidden.bs.modal', function handler() {
+        el.removeEventListener('hidden.bs.modal', handler);
+        openModal('#modalEditarRegra');
+      }, {once: true});
+      closeModal('#modalRegrasTransacao');
+    } else {
+      openModal('#modalEditarRegra');
+    }
+  });
+
+  $('#btnSalvarEditarRegra').on('click', function() {
+    const id = parseInt($('#merId').val());
+    const padrao = ($('#merPadrao').val() || '').trim();
+    const categoriaId = $('#merCategoria').val() ? parseInt($('#merCategoria').val()) : null;
+    const cpfRaw = ($('#merCpfCnpj').val() || '').trim();
+    const cpfDigits = cpfRaw.replace(/\D/g, '');
+    if (!padrao && !cpfDigits) {
+      toastr.warning('Informe o padrao textual ou CPF/CNPJ.');
+      return;
+    }
+    if (cpfDigits && cpfDigits.length !== 11 && cpfDigits.length !== 14) {
+      toastr.warning('CPF/CNPJ deve ter 11 ou 14 digitos.');
+      return;
+    }
+    if (!categoriaId) {
+      toastr.warning('Selecione uma categoria.');
+      return;
+    }
+    const payload = {
+      id: id,
+      padrao_historico: padrao,
+      tipo_regra: 'PADRAO',
+      categoria_id: categoriaId,
+      cpf_cnpj_padrao: cpfDigits || null,
+      valor_min: parseFloat($('#merValorMin').val()) || null,
+      valor_max: parseFloat($('#merValorMax').val()) || null,
+    };
+    $.ajax({
+      url: '/pessoal/api/regras',
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify(payload),
+      success: function(r) {
+        if (!r.sucesso) { toastr.error(r.mensagem); return; }
+        let msg = 'Regra salva.';
+        if (r.afetadas > 0) msg += ' ' + r.afetadas + ' despropagadas.';
+        if (r.propagados > 0) msg += ' ' + r.propagados + ' re-categorizadas.';
+        toastr.success(msg);
+        // Re-abre a lista para refletir a mudanca — aguardar hidden.bs.modal para nao orfa backdrop
+        const el = document.querySelector('#modalEditarRegra');
+        if (transacaoModalCtx && el) {
+          el.addEventListener('hidden.bs.modal', function handler() {
+            el.removeEventListener('hidden.bs.modal', handler);
+            openModal('#modalRegrasTransacao');
+            carregarRegrasAplicaveis(transacaoModalCtx);
+          }, {once: true});
+        }
+        closeModal('#modalEditarRegra');
+      },
+      error: function(xhr) {
+        toastr.error(xhr.responseJSON?.mensagem || 'Erro ao salvar regra.');
+      },
+    });
+  });
+
+  $(document).on('click', '.btn-mrt-remover', function() {
+    const id = $(this).data('regra-id');
+    const padrao = $(this).data('padrao');
+    if (!confirm(`Desativar a regra "${padrao}"?\nTransacoes auto-categorizadas por ela voltam para PENDENTE.`)) return;
+    $.ajax({
+      url: '/pessoal/api/regras/' + id,
+      method: 'DELETE',
+      headers: {'X-CSRFToken': csrfToken},
+      success: function(r) {
+        if (!r.sucesso) { toastr.error(r.mensagem); return; }
+        toastr.success(r.mensagem);
+        if (transacaoModalCtx) carregarRegrasAplicaveis(transacaoModalCtx);
+      },
+      error: function(xhr) {
+        toastr.error(xhr.responseJSON?.mensagem || 'Erro ao remover regra.');
+      },
+    });
+  });
 });
 </script>
 {% endblock %}
