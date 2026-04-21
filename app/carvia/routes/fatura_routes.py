@@ -1764,7 +1764,8 @@ def register_fatura_routes(bp):
         # canonica agora eh `sub.frete.valor_considerado`. Fallback para
         # `sub.valor_acertado`/`sub.valor_cotado` (campos de CTe legados,
         # nao removidos) quando o sub nao tem frete vinculado.
-        def _valor_base_sub(s):
+        
+        def _valor_base_sub(s): 
             if s.frete is not None and s.frete.valor_considerado is not None:
                 return float(s.frete.valor_considerado)
             return float(s.valor_acertado or s.valor_cotado or 0)

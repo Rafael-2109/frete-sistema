@@ -64,45 +64,6 @@ echo "Backfill icms_aliquota CarVia (idempotente)..."
 python scripts/migrations/add_icms_aliquota_carvia_operacoes.py \
     || echo "⚠️ Backfill icms_aliquota falhou, continuando deploy..."
 
-# 7. Migration CarVia Escopo C (2026-04-14): conferencia migra de Sub para Frete.
-# REMOVIDO DO BUILD em 2026-04-20 — migrations ja aplicadas em prod desde 2026-04-14.
-# Continuavam disparando erros no Sentry (HS, HR, MD) a cada deploy.
-# Scripts permanecem em scripts/migrations/ para referencia historica e
-# possivel re-execucao manual se necessario (ja contem guards idempotentes).
-# Ref: docs/superpowers/plans/2026-04-14-carvia-frete-conferencia-migration.md
-
-# 8. Migration Monitoramento + CarVia (2026-04-14): coluna origem em entregas_monitoradas.
-# Permite que NFs CarVia coexistam com NFs Nacom no monitoramento sem colisao de numero_nf.
-# Default 'NACOM' preserva registros existentes; novos registros CarVia usam origem='CARVIA'.
-# Idempotente (IF NOT EXISTS + verificacao information_schema).
-# Ref: .claude/plans/quiet-humming-spark.md
-echo "Migration: coluna origem em entregas_monitoradas..."
-python scripts/migrations/add_origem_entrega_monitorada.py \
-    || echo "⚠️ Migration add_origem_entrega_monitorada falhou, continuando deploy..."
-
-# 9. Backfill: cria EntregaMonitorada(origem='CARVIA') para CarviaNf ATIVAS existentes.
-# Idempotente (upsert via sincronizar_entrega_carvia_por_nf). Roda APOS a coluna existir.
-# Ref: .claude/plans/quiet-humming-spark.md
-echo "Backfill: EntregaMonitorada origem='CARVIA' para CarviaNf existentes..."
-python scripts/migrations/backfill_entrega_monitorada_carvia.py \
-    || echo "⚠️ Backfill entrega monitorada CarVia falhou, continuando deploy..."
-
-
-# 10. Migration Remessa VORTX (2026-04-16): flag usuario + tabela cache + sequence.
-# Idempotente (IF NOT EXISTS). CRITICO: sem esta migration, /auth/login retorna 500.
-echo "Migration: remessa VORTX (flag usuario + tabela cache + sequence)..."
-python scripts/migrations/adicionar_remessa_vortx.py \
-    || echo "⚠️ Migration adicionar_remessa_vortx falhou, continuando deploy..."
-
-# 11. Migration Features SDK 0.1.60 (2026-04-17): indice GIN para subagent_costs.
-# Feature #3 — cost tracking granular por subagente em AgentSession.data JSONB.
-# Suporta queries agregadas de top subagentes por custo sem full scan.
-# Idempotente (CREATE INDEX IF NOT EXISTS).
-# Ref: docs/superpowers/specs/2026-04-16-agent-sdk-0160-features-design.md
-echo "Migration: indice GIN agent_session.subagent_costs..."
-python scripts/migrations/agent_session_subagent_costs_idx.py \
-    || echo "⚠️ Migration agent_session_subagent_costs_idx falhou, continuando deploy..."
-
 echo "Build concluído com sucesso!"
 
 
