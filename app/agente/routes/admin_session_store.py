@@ -80,7 +80,7 @@ def api_admin_session_store_stats():
             LIMIT 24
         """)).mappings().all()
 
-        # 3. Types distribution (so main transcripts)
+        # 3. Types distribution (so main transcripts) — R6.3: cap 50 types
         types = db.session.execute(text("""
             SELECT
                 COALESCE(entry->>'type', '<unknown>') AS type,
@@ -89,6 +89,7 @@ def api_admin_session_store_stats():
             WHERE subpath = ''
             GROUP BY 1
             ORDER BY 2 DESC
+            LIMIT 50
         """)).mappings().all()
 
         # 4. Top 10 sessions por volume
@@ -109,7 +110,7 @@ def api_admin_session_store_stats():
             LIMIT 10
         """)).mappings().all()
 
-        # 5. Projects (multi-tenancy)
+        # 5. Projects (multi-tenancy) — R6.3: cap 100 projects
         projects = db.session.execute(text("""
             SELECT
                 project_key,
@@ -119,9 +120,10 @@ def api_admin_session_store_stats():
             FROM claude_session_store
             GROUP BY project_key
             ORDER BY entries DESC
+            LIMIT 100
         """)).mappings().all()
 
-        # 6. Atividade ultimos 7 dias (por dia)
+        # 6. Atividade ultimos 7 dias (por dia) — R6.3: cap 7 dias
         daily = db.session.execute(text("""
             SELECT
                 to_char(date_trunc('day', to_timestamp(mtime / 1000.0)), 'YYYY-MM-DD') AS dia,
@@ -131,6 +133,7 @@ def api_admin_session_store_stats():
             WHERE mtime > (EXTRACT(EPOCH FROM NOW() - INTERVAL '7 days') * 1000)::bigint
             GROUP BY 1
             ORDER BY 1 DESC
+            LIMIT 7
         """)).mappings().all()
 
         return jsonify({
@@ -157,10 +160,11 @@ def api_admin_session_store_stats():
             ],
         })
     except Exception as e:
+        # FIX P2 (R6.4): nao vazar PG error text para frontend
         logger.error(f"[ADMIN_SESSION_STORE] erro em stats: {e}", exc_info=True)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Erro interno — ver logs do servidor',
         }), 500
 
 
@@ -234,7 +238,7 @@ def api_admin_session_store_detail(session_id: str):
         )
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Erro interno — ver logs do servidor',
         }), 500
 
 

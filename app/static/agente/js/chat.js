@@ -2561,8 +2561,10 @@ function renderSessions() {
                 <span class="session-item-title" title="${escapeHtml(session.title || 'Sem título')}">${escapeHtml(session.title || 'Sem título')}</span>
                 <div class="session-item-actions">
                     <button class="fork-session" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
-                            onclick="event.stopPropagation(); forkSessionPrompt(this.dataset.sid, this.dataset.title)" title="Fork — duplicar em branch paralelo">
-                        <i class="fas fa-code-branch"></i>
+                            onclick="event.stopPropagation(); forkSessionPrompt(this.dataset.sid, this.dataset.title)"
+                            title="Fork — duplicar em branch paralelo"
+                            aria-label="Forkar sessao ${escapeHtml(session.title || 'Conversa')}">
+                        <i class="fas fa-code-branch" aria-hidden="true"></i>
                     </button>
                     <button class="export" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
                             onclick="event.stopPropagation(); exportHistoricalSession(this.dataset.sid, this.dataset.title)" title="Exportar">
@@ -2598,7 +2600,9 @@ function renderSessions() {
 const FORK_INTRO_KEY = 'agente_fork_intro_shown_v1';
 
 /**
- * Abre modal explicativo (primeira vez) + confirm para forkar session.
+ * Abre modal explicativo (primeira vez) + modal custom para titulo.
+ * FIX P2 (R1.3 review): substitui prompt() nativo que quebra em iframes sandbox,
+ * Safari iOS, e nao respeita design tokens (dark mode).
  */
 async function forkSessionPrompt(sourceSessionId, sourceTitle) {
     // Modal explicativo na primeira vez
@@ -2608,13 +2612,9 @@ async function forkSessionPrompt(sourceSessionId, sourceTitle) {
         localStorage.setItem(FORK_INTRO_KEY, '1');
     }
 
-    // Pedir titulo custom (opcional)
+    // Pedir titulo custom (opcional) via modal
     const defaultTitle = `${sourceTitle} (fork)`;
-    const customTitle = prompt(
-        `Duplicar sessao "${sourceTitle}" em um novo branch paralelo.\n\n` +
-        `Titulo do fork (opcional — Enter para padrao):`,
-        defaultTitle
-    );
+    const customTitle = await showForkTitleModal(sourceTitle, defaultTitle);
     if (customTitle === null) return;  // cancelou
 
     try {
@@ -2680,6 +2680,49 @@ function showForkIntroModal() {
         modal.querySelector('#fork-intro-ok').onclick = () => {
             document.body.removeChild(modal);
             resolve(true);
+        };
+    });
+}
+
+/**
+ * Modal custom para titulo do fork (substitui prompt() nativo — R1.3 review).
+ * Retorna Promise<string|null> — null = cancelou.
+ */
+function showForkTitleModal(sourceTitle, defaultTitle) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'fork-title-modal-backdrop';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        const safeSourceTitle = escapeHtml(sourceTitle);
+        const safeDefault = escapeHtml(defaultTitle);
+        modal.innerHTML = `
+            <div style="background:var(--bg-light,#fff);color:var(--text,#222);max-width:500px;margin:1rem;padding:1.5rem;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.3);">
+                <h5 style="margin-top:0;"><i class="fas fa-code-branch"></i> Fork de "${safeSourceTitle}"</h5>
+                <p style="font-size:.9rem;color:var(--muted,#666);margin-bottom:.5rem;">
+                    Titulo do fork (opcional):
+                </p>
+                <input type="text" id="fork-title-input" class="form-control" maxlength="256"
+                       value="${safeDefault}" placeholder="${safeDefault}"
+                       style="width:100%;padding:.5rem;margin-bottom:1rem;background:var(--bg,#fff);color:var(--text,#222);border:1px solid var(--border,#ccc);border-radius:4px;">
+                <div style="text-align:right;">
+                    <button id="fork-title-cancel" class="btn btn-secondary btn-sm" style="margin-right:.5rem;">Cancelar</button>
+                    <button id="fork-title-ok" class="btn btn-primary btn-sm">Forkar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        const input = modal.querySelector('#fork-title-input');
+        input.focus();
+        input.select();
+        const close = (result) => {
+            document.body.removeChild(modal);
+            resolve(result);
+        };
+        modal.querySelector('#fork-title-cancel').onclick = () => close(null);
+        modal.querySelector('#fork-title-ok').onclick = () => close(input.value.trim() || defaultTitle);
+        input.onkeydown = (ev) => {
+            if (ev.key === 'Enter') close(input.value.trim() || defaultTitle);
+            if (ev.key === 'Escape') close(null);
         };
     });
 }

@@ -575,8 +575,11 @@ Nunca invente informações."""
                 f"session_id={_sid} error={_error_msg}"
             )
             try:
+                # FIX P2 (FaseB.3 review): Sentry SDK 2.x API — Hub.current.client
+                # foi depreciado, usar get_client().is_active() + top-level capture.
                 import sentry_sdk
-                if sentry_sdk.Hub.current.client is not None:
+                _client = sentry_sdk.get_client()
+                if _client is not None and _client.is_active():
                     sentry_sdk.capture_message(
                         f"SessionStore mirror_error: {_error_msg}",
                         level="error",

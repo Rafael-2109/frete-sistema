@@ -221,13 +221,13 @@ async function loadStats() {
       <td><small>${esc(r.ultimo)}</small></td>
     </tr>`, 4);
 
-  // Top sessions
+  // Top sessions — FIX P3 (R6.6): guard contra session_id null
   fillTable('tbl-top', data.top_sessions, r => `
     <tr>
       <td>
-        <a href="/agente/api/admin/session-store/sessions/${encodeURIComponent(r.session_id)}"
+        <a href="/agente/api/admin/session-store/sessions/${encodeURIComponent(r.session_id || '')}"
            target="_blank" rel="noopener">
-          <code>${esc(r.session_id.substring(0, 12))}...</code>
+          <code>${esc((r.session_id || '').substring(0, 12))}...</code>
         </a>
       </td>
       <td class="text-end">${fmt(r.entries)}</td>
@@ -266,7 +266,10 @@ function esc(s) {
 }
 
 loadStats();
-// Auto-refresh a cada 60s
-setInterval(loadStats, 60000);
+// Auto-refresh a cada 60s — FIX P3 (R6.3): skip quando aba escondida para
+// nao bater PG desnecessariamente
+setInterval(() => {
+  if (!document.hidden) loadStats();
+}, 60000);
 </script>
 {% endblock %}

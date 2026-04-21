@@ -1,7 +1,7 @@
 """
 PostgresSessionStore adapter para claude-agent-sdk 0.1.64+.
 
-Fase A dual-run: roda em paralelo com session_persistence.py. Substitui o ciclo
+Fase B (cutover ativo, 2026-04-21): source-of-truth. Substitui o ciclo
 manual backup/restore JSONL ↔ AgentSession.sdk_session_transcript (TEXT blob)
 pelo contrato SessionStore oficial (append/load/list_sessions/delete/list_subkeys
 sob tabela claude_session_store).
