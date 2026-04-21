@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="fas fa-balance-scale-right"></i> Compensacoes Saida &harr; Entrada Empresa</h4>
+    <div>
+      <a href="{{ url_for('pessoal.pessoal_configuracao.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-cog"></i> Configuracao
+      </a>
+      <a href="{{ url_for('pessoal.pessoal_transacoes.listar') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-list"></i> Transacoes
+      </a>
+    </div>
+  </div>
+
+  {# ===== Quadro de categorias compensaveis ===== #}
+  <div class="row g-2 mb-3">
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header py-2 small fw-bold">
+          <i class="fas fa-arrow-up text-danger"></i> Saidas compensaveis
+          <span class="badge bg-secondary ms-1">{{ cats_saida|length }}</span>
+        </div>
+        <div class="card-body py-2 small">
+          {% if cats_saida %}
+            {% for c in cats_saida %}
+              <span class="badge bg-light text-dark border me-1 mb-1">{{ c.grupo }} / {{ c.nome }}</span>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted">Nenhuma categoria marcada como Saida compensavel.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header py-2 small fw-bold">
+          <i class="fas fa-arrow-down text-success"></i> Entradas compensaveis
+          <span class="badge bg-secondary ms-1">{{ cats_entrada|length }}</span>
+        </div>
+        <div class="card-body py-2 small">
+          {% if cats_entrada %}
+            {% for c in cats_entrada %}
+              <span class="badge bg-light text-dark border me-1 mb-1">{{ c.grupo }} / {{ c.nome }}</span>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted">Nenhuma categoria marcada como Entrada compensavel.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info small py-2">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+      <div>
+        <strong>Fluxo:</strong>
+        1) Marque categorias como compensaveis em <a href="{{ url_for('pessoal.pessoal_configuracao.index') }}">Configuracao</a>
+        (dropdown <em>Compensavel</em>: Saida ou Entrada).
+        2) Transacoes ja importadas ficam disponiveis para pareamento automaticamente —
+        a importacao NUNCA perde registros, apenas marca <code>excluir_relatorio</code>.
+        3) Crie regras de categorizacao apontando para essas categorias para que
+        futuras importacoes classifiquem automaticamente.
+      </div>
+      <div>
+        <a href="{{ url_for('pessoal.pessoal_transacoes.listar', somente_excluidas='1', tem_categoria='nao') }}"
+           class="btn btn-outline-secondary btn-sm" title="Transacoes excluidas sem categoria — candidatas a recategorizar">
+          <i class="fas fa-search"></i> Excluidas sem categoria
+        </a>
+        <a href="{{ url_for('pessoal.pessoal_transacoes.listar', somente_excluidas='1') }}"
+           class="btn btn-outline-secondary btn-sm" title="Todas as transacoes marcadas como excluidas">
+          <i class="fas fa-eye"></i> Todas excluidas
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Controles ===== #}
+  <div class="card mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Janela (dias)</label>
+          <input type="number" id="janelaDias" class="form-control form-control-sm" value="7" min="0" max="90">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Data inicio</label>
+          <input type="date" id="dataInicio" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Data fim</label>
+          <input type="date" id="dataFim" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-6 text-end">
+          <button id="btnSugerir" class="btn btn-primary btn-sm">
+            <i class="fas fa-search"></i> Sugerir pares
+          </button>
+          <button id="btnAplicarTodos" class="btn btn-success btn-sm" disabled>
+            <i class="fas fa-check-double"></i> Aplicar todos
+          </button>
+          <button id="btnAuto" class="btn btn-warning btn-sm" title="Dry-run: mostra o que seria feito (identico a Sugerir)">
+            <i class="fas fa-bolt"></i> Auto (dry-run)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Sugestoes (dry-run) ===== #}
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-lightbulb"></i> Sugestoes de pareamento</span>
+      <span id="sugInfo" class="text-muted small">—</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="tblSugestoes">
+          <thead class="table-light">
+            <tr>
+              <th></th>
+              <th>Saida</th>
+              <th class="text-end">Valor saida</th>
+              <th>Entrada</th>
+              <th class="text-end">Valor entrada</th>
+              <th class="text-end">A compensar</th>
+              <th>Gap</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Historico ===== #}
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-history"></i> Compensacoes aplicadas</span>
+      <div>
+        <select id="filtroStatus" class="form-select form-select-sm d-inline-block" style="width:auto">
+          <option value="ATIVA" selected>Ativas</option>
+          <option value="REVERTIDA">Revertidas</option>
+          <option value="">Todas</option>
+        </select>
+        <button id="btnAtualizarHistorico" class="btn btn-outline-secondary btn-sm">
+          <i class="fas fa-sync"></i>
+        </button>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="tblHistorico">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Criado em</th>
+              <th>Origem</th>
+              <th>Saida</th>
+              <th>Entrada</th>
+              <th class="text-end">Compensado</th>
+              <th>Residuo S / E</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+$(function() {
+  const csrfToken = $('meta[name="csrf-token"]').attr('content');
+  function escHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function fmtBRL(v) {
+    if (v === null || v === undefined) return '-';
+    return Number(v).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+  }
+
+  let sugestoesCache = [];
+
+  function renderSugestoes(sugs) {
+    sugestoesCache = sugs;
+    const tb = $('#tblSugestoes tbody').empty();
+    if (!sugs.length) {
+      tb.append('<tr><td colspan="8" class="text-center text-muted py-3">Nenhuma sugestao. Verifique categorias compensaveis e janela.</td></tr>');
+      $('#btnAplicarTodos').prop('disabled', true);
+      return;
+    }
+    $('#btnAplicarTodos').prop('disabled', false);
+    sugs.forEach(function(s, idx) {
+      const gapSaida = s.saida.valor_restante - s.valor_a_compensar;
+      const gapEntrada = s.entrada.valor_restante - s.valor_a_compensar;
+      const gapTxt = (gapSaida === 0 && gapEntrada === 0)
+        ? '<span class="badge bg-success">zera ambos</span>'
+        : (gapSaida > 0 || gapEntrada > 0)
+          ? `<span class="badge bg-warning text-dark" title="Residuo saida ${fmtBRL(gapSaida)} / entrada ${fmtBRL(gapEntrada)}">parcial</span>`
+          : '<span class="badge bg-secondary">—</span>';
+      tb.append(
+        '<tr>' +
+          '<td><input type="checkbox" class="form-check-input chk-sug" data-idx="' + idx + '" checked></td>' +
+          '<td class="small">' +
+            '<div>' + escHtml(s.saida.data) + ' &middot; <strong>' + escHtml(s.saida.historico) + '</strong></div>' +
+            '<div class="text-muted">' + escHtml(s.saida.descricao || '') + '</div>' +
+          '</td>' +
+          '<td class="text-end small">' + fmtBRL(s.saida.valor_restante) + '</td>' +
+          '<td class="small">' +
+            '<div>' + escHtml(s.entrada.data) + ' &middot; <strong>' + escHtml(s.entrada.historico) + '</strong></div>' +
+            '<div class="text-muted">' + escHtml(s.entrada.descricao || '') + '</div>' +
+          '</td>' +
+          '<td class="text-end small">' + fmtBRL(s.entrada.valor_restante) + '</td>' +
+          '<td class="text-end small fw-bold">' + fmtBRL(s.valor_a_compensar) + '</td>' +
+          '<td class="small">' + gapTxt + ' <span class="text-muted">' + s.distancia_dias + 'd</span></td>' +
+          '<td class="text-end"><button class="btn btn-outline-success btn-sm btn-aplicar-1" data-idx="' + idx + '">Aplicar</button></td>' +
+        '</tr>'
+      );
+    });
+  }
+
+  function carregarSugestoes() {
+    const qs = $.param({
+      janela_dias: $('#janelaDias').val() || 7,
+      data_inicio: $('#dataInicio').val() || '',
+      data_fim: $('#dataFim').val() || '',
+    });
+    $('#sugInfo').text('Carregando...');
+    $.get('/pessoal/api/compensacoes/sugerir?' + qs, function(r) {
+      if (!r.sucesso) { toastr.error(r.mensagem); return; }
+      $('#sugInfo').text(r.total + ' pares sugeridos (janela ' + r.janela_dias + 'd)');
+      renderSugestoes(r.sugestoes);
+    }).fail(function() { toastr.error('Erro ao sugerir.'); });
+  }
+
+  function carregarHistorico() {
+    const qs = $.param({ status: $('#filtroStatus').val() || '' });
+    $.get('/pessoal/api/compensacoes?' + qs, function(r) {
+      if (!r.sucesso) { toastr.error(r.mensagem); return; }
+      const tb = $('#tblHistorico tbody').empty();
+      if (!r.compensacoes.length) {
+        tb.append('<tr><td colspan="9" class="text-center text-muted py-3">Nenhuma compensacao.</td></tr>');
+        return;
+      }
+      r.compensacoes.forEach(function(c) {
+        const statusBadge = c.status === 'ATIVA'
+          ? '<span class="badge bg-success">ATIVA</span>'
+          : '<span class="badge bg-secondary">REVERTIDA</span>';
+        const origemBadge = c.origem === 'auto'
+          ? '<span class="badge bg-info">auto</span>'
+          : '<span class="badge bg-light text-dark border">manual</span>';
+        const btnRev = c.status === 'ATIVA'
+          ? '<button class="btn btn-outline-danger btn-sm btn-reverter" data-id="' + c.id + '">Reverter</button>'
+          : '<span class="text-muted small">' + escHtml(c.revertido_em || '-') + '</span>';
+        tb.append(
+          '<tr>' +
+            '<td class="small">#' + c.id + '</td>' +
+            '<td class="small">' + escHtml(c.criado_em || '') + '<br><span class="text-muted">' + escHtml(c.criado_por || '—') + '</span></td>' +
+            '<td>' + origemBadge + '</td>' +
+            '<td class="small">' + (c.saida
+              ? ('<div>' + escHtml(c.saida.data || '') + '</div><div class="text-muted">' + escHtml(c.saida.historico || '') + '</div>')
+              : '—') + '</td>' +
+            '<td class="small">' + (c.entrada
+              ? ('<div>' + escHtml(c.entrada.data || '') + '</div><div class="text-muted">' + escHtml(c.entrada.historico || '') + '</div>')
+              : '—') + '</td>' +
+            '<td class="text-end small fw-bold">' + fmtBRL(c.valor_compensado) + '</td>' +
+            '<td class="small">' + fmtBRL(c.residuo_saida) + ' / ' + fmtBRL(c.residuo_entrada) + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td class="text-end">' + btnRev + '</td>' +
+          '</tr>'
+        );
+      });
+    }).fail(function() { toastr.error('Erro ao listar historico.'); });
+  }
+
+  function aplicarPares(idxs) {
+    const pares = idxs.map(function(i) {
+      const s = sugestoesCache[i];
+      return {
+        saida_id: s.saida.id, entrada_id: s.entrada.id,
+        valor: s.valor_a_compensar, origem: 'manual',
+        observacao: 'Aplicada via UI (janela ' + $('#janelaDias').val() + 'd, dist ' + s.distancia_dias + 'd)',
+      };
+    });
+    $.ajax({
+      url: '/pessoal/api/compensacoes/aplicar', method: 'POST',
+      contentType: 'application/json', headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify({ pares: pares }),
+      success: function(r) {
+        if (!r.sucesso) {
+          toastr.error(r.mensagem + (r.erros ? ' (' + r.erros.length + ' erros)' : ''));
+          return;
+        }
+        toastr.success(r.mensagem);
+        carregarSugestoes();
+        carregarHistorico();
+      },
+      error: function(xhr) {
+        const resp = xhr.responseJSON || {};
+        toastr.error(resp.mensagem || 'Erro ao aplicar.');
+        if (resp.erros && resp.erros.length) console.error('erros:', resp.erros);
+      },
+    });
+  }
+
+  $('#btnSugerir').on('click', carregarSugestoes);
+  $('#btnAuto').on('click', carregarSugestoes);  // dry-run == sugerir
+  $('#btnAplicarTodos').on('click', function() {
+    const idxs = [];
+    $('#tblSugestoes tbody .chk-sug:checked').each(function() { idxs.push(parseInt($(this).data('idx'))); });
+    if (!idxs.length) { toastr.warning('Marque ao menos um par.'); return; }
+    if (!confirm('Aplicar ' + idxs.length + ' compensacao(oes)? Toda compensacao fica auditada e pode ser revertida.')) return;
+    aplicarPares(idxs);
+  });
+  $(document).on('click', '.btn-aplicar-1', function() {
+    aplicarPares([parseInt($(this).data('idx'))]);
+  });
+  $(document).on('click', '.btn-reverter', function() {
+    const id = $(this).data('id');
+    if (!confirm('Reverter compensacao #' + id + '?')) return;
+    $.ajax({
+      url: '/pessoal/api/compensacoes/' + id + '/reverter', method: 'POST',
+      headers: {'X-CSRFToken': csrfToken},
+      success: function(r) {
+        if (!r.sucesso) { toastr.error(r.mensagem); return; }
+        toastr.success(r.mensagem);
+        carregarHistorico();
+      },
+      error: function(xhr) {
+        toastr.error(xhr.responseJSON?.mensagem || 'Erro ao reverter.');
+      },
+    });
+  });
+  $('#btnAtualizarHistorico, #filtroStatus').on('click change', carregarHistorico);
+
+  // Carrega historico ao abrir; sugestoes sao on-demand para economizar queries
+  carregarHistorico();
+});
+</script>
+{% endblock %}

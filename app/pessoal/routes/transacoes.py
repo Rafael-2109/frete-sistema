@@ -65,6 +65,10 @@ def listar():
     valor_max = request.args.get('valor_max', type=float)
     tem_categoria = request.args.get('tem_categoria')  # 'sim' | 'nao' | None
     excluir_filtradas = request.args.get('excluir_filtradas', '1')
+    # 'sim' -> somente excluidas (excluir_relatorio=True)
+    # 'nao' -> somente nao excluidas
+    # None  -> sem filtro (combinado com excluir_filtradas='0' mostra todas)
+    somente_excluidas = request.args.get('somente_excluidas')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
     sort_by = request.args.get('sort_by', 'data')
@@ -100,7 +104,13 @@ def listar():
         valor_max=valor_max,
         tem_categoria=tem_categoria,
     )
-    if excluir_filtradas == '1':
+    # Fluxos:
+    # - excluir_filtradas='1' (default): oculta excluidas
+    # - excluir_filtradas='0': inclui todas
+    # - somente_excluidas='1': ATALHO para ver SO as excluidas (ignora excluir_filtradas)
+    if somente_excluidas == '1':
+        query = query.filter_by(excluir_relatorio=True)
+    elif excluir_filtradas == '1':
         query = query.filter_by(excluir_relatorio=False)
 
     # Chave composta: historico_completo (contem historico + descricao normalizado)
@@ -189,6 +199,7 @@ def listar():
             'valor_max': valor_max,
             'tem_categoria': tem_categoria,
             'excluir_filtradas': excluir_filtradas,
+            'somente_excluidas': somente_excluidas,
             'sort_by': sort_by,
             'sort_order': sort_order,
         },

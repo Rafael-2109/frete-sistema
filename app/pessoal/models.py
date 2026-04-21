@@ -89,6 +89,11 @@ class PessoalCategoria(db.Model):
     grupo = db.Column(db.String(100), nullable=False)
     icone = db.Column(db.String(50))
     ativa = db.Column(db.Boolean, default=True)
+    # Compensacao Empresa: 'S' saida compensavel, 'E' entrada compensavel, NULL nao participa.
+    # Categorias marcadas como 'S'/'E' automaticamente ficam em excluir_relatorio=True quando
+    # atribuidas a uma transacao (mesmo comportamento do grupo Desconsiderar), mas permitem
+    # pareamento em pessoal_compensacoes.
+    compensavel_tipo = db.Column(db.String(1))  # 'S' | 'E' | None
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     # Relacionamentos
@@ -98,6 +103,10 @@ class PessoalCategoria(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('grupo', 'nome', name='uq_pessoal_categorias_grupo_nome'),
+        db.CheckConstraint(
+            "compensavel_tipo IS NULL OR compensavel_tipo IN ('S', 'E')",
+            name='ck_pessoal_categorias_compensavel_tipo',
+        ),
     )
 
     def __repr__(self):
@@ -110,6 +119,7 @@ class PessoalCategoria(db.Model):
             'grupo': self.grupo,
             'icone': self.icone,
             'ativa': self.ativa,
+            'compensavel_tipo': self.compensavel_tipo,
         }
 
 
@@ -288,6 +298,11 @@ class PessoalTransacao(db.Model):
     observacao = db.Column(db.Text)
     status = db.Column(db.String(20), default='PENDENTE')  # PENDENTE | CATEGORIZADO | REVISADO
 
+    # Compensacao: quanto desta transacao ja foi compensado por contraparte.
+    # Cache agregado — SUM(valor_compensado) das linhas ATIVAS em pessoal_compensacoes
+    # onde esta transacao aparece como saida_id OU entrada_id.
+    valor_compensado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+
     # F1: CPF/CNPJ extraido do historico/descricao (so digitos, 11 ou 14 chars)
     cpf_cnpj_parte = db.Column(db.String(20))
 
@@ -316,6 +331,15 @@ class PessoalTransacao(db.Model):
 
     def __repr__(self):
         return f'<PessoalTransacao {self.data} {self.historico[:30]} R${self.valor}>'
+
+    @property
+    def valor_efetivo(self):
+        """Valor util para relatorios: valor - valor_compensado. Nunca negativo."""
+        if self.valor is None:
+            return None
+        compensado = self.valor_compensado or 0
+        efetivo = float(self.valor) - float(compensado)
+        return efetivo if efetivo > 0 else 0.0
 
     def to_dict(self):
         return {
@@ -352,6 +376,82 @@ class PessoalTransacao(db.Model):
             'observacao': self.observacao,
             'status': self.status,
             'cpf_cnpj_parte': self.cpf_cnpj_parte,
+            'valor_compensado': float(self.valor_compensado) if self.valor_compensado is not None else 0,
+            'valor_efetivo': self.valor_efetivo,
+        }
+
+
+# =============================================================================
+# 7b. COMPENSACOES (Saida <-> Entrada Empresa)
+# =============================================================================
+class PessoalCompensacao(db.Model):
+    """Pareamento N:M entre uma transacao de SAIDA e uma ENTRADA.
+
+    Um depósito transitório alto (ex: R$ 200k entra, R$ 200k sai no mesmo periodo)
+    e "cancelado" via compensacao: a saida consome X reais de uma entrada, reduzindo
+    valor_efetivo de ambas. Quando residuo = 0, excluir_relatorio pode ser ligado.
+
+    Auditoria completa: quem criou, quando, observacao, e toda reversao preservada
+    (status = 'REVERTIDA' em vez de DELETE).
+    """
+    __tablename__ = 'pessoal_compensacoes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    saida_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_transacoes.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    entrada_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_transacoes.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    valor_compensado = db.Column(db.Numeric(15, 2), nullable=False)
+    # Residuos apos ESTA compensacao ser aplicada (snapshot no momento da criacao).
+    residuo_saida = db.Column(db.Numeric(15, 2), nullable=False)
+    residuo_entrada = db.Column(db.Numeric(15, 2), nullable=False)
+    origem = db.Column(db.String(10), nullable=False, default='manual')  # auto | manual
+    status = db.Column(db.String(10), nullable=False, default='ATIVA')   # ATIVA | REVERTIDA
+    observacao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    criado_por = db.Column(db.String(100))
+    revertido_em = db.Column(db.DateTime)
+    revertido_por = db.Column(db.String(100))
+
+    # Relacionamentos
+    saida = db.relationship(
+        'PessoalTransacao', foreign_keys=[saida_id],
+        backref=db.backref('compensacoes_como_saida', lazy='dynamic'),
+    )
+    entrada = db.relationship(
+        'PessoalTransacao', foreign_keys=[entrada_id],
+        backref=db.backref('compensacoes_como_entrada', lazy='dynamic'),
+    )
+
+    __table_args__ = (
+        db.CheckConstraint('valor_compensado > 0', name='ck_compensacoes_valor_positivo'),
+        db.CheckConstraint("origem IN ('auto', 'manual')", name='ck_compensacoes_origem'),
+        db.CheckConstraint("status IN ('ATIVA', 'REVERTIDA')", name='ck_compensacoes_status'),
+        db.CheckConstraint('saida_id <> entrada_id', name='ck_compensacoes_saida_diff_entrada'),
+    )
+
+    def __repr__(self):
+        return f'<PessoalCompensacao #{self.id} saida={self.saida_id} entrada={self.entrada_id} R${self.valor_compensado}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'saida_id': self.saida_id,
+            'entrada_id': self.entrada_id,
+            'valor_compensado': float(self.valor_compensado) if self.valor_compensado else 0,
+            'residuo_saida': float(self.residuo_saida) if self.residuo_saida is not None else 0,
+            'residuo_entrada': float(self.residuo_entrada) if self.residuo_entrada is not None else 0,
+            'origem': self.origem,
+            'status': self.status,
+            'observacao': self.observacao,
+            'criado_em': self.criado_em.strftime('%d/%m/%Y %H:%M') if self.criado_em else None,
+            'criado_por': self.criado_por,
+            'revertido_em': self.revertido_em.strftime('%d/%m/%Y %H:%M') if self.revertido_em else None,
+            'revertido_por': self.revertido_por,
         }
 
 
