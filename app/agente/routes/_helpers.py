@@ -29,6 +29,141 @@ def _sse_event(event_type: str, data: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def should_rotate_session(session, idle_hours: int) -> bool:
+    """
+    Decide se uma AgentSession esta idle alem do threshold e deve ser rotacionada.
+
+    Fase 2 (2026-04-21): evita acumular cache creation em sessoes retomadas
+    horas depois (ex: Marcus sessao 379 com 9 dias abertos, $151.80).
+
+    Args:
+        session: instancia de AgentSession ou None
+        idle_hours: horas de inatividade que disparam rotacao (0 = desabilitado)
+
+    Returns:
+        True se sessao idle >= threshold (deve criar nova session_id)
+        False caso contrario (idle_hours=0 ou sessao recente ou nao existe)
+    """
+    if idle_hours <= 0 or session is None:
+        return False
+    try:
+        from datetime import timedelta
+        from app.utils.timezone import agora_utc_naive
+        updated = session.updated_at
+        if updated is None:
+            return False
+        # updated_at e stored como naive UTC (padrao do projeto)
+        if updated.tzinfo is not None:
+            updated = updated.replace(tzinfo=None)
+        idle = agora_utc_naive() - updated
+        return idle >= timedelta(hours=idle_hours)
+    except Exception as exc:
+        logger.debug(f"[should_rotate_session] fallback false: {exc}")
+        return False
+
+
+def detect_recent_repeat(
+    session,
+    new_message: str,
+    window_min: int = 10,
+    last_n: int = 5,
+) -> dict | None:
+    """
+    Detecta se new_message e repeticao literal de mensagem recente do mesmo user.
+
+    Fase 3 (2026-04-21): elimina retry cycles caros (Gabriella mandou o mesmo
+    "vincular pedido C2512431 na nota 117380" 5x em 30 min; Marcus "executou
+    a tarefa anterior?" 15x). Cada retry no Opus custa ~$0.50-1.00.
+
+    Args:
+        session: AgentSession (le data['messages'])
+        new_message: texto do prompt do usuario
+        window_min: janela em minutos (repeticao FORA dela e permitida)
+        last_n: quantas ultimas msgs user examinar
+
+    Returns:
+        dict com info da repeticao ou None se nao for repeticao.
+        Estrutura:
+            {
+                'duplicate': True,
+                'minutes_ago': float,
+                'previous_assistant': str,  # ultimas 200 chars da resposta anterior
+            }
+    """
+    if session is None or not new_message or len(new_message.strip()) < 15:
+        return None
+    try:
+        from datetime import datetime, timedelta, timezone
+        from app.utils.timezone import agora_utc_naive
+
+        messages = (session.data or {}).get('messages', [])
+        if not messages:
+            return None
+
+        user_msgs = [
+            m for m in messages
+            if m.get('role') == 'user' and m.get('content')
+        ]
+        if len(user_msgs) < 1:
+            return None
+
+        normalized_new = new_message.strip().lower()
+        now = agora_utc_naive()
+        threshold = timedelta(minutes=window_min)
+
+        # Fix pos-review (2026-04-21):
+        # 1) Trackar indice original do msg via enumerate para evitar
+        #    messages.index(prev) retornar posicao da PRIMEIRA ocorrencia
+        #    (dicts iguais comparam por valor). Identity tracking via indice
+        #    preserva o par user→assistant correto.
+        # 2) Usar `continue` ao inves de `return None` em matches out-of-window
+        #    — pode existir ocorrencia mais recente ainda dentro da janela.
+        indexed_user_msgs: list[tuple[int, dict]] = [
+            (i, m) for i, m in enumerate(messages)
+            if m.get('role') == 'user' and m.get('content')
+        ]
+        if not indexed_user_msgs:
+            return None
+
+        for idx, prev in reversed(indexed_user_msgs[-last_n:]):
+            prev_content = (prev.get('content') or '').strip().lower()
+            if prev_content != normalized_new:
+                continue
+
+            prev_ts_str = prev.get('timestamp', '')
+            if not prev_ts_str:
+                continue
+            try:
+                prev_ts = datetime.fromisoformat(prev_ts_str.rstrip('Z'))
+                if prev_ts.tzinfo is not None:
+                    prev_ts = prev_ts.replace(tzinfo=None)
+            except ValueError:
+                continue
+
+            delta = now - prev_ts
+            if delta > threshold:
+                # Continuar — pode haver repeticao mais recente na janela
+                continue
+
+            # Pegar proxima mensagem assistant apos essa user msg (identity-safe via idx)
+            prev_assistant_content = ''
+            for m in messages[idx + 1:]:
+                if m.get('role') == 'assistant' and m.get('content'):
+                    prev_assistant_content = (m.get('content') or '')[:400]
+                    break
+
+            return {
+                'duplicate': True,
+                'minutes_ago': round(delta.total_seconds() / 60, 1),
+                'previous_assistant': prev_assistant_content,
+            }
+
+        return None
+    except Exception as exc:
+        logger.debug(f"[detect_recent_repeat] fallback None: {exc}")
+        return None
+
+
 def _session_meets_extraction_threshold(session, msg_threshold: int) -> bool:
     """
     Threshold inteligente: msg_count >= threshold OU cost >= cost_threshold.

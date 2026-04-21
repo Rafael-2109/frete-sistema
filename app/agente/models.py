@@ -58,10 +58,10 @@ class AgentSession(db.Model):
     # Dados extras em JSONB - HISTÓRICO COMPLETO (FEAT-030)
     data = db.Column(db.JSON, default=dict)
 
-    # Transcript JSONL do SDK para restore após reciclagem do worker (Bug Teams #1)
-    # TEXT separado do JSONB `data` para evitar overhead de reescrita JSONB.
-    # PostgreSQL TEXT suporta até 1GB — suficiente para sessões longas.
-    sdk_session_transcript = db.Column(db.Text, nullable=True)
+    # NOTA: coluna `sdk_session_transcript` removida em 2026-04-21 (Fase C
+    # pos-SessionStore cutover). Source-of-truth agora e a tabela
+    # `claude_session_store` (JSONB, SDK 0.1.64+). Migration drop em
+    # scripts/migrations/2026_04_21_drop_sdk_session_transcript.{py,sql}.
 
     # P0-2: Sumarização Estruturada de Sessões
     summary = db.Column(db.JSON, nullable=True)  # Resumo estruturado (JSONB)
@@ -211,15 +211,25 @@ class AgentSession(db.Model):
         input_tokens: int = 0,
         output_tokens: int = 0,
         tools_used: List[str] = None,
+        cache_read_tokens: int = 0,
+        cache_creation_tokens: int = 0,
     ) -> Dict[str, Any]:
         """
         Adiciona mensagem do assistente.
 
         Args:
             content: Conteúdo da mensagem
-            input_tokens: Tokens de entrada usados
+            input_tokens: Tokens de entrada usados (uncached remainder)
             output_tokens: Tokens de saída usados
             tools_used: Lista de ferramentas usadas
+            cache_read_tokens: Tokens servidos do prompt cache (pago ~0.10x)
+            cache_creation_tokens: Tokens escritos no prompt cache (pago ~1.25x)
+
+        Observabilidade granular (Fase 4, 2026-04-21):
+            Persiste cache tokens por mensagem em `tokens` dict.
+            Backward-compat: readers existentes usam `.get('cache_read', 0)`.
+            Fonte: ResultMessage.usage.{cache_read_input_tokens,
+            cache_creation_input_tokens} extraidos em sdk/client.py.
 
         Returns:
             Mensagem criada
@@ -234,6 +244,8 @@ class AgentSession(db.Model):
             'tokens': {
                 'input': input_tokens,
                 'output': output_tokens,
+                'cache_read': cache_read_tokens,
+                'cache_creation': cache_creation_tokens,
             },
         }
 
@@ -242,8 +254,11 @@ class AgentSession(db.Model):
 
         self.data['messages'].append(message)
 
-        # Atualiza contadores
-        total_new_tokens = input_tokens + output_tokens
+        # Atualiza contadores (cache tokens contam no total para observabilidade)
+        total_new_tokens = (
+            input_tokens + output_tokens
+            + cache_read_tokens + cache_creation_tokens
+        )
         self.data['total_tokens'] = self.data.get('total_tokens', 0) + total_new_tokens
         self.message_count = (self.message_count or 0) + 1
         self.updated_at = agora_utc_naive()
@@ -278,30 +293,12 @@ class AgentSession(db.Model):
         flag_modified(self, 'data')
 
     # =========================================================================
-    # MÉTODOS DE PERSISTÊNCIA DE TRANSCRIPT (Bug Teams #1)
+    # MÉTODOS DE PERSISTÊNCIA DE TRANSCRIPT — REMOVIDOS (Fase C, 2026-04-21)
     # =========================================================================
-
-    def save_transcript(self, transcript: str) -> None:
-        """
-        Salva transcript JSONL do SDK no banco.
-
-        Chamado após cada resposta do SDK para permitir restore
-        caso o worker Render recicle e perca o arquivo do disco.
-
-        Args:
-            transcript: Conteúdo completo do JSONL como string
-        """
-        self.sdk_session_transcript = transcript
-        self.updated_at = agora_utc_naive()
-
-    def get_transcript(self) -> Optional[str]:
-        """
-        Retorna transcript JSONL salvo no banco.
-
-        Returns:
-            Conteúdo do JSONL ou None se nunca salvo
-        """
-        return self.sdk_session_transcript
+    # `save_transcript()` / `get_transcript()` foram removidos junto com a
+    # coluna `sdk_session_transcript`. Source-of-truth do transcript JSONL
+    # agora e a tabela `claude_session_store` (gerenciada pelo SDK 0.1.64+
+    # via PostgresSessionStore adapter em sdk/session_store_adapter.py).
 
     # =========================================================================
     # MÉTODOS DE SUMARIZAÇÃO (P0-2)

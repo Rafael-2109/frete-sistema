@@ -173,6 +173,11 @@ class AgentClient:
         # Carrega preset operacional (para USE_CUSTOM_SYSTEM_PROMPT)
         self.operational_preset = self._load_preset_operacional()
 
+        # Carrega briefing institucional (empresa_briefing.md) — injetado no
+        # system_prompt como bloco estatico cacheavel (vocabulario + cadeia
+        # de valor + gargalos + sistemas).
+        self.empresa_briefing = self._load_empresa_briefing()
+
         # Cliente para health check (API direta)
         self._anthropic_client = anthropic.Anthropic(api_key=self.settings.api_key)
 
@@ -226,6 +231,33 @@ class AgentClient:
             )
             return ""
 
+    def _load_empresa_briefing(self) -> str:
+        """Carrega briefing institucional da Nacom Goya.
+
+        Conteudo: identificacao da empresa, cadeia de valor, tabelas-chave,
+        sistemas, gargalos recorrentes, vocabulario de dominio. Injetado no
+        system_prompt como bloco estatico para que o agente principal tenha
+        acesso ao vocabulario operacional (ex: 'matar pedido', 'ruptura',
+        'completude', 'bonificacao', 'travando a carteira', etc).
+
+        Returns:
+            String com o conteudo do briefing, ou string vazia se ausente.
+        """
+        briefing_path = self.settings.empresa_briefing_path
+        try:
+            with open(briefing_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                logger.debug(
+                    f"[AGENT_CLIENT] Empresa briefing carregado: "
+                    f"{briefing_path} ({len(content)} chars)"
+                )
+                return content
+        except FileNotFoundError:
+            logger.warning(
+                f"[AGENT_CLIENT] empresa_briefing.md nao encontrado: {briefing_path}"
+            )
+            return ""
+
     def get_context_usage(self) -> Optional[Dict[str, Any]]:
         """
         Retorna uso do context window via SDK get_context_usage().
@@ -271,25 +303,44 @@ class AgentClient:
             return None
 
     def _build_full_system_prompt(self, custom_instructions: str) -> str:
-        """Concatena preset operacional + system_prompt formatado.
+        """Concatena preset operacional + system_prompt formatado + empresa_briefing.
 
         Retorna string única que SUBSTITUI o preset claude_code.
         Economia estimada: ~3-4K tokens input por request.
+
+        Ordem (tudo estatico para maximizar cache hits):
+          1. preset_operacional.md  — tool instructions, safety, environment
+          2. system_prompt.md        — identidade, regras R0-R10, routing
+          3. empresa_briefing.md     — cadeia de valor, vocabulario, gargalos
 
         Args:
             custom_instructions: System prompt formatado (_format_system_prompt output)
 
         Returns:
-            String completa para system_prompt (sem preset)
+            String completa para system_prompt (sem preset claude_code)
         """
         preset = self.operational_preset
+        briefing = self.empresa_briefing
+
         if not preset:
             logger.warning(
                 "[AGENT_CLIENT] Preset operacional vazio — usando apenas system_prompt.md"
             )
-            return custom_instructions
+            base = custom_instructions
+        else:
+            base = f"{preset}\n\n{custom_instructions}"
 
-        return f"{preset}\n\n{custom_instructions}"
+        if briefing:
+            return (
+                f"{base}\n\n"
+                f"<empresa_briefing>\n"
+                f"Contexto institucional Nacom Goya (vocabulario, cadeia de valor, "
+                f"sistemas, gargalos) — use como referencia para interpretar pedidos "
+                f"do usuario e traduzir termos operacionais.\n\n"
+                f"{briefing}\n"
+                f"</empresa_briefing>"
+            )
+        return base
 
     def _get_default_system_prompt(self) -> str:
         """Retorna system prompt padrão."""
@@ -2070,6 +2121,10 @@ Nunca invente informações."""
         stop_reason = ""
         result_session_id = sdk_session_id
         errors = []  # Fix 2c: Capturar error events
+        # Fase 4 (2026-04-21): cache tokens + custo para observabilidade granular
+        cache_read_tokens = 0
+        cache_creation_tokens = 0
+        total_cost_usd = 0.0
 
         async for event in self.stream_response(
             prompt=prompt,
@@ -2101,6 +2156,10 @@ Nunca invente informações."""
                 input_tokens = event.content.get('input_tokens', 0)
                 output_tokens = event.content.get('output_tokens', 0)
                 stop_reason = event.content.get('stop_reason', '')
+                # Fase 4 (2026-04-21): extrair cache + custo do done event
+                cache_read_tokens = event.content.get('cache_read_tokens', 0) or 0
+                cache_creation_tokens = event.content.get('cache_creation_tokens', 0) or 0
+                total_cost_usd = event.content.get('total_cost_usd', 0.0) or 0.0
                 # Captura session_id real do done
                 done_session_id = event.content.get('session_id')
                 if done_session_id:
@@ -2122,6 +2181,9 @@ Nunca invente informações."""
             output_tokens=output_tokens,
             stop_reason=stop_reason,
             session_id=result_session_id,
+            cache_read_tokens=cache_read_tokens,
+            cache_creation_tokens=cache_creation_tokens,
+            total_cost_usd=total_cost_usd,
         )
 
     def health_check(self) -> Dict[str, Any]:

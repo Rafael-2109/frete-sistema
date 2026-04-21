@@ -6,14 +6,112 @@ e scoring de memórias no hook UserPromptSubmit.
 
 Todas as funções são module-level (sem dependência de instância).
 Extraído de client.py em 2026-04-04.
+
+Fase 5 (2026-04-21): cache por sessao + invalidacao em mutacao.
+Reduz consultas redundantes em sessoes de multi-turno repetitivas
+(ex: Gabriella 13 consultas de memoria em 28 msgs — pattern observado).
 """
 
 import logging
+import threading
+import time as _time_module
 from typing import Optional
 from app.utils.timezone import agora_utc_naive
 from ._sanitization import xml_escape, sanitize_memory_content
 
 logger = logging.getLogger('sistema_fretes')
+
+
+# ======================================================================
+# Fase 5 (2026-04-21): Cache de injecao de memoria por sessao
+# ======================================================================
+# Estrutura: {session_id: (rendered_context, mem_ids, timestamp, user_id)}
+# TTL: 30 minutos OU invalidacao manual via mutacao de memoria.
+# Memoria Invalidacao: _INVALIDATED_USERS set — consumido e limpo na proxima
+# consulta do user. Permite invalidacao cross-session sem iterar cache inteiro.
+_SESSION_INJECTION_CACHE: dict[str, tuple[Optional[str], list[int], float, int]] = {}
+_INVALIDATED_USERS: set[int] = set()
+_INJECTION_CACHE_TTL_SEC = 1800  # 30 minutos
+_INJECTION_CACHE_LOCK = threading.Lock()
+_INJECTION_CACHE_MAX_SIZE = 500  # Evita leak se sessoes nao forem limpas
+
+
+def invalidate_injection_cache_for_user(user_id: int) -> None:
+    """
+    Remove TODAS as entries de cache do user_id atomicamente.
+
+    Fix pos-review (2026-04-21): antes usava flag `_INVALIDATED_USERS` consumida
+    pela primeira session a fazer `_cache_get` — race entre sessoes concorrentes
+    (Web + Teams, ou 2 tabs) deixava algumas servindo contexto stale. Agora
+    evictamos TODAS as entries do user na hora da invalidacao.
+
+    Chamado por memory_mcp_tool em save_memory / update_memory / delete_memory.
+    """
+    if not user_id:
+        return
+    with _INJECTION_CACHE_LOCK:
+        sids_to_evict = [
+            sid for sid, entry in _SESSION_INJECTION_CACHE.items()
+            if entry[3] == user_id  # entry = (rendered, ids, ts, cached_uid)
+        ]
+        for sid in sids_to_evict:
+            del _SESSION_INJECTION_CACHE[sid]
+        # Remover flag se ainda presente (legado — nao mais necessario)
+        _INVALIDATED_USERS.discard(user_id)
+    logger.debug(
+        f"[memory_injection] cache invalidated for user={user_id} "
+        f"evicted={len(sids_to_evict)} sessions"
+    )
+
+
+def _cache_get(session_id: str, user_id: int) -> Optional[tuple[Optional[str], list[int]]]:
+    """
+    Retorna (context, mem_ids) do cache se valido, ou None.
+
+    Valido = TTL nao expirou AND user_id do cache bate com o atual.
+    Invalidacao por mutacao e tratada em `invalidate_injection_cache_for_user`
+    (evicta todas entries do user ao inves de usar flag consumivel).
+    """
+    if not session_id or not user_id:
+        return None
+    with _INJECTION_CACHE_LOCK:
+        entry = _SESSION_INJECTION_CACHE.get(session_id)
+        if entry is None:
+            return None
+        rendered, ids, ts, cached_uid = entry
+        if cached_uid != user_id:
+            # Session trocou de user (edge case) — invalidar
+            del _SESSION_INJECTION_CACHE[session_id]
+            return None
+        if _time_module.time() - ts > _INJECTION_CACHE_TTL_SEC:
+            del _SESSION_INJECTION_CACHE[session_id]
+            return None
+        return rendered, list(ids)
+
+
+def _cache_put(
+    session_id: str,
+    user_id: int,
+    rendered: Optional[str],
+    mem_ids: list[int],
+) -> None:
+    """Armazena context no cache. Evicta entries mais antigas se overflow."""
+    if not session_id or not user_id:
+        return
+    with _INJECTION_CACHE_LOCK:
+        # Evict oldest se tamanho excedeu (simple LRU by timestamp)
+        if len(_SESSION_INJECTION_CACHE) >= _INJECTION_CACHE_MAX_SIZE:
+            oldest_sid = min(
+                _SESSION_INJECTION_CACHE.keys(),
+                key=lambda k: _SESSION_INJECTION_CACHE[k][2],
+            )
+            del _SESSION_INJECTION_CACHE[oldest_sid]
+        _SESSION_INJECTION_CACHE[session_id] = (
+            rendered,
+            list(mem_ids),
+            _time_module.time(),
+            user_id,
+        )
 
 
 # =====================================================================
@@ -618,6 +716,25 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
     if not user_id:
         return None, []
 
+    # ─── Fase 5: Cache check por sessao ────────────────────────────
+    # Se estamos em uma sessao conhecida, tenta servir do cache antes de
+    # fazer queries SQL + embeddings. TTL 30min ou invalidacao em mutacao.
+    try:
+        from ..config.permissions import get_current_session_id
+        _cached_session_id = get_current_session_id()
+        if _cached_session_id:
+            _cache_hit = _cache_get(_cached_session_id, user_id)
+            if _cache_hit is not None:
+                rendered, mem_ids = _cache_hit
+                logger.info(
+                    f"[memory_injection] CACHE HIT session={_cached_session_id[:12]}... "
+                    f"user={user_id} chars={len(rendered or '')} ids={len(mem_ids)}"
+                )
+                return rendered, mem_ids
+    except Exception as _cache_err:
+        logger.debug(f"[memory_injection] cache check falhou (ignorado): {_cache_err}")
+        _cached_session_id = None
+
     try:
         # Obter Flask app context
         try:
@@ -1160,10 +1277,26 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             return result, injected_ids
 
         if ctx is None:
-            return _load()
+            result = _load()
         else:
             with ctx:
-                return _load()
+                result = _load()
+
+        # ─── Fase 5: Cache write-back (MISS) ───────────────────────
+        # Persistir resultado para proximas consultas da mesma sessao.
+        # Invalidado automaticamente em save/update/delete_memory (user marcado).
+        try:
+            if _cached_session_id and result is not None:
+                rendered, mem_ids = result
+                _cache_put(_cached_session_id, user_id, rendered, mem_ids or [])
+                logger.info(
+                    f"[memory_injection] CACHE MISS -> PUT session={_cached_session_id[:12]}... "
+                    f"user={user_id} chars={len(rendered or '')} ids={len(mem_ids or [])}"
+                )
+        except Exception as _put_err:
+            logger.debug(f"[memory_injection] cache put falhou: {_put_err}")
+
+        return result
 
     except Exception as e:
         logger.warning(f"[MEMORY_INJECT] Erro ao carregar memórias (ignorado): {e}")

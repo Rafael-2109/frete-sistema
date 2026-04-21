@@ -108,6 +108,39 @@ def api_chat():
         session_id = data.get('session_id')  # Nosso session_id (não do SDK)
         model = data.get('model')
         effort_level = data.get('effort_level', 'off')
+
+        # Fase 1 (2026-04-21): Smart model routing no canal Web.
+        # Se flag USE_WEB_SMART_MODEL_ROUTING ligada, analisa padroes do prompt
+        # e rebaixa Opus -> Sonnet para tarefas estruturadas/repetitivas.
+        # NUNCA promove Sonnet -> Opus (respeita escolha explicita do usuario).
+        try:
+            from app.agente.config.feature_flags import (
+                USE_WEB_SMART_MODEL_ROUTING, WEB_FAST_MODEL,
+            )
+            if USE_WEB_SMART_MODEL_ROUTING and message:
+                from app.agente.sdk.model_router import select_model, log_routing_decision
+                default_for_router = model or 'claude-opus-4-7'
+                # So rebaixa se caller escolheu Opus (ou deixou default)
+                if 'opus' in default_for_router.lower():
+                    chosen, reason = select_model(
+                        message,
+                        default_model=default_for_router,
+                        fast_model=WEB_FAST_MODEL,
+                    )
+                    if chosen != default_for_router:
+                        log_routing_decision(
+                            session_id=session_id or '',
+                            user_id=current_user.id if hasattr(current_user, 'id') else None,
+                            prompt_preview=message,
+                            chosen_model=chosen,
+                            reason=reason,
+                            default_model=default_for_router,
+                            fast_model=WEB_FAST_MODEL,
+                        )
+                        model = chosen
+        except Exception as _router_err:
+            logger.warning(f"[AGENTE] model_router falhou (ignorado): {_router_err}")
+
         plan_mode = data.get('plan_mode', False)
         files = data.get('files', [])
         output_format = data.get('output_format')  # JSON Schema para structured output
@@ -233,6 +266,112 @@ def api_chat():
                     f"preparado(s) (image + document)"
                 )
 
+        # ──────────────────────────────────────────────────────────────
+        # Fase 2+3 (2026-04-21): Session rotation + repeat detection
+        # ──────────────────────────────────────────────────────────────
+        # Ordem (fix pos-review):
+        # 1) Idle rotation primeiro — se sessao esta idle alem do TTL,
+        #    rotacionar e NAO short-circuit (contexto perdido, cache expirou).
+        # 2) Repeat detection APENAS se sessao NAO foi rotacionada — short
+        #    circuit na mesma sessao recente elimina retry cycles sem custo.
+        rotated_from_session_id = None
+        short_circuit_repeat = None
+        try:
+            from app.agente.config.feature_flags import WEB_SESSION_IDLE_HOURS
+            from app.agente.routes._helpers import (
+                should_rotate_session, detect_recent_repeat,
+            )
+            from app.agente.models import AgentSession
+            import uuid as _uuid_fase2
+
+            if session_id:
+                _existing = AgentSession.query.filter_by(
+                    session_id=session_id
+                ).first()
+                if _existing:
+                    # (1) Idle rotation PRIMEIRO: se sessao abandonada ha horas,
+                    # contexto ja expirou em cache Anthropic — rotacionar e
+                    # processar normalmente. Short-circuit em sessao stale
+                    # ressuscitaria `updated_at` e defeat-aria o TTL.
+                    if should_rotate_session(_existing, WEB_SESSION_IDLE_HOURS):
+                        rotated_from_session_id = session_id
+                        session_id = str(_uuid_fase2.uuid4())
+                        logger.info(
+                            f"[AGENTE] Sessao idle >= {WEB_SESSION_IDLE_HOURS}h, "
+                            f"rotacionada: {rotated_from_session_id[:12]}... -> "
+                            f"{session_id[:12]}..."
+                        )
+                    else:
+                        # (2) Repeat detection: mesma sessao, msg identica < 10min
+                        repeat_info = detect_recent_repeat(
+                            _existing, message, window_min=10, last_n=5
+                        )
+                        if repeat_info:
+                            short_circuit_repeat = repeat_info
+                            logger.info(
+                                f"[AGENTE] Repeat detectado sess={session_id[:12]}... "
+                                f"{repeat_info['minutes_ago']}min atras — short circuit"
+                            )
+        except Exception as _fase2_err:
+            logger.warning(f"[AGENTE] Fase 2/3 gate falhou (ignorado): {_fase2_err}")
+
+        # Short-circuit: repeat detectado → responder direto sem chamar SDK
+        if short_circuit_repeat is not None:
+            from app.agente.routes._helpers import _sse_event as _sse_event_local
+
+            def _repeat_short_circuit_stream():
+                try:
+                    yield _sse_event_local('start', {'session_id': session_id})
+                    minutes_ago = short_circuit_repeat['minutes_ago']
+                    prev_preview = short_circuit_repeat['previous_assistant']
+                    resp_text = (
+                        f"Essa solicitação foi processada há {minutes_ago:.0f} min. "
+                        f"Resposta anterior:\n\n{prev_preview}\n\n"
+                        f"Se precisa revalidar no Odoo, confirme e rodo novamente."
+                    )
+                    yield _sse_event_local('text', {
+                        'text': resp_text,
+                        'session_id': session_id,
+                    })
+                    yield _sse_event_local('done', {
+                        'session_id': session_id,
+                        'total_cost_usd': 0.0,
+                        'input_tokens': 0,
+                        'output_tokens': 0,
+                        'via_repeat_detect': True,
+                    })
+                    # Persistir a interacao (user msg + resposta) na sessao
+                    try:
+                        from app.agente.models import AgentSession as _AS
+                        from app import db as _db
+                        _sess = _AS.query.filter_by(session_id=session_id).first()
+                        if _sess:
+                            _sess.add_user_message(message)
+                            _sess.add_assistant_message(
+                                content=resp_text,
+                                input_tokens=0,
+                                output_tokens=0,
+                                tools_used=None,
+                            )
+                            _db.session.commit()
+                    except Exception as _persist_err:
+                        logger.warning(
+                            f"[AGENTE] repeat short-circuit persist falhou: "
+                            f"{_persist_err}"
+                        )
+                finally:
+                    yield None
+
+            return Response(
+                stream_with_context(_repeat_short_circuit_stream()),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'X-Accel-Buffering': 'no',
+                    'Connection': 'keep-alive',
+                },
+            )
+
         return Response(
             stream_with_context(_stream_chat_response(
                 message=enriched_message,
@@ -246,6 +385,7 @@ def api_chat():
                 document_files=document_files,  # FEAT-032 / Fase B: content blocks (image + document)
                 debug_mode=debug_mode,
                 output_format=output_format,
+                rotated_from_session_id=rotated_from_session_id,
             )),
             mimetype='text/event-stream',
             headers={
@@ -460,6 +600,7 @@ def _stream_chat_response(
     document_files: List[dict] = None,
     debug_mode: bool = False,
     output_format: dict = None,
+    rotated_from_session_id: str = None,
 ) -> Generator[str, None, None]:
     """
     Gera resposta em streaming (SSE).
@@ -940,6 +1081,15 @@ def _stream_chat_response(
         # Inicia streaming
         yield _sse_event('start', {'message': 'Iniciando...'})
 
+        # Fase 2 (2026-04-21): Notificar frontend se sessao foi rotacionada
+        # por idle timeout. Frontend troca session_id no localStorage.
+        if rotated_from_session_id:
+            yield _sse_event('session_rotated', {
+                'previous_session_id': rotated_from_session_id,
+                'new_session_id': session_id,
+                'reason': 'idle_timeout',
+            })
+
         # Inicia thread para async stream
         thread = Thread(target=run_async_stream, daemon=True)
         thread.start()
@@ -1198,6 +1348,8 @@ def _stream_chat_response(
                 model=model,
                 session_expired=response_state['session_expired'],
                 sdk_cost_usd=response_state.get('sdk_cost_usd', 0),
+                cache_read_tokens=response_state.get('cache_read_tokens', 0),
+                cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
             )
             logger.info("[AGENTE] Mensagens salvas no banco (finally)")
         except Exception as save_error:
@@ -1226,6 +1378,8 @@ def _save_messages_to_db(
     model: str,
     session_expired: bool,
     sdk_cost_usd: float = 0,
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
 ) -> None:
     """
     FEAT-030: Salva mensagens do usuário e assistente no banco.
@@ -1237,12 +1391,14 @@ def _save_messages_to_db(
         user_id: ID do usuário
         user_message: Mensagem do usuário
         assistant_message: Resposta do assistente
-        input_tokens: Tokens de entrada
+        input_tokens: Tokens de entrada (uncached)
         output_tokens: Tokens de saída
         tools_used: Lista de tools usadas
         model: Modelo usado
         session_expired: Se a sessão SDK expirou
         sdk_cost_usd: Custo informado pelo SDK (ResultMessage.total_cost_usd)
+        cache_read_tokens: Tokens servidos do prompt cache (Fase 4 observabilidade)
+        cache_creation_tokens: Tokens escritos no prompt cache
     """
     if not our_session_id:
         logger.warning("[AGENTE] Não foi possível salvar: session_id não definido")
@@ -1261,13 +1417,15 @@ def _save_messages_to_db(
             if user_message:
                 session.add_user_message(user_message)
 
-            # Salva resposta do assistente
+            # Salva resposta do assistente (Fase 4: persiste cache tokens)
             if assistant_message:
                 session.add_assistant_message(
                     content=assistant_message,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     tools_used=tools_used if tools_used else None,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
                 )
 
             # Atualiza sdk_session_id se não expirou

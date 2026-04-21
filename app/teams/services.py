@@ -13,12 +13,74 @@ import re
 import hashlib
 import time
 import uuid
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 from app.utils.timezone import agora_utc_naive
 from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# StreamResult — valor de retorno tipado de _obter_resposta_agente*
+# ═══════════════════════════════════════════════════════════════════════
+# Fase 4 extensao (2026-04-21): substitui tupla de 6 campos por dataclass
+# imutavel com campos nomeados. Permite adicionar cache_read_tokens /
+# cache_creation_tokens sem quebrar call sites (que usam acesso por nome).
+#
+# Backward compat: metodos `__iter__` para suportar unpacking posicional
+# legacy (se algum call site ainda fizer `a, b, c, d, e, f = result`).
+# Mas o padrao novo e acessar via atributo (stream.input_tokens, etc.).
+@dataclass(frozen=True)
+class StreamResult:
+    """Resultado de uma chamada _obter_resposta_agente* (sync ou streaming).
+
+    Campos:
+        resposta_texto: texto final retornado ao usuario (pode ser None em erro)
+        sdk_session_id: novo sdk_session_id emitido pelo SDK (para resume)
+        input_tokens: tokens de input uncached
+        output_tokens: tokens de output
+        tools_used: lista de nomes de tools invocadas (granularidade via stream)
+        cost_usd: custo reportado pelo SDK (ResultMessage.total_cost_usd)
+        cache_read_tokens: tokens servidos do cache (Fase 4 observabilidade)
+        cache_creation_tokens: tokens escritos no cache
+    """
+    resposta_texto: Optional[str]
+    sdk_session_id: Optional[str]
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tools_used: List[str] = field(default_factory=list)
+    cost_usd: float = 0.0
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+
+    def __iter__(self):
+        # Backward compat: permite unpacking posicional antigo de 6 campos.
+        # Codigo novo DEVE usar acesso por atributo.
+        yield self.resposta_texto
+        yield self.sdk_session_id
+        yield self.input_tokens
+        yield self.output_tokens
+        yield self.tools_used
+        yield self.cost_usd
+
+
+def _error_stream_result(
+    resposta_texto: Optional[str] = None,
+    sdk_session_id: Optional[str] = None,
+) -> StreamResult:
+    """Helper para paths de erro/timeout. Zero tokens e custo."""
+    return StreamResult(
+        resposta_texto=resposta_texto,
+        sdk_session_id=sdk_session_id,
+        input_tokens=0,
+        output_tokens=0,
+        tools_used=[],
+        cost_usd=0.0,
+        cache_read_tokens=0,
+        cache_creation_tokens=0,
+    )
 
 
 def _get_or_create_teams_user(usuario: str) -> Optional[int]:
@@ -123,8 +185,14 @@ CORRETO:
 PERGUNTA DO USUÁRIO:
 """
 
-# TTL de sessão do Teams: após 4h de inatividade, cria nova sessão
-TEAMS_SESSION_TTL_HOURS = 4
+# TTL de sessão do Teams: após N horas de inatividade, cria nova sessão.
+# Fase 2 (2026-04-21): extraido para env var (default 2h). Reduz cache
+# creation em sessoes longas abandonadas e retomadas horas depois.
+# Para rollback ao comportamento antigo: TEAMS_SESSION_TTL_HOURS=4
+from app.agente.config.feature_flags import ( # noqa: E402
+    TEAMS_SESSION_TTL_HOURS as _TEAMS_SESSION_TTL_HOURS,
+)
+TEAMS_SESSION_TTL_HOURS = _TEAMS_SESSION_TTL_HOURS
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -153,11 +221,14 @@ def _tool_display_name(tool_name: str) -> str:
 
 
 def _select_model_for_message(mensagem: str) -> str:
-    """Seleciona modelo com base na complexidade da mensagem.
+    """Seleciona modelo com base em padroes de intent da mensagem.
 
-    Lógica invertida (v2): default = Opus, Sonnet apenas para mensagens
-    comprovadamente simples. Evita que operações complexas curtas
-    (ex: "concilie transferências") caiam no Sonnet por engano.
+    Fase 1 (2026-04-21): delega a app.agente.sdk.model_router.select_model,
+    compartilhado entre Teams e Web. Patterns evolvem em um local unico.
+
+    Mantém compatibilidade com v2 anterior: quando SMART_MODEL_ROUTING=false,
+    retorna TEAMS_DEFAULT_MODEL. Caso contrario, roteia baseado em patterns
+    observados em producao (padrao_nf_po, saudacoes, follow-ups, etc.).
     """
     from app.agente.config.feature_flags import (
         TEAMS_SMART_MODEL_ROUTING, TEAMS_DEFAULT_MODEL, TEAMS_FAST_MODEL,
@@ -165,33 +236,13 @@ def _select_model_for_message(mensagem: str) -> str:
     if not TEAMS_SMART_MODEL_ROUTING:
         return TEAMS_DEFAULT_MODEL
 
-    msg_lower = mensagem.lower().strip()
-    msg_words = len(msg_lower.split())
-
-    # Padrões SIMPLES que podem usar Sonnet (rápido, barato)
-    sonnet_patterns = [
-        # Saudações
-        'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite',
-        'hey', 'hello', 'hi',
-        # Status checks
-        'está funcionando', 'esta funcionando', 'voltou a funcionar',
-        'tudo bem', 'como vai',
-        # Agradecimentos
-        'obrigad', 'valeu', 'thanks',
-    ]
-    for pattern in sonnet_patterns:
-        if pattern in msg_lower:
-            # Saudação com pedido junto (ex: "bom dia, analise a carteira") → Opus
-            if msg_words > 8:
-                return TEAMS_DEFAULT_MODEL
-            return TEAMS_FAST_MODEL
-
-    # Mensagens muito curtas (≤ 2 palavras) sem conteúdo operacional → Sonnet
-    if msg_words <= 2:
-        return TEAMS_FAST_MODEL
-
-    # Default: Opus para tudo que não é comprovadamente simples
-    return TEAMS_DEFAULT_MODEL
+    from app.agente.sdk.model_router import select_model
+    chosen, _reason = select_model(
+        mensagem or "",
+        default_model=TEAMS_DEFAULT_MODEL,
+        fast_model=TEAMS_FAST_MODEL,
+    )
+    return chosen
 
 
 def _commit_with_retry(log_prefix: str = "[TEAMS]") -> bool:
@@ -306,7 +357,7 @@ def processar_mensagem_bot(
         )
 
         # Obter resposta do agente (com can_use_tool para graceful denial de AskUserQuestion)
-        resposta_texto, new_sdk_session_id, _, _, _, _ = _obter_resposta_agente(
+        _sync_result = _obter_resposta_agente(
             mensagem=mensagem,
             usuario=usuario,
             sdk_session_id=sdk_session_id,
@@ -315,13 +366,23 @@ def processar_mensagem_bot(
             session=session,
             model=selected_model,
         )
+        resposta_texto = _sync_result.resposta_texto
+        new_sdk_session_id = _sync_result.sdk_session_id
 
         # Salvar mensagens e atualizar sdk_session_id
         if session:
             try:
                 session.add_user_message(mensagem)
                 if resposta_texto:
-                    session.add_assistant_message(resposta_texto)
+                    # Fase 4 (2026-04-21): persiste cache tokens por msg
+                    session.add_assistant_message(
+                        content=resposta_texto,
+                        input_tokens=_sync_result.input_tokens,
+                        output_tokens=_sync_result.output_tokens,
+                        tools_used=_sync_result.tools_used if _sync_result.tools_used else None,
+                        cache_read_tokens=_sync_result.cache_read_tokens,
+                        cache_creation_tokens=_sync_result.cache_creation_tokens,
+                    )
                 if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
                     session.set_sdk_session_id(new_sdk_session_id)
                     logger.info(f"[TEAMS-BOT] Novo sdk_session_id salvo: {new_sdk_session_id[:20]}...")
@@ -340,7 +401,14 @@ def processar_mensagem_bot(
                     if session:
                         session.add_user_message(mensagem)
                         if resposta_texto:
-                            session.add_assistant_message(resposta_texto)
+                            session.add_assistant_message(
+                                content=resposta_texto,
+                                input_tokens=_sync_result.input_tokens,
+                                output_tokens=_sync_result.output_tokens,
+                                tools_used=_sync_result.tools_used if _sync_result.tools_used else None,
+                                cache_read_tokens=_sync_result.cache_read_tokens,
+                                cache_creation_tokens=_sync_result.cache_creation_tokens,
+                            )
                         if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
                             session.set_sdk_session_id(new_sdk_session_id)
                         db.session.commit()
@@ -549,9 +617,9 @@ def _obter_resposta_agente(
     can_use_tool=None,
     session=None,
     model: str = None,
-) -> Tuple[Optional[str], Optional[str], int, int, List[str], float]:
+) -> StreamResult:
     """
-    Obtem resposta do Agente Claude SDK.
+    Obtem resposta do Agente Claude SDK (path sync, non-streaming).
 
     Args:
         mensagem: Mensagem do usuario
@@ -562,14 +630,15 @@ def _obter_resposta_agente(
         session: AgentSession para backup/restore de transcript (Bug Teams #1)
 
     Returns:
-        Tuple[resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd]
+        StreamResult (dataclass imutavel) com campos nomeados.
+        Compativel com unpacking posicional legacy de 6 elementos via __iter__.
     """
     try:
         from app.agente.sdk import get_client
         client = get_client()
     except Exception as e:
         logger.error(f"[TEAMS-BOT] Erro ao obter client: {e}")
-        return None, None, 0, 0, [], 0.0
+        return _error_stream_result()
 
     # Fase B (SDK 0.1.64 SessionStore): restore_session_transcript removido.
     # SDK materializa JSONL de resume a partir de claude_session_store via
@@ -650,23 +719,39 @@ def _obter_resposta_agente(
         ns_input_tokens = getattr(response, 'input_tokens', 0) or 0
         ns_output_tokens = getattr(response, 'output_tokens', 0) or 0
         ns_cost_usd = getattr(response, 'total_cost_usd', 0) or 0.0
+        # Fase 4 (2026-04-21): cache tokens do SDK ResultMessage.usage
+        ns_cache_read = getattr(response, 'cache_read_tokens', 0) or 0
+        ns_cache_creation = getattr(response, 'cache_creation_tokens', 0) or 0
         # Non-streaming não tem granularidade de tool_call events
         ns_tools_used: List[str] = []
 
         # Fase B: backup_session_transcript removido — SDK TranscriptMirrorBatcher
         # persiste entries automaticamente em claude_session_store durante o stream.
 
-        return resposta_texto, new_sdk_session_id, ns_input_tokens, ns_output_tokens, ns_tools_used, ns_cost_usd
+        return StreamResult(
+            resposta_texto=resposta_texto,
+            sdk_session_id=new_sdk_session_id,
+            input_tokens=ns_input_tokens,
+            output_tokens=ns_output_tokens,
+            tools_used=ns_tools_used,
+            cost_usd=ns_cost_usd,
+            cache_read_tokens=ns_cache_read,
+            cache_creation_tokens=ns_cache_creation,
+        )
 
     except asyncio.TimeoutError:
         future.cancel()  # Evita "Task was destroyed but it is pending"
         logger.error("[TEAMS-BOT] Timeout ao aguardar resposta do agente")
-        return "Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais especifica.", None, 0, 0, [], 0.0
+        return _error_stream_result(
+            resposta_texto="Desculpe, a consulta demorou muito. Tente novamente com uma pergunta mais especifica.",
+        )
 
     except Exception as e:
         future.cancel()  # Evita "Task was destroyed but it is pending"
         logger.error(f"[TEAMS-BOT] Erro ao obter resposta do agente: {e}", exc_info=True)
-        return "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.", None, 0, 0, [], 0.0
+        return _error_stream_result(
+            resposta_texto="Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.",
+        )
 
 
 def _extrair_texto_resposta(response) -> Optional[str]:
@@ -913,7 +998,7 @@ def _obter_resposta_agente_streaming(
     session=None,
     app=None,
     model: str = None,
-) -> Tuple[Optional[str], Optional[str], int, int, List[str], float]:
+) -> StreamResult:
     """
     Obtem resposta do Agente Claude SDK com flush parcial progressivo ao DB.
 
@@ -947,7 +1032,7 @@ def _obter_resposta_agente_streaming(
         client = get_client()
     except Exception as e:
         logger.error(f"[TEAMS-STREAM] Erro ao obter client: {e}")
-        return None, None, 0, 0, [], 0.0
+        return _error_stream_result()
 
     # Fase B (SDK 0.1.64 SessionStore): restore_session_transcript removido.
     # SDK materializa JSONL de resume a partir de claude_session_store.
@@ -998,6 +1083,8 @@ def _obter_resposta_agente_streaming(
             input_tokens = 0
             output_tokens = 0
             cost_usd = 0.0
+            cache_read_tokens = 0
+            cache_creation_tokens = 0
             last_flush_time = time.monotonic()
             last_activity = time.monotonic()  # Renewal: atualizado a cada chunk
             stream_start = time.monotonic()   # Para log de elapsed time
@@ -1134,6 +1221,9 @@ def _obter_resposta_agente_streaming(
                     input_tokens = event.content.get('input_tokens', 0) or 0
                     output_tokens = event.content.get('output_tokens', 0) or 0
                     cost_usd = event.content.get('total_cost_usd', 0.0) or 0.0
+                    # Fase 4 (2026-04-21): cache tokens para observabilidade
+                    cache_read_tokens = event.content.get('cache_read_tokens', 0) or 0
+                    cache_creation_tokens = event.content.get('cache_creation_tokens', 0) or 0
 
             # Se full_text vazio mas houve errors, montar texto sintetico
             if not full_text and errors:
@@ -1146,7 +1236,16 @@ def _obter_resposta_agente_streaming(
                     f"Errors: {'; '.join(errors[:3])}"
                 )
 
-            return full_text, result_session_id, input_tokens, output_tokens, tools_used, cost_usd
+            return StreamResult(
+                resposta_texto=full_text,
+                sdk_session_id=result_session_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                tools_used=tools_used,
+                cost_usd=cost_usd,
+                cache_read_tokens=cache_read_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+            )
 
         # Deadline renewal integrado em _stream_with_flush (per-chunk timeout).
         # Wrapper direto sem asyncio.wait_for externo.
@@ -1160,27 +1259,36 @@ def _obter_resposta_agente_streaming(
         # Timeout da thread: safety net contra coroutine que nunca retorna.
         # Generoso (1h) porque o timeout real é por inatividade (240s) dentro da coroutine.
         THREAD_SAFETY_TIMEOUT = 3600
-        resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd = future.result(
-            timeout=THREAD_SAFETY_TIMEOUT
-        )
+        stream_result: StreamResult = future.result(timeout=THREAD_SAFETY_TIMEOUT)
 
-        # Extrair e sanitizar resposta
-        if resposta_texto:
-            resposta_texto = _sanitizar_texto(resposta_texto)
+        # Extrair e sanitizar resposta (retorna novo StreamResult — dataclass e frozen)
+        if stream_result.resposta_texto:
+            stream_result = StreamResult(
+                resposta_texto=_sanitizar_texto(stream_result.resposta_texto),
+                sdk_session_id=stream_result.sdk_session_id,
+                input_tokens=stream_result.input_tokens,
+                output_tokens=stream_result.output_tokens,
+                tools_used=stream_result.tools_used,
+                cost_usd=stream_result.cost_usd,
+                cache_read_tokens=stream_result.cache_read_tokens,
+                cache_creation_tokens=stream_result.cache_creation_tokens,
+            )
 
         # Fase B: backup_session_transcript removido — SDK TranscriptMirrorBatcher
         # persiste entries automaticamente em claude_session_store.
 
-        return resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd
+        return stream_result
 
     except asyncio.TimeoutError:
         future.cancel()  # Evita "Task was destroyed but it is pending"
         logger.error("[TEAMS-STREAM] Timeout ao aguardar resposta do agente")
         _cleanup_orphan_claude_processes()
-        return (
-            "Desculpe, a consulta demorou muito. "
-            "Tente novamente com uma pergunta mais especifica."
-        ), None, 0, 0, [], 0.0
+        return _error_stream_result(
+            resposta_texto=(
+                "Desculpe, a consulta demorou muito. "
+                "Tente novamente com uma pergunta mais especifica."
+            ),
+        )
 
     except Exception as e:
         future.cancel()  # Evita "Task was destroyed but it is pending"
@@ -1189,10 +1297,12 @@ def _obter_resposta_agente_streaming(
             exc_info=True,
         )
         _cleanup_orphan_claude_processes()
-        return (
-            "Desculpe, ocorreu um erro ao processar sua mensagem. "
-            "Tente novamente."
-        ), None, 0, 0, [], 0.0
+        return _error_stream_result(
+            resposta_texto=(
+                "Desculpe, ocorreu um erro ao processar sua mensagem. "
+                "Tente novamente."
+            ),
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1313,10 +1423,14 @@ def process_teams_task_async(
             # NÃO devem ser aceitos como resposta válida pelo retry loop.
             _ERROR_PREFIXES = ("Desculpe, ocorreu um erro", "Desculpe, a consulta demorou")
 
+            # Inicializado como None — agent_result e reatribuido em cada tentativa.
+            # Retry loop preserva `agent_result` da ultima tentativa bem-sucedida
+            # OU mantem erro da ultima tentativa se todas falharam.
+            agent_result: Optional[StreamResult] = None
             for attempt in range(max_retries):
                 try:
                     if TEAMS_PROGRESSIVE_STREAMING:
-                        resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd = _obter_resposta_agente_streaming(
+                        agent_result = _obter_resposta_agente_streaming(
                             mensagem=mensagem,
                             usuario=usuario,
                             task_id=task_id,
@@ -1328,7 +1442,7 @@ def process_teams_task_async(
                             model=selected_model,
                         )
                     else:
-                        resposta_texto, new_sdk_session_id, input_tokens, output_tokens, tools_used, cost_usd = _obter_resposta_agente(
+                        agent_result = _obter_resposta_agente(
                             mensagem=mensagem,
                             usuario=usuario,
                             sdk_session_id=sdk_session_id,
@@ -1337,6 +1451,14 @@ def process_teams_task_async(
                             session=session,
                             model=selected_model,
                         )
+                    resposta_texto = agent_result.resposta_texto
+                    new_sdk_session_id = agent_result.sdk_session_id
+                    input_tokens = agent_result.input_tokens
+                    output_tokens = agent_result.output_tokens
+                    tools_used = agent_result.tools_used
+                    cost_usd = agent_result.cost_usd
+                    cache_read_tokens = agent_result.cache_read_tokens
+                    cache_creation_tokens = agent_result.cache_creation_tokens
                     # Fix: mensagens de erro são truthy mas NÃO são respostas válidas.
                     # Sem esta checagem, "Desculpe, ocorreu um erro..." bypassa o retry.
                     is_error_response = (
@@ -1357,7 +1479,7 @@ def process_teams_task_async(
                         # Última tentativa e ainda é erro — manter a mensagem de erro
                         logger.error(
                             f"[TEAMS-ASYNC] Todas as {max_retries} tentativas "
-                            f"retornaram erro: {resposta_texto[:100]}"
+                            f"retornaram erro: {resposta_texto[:100] if resposta_texto else 'N/A'}"
                         )
                 except Exception as agent_err:
                     if attempt < max_retries - 1:
@@ -1376,15 +1498,23 @@ def process_teams_task_async(
                         )
 
             # GAP 1/2/6: Salvar mensagens com tokens/tools/cost + model
+            # Fase 4 (2026-04-21): inclui cache_read_tokens + cache_creation_tokens
             if session:
                 try:
+                    # Defense-in-depth: se agent_result None (nao deveria acontecer
+                    # pois retry loop sempre produz resultado), cria fallback zerado.
+                    if agent_result is None:
+                        agent_result = _error_stream_result(resposta_texto=resposta_texto)
+
                     session.add_user_message(mensagem)
                     if resposta_texto:
                         session.add_assistant_message(
                             content=resposta_texto,
-                            input_tokens=input_tokens,
-                            output_tokens=output_tokens,
-                            tools_used=tools_used if tools_used else None,
+                            input_tokens=agent_result.input_tokens,
+                            output_tokens=agent_result.output_tokens,
+                            tools_used=agent_result.tools_used if agent_result.tools_used else None,
+                            cache_read_tokens=agent_result.cache_read_tokens,
+                            cache_creation_tokens=agent_result.cache_creation_tokens,
                         )
                     if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
                         # Defense-in-depth: só salvar se for UUID válido
@@ -1400,8 +1530,10 @@ def process_teams_task_async(
 
                     # GAP 2: Custo — SDK prioritário, fallback cálculo local
                     from app.agente.routes import _calculate_cost
-                    sdk_cost = cost_usd
-                    calc_cost = _calculate_cost(selected_model, input_tokens, output_tokens)
+                    sdk_cost = agent_result.cost_usd
+                    calc_cost = _calculate_cost(
+                        selected_model, agent_result.input_tokens, agent_result.output_tokens
+                    )
                     final_cost = sdk_cost if sdk_cost and sdk_cost > 0 else calc_cost
                     session.total_cost_usd = float(session.total_cost_usd or 0) + final_cost
 
@@ -1411,8 +1543,10 @@ def process_teams_task_async(
                     logger.info(
                         f"[TEAMS-ASYNC] Custo sessão {teams_session_id[:8]}: "
                         f"sdk_cost={sdk_cost}, calc_cost={calc_cost:.6f}, "
-                        f"final={final_cost:.6f}, tokens=({input_tokens},{output_tokens}), "
-                        f"tools={tools_used}"
+                        f"final={final_cost:.6f}, "
+                        f"tokens=(in={agent_result.input_tokens},out={agent_result.output_tokens},"
+                        f"cache_r={agent_result.cache_read_tokens},cache_w={agent_result.cache_creation_tokens}), "
+                        f"tools={agent_result.tools_used}"
                     )
                 except Exception as sess_err:
                     logger.warning(

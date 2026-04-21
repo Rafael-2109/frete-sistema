@@ -1713,6 +1713,16 @@ try:
 
             logger.info(f"[MEMORY_MCP] save_memory: {path} ({action})")
 
+            # Fase 5 (2026-04-21): invalida cache de injecao — novo conteudo
+            # pode afetar proxima injecao em sessoes ativas do usuario.
+            try:
+                from ..sdk.memory_injection import invalidate_injection_cache_for_user
+                invalidate_injection_cache_for_user(actual_user_id)
+                if actual_user_id != user_id:
+                    invalidate_injection_cache_for_user(user_id)
+            except Exception:
+                pass
+
             # Sync dedup embed: garante que próximos saves detectem esta memória
             # via Layer 1 (elimina race condition do Bug 3 — daemon thread assíncrono)
             if action == "criado":
@@ -1928,6 +1938,15 @@ try:
             _execute_with_context(_update)
             logger.info(f"[MEMORY_MCP] update_memory: {path}")
 
+            # Fase 5 (2026-04-21): invalida cache de injecao
+            try:
+                from ..sdk.memory_injection import invalidate_injection_cache_for_user
+                invalidate_injection_cache_for_user(actual_user_id)
+                if actual_user_id != user_id:
+                    invalidate_injection_cache_for_user(user_id)
+            except Exception:
+                pass
+
             # Best-effort: re-embeddar memória + KG em daemon thread (não bloqueia retorno)
             def _bg_reembed_and_kg():
                 try:
@@ -2088,6 +2107,15 @@ try:
 
             result_text, type_str, count = _execute_with_context(_delete)
             logger.info(f"[MEMORY_MCP] delete_memory: {path}")
+
+            # Fase 5 (2026-04-21): invalida cache de injecao
+            try:
+                from ..sdk.memory_injection import invalidate_injection_cache_for_user
+                invalidate_injection_cache_for_user(actual_user_id)
+                if actual_user_id != user_id:
+                    invalidate_injection_cache_for_user(user_id)
+            except Exception:
+                pass
             return {
                 "content": [{"type": "text", "text": result_text}],
                 "structuredContent": {"path": path, "type": type_str, "count": count},

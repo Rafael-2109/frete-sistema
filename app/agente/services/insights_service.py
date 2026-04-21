@@ -137,6 +137,11 @@ def get_insights_data(
         # Funcao definida abaixo no mesmo modulo (Pyright nao resolve forward ref em arquivo grande)
         current['subagent_costs'] = _get_subagent_cost_section(days=days)  # pyright: ignore[reportUndefinedVariable]
 
+        # ── Cache efficiency por mensagem (Fase 4, 2026-04-21) ──
+        # Calcula cache_hit_rate global e lista sessoes com baixa eficiencia
+        # (candidatas a otimizacao de session lifecycle / memory injection).
+        current['cache_efficiency'] = _get_cache_efficiency_section(days=days)  # pyright: ignore[reportUndefinedVariable]
+
         return current
 
     except Exception as e:
@@ -1462,3 +1467,139 @@ def _get_subagent_cost_section(days: int = 30) -> dict:
             f"[insights] subagent_cost_section falhou: {e}"
         )
         return {}
+
+
+# =============================================================================
+# CACHE EFFICIENCY (Fase 4, 2026-04-21)
+# =============================================================================
+
+def _get_cache_efficiency_section(days: int = 30) -> dict:
+    """
+    Cache hit rate global + top sessoes com baixa eficiencia.
+
+    Extrai `tokens.cache_read` e `tokens.cache_creation` de cada mensagem
+    em `data['messages']` (populados por add_assistant_message desde Fase 4).
+
+    Hit rate = sum(cache_read) / sum(cache_read + input)
+        - 0.0 = nenhum cache (todas req sao cache creation ou uncached)
+        - ~0.5-0.8 = cache sendo reutilizado bem
+        - 1.0 = tudo servido do cache (ideal)
+
+    Sessoes com hit rate baixo + custo alto sao candidatas a:
+        - Session TTL menor (recriar cache em sessoes curtas e caras)
+        - Memory injection cache (evitar re-injecao custosa)
+    """
+    from sqlalchemy import text
+    from app import db
+    try:
+        result = db.session.execute(text("""
+            WITH per_session AS (
+                SELECT
+                    s.id,
+                    s.session_id,
+                    s.user_id,
+                    s.total_cost_usd,
+                    s.message_count,
+                    SUM(COALESCE((msg->'tokens'->>'input')::bigint, 0)) AS input_sum,
+                    SUM(COALESCE((msg->'tokens'->>'cache_read')::bigint, 0)) AS cache_read_sum,
+                    SUM(COALESCE((msg->'tokens'->>'cache_creation')::bigint, 0)) AS cache_creation_sum
+                FROM agent_sessions s,
+                     LATERAL jsonb_array_elements(COALESCE(s.data->'messages', '[]'::jsonb)) msg
+                WHERE s.updated_at >= NOW() - (:days || ' days')::interval
+                  AND msg->>'role' = 'assistant'
+                GROUP BY s.id, s.session_id, s.user_id, s.total_cost_usd, s.message_count
+            )
+            SELECT
+                SUM(input_sum) AS total_input,
+                SUM(cache_read_sum) AS total_cache_read,
+                SUM(cache_creation_sum) AS total_cache_creation,
+                COUNT(*) FILTER (WHERE input_sum + cache_read_sum > 0) AS sessoes_com_tokens,
+                COUNT(*) AS sessoes_total
+            FROM per_session
+        """), {'days': days}).fetchone()
+
+        total_input = int(result.total_input or 0) if result else 0
+        total_cache_read = int(result.total_cache_read or 0) if result else 0
+        total_cache_create = int(result.total_cache_creation or 0) if result else 0
+        sessoes_com_tokens = int(result.sessoes_com_tokens or 0) if result else 0
+        sessoes_total = int(result.sessoes_total or 0) if result else 0
+
+        denom_global = total_input + total_cache_read
+        hit_rate_global = (
+            round(total_cache_read / denom_global, 4) if denom_global > 0 else 0.0
+        )
+
+        # Top 10 sessoes com baixa eficiencia (candidatas a otimizacao)
+        low_eff = db.session.execute(text("""
+            WITH per_session AS (
+                SELECT
+                    s.session_id,
+                    s.title,
+                    u.nome AS user_nome,
+                    s.total_cost_usd,
+                    s.message_count,
+                    SUM(COALESCE((msg->'tokens'->>'input')::bigint, 0)) AS input_sum,
+                    SUM(COALESCE((msg->'tokens'->>'cache_read')::bigint, 0)) AS cache_read_sum
+                FROM agent_sessions s
+                LEFT JOIN usuarios u ON u.id = s.user_id,
+                     LATERAL jsonb_array_elements(COALESCE(s.data->'messages', '[]'::jsonb)) msg
+                WHERE s.updated_at >= NOW() - (:days || ' days')::interval
+                  AND msg->>'role' = 'assistant'
+                  AND s.total_cost_usd > 1.0
+                GROUP BY s.session_id, s.title, u.nome, s.total_cost_usd, s.message_count
+                HAVING SUM(COALESCE((msg->'tokens'->>'input')::bigint, 0))
+                     + SUM(COALESCE((msg->'tokens'->>'cache_read')::bigint, 0)) > 0
+            )
+            SELECT
+                session_id,
+                title,
+                user_nome,
+                total_cost_usd,
+                message_count,
+                CASE
+                    WHEN input_sum + cache_read_sum > 0
+                    THEN ROUND(cache_read_sum::numeric
+                        / (input_sum + cache_read_sum)::numeric, 4)
+                    ELSE 0
+                END AS hit_rate
+            FROM per_session
+            ORDER BY hit_rate ASC, total_cost_usd DESC
+            LIMIT 10
+        """), {'days': days}).fetchall()
+
+        low_eff_list = [
+            {
+                'session_id': row.session_id,
+                'title': row.title,
+                'user_nome': row.user_nome,
+                'cost_usd': float(row.total_cost_usd or 0),
+                'message_count': int(row.message_count or 0),
+                'hit_rate': float(row.hit_rate or 0),
+            }
+            for row in low_eff
+        ]
+
+        return {
+            'hit_rate_global': hit_rate_global,
+            'total_input_tokens': total_input,
+            'total_cache_read_tokens': total_cache_read,
+            'total_cache_creation_tokens': total_cache_create,
+            'sessoes_com_tokens': sessoes_com_tokens,
+            'sessoes_total': sessoes_total,
+            'low_efficiency_sessions': low_eff_list,
+            'period_days': days,
+        }
+    except Exception as e:
+        logger.warning(
+            f"[insights] cache_efficiency_section falhou: {e}"
+        )
+        return {
+            'hit_rate_global': 0.0,
+            'total_input_tokens': 0,
+            'total_cache_read_tokens': 0,
+            'total_cache_creation_tokens': 0,
+            'sessoes_com_tokens': 0,
+            'sessoes_total': 0,
+            'low_efficiency_sessions': [],
+            'period_days': days,
+        }

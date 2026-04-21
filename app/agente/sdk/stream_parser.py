@@ -43,6 +43,11 @@ class AgentResponse:
     stop_reason: str = ""
     pending_action: Optional[Dict[str, Any]] = None
     session_id: Optional[str] = None
+    # Fase 4 (2026-04-21): cache tokens reportados pelo SDK (ResultMessage.usage)
+    # Preenchidos pelo path sync get_response() em client.py:2118 quando disponivel.
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+    total_cost_usd: float = 0.0
 
 
 @dataclass

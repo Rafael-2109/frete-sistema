@@ -1226,6 +1226,24 @@ function processSSEEvent(eventType, data, state) {
                 if (data.session_id) sessionId = data.session_id;
                 break;
 
+            // Fase 2 (2026-04-21): sessão rotacionada por idle timeout.
+            // Backend criou novo session_id — frontend atualiza a variavel
+            // in-memory. NAO persistimos em localStorage porque o padrao
+            // do chat e que sessionId e efemera a pagina (usuario retoma
+            // sessoes via modal de historico, nao por reload automatico).
+            case 'session_rotated':
+                try {
+                    const prev = (data.previous_session_id || '').slice(0, 12);
+                    const next = (data.new_session_id || '').slice(0, 12);
+                    console.log(`[SSE] session_rotated: ${prev}... -> ${next}... (${data.reason || 'idle'})`);
+                    if (data.new_session_id) {
+                        sessionId = data.new_session_id;
+                    }
+                } catch (e) {
+                    console.warn('[SSE] session_rotated handler falhou:', e);
+                }
+                break;
+
             // FEAT-030: Heartbeat para manter conexão viva (ignorar)
             case 'heartbeat':
                 console.log('[SSE] Heartbeat recebido:', data.timestamp);

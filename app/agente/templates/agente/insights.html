@@ -140,6 +140,44 @@
       </div>
     </div>
 
+    <!-- Linha 3: Cache Efficiency (Fase 4 observabilidade) -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h5><i class="fas fa-memory"></i> Cache Efficiency</h5>
+        <div style="display:flex; gap:1rem; align-items:center; padding:0.5rem 0;">
+          <div>
+            <div class="kpi-value" id="cacheHitRate" style="font-size:2rem;">0%</div>
+            <div class="kpi-label" style="font-size:0.85rem;">Hit Rate Global</div>
+          </div>
+          <div style="flex:1; font-size:0.85rem;">
+            <div>Input (uncached): <strong id="cacheInputTok">0</strong></div>
+            <div>Cache Read: <strong id="cacheReadTok">0</strong></div>
+            <div>Cache Creation: <strong id="cacheCreateTok">0</strong></div>
+            <div style="color:var(--text-muted); margin-top:0.4rem;">
+              Sessoes c/ tokens: <span id="cacheSessoesOk">0</span>/<span id="cacheSessoesTot">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h5><i class="fas fa-exclamation-circle"></i> Sessoes Baixa Eficiencia</h5>
+        <div style="max-height:240px; overflow-y:auto; font-size:0.85rem;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead style="position:sticky; top:0; background:var(--bg-card);">
+              <tr>
+                <th style="text-align:left; padding:0.3rem;">Sessao</th>
+                <th style="text-align:right; padding:0.3rem;">Hit</th>
+                <th style="text-align:right; padding:0.3rem;">Custo</th>
+              </tr>
+            </thead>
+            <tbody id="lowCacheEffTable">
+              <tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:1rem;">Sem dados</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══════════════════════════════════════════════════════════════
          ZONA 4: Tabs + Tabelas
          ═══════════════════════════════════════════════════════════════ -->
@@ -583,6 +621,43 @@ function renderAll(data) {
   renderSessionsTable(data.sessions?.all || []);
   renderFriction(data.friction || {});
   renderUsersTab(data.users, data.costs);
+  renderCacheEfficiency(data.cache_efficiency || {});
+}
+
+// Fase 4 (2026-04-21): Cache efficiency KPI e top low-eff sessions
+function renderCacheEfficiency(ce) {
+  const rate = (ce.hit_rate_global || 0) * 100;
+  const el = document.getElementById('cacheHitRate');
+  if (el) {
+    el.textContent = rate.toFixed(1) + '%';
+    el.style.color = rate > 40 ? 'var(--success)' : rate > 15 ? 'var(--warning)' : 'var(--danger)';
+  }
+  const fmt = n => (n || 0).toLocaleString('pt-BR');
+  setText('cacheInputTok', fmt(ce.total_input_tokens));
+  setText('cacheReadTok', fmt(ce.total_cache_read_tokens));
+  setText('cacheCreateTok', fmt(ce.total_cache_creation_tokens));
+  setText('cacheSessoesOk', ce.sessoes_com_tokens || 0);
+  setText('cacheSessoesTot', ce.sessoes_total || 0);
+
+  const tbody = document.getElementById('lowCacheEffTable');
+  if (!tbody) return;
+  const low = ce.low_efficiency_sessions || [];
+  if (!low.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:1rem;">Sem sessoes de baixa eficiencia</td></tr>';
+    return;
+  }
+  tbody.innerHTML = low.map(s => `
+    <tr>
+      <td style="padding:0.3rem;">
+        <a href="javascript:void(0)" onclick="openSessionDetail('${escAttr(s.session_id)}')">
+          ${escHtml(truncate(s.title || s.session_id, 35))}
+        </a>
+        <div style="font-size:0.75rem; color:var(--text-muted);">${escHtml(s.user_nome || '-')}</div>
+      </td>
+      <td style="text-align:right; padding:0.3rem;">${((s.hit_rate || 0) * 100).toFixed(1)}%</td>
+      <td style="text-align:right; padding:0.3rem;" class="cost-badge">$${(s.cost_usd || 0).toFixed(2)}</td>
+    </tr>
+  `).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

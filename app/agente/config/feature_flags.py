@@ -349,6 +349,34 @@ TEAMS_SMART_MODEL_ROUTING = os.getenv("TEAMS_SMART_MODEL_ROUTING", "true").lower
 # Modelo rápido para mensagens simples (usado quando SMART_MODEL_ROUTING=true)
 TEAMS_FAST_MODEL = os.getenv("TEAMS_FAST_MODEL", "claude-sonnet-4-6")
 
+# Fase 1 (2026-04-21): routing programatico tambem no canal Web.
+# Patterns compartilhados via app/agente/sdk/model_router.py.
+# Motivacao: 21 sessoes > $10 USD tinham padrao estruturado que podia ir pra Sonnet.
+# Desabilitar via env var: AGENT_WEB_SMART_MODEL_ROUTING=false
+USE_WEB_SMART_MODEL_ROUTING = os.getenv(
+    "AGENT_WEB_SMART_MODEL_ROUTING", "true"
+).lower() == "true"
+
+# Modelo rapido para Web quando router decide rebaixar.
+# Default Sonnet 4.6 (mesmo do Teams). Rollback: deixar Opus setando igual.
+WEB_FAST_MODEL = os.getenv("AGENT_WEB_FAST_MODEL", "claude-sonnet-4-6")
+
+# ====================================================================
+# Session Lifecycle (Fase 2, 2026-04-21)
+# ====================================================================
+# TTL idle para sessoes do Teams. Antes hardcoded 4h em app/teams/services.py.
+# Extraido para env var com default 2h — evita acumular cache creation em
+# sessoes de 9 dias (caso Marcus, $151.80) ou 7h (caso Gabriella, $27.88).
+# Usuario idle por > TTL: retomar cria nova session_id (cache reinicia limpo).
+# Rollback para comportamento anterior: TEAMS_SESSION_TTL_HOURS=4
+TEAMS_SESSION_TTL_HOURS = int(os.getenv("TEAMS_SESSION_TTL_HOURS", "2"))
+
+# Idle threshold para sessoes Web. Novo na Fase 2.
+# Diferente do Teams: Web nao rotaciona automaticamente — apenas emite SSE
+# 'session_rotated' com novo session_id; frontend troca no localStorage.
+# Disabled (valor 0): comportamento legado (sessao persiste indefinidamente).
+WEB_SESSION_IDLE_HOURS = int(os.getenv("AGENT_WEB_SESSION_IDLE_HOURS", "2"))
+
 # Feedback visual de tool calls: mostra "Consultando dados..." durante execução de tools
 # Desativar se causar flickering ou problemas visuais no Teams
 TEAMS_TOOL_STATUS_FEEDBACK = os.getenv("TEAMS_TOOL_STATUS_FEEDBACK", "true").lower() == "true"

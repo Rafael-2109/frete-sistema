@@ -713,47 +713,71 @@ def build_hooks(
                         # SQLAlchemy text() usa `:param` para bind. PostgreSQL
                         # cast `::jsonb` conflita — gera "syntax error at or
                         # near ':'". Solucao: usar CAST(... AS jsonb).
-                        with _app_ctx:
-                            result = db.session.execute(
-                                _sql_text("""
-                                    UPDATE agent_sessions
-                                    SET data = jsonb_set(
-                                        COALESCE(data, CAST('{}' AS jsonb)),
-                                        '{subagent_costs}',
-                                        jsonb_build_object(
-                                            'version', 2,
-                                            'entries',
-                                            COALESCE(
-                                                data->'subagent_costs'->'entries',
-                                                CAST('[]' AS jsonb)
-                                            ) || CAST(:entry_json AS jsonb)
-                                        ),
-                                        true
-                                    )
-                                    WHERE session_id = :sid
-                                """),
-                                {
-                                    'sid': session_id,
-                                    'entry_json': _json.dumps(entry),
-                                }
+                        # Fase 4 (2026-04-21): Retry único com backoff 500ms quando
+                        # rowcount=0. Root cause: race entre hook async e
+                        # AgentSession.get_or_create — SubagentStop pode disparar
+                        # ANTES do commit que cria a linha em agent_sessions.
+                        # Antes: 21/21 sessoes > $10 com subagent_costs NULL.
+                        # Fix: 1 retry curto recupera maioria dos casos sem custo.
+                        _upsert_sql = _sql_text("""
+                            UPDATE agent_sessions
+                            SET data = jsonb_set(
+                                COALESCE(data, CAST('{}' AS jsonb)),
+                                '{subagent_costs}',
+                                jsonb_build_object(
+                                    'version', 2,
+                                    'entries',
+                                    COALESCE(
+                                        data->'subagent_costs'->'entries',
+                                        CAST('[]' AS jsonb)
+                                    ) || CAST(:entry_json AS jsonb)
+                                ),
+                                true
                             )
+                            WHERE session_id = :sid
+                        """)
+                        _entry_params = {
+                            'sid': session_id,
+                            'entry_json': _json.dumps(entry),
+                        }
+                        with _app_ctx:
+                            result = db.session.execute(_upsert_sql, _entry_params)
                             rowcount = result.rowcount
                             db.session.commit()
+
+                        # Retry único se session ainda não foi commitada.
+                        # Fix pos-review (2026-04-21): sleep FORA do _app_ctx
+                        # para liberar a conexao do pool durante a espera.
+                        # Novo `with _app_ctx` para a query de retry — Flask
+                        # AppContext e re-entrant (push multiplo funciona) e
+                        # nullcontext e trivialmente re-utilizavel.
+                        if rowcount == 0:
+                            import time as _time
+                            _time.sleep(0.5)
+                            logger.info(
+                                f"[HOOK:SubagentStop] rowcount=0 — retry "
+                                f"apos 500ms session_id={session_id[:12]}..."
+                            )
+                            with _app_ctx:
+                                result_retry = db.session.execute(
+                                    _upsert_sql, _entry_params
+                                )
+                                rowcount = result_retry.rowcount
+                                db.session.commit()
+
                         logger.info(
                             f"[HOOK:SubagentStop] cost granular persistido v2 "
                             f"agent_type={agent_type} cost=${computed_cost:.4f} "
                             f"turns={computed_turns} duration={computed_duration}ms "
-                            f"rowcount={rowcount}"
+                            f"rowcount={rowcount} persist_ok={rowcount > 0}"
                         )
-                        # B1 fix: detectar sessao inexistente (race com
-                        # get_or_create em chat.py:567). UPDATE com 0 rows nao
-                        # falha — warning para monitoramento.
+                        # Se AINDA rowcount=0 apos retry: session realmente nao
+                        # existe. Log warning para monitoramento.
                         if rowcount == 0:
                             logger.warning(
                                 f"[HOOK:SubagentStop] cost granular UPDATE "
-                                f"rowcount=0 — session_id={session_id[:12]}... "
-                                f"nao existe em agent_sessions (race com "
-                                f"get_or_create?). Entry perdida: "
+                                f"rowcount=0 APOS retry — session_id={session_id[:12]}... "
+                                f"nao existe em agent_sessions. Entry perdida: "
                                 f"agent_type={agent_type}"
                             )
                 except Exception as granular_err:
