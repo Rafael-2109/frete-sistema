@@ -55,17 +55,17 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_endereco_correcoes_operacao_criado",
+      "name": "ix_carvia_endereco_correcoes_operacao_id",
       "columns": [
-        "operacao_id",
-        "criado_em"
+        "operacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_endereco_correcoes_operacao_id",
+      "name": "ix_carvia_endereco_correcoes_operacao_criado",
       "columns": [
-        "operacao_id"
+        "operacao_id",
+        "criado_em"
       ],
       "unique": false
     },

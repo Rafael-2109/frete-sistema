@@ -68,16 +68,16 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_atacadao_produto_depara_ativo",
+      "name": "ix_portal_atacadao_produto_depara_cnpj_cliente",
       "columns": [
-        "ativo"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_cnpj_cliente",
+      "name": "ix_portal_atacadao_produto_depara_ativo",
       "columns": [
-        "cnpj_cliente"
+        "ativo"
       ],
       "unique": false
     },

@@ -96,16 +96,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_despesas_tipo_despesa",
+      "name": "ix_carvia_despesas_operacao_id",
       "columns": [
-        "tipo_despesa"
+        "operacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_despesas_operacao_id",
+      "name": "ix_carvia_despesas_tipo_despesa",
       "columns": [
-        "operacao_id"
+        "tipo_despesa"
       ],
       "unique": false
     },

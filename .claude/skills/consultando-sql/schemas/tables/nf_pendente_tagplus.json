@@ -122,6 +122,13 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_pendente_tagplus_importado",
       "columns": [
         "importado"
@@ -143,14 +150,6 @@
       "unique": false
     },
     {
-      "name": "idx_nf_pendente_resolvido",
-      "columns": [
-        "resolvido",
-        "importado"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_pendente_tagplus_resolvido",
       "columns": [
         "resolvido"
@@ -158,9 +157,10 @@
       "unique": false
     },
     {
-      "name": "ix_nf_pendente_tagplus_cnpj_cliente",
+      "name": "idx_nf_pendente_resolvido",
       "columns": [
-        "cnpj_cliente"
+        "resolvido",
+        "importado"
       ],
       "unique": false
     }

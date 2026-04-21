@@ -212,23 +212,9 @@
   ],
   "indices": [
     {
-      "name": "idx_pessoal_transacoes_excluir",
-      "columns": [
-        "excluir_relatorio"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_pessoal_transacoes_data",
       "columns": [
         "data"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_conta",
-      "columns": [
-        "conta_id"
       ],
       "unique": false
     },
@@ -240,9 +226,9 @@
       "unique": false
     },
     {
-      "name": "idx_pessoal_transacoes_categoria",
+      "name": "idx_pessoal_transacoes_conta",
       "columns": [
-        "categoria_id"
+        "conta_id"
       ],
       "unique": false
     },
@@ -252,6 +238,13 @@
         "pluggy_transaction_id"
       ],
       "unique": true
+    },
+    {
+      "name": "idx_pessoal_transacoes_categoria",
+      "columns": [
+        "categoria_id"
+      ],
+      "unique": false
     },
     {
       "name": "idx_pessoal_transacoes_cpf_cnpj",
@@ -271,6 +264,13 @@
       "name": "idx_pessoal_transacoes_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_excluir",
+      "columns": [
+        "excluir_relatorio"
       ],
       "unique": false
     }

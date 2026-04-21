@@ -75,16 +75,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_status",
+      "name": "ix_hora_recebimento_nf_id",
       "columns": [
-        "status"
+        "nf_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_nf_id",
+      "name": "ix_hora_recebimento_status",
       "columns": [
-        "nf_id"
+        "status"
       ],
       "unique": false
     }

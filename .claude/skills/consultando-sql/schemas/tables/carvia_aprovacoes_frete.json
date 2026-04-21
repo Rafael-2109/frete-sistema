@@ -81,16 +81,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_aprovacoes_frete_frete_id",
+      "name": "ix_carvia_aprovacoes_frete_status",
       "columns": [
-        "frete_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_aprovacoes_frete_status",
+      "name": "ix_carvia_aprovacoes_frete_frete_id",
       "columns": [
-        "status"
+        "frete_id"
       ],
       "unique": false
     }

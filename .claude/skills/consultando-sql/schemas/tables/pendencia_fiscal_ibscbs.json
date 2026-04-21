@@ -172,9 +172,9 @@
   ],
   "indices": [
     {
-      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
+      "name": "ix_pendencia_fiscal_ibscbs_status",
       "columns": [
-        "chave_acesso"
+        "status"
       ],
       "unique": false
     },
@@ -214,9 +214,9 @@
       "unique": false
     },
     {
-      "name": "ix_pendencia_fiscal_ibscbs_status",
+      "name": "ix_pendencia_fiscal_ibscbs_chave_acesso",
       "columns": [
-        "status"
+        "chave_acesso"
       ],
       "unique": false
     }

@@ -79,16 +79,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_nf_referenciada_numero_nf",
+      "name": "idx_nf_ref_numero",
       "columns": [
         "numero_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_nf_referenciada_entrega_monitorada_id",
-      "columns": [
-        "entrega_monitorada_id"
       ],
       "unique": false
     },
@@ -100,16 +93,23 @@
       "unique": false
     },
     {
-      "name": "idx_nf_ref_numero",
+      "name": "idx_nf_ref_chave",
+      "columns": [
+        "chave_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_nf_referenciada_numero_nf",
       "columns": [
         "numero_nf"
       ],
       "unique": false
     },
     {
-      "name": "idx_nf_ref_chave",
+      "name": "ix_nf_devolucao_nf_referenciada_entrega_monitorada_id",
       "columns": [
-        "chave_nf"
+        "entrega_monitorada_id"
       ],
       "unique": false
     }
