@@ -55,6 +55,7 @@ __all__ = [
     "PostgresSessionStore",
     "get_or_create_session_store",
     "close_session_store_pool",
+    "session_has_legacy_transcript",
     "_store_implements",  # util publico, replica de SDK._internal
 ]
 
@@ -350,3 +351,46 @@ async def get_or_create_session_store() -> PostgresSessionStore:
     """
     pool = await _get_pool()
     return PostgresSessionStore(pool=pool)
+
+
+async def session_has_legacy_transcript(session_id: str) -> bool:
+    """Checa via asyncpg se AgentSession tem sdk_session_transcript populado.
+
+    Usa o mesmo pool asyncpg do adapter — NAO depende de Flask-SQLAlchemy nem de
+    app_context ativo. Critico em `_stream_response_persistent` que roda em
+    daemon thread do client_pool SEM Flask context.
+
+    Retorna True se session existe E tem transcript (path legado deve ser usado).
+    Retorna False em qualquer outro caso (session nova, nao existe, ou erro →
+    nesse caso conservador: prefere ativar store a bloquear).
+
+    Args:
+        session_id: UUID do nosso AgentSession (coluna agent_sessions.session_id).
+    """
+    if not session_id:
+        return False
+    try:
+        pool = await _get_pool()
+        row = await pool.fetchrow(
+            """
+            SELECT 1 AS has_tr
+            FROM agent_sessions
+            WHERE session_id = $1
+              AND sdk_session_transcript IS NOT NULL
+              AND length(sdk_session_transcript) > 0
+            LIMIT 1
+            """,
+            session_id,
+        )
+        return row is not None
+    except Exception as e:
+        # Em caso de erro: NAO usamos fallback conservador (como era na versao
+        # Flask-SQLAlchemy) porque isso silenciava a feature. Preferimos tratar
+        # como session nova — se ela realmente for legada, SDK materialize
+        # retorna None, spawn sem resume, fallback XML via UserPromptSubmit hook
+        # reinjeta contexto das ultimas 10 msgs (defense in depth).
+        logger.warning(
+            f"[SESSION_STORE] check legacy transcript falhou (tratando como "
+            f"session nova): {e}"
+        )
+        return False

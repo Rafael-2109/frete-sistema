@@ -1477,28 +1477,21 @@ Nunca invente informações."""
             AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS,
         )
         if AGENT_SDK_SESSION_STORE_ENABLED:
-            has_legacy_transcript = False
-            if our_session_id:
-                try:
-                    from ..models import AgentSession
-                    _db_sess = AgentSession.query.filter_by(
-                        session_id=our_session_id
-                    ).first()
-                    has_legacy_transcript = bool(
-                        _db_sess and _db_sess.sdk_session_transcript
-                    )
-                except Exception as _db_err:
-                    logger.warning(
-                        f"[SESSION_STORE] erro consultando DB (fallback conservador = "
-                        f"legado): {_db_err}"
-                    )
-                    has_legacy_transcript = True  # se nao sabe, trata como legado
+            try:
+                from dataclasses import replace as _dc_replace
 
-            if not has_legacy_transcript:
-                try:
-                    from dataclasses import replace as _dc_replace
+                from .session_store_adapter import (
+                    get_or_create_session_store,
+                    session_has_legacy_transcript,
+                )
+                # Checa via asyncpg (NAO Flask-SQLAlchemy) — _stream_response_persistent
+                # roda em daemon thread do client_pool sem Flask app_context.
+                # Tentar AgentSession.query.filter_by() aqui levanta
+                # "Working outside of application context" e cai no fallback
+                # silencioso (bug descoberto em 2026-04-21 15:29 apos deploy).
+                has_legacy = await session_has_legacy_transcript(our_session_id or "")
 
-                    from .session_store_adapter import get_or_create_session_store
+                if not has_legacy:
                     _store = await get_or_create_session_store()
                     options = _dc_replace(
                         options,
@@ -1510,17 +1503,17 @@ Nunca invente informações."""
                         f"{(our_session_id or 'pending')[:12]}... "
                         f"load_timeout={AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS}ms"
                     )
-                except Exception as _store_err:
-                    # Silencioso: session_persistence.py continua ativo, zero regressao
-                    logger.error(
-                        f"[SESSION_STORE] init falhou — fallback path legado: "
-                        f"{_store_err}",
-                        exc_info=True,
+                else:
+                    logger.debug(
+                        f"[SESSION_STORE] SKIP (session com transcript legado): "
+                        f"{(our_session_id or '?')[:12]}..."
                     )
-            else:
-                logger.debug(
-                    f"[SESSION_STORE] SKIP (session com transcript legado): "
-                    f"{(our_session_id or '?')[:12]}..."
+            except Exception as _store_err:
+                # Silencioso: session_persistence.py continua ativo, zero regressao
+                logger.error(
+                    f"[SESSION_STORE] init falhou — fallback path legado: "
+                    f"{_store_err}",
+                    exc_info=True,
                 )
 
         # ─── RESUME: só na primeira conexão ───
