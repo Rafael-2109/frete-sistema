@@ -313,30 +313,14 @@ async def _async_stream_sdk_client(
                             f"[AGENTE] sdk_session_id para resume: "
                             f"{sdk_session_id_for_resume[:12]}..."
                         )
-                        # Restaurar transcript do DB para disco antes do resume.
-                        # Sem isso, worker Render reciclado perde o JSONL e
-                        # o CLI falha com exit code 1.
-                        transcript = db_session.get_transcript()
-                        if transcript:
-                            from app.agente.sdk.session_persistence import restore_session_transcript
-                            restored = restore_session_transcript(
-                                sdk_session_id_for_resume, transcript
-                            )
-                            if restored:
-                                logger.info(
-                                    f"[AGENTE] Transcript restaurado do DB "
-                                    f"({len(transcript) / 1024:.1f} KB)"
-                                )
-                            else:
-                                logger.warning(
-                                    "[AGENTE] Falha ao restaurar transcript "
-                                    "- resume pode falhar com exit 1"
-                                )
-                        else:
-                            logger.debug(
-                                "[AGENTE] Sem transcript no DB para restaurar "
-                                "(primeira msg ou sessão antiga)"
-                            )
+                        # Fase B (SDK 0.1.64 SessionStore nativo):
+                        # restore_session_transcript removido — SDK agora materializa
+                        # o JSONL a partir do claude_session_store via
+                        # materialize_resume_session. Pre-requisito: migration
+                        # scripts/migrations/2026_04_21_migrar_session_persistence_to_store.py
+                        # deve ter rodado para sessions pre-existentes.
+                        # Fallback XML via UserPromptSubmit hook (abaixo) continua
+                        # como defense in depth se materialize retornar None.
 
                         # Carregar mensagens JSONB como fallback caso resume falhe.
                         # Se o resume funcionar, este fallback não é usado.
@@ -1287,6 +1271,11 @@ def _save_messages_to_db(
                 )
 
             # Atualiza sdk_session_id se não expirou
+            # Fase B (SDK 0.1.64 SessionStore): backup_session_transcript removido.
+            # SDK persiste entries automaticamente em claude_session_store via
+            # TranscriptMirrorBatcher durante o stream. Ainda persistimos
+            # sdk_session_id no JSONB data para recuperar a chave canonica do
+            # store no proximo turno.
             _sdk_id_valid = False
             if sdk_session_id and not session_expired:
                 # Defense-in-depth: só salvar se for UUID válido
@@ -1299,30 +1288,6 @@ def _save_messages_to_db(
                     logger.warning(
                         f"[AGENTE] sdk_session_id inválido (não UUID), "
                         f"descartado: {sdk_session_id[:20]}..."
-                    )
-
-                # Backup do transcript JSONL do disco para o DB.
-                # Permite restaurar o JSONL caso o worker Render recicle.
-                # Só faz backup se SDK session ID era UUID válido.
-                if not _sdk_id_valid:
-                    sdk_session_id = None  # type: ignore
-                try:
-                    from app.agente.sdk.session_persistence import backup_session_transcript
-                    transcript_content = backup_session_transcript(sdk_session_id)
-                    if transcript_content:
-                        session.save_transcript(transcript_content)
-                        logger.info(
-                            f"[AGENTE] Transcript backup salvo no DB "
-                            f"({len(transcript_content) / 1024:.1f} KB)"
-                        )
-                except Exception as backup_err:
-                    # Falha no backup é GRAVE: sem transcript no DB, o próximo
-                    # resume após reciclagem do worker falhará com ProcessError exit=1.
-                    # Loga como ERROR (não warning) para visibilidade no Sentry.
-                    logger.error(
-                        f"[AGENTE] Erro no backup do transcript — próximo resume "
-                        f"pode falhar se worker reciclar: {backup_err}",
-                        exc_info=True,
                     )
 
             elif session_expired:

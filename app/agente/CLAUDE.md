@@ -508,28 +508,27 @@ Diagnosticados via logs Render: **19/19 sessoes em 48h com `subagent_costs` VAZI
 
 ---
 
-## SDK 0.1.64 (atualizado 2026-04-21) — SessionStore Fase A dual-run
+## SDK 0.1.64 (atualizado 2026-04-21) — SessionStore Fase B (cutover)
 
 **Versao**: `claude-agent-sdk==0.1.64`, `asyncpg==0.30.0` (novo driver async)
 **CLI bundled**: 2.1.116
 
-### Feature adotada: PostgresSessionStore adapter
+### Feature: PostgresSessionStore (source-of-truth)
 
-Substitui o ciclo manual `backup_session_transcript`/`restore_session_transcript` de `session_persistence.py` (JSONL disco ↔ `AgentSession.sdk_session_transcript` TEXT blob) pelo contrato `SessionStore` nativo.
+Tabela `claude_session_store` substituiu `session_persistence.py` — SDK 0.1.64 nativo via `TranscriptMirrorBatcher` (escrita) + `materialize_resume_session` (resume).
 
 - **Adapter**: `app/agente/sdk/session_store_adapter.py` — `PostgresSessionStore` (5 dos 6 metodos do protocol)
 - **Tabela**: `claude_session_store` (migration `2026_04_21_claude_session_store.{sql,py}`)
 - **Conformance**: `tests/agente/sdk/test_session_store_conformance.py` — 13 contratos do harness oficial SDK 0.1.64
-- **Flag**: `AGENT_SDK_SESSION_STORE_ENABLED` (default OFF em Fase A)
+- **Flag**: `AGENT_SDK_SESSION_STORE_ENABLED` (default **ON** apos Fase B)
 - **Timeout**: `AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS` (default 30000ms)
 
-### Fase A dual-run (ATUAL)
+### Historico de fases
 
-| Flag | Comportamento |
-|------|---------------|
-| OFF | `session_persistence.py` ativo — zero regressao |
-| ON, session **nova** (sem `sdk_session_transcript`) | SDK gerencia mirror automatico via `TranscriptMirrorBatcher` + `materialize_resume_session` |
-| ON, session **existente** (com `sdk_session_transcript` populado) | Path legado — **preserva contexto das 434 sessions pre-existentes** (C4 do adversarial review) |
+| Fase | Data | Estado |
+|------|------|--------|
+| A (dual-run) | 2026-04-21 15:00-16:30 | Flag OFF default, session_persistence.py em paralelo, criterio C4 "apenas sessions novas" |
+| **B (cutover)** | 2026-04-21 17:00 | Flag ON default, 6 callsites legados removidos, session_persistence.py reduzido a helpers de path, migration batch populou store |
 
 ### Rollback
 
@@ -563,17 +562,20 @@ Substitui o ciclo manual `backup_session_transcript`/`restore_session_transcript
 - Disco local continua durable — session nao quebra
 - Import condicional (try/except) em `client.py:47-57` para compat com SDK < 0.1.64
 
-### Fase B (apos 48h producao canary estavel)
+### Fase B (EXECUTADA 2026-04-21)
 
-- Remover `backup_session_transcript` / `restore_session_transcript` em 6 callsites (`chat.py:321,1311` + `teams/services.py:579,641,950,1154`)
-- Descontinuar `session_persistence.py`
-- Flag `AGENT_SDK_SESSION_STORE_ENABLED` default ON; remover criterio "apenas sessions novas"
-- Migrar historico 434 sessions: script batch `sdk_session_transcript (TEXT) → claude_session_store (JSONB por entry)` OU aceitar que expiram naturalmente
+- ✅ `session_persistence.py` reduzido a helpers de path (`_get_session_path` mantido para cleanup stale JSONL em client.py/client_pool.py)
+- ✅ 6 callsites legados removidos: `chat.py:321,1311` (pre/pos-stream) + `teams/services.py:579,641,950,1154` (streaming + non-streaming)
+- ✅ Flag `AGENT_SDK_SESSION_STORE_ENABLED` default **ON**; criterio C4 "apenas sessions novas" removido (flag universal)
+- ✅ Migration batch `scripts/migrations/2026_04_21_migrar_session_persistence_to_store.py` populou store (rodar manualmente no Render Shell com `--project-key=-opt-render-project-src`)
+- ✅ 81/81 testes existentes passaram pos-cutover
+- Fallback defense in depth: se store falhar, `UserPromptSubmit` hook (`chat.py:341-360`) reinjeta contexto XML das ultimas 10 msgs do `AgentSession.data['messages']` JSONB
 
-### Fase C (cleanup, opcional)
+### Fase C (cleanup, opcional — nao executada)
 
-- `ALTER TABLE agent_sessions DROP COLUMN sdk_session_transcript` (ou manter como dead backup)
-- Remover `AgentSession.save_transcript()` / `get_transcript()` / `set_sdk_session_id()` se SDK rastrear tudo
+- `ALTER TABLE agent_sessions DROP COLUMN sdk_session_transcript` (libera ~66MB + remove coluna confusa)
+- Remover `AgentSession.save_transcript()` / `get_transcript()` (nao mais usados)
+- Remover `session_persistence.py` completamente (precisa encontrar novo lugar para `_get_session_path`)
 
 ### Referencias
 

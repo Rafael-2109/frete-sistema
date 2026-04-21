@@ -484,30 +484,36 @@ SUBAGENT_UI_RAW_FOR_ADMIN = os.getenv(
 ).lower() == "true"
 
 # ====================================================================
-# SDK 0.1.64 — SessionStore adapter (Fase A dual-run)
+# SDK 0.1.64 — SessionStore (Fase B cutover: flag ON default)
 # ====================================================================
 #
-# Substitui o ciclo manual backup/restore de session_persistence.py pelo
-# SessionStore protocol nativo do SDK 0.1.64. Tabela claude_session_store
-# recebe entries via SDK TranscriptMirrorBatcher (automatico, at-most-once).
+# Substitui session_persistence.py (reduzido a helpers de path) pelo SessionStore
+# protocol nativo do SDK 0.1.64. Tabela claude_session_store e source-of-truth
+# para persistencia e resume de sessoes SDK.
 #
-# Fase A dual-run: session_persistence.py continua ativo em paralelo.
+# Historico:
+# - Fase A (dual-run, 2026-04-21 15:00-16:30): flag OFF default, dual path
+# - Fase B (cutover, 2026-04-21 ~17:00): flag ON default, 6 callsites legados
+#   removidos, migration batch script populou store com sessions pre-existentes
 #
-# Criterio de ativacao REFINADO (pos-adversarial review C4):
-# - Flag ON aplica SOMENTE a sessions NOVAS (sem sdk_session_transcript no DB).
-# - Sessions existentes continuam no path legado — evita perda de contexto
-#   das 434 sessions pre-existentes.
+# Fallback defense in depth (se store falhar):
+# - SDK materialize_resume_session retorna None se store.load falhar
+# - Subprocess spawna sem --resume
+# - UserPromptSubmit hook (chat.py ~320+) reinjeta XML com ultimas 10 msgs
+#   a partir de AgentSession.data['messages'] (JSONB preservado)
 #
 # Rollback: AGENT_SDK_SESSION_STORE_ENABLED=false + redeploy (0 downtime).
+# Sessions ativas perdem resume automatico ate proximo deploy, mas fallback XML
+# injeta contexto das ultimas 10 msgs via hook.
 #
 # Ref: /tmp/subagent-findings/20260421-sessionstore-60ddbe70/phase3/plan-v2-final.md
 AGENT_SDK_SESSION_STORE_ENABLED = os.getenv(
-    "AGENT_SDK_SESSION_STORE_ENABLED", "false"
+    "AGENT_SDK_SESSION_STORE_ENABLED", "true"
 ).lower() == "true"
 
 # Timeout em ms para store.load() / list_subkeys() durante materialize_resume_session.
 # Default SDK = 60000ms. Nosso p99 de query indexed < 100ms; 30000ms e folgado.
-# Se store ficar lento > 30s, resume falha — cai no path legado via fallback natural.
+# Se store ficar lento > 30s, resume falha — cai no fallback XML.
 AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS = int(
     os.getenv("AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS", "30000")
 )

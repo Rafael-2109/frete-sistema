@@ -1,4 +1,27 @@
-# Rollback — SessionStore adapter (SDK 0.1.64, Fase A)
+# Rollback — SessionStore adapter (SDK 0.1.64, Fase B cutover)
+
+## Estado atual (2026-04-21 pos-Fase B)
+
+- Flag default: **ON** (`AGENT_SDK_SESSION_STORE_ENABLED=true`)
+- `session_persistence.py`: reduzido a helpers de path (nao mais backup/restore)
+- 6 callsites legados: **removidos**
+- Source of truth: `claude_session_store` (JSONB)
+- Coluna `agent_sessions.sdk_session_transcript`: **preservada, read-only** (migration nao apaga, pode servir como backup para rollback emergencial)
+
+## Rollback de emergencia — Fase A
+
+Se Fase B quebrar algo critico, a reversao para Fase A requer:
+
+1. **Revert do commit cutover** (git revert do commit Fase B)
+2. Redeploy
+3. Set env var `AGENT_SDK_SESSION_STORE_ENABLED=false`
+4. Resume funciona pelo path legado pois `sdk_session_transcript` esta intacto
+
+Alternativa sem revert: tocar apenas env var `AGENT_SDK_SESSION_STORE_ENABLED=false`. Mas como os callsites legados foram removidos, isso NAO restaura backup/restore — SDK spawna sem resume e cai no fallback XML (defense in depth). Resume funciona mas pode perder contexto alem das ultimas 10 msgs.
+
+---
+
+
 
 **Contexto**: `app/agente/CLAUDE.md` → secao "SDK 0.1.64 (atualizado 2026-04-21)".
 

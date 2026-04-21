@@ -571,20 +571,9 @@ def _obter_resposta_agente(
         logger.error(f"[TEAMS-BOT] Erro ao obter client: {e}")
         return None, None, 0, 0, [], 0.0
 
-    # Bug Teams #1: Restaurar transcript do DB se arquivo JSONL nao existe no disco
-    if sdk_session_id and session:
-        try:
-            transcript = session.get_transcript()
-            if transcript:
-                from app.agente.sdk.session_persistence import restore_session_transcript
-                restored = restore_session_transcript(sdk_session_id, transcript)
-                if restored:
-                    logger.info(
-                        f"[TEAMS-BOT] Session transcript restaurado do DB: "
-                        f"{sdk_session_id[:12]}... ({len(transcript)} bytes)"
-                    )
-        except Exception as e:
-            logger.warning(f"[TEAMS-BOT] Erro ao restaurar transcript: {e}")
+    # Fase B (SDK 0.1.64 SessionStore): restore_session_transcript removido.
+    # SDK materializa JSONL de resume a partir de claude_session_store via
+    # materialize_resume_session (automatico quando session_store setado em options).
 
     # Contexto especial para Teams: data atual + instruções anti-verbosidade
     contexto_teams = _get_teams_context()
@@ -635,19 +624,8 @@ def _obter_resposta_agente(
         # Non-streaming não tem granularidade de tool_call events
         ns_tools_used: List[str] = []
 
-        # Bug Teams #1: Backup transcript JSONL do disco para o DB
-        if new_sdk_session_id and session:
-            try:
-                from app.agente.sdk.session_persistence import backup_session_transcript
-                transcript = backup_session_transcript(new_sdk_session_id)
-                if transcript:
-                    session.save_transcript(transcript)
-                    logger.info(
-                        f"[TEAMS-BOT] Session transcript salvo no DB: "
-                        f"{new_sdk_session_id[:12]}... ({len(transcript)} bytes)"
-                    )
-            except Exception as e:
-                logger.warning(f"[TEAMS-BOT] Erro ao salvar transcript: {e}")
+        # Fase B: backup_session_transcript removido — SDK TranscriptMirrorBatcher
+        # persiste entries automaticamente em claude_session_store durante o stream.
 
         return resposta_texto, new_sdk_session_id, ns_input_tokens, ns_output_tokens, ns_tools_used, ns_cost_usd
 
@@ -942,20 +920,8 @@ def _obter_resposta_agente_streaming(
         logger.error(f"[TEAMS-STREAM] Erro ao obter client: {e}")
         return None, None, 0, 0, [], 0.0
 
-    # Bug Teams #1: Restaurar transcript do DB se arquivo JSONL nao existe no disco
-    if sdk_session_id and session:
-        try:
-            transcript = session.get_transcript()
-            if transcript:
-                from app.agente.sdk.session_persistence import restore_session_transcript
-                restored = restore_session_transcript(sdk_session_id, transcript)
-                if restored:
-                    logger.info(
-                        f"[TEAMS-STREAM] Session transcript restaurado do DB: "
-                        f"{sdk_session_id[:12]}... ({len(transcript)} bytes)"
-                    )
-        except Exception as e:
-            logger.warning(f"[TEAMS-STREAM] Erro ao restaurar transcript: {e}")
+    # Fase B (SDK 0.1.64 SessionStore): restore_session_transcript removido.
+    # SDK materializa JSONL de resume a partir de claude_session_store.
 
     # Contexto especial para Teams
     contexto_teams = _get_teams_context()
@@ -1148,19 +1114,8 @@ def _obter_resposta_agente_streaming(
         if resposta_texto:
             resposta_texto = _sanitizar_texto(resposta_texto)
 
-        # Bug Teams #1: Backup transcript JSONL do disco para o DB
-        if new_sdk_session_id and session:
-            try:
-                from app.agente.sdk.session_persistence import backup_session_transcript
-                transcript = backup_session_transcript(new_sdk_session_id)
-                if transcript:
-                    session.save_transcript(transcript)
-                    logger.info(
-                        f"[TEAMS-STREAM] Session transcript salvo no DB: "
-                        f"{new_sdk_session_id[:12]}... ({len(transcript)} bytes)"
-                    )
-            except Exception as e:
-                logger.warning(f"[TEAMS-STREAM] Erro ao salvar transcript: {e}")
+        # Fase B: backup_session_transcript removido — SDK TranscriptMirrorBatcher
+        # persiste entries automaticamente em claude_session_store.
 
         return resposta_texto, new_sdk_session_id, s_input_tokens, s_output_tokens, s_tools_used, s_cost_usd
 
