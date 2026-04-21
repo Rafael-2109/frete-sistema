@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Admin — SessionStore (SDK 0.1.64){% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2><i class="fas fa-database"></i> SessionStore Observability</h2>
+      <p class="text-muted mb-0">
+        Metricas da tabela <code>claude_session_store</code> (SDK 0.1.64 Fase A dual-run).
+        <a href="https://github.com/anthropics/claude-agent-sdk-python/blob/main/CHANGELOG.md#0164"
+           target="_blank" rel="noopener">changelog</a>
+      </p>
+    </div>
+    <div>
+      <span id="flag-badge" class="badge bg-secondary">flag: ?</span>
+      <button class="btn btn-sm btn-outline-primary ms-2" onclick="loadStats()">
+        <i class="fas fa-sync-alt"></i> Atualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="row g-3 mb-4" id="kpis">
+    <div class="col-md-2">
+      <div class="card h-100"><div class="card-body">
+        <small class="text-muted">Total rows</small>
+        <h3 class="mb-0" id="kpi-rows">—</h3>
+      </div></div>
+    </div>
+    <div class="col-md-2">
+      <div class="card h-100"><div class="card-body">
+        <small class="text-muted">Sessions</small>
+        <h3 class="mb-0" id="kpi-sessions">—</h3>
+      </div></div>
+    </div>
+    <div class="col-md-2">
+      <div class="card h-100"><div class="card-body">
+        <small class="text-muted">Projects</small>
+        <h3 class="mb-0" id="kpi-projects">—</h3>
+      </div></div>
+    </div>
+    <div class="col-md-2">
+      <div class="card h-100"><div class="card-body">
+        <small class="text-muted">Main entries</small>
+        <h3 class="mb-0" id="kpi-main">—</h3>
+      </div></div>
+    </div>
+    <div class="col-md-2">
+      <div class="card h-100"><div class="card-body">
+        <small class="text-muted">Subagent entries</small>
+        <h3 class="mb-0" id="kpi-subagent">—</h3>
+      </div></div>
+    </div>
+    <div class="col-md-2">
+      <div class="card h-100"><div class="card-body">
+        <small class="text-muted">Sessions c/ subagents</small>
+        <h3 class="mb-0" id="kpi-ss">—</h3>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- Atividade 24h -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="fas fa-clock"></i> Atividade ultimas 24h</h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead><tr>
+            <th>Hora</th>
+            <th class="text-end">Rows</th>
+            <th class="text-end">Sessions ativas</th>
+          </tr></thead>
+          <tbody id="tbl-hourly"><tr><td colspan="3" class="text-muted">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Atividade 7 dias -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="fas fa-calendar-day"></i> Atividade ultimos 7 dias</h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead><tr>
+            <th>Dia</th>
+            <th class="text-end">Rows</th>
+            <th class="text-end">Sessions ativas</th>
+          </tr></thead>
+          <tbody id="tbl-daily"><tr><td colspan="3" class="text-muted">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Types distribution + Top sessions -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="fas fa-tags"></i> Types distribution (main)</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover">
+              <thead><tr><th>Type</th><th class="text-end">Count</th></tr></thead>
+              <tbody id="tbl-types"><tr><td colspan="2" class="text-muted">Carregando…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <h5 class="mb-0"><i class="fas fa-layer-group"></i> Projects (multi-tenancy)</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover">
+              <thead><tr>
+                <th>Project key</th>
+                <th class="text-end">Sessions</th>
+                <th class="text-end">Entries</th>
+                <th>Ultimo</th>
+              </tr></thead>
+              <tbody id="tbl-projects"><tr><td colspan="4" class="text-muted">Carregando…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top sessions -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="fas fa-trophy"></i> Top 10 sessions por volume</h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead><tr>
+            <th>Session ID</th>
+            <th class="text-end">Entries</th>
+            <th>Primeiro</th>
+            <th>Ultimo</th>
+            <th class="text-end">Spread</th>
+          </tr></thead>
+          <tbody id="tbl-top"><tr><td colspan="5" class="text-muted">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadStats() {
+  const resp = await fetch('/agente/api/admin/session-store/stats');
+  const data = await resp.json();
+
+  if (!data.success) {
+    alert('Erro: ' + (data.error || 'desconhecido'));
+    return;
+  }
+
+  // Flag badge
+  const badge = document.getElementById('flag-badge');
+  if (data.flag_enabled) {
+    badge.className = 'badge bg-success';
+    badge.textContent = 'flag: ON';
+  } else {
+    badge.className = 'badge bg-warning text-dark';
+    badge.textContent = 'flag: OFF';
+  }
+
+  // KPIs
+  const t = data.totals || {};
+  document.getElementById('kpi-rows').textContent = fmt(t.total_rows);
+  document.getElementById('kpi-sessions').textContent = fmt(t.total_sessions);
+  document.getElementById('kpi-projects').textContent = fmt(t.total_projects);
+  document.getElementById('kpi-main').textContent = fmt(t.main_entries);
+  document.getElementById('kpi-subagent').textContent = fmt(t.subagent_entries);
+  document.getElementById('kpi-ss').textContent = fmt(t.sessions_com_subagents);
+
+  // Hourly
+  fillTable('tbl-hourly', data.hourly_24h, r => `
+    <tr>
+      <td><code>${esc(r.hora)}</code></td>
+      <td class="text-end">${fmt(r.rows)}</td>
+      <td class="text-end">${fmt(r.sessions)}</td>
+    </tr>`, 3);
+
+  // Daily
+  fillTable('tbl-daily', data.daily_7d, r => `
+    <tr>
+      <td><code>${esc(r.dia)}</code></td>
+      <td class="text-end">${fmt(r.rows)}</td>
+      <td class="text-end">${fmt(r.sessions)}</td>
+    </tr>`, 3);
+
+  // Types
+  fillTable('tbl-types', data.types_distribution, r => `
+    <tr>
+      <td><code>${esc(r.type)}</code></td>
+      <td class="text-end">${fmt(r.count)}</td>
+    </tr>`, 2);
+
+  // Projects
+  fillTable('tbl-projects', data.projects, r => `
+    <tr>
+      <td><code>${esc(r.project_key)}</code></td>
+      <td class="text-end">${fmt(r.sessions)}</td>
+      <td class="text-end">${fmt(r.entries)}</td>
+      <td><small>${esc(r.ultimo)}</small></td>
+    </tr>`, 4);
+
+  // Top sessions
+  fillTable('tbl-top', data.top_sessions, r => `
+    <tr>
+      <td>
+        <a href="/agente/api/admin/session-store/sessions/${encodeURIComponent(r.session_id)}"
+           target="_blank" rel="noopener">
+          <code>${esc(r.session_id.substring(0, 12))}...</code>
+        </a>
+      </td>
+      <td class="text-end">${fmt(r.entries)}</td>
+      <td><small>${esc(r.primeiro)}</small></td>
+      <td><small>${esc(r.ultimo)}</small></td>
+      <td class="text-end"><small>${fmtDur(r.spread_seg)}</small></td>
+    </tr>`, 5);
+}
+
+function fillTable(tbodyId, rows, rowFn, cols) {
+  const tbody = document.getElementById(tbodyId);
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="${cols}" class="text-muted text-center">Sem dados</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(rowFn).join('');
+}
+
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  return Number(n).toLocaleString('pt-BR');
+}
+
+function fmtDur(sec) {
+  if (sec === null || sec === undefined) return '—';
+  if (sec < 60) return sec + 's';
+  if (sec < 3600) return Math.round(sec / 60) + 'min';
+  return (sec / 3600).toFixed(1) + 'h';
+}
+
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+loadStats();
+// Auto-refresh a cada 60s
+setInterval(loadStats, 60000);
+</script>
+{% endblock %}
