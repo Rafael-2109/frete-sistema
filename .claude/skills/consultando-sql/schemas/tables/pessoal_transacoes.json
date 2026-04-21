@@ -140,6 +140,36 @@
       "nullable": false
     },
     {
+      "name": "pluggy_transaction_id",
+      "type": "varchar(64)"
+    },
+    {
+      "name": "origem_import",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "csv"
+    },
+    {
+      "name": "operation_type",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "merchant_nome",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "merchant_cnpj",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "categoria_pluggy_id",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "categoria_pluggy_sugerida",
+      "type": "varchar(100)"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"
@@ -182,20 +212,6 @@
   ],
   "indices": [
     {
-      "name": "idx_pessoal_transacoes_membro",
-      "columns": [
-        "membro_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_pessoal_transacoes_excluir",
       "columns": [
         "excluir_relatorio"
@@ -217,6 +233,13 @@
       "unique": false
     },
     {
+      "name": "idx_pessoal_transacoes_origem",
+      "columns": [
+        "origem_import"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_pessoal_transacoes_categoria",
       "columns": [
         "categoria_id"
@@ -224,9 +247,30 @@
       "unique": false
     },
     {
+      "name": "uq_pessoal_transacoes_pluggy_tx",
+      "columns": [
+        "pluggy_transaction_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "idx_pessoal_transacoes_cpf_cnpj",
       "columns": [
         "cpf_cnpj_parte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_membro",
+      "columns": [
+        "membro_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

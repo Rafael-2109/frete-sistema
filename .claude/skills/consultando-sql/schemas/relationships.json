@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 294,
+  "total_relationships": 315,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -425,6 +425,18 @@
     {
       "from_table": "carvia_nf_veiculos",
       "from_column": "nf_id",
+      "to_table": "carvia_nfs",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_nf_vinculos_transferencia",
+      "from_column": "nf_transferencia_id",
+      "to_table": "carvia_nfs",
+      "to_column": "id"
+    },
+    {
+      "from_table": "carvia_nf_vinculos_transferencia",
+      "from_column": "nf_venda_id",
       "to_table": "carvia_nfs",
       "to_column": "id"
     },
@@ -1035,6 +1047,36 @@
       "to_column": "id"
     },
     {
+      "from_table": "hora_devolucao_fornecedor",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_fornecedor",
+      "from_column": "nf_entrada_id",
+      "to_table": "hora_nf_entrada",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_fornecedor_item",
+      "from_column": "devolucao_id",
+      "to_table": "hora_devolucao_fornecedor",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_fornecedor_item",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_devolucao_fornecedor_item",
+      "from_column": "recebimento_conferencia_id",
+      "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_moto",
       "from_column": "modelo_id",
       "to_table": "hora_modelo",
@@ -1075,6 +1117,30 @@
       "from_column": "numero_chassi",
       "to_table": "hora_moto",
       "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_peca_faltando",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_peca_faltando",
+      "from_column": "chassi_doador",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_peca_faltando",
+      "from_column": "recebimento_conferencia_id",
+      "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_peca_faltando_foto",
+      "from_column": "peca_faltando_id",
+      "to_table": "hora_peca_faltando",
+      "to_column": "id"
     },
     {
       "from_table": "hora_pedido",
@@ -1521,9 +1587,39 @@
       "to_column": "id"
     },
     {
+      "from_table": "pessoal_compensacoes",
+      "from_column": "saida_id",
+      "to_table": "pessoal_transacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_compensacoes",
+      "from_column": "entrada_id",
+      "to_table": "pessoal_transacoes",
+      "to_column": "id"
+    },
+    {
       "from_table": "pessoal_contas",
       "from_column": "membro_id",
       "to_table": "pessoal_membros",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_contas",
+      "from_column": "pluggy_item_pk",
+      "to_table": "pessoal_pluggy_items",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_grupos_analise_categorias",
+      "from_column": "grupo_id",
+      "to_table": "pessoal_grupos_analise",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_grupos_analise_categorias",
+      "from_column": "categoria_id",
+      "to_table": "pessoal_categorias",
       "to_column": "id"
     },
     {
@@ -1536,6 +1632,36 @@
       "from_table": "pessoal_orcamentos",
       "from_column": "categoria_id",
       "to_table": "pessoal_categorias",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_pluggy_accounts",
+      "from_column": "pluggy_item_pk",
+      "to_table": "pessoal_pluggy_items",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_pluggy_accounts",
+      "from_column": "conta_pessoal_id",
+      "to_table": "pessoal_contas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_pluggy_categorias_map",
+      "from_column": "pessoal_categoria_id",
+      "to_table": "pessoal_categorias",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_pluggy_transacoes_stg",
+      "from_column": "pluggy_account_pk",
+      "to_table": "pessoal_pluggy_accounts",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_pluggy_transacoes_stg",
+      "from_column": "transacao_pessoal_id",
+      "to_table": "pessoal_transacoes",
       "to_column": "id"
     },
     {

@@ -47,16 +47,17 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_histmatch_conciliacao_id",
+      "name": "ix_carvia_histmatch_tokens_tipo",
       "columns": [
-        "conciliacao_id"
+        "descricao_tokens",
+        "tipo_documento"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_histmatch_cnpj",
+      "name": "ix_carvia_histmatch_conciliacao_id",
       "columns": [
-        "cnpj_pagador"
+        "conciliacao_id"
       ],
       "unique": false
     },
@@ -68,10 +69,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_histmatch_tokens_tipo",
+      "name": "ix_carvia_histmatch_cnpj",
       "columns": [
-        "descricao_tokens",
-        "tipo_documento"
+        "cnpj_pagador"
       ],
       "unique": false
     }

@@ -114,16 +114,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_previnculos_extrato_cotacao_status",
+      "name": "ix_previnculo_ativo",
       "columns": [
+        "cotacao_id",
         "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_previnculo_ativo",
+      "name": "ix_carvia_previnculos_extrato_cotacao_status",
       "columns": [
-        "cotacao_id",
         "status"
       ],
       "unique": false

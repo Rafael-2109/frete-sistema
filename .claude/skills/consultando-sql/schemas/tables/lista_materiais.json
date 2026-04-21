@@ -81,10 +81,9 @@
   ],
   "indices": [
     {
-      "name": "idx_lista_materiais_status_data",
+      "name": "ix_lista_materiais_cod_produto_produzido",
       "columns": [
-        "status",
-        "criado_em"
+        "cod_produto_produzido"
       ],
       "unique": false
     },
@@ -103,9 +102,10 @@
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_cod_produto_produzido",
+      "name": "idx_lista_materiais_status_data",
       "columns": [
-        "cod_produto_produzido"
+        "status",
+        "criado_em"
       ],
       "unique": false
     }

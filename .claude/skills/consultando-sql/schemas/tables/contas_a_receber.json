@@ -226,13 +226,6 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_receber_parcela",
-      "columns": [
-        "parcela"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_receber_uf_cliente",
       "columns": [
         "uf_cliente"
@@ -306,6 +299,13 @@
       "name": "ix_contas_a_receber_cnpj",
       "columns": [
         "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_parcela",
+      "columns": [
+        "parcela"
       ],
       "unique": false
     }

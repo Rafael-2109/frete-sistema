@@ -282,13 +282,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_fretes_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
       "name": "uq_carvia_frete_embarque_cnpj_notnull",
       "columns": [
         "embarque_id",
@@ -298,9 +291,9 @@
       "unique": true
     },
     {
-      "name": "ix_carvia_fretes_cnpj_destino",
+      "name": "ix_carvia_fretes_embarque_id",
       "columns": [
-        "cnpj_destino"
+        "embarque_id"
       ],
       "unique": false
     },
@@ -312,16 +305,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_fretes_operacao_id",
+      "name": "ix_carvia_fretes_cnpj_destino",
       "columns": [
-        "operacao_id"
+        "cnpj_destino"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_fretes_subcontrato_id",
+      "name": "ix_carvia_fretes_operacao_id",
       "columns": [
-        "subcontrato_id"
+        "operacao_id"
       ],
       "unique": false
     },
@@ -333,9 +326,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_fretes_embarque_id",
+      "name": "ix_carvia_fretes_subcontrato_id",
       "columns": [
-        "embarque_id"
+        "subcontrato_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_fretes_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
       ],
       "unique": false
     }

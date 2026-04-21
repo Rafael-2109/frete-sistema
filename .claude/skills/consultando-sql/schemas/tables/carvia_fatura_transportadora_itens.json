@@ -101,6 +101,13 @@
       "unique": false
     },
     {
+      "name": "ix_carvia_fatura_transportadora_itens_operacao_id",
+      "columns": [
+        "operacao_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_fatura_transportadora_itens_nf_id",
       "columns": [
         "nf_id"
@@ -111,13 +118,6 @@
       "name": "ix_carvia_fatura_transportadora_itens_fatura_transportadora_id",
       "columns": [
         "fatura_transportadora_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_fatura_transportadora_itens_operacao_id",
-      "columns": [
-        "operacao_id"
       ],
       "unique": false
     }

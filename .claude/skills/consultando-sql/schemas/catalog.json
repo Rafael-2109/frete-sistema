@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 195,
+  "total_tabelas": 207,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -553,6 +553,15 @@
         "nf_id",
         "chassi",
         "modelo"
+      ]
+    },
+    {
+      "name": "carvia_nf_vinculos_transferencia",
+      "description": "Tabela carvia_nf_vinculos_transferencia",
+      "key_fields": [
+        "nf_transferencia_id",
+        "nf_venda_id",
+        "peso_bruto_venda_snapshot"
       ]
     },
     {
@@ -1032,6 +1041,24 @@
       ]
     },
     {
+      "name": "hora_devolucao_fornecedor",
+      "description": "Tabela hora_devolucao_fornecedor",
+      "key_fields": [
+        "loja_id",
+        "nf_entrada_id",
+        "motivo"
+      ]
+    },
+    {
+      "name": "hora_devolucao_fornecedor_item",
+      "description": "Tabela hora_devolucao_fornecedor_item",
+      "key_fields": [
+        "devolucao_id",
+        "numero_chassi",
+        "motivo_especifico"
+      ]
+    },
+    {
       "name": "hora_loja",
       "description": "Tabela hora_loja",
       "key_fields": [
@@ -1083,6 +1110,24 @@
         "nf_id",
         "numero_chassi",
         "preco_real"
+      ]
+    },
+    {
+      "name": "hora_peca_faltando",
+      "description": "Tabela hora_peca_faltando",
+      "key_fields": [
+        "numero_chassi",
+        "descricao",
+        "chassi_doador"
+      ]
+    },
+    {
+      "name": "hora_peca_faltando_foto",
+      "description": "Tabela hora_peca_faltando_foto",
+      "key_fields": [
+        "peca_faltando_id",
+        "foto_s3_key",
+        "legenda"
       ]
     },
     {
@@ -1480,6 +1525,15 @@
       ]
     },
     {
+      "name": "pessoal_compensacoes",
+      "description": "Tabela pessoal_compensacoes",
+      "key_fields": [
+        "saida_id",
+        "entrada_id",
+        "valor_compensado"
+      ]
+    },
+    {
       "name": "pessoal_contas",
       "description": "Tabela pessoal_contas",
       "key_fields": [
@@ -1495,6 +1549,20 @@
         "padrao",
         "descricao"
       ]
+    },
+    {
+      "name": "pessoal_grupos_analise",
+      "description": "Tabela pessoal_grupos_analise",
+      "key_fields": [
+        "nome",
+        "descricao",
+        "cor"
+      ]
+    },
+    {
+      "name": "pessoal_grupos_analise_categorias",
+      "description": "Tabela pessoal_grupos_analise_categorias",
+      "key_fields": []
     },
     {
       "name": "pessoal_importacoes",
@@ -1521,6 +1589,42 @@
         "ano_mes",
         "categoria_id",
         "valor_limite"
+      ]
+    },
+    {
+      "name": "pessoal_pluggy_accounts",
+      "description": "Tabela pessoal_pluggy_accounts",
+      "key_fields": [
+        "pluggy_item_pk",
+        "pluggy_account_id",
+        "type"
+      ]
+    },
+    {
+      "name": "pessoal_pluggy_categorias_map",
+      "description": "Tabela pessoal_pluggy_categorias_map",
+      "key_fields": [
+        "pluggy_category_id",
+        "pluggy_category_description",
+        "pluggy_category_translated"
+      ]
+    },
+    {
+      "name": "pessoal_pluggy_items",
+      "description": "Tabela pessoal_pluggy_items",
+      "key_fields": [
+        "pluggy_item_id",
+        "client_user_id",
+        "connector_id"
+      ]
+    },
+    {
+      "name": "pessoal_pluggy_transacoes_stg",
+      "description": "Tabela pessoal_pluggy_transacoes_stg",
+      "key_fields": [
+        "pluggy_account_pk",
+        "pluggy_transaction_id",
+        "date"
       ]
     },
     {

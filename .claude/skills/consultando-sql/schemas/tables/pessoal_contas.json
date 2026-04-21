@@ -46,6 +46,14 @@
       "default": true
     },
     {
+      "name": "pluggy_account_id",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "pluggy_item_pk",
+      "type": "integer"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"
@@ -55,6 +63,10 @@
     {
       "column": "membro_id",
       "references": "pessoal_membros.id"
+    },
+    {
+      "column": "pluggy_item_pk",
+      "references": "pessoal_pluggy_items.id"
     }
   ]
 }
