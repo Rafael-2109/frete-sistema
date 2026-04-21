@@ -508,6 +508,82 @@ Diagnosticados via logs Render: **19/19 sessoes em 48h com `subagent_costs` VAZI
 
 ---
 
+## SDK 0.1.64 (atualizado 2026-04-21) — SessionStore Fase A dual-run
+
+**Versao**: `claude-agent-sdk==0.1.64`, `asyncpg==0.30.0` (novo driver async)
+**CLI bundled**: 2.1.116
+
+### Feature adotada: PostgresSessionStore adapter
+
+Substitui o ciclo manual `backup_session_transcript`/`restore_session_transcript` de `session_persistence.py` (JSONL disco ↔ `AgentSession.sdk_session_transcript` TEXT blob) pelo contrato `SessionStore` nativo.
+
+- **Adapter**: `app/agente/sdk/session_store_adapter.py` — `PostgresSessionStore` (5 dos 6 metodos do protocol)
+- **Tabela**: `claude_session_store` (migration `2026_04_21_claude_session_store.{sql,py}`)
+- **Conformance**: `tests/agente/sdk/test_session_store_conformance.py` — 13 contratos do harness oficial SDK 0.1.64
+- **Flag**: `AGENT_SDK_SESSION_STORE_ENABLED` (default OFF em Fase A)
+- **Timeout**: `AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS` (default 30000ms)
+
+### Fase A dual-run (ATUAL)
+
+| Flag | Comportamento |
+|------|---------------|
+| OFF | `session_persistence.py` ativo — zero regressao |
+| ON, session **nova** (sem `sdk_session_transcript`) | SDK gerencia mirror automatico via `TranscriptMirrorBatcher` + `materialize_resume_session` |
+| ON, session **existente** (com `sdk_session_transcript` populado) | Path legado — **preserva contexto das 434 sessions pre-existentes** (C4 do adversarial review) |
+
+### Rollback
+
+- `AGENT_SDK_SESSION_STORE_ENABLED=false` + redeploy (0 downtime)
+- `session_persistence.py` NAO e tocado em Fase A — continua funcionando em paralelo (belt + suspenders)
+- Dados orfaos em `claude_session_store` nao afetam performance (indexed)
+
+### Pool asyncpg
+
+- **LAZY per-worker** via `asyncio.Lock` — evita sockets compartilhados em gunicorn fork (C2 adversarial)
+- `min_size=1, max_size=3` por worker — 4 workers × 3 = 12 conn asyncpg + 4 × 15 psycopg2 = 72/100 Render Starter
+- DSN parsed: `_prepare_dsn()` remove `client_encoding` e `options=-c ...` (psycopg2-specific, asyncpg ignora)
+- Shutdown: `close_session_store_pool()` disponivel (best-effort, nao bloqueia)
+
+### Integracao (`client.py`)
+
+1. `_build_options` (sync) — inalterada; retorna `ClaudeAgentOptions` base
+2. `_stream_response_persistent` (async, linha ~1422) — apos `options = self._build_options(...)`, se flag ON E session NOVA: `options = replace(options, session_store=store, load_timeout_ms=...)` via `dataclasses.replace`
+3. `_parse_sdk_message` (linha ~547) — handler `MirrorErrorMessage` (subclass SystemMessage): log ERROR + Sentry, NAO propagado como SSE
+
+### Encoding `project_key`
+
+- `project_key_for_directory('/home/rafaelnascimento/projetos/frete_sistema')` = `-home-rafaelnascimento-projetos-frete-sistema`
+- **Identico ao regex atual** de `session_persistence.py` (verificado empirico via SDK)
+- Sem migracao de dados — sessions legadas e novas usam mesma chave
+
+### MirrorErrorMessage
+
+- Subclass de `SystemMessage` em SDK 0.1.64+
+- Emitida quando `store.append()` falha — contrato at-most-once (batch perdido, nao retentado)
+- Disco local continua durable — session nao quebra
+- Import condicional (try/except) em `client.py:47-57` para compat com SDK < 0.1.64
+
+### Fase B (apos 48h producao canary estavel)
+
+- Remover `backup_session_transcript` / `restore_session_transcript` em 6 callsites (`chat.py:321,1311` + `teams/services.py:579,641,950,1154`)
+- Descontinuar `session_persistence.py`
+- Flag `AGENT_SDK_SESSION_STORE_ENABLED` default ON; remover criterio "apenas sessions novas"
+- Migrar historico 434 sessions: script batch `sdk_session_transcript (TEXT) → claude_session_store (JSONB por entry)` OU aceitar que expiram naturalmente
+
+### Fase C (cleanup, opcional)
+
+- `ALTER TABLE agent_sessions DROP COLUMN sdk_session_transcript` (ou manter como dead backup)
+- Remover `AgentSession.save_transcript()` / `get_transcript()` / `set_sdk_session_id()` se SDK rastrear tudo
+
+### Referencias
+
+- Plano adversarial-revised: `/tmp/subagent-findings/20260421-sessionstore-60ddbe70/phase3/plan-v2-final.md`
+- Rollback runbook: `app/agente/ROLLBACK_SESSION_STORE.md`
+- Reference adapter oficial: `anthropics/claude-agent-sdk-python/examples/session_stores/postgres_session_store.py`
+- Conformance harness: `claude_agent_sdk.testing.run_session_store_conformance`
+
+---
+
 ## Export critico: Teams
 
 `app/teams/` importa de **6 sub-modulos**: permissions, models, SDK client, flags, session_persistence, pending_questions.

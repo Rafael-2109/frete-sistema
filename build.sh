@@ -64,6 +64,13 @@ echo "Backfill icms_aliquota CarVia (idempotente)..."
 python scripts/migrations/add_icms_aliquota_carvia_operacoes.py \
     || echo "⚠️ Backfill icms_aliquota falhou, continuando deploy..."
 
+# 7. SessionStore v0.1.64 — tabela claude_session_store (Fase A dual-run).
+# Idempotente via IF NOT EXISTS. Ativa mirror automatico quando
+# AGENT_SDK_SESSION_STORE_ENABLED=true (feature flag).
+echo "Criando tabela claude_session_store (SessionStore v0.1.64 Fase A)..."
+python scripts/migrations/2026_04_21_claude_session_store.py \
+    || echo "⚠️ Migration claude_session_store falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

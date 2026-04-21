@@ -43,6 +43,19 @@ from claude_agent_sdk import (
     RateLimitEvent,
 )
 
+# SDK 0.1.64+: MirrorErrorMessage (SessionStore append falhou).
+# Import condicional — quando SDK < 0.1.64 instalado, classe nao existe.
+# isinstance contra tuple vazia = sempre False → handler e skipped graciosamente.
+try:
+    from claude_agent_sdk import MirrorErrorMessage as _MirrorErrorMessageClass
+    MirrorErrorMessage = _MirrorErrorMessageClass
+except ImportError:
+    # SDK < 0.1.64: sentinel inerte. isinstance() contra classe sem instancias
+    # reais sempre retorna False — handler abaixo fica inerte sem quebrar.
+    class MirrorErrorMessage:  # type: ignore[no-redef]
+        """Sentinel inerte para SDK < 0.1.64 (sem SessionStore). Nao e emitida."""
+        pass
+
 # Fallback para API direta (health check)
 import anthropic
 logger = logging.getLogger('sistema_fretes')
@@ -543,6 +556,38 @@ Nunca invente informações."""
                 f"total={elapsed_total:.1f}s | "
                 f"delta={elapsed_since_last:.1f}s"
             )
+
+        # ─── MirrorErrorMessage (SessionStore append falhou) ───
+        # Subclass de SystemMessage (so importada no topo — ver imports).
+        # Emitida quando batcher.store.append() falha. Contrato at-most-once: batch
+        # e perdido (nao retentado). Disco local continua durable, session nao quebra.
+        # Log ERROR + Sentry para visibilidade. NAO propaga como SSE (infra, nao UX).
+        if isinstance(message, MirrorErrorMessage):
+            _key = getattr(message, 'key', None)
+            _error_msg = getattr(message, 'error', 'unknown')
+            _sid = (
+                (_key.get('session_id') or '?')[:12] + '...'
+                if _key else '?'
+            )
+            logger.error(
+                f"[SESSION_STORE] mirror_error — batch perdido "
+                f"(disco local OK, store inconsistente): "
+                f"session_id={_sid} error={_error_msg}"
+            )
+            try:
+                import sentry_sdk
+                if sentry_sdk.Hub.current.client is not None:
+                    sentry_sdk.capture_message(
+                        f"SessionStore mirror_error: {_error_msg}",
+                        level="error",
+                    )
+            except ImportError:
+                pass
+            except Exception as _sentry_err:
+                logger.debug(
+                    f"[SESSION_STORE] Sentry capture falhou (ignorado): {_sentry_err}"
+                )
+            return events
 
         # ─── SystemMessage (init do SDK) ───
         if isinstance(message, SystemMessage):
@@ -1419,6 +1464,64 @@ Nunca invente informações."""
             stderr_queue=stderr_q,
             resume_state=resume_state,
         )
+
+        # ─── SDK 0.1.64 SessionStore (Fase A dual-run) ───
+        # Injecao async APOS _build_options (sync) via dataclasses.replace.
+        # Criterio refinado (C4 adversarial review): flag ON aplica SOMENTE a
+        # sessions NOVAS (sem sdk_session_transcript no DB). Sessions existentes
+        # continuam no path legado via session_persistence.py — preserva contexto
+        # das 434 sessions pre-existentes.
+        # Rollback: AGENT_SDK_SESSION_STORE_ENABLED=false + redeploy (0 downtime).
+        from ..config.feature_flags import (
+            AGENT_SDK_SESSION_STORE_ENABLED,
+            AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS,
+        )
+        if AGENT_SDK_SESSION_STORE_ENABLED:
+            has_legacy_transcript = False
+            if our_session_id:
+                try:
+                    from ..models import AgentSession
+                    _db_sess = AgentSession.query.filter_by(
+                        session_id=our_session_id
+                    ).first()
+                    has_legacy_transcript = bool(
+                        _db_sess and _db_sess.sdk_session_transcript
+                    )
+                except Exception as _db_err:
+                    logger.warning(
+                        f"[SESSION_STORE] erro consultando DB (fallback conservador = "
+                        f"legado): {_db_err}"
+                    )
+                    has_legacy_transcript = True  # se nao sabe, trata como legado
+
+            if not has_legacy_transcript:
+                try:
+                    from dataclasses import replace as _dc_replace
+
+                    from .session_store_adapter import get_or_create_session_store
+                    _store = await get_or_create_session_store()
+                    options = _dc_replace(
+                        options,
+                        session_store=_store,
+                        load_timeout_ms=AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS,
+                    )
+                    logger.info(
+                        f"[SESSION_STORE] ENABLED (session nova): "
+                        f"{(our_session_id or 'pending')[:12]}... "
+                        f"load_timeout={AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS}ms"
+                    )
+                except Exception as _store_err:
+                    # Silencioso: session_persistence.py continua ativo, zero regressao
+                    logger.error(
+                        f"[SESSION_STORE] init falhou — fallback path legado: "
+                        f"{_store_err}",
+                        exc_info=True,
+                    )
+            else:
+                logger.debug(
+                    f"[SESSION_STORE] SKIP (session com transcript legado): "
+                    f"{(our_session_id or '?')[:12]}..."
+                )
 
         # ─── RESUME: só na primeira conexão ───
         # Se o client já existe no pool (reutilização), o CLI subprocess

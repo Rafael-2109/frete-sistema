@@ -482,3 +482,32 @@ SUBAGENT_VALIDATION_THRESHOLD = int(
 SUBAGENT_UI_RAW_FOR_ADMIN = os.getenv(
     "AGENT_SUBAGENT_UI_RAW_FOR_ADMIN", "true"
 ).lower() == "true"
+
+# ====================================================================
+# SDK 0.1.64 — SessionStore adapter (Fase A dual-run)
+# ====================================================================
+#
+# Substitui o ciclo manual backup/restore de session_persistence.py pelo
+# SessionStore protocol nativo do SDK 0.1.64. Tabela claude_session_store
+# recebe entries via SDK TranscriptMirrorBatcher (automatico, at-most-once).
+#
+# Fase A dual-run: session_persistence.py continua ativo em paralelo.
+#
+# Criterio de ativacao REFINADO (pos-adversarial review C4):
+# - Flag ON aplica SOMENTE a sessions NOVAS (sem sdk_session_transcript no DB).
+# - Sessions existentes continuam no path legado — evita perda de contexto
+#   das 434 sessions pre-existentes.
+#
+# Rollback: AGENT_SDK_SESSION_STORE_ENABLED=false + redeploy (0 downtime).
+#
+# Ref: /tmp/subagent-findings/20260421-sessionstore-60ddbe70/phase3/plan-v2-final.md
+AGENT_SDK_SESSION_STORE_ENABLED = os.getenv(
+    "AGENT_SDK_SESSION_STORE_ENABLED", "false"
+).lower() == "true"
+
+# Timeout em ms para store.load() / list_subkeys() durante materialize_resume_session.
+# Default SDK = 60000ms. Nosso p99 de query indexed < 100ms; 30000ms e folgado.
+# Se store ficar lento > 30s, resume falha — cai no path legado via fallback natural.
+AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS = int(
+    os.getenv("AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS", "30000")
+)
