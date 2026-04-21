@@ -47,10 +47,40 @@ def index():
     ).filter(
         PessoalTransacao.excluir_relatorio.is_(False),
     ).group_by(PessoalTransacao.categoria_id).all()
+
+    # Numero de meses distintos com movimento valido no historico (base para media/mes)
+    # Usamos o conjunto total do historico para consistencia entre categorias — assim
+    # uma categoria que aparece em poucos meses nao distorce a comparacao.
+    num_meses = db.session.query(
+        func.count(func.distinct(func.date_trunc('month', PessoalTransacao.data)))
+    ).filter(
+        PessoalTransacao.excluir_relatorio.is_(False),
+    ).scalar() or 1
+    # Protecao contra divisao por zero (scalar() pode retornar 0 se nao houver transacoes)
+    if num_meses <= 0:
+        num_meses = 1
+
     agregados = {
-        cat_id: {'qtd': int(qtd or 0), 'total': float(total or 0)}
+        cat_id: {
+            'qtd': int(qtd or 0),
+            'total': float(total or 0),
+            'media_mes': float(total or 0) / num_meses,
+        }
         for cat_id, qtd, total in agregados_raw
     }
+
+    # Agregados por grupo (soma dos valores das categorias que compoem o grupo).
+    # Iteramos `categorias` para manter ordem estavel (mesma do render).
+    grupos_agregados = {}
+    for cat in categorias:
+        ag = agregados.get(cat.id, {'qtd': 0, 'total': 0.0, 'media_mes': 0.0})
+        if cat.grupo not in grupos_agregados:
+            grupos_agregados[cat.grupo] = {'qtd': 0, 'total': 0.0, 'media_mes': 0.0}
+        grupos_agregados[cat.grupo]['qtd'] += ag['qtd']
+        grupos_agregados[cat.grupo]['total'] += ag['total']
+    # media_mes do grupo = total do grupo / num_meses (mesma base das categorias)
+    for g in grupos_agregados:
+        grupos_agregados[g]['media_mes'] = grupos_agregados[g]['total'] / num_meses
 
     return render_template(
         'pessoal/configuracao.html',
@@ -60,6 +90,8 @@ def index():
         contas=contas,
         contagem_match=contagem_match,
         agregados=agregados,
+        grupos_agregados=grupos_agregados,
+        num_meses=num_meses,
     )
 
 

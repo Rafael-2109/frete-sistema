@@ -43,46 +43,65 @@
     <div class="tab-pane fade show active" id="tabCategorias">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <span>Categorias de Despesas</span>
+          <span>
+            Categorias de Despesas
+            {% if num_meses %}
+            <small class="text-muted ms-2" title="Media/mes = total historico / {{ num_meses }} meses com movimento">
+              (media/mes considera {{ num_meses }} {{ 'mes' if num_meses == 1 else 'meses' }} de historico)
+            </small>
+            {% endif %}
+          </span>
           <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCategoria" id="btnNovaCategoria">
             <i class="fas fa-plus"></i> Nova Categoria
           </button>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
+            <table class="table table-sm table-hover mb-0" id="tblCategorias" data-grouped="1">
               <thead class="table-light">
                 <tr>
-                  <th>Grupo</th>
-                  <th>Nome</th>
-                  <th class="text-end">Qtd</th>
-                  <th class="text-end">Valor Total</th>
+                  <th class="sortable" data-sort="string" data-col="0" role="button">Grupo <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="1" role="button">Nome <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable text-end" data-sort="number" data-col="2" role="button">Qtd <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable text-end" data-sort="number" data-col="3" role="button">Valor Total <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable text-end" data-sort="number" data-col="4" role="button" title="Media mensal = total / numero de meses com movimento no historico">Media/mes <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
                   <th title="Compensavel em pareamento Saida<->Entrada Empresa">Compensavel</th>
                   <th>Ativa</th>
                   <th style="width:180px">Acoes</th>
                 </tr>
               </thead>
               <tbody>
-                {% set ns = namespace(grupo_atual=None, total_qtd_grupo=0, total_valor_grupo=0) %}
+                {% set ns = namespace(grupo_atual=None) %}
                 {% for cat in categorias %}
-                {% set ag = agregados.get(cat.id, {'qtd': 0, 'total': 0}) %}
+                {% set ag = agregados.get(cat.id, {'qtd': 0, 'total': 0, 'media_mes': 0}) %}
                 {% if cat.grupo != ns.grupo_atual %}
                   {% set ns.grupo_atual = cat.grupo %}
-                  <tr class="table-secondary">
-                    <td colspan="7" class="fw-bold small">
+                  {% set grupo_ag = grupos_agregados.get(cat.grupo, {'qtd': 0, 'total': 0, 'media_mes': 0}) %}
+                  <tr class="table-secondary grupo-header"
+                      data-grupo="{{ cat.grupo }}"
+                      data-grupo-qtd="{{ grupo_ag.qtd }}"
+                      data-grupo-total="{{ grupo_ag.total }}"
+                      data-grupo-media="{{ grupo_ag.media_mes }}">
+                    <td colspan="2" class="fw-bold small" data-val="{{ cat.grupo|lower }}">
                       <i class="fas fa-folder-open me-1"></i>{{ cat.grupo }}
                     </td>
+                    <td class="text-end small fw-bold" data-val="{{ grupo_ag.qtd }}">{{ grupo_ag.qtd }}</td>
+                    <td class="text-end small fw-bold" data-val="{{ grupo_ag.total }}">{{ grupo_ag.total|valor_br }}</td>
+                    <td class="text-end small fw-bold" data-val="{{ grupo_ag.media_mes }}">{{ grupo_ag.media_mes|valor_br }}</td>
+                    <td colspan="3"></td>
                   </tr>
                 {% endif %}
-                <tr class="{{ '' if cat.ativa else 'text-muted' }}"
+                <tr class="grupo-row {{ '' if cat.ativa else 'text-muted' }}"
+                    data-grupo="{{ cat.grupo }}"
                     data-cat-id="{{ cat.id }}"
                     data-cat-nome="{{ cat.nome }}"
                     data-cat-grupo="{{ cat.grupo }}"
                     data-cat-icone="{{ cat.icone or '' }}">
-                  <td class="small text-muted">{{ cat.grupo }}</td>
-                  <td><i class="fas {{ cat.icone or 'fa-tag' }} me-1"></i> {{ cat.nome }}</td>
-                  <td class="text-end small">{{ ag.qtd }}</td>
-                  <td class="text-end small">{{ ag.total|valor_br }}</td>
+                  <td class="small text-muted" data-val="{{ cat.grupo|lower }}">{{ cat.grupo }}</td>
+                  <td data-val="{{ cat.nome|lower }}"><i class="fas {{ cat.icone or 'fa-tag' }} me-1"></i> {{ cat.nome }}</td>
+                  <td class="text-end small" data-val="{{ ag.qtd }}">{{ ag.qtd }}</td>
+                  <td class="text-end small" data-val="{{ ag.total }}">{{ ag.total|valor_br }}</td>
+                  <td class="text-end small" data-val="{{ ag.media_mes }}">{{ ag.media_mes|valor_br }}</td>
                   <td class="small">
                     <select class="form-select form-select-sm sel-compensavel" data-cat-id="{{ cat.id }}" style="width: 120px">
                       <option value="" {{ 'selected' if not cat.compensavel_tipo }}>—</option>
@@ -259,22 +278,22 @@
       <div class="card">
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
+            <table class="table table-sm table-hover mb-0" id="tblMembros">
               <thead class="table-light">
                 <tr>
-                  <th>Nome</th>
-                  <th>Nome Completo</th>
-                  <th>Papel</th>
-                  <th>Ativo</th>
+                  <th class="sortable" data-sort="string" data-col="0" role="button">Nome <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="1" role="button">Nome Completo <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="2" role="button">Papel <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="3" role="button">Ativo <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
                 </tr>
               </thead>
               <tbody>
                 {% for m in membros %}
                 <tr>
-                  <td class="fw-bold">{{ m.nome }}</td>
-                  <td class="small">{{ m.nome_completo or '-' }}</td>
-                  <td>{{ m.papel or '-' }}</td>
-                  <td>
+                  <td class="fw-bold" data-val="{{ (m.nome or '')|lower }}">{{ m.nome }}</td>
+                  <td class="small" data-val="{{ (m.nome_completo or '')|lower }}">{{ m.nome_completo or '-' }}</td>
+                  <td data-val="{{ (m.papel or '')|lower }}">{{ m.papel or '-' }}</td>
+                  <td data-val="{{ 'sim' if m.ativo else 'nao' }}">
                     {% if m.ativo %}
                     <span class="badge bg-success">Sim</span>
                     {% else %}
@@ -295,34 +314,34 @@
       <div class="card">
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
+            <table class="table table-sm table-hover mb-0" id="tblContas">
               <thead class="table-light">
                 <tr>
-                  <th>Nome</th>
-                  <th>Tipo</th>
-                  <th>Banco</th>
-                  <th>Agencia</th>
-                  <th>Conta/Digitos</th>
-                  <th>Membro</th>
-                  <th>Ativa</th>
+                  <th class="sortable" data-sort="string" data-col="0" role="button">Nome <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="1" role="button">Tipo <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="2" role="button">Banco <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="3" role="button">Agencia <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="4" role="button">Conta/Digitos <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="5" role="button">Membro <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="string" data-col="6" role="button">Ativa <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
                 </tr>
               </thead>
               <tbody>
                 {% for c in contas %}
                 <tr>
-                  <td class="fw-bold">{{ c.nome }}</td>
-                  <td>
+                  <td class="fw-bold" data-val="{{ (c.nome or '')|lower }}">{{ c.nome }}</td>
+                  <td data-val="{{ c.tipo or '' }}">
                     {% if c.tipo == 'conta_corrente' %}
                     <span class="badge bg-info">CC</span>
                     {% else %}
                     <span class="badge bg-warning text-dark">Cartao</span>
                     {% endif %}
                   </td>
-                  <td>{{ c.banco }}</td>
-                  <td>{{ c.agencia or '-' }}</td>
-                  <td>{{ c.numero_conta or c.ultimos_digitos_cartao or '-' }}</td>
-                  <td>{{ c.membro.nome if c.membro else '-' }}</td>
-                  <td>
+                  <td data-val="{{ (c.banco or '')|lower }}">{{ c.banco }}</td>
+                  <td data-val="{{ (c.agencia or '')|lower }}">{{ c.agencia or '-' }}</td>
+                  <td data-val="{{ ((c.numero_conta or c.ultimos_digitos_cartao or ''))|lower }}">{{ c.numero_conta or c.ultimos_digitos_cartao or '-' }}</td>
+                  <td data-val="{{ ((c.membro.nome if c.membro else '')|lower) }}">{{ c.membro.nome if c.membro else '-' }}</td>
+                  <td data-val="{{ 'sim' if c.ativa else 'nao' }}">
                     {% if c.ativa %}
                     <span class="badge bg-success">Sim</span>
                     {% else %}
@@ -1034,61 +1053,126 @@ $(function() {
     });
   });
 
-  // ===== SORT TABELA REGRAS =====
+  // ===== SORT GENERICO (aplica a todas tabelas com th.sortable) =====
   (function() {
-    const table = document.getElementById('tblRegras');
-    if (!table) return;
-    const headers = table.querySelectorAll('th.sortable');
-    let currentCol = -1;
-    let ascending = true;
+    function parseCell(cell, sortType) {
+      if (!cell) return sortType === 'number' ? 0 : '';
+      const raw = (cell.dataset && cell.dataset.val !== undefined)
+        ? cell.dataset.val
+        : cell.textContent.trim();
+      if (sortType === 'number') {
+        const n = parseFloat(raw);
+        return isNaN(n) ? 0 : n;
+      }
+      return String(raw).toLowerCase();
+    }
 
-    headers.forEach(function(th) {
-      th.style.cursor = 'pointer';
-      th.addEventListener('click', function() {
-        const col = parseInt(th.dataset.col);
-        const sortType = th.dataset.sort; // 'string' ou 'number'
+    function compare(a, b, sortType, ascending) {
+      if (sortType === 'number') {
+        return ascending ? a - b : b - a;
+      }
+      if (a < b) return ascending ? -1 : 1;
+      if (a > b) return ascending ? 1 : -1;
+      return 0;
+    }
 
-        if (col === currentCol) {
-          ascending = !ascending;
-        } else {
-          currentCol = col;
-          ascending = true;
-        }
+    function setupSort(table) {
+      if (!table) return;
+      const headers = table.querySelectorAll('th.sortable');
+      if (!headers.length) return;
+      const isGrouped = table.dataset.grouped === '1';
+      const state = { col: -1, ascending: true };
 
-        // Atualizar icones
-        headers.forEach(function(h) {
-          h.querySelector('i').className = 'fas fa-sort text-muted ms-1';
-          h.querySelector('i').style.fontSize = '0.7rem';
-        });
-        const icon = th.querySelector('i');
-        icon.className = 'fas fa-sort-' + (ascending ? 'up' : 'down') + ' ms-1';
-        icon.style.fontSize = '0.7rem';
+      headers.forEach(function(th) {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', function() {
+          const col = parseInt(th.dataset.col);
+          const sortType = th.dataset.sort;
 
-        // Ordenar
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-
-        rows.sort(function(a, b) {
-          const aCell = a.querySelectorAll('td')[col];
-          const bCell = b.querySelectorAll('td')[col];
-          let aVal = (aCell && aCell.dataset.val) || aCell.textContent.trim();
-          let bVal = (bCell && bCell.dataset.val) || bCell.textContent.trim();
-
-          if (sortType === 'number') {
-            aVal = parseFloat(aVal) || 0;
-            bVal = parseFloat(bVal) || 0;
-            return ascending ? aVal - bVal : bVal - aVal;
+          if (col === state.col) {
+            state.ascending = !state.ascending;
           } else {
-            aVal = aVal.toLowerCase();
-            bVal = bVal.toLowerCase();
-            if (aVal < bVal) return ascending ? -1 : 1;
-            if (aVal > bVal) return ascending ? 1 : -1;
-            return 0;
+            state.col = col;
+            state.ascending = true;
+          }
+
+          headers.forEach(function(h) {
+            const i = h.querySelector('i');
+            if (i) {
+              i.className = 'fas fa-sort text-muted ms-1';
+              i.style.fontSize = '0.7rem';
+            }
+          });
+          const icon = th.querySelector('i');
+          if (icon) {
+            icon.className = 'fas fa-sort-' + (state.ascending ? 'up' : 'down') + ' ms-1';
+            icon.style.fontSize = '0.7rem';
+          }
+
+          const tbody = table.querySelector('tbody');
+          if (!tbody) return;
+
+          if (isGrouped) {
+            // Agrupamento: cada bloco = 1 linha `grupo-header` + suas `grupo-row`.
+            // Ordena os blocos pela chave do PROPRIO header do grupo (subtotal),
+            // preservando a ordem das categorias dentro de cada grupo.
+            const rows = Array.from(tbody.children);
+            const blocks = [];
+            let current = null;
+            rows.forEach(function(row) {
+              if (row.classList.contains('grupo-header')) {
+                current = { header: row, children: [] };
+                blocks.push(current);
+              } else if (current) {
+                current.children.push(row);
+              }
+            });
+
+            blocks.sort(function(a, b) {
+              const aCell = a.header.querySelectorAll('td')[col];
+              const bCell = b.header.querySelectorAll('td')[col];
+              return compare(parseCell(aCell, sortType), parseCell(bCell, sortType), sortType, state.ascending);
+            });
+
+            blocks.forEach(function(blk) {
+              tbody.appendChild(blk.header);
+              blk.children.forEach(function(c) { tbody.appendChild(c); });
+            });
+          } else {
+            // Ordenacao direta, mas preserva pares linha principal + linha de detalhe
+            // (ex: tblRegras tem `regra-detail-row` logo apos cada `regra-row`).
+            const rows = Array.from(tbody.children);
+            const pairs = [];
+            let i = 0;
+            while (i < rows.length) {
+              const row = rows[i];
+              const next = rows[i + 1];
+              if (next && next.classList.contains('regra-detail-row')) {
+                pairs.push({ main: row, detail: next });
+                i += 2;
+              } else {
+                pairs.push({ main: row, detail: null });
+                i += 1;
+              }
+            }
+
+            pairs.sort(function(a, b) {
+              const aCell = a.main.querySelectorAll('td')[col];
+              const bCell = b.main.querySelectorAll('td')[col];
+              return compare(parseCell(aCell, sortType), parseCell(bCell, sortType), sortType, state.ascending);
+            });
+
+            pairs.forEach(function(p) {
+              tbody.appendChild(p.main);
+              if (p.detail) tbody.appendChild(p.detail);
+            });
           }
         });
-
-        rows.forEach(function(row) { tbody.appendChild(row); });
       });
+    }
+
+    ['tblRegras', 'tblCategorias', 'tblMembros', 'tblContas'].forEach(function(id) {
+      setupSort(document.getElementById(id));
     });
   })();
 
