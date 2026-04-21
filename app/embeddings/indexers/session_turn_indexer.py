@@ -68,14 +68,12 @@ def content_hash(text: str) -> str:
 def _collect_turns_impl(user_id: Optional[int] = None) -> Tuple[List[Dict], Dict]:
     """Implementacao real da coleta de turns. REQUER app context ativo."""
     from app.agente.models import AgentSession
-    from sqlalchemy.orm import defer
 
     turns = []
 
-    # defer() evita SELECT de colunas pesadas/inexistentes no banco
-    query = AgentSession.query.options(
-        defer(AgentSession.sdk_session_transcript),
-    )
+    # Fase C (2026-04-21): sdk_session_transcript foi removida; defer nao e mais
+    # necessario. Source-of-truth do transcript vive em claude_session_store.
+    query = AgentSession.query
     if user_id:
         query = query.filter_by(user_id=user_id)
 

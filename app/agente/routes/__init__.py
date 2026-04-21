@@ -18,7 +18,6 @@ Estrutura:
 - improvement_dialogue.py    - D8 cron bridge + admin, csrf.exempt
 - memories.py                - CRUD memorias + users + review
 - briefing.py                - api_get_briefing
-- _deprecated.py             - Scaffolding async migration (quarentena)
 """
 
 import os
@@ -47,7 +46,6 @@ from app.agente.routes import intelligence_report  # noqa: F401, E402
 from app.agente.routes import improvement_dialogue  # noqa: F401, E402
 from app.agente.routes import memories  # noqa: F401, E402
 from app.agente.routes import briefing  # noqa: F401, E402
-from app.agente.routes import _deprecated  # noqa: F401, E402
 
 # Re-export: helpers usados por app/teams/services.py
 # Mantem compatibilidade: from app.agente.routes import run_post_session_processing

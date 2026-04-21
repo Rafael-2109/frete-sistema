@@ -1,23 +1,26 @@
-# Rollback — SessionStore adapter (SDK 0.1.64, Fase B cutover)
+# Rollback — SessionStore adapter (SDK 0.1.64, Fase B cutover + Fase C drop)
 
-## Estado atual (2026-04-21 pos-Fase B)
+## Estado atual (2026-04-21 pos-Fase C)
 
 - Flag default: **ON** (`AGENT_SDK_SESSION_STORE_ENABLED=true`)
 - `session_persistence.py`: reduzido a helpers de path (nao mais backup/restore)
-- 6 callsites legados: **removidos**
+- 6 callsites legados: **removidos** na Fase B
 - Source of truth: `claude_session_store` (JSONB)
-- Coluna `agent_sessions.sdk_session_transcript`: **preservada, read-only** (migration nao apaga, pode servir como backup para rollback emergencial)
+- Coluna `agent_sessions.sdk_session_transcript`: **REMOVIDA** na Fase C (migration `2026_04_21_drop_sdk_session_transcript.{py,sql}`)
+- `AgentSession.save_transcript()` / `get_transcript()`: **removidos**
+- `session_store_adapter.session_has_legacy_transcript()` / `session_has_store_entries()`: **removidos** (helpers C4 dual-run obsoletos)
 
-## Rollback de emergencia — Fase A
+## Rollback de emergencia — Fase A (nao mais reversivel sem restore do banco)
 
-Se Fase B quebrar algo critico, a reversao para Fase A requer:
+**IMPORTANTE**: Apos Fase C, o rollback completo para Fase A nao e mais possivel via env var, pois a coluna `sdk_session_transcript` foi dropada. Se necessario:
 
-1. **Revert do commit cutover** (git revert do commit Fase B)
-2. Redeploy
-3. Set env var `AGENT_SDK_SESSION_STORE_ENABLED=false`
-4. Resume funciona pelo path legado pois `sdk_session_transcript` esta intacto
+1. Restore do banco para snapshot pre-Fase C (PITR Render) OU `git revert` da migration Fase C + re-popular via script de migracao historica
+2. `git revert` do commit Fase C
+3. `git revert` do commit Fase B
+4. Redeploy
+5. Set env var `AGENT_SDK_SESSION_STORE_ENABLED=false`
 
-Alternativa sem revert: tocar apenas env var `AGENT_SDK_SESSION_STORE_ENABLED=false`. Mas como os callsites legados foram removidos, isso NAO restaura backup/restore — SDK spawna sem resume e cai no fallback XML (defense in depth). Resume funciona mas pode perder contexto alem das ultimas 10 msgs.
+Alternativa rapida sem revert: tocar apenas `AGENT_SDK_SESSION_STORE_ENABLED=false`. Store desativa mas resume cai no fallback XML (defense in depth, `UserPromptSubmit` hook reinjeta ultimas 10 msgs do `AgentSession.data['messages']` JSONB — intacto). Contexto alem das 10 msgs e perdido mas sessoes seguem funcionais.
 
 ---
 

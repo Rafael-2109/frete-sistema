@@ -26,7 +26,7 @@ __all__ = [
     'get_client',
     'CostTracker',
     'get_cost_tracker',
-    # Pool (Fase 0 — inativo com flag=false)
+    # Pool (ativo por default — flag USE_PERSISTENT_SDK_CLIENT)
     'submit_coroutine',
     'get_or_create_client',
     'disconnect_client',

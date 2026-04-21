@@ -1,9 +1,10 @@
 """
 PostgresSessionStore adapter para claude-agent-sdk 0.1.64+.
 
-Fase B (cutover ativo, 2026-04-21): source-of-truth. Substitui o ciclo
-manual backup/restore JSONL ↔ AgentSession.sdk_session_transcript (TEXT blob)
-pelo contrato SessionStore oficial (append/load/list_sessions/delete/list_subkeys
+Fase B (cutover ativo, 2026-04-21) + Fase C (coluna legada dropada, 2026-04-21):
+source-of-truth do transcript JSONL. Substituiu o ciclo manual backup/restore
+JSONL ↔ AgentSession.sdk_session_transcript (TEXT blob, coluna REMOVIDA) pelo
+contrato SessionStore oficial (append/load/list_sessions/delete/list_subkeys
 sob tabela claude_session_store).
 
 Schema: copia fiel de examples/session_stores/postgres_session_store.py (SDK 0.1.64,
@@ -56,8 +57,6 @@ __all__ = [
     "PostgresSessionStore",
     "get_or_create_session_store",
     "close_session_store_pool",
-    "session_has_legacy_transcript",
-    "session_has_store_entries",
     "_store_implements",  # util publico, replica de SDK._internal
 ]
 
@@ -435,95 +434,8 @@ async def get_or_create_session_store() -> PostgresSessionStore:
     return PostgresSessionStore(pool=pool)
 
 
-async def session_has_legacy_transcript(session_id: str) -> bool:
-    """Checa via asyncpg se AgentSession tem sdk_session_transcript populado.
-
-    Usa o mesmo pool asyncpg do adapter — NAO depende de Flask-SQLAlchemy nem de
-    app_context ativo. Critico em `_stream_response_persistent` que roda em
-    daemon thread do client_pool SEM Flask context.
-
-    Retorna True se session existe E tem transcript (path legado deve ser usado).
-    Retorna False em qualquer outro caso (session nova, nao existe, ou erro →
-    nesse caso conservador: prefere ativar store a bloquear).
-
-    Args:
-        session_id: UUID do nosso AgentSession (coluna agent_sessions.session_id).
-    """
-    if not session_id:
-        return False
-    try:
-        pool = await _get_pool()
-        row = await pool.fetchrow(
-            """
-            SELECT 1 AS has_tr
-            FROM agent_sessions
-            WHERE session_id = $1
-              AND sdk_session_transcript IS NOT NULL
-              AND length(sdk_session_transcript) > 0
-            LIMIT 1
-            """,
-            session_id,
-        )
-        return row is not None
-    except Exception as e:
-        # Em caso de erro: NAO usamos fallback conservador (como era na versao
-        # Flask-SQLAlchemy) porque isso silenciava a feature. Preferimos tratar
-        # como session nova — se ela realmente for legada, SDK materialize
-        # retorna None, spawn sem resume, fallback XML via UserPromptSubmit hook
-        # reinjeta contexto das ultimas 10 msgs (defense in depth).
-        logger.warning(
-            f"[SESSION_STORE] check legacy transcript falhou (tratando como "
-            f"session nova): {e}"
-        )
-        return False
-
-
-async def session_has_store_entries(
-    session_id: str, project_key: str, table: str = "claude_session_store"
-) -> bool:
-    """Checa se claude_session_store ja tem entries para esta session.
-
-    Uso: em `_stream_response_persistent`, priorizar ativacao do store se
-    sessoes anteriores JA gravaram entries (mesmo que `sdk_session_transcript`
-    tambem esteja populado pelo path legado em paralelo). Sem isso, a partir
-    do 2o turno de uma session nova, o criterio C4 `has_legacy_transcript=True`
-    force SKIP — e o store ficaria com apenas 1 turno, nao ganhando resume.
-
-    Logica de ativacao completa:
-      1. Se store ja tem entries dessa session → ENABLE (continuar usando)
-      2. Senao se has_legacy_transcript → SKIP (session pre-existente)
-      3. Senao → ENABLE (session nova)
-
-    Args:
-        session_id: sdk_session_id (UUID do JSONL / chave no store).
-        project_key: project_key do store (ex: `project_key_for_directory(cwd)`).
-        table: nome da tabela (default "claude_session_store").
-
-    Retorna True se existe ao menos 1 row no main transcript (subpath='').
-    Retorna False se tabela vazia para essa key ou erro.
-    """
-    if not session_id or not project_key:
-        return False
-    # Guard contra SQL injection via table name (mesmo do adapter)
-    if not _IDENT_RE.match(table):
-        logger.warning(f"[SESSION_STORE] table name invalido: {table!r}")
-        return False
-    try:
-        pool = await _get_pool()
-        row = await pool.fetchrow(
-            f"""
-            SELECT 1 AS has_entries
-            FROM {table}
-            WHERE project_key = $1 AND session_id = $2 AND subpath = ''
-            LIMIT 1
-            """,
-            project_key,
-            session_id,
-        )
-        return row is not None
-    except Exception as e:
-        logger.warning(
-            f"[SESSION_STORE] check store entries falhou (tratando como sem "
-            f"entries): {e}"
-        )
-        return False
+# REMOVIDO (Fase C, 2026-04-21): `session_has_legacy_transcript` e
+# `session_has_store_entries`. Ambas eram helpers do criterio C4 dual-run da
+# Fase A (checagem de qual path usar — store vs legado via
+# `sdk_session_transcript`). Pos-cutover Fase B, a flag e universal e a
+# coluna legada foi dropada — nao ha mais decisao condicional de path.

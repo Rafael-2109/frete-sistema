@@ -11,8 +11,8 @@ CAVEAT SDK: "you cannot use a ClaudeSDKClient instance across different
 async runtime contexts". Por isso TODAS as operações rodam no MESMO
 event loop do daemon thread.
 
-Feature flag: USE_PERSISTENT_SDK_CLIENT (default false)
-Quando false: daemon thread NÃO inicia, funções retornam None/raise.
+Feature flag: USE_PERSISTENT_SDK_CLIENT (default true)
+Quando false: daemon thread NÃO inicia, funções retornam None/raise — rollback para query() standalone (spawn + destroy CLI por turno).
 
 Ref: .claude/references/ROADMAP_SDK_CLIENT.md (Fase 0, Task 0.2)
 """

@@ -92,6 +92,11 @@ class AgentSettings:
     # Preset operacional (substitui preset claude_code quando USE_CUSTOM_SYSTEM_PROMPT=true)
     operational_preset_path: str = "app/agente/prompts/preset_operacional.md"
 
+    # Briefing institucional da Nacom Goya (cadeia de valor, sistemas, gargalos, vocabulario).
+    # Concatenado ao system_prompt estatico via _build_full_system_prompt() — cacheavel.
+    # Mesmo arquivo tambem consumido por pattern_analyzer.py (extracao pos-sessao Sonnet).
+    empresa_briefing_path: str = "app/agente/config/empresa_briefing.md"
+
     # Logs
     log_tool_calls: bool = True
 

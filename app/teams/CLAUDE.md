@@ -158,7 +158,7 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 |-----------|-------|---------|
 | `app/agente/sdk/` | client, client_pool, session_persistence, pending_questions | Mudanca em qualquer um DEVE ser testada no Teams |
 | `app/agente/config/` | permissions (ContextVar), feature_flags | Context vars cross-thread |
-| `app/agente/models.py` | AgentSession | JSONB `data`, `sdk_session_transcript` |
+| `app/agente/models.py` | AgentSession | JSONB `data` (transcript vive em `claude_session_store` pos-Fase C) |
 | `app/auth/models.py` | Usuario | Auto-cadastro FK |
 
 > **REGRA** (de `app/agente/CLAUDE.md:232-234`): Qualquer mudanca em `permissions.py`, `models.py`, `client.py`, `feature_flags.py`, `session_persistence.py` ou `pending_questions.py` DEVE ser testada no Teams bot.

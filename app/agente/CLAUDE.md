@@ -170,7 +170,7 @@ Segue o modelo de 5 camadas do Agent SDK (Anthropic):
 - **Resume** usa `sdk_session_id` (CLI carrega sessao do disco)
 - **Banco** usa `session_id` (nosso controle, FK em queries)
 - Confundir os dois causa sessao perdida ou mensagens em sessao errada
-- `sdk_session_transcript` e TEXT separado (ate 1GB), NAO JSONB — decisao de performance
+- ~~`sdk_session_transcript` e TEXT separado~~ REMOVIDA em Fase C (2026-04-21) — transcript vive em `claude_session_store`
 - **GOTCHA restore**: `session_persistence.py:136` — se JSONL existe no disco, NAO re-restaura do banco. JSONL corrompido (crash, escrita parcial) → resume falha silenciosamente, SDK cria sessao nova, contexto perdido sem erro visivel
 
 ### R2: Thread-safety — 3 mecanismos distintos
@@ -343,6 +343,18 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 3. **`static/agente/js/chat.js`** — `case 'xxx':` no switch de SSE
 
 **Se uma camada faltar, o evento e silenciosamente descartado.** Nao ha validacao automatica.
+
+### Excecao R8: eventos emitidos de `can_use_tool` (raw SSE via event_queue)
+
+`ask_user_question` (`config/permissions.py:419`) e `destructive_action_warning` (`config/permissions.py:620`) violam o contrato de 3 camadas **por design**:
+
+- Sao emitidos de DENTRO do callback `can_use_tool` do SDK (pre-tool hook), nao durante parsing de mensagens.
+- `can_use_tool` roda em thread separada, sem acesso a instancia `AgentClient` nem ao parser `_parse_sdk_message`.
+- Usam `event_queue.put(f"event: {type}\ndata: {json}\n\n")` diretamente — raw SSE string via `queue.Queue` cross-thread.
+- SSE generator em `routes/chat.py` dreva o `event_queue` e repassa para o frontend.
+- camada 3 (chat.js case) e mantida normalmente.
+
+**Regra**: ao adicionar novo evento emitido de `can_use_tool` ou outro callback async, usar o mesmo padrao `event_queue.put(raw_sse_string)` — NAO tentar passar por `StreamEvent` (nao ha contexto).
 
 ### Mapa de eventos (atualizado 2026-04-01)
 
@@ -571,11 +583,13 @@ Tabela `claude_session_store` substituiu `session_persistence.py` — SDK 0.1.64
 - ✅ 81/81 testes existentes passaram pos-cutover
 - Fallback defense in depth: se store falhar, `UserPromptSubmit` hook (`chat.py:341-360`) reinjeta contexto XML das ultimas 10 msgs do `AgentSession.data['messages']` JSONB
 
-### Fase C (cleanup, opcional — nao executada)
+### Fase C (cleanup) — EXECUTADA 2026-04-21
 
-- `ALTER TABLE agent_sessions DROP COLUMN sdk_session_transcript` (libera ~66MB + remove coluna confusa)
-- Remover `AgentSession.save_transcript()` / `get_transcript()` (nao mais usados)
-- Remover `session_persistence.py` completamente (precisa encontrar novo lugar para `_get_session_path`)
+- ✅ `ALTER TABLE agent_sessions DROP COLUMN sdk_session_transcript` via `scripts/migrations/2026_04_21_drop_sdk_session_transcript.{py,sql}` (libera ~66MB)
+- ✅ `AgentSession.save_transcript()` / `get_transcript()` removidos (`models.py` — zero callers verificados antes do drop)
+- ✅ `session_store_adapter.session_has_legacy_transcript()` e `session_has_store_entries()` removidas (helpers do criterio C4 dual-run, orfas pos-Fase B)
+- ✅ `session_turn_indexer.py` removido `defer(AgentSession.sdk_session_transcript)` — nao mais necessario
+- ⏳ `session_persistence.py` mantido como helpers de path (2 funcoes) — remocao completa exige realocar `_get_session_path` usado em cleanup stale JSONL
 
 ### Referencias
 
