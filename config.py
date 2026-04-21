@@ -172,6 +172,21 @@ class Config:
     RQ_DASHBOARD_REDIS_URL = REDIS_URL
     RQ_DASHBOARD_WEB_BACKGROUND = True  # Executa em background
 
+    # ==========================================
+    # PLUGGY OPEN FINANCE — modulo pessoal (Bradesco via Meu Pluggy)
+    # ==========================================
+    PLUGGY_CLIENT_ID = os.environ.get('PLUGGY_CLIENT_ID')
+    PLUGGY_CLIENT_SECRET = os.environ.get('PLUGGY_CLIENT_SECRET')
+    PLUGGY_API_KEY = os.environ.get('PLUGGY_API_KEY')  # opcional; fallback do cache Redis
+    PLUGGY_WEBHOOK_SECRET = os.environ.get('PLUGGY_WEBHOOK_SECRET')
+    PLUGGY_INCLUDE_SANDBOX = os.environ.get('PLUGGY_INCLUDE_SANDBOX', 'false').lower() == 'true'
+    PLUGGY_API_HOST = os.environ.get('PLUGGY_API_HOST', 'https://api.pluggy.ai')
+    # URL publica do webhook — sobrescrever no Render se precisar dominio custom
+    PLUGGY_WEBHOOK_URL = os.environ.get(
+        'PLUGGY_WEBHOOK_URL',
+        'https://sistema-fretes.onrender.com/pessoal/pluggy/webhook',
+    )
+
 
 class TestConfig(Config):
     TESTING = True

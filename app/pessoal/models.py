@@ -1,5 +1,5 @@
 """
-Models do modulo Pessoal — 8 tabelas para controle de financas pessoais.
+Models do modulo Pessoal — 8 tabelas principais + 4 tabelas staging Pluggy.
 
 Convencao de timezone: agora_utc_naive() para todos os timestamps (Brasil naive).
 Convencao monetaria: Numeric(15,2) para valores em R$, Numeric(15,4) para USD.
@@ -7,6 +7,7 @@ Convencao monetaria: Numeric(15,2) para valores em R$, Numeric(15,4) para USD.
 from app import db
 from app.utils.timezone import agora_utc_naive
 from sqlalchemy import Index
+from sqlalchemy.dialects.postgresql import JSONB
 import json
 
 
@@ -55,6 +56,11 @@ class PessoalConta(db.Model):
     ultimos_digitos_cartao = db.Column(db.String(10))
     membro_id = db.Column(db.Integer, db.ForeignKey('pessoal_membros.id'))
     ativa = db.Column(db.Boolean, default=True)
+    # Vinculo Pluggy (Fase 4): quando conta foi conectada via Open Finance
+    pluggy_account_id = db.Column(db.String(50), unique=True)
+    pluggy_item_pk = db.Column(
+        db.Integer, db.ForeignKey('pessoal_pluggy_items.id', ondelete='SET NULL'),
+    )
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
 
     # Relacionamentos
@@ -309,6 +315,15 @@ class PessoalTransacao(db.Model):
     # Deduplicacao
     hash_transacao = db.Column(db.String(64), nullable=False, unique=True)
 
+    # Pluggy / Open Finance (Fase 4) — NULL quando origem != 'pluggy'
+    pluggy_transaction_id = db.Column(db.String(64))
+    origem_import = db.Column(db.String(20), nullable=False, default='csv')  # csv | ofx | pluggy
+    operation_type = db.Column(db.String(30))  # TED | PIX | BOLETO | ...
+    merchant_nome = db.Column(db.String(200))
+    merchant_cnpj = db.Column(db.String(20))
+    categoria_pluggy_id = db.Column(db.String(20))
+    categoria_pluggy_sugerida = db.Column(db.String(100))
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
@@ -327,6 +342,13 @@ class PessoalTransacao(db.Model):
             'cpf_cnpj_parte',
             postgresql_where=db.text('cpf_cnpj_parte IS NOT NULL'),
         ),
+        Index(
+            'uq_pessoal_transacoes_pluggy_tx',
+            'pluggy_transaction_id',
+            unique=True,
+            postgresql_where=db.text('pluggy_transaction_id IS NOT NULL'),
+        ),
+        Index('idx_pessoal_transacoes_origem', 'origem_import'),
     )
 
     def __repr__(self):
@@ -539,3 +561,287 @@ pessoal_grupos_analise_categorias = db.Table(
               primary_key=True),
     Index('idx_pessoal_gac_categoria', 'categoria_id'),
 )
+
+
+# =============================================================================
+# STAGING PLUGGY — 4 tabelas para Open Finance (Fase 1)
+# =============================================================================
+# Recebem dados fieis ao payload Pluggy. NAO tocam PessoalTransacao/PessoalConta.
+# Migracao para modelos principais ocorre em fase posterior (apos dry-run validado).
+# =============================================================================
+
+class PessoalPluggyItem(db.Model):
+    """Conexao Pluggy (item) = 1 banco conectado via OAuth/Open Finance."""
+    __tablename__ = 'pessoal_pluggy_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pluggy_item_id = db.Column(db.String(50), nullable=False, unique=True)
+    # client_user_id = str(User.id). NAO e FK — controle via USUARIOS_PESSOAL
+    client_user_id = db.Column(db.String(20), nullable=False, index=True)
+    connector_id = db.Column(db.Integer, nullable=False)
+    connector_name = db.Column(db.String(100))
+    # UPDATING | UPDATED | LOGIN_ERROR | OUTDATED | WAITING_USER_INPUT
+    status = db.Column(db.String(30), nullable=False, index=True)
+    execution_status = db.Column(db.String(50))
+    consent_expires_at = db.Column(db.DateTime)
+    ultimo_sync = db.Column(db.DateTime)
+    ultimo_webhook_em = db.Column(db.DateTime)
+    erro_mensagem = db.Column(db.Text)
+    payload_raw = db.Column(JSONB)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive,
+                              onupdate=agora_utc_naive, nullable=False)
+
+    accounts = db.relationship('PessoalPluggyAccount', backref='item',
+                               lazy='dynamic', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<PessoalPluggyItem {self.pluggy_item_id} user={self.client_user_id} {self.status}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'pluggy_item_id': self.pluggy_item_id,
+            'client_user_id': self.client_user_id,
+            'connector_id': self.connector_id,
+            'connector_name': self.connector_name,
+            'status': self.status,
+            'execution_status': self.execution_status,
+            'consent_expires_at': (
+                self.consent_expires_at.isoformat() if self.consent_expires_at else None
+            ),
+            'ultimo_sync': self.ultimo_sync.isoformat() if self.ultimo_sync else None,
+            'ultimo_webhook_em': (
+                self.ultimo_webhook_em.isoformat() if self.ultimo_webhook_em else None
+            ),
+            'erro_mensagem': self.erro_mensagem,
+        }
+
+
+class PessoalPluggyAccount(db.Model):
+    """Conta Pluggy dentro de um item (BANK conta corrente ou CREDIT cartao)."""
+    __tablename__ = 'pessoal_pluggy_accounts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pluggy_item_pk = db.Column(
+        db.Integer, db.ForeignKey('pessoal_pluggy_items.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    pluggy_account_id = db.Column(db.String(50), nullable=False, unique=True)
+    type = db.Column(db.String(10), nullable=False, index=True)  # BANK | CREDIT
+    subtype = db.Column(db.String(30))  # CHECKING_ACCOUNT | SAVINGS_ACCOUNT | CREDIT_CARD
+    # BANK: "0001/12345-0"  |  CREDIT: 4 ultimos digitos ("1234")
+    number = db.Column(db.String(50))
+    name = db.Column(db.String(200))
+    marketing_name = db.Column(db.String(200))
+    owner_name = db.Column(db.String(200))
+    tax_number = db.Column(db.String(30))
+    # BANK: saldo conta. CREDIT: saldo devedor (nao mapear para Transacao.saldo)
+    balance = db.Column(db.Numeric(15, 2))
+    currency_code = db.Column(db.String(3), default='BRL')
+    bank_data = db.Column(JSONB)    # transferNumber, closingBalance
+    credit_data = db.Column(JSONB)  # level, brand, dueDate, creditLimit, minimumPayment
+    payload_raw = db.Column(JSONB)
+    # Vinculo pos-aprovacao (Fase 4)
+    conta_pessoal_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_contas.id', ondelete='SET NULL')
+    )
+    conta_vinculada_em = db.Column(db.DateTime)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive,
+                              onupdate=agora_utc_naive, nullable=False)
+
+    transacoes_stg = db.relationship(
+        'PessoalPluggyTransacaoStg', backref='account',
+        lazy='dynamic', cascade='all, delete-orphan',
+    )
+    conta_pessoal = db.relationship('PessoalConta', foreign_keys=[conta_pessoal_id])
+
+    def __repr__(self):
+        return f'<PessoalPluggyAccount {self.pluggy_account_id} {self.type} {self.number}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'pluggy_item_pk': self.pluggy_item_pk,
+            'pluggy_account_id': self.pluggy_account_id,
+            'type': self.type,
+            'subtype': self.subtype,
+            'number': self.number,
+            'name': self.name,
+            'marketing_name': self.marketing_name,
+            'owner_name': self.owner_name,
+            'tax_number': self.tax_number,
+            'balance': float(self.balance) if self.balance is not None else None,
+            'currency_code': self.currency_code,
+            'bank_data': self.bank_data,
+            'credit_data': self.credit_data,
+            'conta_pessoal_id': self.conta_pessoal_id,
+            'conta_vinculada_em': (
+                self.conta_vinculada_em.isoformat() if self.conta_vinculada_em else None
+            ),
+        }
+
+
+class PessoalPluggyTransacaoStg(db.Model):
+    """Staging de transacoes Pluggy — fiel ao payload, sem adapter aplicado.
+
+    ALERTA 1: amount e signed. BANK: +entrada/-saida. CREDIT_CARD: +compra/-estorno.
+    O adapter (pluggy_adapter.py, Fase 3) trata a divergencia antes de migrar para
+    PessoalTransacao.
+    """
+    __tablename__ = 'pessoal_pluggy_transacoes_stg'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pluggy_account_pk = db.Column(
+        db.Integer, db.ForeignKey('pessoal_pluggy_accounts.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    pluggy_transaction_id = db.Column(db.String(64), nullable=False, unique=True)
+    # Core (fiel ao payload)
+    date = db.Column(db.DateTime, nullable=False, index=True)
+    description = db.Column(db.String(500))
+    description_raw = db.Column(db.String(500))
+    amount = db.Column(db.Numeric(15, 2), nullable=False)
+    amount_in_account_currency = db.Column(db.Numeric(15, 2))
+    currency_code = db.Column(db.String(3))
+    balance = db.Column(db.Numeric(15, 2))
+    category = db.Column(db.String(100))
+    category_id = db.Column(db.String(20))
+    category_translated = db.Column(db.String(100))
+    provider_code = db.Column(db.String(100))
+    provider_id = db.Column(db.String(100))
+    type = db.Column(db.String(10))   # CREDIT | DEBIT
+    status = db.Column(db.String(20), index=True)  # POSTED | PENDING
+    operation_type = db.Column(db.String(30))  # TED | PIX | BOLETO | ...
+    # Nested
+    payment_data = db.Column(JSONB)
+    credit_card_metadata = db.Column(JSONB)
+    merchant = db.Column(JSONB)
+    payload_raw = db.Column(JSONB, nullable=False)
+    # Controle do staging
+    visto_em_sync_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    # PENDENTE | DRY_RUN | APROVADO | MIGRADO | REPROVADO | IGNORAR
+    status_processamento = db.Column(
+        db.String(20), nullable=False, default='PENDENTE', index=True,
+    )
+    # Vinculo pos-migracao
+    transacao_pessoal_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_transacoes.id', ondelete='SET NULL'),
+    )
+    migrado_em = db.Column(db.DateTime)
+    observacao_migracao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive,
+                              onupdate=agora_utc_naive, nullable=False)
+
+    transacao_pessoal = db.relationship(
+        'PessoalTransacao', foreign_keys=[transacao_pessoal_id]
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "status_processamento IN ('PENDENTE', 'DRY_RUN', 'APROVADO', "
+            "'MIGRADO', 'REPROVADO', 'IGNORAR')",
+            name='ck_pluggy_stg_status_proc',
+        ),
+        Index(
+            'idx_pluggy_stg_transacao', 'transacao_pessoal_id',
+            postgresql_where=db.text('transacao_pessoal_id IS NOT NULL'),
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<PluggyTxStg {self.pluggy_transaction_id} {self.date} '
+            f'R${self.amount} {self.status} [{self.status_processamento}]>'
+        )
+
+    def to_dict(self, incluir_payload_raw: bool = False):
+        d = {
+            'id': self.id,
+            'pluggy_account_pk': self.pluggy_account_pk,
+            'pluggy_transaction_id': self.pluggy_transaction_id,
+            'date': self.date.isoformat() if self.date else None,
+            'description': self.description,
+            'description_raw': self.description_raw,
+            'amount': float(self.amount) if self.amount is not None else None,
+            'amount_in_account_currency': (
+                float(self.amount_in_account_currency)
+                if self.amount_in_account_currency is not None else None
+            ),
+            'currency_code': self.currency_code,
+            'balance': float(self.balance) if self.balance is not None else None,
+            'category': self.category,
+            'category_id': self.category_id,
+            'category_translated': self.category_translated,
+            'provider_code': self.provider_code,
+            'provider_id': self.provider_id,
+            'type': self.type,
+            'status': self.status,
+            'operation_type': self.operation_type,
+            'payment_data': self.payment_data,
+            'credit_card_metadata': self.credit_card_metadata,
+            'merchant': self.merchant,
+            'status_processamento': self.status_processamento,
+            'transacao_pessoal_id': self.transacao_pessoal_id,
+            'migrado_em': self.migrado_em.isoformat() if self.migrado_em else None,
+            'observacao_migracao': self.observacao_migracao,
+        }
+        if incluir_payload_raw:
+            d['payload_raw'] = self.payload_raw
+        return d
+
+
+class PessoalPluggyCategoriaMap(db.Model):
+    """Mapeia categoryId hierarquico Pluggy para PessoalCategoria local.
+
+    Exemplo: pluggy_category_id='05080000' (Transfer - TED) -> pessoal_categoria_id
+    Codigos Pluggy sao 8 digitos, com parent_id tambem 8 digitos (hierarquia 2 niveis).
+    """
+    __tablename__ = 'pessoal_pluggy_categorias_map'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pluggy_category_id = db.Column(db.String(20), nullable=False, unique=True)
+    pluggy_category_description = db.Column(db.String(100))  # EN
+    pluggy_category_translated = db.Column(db.String(100))   # PT
+    pluggy_parent_id = db.Column(db.String(20), index=True)
+    pessoal_categoria_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_categorias.id', ondelete='SET NULL'),
+        index=True,
+    )
+    confianca = db.Column(db.Numeric(5, 2), default=100)
+    # manual | sugerida | aprovada | semente
+    origem = db.Column(db.String(20), default='manual')
+    observacao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive,
+                              onupdate=agora_utc_naive, nullable=False)
+
+    pessoal_categoria = db.relationship('PessoalCategoria')
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "origem IN ('manual', 'sugerida', 'aprovada', 'semente')",
+            name='ck_pluggy_cat_map_origem',
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<PluggyCatMap {self.pluggy_category_id} "{self.pluggy_category_translated}" '
+            f'-> cat_id={self.pessoal_categoria_id}>'
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'pluggy_category_id': self.pluggy_category_id,
+            'pluggy_category_description': self.pluggy_category_description,
+            'pluggy_category_translated': self.pluggy_category_translated,
+            'pluggy_parent_id': self.pluggy_parent_id,
+            'pessoal_categoria_id': self.pessoal_categoria_id,
+            'confianca': float(self.confianca) if self.confianca else 100,
+            'origem': self.origem,
+            'observacao': self.observacao,
+        }

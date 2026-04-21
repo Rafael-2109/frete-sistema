@@ -44,6 +44,7 @@ from app.pessoal.routes.dashboard import dashboard_bp  # noqa: E402
 from app.pessoal.routes.orcamento import orcamento_bp  # noqa: E402
 from app.pessoal.routes.analise import analise_bp  # noqa: E402
 from app.pessoal.routes.compensacao import compensacao_bp  # noqa: E402
+from app.pessoal.routes.pluggy import pluggy_bp  # noqa: E402
 
 pessoal_bp.register_blueprint(importacao_bp)
 pessoal_bp.register_blueprint(transacoes_bp)
@@ -52,3 +53,4 @@ pessoal_bp.register_blueprint(dashboard_bp)
 pessoal_bp.register_blueprint(orcamento_bp)
 pessoal_bp.register_blueprint(analise_bp)
 pessoal_bp.register_blueprint(compensacao_bp)
+pessoal_bp.register_blueprint(pluggy_bp)

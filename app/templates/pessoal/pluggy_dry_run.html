@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>
+      <i class="fas fa-vial"></i> Dry-Run — {{ item.connector_name }}
+      <small class="text-muted">({{ item.pluggy_item_id[:8] }}...)</small>
+    </h4>
+    <a href="{{ url_for('pessoal.pessoal_pluggy.painel') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+  </div>
+
+  {# ========= STATS ========= #}
+  <div class="row mb-3">
+    <div class="col-md-2">
+      <div class="card border-primary">
+        <div class="card-body text-center py-2">
+          <div class="text-muted small">Analisadas</div>
+          <h4 class="mb-0">{{ resultado.total_analisado }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-success">
+        <div class="card-body text-center py-2">
+          <div class="text-muted small">Categorizadas</div>
+          <h4 class="mb-0 text-success">{{ resultado.categorizadas }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-warning">
+        <div class="card-body text-center py-2">
+          <div class="text-muted small">Sem Categoria</div>
+          <h4 class="mb-0 text-warning">{{ resultado.sem_categoria }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-info">
+        <div class="card-body text-center py-2">
+          <div class="text-muted small">Duplicatas</div>
+          <h4 class="mb-0 text-info">{{ resultado.duplicadas_em_pessoal }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-danger">
+        <div class="card-body text-center py-2">
+          <div class="text-muted small">Com Alertas</div>
+          <h4 class="mb-0 text-danger">{{ resultado.com_alertas }}</h4>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <div class="card border-secondary">
+        <div class="card-body text-center py-2">
+          <div class="text-muted small">Accounts</div>
+          <h4 class="mb-0">{{ resultado.accounts }}</h4>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ========= ACOES EM LOTE ========= #}
+  <div class="card mb-3">
+    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+      <div>
+        <form id="form-lote" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <span class="me-2"><strong>Acoes em lote (todas DRY_RUN):</strong></span>
+          <button type="button" class="btn btn-success btn-sm" data-status="APROVADO">
+            <i class="fas fa-check"></i> Aprovar tudo
+          </button>
+          <button type="button" class="btn btn-warning btn-sm" data-status="IGNORAR">
+            <i class="fas fa-eye-slash"></i> Ignorar tudo
+          </button>
+          <button type="button" class="btn btn-danger btn-sm" data-status="REPROVADO">
+            <i class="fas fa-ban"></i> Reprovar tudo
+          </button>
+        </form>
+      </div>
+      <div>
+        <button type="button" id="btn-merge" class="btn btn-dark btn-sm">
+          <i class="fas fa-exchange-alt"></i> Executar Merge (APROVADAS -> PessoalTransacao)
+        </button>
+        <span class="text-muted small ms-3">
+          Rodado em: {{ resultado.rodado_em[:16] }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  {# ========= TABELA ========= #}
+  <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+    <table class="table table-sm table-hover table-bordered">
+      <thead class="table-dark sticky-top">
+        <tr>
+          <th>Data</th>
+          <th>Conta</th>
+          <th>Historico</th>
+          <th class="text-end">Valor</th>
+          <th>Tipo</th>
+          <th>OpType</th>
+          <th>Categoria Simulada</th>
+          <th>Cat. Pluggy</th>
+          <th>Parcela</th>
+          <th>Duplicata?</th>
+          <th>Alertas</th>
+          <th>Acao</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tx in resultado.preview %}
+        {% if tx.erro %}
+        <tr class="table-danger">
+          <td colspan="12"><strong>Erro stg#{{ tx.stg_id }}:</strong> {{ tx.erro }}</td>
+        </tr>
+        {% else %}
+        <tr data-stg-id="{{ tx.stg_id }}">
+          <td><small>{{ tx.data }}</small></td>
+          <td>
+            {% if tx.account_type == 'BANK' %}
+              <span class="badge bg-info">CC</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">CC CR</span>
+            {% endif %}
+          </td>
+          <td>
+            <div>{{ tx.historico }}</div>
+            {% if tx.descricao %}<div class="text-muted small">{{ tx.descricao[:80] }}</div>{% endif %}
+            {% if tx.merchant_nome %}
+              <div class="text-muted small"><i class="fas fa-store"></i> {{ tx.merchant_nome[:40] }}</div>
+            {% endif %}
+            {% if tx.cpf_cnpj %}
+              <div class="text-muted small">CPF/CNPJ: <code>{{ tx.cpf_cnpj }}</code></div>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <strong>R$ {{ '%.2f'|format(tx.valor)|replace('.', ',') }}</strong>
+            {% if tx.saldo is not none %}
+              <br><small class="text-muted">S: {{ '%.2f'|format(tx.saldo)|replace('.', ',') }}</small>
+            {% endif %}
+          </td>
+          <td>
+            {% if tx.tipo == 'credito' %}
+              <span class="badge bg-success">+</span>
+            {% else %}
+              <span class="badge bg-danger">-</span>
+            {% endif %}
+          </td>
+          <td><small>{{ tx.operation_type or '-' }}</small></td>
+          <td>
+            {% if tx.categoria_simulada.categoria_id %}
+              <span class="badge bg-primary">{{ tx.categoria_simulada.categoria_nome }}</span>
+              <div class="text-muted small">
+                {{ tx.categoria_simulada.origem }}
+                {% if tx.categoria_simulada.regra_padrao %}
+                  — <code>{{ tx.categoria_simulada.regra_padrao[:30] }}</code>
+                {% endif %}
+              </div>
+            {% else %}
+              <span class="badge bg-secondary">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if tx.categoria_pluggy.descricao %}
+              <small>{{ tx.categoria_pluggy.descricao }}</small>
+              <div class="text-muted small"><code>{{ tx.categoria_pluggy.id }}</code></div>
+            {% else %}—{% endif %}
+          </td>
+          <td><small>{{ tx.parcela or '-' }}</small></td>
+          <td>
+            {% if tx.duplicata_pessoal_id %}
+              <span class="badge bg-info">Sim #{{ tx.duplicata_pessoal_id }}</span>
+              {% if tx.duplicata_historico %}
+                <div class="text-muted small">{{ tx.duplicata_historico }}</div>
+              {% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% for a in tx.alertas %}
+              <div class="badge bg-warning text-dark">{{ a[:35] }}...</div>
+            {% endfor %}
+          </td>
+          <td>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-success btn-aprovar" data-status="APROVADO" title="Aprovar">
+                <i class="fas fa-check"></i>
+              </button>
+              <button class="btn btn-outline-warning btn-aprovar" data-status="IGNORAR" title="Ignorar">
+                <i class="fas fa-eye-slash"></i>
+              </button>
+              <button class="btn btn-outline-danger btn-aprovar" data-status="REPROVADO" title="Reprovar">
+                <i class="fas fa-ban"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function() {
+  const csrfToken = '{{ csrf_token() }}';
+  const itemPk = {{ item.id }};
+
+  // Aprovar em lote
+  document.querySelectorAll('#form-lote button').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const status = btn.dataset.status;
+      if (!confirm('Confirma marcar TODAS as DRY_RUN como ' + status + '?')) return;
+      const resp = await fetch(`{{ url_for('pessoal.pessoal_pluggy.aprovar_lote', item_pk=0) }}`.replace('/0', '/' + itemPk), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({status: status})
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        alert(data.total_marcadas + ' transacoes marcadas como ' + status);
+        location.reload();
+      } else {
+        alert('Erro: ' + (data.erro || 'desconhecido'));
+      }
+    });
+  });
+
+  // Merge (APROVADAS -> PessoalTransacao)
+  const btnMerge = document.getElementById('btn-merge');
+  if (btnMerge) {
+    btnMerge.addEventListener('click', async () => {
+      if (!confirm('Executar merge? Isso cria PessoalTransacao reais a partir das STG marcadas como APROVADO.')) return;
+      btnMerge.disabled = true;
+      btnMerge.textContent = 'Executando merge...';
+      const resp = await fetch(`{{ url_for('pessoal.pessoal_pluggy.executar_merge', item_pk=0) }}`.replace('/0', '/' + itemPk), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken}
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        alert(`Merge concluido:\n- Criadas: ${data.criadas}\n- Atualizadas: ${data.atualizadas}\n- Skips: ${data.skips}\n- Erros: ${data.erros}`);
+        location.reload();
+      } else {
+        alert('Erro: ' + (data.erro || 'desconhecido'));
+        btnMerge.disabled = false;
+      }
+    });
+  }
+
+  // Aprovar individual
+  document.querySelectorAll('.btn-aprovar').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tr = btn.closest('tr');
+      const stgId = tr.dataset.stgId;
+      const status = btn.dataset.status;
+      const resp = await fetch(`/pessoal/pluggy/aprovar/${stgId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({status: status})
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        tr.classList.add('table-success');
+        tr.style.opacity = '0.5';
+      } else {
+        alert('Erro: ' + (data.erro || 'desconhecido'));
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

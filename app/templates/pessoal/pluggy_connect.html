@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4><i class="fas fa-university"></i> Conectar Banco via Open Finance</h4>
+    <a href="{{ url_for('pessoal.pessoal_pluggy.painel') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <i class="fas fa-shield-alt"></i> Autorizacao via Meu Pluggy
+    </div>
+    <div class="card-body">
+      <p>
+        O widget abaixo permite conectar sua conta bancaria via Open Finance Brasil.
+        Voce sera redirecionado para autorizar no app do banco.
+      </p>
+      <p class="text-muted small mb-3">
+        Todos os dados entram em uma area de <strong>validacao (staging)</strong> — nao se
+        misturam com suas transacoes atuais ate voce aprovar.
+      </p>
+
+      <div id="pluggy-status" class="alert alert-info d-none" role="status"></div>
+      <div id="pluggy-erro" class="alert alert-danger d-none" role="alert"></div>
+
+      <button id="btn-abrir-widget" class="btn btn-primary btn-lg">
+        <i class="fas fa-plug"></i> Conectar Banco
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.pluggy.ai/pluggy-connect/v2.10.0/pluggy-connect.js"></script>
+<script>
+(function() {
+  const btnAbrir = document.getElementById('btn-abrir-widget');
+  const status = document.getElementById('pluggy-status');
+  const erroBox = document.getElementById('pluggy-erro');
+  const csrfToken = '{{ csrf_token() }}';
+
+  function showStatus(msg) {
+    status.textContent = msg;
+    status.classList.remove('d-none');
+    erroBox.classList.add('d-none');
+  }
+  function showErro(msg) {
+    erroBox.textContent = msg;
+    erroBox.classList.remove('d-none');
+    status.classList.add('d-none');
+  }
+
+  async function obterConnectToken() {
+    const resp = await fetch('{{ url_for("pessoal.pessoal_pluggy.connect_token") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      }
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({erro: 'Falha HTTP ' + resp.status}));
+      throw new Error(err.erro || 'Falha ao gerar token');
+    }
+    const data = await resp.json();
+    return data.accessToken;
+  }
+
+  async function notificarBackend(itemData) {
+    const resp = await fetch('{{ url_for("pessoal.pessoal_pluggy.item_created") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      body: JSON.stringify({
+        itemId: itemData.item ? itemData.item.id : itemData.itemId,
+        item: itemData.item || null
+      })
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({erro: 'Falha HTTP ' + resp.status}));
+      throw new Error(err.erro || 'Falha ao registrar item');
+    }
+    return await resp.json();
+  }
+
+  btnAbrir.addEventListener('click', async () => {
+    try {
+      btnAbrir.disabled = true;
+      showStatus('Gerando token de conexao...');
+
+      const connectToken = await obterConnectToken();
+      showStatus('Abrindo widget Pluggy...');
+
+      const pluggyConnect = new window.PluggyConnect({
+        connectToken: connectToken,
+        includeSandbox: {{ 'true' if include_sandbox else 'false' }},
+        onSuccess: async (itemData) => {
+          try {
+            showStatus('Conta conectada — iniciando sincronizacao em background...');
+            const result = await notificarBackend(itemData);
+            if (result.redirect) {
+              setTimeout(() => { window.location.href = result.redirect; }, 1500);
+            }
+          } catch (e) {
+            showErro('Erro ao notificar backend: ' + e.message);
+            btnAbrir.disabled = false;
+          }
+        },
+        onError: (error) => {
+          console.error('Pluggy error:', error);
+          showErro('Erro na conexao: ' + (error.message || JSON.stringify(error)));
+          btnAbrir.disabled = false;
+        },
+        onClose: () => {
+          btnAbrir.disabled = false;
+          if (status.classList.contains('d-none') === false &&
+              status.textContent.startsWith('Abrindo')) {
+            status.classList.add('d-none');
+          }
+        }
+      });
+      pluggyConnect.init();
+    } catch (e) {
+      showErro(e.message || 'Erro inesperado');
+      btnAbrir.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -28,6 +28,11 @@ xlwt==1.3.0
 python-dateutil==2.9.0.post0
 pytz==2025.2
 requests==2.32.5
+
+# ==========================================
+# OPEN FINANCE / BANKING INTEGRATION
+# ==========================================
+pluggy-sdk>=1.0.0  # Pluggy Open Finance Brasil (modulo pessoal — Bradesco via Meu Pluggy)
 urllib3>=2.6.0             # CVE-2025-66418 (decompression bomb)
 
 # ==========================================
