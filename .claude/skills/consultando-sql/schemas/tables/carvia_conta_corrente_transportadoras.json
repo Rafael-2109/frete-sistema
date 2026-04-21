@@ -96,6 +96,20 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_conta_corrente_transportadoras_transportadora_id",
+      "columns": [
+        "transportadora_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_fatura_transportadora_id",
+      "columns": [
+        "fatura_transportadora_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_conta_corrente_transportadoras_status",
       "columns": [
         "status"
@@ -113,20 +127,6 @@
       "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
       "columns": [
         "criado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_conta_corrente_transportadoras_transportadora_id",
-      "columns": [
-        "transportadora_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_conta_corrente_transportadoras_fatura_transportadora_id",
-      "columns": [
-        "fatura_transportadora_id"
       ],
       "unique": false
     }

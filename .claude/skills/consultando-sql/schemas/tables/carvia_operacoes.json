@@ -225,16 +225,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_cnpj_cliente",
+      "name": "ix_carvia_operacoes_ctrc_numero",
       "columns": [
-        "cnpj_cliente"
+        "ctrc_numero"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_ctrc_numero",
+      "name": "ix_carvia_operacoes_cnpj_cliente",
       "columns": [
-        "ctrc_numero"
+        "cnpj_cliente"
       ],
       "unique": false
     },

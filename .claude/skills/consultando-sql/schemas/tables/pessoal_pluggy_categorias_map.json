@@ -1,0 +1,81 @@
+{
+  "name": "pessoal_pluggy_categorias_map",
+  "description": "Tabela pessoal_pluggy_categorias_map",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pluggy_category_id",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "pluggy_category_description",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "pluggy_category_translated",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "pluggy_parent_id",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "pessoal_categoria_id",
+      "type": "integer",
+      "description": "FK → pessoal_categorias.id"
+    },
+    {
+      "name": "confianca",
+      "type": "numeric(5,2)",
+      "default": 100
+    },
+    {
+      "name": "origem",
+      "type": "varchar(20)",
+      "default": "manual"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pessoal_categoria_id",
+      "references": "pessoal_categorias.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_pessoal_pluggy_categorias_map_pessoal_categoria_id",
+      "columns": [
+        "pessoal_categoria_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pessoal_pluggy_categorias_map_pluggy_parent_id",
+      "columns": [
+        "pluggy_parent_id"
+      ],
+      "unique": false
+    }
+  ]
+}

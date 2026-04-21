@@ -92,16 +92,23 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_status",
+      "name": "ix_hora_venda_loja_id",
       "columns": [
-        "status"
+        "loja_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_venda_cpf_cliente",
+      "name": "ix_hora_venda_data_venda",
       "columns": [
-        "cpf_cliente"
+        "data_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -113,16 +120,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_loja_id",
+      "name": "ix_hora_venda_cpf_cliente",
       "columns": [
-        "loja_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_data_venda",
-      "columns": [
-        "data_venda"
+        "cpf_cliente"
       ],
       "unique": false
     }

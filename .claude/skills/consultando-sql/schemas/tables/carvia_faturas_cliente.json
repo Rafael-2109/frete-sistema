@@ -162,16 +162,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_faturas_cliente_numero_fatura",
+      "name": "ix_carvia_faturas_cliente_status_conferencia",
       "columns": [
-        "numero_fatura"
+        "status_conferencia"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_faturas_cliente_status_conferencia",
+      "name": "ix_carvia_faturas_cliente_numero_fatura",
       "columns": [
-        "status_conferencia"
+        "numero_fatura"
       ],
       "unique": false
     },

@@ -76,16 +76,16 @@
       "unique": true
     },
     {
-      "name": "ix_hora_pedido_loja_destino_id",
+      "name": "ix_hora_pedido_status",
       "columns": [
-        "loja_destino_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_status",
+      "name": "ix_hora_pedido_loja_destino_id",
       "columns": [
-        "status"
+        "loja_destino_id"
       ],
       "unique": false
     },

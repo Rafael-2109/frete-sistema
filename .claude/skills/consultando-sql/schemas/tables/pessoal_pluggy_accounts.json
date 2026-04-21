@@ -1,0 +1,118 @@
+{
+  "name": "pessoal_pluggy_accounts",
+  "description": "Tabela pessoal_pluggy_accounts",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pluggy_item_pk",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "pluggy_account_id",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "type",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "subtype",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "number",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "name",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "marketing_name",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "owner_name",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "tax_number",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "balance",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "currency_code",
+      "type": "varchar(3)",
+      "default": "BRL"
+    },
+    {
+      "name": "bank_data",
+      "type": "jsonb"
+    },
+    {
+      "name": "credit_data",
+      "type": "jsonb"
+    },
+    {
+      "name": "payload_raw",
+      "type": "jsonb"
+    },
+    {
+      "name": "conta_pessoal_id",
+      "type": "integer",
+      "description": "FK → pessoal_contas.id"
+    },
+    {
+      "name": "conta_vinculada_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pluggy_item_pk",
+      "references": "pessoal_pluggy_items.id"
+    },
+    {
+      "column": "conta_pessoal_id",
+      "references": "pessoal_contas.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_pessoal_pluggy_accounts_pluggy_item_pk",
+      "columns": [
+        "pluggy_item_pk"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pessoal_pluggy_accounts_type",
+      "columns": [
+        "type"
+      ],
+      "unique": false
+    }
+  ]
+}

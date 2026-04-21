@@ -94,18 +94,25 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_nf_entrada_loja_destino_id",
-      "columns": [
-        "loja_destino_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_nf_entrada_chave_44",
       "columns": [
         "chave_44"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_nf_entrada_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_nf_entrada_loja_destino_id",
+      "columns": [
+        "loja_destino_id"
+      ],
+      "unique": false
     },
     {
       "name": "ix_hora_nf_entrada_pedido_id",
@@ -118,13 +125,6 @@
       "name": "ix_hora_nf_entrada_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_nf_entrada_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
       ],
       "unique": false
     }

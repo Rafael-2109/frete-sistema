@@ -1,0 +1,183 @@
+{
+  "name": "pessoal_pluggy_transacoes_stg",
+  "description": "Tabela pessoal_pluggy_transacoes_stg",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pluggy_account_pk",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "pluggy_transaction_id",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "date",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "description",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "description_raw",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "amount",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "amount_in_account_currency",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "currency_code",
+      "type": "varchar(3)"
+    },
+    {
+      "name": "balance",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "category",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "category_id",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "category_translated",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "provider_code",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "provider_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "type",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "operation_type",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "payment_data",
+      "type": "jsonb"
+    },
+    {
+      "name": "credit_card_metadata",
+      "type": "jsonb"
+    },
+    {
+      "name": "merchant",
+      "type": "jsonb"
+    },
+    {
+      "name": "payload_raw",
+      "type": "jsonb",
+      "nullable": false
+    },
+    {
+      "name": "visto_em_sync_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "status_processamento",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "transacao_pessoal_id",
+      "type": "integer",
+      "description": "FK → pessoal_transacoes.id"
+    },
+    {
+      "name": "migrado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacao_migracao",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pluggy_account_pk",
+      "references": "pessoal_pluggy_accounts.id"
+    },
+    {
+      "column": "transacao_pessoal_id",
+      "references": "pessoal_transacoes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_pessoal_pluggy_transacoes_stg_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pessoal_pluggy_transacoes_stg_date",
+      "columns": [
+        "date"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pluggy_stg_transacao",
+      "columns": [
+        "transacao_pessoal_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pessoal_pluggy_transacoes_stg_pluggy_account_pk",
+      "columns": [
+        "pluggy_account_pk"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pessoal_pluggy_transacoes_stg_status_processamento",
+      "columns": [
+        "status_processamento"
+      ],
+      "unique": false
+    }
+  ]
+}

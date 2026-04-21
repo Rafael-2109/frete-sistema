@@ -1,0 +1,87 @@
+{
+  "name": "pessoal_pluggy_items",
+  "description": "Tabela pessoal_pluggy_items",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pluggy_item_id",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "client_user_id",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "connector_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "connector_name",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "execution_status",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "consent_expires_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "ultimo_sync",
+      "type": "timestamp"
+    },
+    {
+      "name": "ultimo_webhook_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "erro_mensagem",
+      "type": "text"
+    },
+    {
+      "name": "payload_raw",
+      "type": "jsonb"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_pessoal_pluggy_items_client_user_id",
+      "columns": [
+        "client_user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pessoal_pluggy_items_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}
