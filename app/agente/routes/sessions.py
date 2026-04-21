@@ -312,3 +312,145 @@ def api_list_session_summaries():
     except Exception as e:
         logger.error(f"[SUMMARIES] Erro ao listar resumos: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# R1 Fork de sessao (SDK 0.1.64 SessionStore — requer flag ON)
+# ============================================================================
+
+@agente_bp.route('/api/sessions/<session_id>/fork', methods=['POST'])
+@login_required
+def api_fork_session(session_id: str):
+    """
+    R1: duplica uma sessao em branch paralelo via fork_session_via_store() SDK.
+
+    POST /agente/api/sessions/<session_id>/fork
+    Body (JSON): { "title": "opcional titulo custom do fork" }
+
+    Retorna: { success, session_id (novo), title, forked_from: {...} }
+
+    Arquitetura:
+    - SDK remapeia todos os UUIDs internamente (stampa forkedFrom nas entries).
+    - Cria nova linha AgentSession apontando para o novo sdk_session_id.
+    - Copia messages JSONB como snapshot para o fallback XML funcionar mesmo
+      se o store falhar no primeiro turno do fork.
+    - `data['forked_from']` marca o fork para UI exibir badge.
+
+    Requisitos: AGENT_SDK_SESSION_STORE_ENABLED=true (senao retorna 400).
+    Session parent deve existir no store (ja migrada ou criada pos-Fase A).
+    """
+    import asyncio
+    import uuid as _uuid
+
+    try:
+        from app.agente.models import AgentSession
+        from app.agente.config.feature_flags import AGENT_SDK_SESSION_STORE_ENABLED
+        from app.utils.timezone import agora_utc_naive
+
+        if not AGENT_SDK_SESSION_STORE_ENABLED:
+            return jsonify({
+                'success': False,
+                'error': 'Fork requer AGENT_SDK_SESSION_STORE_ENABLED=true',
+            }), 400
+
+        parent = AgentSession.query.filter_by(
+            session_id=session_id,
+            user_id=current_user.id,
+        ).first()
+        if not parent:
+            return jsonify({
+                'success': False,
+                'error': 'Sessão não encontrada ou sem acesso',
+            }), 404
+
+        parent_sdk_sid = parent.get_sdk_session_id() or session_id
+        try:
+            _uuid.UUID(parent_sdk_sid)
+        except (ValueError, AttributeError):
+            return jsonify({
+                'success': False,
+                'error': f'sdk_session_id da parent nao e UUID valido: {parent_sdk_sid!r}',
+            }), 400
+
+        body = request.get_json(silent=True) or {}
+        custom_title = (body.get('title') or '').strip()[:256] or None
+
+        # Executa fork via SDK SessionStore (async) — roda em thread separada
+        # pois estamos em sync Flask route.
+        async def _do_fork():
+            from claude_agent_sdk import (
+                fork_session_via_store,
+                project_key_for_directory,
+            )
+            from app.agente.sdk.session_store_adapter import get_or_create_session_store
+
+            store = await get_or_create_session_store()
+            # project_key e derivado do cwd do SERVER (Render = /opt/render/project/src).
+            # Sem override — o cwd ja e o correto no ambiente de runtime.
+            result = await fork_session_via_store(
+                store,
+                session_id=parent_sdk_sid,
+                title=custom_title,
+            )
+            return result
+
+        fork_result = asyncio.run(_do_fork())
+        new_sdk_sid = fork_result.session_id  # novo UUID gerado pelo SDK
+
+        # Cria nova AgentSession apontando para o fork — preserva user_id +
+        # copia ultimas 50 msgs do parent como snapshot (fallback XML defense).
+        parent_messages = parent.get_messages() or []
+        parent_summary = parent.summary
+        parent_title_for_child = (
+            custom_title
+            or (f"{parent.title} (fork)" if parent.title else f"Fork de {parent_sdk_sid[:8]}")
+        )
+
+        new_session = AgentSession(
+            session_id=new_sdk_sid,
+            user_id=current_user.id,
+            title=parent_title_for_child[:256],
+            data={
+                'sdk_session_id': new_sdk_sid,
+                'messages': parent_messages[-50:],  # snapshot fallback
+                'total_tokens': 0,
+                'channel': (parent.data or {}).get('channel', 'web'),
+                'forked_from': {
+                    'parent_session_id': parent.session_id,
+                    'parent_title': parent.title or '(sem titulo)',
+                    'forked_at': agora_utc_naive().isoformat(),
+                },
+            },
+            message_count=len(parent_messages),
+            total_cost_usd=0,
+            last_message=parent.last_message,
+            model=parent.model,
+            created_at=agora_utc_naive(),
+            updated_at=agora_utc_naive(),
+        )
+        if parent_summary:
+            new_session.summary = parent_summary
+
+        db.session.add(new_session)
+        db.session.commit()
+
+        logger.info(
+            f"[FORK] sessao {parent.session_id[:12]}... -> {new_sdk_sid[:12]}... "
+            f"(user_id={current_user.id}, snapshot_msgs={len(parent_messages[-50:])})"
+        )
+
+        return jsonify({
+            'success': True,
+            'session_id': new_sdk_sid,
+            'title': new_session.title,
+            'forked_from': new_session.data['forked_from'],
+            'snapshot_messages': len(parent_messages[-50:]),
+        })
+
+    except Exception as e:
+        logger.error(f"[FORK] Erro ao forkar sessao {session_id}: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+        }), 500

@@ -108,6 +108,14 @@ class AgentSession(db.Model):
                 if self.summary_updated_at else None
             )
 
+        # R1 Fork — expor metadata de fork para UI mostrar badge + tooltip
+        # `forked_from` e setado em data JSONB por api_fork_session ao criar a filha.
+        # Struct: {'parent_session_id': str, 'parent_title': str, 'forked_at': iso}
+        if self.data and isinstance(self.data, dict):
+            forked_from = self.data.get('forked_from')
+            if forked_from:
+                result['forked_from'] = forked_from
+
         return result
 
     def _generate_title(self) -> str:

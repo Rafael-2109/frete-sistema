@@ -2546,10 +2546,24 @@ function renderSessions() {
             })
             : '';
 
+        // R1: badge FORK se session foi forkada + tooltip com parent
+        const forkedFrom = session.forked_from || null;
+        const forkBadgeHtml = forkedFrom
+            ? `<span class="badge bg-warning text-dark ms-1"
+                     title="Forkada de: ${escapeHtml(forkedFrom.parent_title || '')} (${(forkedFrom.parent_session_id || '').substring(0, 8)}...) em ${escapeHtml(forkedFrom.forked_at || '')}"
+                     style="font-size: 0.6rem; cursor: help;">
+                 <i class="fas fa-code-branch"></i> FORK
+               </span>`
+            : '';
+
         item.innerHTML = `
             <div class="session-item-header">
                 <span class="session-item-title" title="${escapeHtml(session.title || 'Sem título')}">${escapeHtml(session.title || 'Sem título')}</span>
                 <div class="session-item-actions">
+                    <button class="fork-session" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
+                            onclick="event.stopPropagation(); forkSessionPrompt(this.dataset.sid, this.dataset.title)" title="Fork — duplicar em branch paralelo">
+                        <i class="fas fa-code-branch"></i>
+                    </button>
                     <button class="export" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
                             onclick="event.stopPropagation(); exportHistoricalSession(this.dataset.sid, this.dataset.title)" title="Exportar">
                         <i class="fas fa-file-export"></i>
@@ -2566,11 +2580,116 @@ function renderSessions() {
             <div class="session-item-meta">
                 <span>${dateStr}</span>
                 <span class="badge bg-secondary">${session.message_count || 0} msgs</span>
+                ${forkBadgeHtml}
             </div>
         `;
 
         list.appendChild(item);
     });
+}
+
+// ============================================================================
+// R1 Fork de sessao (SDK 0.1.64 SessionStore)
+// ============================================================================
+
+/**
+ * Flag no localStorage: se ja mostramos o explicativo uma vez, pular.
+ */
+const FORK_INTRO_KEY = 'agente_fork_intro_shown_v1';
+
+/**
+ * Abre modal explicativo (primeira vez) + confirm para forkar session.
+ */
+async function forkSessionPrompt(sourceSessionId, sourceTitle) {
+    // Modal explicativo na primeira vez
+    if (!localStorage.getItem(FORK_INTRO_KEY)) {
+        const ok = await showForkIntroModal();
+        if (!ok) return;
+        localStorage.setItem(FORK_INTRO_KEY, '1');
+    }
+
+    // Pedir titulo custom (opcional)
+    const defaultTitle = `${sourceTitle} (fork)`;
+    const customTitle = prompt(
+        `Duplicar sessao "${sourceTitle}" em um novo branch paralelo.\n\n` +
+        `Titulo do fork (opcional — Enter para padrao):`,
+        defaultTitle
+    );
+    if (customTitle === null) return;  // cancelou
+
+    try {
+        const resp = await fetch(`/agente/api/sessions/${encodeURIComponent(sourceSessionId)}/fork`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+            },
+            body: JSON.stringify({ title: customTitle || null }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+            alert(`Falha ao forkar: ${data.error || 'erro desconhecido'}`);
+            return;
+        }
+        // Recarrega listagem + selciona o novo fork
+        await loadSessions();
+        const newSession = sessionsList.find(s => s.session_id === data.session_id);
+        if (newSession) {
+            await selectSession(newSession);
+        } else {
+            alert(`Fork criado: ${data.title}\n\nUUID: ${data.session_id}`);
+        }
+    } catch (err) {
+        console.error('[FORK] erro:', err);
+        alert('Erro ao forkar sessao: ' + (err.message || err));
+    }
+}
+
+/**
+ * Modal explicativo (mostrado apenas na primeira vez).
+ * Retorna Promise<boolean> — true = usuario quer continuar, false = cancelou.
+ */
+function showForkIntroModal() {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'fork-intro-modal-backdrop';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = `
+            <div style="background:var(--bg-light,#fff);color:var(--text,#222);max-width:500px;margin:1rem;padding:1.5rem;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.3);">
+                <h4 style="margin-top:0;"><i class="fas fa-code-branch"></i> O que e fork?</h4>
+                <p>Fork <b>duplica</b> esta conversa em um <b>branch paralelo</b>, como um git branch.</p>
+                <ul style="padding-left:1.25rem;">
+                    <li>A sessao original permanece <b>intacta</b>.</li>
+                    <li>Voce pode testar outras abordagens, prompts ou decisoes no fork sem poluir o original.</li>
+                    <li>Util para: "e se eu tivesse perguntado de outra forma?", A/B testing, explorar caminhos alternativos.</li>
+                </ul>
+                <p style="font-size:.85rem;color:var(--muted,#666);">
+                    O fork comeca com um snapshot das ultimas 50 mensagens. Proxima resposta usa contexto completo via SessionStore.
+                </p>
+                <div style="text-align:right;margin-top:1rem;">
+                    <button id="fork-intro-cancel" class="btn btn-secondary btn-sm" style="margin-right:.5rem;">Cancelar</button>
+                    <button id="fork-intro-ok" class="btn btn-primary btn-sm">Entendi, continuar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.querySelector('#fork-intro-cancel').onclick = () => {
+            document.body.removeChild(modal);
+            resolve(false);
+        };
+        modal.querySelector('#fork-intro-ok').onclick = () => {
+            document.body.removeChild(modal);
+            resolve(true);
+        };
+    });
+}
+
+/**
+ * Helper — obtem CSRF token do meta tag do Flask-WTF.
+ */
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
 }
 
 /**
