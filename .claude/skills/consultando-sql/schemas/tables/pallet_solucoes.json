@@ -154,9 +154,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_nf_venda",
+      "name": "ix_pallet_solucoes_credito_id",
       "columns": [
-        "nf_venda"
+        "credito_id"
       ],
       "unique": false
     },
@@ -169,9 +169,9 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_credito_destino_id",
+      "name": "ix_pallet_solucoes_nf_venda",
       "columns": [
-        "credito_destino_id"
+        "nf_venda"
       ],
       "unique": false
     },
@@ -184,16 +184,16 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_tipo",
+      "name": "ix_pallet_solucoes_credito_destino_id",
       "columns": [
-        "tipo"
+        "credito_destino_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_solucoes_credito_id",
+      "name": "ix_pallet_solucoes_tipo",
       "columns": [
-        "credito_id"
+        "tipo"
       ],
       "unique": false
     }

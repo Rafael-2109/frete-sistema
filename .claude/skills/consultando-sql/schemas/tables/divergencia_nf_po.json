@@ -120,13 +120,6 @@
   ],
   "indices": [
     {
-      "name": "ix_divergencia_nf_po_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_divergencia_nf_po_tipo_divergencia",
       "columns": [
         "tipo_divergencia"
@@ -137,6 +130,13 @@
       "name": "ix_divergencia_nf_po_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
       ],
       "unique": false
     },

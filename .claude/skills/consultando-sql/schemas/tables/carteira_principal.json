@@ -362,24 +362,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carteira_principal_data_pedido",
+      "name": "ix_carteira_principal_vendedor",
       "columns": [
-        "data_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_produto_saldo",
-      "columns": [
-        "cod_produto",
-        "qtd_saldo_produto_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_ativo",
-      "columns": [
-        "ativo"
+        "vendedor"
       ],
       "unique": false
     },
@@ -391,9 +376,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_vendedor",
+      "name": "ix_carteira_principal_ativo",
       "columns": [
-        "vendedor"
+        "ativo"
       ],
       "unique": false
     },
@@ -406,13 +391,6 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_status_pedido",
-      "columns": [
-        "status_pedido"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_carteira_cliente_vendedor",
       "columns": [
         "cnpj_cpf",
@@ -421,24 +399,16 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_ativo_saldo",
+      "name": "ix_carteira_principal_status_pedido",
       "columns": [
-        "num_pedido",
-        "cod_produto"
+        "status_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_cnpj_cpf",
+      "name": "ix_carteira_principal_odoo_write_date",
       "columns": [
-        "cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_cod_produto",
-      "columns": [
-        "cod_produto"
+        "odoo_write_date"
       ],
       "unique": false
     },
@@ -450,9 +420,39 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_odoo_write_date",
+      "name": "idx_carteira_produto_saldo",
       "columns": [
-        "odoo_write_date"
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cod_produto",
+      "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_data_pedido",
+      "columns": [
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cnpj_cpf",
+      "columns": [
+        "cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_ativo_saldo",
+      "columns": [
+        "num_pedido",
+        "cod_produto"
       ],
       "unique": false
     }

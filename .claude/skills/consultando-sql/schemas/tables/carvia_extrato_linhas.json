@@ -118,16 +118,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_status_conciliacao",
+      "name": "ix_carvia_extrato_linhas_data",
       "columns": [
-        "status_conciliacao"
+        "data"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_data",
+      "name": "ix_carvia_extrato_linhas_status_conciliacao",
       "columns": [
-        "data"
+        "status_conciliacao"
       ],
       "unique": false
     },
