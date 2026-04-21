@@ -778,17 +778,33 @@ $(function() {
     });
   });
 
-  // Helpers de modal: usa getOrCreateInstance com elemento DOM (evita dupla instancia
-  // e backdrop orfao). Bootstrap 5.x nao suporta seletor string no construtor.
+  // Helpers de modal — robustez contra:
+  //   (1) Bootstrap 5 nao aceitar seletor string em `new Modal(...)`
+  //   (2) Ancestors com transform/filter/overflow que quebram o stacking context
+  //       (ex: .tab-content, containers do base.html) — move o modal para <body>
+  //   (3) Backdrop orfao de modais anteriores
+  //   (4) body.modal-open preso sem modal visivel
+  function _cleanupOrphans() {
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+  }
   function openModal(sel) {
     const el = document.querySelector(sel);
     if (!el) { console.error('Modal nao encontrado:', sel); return null; }
-    // Limpa eventuais backdrops orfaos de modais anteriores
-    document.querySelectorAll('.modal-backdrop').forEach(function(b) {
-      if (!document.querySelector('.modal.show')) b.remove();
-    });
-    const m = bootstrap.Modal.getOrCreateInstance(el);
+    _cleanupOrphans();
+    // Move para <body> para escapar de stacking contexts (transform, filter, etc.)
+    if (el.parentNode !== document.body) document.body.appendChild(el);
+    // Dispose instancia antiga caso o elemento tenha sido movido.
+    const antiga = bootstrap.Modal.getInstance(el);
+    if (antiga) { try { antiga.dispose(); } catch (e) {} }
+    const m = new bootstrap.Modal(el, {backdrop: true, keyboard: true, focus: true});
     m.show();
+    // Forca z-index acima do backdrop (1050). Fallback caso CSS custom interfira.
+    el.style.zIndex = '1060';
     return m;
   }
   function closeModal(sel) {
@@ -796,6 +812,7 @@ $(function() {
     if (!el) return;
     const m = bootstrap.Modal.getInstance(el);
     if (m) m.hide();
+    setTimeout(_cleanupOrphans, 400);
   }
 
   // Helper: renderiza vinculos no formato "N regras, N transacoes, ..."

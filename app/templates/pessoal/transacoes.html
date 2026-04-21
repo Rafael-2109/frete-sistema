@@ -1085,16 +1085,27 @@ $(function() {
   renderMenuPresets();
 
   // ===== REGRAS DA TRANSACAO (abrir modal, listar aplicaveis, editar, remover) =====
-  // Bootstrap 5.x exige elemento DOM (nao seletor string) no construtor do Modal.
-  // Uso getOrCreateInstance para evitar dupla instancia + remove backdrops orfaos.
+  // Helpers robustos: Bootstrap 5 exige elemento DOM (nao seletor), e o modal precisa
+  // viver em <body> para nao herdar stacking context de .tab-content / containers
+  // com transform/filter/overflow. Tambem limpa backdrops orfaos + body.modal-open.
+  function _cleanupOrphans() {
+    if (!document.querySelector('.modal.show')) {
+      document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+    }
+  }
   function openModal(sel) {
     const el = document.querySelector(sel);
     if (!el) { console.error('Modal nao encontrado:', sel); return null; }
-    document.querySelectorAll('.modal-backdrop').forEach(function(b) {
-      if (!document.querySelector('.modal.show')) b.remove();
-    });
-    const m = bootstrap.Modal.getOrCreateInstance(el);
+    _cleanupOrphans();
+    if (el.parentNode !== document.body) document.body.appendChild(el);
+    const antiga = bootstrap.Modal.getInstance(el);
+    if (antiga) { try { antiga.dispose(); } catch (e) {} }
+    const m = new bootstrap.Modal(el, {backdrop: true, keyboard: true, focus: true});
     m.show();
+    el.style.zIndex = '1060';
     return m;
   }
   function closeModal(sel) {
@@ -1102,6 +1113,7 @@ $(function() {
     if (!el) return;
     const m = bootstrap.Modal.getInstance(el);
     if (m) m.hide();
+    setTimeout(_cleanupOrphans, 400);
   }
 
   function escHtml(s) {
