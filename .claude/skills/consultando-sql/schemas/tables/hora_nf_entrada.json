@@ -94,9 +94,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_nf_entrada_cnpj_destinatario",
+      "name": "ix_hora_nf_entrada_loja_destino_id",
       "columns": [
-        "cnpj_destinatario"
+        "loja_destino_id"
       ],
       "unique": false
     },
@@ -115,16 +115,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_loja_destino_id",
+      "name": "ix_hora_nf_entrada_cnpj_emitente",
       "columns": [
-        "loja_destino_id"
+        "cnpj_emitente"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_cnpj_emitente",
+      "name": "ix_hora_nf_entrada_cnpj_destinatario",
       "columns": [
-        "cnpj_emitente"
+        "cnpj_destinatario"
       ],
       "unique": false
     }

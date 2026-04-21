@@ -1,0 +1,78 @@
+{
+  "name": "carvia_nf_vinculos_transferencia",
+  "description": "Tabela carvia_nf_vinculos_transferencia",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_transferencia_id",
+      "type": "integer",
+      "description": "FK → carvia_nfs.id",
+      "nullable": false
+    },
+    {
+      "name": "nf_venda_id",
+      "type": "integer",
+      "description": "FK → carvia_nfs.id",
+      "nullable": false
+    },
+    {
+      "name": "peso_bruto_venda_snapshot",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "peso_bruto_transf_snapshot",
+      "type": "numeric(15,3)"
+    },
+    {
+      "name": "vinculado_retroativamente",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "contexto_retroativo",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_transferencia_id",
+      "references": "carvia_nfs.id"
+    },
+    {
+      "column": "nf_venda_id",
+      "references": "carvia_nfs.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_nf_vinculos_transferencia_nf_transferencia_id",
+      "columns": [
+        "nf_transferencia_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_nf_vinculos_transferencia_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    }
+  ]
+}

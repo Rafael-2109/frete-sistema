@@ -362,23 +362,24 @@
   ],
   "indices": [
     {
-      "name": "ix_carteira_principal_importante",
+      "name": "ix_carteira_principal_data_pedido",
       "columns": [
-        "importante"
+        "data_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_status_pedido",
+      "name": "idx_carteira_cliente_vendedor",
       "columns": [
-        "status_pedido"
+        "cnpj_cpf",
+        "vendedor"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_ativo",
+      "name": "ix_carteira_principal_vendedor",
       "columns": [
-        "ativo"
+        "vendedor"
       ],
       "unique": false
     },
@@ -390,9 +391,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_data_pedido",
+      "name": "ix_carteira_principal_importante",
       "columns": [
-        "data_pedido"
+        "importante"
       ],
       "unique": false
     },
@@ -405,16 +406,16 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_odoo_write_date",
+      "name": "ix_carteira_principal_ativo",
       "columns": [
-        "odoo_write_date"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_cod_produto",
+      "name": "ix_carteira_principal_status_pedido",
       "columns": [
-        "cod_produto"
+        "status_pedido"
       ],
       "unique": false
     },
@@ -427,10 +428,9 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_cliente_vendedor",
+      "name": "ix_carteira_principal_odoo_write_date",
       "columns": [
-        "cnpj_cpf",
-        "vendedor"
+        "odoo_write_date"
       ],
       "unique": false
     },
@@ -450,9 +450,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_vendedor",
+      "name": "ix_carteira_principal_cod_produto",
       "columns": [
-        "vendedor"
+        "cod_produto"
       ],
       "unique": false
     }

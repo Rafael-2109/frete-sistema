@@ -74,6 +74,10 @@
       "type": "integer"
     },
     {
+      "name": "modalidade_frete",
+      "type": "varchar(1)"
+    },
+    {
       "name": "arquivo_pdf_path",
       "type": "varchar(500)"
     },
@@ -121,13 +125,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_nfs_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_nfs_status",
       "columns": [
         "status"
@@ -138,6 +135,13 @@
       "name": "ix_carvia_nfs_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_nfs_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
       ],
       "unique": false
     },

@@ -125,6 +125,12 @@
       "default": "PENDENTE"
     },
     {
+      "name": "valor_compensado",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
       "name": "cpf_cnpj_parte",
       "type": "varchar(20)"
     },
@@ -176,6 +182,13 @@
   ],
   "indices": [
     {
+      "name": "idx_pessoal_transacoes_categoria",
+      "columns": [
+        "categoria_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_pessoal_transacoes_cpf_cnpj",
       "columns": [
         "cpf_cnpj_parte"
@@ -214,13 +227,6 @@
       "name": "idx_pessoal_transacoes_conta",
       "columns": [
         "conta_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_categoria",
-      "columns": [
-        "categoria_id"
       ],
       "unique": false
     }

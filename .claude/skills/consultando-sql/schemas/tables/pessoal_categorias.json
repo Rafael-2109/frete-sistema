@@ -27,6 +27,10 @@
       "default": true
     },
     {
+      "name": "compensavel_tipo",
+      "type": "varchar(1)"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"

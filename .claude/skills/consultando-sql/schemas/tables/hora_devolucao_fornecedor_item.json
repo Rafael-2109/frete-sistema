@@ -1,0 +1,73 @@
+{
+  "name": "hora_devolucao_fornecedor_item",
+  "description": "Tabela hora_devolucao_fornecedor_item",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "devolucao_id",
+      "type": "integer",
+      "description": "FK → hora_devolucao_fornecedor.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_chassi",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "motivo_especifico",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "recebimento_conferencia_id",
+      "type": "integer",
+      "description": "FK → hora_recebimento_conferencia.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "devolucao_id",
+      "references": "hora_devolucao_fornecedor.id"
+    },
+    {
+      "column": "numero_chassi",
+      "references": "hora_moto.numero_chassi"
+    },
+    {
+      "column": "recebimento_conferencia_id",
+      "references": "hora_recebimento_conferencia.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "devolucao_id",
+      "numero_chassi"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_devolucao_fornecedor_item_devolucao_id",
+      "columns": [
+        "devolucao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_devolucao_fornecedor_item_numero_chassi",
+      "columns": [
+        "numero_chassi"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -119,13 +119,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pedido_importacao_temp_chave_importacao",
-      "columns": [
-        "chave_importacao"
-      ],
-      "unique": true
-    },
-    {
       "name": "idx_importacao_temp_criado",
       "columns": [
         "criado_em"
@@ -145,6 +138,13 @@
         "status"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_pedido_importacao_temp_chave_importacao",
+      "columns": [
+        "chave_importacao"
+      ],
+      "unique": true
     },
     {
       "name": "idx_importacao_temp_status",
