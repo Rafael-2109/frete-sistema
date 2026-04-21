@@ -1480,33 +1480,51 @@ Nunca invente informações."""
             try:
                 from dataclasses import replace as _dc_replace
 
+                from claude_agent_sdk import project_key_for_directory
+
                 from .session_store_adapter import (
                     get_or_create_session_store,
                     session_has_legacy_transcript,
+                    session_has_store_entries,
                 )
-                # Checa via asyncpg (NAO Flask-SQLAlchemy) — _stream_response_persistent
-                # roda em daemon thread do client_pool sem Flask app_context.
-                # Tentar AgentSession.query.filter_by() aqui levanta
-                # "Working outside of application context" e cai no fallback
-                # silencioso (bug descoberto em 2026-04-21 15:29 apos deploy).
-                has_legacy = await session_has_legacy_transcript(our_session_id or "")
+                # Logica de ativacao (3 niveis):
+                # 1. Store ja tem entries desta session → ENABLE (continuar usando)
+                # 2. Senao se has_legacy_transcript → SKIP (session pre-existente)
+                # 3. Senao → ENABLE (session nova)
+                #
+                # Nivel 1 resolve o quirk do dual-run onde a partir do 2o turno
+                # de uma session nova, sdk_session_transcript estaria populado
+                # e sem essa regra o criterio C4 forcaria SKIP — store ficaria
+                # com apenas o 1o turno.
+                #
+                # NAO usa Flask-SQLAlchemy (app_context nao existe neste thread).
+                _project_key = project_key_for_directory(options.cwd) if options.cwd else project_key_for_directory()
+                _sid = our_session_id or ""
 
-                if not has_legacy:
+                has_in_store = await session_has_store_entries(_sid, _project_key)
+                has_legacy = (
+                    False
+                    if has_in_store
+                    else await session_has_legacy_transcript(_sid)
+                )
+
+                if has_in_store or not has_legacy:
                     _store = await get_or_create_session_store()
                     options = _dc_replace(
                         options,
                         session_store=_store,
                         load_timeout_ms=AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS,
                     )
+                    _reason = "continuing" if has_in_store else "session nova"
                     logger.info(
-                        f"[SESSION_STORE] ENABLED (session nova): "
+                        f"[SESSION_STORE] ENABLED ({_reason}): "
                         f"{(our_session_id or 'pending')[:12]}... "
                         f"load_timeout={AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS}ms"
                     )
                 else:
-                    logger.debug(
-                        f"[SESSION_STORE] SKIP (session com transcript legado): "
-                        f"{(our_session_id or '?')[:12]}..."
+                    logger.info(
+                        f"[SESSION_STORE] SKIP (session com transcript legado e "
+                        f"sem entries no store): {(our_session_id or '?')[:12]}..."
                     )
             except Exception as _store_err:
                 # Silencioso: session_persistence.py continua ativo, zero regressao

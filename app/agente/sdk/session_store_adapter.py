@@ -56,6 +56,7 @@ __all__ = [
     "get_or_create_session_store",
     "close_session_store_pool",
     "session_has_legacy_transcript",
+    "session_has_store_entries",
     "_store_implements",  # util publico, replica de SDK._internal
 ]
 
@@ -392,5 +393,56 @@ async def session_has_legacy_transcript(session_id: str) -> bool:
         logger.warning(
             f"[SESSION_STORE] check legacy transcript falhou (tratando como "
             f"session nova): {e}"
+        )
+        return False
+
+
+async def session_has_store_entries(
+    session_id: str, project_key: str, table: str = "claude_session_store"
+) -> bool:
+    """Checa se claude_session_store ja tem entries para esta session.
+
+    Uso: em `_stream_response_persistent`, priorizar ativacao do store se
+    sessoes anteriores JA gravaram entries (mesmo que `sdk_session_transcript`
+    tambem esteja populado pelo path legado em paralelo). Sem isso, a partir
+    do 2o turno de uma session nova, o criterio C4 `has_legacy_transcript=True`
+    force SKIP — e o store ficaria com apenas 1 turno, nao ganhando resume.
+
+    Logica de ativacao completa:
+      1. Se store ja tem entries dessa session → ENABLE (continuar usando)
+      2. Senao se has_legacy_transcript → SKIP (session pre-existente)
+      3. Senao → ENABLE (session nova)
+
+    Args:
+        session_id: sdk_session_id (UUID do JSONL / chave no store).
+        project_key: project_key do store (ex: `project_key_for_directory(cwd)`).
+        table: nome da tabela (default "claude_session_store").
+
+    Retorna True se existe ao menos 1 row no main transcript (subpath='').
+    Retorna False se tabela vazia para essa key ou erro.
+    """
+    if not session_id or not project_key:
+        return False
+    # Guard contra SQL injection via table name (mesmo do adapter)
+    if not _IDENT_RE.match(table):
+        logger.warning(f"[SESSION_STORE] table name invalido: {table!r}")
+        return False
+    try:
+        pool = await _get_pool()
+        row = await pool.fetchrow(
+            f"""
+            SELECT 1 AS has_entries
+            FROM {table}
+            WHERE project_key = $1 AND session_id = $2 AND subpath = ''
+            LIMIT 1
+            """,
+            project_key,
+            session_id,
+        )
+        return row is not None
+    except Exception as e:
+        logger.warning(
+            f"[SESSION_STORE] check store entries falhou (tratando como sem "
+            f"entries): {e}"
         )
         return False
