@@ -112,6 +112,50 @@ async def test_adapter_requires_pool():
         PostgresSessionStore(pool=None)  # type: ignore[arg-type]
 
 
+async def test_pool_is_per_event_loop():
+    """Regression: _get_pool deve retornar pools distintos para loops distintos.
+
+    Bug de producao 2026-04-21: pool module-global criado em loop A e usado em
+    loop B causava "got Future attached to a different loop". Fix: pool por loop.
+
+    Esse teste valida que 2 chamadas de _get_pool de loops diferentes retornam
+    pools diferentes (bound ao seu proprio loop).
+    """
+    import asyncio
+
+    from app.agente.sdk.session_store_adapter import _get_pool, _pools_by_loop
+
+    # Chamada 1: loop atual
+    pool1 = await _get_pool()
+    loop1 = asyncio.get_running_loop()
+    assert pool1 is _pools_by_loop.get(id(loop1))
+
+    # Chamada 2: novo loop separado (simulando async_to_sync criando loop fresh)
+    result: dict = {}
+
+    def run_in_new_loop() -> None:
+        new_loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(new_loop)
+            result['pool2'] = new_loop.run_until_complete(_get_pool())
+            result['loop2_id'] = id(new_loop)
+            # Fechar pool antes do loop morrer (senao warning)
+            new_loop.run_until_complete(result['pool2'].close())
+        finally:
+            new_loop.close()
+
+    import threading
+    t = threading.Thread(target=run_in_new_loop)
+    t.start()
+    t.join()
+
+    # Pools DEVEM ser instancias distintas
+    assert result['pool2'] is not pool1, (
+        "pool deve ser por-loop, nao global — se for global, quebra com "
+        "'got Future attached to a different loop' em Flask/async_to_sync"
+    )
+
+
 def test_prepare_dsn_removes_psycopg2_specific_params():
     """_prepare_dsn deve remover client_encoding e options=... que asyncpg nao entende.
 

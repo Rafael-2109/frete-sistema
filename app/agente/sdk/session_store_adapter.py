@@ -36,7 +36,8 @@ import json
 import logging
 import os
 import re
-from typing import TYPE_CHECKING, Optional
+import threading
+from typing import TYPE_CHECKING
 
 from claude_agent_sdk import (
     SessionKey,
@@ -70,11 +71,28 @@ _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 # -----------------------------------------------------------------------------
-# Pool lifecycle (LAZY per-worker)
+# Pool lifecycle (LAZY per-event-loop, per-worker)
 # -----------------------------------------------------------------------------
+#
+# FIX 2026-04-21 (production bug "got Future attached to a different loop"):
+# asyncpg pools sao bound ao event loop onde create_pool() rodou. Flask +
+# gunicorn sync + async_to_sync pode usar loops diferentes entre requests
+# (thread pool do asgiref nao garante loop persistente cross-thread). Pool
+# module-global foi criado no loop da PRIMEIRA chamada, quebrando em
+# chamadas subsequentes de outros loops.
+#
+# Solucao: dict pools indexado por id(loop). Cada loop cria seu proprio pool
+# lazy. threading.Lock usado porque corridas podem vir de threads/loops
+# diferentes. Limite teorico: ~N loops efemeros = N pools, mas na pratica
+# async_to_sync reusa loops por thread, entao convergimos em ~N_threads pools.
+#
+# Cleanup de pools de loops mortos: feito on-demand em _get_pool (scan O(loops)
+# por chamada e nao ha TTL explicito — loops mortos sao garbage collected quando
+# o dict nao os referencia mais).
 
-_pool: Optional["asyncpg.Pool"] = None
-_pool_lock: asyncio.Lock = asyncio.Lock()
+_pools_by_loop: dict[int, "asyncpg.Pool"] = {}
+_loops_by_id: dict[int, asyncio.AbstractEventLoop] = {}  # weak-ish ref p/ validar loop vivo
+_pools_init_lock: threading.Lock = threading.Lock()
 
 
 def _prepare_dsn(url: str) -> str:
@@ -94,24 +112,53 @@ def _prepare_dsn(url: str) -> str:
     return url
 
 
-async def _get_pool() -> "asyncpg.Pool":
-    """Retorna pool asyncpg (lazy init). Thread-safe via asyncio.Lock.
+def _gc_dead_loop_pools() -> None:
+    """Remove pools de loops que ja fecharam. Chamado sob lock."""
+    dead = []
+    for loop_id, loop in list(_loops_by_id.items()):
+        try:
+            if loop.is_closed():
+                dead.append(loop_id)
+        except Exception:
+            dead.append(loop_id)
+    for loop_id in dead:
+        pool = _pools_by_loop.pop(loop_id, None)
+        _loops_by_id.pop(loop_id, None)
+        if pool is not None:
+            # Pool de loop morto — nao da para await close, apenas descartar
+            logger.info(
+                f"[SESSION_STORE] descartando pool de loop morto loop_id={loop_id}"
+            )
 
-    CRITICAL: pool NAO e criado em module import (module-level eager quebra
-    gunicorn fork — sockets compartilhados entre workers).
+
+async def _get_pool() -> "asyncpg.Pool":
+    """Retorna pool asyncpg do event loop atual (lazy init per-loop).
+
+    CRITICAL: asyncpg pools sao bound ao loop onde create_pool() rodou.
+    Flask + gunicorn sync + async_to_sync pode usar loops diferentes →
+    pool module-global quebra com "got Future attached to a different loop".
+
+    Solucao: um pool por event loop. Cada loop cria seu proprio lazy.
 
     Raises:
         RuntimeError: se DATABASE_URL nao setado.
-        ImportError: se asyncpg nao instalado (requirements.txt desatualizado).
+        ImportError: se asyncpg nao instalado.
     """
-    global _pool
-    if _pool is not None:
-        return _pool
+    loop = asyncio.get_running_loop()
+    loop_id = id(loop)
 
-    async with _pool_lock:
+    # Fast path: pool existente e vivo para este loop
+    existing = _pools_by_loop.get(loop_id)
+    if existing is not None:
+        return existing
+
+    # Init path (threading lock para cross-loop safety)
+    with _pools_init_lock:
         # Double-check apos aquirir lock
-        if _pool is not None:
-            return _pool
+        existing = _pools_by_loop.get(loop_id)
+        if existing is not None:
+            return existing
+        _gc_dead_loop_pools()
 
         import asyncpg  # import local: so importa quando flag ON
 
@@ -122,30 +169,64 @@ async def _get_pool() -> "asyncpg.Pool":
             )
         dsn = _prepare_dsn(dsn_raw)
 
-        _pool = await asyncpg.create_pool(
-            dsn,
-            min_size=1,
-            max_size=3,  # conservador: 4 workers * 3 = 12 conn asyncpg adicionais
-            command_timeout=30,  # match psycopg2 connect_args.command_timeout
-        )
-        logger.info(
-            f"[SESSION_STORE] pool asyncpg criado (min=1 max=3 timeout=30s) "
-            f"— worker pid={os.getpid()}"
-        )
-        return _pool
+        # create_pool e async — liberamos o threading lock e criamos em seguida,
+        # depois re-aquirimos o slot. Risco de double-init mitigado: async loops
+        # nunca rodam 2 corotinas simultaneamente na mesma thread (GIL + event
+        # loop cooperative scheduling); corridas reais so vem de threads
+        # diferentes, onde cada uma tem seu proprio loop → slot distinto.
+
+    # create_pool FORA do threading lock (async-only operation)
+    pool = await asyncpg.create_pool(
+        dsn,
+        min_size=1,
+        max_size=3,  # conservador: 4 workers * 3 loops medio * 3 = ~36 asyncpg
+        command_timeout=30,
+    )
+
+    with _pools_init_lock:
+        # Segunda thread pode ter criado nesse intervalo — se sim, descartar o nosso
+        other = _pools_by_loop.get(loop_id)
+        if other is not None:
+            # Descartar o pool que acabamos de criar (perdemos a corrida)
+            try:
+                await pool.close()
+            except Exception:
+                pass
+            return other
+        _pools_by_loop[loop_id] = pool
+        _loops_by_id[loop_id] = loop
+
+    logger.info(
+        f"[SESSION_STORE] pool asyncpg criado (min=1 max=3 timeout=30s) "
+        f"— worker pid={os.getpid()} loop_id={loop_id}"
+    )
+    return pool
 
 
 async def close_session_store_pool() -> None:
-    """Fecha o pool asyncpg (best-effort, chamado em shutdown)."""
-    global _pool
-    if _pool is not None:
+    """Fecha pool(s) asyncpg do loop atual (best-effort, chamado em shutdown).
+
+    Nao itera todos os loops — apenas o loop onde foi chamado. Pools de outros
+    loops sao liberados quando seus loops fecham (via _gc_dead_loop_pools no
+    proximo _get_pool).
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    loop_id = id(loop)
+    with _pools_init_lock:
+        pool = _pools_by_loop.pop(loop_id, None)
+        _loops_by_id.pop(loop_id, None)
+    if pool is not None:
         try:
-            await _pool.close()
-            logger.info(f"[SESSION_STORE] pool asyncpg fechado — worker pid={os.getpid()}")
+            await pool.close()
+            logger.info(
+                f"[SESSION_STORE] pool asyncpg fechado "
+                f"— worker pid={os.getpid()} loop_id={loop_id}"
+            )
         except Exception as e:
             logger.warning(f"[SESSION_STORE] erro fechando pool (ignorado): {e}")
-        finally:
-            _pool = None
 
 
 # -----------------------------------------------------------------------------
