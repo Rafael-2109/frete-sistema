@@ -339,7 +339,6 @@ def api_fork_session(session_id: str):
     Requisitos: AGENT_SDK_SESSION_STORE_ENABLED=true (senao retorna 400).
     Session parent deve existir no store (ja migrada ou criada pos-Fase A).
     """
-    import asyncio
     import uuid as _uuid
 
     try:
@@ -375,13 +374,14 @@ def api_fork_session(session_id: str):
         body = request.get_json(silent=True) or {}
         custom_title = (body.get('title') or '').strip()[:256] or None
 
-        # Executa fork via SDK SessionStore (async) — roda em thread separada
-        # pois estamos em sync Flask route.
+        # FIX P1 (R1.1 review): asgiref.async_to_sync em vez de asyncio.run.
+        # Motivo: se Flask migrar para Quart/ASGI ou se pytest-asyncio rodar
+        # este endpoint, asyncio.run() quebra ("already running event loop").
+        # asgiref gerencia isso corretamente; projeto ja usa (ver requirements.txt).
+        from asgiref.sync import async_to_sync
+
         async def _do_fork():
-            from claude_agent_sdk import (
-                fork_session_via_store,
-                project_key_for_directory,
-            )
+            from claude_agent_sdk import fork_session_via_store
             from app.agente.sdk.session_store_adapter import get_or_create_session_store
 
             store = await get_or_create_session_store()
@@ -394,17 +394,24 @@ def api_fork_session(session_id: str):
             )
             return result
 
-        fork_result = asyncio.run(_do_fork())
+        fork_result = async_to_sync(_do_fork)()
         new_sdk_sid = fork_result.session_id  # novo UUID gerado pelo SDK
 
-        # Cria nova AgentSession apontando para o fork — preserva user_id +
-        # copia ultimas 50 msgs do parent como snapshot (fallback XML defense).
+        # FIX P1 (R1.2 review): title default usando _generate_title() do parent
+        # em vez de UUID truncado quando parent nao tem title. UX melhor.
+        parent_title_display = parent.title or parent._generate_title() or '(sem titulo)'
+
         parent_messages = parent.get_messages() or []
         parent_summary = parent.summary
         parent_title_for_child = (
             custom_title
-            or (f"{parent.title} (fork)" if parent.title else f"Fork de {parent_sdk_sid[:8]}")
+            or (f"{parent.title} (fork)" if parent.title else f"Fork de {parent_title_display[:40]}")
         )
+
+        # FIX P1 (R1.2 review): snapshot tem cap de 50 msgs — message_count
+        # deve refletir SNAPSHOT (nao total parent) para coerencia com
+        # add_user_message/add_assistant_message downstream.
+        _snapshot_msgs = parent_messages[-50:] if parent_messages else []
 
         new_session = AgentSession(
             session_id=new_sdk_sid,
@@ -412,16 +419,21 @@ def api_fork_session(session_id: str):
             title=parent_title_for_child[:256],
             data={
                 'sdk_session_id': new_sdk_sid,
-                'messages': parent_messages[-50:],  # snapshot fallback
+                'messages': _snapshot_msgs,  # snapshot fallback (imutavel)
                 'total_tokens': 0,
                 'channel': (parent.data or {}).get('channel', 'web'),
                 'forked_from': {
-                    'parent_session_id': parent.session_id,
-                    'parent_title': parent.title or '(sem titulo)',
+                    # FIX P1 (R1.2 review): usar sdk_session_id real do parent
+                    # (nao parent.session_id) — fork-de-fork precisa referenciar
+                    # chave que existe no store, nao nosso UUID que pode ter
+                    # divergido ao longo de resumes sucessivos.
+                    'parent_session_id': parent_sdk_sid,
+                    'parent_title': parent_title_display,
+                    'parent_total_msgs': len(parent_messages),  # auditoria: diferenca vs snapshot
                     'forked_at': agora_utc_naive().isoformat(),
                 },
             },
-            message_count=len(parent_messages),
+            message_count=len(_snapshot_msgs),
             total_cost_usd=0,
             last_message=parent.last_message,
             model=parent.model,
@@ -431,12 +443,38 @@ def api_fork_session(session_id: str):
         if parent_summary:
             new_session.summary = parent_summary
 
-        db.session.add(new_session)
-        db.session.commit()
+        try:
+            db.session.add(new_session)
+            db.session.commit()
+        except Exception as _commit_err:
+            # FIX P3 (R1.10 review): se commit DB falhar, deletar entries ja
+            # escritas no store para nao ter orphan. Best-effort.
+            logger.error(
+                f"[FORK] DB commit falhou — tentando cleanup do store: {_commit_err}",
+                exc_info=True,
+            )
+            db.session.rollback()
+            try:
+                async def _cleanup():
+                    from claude_agent_sdk import (
+                        delete_session_via_store,
+                        project_key_for_directory,
+                    )
+                    from app.agente.sdk.session_store_adapter import get_or_create_session_store
+                    store = await get_or_create_session_store()
+                    await delete_session_via_store(store, session_id=new_sdk_sid)
+                async_to_sync(_cleanup)()
+            except Exception as _cleanup_err:
+                logger.warning(
+                    f"[FORK] cleanup store falhou (orphan entries em {new_sdk_sid}): "
+                    f"{_cleanup_err}"
+                )
+            raise  # propaga para except externo → 500 response
 
         logger.info(
-            f"[FORK] sessao {parent.session_id[:12]}... -> {new_sdk_sid[:12]}... "
-            f"(user_id={current_user.id}, snapshot_msgs={len(parent_messages[-50:])})"
+            f"[FORK] sessao {parent_sdk_sid[:12]}... -> {new_sdk_sid[:12]}... "
+            f"(user_id={current_user.id}, snapshot_msgs={len(_snapshot_msgs)}, "
+            f"parent_total_msgs={len(parent_messages)})"
         )
 
         return jsonify({
@@ -444,13 +482,14 @@ def api_fork_session(session_id: str):
             'session_id': new_sdk_sid,
             'title': new_session.title,
             'forked_from': new_session.data['forked_from'],
-            'snapshot_messages': len(parent_messages[-50:]),
+            'snapshot_messages': len(_snapshot_msgs),
         })
 
     except Exception as e:
         logger.error(f"[FORK] Erro ao forkar sessao {session_id}: {e}", exc_info=True)
         db.session.rollback()
+        # FIX P2 (review R6.4 pattern): nao vaza stacktrace/PG details para frontend
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Erro interno ao forkar sessao. Ver logs para detalhes.',
         }), 500

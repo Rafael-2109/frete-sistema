@@ -575,6 +575,34 @@ def _obter_resposta_agente(
     # SDK materializa JSONL de resume a partir de claude_session_store via
     # materialize_resume_session (automatico quando session_store setado em options).
 
+    # FIX P1 (FaseB.1 review): Teams perdeu fallback XML ao remover
+    # session_persistence. Se uma session Teams pre-existente nao foi migrada
+    # (migration script pode ter pulado linhas), o SDK materialize retorna None
+    # e subprocess spawna sem --resume — contexto perdido silenciosamente.
+    # Construimos XML com ultimas 10 msgs do JSONB `data['messages']` para o
+    # hook UserPromptSubmit (client.py) injetar como `additionalContext` quando
+    # resume falhar. Espelha pattern de chat.py:341-360 no path web.
+    resume_messages_fallback = None
+    if session:
+        try:
+            messages = session.get_messages() or []
+            if messages and len(messages) > 1:
+                recent = messages[-10:]
+                parts = ['<conversation_history_fallback reason="resume_failed">']
+                for msg in recent:
+                    role = msg.get('role', 'unknown')
+                    content = (msg.get('content', '') or '')[:2000]
+                    if content:
+                        parts.append(f'<msg role="{role}">{content}</msg>')
+                parts.append('</conversation_history_fallback>')
+                resume_messages_fallback = '\n'.join(parts)
+                logger.debug(
+                    f"[TEAMS-BOT] Fallback XML preparado: "
+                    f"{len(messages)} msgs, {len(resume_messages_fallback)} chars"
+                )
+        except Exception as fb_err:
+            logger.debug(f"[TEAMS-BOT] Fallback XML falhou (ignorado): {fb_err}")
+
     # Contexto especial para Teams: data atual + instruções anti-verbosidade
     contexto_teams = _get_teams_context()
     prompt_completo = contexto_teams + mensagem
@@ -604,6 +632,7 @@ def _obter_resposta_agente(
                     model=model,
                     can_use_tool=can_use_tool,
                     our_session_id=our_session_id,
+                    resume_messages_fallback=resume_messages_fallback,
                 ),
                 timeout=MAX_TEAMS_RESPONSE_SECONDS,
             )
@@ -923,6 +952,30 @@ def _obter_resposta_agente_streaming(
     # Fase B (SDK 0.1.64 SessionStore): restore_session_transcript removido.
     # SDK materializa JSONL de resume a partir de claude_session_store.
 
+    # FIX P1 (FaseB.1 review): fallback XML defense in depth — se session
+    # Teams pre-existente nao foi migrada, hook UserPromptSubmit injeta
+    # contexto das ultimas 10 msgs via `additionalContext`.
+    resume_messages_fallback = None
+    if session:
+        try:
+            messages = session.get_messages() or []
+            if messages and len(messages) > 1:
+                recent = messages[-10:]
+                parts = ['<conversation_history_fallback reason="resume_failed">']
+                for msg in recent:
+                    role = msg.get('role', 'unknown')
+                    content = (msg.get('content', '') or '')[:2000]
+                    if content:
+                        parts.append(f'<msg role="{role}">{content}</msg>')
+                parts.append('</conversation_history_fallback>')
+                resume_messages_fallback = '\n'.join(parts)
+                logger.debug(
+                    f"[TEAMS-STREAM] Fallback XML preparado: "
+                    f"{len(messages)} msgs, {len(resume_messages_fallback)} chars"
+                )
+        except Exception as fb_err:
+            logger.debug(f"[TEAMS-STREAM] Fallback XML falhou (ignorado): {fb_err}")
+
     # Contexto especial para Teams
     contexto_teams = _get_teams_context()
     prompt_completo = contexto_teams + mensagem
@@ -981,6 +1034,7 @@ def _obter_resposta_agente_streaming(
                 can_use_tool=can_use_tool,
                 user_id=user_id,
                 our_session_id=our_session_id,
+                resume_messages_fallback=resume_messages_fallback,
             ).__aiter__()
 
             while True:

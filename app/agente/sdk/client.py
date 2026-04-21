@@ -1465,12 +1465,12 @@ Nunca invente informações."""
             resume_state=resume_state,
         )
 
-        # ─── SDK 0.1.64 SessionStore (Fase A dual-run) ───
+        # ─── SDK 0.1.64 SessionStore (Fase B cutover — flag default ON) ───
         # Injecao async APOS _build_options (sync) via dataclasses.replace.
-        # Criterio refinado (C4 adversarial review): flag ON aplica SOMENTE a
-        # sessions NOVAS (sem sdk_session_transcript no DB). Sessions existentes
-        # continuam no path legado via session_persistence.py — preserva contexto
-        # das 434 sessions pre-existentes.
+        # Fase B (2026-04-21): criterio C4 removido, flag aplica UNIVERSALMENTE.
+        # Sessions pre-existentes foram migradas pelo script
+        # scripts/migrations/2026_04_21_migrar_session_persistence_to_store.py.
+        #
         # Rollback: AGENT_SDK_SESSION_STORE_ENABLED=false + redeploy (0 downtime).
         from ..config.feature_flags import (
             AGENT_SDK_SESSION_STORE_ENABLED,
@@ -1480,17 +1480,9 @@ Nunca invente informações."""
             try:
                 from dataclasses import replace as _dc_replace
 
+                from claude_agent_sdk import project_key_for_directory
+
                 from .session_store_adapter import get_or_create_session_store
-                # Fase B (2026-04-21): criterio C4 "apenas sessions novas" removido.
-                # Sessions pre-existentes foram migradas pelo script
-                # scripts/migrations/2026_04_21_migrar_session_persistence_to_store.py
-                # antes do cutover. Flag ON agora aplica UNIVERSALMENTE.
-                #
-                # Se store.load() retornar None para uma session nao migrada
-                # (edge case residual): materialize_resume_session retorna None,
-                # subprocess spawna sem --resume, e o fallback XML via
-                # UserPromptSubmit hook (chat.py ~320+) reinjeta contexto das
-                # ultimas 10 msgs (defense in depth).
                 _store = await get_or_create_session_store()
                 options = _dc_replace(
                     options,
@@ -1501,9 +1493,41 @@ Nunca invente informações."""
                     f"[SESSION_STORE] ENABLED: {(our_session_id or 'pending')[:12]}... "
                     f"load_timeout={AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS}ms"
                 )
+
+                # FIX P1 (FaseB.2 review): probe store.load() quando resume_id
+                # setado — se store vazio (session pre-existente nao migrada OU
+                # fora do criterio), marcar resume_state['failed']=True para
+                # disparar fallback XML ANTES do subprocess spawnar sem --resume.
+                # Sem isso, SDK materialize retorna None silenciosamente e
+                # subprocess spawna como sessao nova SEM dispatch de ProcessError —
+                # fallback XML nunca ativa e contexto e perdido.
+                if sdk_session_id:
+                    try:
+                        import uuid as _uuid_probe
+                        _uuid_probe.UUID(sdk_session_id)  # valida UUID
+                        _pk = project_key_for_directory(options.cwd) if options.cwd else project_key_for_directory()
+                        _existing = await _store.load({
+                            "project_key": _pk,
+                            "session_id": sdk_session_id,
+                        })
+                        if _existing is None and resume_state is not None:
+                            resume_state['failed'] = True
+                            logger.warning(
+                                f"[SESSION_STORE] probe: session {sdk_session_id[:12]}... "
+                                f"nao esta no store — marcando resume_state['failed']=True "
+                                f"para acionar fallback XML"
+                            )
+                    except (ValueError, AttributeError):
+                        pass  # UUID invalido — nao e session do store
+                    except Exception as _probe_err:
+                        logger.debug(
+                            f"[SESSION_STORE] probe falhou (ignorado): {_probe_err}"
+                        )
             except Exception as _store_err:
-                # Em caso de falha: SDK spawna sem session_store, depende
-                # de fallback XML (defense in depth). Log ERROR para Sentry.
+                # Em caso de falha: SDK spawna sem session_store, sinalizar
+                # fallback XML para o hook UserPromptSubmit injetar contexto.
+                if resume_state is not None:
+                    resume_state['failed'] = True
                 logger.error(
                     f"[SESSION_STORE] init falhou — stream sem store "
                     f"(fallback XML via UserPromptSubmit hook): {_store_err}",
@@ -2011,6 +2035,7 @@ Nunca invente informações."""
         can_use_tool: Optional[Callable] = None,
         user_id: Optional[int] = None,
         our_session_id: Optional[str] = None,
+        resume_messages_fallback: Optional[str] = None,
         # LEGADO: aceitar pooled_client para compatibilidade (ignorado)
         pooled_client: Any = None,
     ) -> AgentResponse:
@@ -2026,6 +2051,10 @@ Nunca invente informações."""
             can_use_tool: Callback de permissão
             user_id: ID do usuário (para Memory Tool e hooks)
             our_session_id: Nosso UUID de sessão (chave do pool para path persistente)
+            resume_messages_fallback: XML com ultimas 10 msgs JSONB para injetar
+                via UserPromptSubmit hook se resume falhar (defense in depth —
+                FaseB.1 review fix, previne perda de contexto em sessions Teams
+                nao migradas ao store).
             pooled_client: LEGADO — ignorado
 
         Returns:
@@ -2048,6 +2077,7 @@ Nunca invente informações."""
             can_use_tool=can_use_tool,
             user_id=user_id,
             our_session_id=our_session_id,
+            resume_messages_fallback=resume_messages_fallback,
         ):
             if event.type == 'init':
                 result_session_id = event.content.get('session_id')

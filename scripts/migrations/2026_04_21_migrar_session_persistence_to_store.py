@@ -269,10 +269,19 @@ def main():
         logger.info("=" * 60)
         logger.info("MODO DRY-RUN — nenhum INSERT sera feito")
         logger.info("=" * 60)
-    exit_code = asyncio.run(migrate(
-        dry_run=dry_run,
-        project_key_override=project_key_override,
-    ))
+
+    # FIX P1 (R6.2 review): asyncio.run() quebra em interactive shells com
+    # event loop ativo (ex: IPython, `python -i`, jupyter). Detecta e reusa
+    # loop existente como fallback.
+    coro = migrate(dry_run=dry_run, project_key_override=project_key_override)
+    try:
+        loop = asyncio.get_running_loop()
+        # Em loop ativo: nao podemos asyncio.run. Agendamos via task e esperamos.
+        exit_code = loop.run_until_complete(coro)
+    except RuntimeError:
+        # Nenhum loop ativo — uso normal CLI
+        exit_code = asyncio.run(coro)
+
     sys.exit(exit_code)
 
 
