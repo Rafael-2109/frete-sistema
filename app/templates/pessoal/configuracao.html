@@ -27,11 +27,6 @@
       </button>
     </li>
     <li class="nav-item">
-      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabExclusoes" type="button">
-        <i class="fas fa-ban"></i> Exclusoes ({{ exclusoes|length }})
-      </button>
-    </li>
-    <li class="nav-item">
       <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabContas" type="button">
         <i class="fas fa-university"></i> Contas ({{ contas|length }})
       </button>
@@ -55,21 +50,33 @@
                 <tr>
                   <th>Grupo</th>
                   <th>Nome</th>
-                  <th>Icone</th>
+                  <th class="text-end">Qtd</th>
+                  <th class="text-end">Valor Total</th>
                   <th>Ativa</th>
-                  <th style="width:120px">Acoes</th>
+                  <th style="width:180px">Acoes</th>
                 </tr>
               </thead>
               <tbody>
+                {% set ns = namespace(grupo_atual=None, total_qtd_grupo=0, total_valor_grupo=0) %}
                 {% for cat in categorias %}
+                {% set ag = agregados.get(cat.id, {'qtd': 0, 'total': 0}) %}
+                {% if cat.grupo != ns.grupo_atual %}
+                  {% set ns.grupo_atual = cat.grupo %}
+                  <tr class="table-secondary">
+                    <td colspan="6" class="fw-bold small">
+                      <i class="fas fa-folder-open me-1"></i>{{ cat.grupo }}
+                    </td>
+                  </tr>
+                {% endif %}
                 <tr class="{{ '' if cat.ativa else 'text-muted' }}"
                     data-cat-id="{{ cat.id }}"
                     data-cat-nome="{{ cat.nome }}"
                     data-cat-grupo="{{ cat.grupo }}"
                     data-cat-icone="{{ cat.icone or '' }}">
-                  <td class="small">{{ cat.grupo }}</td>
+                  <td class="small text-muted">{{ cat.grupo }}</td>
                   <td><i class="fas {{ cat.icone or 'fa-tag' }} me-1"></i> {{ cat.nome }}</td>
-                  <td class="small text-muted">{{ cat.icone or '-' }}</td>
+                  <td class="text-end small">{{ ag.qtd }}</td>
+                  <td class="text-end small">{{ ag.total|valor_br }}</td>
                   <td>
                     {% if cat.ativa %}
                     <span class="badge bg-success">Sim</span>
@@ -78,12 +85,18 @@
                     {% endif %}
                   </td>
                   <td>
-                    <button class="btn btn-outline-primary btn-sm btn-editar-cat" title="Editar">
+                    <button class="btn btn-outline-primary btn-sm btn-editar-cat py-0 px-1" title="Editar">
                       <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-outline-{{ 'warning' if cat.ativa else 'success' }} btn-sm btn-toggle-cat"
+                    <button class="btn btn-outline-{{ 'warning' if cat.ativa else 'success' }} btn-sm btn-toggle-cat py-0 px-1"
                             title="{{ 'Desativar' if cat.ativa else 'Ativar' }}">
                       <i class="fas fa-{{ 'toggle-on' if cat.ativa else 'toggle-off' }}"></i>
+                    </button>
+                    <button class="btn btn-outline-info btn-sm btn-migrar-cat py-0 px-1" title="Migrar vinculos para outra categoria">
+                      <i class="fas fa-exchange-alt"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm btn-remover-cat py-0 px-1" title="Remover categoria">
+                      <i class="fas fa-trash"></i>
                     </button>
                   </td>
                 </tr>
@@ -112,12 +125,11 @@
                   <th class="sortable" data-sort="string" data-col="0" role="button">Padrao <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
                   <th class="sortable" data-sort="string" data-col="1" role="button">Tipo <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
                   <th class="sortable" data-sort="string" data-col="2" role="button">Categoria <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
-                  <th class="sortable" data-sort="string" data-col="3" role="button">Origem <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
-                  <th class="sortable" data-sort="number" data-col="4" role="button">Usos <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
-                  <th class="sortable" data-sort="number" data-col="5" role="button">Conf. <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
-                  <th class="sortable" data-sort="number" data-col="6" role="button" title="Transacoes pendentes que matcham este padrao">Match <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="number" data-col="3" role="button">Usos <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="number" data-col="4" role="button">Conf. <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
+                  <th class="sortable" data-sort="number" data-col="5" role="button" title="Transacoes PENDENTES cujo historico contem este padrao hoje. Indica quantas seriam categorizadas automaticamente em um re-processamento. 0 = sem pendentes matchando (normal se a regra ja foi aplicada).">Match <i class="fas fa-sort text-muted ms-1" style="font-size:0.7rem"></i></th>
                   <th>Ativo</th>
-                  <th style="width:60px">Acoes</th>
+                  <th style="width:120px">Acoes</th>
                 </tr>
               </thead>
               <tbody>
@@ -148,14 +160,15 @@
                     <span class="badge bg-info">Relativo</span>
                     {% endif %}
                   </td>
-                  <td class="small" data-val="{{ regra.categoria.nome if regra.categoria else '' }}">
+                  <td class="small" data-val="{{ (regra.categoria.grupo ~ ' / ' ~ regra.categoria.nome) if regra.categoria else '' }}">
                     {% if regra.categoria %}
+                    <span class="text-muted">{{ regra.categoria.grupo }}</span>
+                    <span class="mx-1">/</span>
                     {{ regra.categoria.nome }}
                     {% else %}
                     <span class="text-muted">-</span>
                     {% endif %}
                   </td>
-                  <td class="small" data-val="{{ regra.origem }}">{{ regra.origem }}</td>
                   <td data-val="{{ regra.vezes_usado }}">{{ regra.vezes_usado }}</td>
                   <td data-val="{{ regra.confianca }}">{{ regra.confianca }}%</td>
                   <td data-val="{{ match_count }}">
@@ -175,6 +188,13 @@
                   <td>
                     <button class="btn btn-outline-primary btn-sm btn-editar-regra py-0 px-1" title="Editar">
                       <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-success btn-sm btn-propagar-regra py-0 px-1"
+                            title="Propagar: re-aplica a regra em transacoes vinculadas + pendentes (preserva regras top-level)">
+                      <i class="fas fa-bolt"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm btn-remover-regra py-0 px-1" title="Desativar regra">
+                      <i class="fas fa-trash"></i>
                     </button>
                   </td>
                 </tr>
@@ -208,40 +228,6 @@
                   <td>{{ m.papel or '-' }}</td>
                   <td>
                     {% if m.ativo %}
-                    <span class="badge bg-success">Sim</span>
-                    {% else %}
-                    <span class="badge bg-secondary">Nao</span>
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {# ===== EXCLUSOES ===== #}
-    <div class="tab-pane fade" id="tabExclusoes">
-      <div class="card">
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Padrao</th>
-                  <th>Descricao</th>
-                  <th>Ativo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for excl in exclusoes %}
-                <tr>
-                  <td class="fw-bold">{{ excl.padrao }}</td>
-                  <td class="small">{{ excl.descricao or '-' }}</td>
-                  <td>
-                    {% if excl.ativo %}
                     <span class="badge bg-success">Sim</span>
                     {% else %}
                     <span class="badge bg-secondary">Nao</span>
@@ -542,6 +528,110 @@
   </div>
 </div>
 
+{# ===== MODAL MIGRAR CATEGORIA ===== #}
+<div class="modal fade" id="modalMigrarCat" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> Migrar Categoria</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="migrarOrigemId">
+        <div class="alert alert-info py-2 mb-3">
+          Move todos os vinculos (regras, transacoes, orcamentos) desta categoria para outra.
+          Nao remove a categoria origem — use o botao Remover para excluir apos a migracao.
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Origem</label>
+          <div class="form-control bg-light" id="migrarOrigemLabel">-</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Vinculos atuais</label>
+          <div id="migrarVinculos" class="small text-muted">Carregando...</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Destino</label>
+          <select id="migrarDestinoId" class="form-select">
+            <option value="">Sem categoria (NULL)</option>
+            {% for cat in categorias %}
+            <option value="{{ cat.id }}" data-grupo="{{ cat.grupo }}" data-nome="{{ cat.nome }}">
+              {{ cat.grupo }} / {{ cat.nome }}{% if not cat.ativa %} (inativa){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">"Sem categoria" seta os vinculos como NULL (transacoes ficam sem categoria).</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-info" id="btnConfirmarMigrar">
+          <i class="fas fa-check"></i> Migrar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ===== MODAL REMOVER CATEGORIA ===== #}
+<div class="modal fade" id="modalRemoverCat" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="fas fa-trash"></i> Remover Categoria</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="removerCatId">
+        <div class="mb-3">
+          <label class="form-label">Categoria</label>
+          <div class="form-control bg-light" id="removerCatLabel">-</div>
+        </div>
+        <div id="removerAlertaEspecial" class="alert alert-warning py-2 d-none">
+          <strong>Atencao:</strong> esta categoria pertence a um grupo especial
+          (Receitas ou Desconsiderar). Remove-la pode impactar o pipeline de categorizacao.
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Vinculos atuais</label>
+          <div id="removerVinculos" class="small text-muted">Carregando...</div>
+        </div>
+        <div id="removerEscolha" class="d-none">
+          <hr>
+          <p class="mb-2"><strong>Escolha o que fazer com os vinculos:</strong></p>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="removerModo" id="radioMigrar" value="migrar" checked>
+            <label class="form-check-label" for="radioMigrar">
+              Migrar para outra categoria
+            </label>
+          </div>
+          <div class="mb-3 ps-4" id="removerDivDestino">
+            <select id="removerDestinoId" class="form-select form-select-sm">
+              <option value="">Selecione...</option>
+              {% for cat in categorias %}
+              <option value="{{ cat.id }}">
+                {{ cat.grupo }} / {{ cat.nome }}{% if not cat.ativa %} (inativa){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="removerModo" id="radioNull" value="null">
+            <label class="form-check-label" for="radioNull">
+              Deixar sem categoria (NULL — transacoes ficam sem categoria atribuida)
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btnConfirmarRemover">
+          <i class="fas fa-trash"></i> Remover
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 $(function() {
   const csrfToken = $('meta[name="csrf-token"]').attr('content');
@@ -653,6 +743,193 @@ $(function() {
     });
   });
 
+  // Helper: renderiza vinculos no formato "N regras, N transacoes, ..."
+  function fmtVinculos(v) {
+    const parts = [];
+    if (v.regras > 0) parts.push(`<strong>${v.regras}</strong> regra(s)`);
+    if (v.transacoes > 0) parts.push(`<strong>${v.transacoes}</strong> transacao(oes)`);
+    if (v.orcamentos > 0) parts.push(`<strong>${v.orcamentos}</strong> orcamento(s)`);
+    if (v.grupos_analise > 0) parts.push(`<strong>${v.grupos_analise}</strong> grupo(s) de analise`);
+    return parts.length ? parts.join(', ') : '<span class="text-success">Sem vinculos</span>';
+  }
+
+  // ===== MIGRAR CATEGORIA =====
+  $(document).on('click', '.btn-migrar-cat', function() {
+    const tr = $(this).closest('tr');
+    const catId = tr.data('cat-id');
+    const catGrupo = tr.data('cat-grupo');
+    const catNome = tr.data('cat-nome');
+
+    $('#migrarOrigemId').val(catId);
+    $('#migrarOrigemLabel').text(catGrupo + ' / ' + catNome);
+    $('#migrarVinculos').html('Carregando...');
+    $('#migrarDestinoId').val('');
+    // Desabilitar a propria categoria como destino
+    $('#migrarDestinoId option').prop('disabled', false);
+    $('#migrarDestinoId option[value="' + catId + '"]').prop('disabled', true);
+
+    new bootstrap.Modal('#modalMigrarCat').show();
+
+    // Carregar vinculos via AJAX
+    $.get('/pessoal/api/categorias/' + catId + '/vinculos', function(r) {
+      if (r.sucesso) {
+        $('#migrarVinculos').html(fmtVinculos(r.vinculos));
+      } else {
+        $('#migrarVinculos').html('<span class="text-danger">Erro ao carregar vinculos.</span>');
+      }
+    }).fail(function() {
+      $('#migrarVinculos').html('<span class="text-danger">Erro ao carregar vinculos.</span>');
+    });
+  });
+
+  $('#btnConfirmarMigrar').on('click', function() {
+    const origemId = parseInt($('#migrarOrigemId').val());
+    const destinoRaw = $('#migrarDestinoId').val();
+    const destinoId = destinoRaw === '' ? null : parseInt(destinoRaw);
+
+    const label = destinoId === null
+      ? 'Sem categoria (NULL)'
+      : $('#migrarDestinoId option[value="' + destinoId + '"]').text().trim();
+    if (!confirm(`Migrar TODOS os vinculos desta categoria para "${label}"?`)) return;
+
+    $.ajax({
+      url: '/pessoal/api/categorias/' + origemId + '/migrar',
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify({destino_id: destinoId}),
+      success: function(r) {
+        if (r.sucesso) {
+          toastr.success(r.mensagem);
+          bootstrap.Modal.getInstance('#modalMigrarCat').hide();
+          location.reload();
+        } else {
+          toastr.error(r.mensagem);
+        }
+      },
+      error: function(xhr) {
+        const msg = xhr.responseJSON?.mensagem || 'Erro ao migrar categoria.';
+        toastr.error(msg);
+      },
+    });
+  });
+
+  // ===== REMOVER CATEGORIA =====
+  const GRUPOS_ESPECIAIS = ['Receitas', 'Desconsiderar'];
+
+  // Toggle enable/disable do select de destino conforme radio
+  $(document).on('change', 'input[name="removerModo"]', function() {
+    const modo = $(this).val();
+    $('#removerDestinoId').prop('disabled', modo !== 'migrar');
+  });
+
+  $(document).on('click', '.btn-remover-cat', function() {
+    const tr = $(this).closest('tr');
+    const catId = tr.data('cat-id');
+    const catGrupo = tr.data('cat-grupo');
+    const catNome = tr.data('cat-nome');
+
+    $('#removerCatId').val(catId);
+    $('#removerCatLabel').text(catGrupo + ' / ' + catNome);
+    $('#removerVinculos').html('Carregando...');
+    $('#removerEscolha').addClass('d-none');
+    $('#removerDestinoId').val('');
+
+    // Alerta especial para grupos sensiveis
+    if (GRUPOS_ESPECIAIS.includes(catGrupo)) {
+      $('#removerAlertaEspecial').removeClass('d-none');
+    } else {
+      $('#removerAlertaEspecial').addClass('d-none');
+    }
+
+    // Desabilitar a propria categoria como destino
+    $('#removerDestinoId option').prop('disabled', false);
+    $('#removerDestinoId option[value="' + catId + '"]').prop('disabled', true);
+
+    new bootstrap.Modal('#modalRemoverCat').show();
+
+    // Carregar vinculos via AJAX
+    $.get('/pessoal/api/categorias/' + catId + '/vinculos', function(r) {
+      if (r.sucesso) {
+        $('#removerVinculos').html(fmtVinculos(r.vinculos));
+        const temVinculos = (r.vinculos.regras + r.vinculos.transacoes + r.vinculos.orcamentos + r.vinculos.grupos_analise) > 0;
+        if (temVinculos) {
+          $('#removerEscolha').removeClass('d-none');
+          $('#radioMigrar').prop('checked', true);
+          $('#removerDestinoId').prop('disabled', false);
+        } else {
+          $('#removerEscolha').addClass('d-none');
+        }
+      } else {
+        $('#removerVinculos').html('<span class="text-danger">Erro ao carregar vinculos.</span>');
+      }
+    }).fail(function() {
+      $('#removerVinculos').html('<span class="text-danger">Erro ao carregar vinculos.</span>');
+    });
+  });
+
+  $('#btnConfirmarRemover').on('click', function() {
+    const catId = parseInt($('#removerCatId').val());
+    const escolhaVisivel = !$('#removerEscolha').hasClass('d-none');
+
+    let body = {};
+    let msgConfirm = '';
+
+    if (escolhaVisivel) {
+      const modo = $('input[name="removerModo"]:checked').val();
+      if (modo === 'migrar') {
+        const destinoId = $('#removerDestinoId').val();
+        if (!destinoId) {
+          toastr.warning('Selecione uma categoria destino.');
+          return;
+        }
+        body = {modo: 'migrar', destino_id: parseInt(destinoId)};
+        const destinoLabel = $('#removerDestinoId option[value="' + destinoId + '"]').text().trim();
+        msgConfirm = `Migrar vinculos para "${destinoLabel}" e remover a categoria. Confirma?`;
+      } else {
+        body = {modo: 'null'};
+        msgConfirm = 'Deixar vinculos sem categoria (NULL) e remover. Confirma?';
+      }
+    } else {
+      body = {modo: 'direto'};
+      msgConfirm = 'Remover esta categoria permanentemente?';
+    }
+
+    if (!confirm(msgConfirm)) return;
+
+    $.ajax({
+      url: '/pessoal/api/categorias/' + catId,
+      method: 'DELETE',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      data: JSON.stringify(body),
+      success: function(r) {
+        if (r.sucesso) {
+          toastr.success(r.mensagem);
+          bootstrap.Modal.getInstance('#modalRemoverCat').hide();
+          location.reload();
+        } else {
+          toastr.error(r.mensagem);
+        }
+      },
+      error: function(xhr) {
+        const resp = xhr.responseJSON || {};
+        // 409 exige_escolha: vinculos surgiram entre o GET /vinculos e o DELETE (concorrencia).
+        // Re-exibe o fluxo de escolha com os novos vinculos em vez de sair.
+        if (xhr.status === 409 && resp.exige_escolha && resp.vinculos) {
+          toastr.warning('Novos vinculos detectados. Escolha migrar ou setar NULL.');
+          $('#removerVinculos').html(fmtVinculos(resp.vinculos));
+          $('#removerEscolha').removeClass('d-none');
+          $('#radioMigrar').prop('checked', true);
+          $('#removerDestinoId').prop('disabled', false);
+          return;
+        }
+        const msg = resp.mensagem || 'Erro ao remover categoria.';
+        toastr.error(msg);
+      },
+    });
+  });
+
   // ===== SORT TABELA REGRAS =====
   (function() {
     const table = document.getElementById('tblRegras');
@@ -724,6 +1001,64 @@ $(function() {
     $('#regraValorMin').val('');
     $('#regraValorMax').val('');
     $('#modalRegraTitulo').text('Nova Regra');
+  });
+
+  // Propagar regra — forca aplicacao em vinculadas + pendentes
+  $(document).on('click', '.btn-propagar-regra', function() {
+    const tr = $(this).closest('tr');
+    const regraId = tr.data('regra-id');
+    const padrao = tr.data('regra-padrao');
+    const msg = `Propagar a regra "${padrao}" para TODAS as transacoes vinculadas a ela` +
+                ` + pendentes que matcham o padrao?\n\n` +
+                `Transacoes com outra regra (ex: CPF/CNPJ mais especifico) ou categorizadas ` +
+                `manualmente sem regra serao preservadas.`;
+    if (!confirm(msg)) return;
+
+    $.ajax({
+      url: `/pessoal/api/regras/${regraId}/propagar`,
+      method: 'POST',
+      contentType: 'application/json',
+      headers: {'X-CSRFToken': csrfToken},
+      success: function(r) {
+        if (r.sucesso) {
+          toastr.success(r.mensagem);
+          if (r.resultado && (r.resultado.reatribuidas_vinculadas || r.resultado.propagados_pendentes)) {
+            location.reload();
+          }
+        } else {
+          toastr.error(r.mensagem);
+        }
+      },
+      error: function(xhr) {
+        const msg = xhr.responseJSON?.mensagem || 'Erro ao propagar regra.';
+        toastr.error(msg);
+      },
+    });
+  });
+
+  // Remover regra — soft-delete com confirmacao
+  $(document).on('click', '.btn-remover-regra', function() {
+    const tr = $(this).closest('tr');
+    const regraId = tr.data('regra-id');
+    const padrao = tr.data('regra-padrao');
+    if (!confirm(`Desativar a regra "${padrao}"?\nTransacoes auto-categorizadas por ela voltam para PENDENTE.`)) return;
+    $.ajax({
+      url: `/pessoal/api/regras/${regraId}`,
+      method: 'DELETE',
+      headers: {'X-CSRFToken': csrfToken},
+      success: function(r) {
+        if (r.sucesso) {
+          toastr.success(r.mensagem);
+          location.reload();
+        } else {
+          toastr.error(r.mensagem);
+        }
+      },
+      error: function(xhr) {
+        const msg = xhr.responseJSON?.mensagem || 'Erro ao desativar regra.';
+        toastr.error(msg);
+      },
+    });
   });
 
   // Editar regra — preencher modal

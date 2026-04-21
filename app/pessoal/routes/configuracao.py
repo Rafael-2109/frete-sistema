@@ -1,16 +1,18 @@
 """Rotas de configuracao — CRUD categorias, regras, membros, exclusoes."""
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
+from sqlalchemy import func
 
 from app import db
 from app.pessoal import pode_acessar_pessoal
 from app.pessoal.models import (
     PessoalCategoria, PessoalRegraCategorizacao, PessoalMembro,
-    PessoalExclusaoEmpresa, PessoalConta,
+    PessoalConta, PessoalTransacao,
 )
 from app.pessoal.services.aprendizado_service import (
     despropagar_regra, normalizar_padrao,
     propagar_regra_para_pendentes, contar_matches_por_regra,
+    desvincular_manuais_da_regra, propagar_regra_forcado,
 )
 from app.utils.timezone import agora_utc_naive
 
@@ -32,20 +34,32 @@ def index():
         PessoalRegraCategorizacao.padrao_historico,
     ).all()
     membros = PessoalMembro.query.order_by(PessoalMembro.nome).all()
-    exclusoes = PessoalExclusaoEmpresa.query.order_by(PessoalExclusaoEmpresa.padrao).all()
     contas = PessoalConta.query.order_by(PessoalConta.nome).all()
 
     # Contar pendentes que cada regra PADRAO matcharia (para coluna "Match")
     contagem_match = contar_matches_por_regra(regras)
+
+    # Qtd e valor total por categoria (historico, exclui transacoes fora do relatorio)
+    agregados_raw = db.session.query(
+        PessoalTransacao.categoria_id,
+        func.count(PessoalTransacao.id),
+        func.sum(PessoalTransacao.valor),
+    ).filter(
+        PessoalTransacao.excluir_relatorio.is_(False),
+    ).group_by(PessoalTransacao.categoria_id).all()
+    agregados = {
+        cat_id: {'qtd': int(qtd or 0), 'total': float(total or 0)}
+        for cat_id, qtd, total in agregados_raw
+    }
 
     return render_template(
         'pessoal/configuracao.html',
         categorias=categorias,
         regras=regras,
         membros=membros,
-        exclusoes=exclusoes,
         contas=contas,
         contagem_match=contagem_match,
+        agregados=agregados,
     )
 
 
@@ -113,6 +127,144 @@ def toggle_categoria(cat_id):
             'mensagem': f'Categoria {"ativada" if cat.ativa else "desativada"}.',
             'categoria': cat.to_dict(),
         })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@configuracao_bp.route('/api/categorias/<int:cat_id>/vinculos', methods=['GET'])
+@login_required
+def vinculos_categoria(cat_id):
+    """Conta vinculos da categoria em todas as tabelas que a referenciam.
+
+    Usado pelos modais de migrar/remover categoria para preview.
+    """
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    cat = db.session.get(PessoalCategoria, cat_id)
+    if not cat:
+        return jsonify({'sucesso': False, 'mensagem': 'Categoria nao encontrada.'}), 404
+
+    from app.pessoal.services.migracao_service import contar_vinculos
+    return jsonify({
+        'sucesso': True,
+        'categoria': cat.to_dict(),
+        'vinculos': contar_vinculos(cat_id),
+    })
+
+
+@configuracao_bp.route('/api/categorias/<int:cat_id>', methods=['DELETE'])
+@login_required
+def excluir_categoria(cat_id):
+    """Remove categoria. Se houver vinculos, exige escolha via body JSON.
+
+    Body JSON:
+        {} ou sem body -> verifica vinculos; se houver, retorna 409 com contagem.
+        {"modo": "migrar", "destino_id": int} -> migra vinculos para destino e deleta.
+        {"modo": "null"}                       -> seta NULL nos vinculos e deleta.
+        {"modo": "direto"}                     -> deleta direto (falha se houver vinculos).
+    """
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    cat = db.session.get(PessoalCategoria, cat_id)
+    if not cat:
+        return jsonify({'sucesso': False, 'mensagem': 'Categoria nao encontrada.'}), 404
+
+    from app.pessoal.services.migracao_service import contar_vinculos, migrar_categoria
+    vinculos = contar_vinculos(cat_id)
+    tem_vinculos = any(vinculos[k] > 0 for k in ('regras', 'transacoes', 'orcamentos', 'grupos_analise'))
+
+    dados = request.get_json(silent=True) or {}
+    modo = dados.get('modo')
+    destino_id = dados.get('destino_id')
+    if destino_id in ('', 'null', 0):
+        destino_id = None
+
+    # Se tem vinculos e nao foi escolhido um modo, exigir escolha
+    if tem_vinculos and not modo:
+        return jsonify({
+            'sucesso': False,
+            'exige_escolha': True,
+            'mensagem': 'Categoria tem vinculos — escolha migrar ou deixar sem categoria.',
+            'vinculos': vinculos,
+            'categoria': cat.to_dict(),
+        }), 409
+
+    try:
+        # Aplicar modo escolhido (commit=False -> tudo em uma transacao com o delete)
+        if modo == 'migrar':
+            if destino_id is None:
+                return jsonify({'sucesso': False, 'mensagem': 'Informe destino_id para modo=migrar.'}), 400
+            try:
+                destino_id = int(destino_id)
+            except (TypeError, ValueError):
+                return jsonify({'sucesso': False, 'mensagem': 'destino_id invalido.'}), 400
+            migrar_categoria(cat_id, destino_id, commit=False)
+        elif modo == 'null':
+            if tem_vinculos:
+                migrar_categoria(cat_id, None, commit=False)
+        elif modo == 'direto':
+            if tem_vinculos:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Categoria tem vinculos — nao pode deletar direto.',
+                    'vinculos': vinculos,
+                }), 409
+
+        db.session.delete(cat)
+        db.session.commit()
+
+        # Invalidar cache apos commit bem-sucedido
+        from app.pessoal.services.categorizacao_service import invalidar_cache_desconsiderar
+        invalidar_cache_desconsiderar()
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': f'Categoria "{cat.grupo} / {cat.nome}" removida.',
+            'vinculos_tratados': vinculos,
+        })
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@configuracao_bp.route('/api/categorias/<int:origem_id>/migrar', methods=['POST'])
+@login_required
+def migrar_categoria_route(origem_id):
+    """Migra todos os vinculos de uma categoria para outra (ou para NULL).
+
+    Body JSON:
+        {"destino_id": int|null}  - None/null => seta NULL em todos os vinculos
+    """
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    dados = request.get_json() or {}
+    destino_id = dados.get('destino_id')
+    # normalizar: strings vazias/"null" -> None
+    if destino_id in ('', 'null', 0):
+        destino_id = None
+    if destino_id is not None:
+        try:
+            destino_id = int(destino_id)
+        except (TypeError, ValueError):
+            return jsonify({'sucesso': False, 'mensagem': 'destino_id invalido.'}), 400
+
+    from app.pessoal.services.migracao_service import migrar_categoria
+    try:
+        updates = migrar_categoria(origem_id, destino_id)
+        total = updates['regras'] + updates['transacoes'] + updates['orcamentos']
+        msg = f'{total} vinculos migrados.'
+        if updates.get('grupos_analise_removidos'):
+            msg += f' {updates["grupos_analise_removidos"]} entrada(s) N:N removidas.'
+        return jsonify({'sucesso': True, 'mensagem': msg, 'updates': updates})
+    except ValueError as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
@@ -218,6 +370,10 @@ def salvar_regra():
 
             if needs_repropagation:
                 afetadas = despropagar_regra(regra.id)
+                # Se a categoria mudou, zerar regra_id em transacoes MANUAIS que apontavam
+                # para esta regra (preserva categoria_id manual, remove referencia obsoleta)
+                if mudou_categoria and tipo_regra == 'PADRAO':
+                    desvincular_manuais_da_regra(regra.id)
                 if tipo_regra == 'PADRAO':
                     propagados_info = propagar_regra_para_pendentes(regra)
         else:
@@ -254,10 +410,63 @@ def salvar_regra():
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 
 
+@configuracao_bp.route('/api/regras/<int:regra_id>/propagar', methods=['POST'])
+@login_required
+def propagar_regra(regra_id):
+    """Propagacao FORCADA de uma regra PADRAO.
+
+    Re-aplica a regra em TODAS as transacoes vinculadas (regra_id=<esta>), inclusive
+    as que foram categorizadas manualmente por esta mesma regra, e propaga para
+    pendentes que matcham o padrao.
+
+    NAO sobrescreve regras top-level: transacoes com outra regra (regra_id != esta)
+    ou categorizadas manualmente sem regra (regra_id=NULL, auto=False) sao preservadas.
+    """
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    regra = db.session.get(PessoalRegraCategorizacao, regra_id)
+    if not regra:
+        return jsonify({'sucesso': False, 'mensagem': 'Regra nao encontrada.'}), 404
+    if regra.tipo_regra != 'PADRAO':
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Propagacao forcada disponivel apenas para regras do tipo PADRAO.',
+        }), 400
+    if not regra.ativo:
+        return jsonify({'sucesso': False, 'mensagem': 'Regra inativa — ative antes de propagar.'}), 400
+    if not regra.categoria_id:
+        return jsonify({'sucesso': False, 'mensagem': 'Regra sem categoria — salve a regra com categoria antes.'}), 400
+
+    try:
+        resultado = propagar_regra_forcado(regra)
+        db.session.commit()
+
+        partes = []
+        if resultado['reatribuidas_vinculadas']:
+            partes.append(f"{resultado['reatribuidas_vinculadas']} vinculadas re-atribuidas")
+        if resultado['propagados_pendentes']:
+            partes.append(f"{resultado['propagados_pendentes']} pendentes propagadas")
+        if not partes:
+            partes.append('nenhuma transacao afetada')
+        protegidas = resultado['protegidas_outras_regras'] + resultado['protegidas_manuais_sem_regra']
+        if protegidas:
+            partes.append(f"{protegidas} preservadas (top-level)")
+
+        return jsonify({
+            'sucesso': True,
+            'mensagem': 'Propagacao concluida: ' + ', '.join(partes) + '.',
+            'resultado': resultado,
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
 @configuracao_bp.route('/api/regras/<int:regra_id>', methods=['DELETE'])
 @login_required
 def excluir_regra(regra_id):
-    """Desativar regra."""
+    """Desativar regra — despropaga transacoes auto-categorizadas por ela antes de desativar."""
     if not pode_acessar_pessoal(current_user):
         return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
 
@@ -265,10 +474,19 @@ def excluir_regra(regra_id):
     if not regra:
         return jsonify({'sucesso': False, 'mensagem': 'Regra nao encontrada.'}), 404
 
-    regra.ativo = False
-    regra.atualizado_em = agora_utc_naive()
-    db.session.commit()
-    return jsonify({'sucesso': True, 'mensagem': 'Regra desativada.'})
+    try:
+        # Despropagar transacoes que foram auto-categorizadas por esta regra (voltam a PENDENTE)
+        afetadas = despropagar_regra(regra_id)
+        regra.ativo = False
+        regra.atualizado_em = agora_utc_naive()
+        db.session.commit()
+        msg = 'Regra desativada.'
+        if afetadas:
+            msg += f' {afetadas} transacoes voltaram para PENDENTE.'
+        return jsonify({'sucesso': True, 'mensagem': msg, 'afetadas': afetadas})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 
 
 # =============================================================================
@@ -313,41 +531,3 @@ def salvar_membro():
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 
 
-# =============================================================================
-# CRUD EXCLUSOES EMPRESA
-# =============================================================================
-@configuracao_bp.route('/api/exclusoes', methods=['POST'])
-@login_required
-def salvar_exclusao():
-    """Criar ou atualizar exclusao empresa."""
-    if not pode_acessar_pessoal(current_user):
-        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
-
-    dados = request.get_json()
-    if not dados:
-        return jsonify({'sucesso': False, 'mensagem': 'Dados invalidos.'}), 400
-
-    excl_id = dados.get('id')
-    padrao = dados.get('padrao', '').strip()
-    descricao = dados.get('descricao', '').strip()
-
-    if not padrao:
-        return jsonify({'sucesso': False, 'mensagem': 'Padrao obrigatorio.'}), 400
-
-    try:
-        if excl_id:
-            excl = db.session.get(PessoalExclusaoEmpresa, excl_id)
-            if not excl:
-                return jsonify({'sucesso': False, 'mensagem': 'Exclusao nao encontrada.'}), 404
-            excl.padrao = padrao
-            excl.descricao = descricao
-        else:
-            excl = PessoalExclusaoEmpresa(padrao=padrao, descricao=descricao)
-            db.session.add(excl)
-
-        db.session.commit()
-        return jsonify({'sucesso': True, 'exclusao': excl.to_dict()})
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500

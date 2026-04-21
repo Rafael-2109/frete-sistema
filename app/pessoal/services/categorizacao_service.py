@@ -2,7 +2,6 @@
 Motor de categorizacao automatica para transacoes pessoais.
 
 Pipeline executado na importacao:
-- Layer 0: Exclusao empresarial (La Famiglia, etc.)
 - Layer 0.5 (F2): Parcela — herda categoria de outra parcela ja categorizada
 - Layer 1 (F1): Match por CPF/CNPJ (quando transacao e regra tem cpf_cnpj)
 - Layer 1 (F4): Match exato PADRAO (substring, respeita valor_min/valor_max)
@@ -10,6 +9,10 @@ Pipeline executado na importacao:
 - Layer 3: Match RELATIVO (identifica regra, NAO aplica categoria)
 - Layer 4: Heuristicas de contexto (pagamento cartao, investimento, etc.)
 - Layer 5: Nao resolvido -> PENDENTE
+
+NOTA: Exclusao empresarial (antigo Layer 0) foi unificada em regras PADRAO apontando
+para categorias no grupo 'Desconsiderar'. _aplicar_regra detecta via eh_categoria_desconsiderar
+e marca excluir_relatorio=True automaticamente.
 
 Atribuicao de membro (separada):
 1. Cartao: titular do parser -> membro_id automatico
@@ -25,7 +28,7 @@ from unidecode import unidecode
 from app import db
 from app.pessoal.models import (
     PessoalTransacao, PessoalCategoria, PessoalRegraCategorizacao,
-    PessoalExclusaoEmpresa, PessoalMembro, PessoalConta,
+    PessoalMembro, PessoalConta,
 )
 from app.pessoal.constants import (
     PADROES_PAGAMENTO_CARTAO, PADROES_TRANSFERENCIA_PROPRIA, PADROES_INVESTIMENTO,
@@ -110,13 +113,8 @@ def categorizar_transacao(transacao: PessoalTransacao) -> ResultadoCategorizacao
     resultado = ResultadoCategorizacao()
     historico = _normalizar(transacao.historico_completo or transacao.historico or '')
 
-    # Layer 0: Exclusao empresarial
-    exclusoes = PessoalExclusaoEmpresa.query.filter_by(ativo=True).all()
-    for excl in exclusoes:
-        if _normalizar(excl.padrao) in historico:
-            resultado.excluir_relatorio = True
-            resultado.status = 'CATEGORIZADO'
-            return resultado
+    # NOTA: Exclusao empresarial agora e tratada como regra PADRAO -> categoria no
+    # grupo 'Desconsiderar'. Layer 1+ cobre via _aplicar_regra + eh_categoria_desconsiderar.
 
     # Layer 0.5 (F2): Parcela — herdar categoria de outra parcela da mesma compra.
     # Se esta transacao tem identificador_parcela, procura OUTRA transacao na mesma

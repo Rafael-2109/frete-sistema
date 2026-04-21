@@ -21,7 +21,6 @@ import re
 from app import db
 from app.pessoal.models import (
     PessoalTransacao, PessoalCategoria, PessoalRegraCategorizacao,
-    PessoalExclusaoEmpresa,
 )
 from app.pessoal.services.categorizacao_service import categorizar_transacao
 from app.utils.timezone import agora_utc_naive
@@ -279,9 +278,8 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
         excluir_relatorio=False,
     ).all()
 
-    # Pre-load exclusoes uma unica vez (Layer 0 do pipeline)
-    exclusoes = PessoalExclusaoEmpresa.query.filter_by(ativo=True).all()
-    exclusoes_norm = [_normalizar(e.padrao) for e in exclusoes if e.padrao]
+    # NOTA: exclusoes empresariais agora sao regras PADRAO -> categoria Desconsiderar.
+    # Transacoes com padrao de exclusao ja estao com status CATEGORIZADO, nao em pendentes.
 
     total_pendentes = len(pendentes)
     propagados = 0
@@ -290,10 +288,6 @@ def propagar_regra_para_pendentes(regra: PessoalRegraCategorizacao,
         historico = _normalizar(
             transacao.historico_completo or transacao.historico or ''
         )
-
-        # Layer 0: pular se excluida
-        if any(exc in historico for exc in exclusoes_norm if exc):
-            continue
 
         # F4: filtro de valor
         if not _valor_no_range(transacao.valor, regra.valor_min, regra.valor_max):
@@ -443,6 +437,129 @@ def despropagar_regra(regra_id: int) -> int:
     return count
 
 
+def desvincular_manuais_da_regra(regra_id: int) -> int:
+    """Zera regra_id em transacoes MANUAIS (auto=False) que apontam para esta regra.
+
+    Usado ao editar uma regra cuja categoria mudou: a decisao manual do usuario
+    e PRESERVADA (categoria_id nao e alterada), mas remove-se a referencia a regra
+    antiga para evitar inconsistencia (regra aponta para cat X, transacao para cat Y).
+
+    NAO altera categoria_id, status, nem categorizacao_auto.
+
+    Returns: quantidade de transacoes desvinculadas.
+    """
+    afetadas = PessoalTransacao.query.filter(
+        PessoalTransacao.regra_id == regra_id,
+        PessoalTransacao.categorizacao_auto.is_(False),
+    ).update({'regra_id': None}, synchronize_session=False)
+    if afetadas:
+        logger.info(
+            'Desvinculacao de manuais (regra_id=%d): %d transacoes com regra_id=NULL',
+            regra_id, afetadas,
+        )
+    return int(afetadas or 0)
+
+
+def propagar_regra_forcado(regra: PessoalRegraCategorizacao) -> dict:
+    """Propagacao forcada — aplica a regra em TODAS as transacoes compativeis.
+
+    Para a regra dada (tipo PADRAO, ativo=True):
+    1. Re-atribui a categoria em transacoes que JA estao vinculadas a esta regra
+       (regra_id = <esta>) — cobre auto E manuais que apontam para esta regra.
+    2. Propaga para transacoes PENDENTES que matcham o padrao (mesma logica de
+       `propagar_regra_para_pendentes`).
+
+    PROTEGE regras top-level: NAO sobrescreve transacoes que pertencem a OUTRA
+    regra (regra_id != esta) — elas permanecem intactas, mesmo que o padrao
+    desta regra tambem matche (ex: regra com CPF/CNPJ mais especifica).
+    NAO sobrescreve transacoes CATEGORIZADAS manualmente sem regra_id
+    (decisao top-level do usuario) — sao preservadas.
+
+    Returns:
+        dict com {reatribuidas_vinculadas, propagados_pendentes, total_pendentes,
+                  protegidas_outras_regras, protegidas_manuais_sem_regra}
+    """
+    from app.pessoal.services.categorizacao_service import eh_categoria_desconsiderar
+
+    if regra.tipo_regra != 'PADRAO' or not regra.ativo:
+        return {
+            'reatribuidas_vinculadas': 0,
+            'propagados_pendentes': 0,
+            'total_pendentes': 0,
+            'protegidas_outras_regras': 0,
+            'protegidas_manuais_sem_regra': 0,
+        }
+
+    # 1. Re-atribuir categoria nas transacoes vinculadas a esta regra
+    vinculadas = PessoalTransacao.query.filter_by(regra_id=regra.id).all()
+    reatribuidas = 0
+    excluir = eh_categoria_desconsiderar(regra.categoria_id)
+    for t in vinculadas:
+        mudou = False
+        if t.categoria_id != regra.categoria_id:
+            t.categoria_id = regra.categoria_id
+            mudou = True
+        if t.excluir_relatorio != excluir:
+            t.excluir_relatorio = excluir
+            mudou = True
+        # Se esta com status PENDENTE mas tem regra_id, promove a CATEGORIZADO
+        if regra.categoria_id and t.status == 'PENDENTE':
+            t.status = 'CATEGORIZADO'
+            if t.categorizado_em is None:
+                t.categorizado_em = agora_utc_naive()
+            if not t.categorizado_por:
+                t.categorizado_por = 'sistema (propagacao forcada)'
+            mudou = True
+        if mudou:
+            reatribuidas += 1
+    db.session.flush()
+
+    # 2. Protegidas: contar transacoes com OUTRA regra que matcham o padrao (so informativo)
+    padrao_norm = _normalizar(regra.padrao_historico or '')
+    protegidas_outras = 0
+    protegidas_manuais = 0
+    if padrao_norm:
+        # Transacoes com regra_id != esta
+        candidatas_outra_regra = PessoalTransacao.query.filter(
+            PessoalTransacao.regra_id.isnot(None),
+            PessoalTransacao.regra_id != regra.id,
+        ).all()
+        for t in candidatas_outra_regra:
+            hist = _normalizar(t.historico_completo or t.historico or '')
+            if padrao_norm in hist:
+                protegidas_outras += 1
+
+        # Transacoes categorizadas manualmente SEM regra (regra_id=NULL, auto=False, CATEGORIZADO)
+        candidatas_manuais = PessoalTransacao.query.filter(
+            PessoalTransacao.regra_id.is_(None),
+            PessoalTransacao.categorizacao_auto.is_(False),
+            PessoalTransacao.status == 'CATEGORIZADO',
+            PessoalTransacao.categoria_id.isnot(None),
+        ).all()
+        for t in candidatas_manuais:
+            hist = _normalizar(t.historico_completo or t.historico or '')
+            if padrao_norm in hist:
+                protegidas_manuais += 1
+
+    # 3. Propagar para pendentes (reusa logica existente — SEM commit proprio)
+    resultado_pendentes = propagar_regra_para_pendentes(regra)
+
+    logger.info(
+        'Propagacao forcada regra_id=%d: %d reatribuidas, %d pendentes propagadas, '
+        '%d protegidas (outra regra), %d protegidas (manuais sem regra)',
+        regra.id, reatribuidas, resultado_pendentes['propagados'],
+        protegidas_outras, protegidas_manuais,
+    )
+
+    return {
+        'reatribuidas_vinculadas': reatribuidas,
+        'propagados_pendentes': resultado_pendentes['propagados'],
+        'total_pendentes': resultado_pendentes['total_pendentes'],
+        'protegidas_outras_regras': protegidas_outras,
+        'protegidas_manuais_sem_regra': protegidas_manuais,
+    }
+
+
 def simular_propagacao(padrao_historico: str = None,
                        cpf_cnpj_padrao: str = None,
                        valor_min=None,
@@ -477,18 +594,13 @@ def simular_propagacao(padrao_historico: str = None,
         if not padrao_norm and not cpf_cnpj_norm:
             return []
 
-        # Pre-load exclusoes uma unica vez (Layer 0 do pipeline)
-        exclusoes = PessoalExclusaoEmpresa.query.filter_by(ativo=True).all()
-        exclusoes_norm = [_normalizar(e.padrao) for e in exclusoes if e.padrao]
+        # NOTA: exclusoes empresariais agora sao regras PADRAO -> categoria Desconsiderar.
+        # Transacoes com padrao de exclusao ja estao com status CATEGORIZADO, nao em pendentes.
 
         for transacao in pendentes:
             historico = _normalizar(
                 transacao.historico_completo or transacao.historico or ''
             )
-
-            # Layer 0: pular se excluida
-            if any(exc in historico for exc in exclusoes_norm if exc):
-                continue
 
             # F4: filtro de valor (range aberto nao restringe)
             if not _valor_no_range(transacao.valor, valor_min, valor_max):

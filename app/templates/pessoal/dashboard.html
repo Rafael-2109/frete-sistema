@@ -85,7 +85,10 @@
     <!-- Gastos por Categoria (barras horizontais) -->
     <div class="col-lg-7">
       <div class="card h-100">
-        <div class="card-header"><i class="fas fa-chart-bar"></i> Gastos por Categoria</div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="fas fa-chart-bar"></i> Gastos por Categoria</span>
+          <span class="badge bg-secondary" id="totalGastoCategorias" title="Total do mes">-</span>
+        </div>
         <div class="card-body">
           <div class="chart-container" style="position:relative;height:340px;width:100%">
             <canvas id="chartCategorias"></canvas>
@@ -137,6 +140,15 @@
           <tbody id="tbodyResumo">
             <tr><td colspan="6" class="text-center text-muted py-4">Carregando...</td></tr>
           </tbody>
+          <tfoot class="table-light fw-bold">
+            <tr>
+              <td colspan="2">TOTAL</td>
+              <td class="text-end" id="totalGasto">-</td>
+              <td class="text-end" id="totalLimite">-</td>
+              <td class="text-end" id="totalSaldo">-</td>
+              <td id="totalPct">-</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -427,6 +439,31 @@ function carregarCategorias() {
     }).join('');
 
     $('#tbodyResumo').html(rows || '<tr><td colspan="6" class="text-center text-muted py-4">Nenhum gasto no periodo.</td></tr>');
+
+    // Totais (rodape da tabela + badge no card "Gastos por Categoria")
+    const totGasto = cats.reduce((a, c) => a + (c.gasto || 0), 0);
+    const totLimite = cats.reduce((a, c) => a + (c.limite || 0), 0);
+    const totSaldo = totLimite > 0 ? totLimite - totGasto : null;
+    const totPct = totLimite > 0 ? Math.round((totGasto / totLimite) * 1000) / 10 : null;
+
+    $('#totalGasto').text(fmt(totGasto));
+    $('#totalLimite').text(totLimite > 0 ? fmt(totLimite) : '-');
+    if (totSaldo !== null) {
+      const cls = totSaldo >= 0 ? 'text-success' : 'text-danger';
+      $('#totalSaldo').html(`<span class="${cls}">${fmt(totSaldo)}</span>`);
+    } else {
+      $('#totalSaldo').text('-');
+    }
+    if (totPct !== null) {
+      let badge = '';
+      if (totPct > 100) badge = ' <span class="badge bg-danger">Estourado</span>';
+      else if (totPct > 80) badge = ' <span class="badge bg-warning text-dark">Alerta</span>';
+      else badge = ' <span class="badge bg-success">OK</span>';
+      $('#totalPct').html(totPct + '%' + badge);
+    } else {
+      $('#totalPct').text('-');
+    }
+    $('#totalGastoCategorias').text(fmt(totGasto));
   });
 }
 
