@@ -981,6 +981,67 @@
     border-left: 3px solid var(--agent-accent, #667eea);
 }
 
+/* ============================================================================
+ * Fork cascata (R1) — recuo + conector visual para hierarquia
+ * Cada depth extra adiciona ~18px de padding-left. Linha vertical via
+ * pseudo-element ::before conecta child ao parent visualmente.
+ * ========================================================================= */
+.session-item.session-fork-child {
+    padding-left: calc(20px + (var(--fork-depth, 1) * 18px));
+    position: relative;
+    background: linear-gradient(
+        to right,
+        rgba(102, 126, 234, 0.04) 0%,
+        transparent 60%
+    );
+}
+
+.session-item.session-fork-child::before {
+    content: "";
+    position: absolute;
+    left: calc(20px + ((var(--fork-depth, 1) - 1) * 18px) + 6px);
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--agent-accent, #667eea);
+    opacity: 0.35;
+}
+
+.session-item.session-fork-child::after {
+    /* L-connector horizontal apontando para o titulo */
+    content: "";
+    position: absolute;
+    left: calc(20px + ((var(--fork-depth, 1) - 1) * 18px) + 6px);
+    top: 22px;
+    width: 10px;
+    height: 2px;
+    background: var(--agent-accent, #667eea);
+    opacity: 0.35;
+}
+
+.session-item.session-fork-child.active::before,
+.session-item.session-fork-child.active::after {
+    opacity: 0.75;
+}
+
+/* Subtitulo "↳ Fork de ..." — inline, discreto */
+.session-fork-parent-label {
+    font-size: 0.72rem;
+    color: var(--agent-text-secondary, #888);
+    font-style: italic;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.session-fork-parent-label i {
+    font-size: 0.65rem;
+    margin-right: 3px;
+    opacity: 0.6;
+}
+
 .session-item-header {
     display: flex;
     justify-content: space-between;

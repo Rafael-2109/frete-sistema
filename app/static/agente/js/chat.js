@@ -2531,63 +2531,134 @@ function renderSessions() {
     const items = list.querySelectorAll('.session-item');
     items.forEach(item => item.remove());
 
-    // Renderiza sessões
-    sessionsList.forEach(session => {
-        const item = document.createElement('div');
-        item.className = 'session-item' + (session.session_id === sessionId ? ' active' : '');
-        item.onclick = () => selectSession(session);
-
-        const dateStr = session.updated_at
-            ? new Date(session.updated_at).toLocaleString('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            })
-            : '';
-
-        // R1: badge FORK se session foi forkada + tooltip com parent
-        const forkedFrom = session.forked_from || null;
-        const forkBadgeHtml = forkedFrom
-            ? `<span class="badge bg-warning text-dark ms-1"
-                     title="Forkada de: ${escapeHtml(forkedFrom.parent_title || '')} (${(forkedFrom.parent_session_id || '').substring(0, 8)}...) em ${escapeHtml(forkedFrom.forked_at || '')}"
-                     style="font-size: 0.6rem; cursor: help;">
-                 <i class="fas fa-code-branch"></i> FORK
-               </span>`
-            : '';
-
-        item.innerHTML = `
-            <div class="session-item-header">
-                <span class="session-item-title" title="${escapeHtml(session.title || 'Sem título')}">${escapeHtml(session.title || 'Sem título')}</span>
-                <div class="session-item-actions">
-                    <button class="fork-session" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
-                            onclick="event.stopPropagation(); forkSessionPrompt(this.dataset.sid, this.dataset.title)"
-                            title="Fork — duplicar em branch paralelo"
-                            aria-label="Forkar sessao ${escapeHtml(session.title || 'Conversa')}">
-                        <i class="fas fa-code-branch" aria-hidden="true"></i>
-                    </button>
-                    <button class="export" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
-                            onclick="event.stopPropagation(); exportHistoricalSession(this.dataset.sid, this.dataset.title)" title="Exportar">
-                        <i class="fas fa-file-export"></i>
-                    </button>
-                    <button onclick="event.stopPropagation(); renameSessionPrompt(${session.id})" title="Renomear">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="delete" onclick="event.stopPropagation(); deleteSessionConfirm(${session.id})" title="Excluir">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="session-item-preview">${escapeHtml(session.last_message || 'Nenhuma mensagem')}</div>
-            <div class="session-item-meta">
-                <span>${dateStr}</span>
-                <span class="badge bg-secondary">${session.message_count || 0} msgs</span>
-                ${forkBadgeHtml}
-            </div>
-        `;
-
-        list.appendChild(item);
+    // ─── R1 cascata: montar arvore pai → filhos ───
+    // Matching primario: forked_from.parent_db_session_id (nosso UUID, estavel).
+    // Fallback legado: parent_session_id (sdk_session_id, pode divergir pos-resume).
+    // Se pai ausente da lista: renderizar como raiz orfa com label "Fork de ... (removido)".
+    const byDbId = new Map();       // session_id (nosso UUID) → session
+    const bySdkId = new Map();      // sdk_session_id → session (fallback)
+    sessionsList.forEach(s => {
+        byDbId.set(s.session_id, s);
+        // session_id === sdk_session_id hoje (api_fork_session usa o SDK UUID
+        // como chave do AgentSession). Historicamente pode divergir.
+        bySdkId.set(s.session_id, s);
     });
+
+    function parentIdOf(session) {
+        const f = session.forked_from;
+        if (!f) return null;
+        return f.parent_db_session_id || f.parent_session_id || null;
+    }
+
+    function findParent(session) {
+        const pid = parentIdOf(session);
+        if (!pid) return null;
+        return byDbId.get(pid) || bySdkId.get(pid) || null;
+    }
+
+    // Children map: parent_id → [children]
+    const childrenOf = new Map();
+    const roots = [];
+    sessionsList.forEach(session => {
+        const parent = findParent(session);
+        if (parent) {
+            if (!childrenOf.has(parent.session_id)) childrenOf.set(parent.session_id, []);
+            childrenOf.get(parent.session_id).push(session);
+        } else {
+            // Raiz OU fork orfa (pai fora da lista)
+            roots.push(session);
+        }
+    });
+
+    // Renderizacao recursiva — DFS pre-order (pai antes dos filhos)
+    const rendered = new Set();
+    function renderNode(session, depth) {
+        if (rendered.has(session.session_id)) return;  // cycle guard
+        rendered.add(session.session_id);
+        list.appendChild(buildSessionItem(session, depth));
+        const kids = childrenOf.get(session.session_id) || [];
+        // Filhos ordenados por updated_at desc (mesmo criterio da API)
+        kids.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+        kids.forEach(child => renderNode(child, depth + 1));
+    }
+    roots.forEach(root => renderNode(root, 0));
+}
+
+/**
+ * Constroi 1 .session-item DOM node.
+ * depth=0 raiz, >=1 filho em cascata (depth=nivel).
+ */
+function buildSessionItem(session, depth) {
+    const item = document.createElement('div');
+    const isChild = depth > 0;
+    let className = 'session-item';
+    if (session.session_id === sessionId) className += ' active';
+    if (isChild) className += ' session-fork-child';
+    item.className = className;
+    if (isChild) item.style.setProperty('--fork-depth', String(depth));
+    item.onclick = () => selectSession(session);
+
+    const dateStr = session.updated_at
+        ? new Date(session.updated_at).toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+        })
+        : '';
+
+    // Label "↳ Fork de <parent_title>" — mais informativo que badge "FORK" solto
+    const forkedFrom = session.forked_from || null;
+    let forkParentLabelHtml = '';
+    let forkBadgeHtml = '';
+    if (forkedFrom) {
+        const parentTitle = escapeHtml(forkedFrom.parent_title || 'sessao');
+        const parentIdShort = (forkedFrom.parent_db_session_id || forkedFrom.parent_session_id || '').substring(0, 8);
+        const forkedAt = escapeHtml(forkedFrom.forked_at || '');
+        const tooltip = `Forkada de: ${parentTitle} (${parentIdShort}...) em ${forkedAt}`;
+        forkParentLabelHtml = `
+            <div class="session-fork-parent-label" title="${tooltip}">
+                <i class="fas fa-code-branch" aria-hidden="true"></i>
+                Fork de: ${parentTitle}
+            </div>`;
+        forkBadgeHtml = `
+            <span class="badge bg-warning text-dark ms-1"
+                  title="${tooltip}"
+                  style="font-size: 0.6rem; cursor: help;">
+                <i class="fas fa-code-branch"></i> FORK
+            </span>`;
+    }
+
+    item.innerHTML = `
+        <div class="session-item-header">
+            <span class="session-item-title" title="${escapeHtml(session.title || 'Sem título')}">${escapeHtml(session.title || 'Sem título')}</span>
+            <div class="session-item-actions">
+                <button class="fork-session" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
+                        onclick="event.stopPropagation(); forkSessionPrompt(this.dataset.sid, this.dataset.title)"
+                        title="Fork — duplicar em branch paralelo"
+                        aria-label="Forkar sessao ${escapeHtml(session.title || 'Conversa')}">
+                    <i class="fas fa-code-branch" aria-hidden="true"></i>
+                </button>
+                <button class="export" data-sid="${escapeHtml(session.session_id)}" data-title="${escapeHtml(session.title || 'Conversa')}"
+                        onclick="event.stopPropagation(); exportHistoricalSession(this.dataset.sid, this.dataset.title)" title="Exportar">
+                    <i class="fas fa-file-export"></i>
+                </button>
+                <button onclick="event.stopPropagation(); renameSessionPrompt(${session.id})" title="Renomear">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="delete" onclick="event.stopPropagation(); deleteSessionConfirm(${session.id})" title="Excluir">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        ${forkParentLabelHtml}
+        <div class="session-item-preview">${escapeHtml(session.last_message || 'Nenhuma mensagem')}</div>
+        <div class="session-item-meta">
+            <span>${dateStr}</span>
+            <span class="badge bg-secondary">${session.message_count || 0} msgs</span>
+            ${forkBadgeHtml}
+        </div>
+    `;
+
+    return item;
 }
 
 // ============================================================================

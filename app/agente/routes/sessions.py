@@ -428,6 +428,10 @@ def api_fork_session(session_id: str):
                     # chave que existe no store, nao nosso UUID que pode ter
                     # divergido ao longo de resumes sucessivos.
                     'parent_session_id': parent_sdk_sid,
+                    # FIX UX cascata (2026-04-21): matching confiavel no frontend
+                    # usa nosso UUID (parent.session_id), que e estavel e indexado.
+                    # parent_session_id (SDK) e efemero e pode nao bater pos-resume.
+                    'parent_db_session_id': parent.session_id,
                     'parent_title': parent_title_display,
                     'parent_total_msgs': len(parent_messages),  # auditoria: diferenca vs snapshot
                     'forked_at': agora_utc_naive().isoformat(),
