@@ -1,6 +1,6 @@
 # Infraestrutura — Render & Servicos
 
-**Ultima Atualizacao**: 11/03/2026
+**Ultima Atualizacao**: 22/04/2026
 
 ---
 
@@ -64,10 +64,45 @@ mcp__render__list_deploys(serviceId="srv-d13m38vfte5s738t6p60", limit=5)
 | Servico | Tipo | Plano | Dominio |
 |---------|------|-------|---------|
 | sistema-fretes | Web Service | Pro Plus 8GB 4CPU | sistema-fretes.onrender.com |
-| frete-sistema | Web Service | Free | frete-sistema.onrender.com (DEPRECATED) |
+| frete-sistema | Web Service | Free (SUSPENDED) | frete-sistema.onrender.com (DEPRECATED) |
 | sistema-fretes-worker-atacadao | Background Worker | Standard 2GB 1CPU | — |
 | sistema-fretes-redis | Key Value | Starter 256MB | — |
-| sistema-fretes-db | Postgres | Basic 4GB | — |
+| sistema-fretes-db | Postgres | Basic 4GB, disco 5 GB, limite ~197 conn | — |
+
+---
+
+### Capacity Planning — baseline 2026-04-22 (30 dias)
+
+> **Use este baseline antes de discutir escalonamento ou downgrade.** Se os numeros
+> mudarem > 50%, reexecute `mcp__render__get_metrics` e atualize aqui.
+
+**Web service `sistema-fretes` (Pro Plus 8GB 4CPU):**
+- CPU (hourly MAX): p50 0.08 / p95 3.10 / p99 4.00 vCPU. 15h/30d em CPU > 87% (2.5% do tempo).
+- Memoria: avg 2.21 GB (28%), p95 3.56 GB, max 4.40 GB (55%). Nunca > 55%.
+- HTTP pico: **1.44 rps** (p95 0.84 rps). Capacidade config atual (4w × 2t = 8 concurrent): ~20-30 rps sustentados → **uso real ~5% da capacidade**.
+- Instance count: 1 (sem autoscaling).
+- Errors 7d: 500 0.12%, 502 0.004%, 499 0.22% (SSE disconnect normal).
+
+**Postgres `sistema-fretes-db` (Basic 4GB):**
+- Conexoes pico: **31 de ~197** (16%). psycopg2 + asyncpg pool somados ja sao visiveis.
+- CPU pico: 8.6%. Memoria pico: 1.4 GB de 4 GB (35%).
+- Disco: 5 GB (atencao: `claude_session_store` cresce sem TTL — monitorar).
+
+**Gunicorn config atual** (`start_render.sh` gunicorn_config):
+- `workers=4, threads=2` gthread — 8 req concorrentes
+- `timeout=600s` (alinhado com Render 600s + SSE teto 540s web / 600s teams)
+- `graceful_timeout=60s` (deploy/reload)
+
+**Decisoes:**
+- **NAO escalar workers** — uso real 5% da capacidade.
+- **Pro Plus sobredimensionado para workload atual** mas picos 4 vCPU (2.5% do tempo) justificam. Downgrade Pro (4GB 2CPU) viavel com `workers=2` se aceitar latencia pior nos picos — economia ~50%.
+- **Standard 2GB 1CPU nao recomendado** — picos 4 vCPU nao cabem em 1 vCPU.
+
+**Stack de timeouts** (ordem critica — nao quebrar):
+```
+Heartbeat SSE 10s < AskUser web 55s < Inatividade 240s < SSE teto 540s < Gunicorn timeout 600s = Render hard limit 600s
+```
+Detalhes e ordem completa em `app/agente/CLAUDE.md` secao "Hierarquia de Timeouts".
 
 ---
 

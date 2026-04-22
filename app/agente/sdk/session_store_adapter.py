@@ -15,7 +15,7 @@ Arquitetura:
   gunicorn fork. Lock evita double-init em corridas async.
 - Pool separado do SQLAlchemy/psycopg2 sync usado no resto do app — nao ha
   interacao. min_size=1, max_size=3 por worker (4 workers = 12 conexoes asyncpg
-  adicionais, bem dentro do limite 100 do Render Starter).
+  adicionais, bem dentro do limite ~197 do Render Basic 4GB).
 - DSN parsed para remover client_encoding e options= que asyncpg nao entende
   (psycopg2-specific).
 

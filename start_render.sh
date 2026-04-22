@@ -149,16 +149,21 @@ import os
 
 # Configurações básicas
 bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
-workers = 4  # Aumentado para aproveitar melhor 2GB RAM
-worker_class = 'gthread'  # Mudado para gthread (melhor para I/O)
-threads = 2  # 2 threads por worker = 8 conexões simultâneas
-timeout = 300
-graceful_timeout = 300  # Tempo para threads non-daemon terminarem durante deploy/reciclagem
+# Pro Plus 8GB 4CPU — 4 workers paralelizam picos de CPU (2.5% das horas > 87% de 4CPU)
+# Uso real observado (30d): p50 CPU 2%, p95 77%, memoria 2.2 GB avg de 8 GB.
+# HTTP pico 1.44 rps — 8 threads simultaneas sao folga suficiente (~20 rps capacidade).
+workers = 4
+worker_class = 'gthread'  # gthread libera thread em I/O wait (SSE, SDK subprocess)
+threads = 2  # 4 workers × 2 threads = 8 requests concorrentes
+# timeout=600 alinha com Render hard limit (600s) e SSE teto absoluto web=540s/teams=600s.
+# Com gthread, timeout e per-request heartbeat — precisa ser >= maior request SSE.
+timeout = 600
+graceful_timeout = 60  # Deploy/reload: master espera 60s para threads terminarem
 max_requests = 1000
 max_requests_jitter = 100
-keepallive = 10
-preload_app = False  # Desabilitar preload para permitir registro de tipos
-worker_connections = 1000  # Máximo de conexões por worker
+keepalive = 10  # (typo historico 'keepallive' era ignorado — Gunicorn usava default 2s)
+preload_app = False  # Permite registro de tipos PostgreSQL por worker
+worker_connections = 1000  # Max conexoes simultaneas por worker
 
 def on_starting(server):
     """Executado ANTES do Gunicorn iniciar"""

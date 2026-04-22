@@ -249,8 +249,9 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 | **Teams inatividade** | 240s | `services.py:848` | Renovavel a cada chunk recebido |
 | SDK stream_close | 240s | `client.py:547` | Timeout CLI hooks/MCP |
 | Job `validate_subagent_output` | 60s | `hooks.py:SubagentStop enqueue` | Timeout RQ para validacao Haiku |
-| Web teto absoluto | 540s | `routes/_constants.py` | Teto absoluto SSE (Render 600s limit) |
+| Web teto absoluto | 540s | `routes/_constants.py` | Teto absoluto SSE (margem 60s vs Render) |
 | Teams teto absoluto | 600s | `services.py:849` | Teto absoluto Teams |
+| Gunicorn timeout | 600s | `start_render.sh` gunicorn_config | Per-request heartbeat gthread (= Render) |
 | Render hard limit | 600s | infra | Request timeout do servidor |
 
 **Deadline renewal**: operacoes longas com progresso continuo NAO sao mais mortas pelo timeout fixo. A cada chunk/evento recebido, o deadline de inatividade (120s) e renovado. Apenas inatividade real (2 min sem progresso) ou teto absoluto disparam timeout.
@@ -551,7 +552,7 @@ Tabela `claude_session_store` substituiu `session_persistence.py` — SDK 0.1.64
 ### Pool asyncpg
 
 - **LAZY per-worker** via `asyncio.Lock` — evita sockets compartilhados em gunicorn fork (C2 adversarial)
-- `min_size=1, max_size=3` por worker — 4 workers × 3 = 12 conn asyncpg + 4 × 15 psycopg2 = 72/100 Render Starter
+- `min_size=1, max_size=3` por worker — 4 workers × 3 = 12 conn asyncpg + 4 × 15 psycopg2 = ~72/~197 Render Basic 4GB
 - DSN parsed: `_prepare_dsn()` remove `client_encoding` e `options=-c ...` (psycopg2-specific, asyncpg ignora)
 - Shutdown: `close_session_store_pool()` disponivel (best-effort, nao bloqueia)
 
