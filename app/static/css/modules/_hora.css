@@ -44,10 +44,41 @@
     color: var(--bs-body-color);
   }
 
+  /* Active: fundo amber solido + texto escuro (alto contraste light/dark,
+     evita combinacao ruim com --bs-primary-bg-subtle nao-tematizado do Bootstrap). */
   .hora-topbar .nav-link.active {
-    background: var(--bs-primary-bg-subtle);
-    color: var(--bs-primary);
+    background: var(--bs-primary);
+    color: hsl(0 0% 10%);
     font-weight: 600;
+  }
+
+  .hora-topbar .nav-link.active:hover {
+    background: var(--bs-primary);
+    color: hsl(0 0% 10%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     BTN OUTLINE PRIMARY (ex: "Importar XLSX") - Light mode
+     amber-55 sobre fundo claro tem contraste baixo; forcar preto no light.
+     Dark mode mantem amber (contraste ok contra bg escuro).
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  [data-bs-theme="light"] .hora-module .btn-outline-primary,
+  [data-theme="light"] .hora-module .btn-outline-primary {
+    color: var(--text);
+    border-color: var(--text);
+  }
+
+  [data-bs-theme="light"] .hora-module .btn-outline-primary:hover,
+  [data-theme="light"] .hora-module .btn-outline-primary:hover,
+  [data-bs-theme="light"] .hora-module .btn-outline-primary:focus,
+  [data-theme="light"] .hora-module .btn-outline-primary:focus,
+  [data-bs-theme="light"] .hora-module .btn-outline-primary:active,
+  [data-theme="light"] .hora-module .btn-outline-primary:active {
+    background-color: var(--text);
+    color: var(--bg-light);
+    border-color: var(--text);
+    box-shadow: none;
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
