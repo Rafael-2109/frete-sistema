@@ -142,26 +142,52 @@
     --_badge-color: hsl(0 0% 100%);
 }
 
-/* NF Triangular — transferencia intercompany vinculada a NF venda.
-   Cor roxa distinta das existentes (success/info/warning) para sinalizar
-   "documento fiscal especial" com relacao 1:N. */
+/* NF Triangular — badges diferenciados por papel da NF na operacao.
+
+   carvia-badge-transf-eh: linha E a propria NF transferencia (AMARELO)
+   carvia-badge-transf-veio: linha e NF venda fruto de transferencia (VERDE)
+   carvia-badge-transferencia: alias legado = carvia-badge-transf-eh
+*/
+.carvia-badge-transf-eh,
 .carvia-badge-transferencia {
-    --_badge-bg: hsl(262 85% 58%);
-    --_badge-color: hsl(0 0% 100%);
-    --_badge-border: hsl(262 85% 45%);
+    --_badge-bg: var(--semantic-warning);
+    --_badge-color: hsl(0 0% 10%);
+    --_badge-border: transparent;
 }
 
+[data-bs-theme="light"] .carvia-badge-transf-eh,
 [data-bs-theme="light"] .carvia-badge-transferencia {
-    --_badge-bg: hsl(262 85% 94%);
-    --_badge-color: hsl(262 85% 30%);
-    --_badge-border: hsl(262 60% 70%);
+    --_badge-bg: var(--semantic-warning-subtle);
+    --_badge-color: hsl(55 80% 20%);
+    --_badge-border: var(--semantic-warning);
     border: 1px solid var(--_badge-border);
 }
 
+[data-bs-theme="dark"] .carvia-badge-transf-eh,
 [data-bs-theme="dark"] .carvia-badge-transferencia {
-    --_badge-bg: hsla(262 85% 60% / 0.18);
-    --_badge-color: hsl(262 85% 82%);
-    --_badge-border: hsla(262 85% 60% / 0.4);
+    --_badge-bg: var(--semantic-warning-subtle);
+    --_badge-color: hsl(55 80% 75%);
+    --_badge-border: hsla(55 70% 50% / 0.5);
+    border: 1px solid var(--_badge-border);
+}
+
+.carvia-badge-transf-veio {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+    --_badge-border: transparent;
+}
+
+[data-bs-theme="light"] .carvia-badge-transf-veio {
+    --_badge-bg: var(--semantic-success-subtle);
+    --_badge-color: hsl(135 70% 22%);
+    --_badge-border: var(--semantic-success);
+    border: 1px solid var(--_badge-border);
+}
+
+[data-bs-theme="dark"] .carvia-badge-transf-veio {
+    --_badge-bg: hsla(145 80% 40% / 0.18);
+    --_badge-color: hsl(145 80% 78%);
+    --_badge-border: hsla(145 80% 50% / 0.4);
     border: 1px solid var(--_badge-border);
 }
 

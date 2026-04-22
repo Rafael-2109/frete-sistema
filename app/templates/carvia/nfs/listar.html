@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "carvia/_macros.html" import th_sort, badge_nf_transferencia %}
+{% from "carvia/_macros.html" import th_sort, badge_nf_transferencia, badge_nf_veio_de_transferencia %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -125,8 +125,15 @@
                             <td>
                                 <strong>{{ nf.numero_nf }}</strong>
                                 {% if nf.id in ids_transf_efetivas %}
+                                {# Linha E a propria NF transferencia — badge amarelo #}
                                 <div class="mt-1">
                                     {{ badge_nf_transferencia(nf.numero_nf, nf.id) }}
+                                </div>
+                                {% elif num_nf_transf_por_venda and num_nf_transf_por_venda.get(nf.id) %}
+                                {# Linha e NF venda fruto de transferencia — badge verde com seta #}
+                                {% set _tref = num_nf_transf_por_venda.get(nf.id) %}
+                                <div class="mt-1">
+                                    {{ badge_nf_veio_de_transferencia(_tref.numero, _tref.id) }}
                                 </div>
                                 {% endif %}
                                 <small class="text-muted d-block">{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</small>

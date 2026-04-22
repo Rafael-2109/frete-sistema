@@ -81,8 +81,9 @@ def sincronizar_entrega_carvia_por_nf(
             e evitar poluir o filtro 'sem_previsao' do painel de monitoramento.
 
     Returns:
-        EntregaMonitorada atualizada/criada, ou None se CarviaNf nao existe
-        ou foi cancelada.
+        EntregaMonitorada atualizada/criada, ou None se CarviaNf nao existe,
+        foi cancelada, ou e uma NF transferencia triangular efetiva (ver R18
+        em app/carvia/CLAUDE.md).
     """
     carvia_nf = (
         CarviaNf.query
@@ -90,6 +91,16 @@ def sincronizar_entrega_carvia_por_nf(
         .first()
     )
     if not carvia_nf:
+        return None
+
+    # NF Triangular (R18): se esta NF e transferencia efetiva (tem vinculos
+    # em carvia_nf_vinculos_transferencia como nf_transferencia_id), ela NAO
+    # representa uma entrega autonoma — e parte de uma operacao triangular
+    # onde a NF venda ja sera monitorada. Pular para evitar duplicidade.
+    from app.carvia.services.documentos.nf_transferencia_service import (
+        CarviaNfTransferenciaService,
+    )
+    if CarviaNfTransferenciaService.eh_transferencia_efetiva(carvia_nf.id):
         return None
 
     entrega = EntregaMonitorada.query.filter_by(
@@ -247,5 +258,33 @@ def arquivar_entrega_carvia_cancelada(numero_nf: str) -> None:
 
     entrega.status_finalizacao = 'Cancelada'
     entrega.finalizado_por = 'Sistema CarVia (auto)'
+    entrega.finalizado_em = agora_utc_naive()
+    db.session.commit()
+
+
+def arquivar_entrega_transferencia_virou_efetiva(numero_nf: str) -> None:
+    """Arquiva EntregaMonitorada de NF que virou transferencia efetiva.
+
+    Chamado por `CarviaNfTransferenciaService.criar_vinculos` apos commit:
+    a NF transferencia nao deve mais aparecer como entrega autonoma no
+    monitoramento.
+
+    Regra simetrica a `arquivar_entrega_carvia_cancelada`:
+    - Se entrega nao existe: nada a fazer.
+    - Se operador ja finalizou manualmente: NAO sobrescrever (preserva historico).
+    - Caso contrario: marca 'Cancelada por Transferencia' para rastreabilidade.
+    """
+    entrega = (
+        EntregaMonitorada.query
+        .filter_by(numero_nf=numero_nf, origem='CARVIA')
+        .first()
+    )
+    if not entrega:
+        return
+    if entrega.status_finalizacao:
+        return
+
+    entrega.status_finalizacao = 'Cancelada por Transferencia'
+    entrega.finalizado_por = 'Sistema CarVia (R18)'
     entrega.finalizado_em = agora_utc_naive()
     db.session.commit()

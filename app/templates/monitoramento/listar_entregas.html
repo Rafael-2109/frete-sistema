@@ -528,6 +528,10 @@
           </td>
           <td>
             {{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}
+            {% set _nf_transf = (num_nf_transf_por_nf or {}).get(e.numero_nf) if num_nf_transf_por_nf is defined else None %}
+            {% if _nf_transf %}
+              <br><small class="carvia-nf-transf-label" title="NF de Transferencia triangular (R18)">NF Transf: {{ _nf_transf }}</small>
+            {% endif %}
             {% if e.rastreamento_id %}
               <br>
               <a href="{{ url_for('rastreamento.detalhes_rastreamento', embarque_id=e.embarque_numero) }}"

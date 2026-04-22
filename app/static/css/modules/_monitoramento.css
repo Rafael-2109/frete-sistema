@@ -857,4 +857,17 @@
     background: transparent;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     R18 NF Triangular — label "NF Transf: ####" na coluna Embarque.
+     Font-size reduzido (~65%) para caber em largura de coluna DD/MM/YYYY
+     com folga para ate ~5 digitos no numero da transferencia.
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .carvia-nf-transf-label {
+    font-size: 0.65em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    display: inline-block;
+    line-height: 1.2;
+  }
+
 } /* End @layer modules */

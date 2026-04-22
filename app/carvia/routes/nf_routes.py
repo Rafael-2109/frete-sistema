@@ -302,6 +302,25 @@ def register_nf_routes(bp):
             ).distinct().all()
             ids_transf_efetivas = {r[0] for r in rows_vt}
 
+        # NF Triangular: para cada NF venda nesta pagina, qual transferencia
+        # esta vinculada. Dict {nf_venda_id: {'id': transf_id, 'numero': '####'}}
+        num_nf_transf_por_venda = {}
+        if nf_ids:
+            NfTransf = db.aliased(CarviaNf, name='nf_transf')
+            rows_vinc = db.session.query(
+                CarviaNfVinculoTransferencia.nf_venda_id,
+                NfTransf.id,
+                NfTransf.numero_nf,
+            ).join(
+                NfTransf, NfTransf.id == CarviaNfVinculoTransferencia.nf_transferencia_id,
+            ).filter(
+                CarviaNfVinculoTransferencia.nf_venda_id.in_(nf_ids),
+            ).all()
+            num_nf_transf_por_venda = {
+                venda_id: {'id': transf_id, 'numero': transf_num}
+                for venda_id, transf_id, transf_num in rows_vinc
+            }
+
         return render_template(
             'carvia/nfs/listar.html',
             nfs=paginacao.items,
@@ -325,6 +344,7 @@ def register_nf_routes(bp):
             cotacao_id_por_nf=cotacao_id_por_nf,
             mostrar_transferencias=mostrar_transferencias,
             ids_transf_efetivas=ids_transf_efetivas,
+            num_nf_transf_por_venda=num_nf_transf_por_venda,
         )
 
     # ==================== HELPER: ÚLTIMOS FRETES ====================

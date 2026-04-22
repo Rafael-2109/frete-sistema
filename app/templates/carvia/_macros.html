@@ -76,9 +76,12 @@
     - tomador = EXPEDIDOR/RECEBEDOR/TERCEIRO → linha adicional "Tomador: <nome>"
 #}
 {#
-  badge_nf_transferencia — Renderiza badge "NF Transf. ####" com link
-  para a detalhe da NF transferencia. Usado em listagens (operacoes,
-  fretes, pedidos, nfs) e detalhes.
+  badge_nf_transferencia — Renderiza badge "Transf: ####" com link para
+  detalhe da NF transferencia. Usado em listagens (operacoes, fretes,
+  pedidos, nfs) e detalhes.
+
+  Comportamento atual: exibe badge AMARELO indicando que a linha E a
+  propria NF de transferencia (emissor intercompany).
 
   Params:
     num_nf    - numero da NF transferencia (string ou None)
@@ -89,17 +92,37 @@
 {% macro badge_nf_transferencia(num_nf, transf_id, size='sm', icon=True) -%}
   {%- if size == 'lg' -%}
     <span class="carvia-badge-transferencia-lg">
-      {%- if icon %}<i class="fas fa-exchange-alt"></i>{% endif -%}
+      {%- if icon %}<i class="fas fa-exchange-alt" aria-hidden="true"></i>{% endif -%}
       NF de Transferencia{% if num_nf %} #{{ num_nf }}{% endif %}
     </span>
   {%- else -%}
     <a href="{{ url_for('carvia.detalhe_nf', nf_id=transf_id) }}"
-       class="badge carvia-badge-transferencia text-decoration-none"
-       title="NF de Transferencia (operacao triangular) — clique para abrir">
-      {%- if icon %}<i class="fas fa-exchange-alt"></i> {% endif -%}
-      NF Transf. {{ num_nf or ('#' ~ transf_id) }}
+       class="badge carvia-badge-transf-eh text-decoration-none"
+       title="Esta NF E uma transferencia triangular (intercompany) — clique para abrir">
+      {%- if icon %}<i class="fas fa-exchange-alt" aria-hidden="true"></i> {% endif -%}
+      Transf: {{ num_nf or ('#' ~ transf_id) }}
     </a>
   {%- endif -%}
+{%- endmacro %}
+
+{#
+  badge_nf_veio_de_transferencia — Renderiza badge "Transf: #### >" (VERDE)
+  para NF venda cujo embarque foi fruto de uma operacao triangular. A seta
+  indica "originada de". Link leva para a NF transferencia origem.
+
+  Params:
+    num_transf - numero da NF transferencia origem (string)
+    transf_id  - id da CarviaNf transferencia (int)
+    icon       - bool, exibir icone fas fa-exchange-alt (default True)
+#}
+{% macro badge_nf_veio_de_transferencia(num_transf, transf_id, icon=True) -%}
+  <a href="{{ url_for('carvia.detalhe_nf', nf_id=transf_id) }}"
+     class="badge carvia-badge-transf-veio text-decoration-none"
+     title="Esta NF e fruto de uma transferencia triangular — clique para abrir a NF transf origem">
+    {%- if icon %}<i class="fas fa-exchange-alt" aria-hidden="true"></i> {% endif -%}
+    Transf: {{ num_transf or ('#' ~ transf_id) }}
+    <i class="fas fa-arrow-right ms-1" aria-hidden="true"></i>
+  </a>
 {%- endmacro %}
 
 {% macro emitente_destinatario(emit, dest, tomador, compact=False) %}

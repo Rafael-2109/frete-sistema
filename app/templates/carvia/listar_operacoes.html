@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "carvia/_macros.html" import th_sort, badge_nf_transferencia %}
+{% from "carvia/_macros.html" import th_sort, badge_nf_transferencia, badge_nf_veio_de_transferencia %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -169,11 +169,11 @@
                                     {{ op.nome_cliente or op.cnpj_cliente }}
                                 </span>
                                 {% endif %}
-                                {# NF Triangular — badges de transferencia vinculada #}
+                                {# NF Triangular — operacao cobriu NF venda que veio de transferencia (badge verde) #}
                                 {% set transfs = transferencias_por_op.get(op.id, []) %}
                                 {% for t in transfs %}
                                 <div class="mt-1">
-                                    {{ badge_nf_transferencia(t.num_nf_transf, t.transf_id) }}
+                                    {{ badge_nf_veio_de_transferencia(t.num_nf_transf, t.transf_id) }}
                                 </div>
                                 {% endfor %}
                                 {% set cli = clientes_por_op.get(op.id) %}

@@ -1110,6 +1110,47 @@ def listar_entregas():
     # Batch pre-fetch: enriquecer entregas paginadas de uma vez
     _enriquecer_entregas_batch(paginacao.items)
 
+    # R18: batch — mapear NF venda (origem=CARVIA) -> NF transferencia
+    # vinculada, para exibir "NF Transf: ####" na coluna Embarque.
+    num_nf_transf_por_nf = {}
+    nfs_carvia = [
+        e.numero_nf for e in paginacao.items
+        if getattr(e, 'origem', None) == 'CARVIA' and e.numero_nf
+    ]
+    if nfs_carvia:
+        try:
+            from app.carvia.models import CarviaNf
+            from app.carvia.models.documentos import (
+                CarviaNfVinculoTransferencia,
+            )
+            NfVenda = db.aliased(CarviaNf, name='nf_venda')
+            NfTransf = db.aliased(CarviaNf, name='nf_transf')
+            # Limitacao conhecida: carvia_nfs.numero_nf nao e unique. Filtramos
+            # por NfVenda.status='ATIVA' para alinhar com o criterio de sync
+            # que so cria EntregaMonitorada de NFs ATIVAs. Em caso raro de
+            # duas NFs ATIVAS com mesmo numero, o dict pega a ultima (last-wins).
+            rows = db.session.query(
+                NfVenda.numero_nf, NfTransf.numero_nf,
+            ).select_from(
+                CarviaNfVinculoTransferencia,
+            ).join(
+                NfVenda, NfVenda.id == CarviaNfVinculoTransferencia.nf_venda_id,
+            ).join(
+                NfTransf, NfTransf.id == CarviaNfVinculoTransferencia.nf_transferencia_id,
+            ).filter(
+                NfVenda.numero_nf.in_(nfs_carvia),
+                NfVenda.status == 'ATIVA',
+            ).all()
+            num_nf_transf_por_nf = {
+                num_venda: num_transf for num_venda, num_transf in rows if num_venda
+            }
+        except Exception:
+            # Nao-bloqueante: erro aqui nao quebra a tela
+            import logging as _lg
+            _lg.getLogger(__name__).exception(
+                'Erro ao carregar num_nf_transf_por_nf (R18)'
+            )
+
     return render_template(
         'monitoramento/listar_entregas.html',
         paginacao=paginacao,
@@ -1118,7 +1159,8 @@ def listar_entregas():
         contatos_agendamento=contatos_agendamento,
         current_user=current_user,
         contadores=contadores,
-        vendedores_unicos=vendedores_unicos
+        vendedores_unicos=vendedores_unicos,
+        num_nf_transf_por_nf=num_nf_transf_por_nf,
     )
 
 @monitoramento_bp.route('/sincronizar-todas-entregas', methods=['POST'])

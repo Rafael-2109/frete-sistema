@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "carvia/_macros.html" import badge_nf_transferencia %}
+{% from "carvia/_macros.html" import badge_nf_transferencia, badge_nf_veio_de_transferencia %}
 {# modal_admin_excluir removido (Sprint 0 — NF nao suporta hard delete) #}
 
 {% block content %}
@@ -34,7 +34,7 @@
                 {% if eh_transf_efetiva %}
                 {{ badge_nf_transferencia(nf.numero_nf, nf.id, size='lg') }}
                 {% elif transf_vinculada %}
-                {{ badge_nf_transferencia(transf_vinculada.numero_nf, transf_vinculada.id) }}
+                {{ badge_nf_veio_de_transferencia(transf_vinculada.numero_nf, transf_vinculada.id) }}
                 {% elif eh_candidata_transf %}
                 <span class="badge bg-secondary" title="NF e candidata a transferencia (mesma raiz CNPJ emit/dest) — ainda sem vinculo">
                     <i class="fas fa-exchange-alt"></i> Candidata Transf.
@@ -290,7 +290,7 @@
                     <ul class="list-unstyled mb-0 small">
                         <li>
                             <i class="fas fa-file-alt text-muted"></i>
-                            NF: {{ badge_nf_transferencia(transf_vinculada.numero_nf, transf_vinculada.id) }}
+                            NF: {{ badge_nf_veio_de_transferencia(transf_vinculada.numero_nf, transf_vinculada.id) }}
                             {% if transf_vinculada.serie_nf %}serie {{ transf_vinculada.serie_nf }}{% endif %}
                         </li>
                         <li>

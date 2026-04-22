@@ -536,6 +536,22 @@ class CarviaNfTransferenciaService:
                 f'Vinculos de transferencia criados: transf={transf.id} '
                 f'vendas={[v.id for v in vendas]} por={criado_por}'
             )
+
+            # R18 Hook monitoramento: NF transf nao deve mais aparecer como
+            # EntregaMonitorada autonoma. Arquiva (nao-bloqueante).
+            try:
+                from app.utils.sincronizar_entregas_carvia import (
+                    arquivar_entrega_transferencia_virou_efetiva,
+                )
+                if transf.numero_nf:
+                    arquivar_entrega_transferencia_virou_efetiva(transf.numero_nf)
+            except Exception:
+                logger.warning(
+                    f'Hook monitoramento (arquivar transf virou efetiva) '
+                    f'falhou: transf={transf.id} num={transf.numero_nf}',
+                    exc_info=True,
+                )
+
             return True, 'Vinculos criados com sucesso', criados
         except Exception as e:
             db.session.rollback()
@@ -592,12 +608,35 @@ class CarviaNfTransferenciaService:
             )
 
         try:
+            transf_id_snapshot = vinc.nf_transferencia_id
             db.session.delete(vinc)
             db.session.commit()
             logger.info(
                 f'Vinculo de transferencia removido: venda={nf_venda_id} '
-                f'por={removido_por}'
+                f'transf={transf_id_snapshot} por={removido_por}'
             )
+
+            # R18 Hook monitoramento: se a NF transf nao tem mais vinculos,
+            # volta a ser "frete comum" — re-sincronizar EntregaMonitorada.
+            # Se ainda tem outras vendas vinculadas (1:N), permanece arquivada.
+            try:
+                ainda_efetiva = CarviaNfTransferenciaService.eh_transferencia_efetiva(
+                    transf_id_snapshot
+                )
+                if not ainda_efetiva:
+                    nf_transf = db.session.get(CarviaNf, transf_id_snapshot)
+                    if nf_transf and nf_transf.numero_nf and nf_transf.status == 'ATIVA':
+                        from app.utils.sincronizar_entregas_carvia import (
+                            sincronizar_entrega_carvia_por_nf,
+                        )
+                        sincronizar_entrega_carvia_por_nf(nf_transf.numero_nf)
+            except Exception:
+                logger.warning(
+                    f'Hook monitoramento (re-sync pos-desvinculo) falhou: '
+                    f'transf={transf_id_snapshot}',
+                    exc_info=True,
+                )
+
             return True, 'Vinculo removido com sucesso'
         except Exception as e:
             db.session.rollback()
