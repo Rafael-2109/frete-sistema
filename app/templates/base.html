@@ -716,7 +716,10 @@
             </a>
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_dashboard.index') }}">
-                  <i class="fas fa-chart-pie text-info"></i> Dashboard
+                  <i class="fas fa-chart-pie text-info"></i> Dashboard (Competencia)
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_fluxo_caixa.index') }}">
+                  <i class="fas fa-water text-primary"></i> Fluxo de Caixa
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_transacoes.listar') }}">
                   <i class="fas fa-receipt text-success"></i> Transacoes
@@ -730,6 +733,9 @@
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_orcamento.index') }}">
                   <i class="fas fa-calculator text-warning"></i> Orcamento
+                </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_provisao.index') }}">
+                  <i class="fas fa-calendar-plus text-primary"></i> Provisoes (Forecast)
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('pessoal.pessoal_configuracao.index') }}">
                   <i class="fas fa-cog text-secondary"></i> Configuracao

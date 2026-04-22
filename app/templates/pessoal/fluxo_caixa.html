@@ -1,0 +1,625 @@
+{% extends 'base.html' %}
+
+{% block title %}Fluxo de Caixa{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">
+      <i class="fas fa-water text-primary"></i> Fluxo de Caixa
+      <span class="badge bg-secondary">Vertente Caixa</span>
+    </h4>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('pessoal.pessoal_provisao.index') }}" class="btn btn-outline-primary btn-sm">
+        <i class="fas fa-calendar-plus"></i> Provisoes
+      </a>
+      <a href="{{ url_for('pessoal.pessoal_dashboard.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-chart-pie"></i> Competencia
+      </a>
+    </div>
+  </div>
+
+  {# ===== Controles de visualizacao ===== #}
+  <div class="card mb-3">
+    <div class="card-body py-2">
+      <form class="row g-2 align-items-end" id="formFluxoCaixa">
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Ano</label>
+          <input type="number" id="ano" class="form-control form-control-sm" value="{{ ano }}" min="2020" max="2040">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Mes de Referencia</label>
+          <select id="mes" class="form-select form-select-sm">
+            {% for m, nome in [(1,'Janeiro'),(2,'Fevereiro'),(3,'Marco'),(4,'Abril'),(5,'Maio'),(6,'Junho'),(7,'Julho'),(8,'Agosto'),(9,'Setembro'),(10,'Outubro'),(11,'Novembro'),(12,'Dezembro')] %}
+            <option value="{{ m }}" {{ 'selected' if m == mes }}>{{ nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Meses anteriores</label>
+          <input type="number" id="meses_anteriores" class="form-control form-control-sm" value="{{ meses_anteriores }}" min="0" max="24">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Meses futuros</label>
+          <input type="number" id="meses_futuros" class="form-control form-control-sm" value="{{ meses_futuros }}" min="0" max="24">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Saldo inicial (R$)</label>
+          <input type="number" id="saldo_inicial" class="form-control form-control-sm" step="0.01" value="{{ saldo_inicial }}">
+        </div>
+        <div class="col-md-2">
+          <button type="button" id="btnRecarregar" class="btn btn-primary btn-sm w-100">
+            <i class="fas fa-sync-alt"></i> Recarregar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {# ===== KPIs do mes atual ===== #}
+  <div class="row g-3 mb-3">
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body py-3">
+          <div class="text-muted small">Entradas realizadas (mes)</div>
+          <div class="fs-5 fw-bold text-success" id="kpiEntradasReal">R$ 0,00</div>
+          <small class="text-muted" id="kpiProvisoesEntradas">+ provisoes: R$ 0,00</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body py-3">
+          <div class="text-muted small">Saidas realizadas (mes)</div>
+          <div class="fs-5 fw-bold text-danger" id="kpiSaidasReal">R$ 0,00</div>
+          <small class="text-muted" id="kpiProvisoesSaidas">+ provisoes: R$ 0,00</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body py-3">
+          <div class="text-muted small">Saldo do mes (com provisoes)</div>
+          <div class="fs-5 fw-bold" id="kpiSaldoMes">R$ 0,00</div>
+          <small class="text-muted" id="kpiSaldoRealizado">realizado: R$ 0,00</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card h-100">
+        <div class="card-body py-3">
+          <div class="text-muted small">Saldo acumulado</div>
+          <div class="fs-5 fw-bold text-primary" id="kpiSaldoAcumulado">R$ 0,00</div>
+          <small class="text-muted" id="kpiOrcamento">orcamento: -</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Timeline mensal ===== #}
+  <div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+      <h6 class="mb-0"><i class="fas fa-stream"></i> Timeline Mensal</h6>
+      <small class="text-muted" id="timelineHint">Clique em um mes para ver detalhes</small>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="tblTimeline">
+          <thead class="table-light">
+            <tr>
+              <th style="width:14%">Mes</th>
+              <th class="text-end">Entradas</th>
+              <th class="text-end">Saidas</th>
+              <th class="text-end">Prov. Entrada</th>
+              <th class="text-end">Prov. Saida</th>
+              <th class="text-end">Saldo Mes</th>
+              <th class="text-end">Saldo Acum.</th>
+              <th class="text-end">Orcado</th>
+              <th class="text-end" style="width:6%">% Orc.</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyTimeline">
+            <tr><td colspan="9" class="text-center text-muted py-3">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ===== Detalhe do mes selecionado ===== #}
+  <div class="card">
+    <div class="card-header py-2">
+      <h6 class="mb-0">
+        <i class="fas fa-list"></i> Detalhe de <span id="detalheMesLabel">-</span>
+      </h6>
+    </div>
+    <div class="card-body">
+      <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item">
+          <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabEntradas">
+            <i class="fas fa-arrow-down text-success"></i>
+            Entradas <span id="countEntradas" class="badge bg-success"></span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSaidas">
+            <i class="fas fa-arrow-up text-danger"></i>
+            Saidas <span id="countSaidas" class="badge bg-danger"></span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabCartoes">
+            <i class="fas fa-credit-card text-warning"></i>
+            Pagamentos de Cartao <span id="countCartoes" class="badge bg-warning text-dark"></span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabProvisoes">
+            <i class="fas fa-calendar-check text-info"></i>
+            Provisoes <span id="countProvisoes" class="badge bg-info"></span>
+          </button>
+        </li>
+      </ul>
+      <div class="tab-content pt-3">
+        <div class="tab-pane fade show active" id="tabEntradas">
+          <table class="table table-sm table-hover">
+            <thead>
+              <tr>
+                <th style="width:110px">Data</th>
+                <th>Historico</th>
+                <th>Conta</th>
+                <th>Categoria</th>
+                <th>Membro</th>
+                <th class="text-end">Valor</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyEntradas"></tbody>
+          </table>
+        </div>
+        <div class="tab-pane fade" id="tabSaidas">
+          <table class="table table-sm table-hover">
+            <thead>
+              <tr>
+                <th style="width:110px">Data</th>
+                <th>Historico</th>
+                <th>Conta</th>
+                <th>Categoria</th>
+                <th>Membro</th>
+                <th class="text-end">Valor</th>
+              </tr>
+            </thead>
+            <tbody id="tbodySaidas"></tbody>
+          </table>
+        </div>
+        <div class="tab-pane fade" id="tabCartoes">
+          <table class="table table-sm table-hover">
+            <thead>
+              <tr>
+                <th style="width:110px">Data Pagamento</th>
+                <th>Conta CC</th>
+                <th>Fatura (periodo)</th>
+                <th>N. compras</th>
+                <th class="text-end">Total fatura</th>
+                <th class="text-end">Valor pago</th>
+                <th class="text-end">Dif.</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyCartoes"></tbody>
+          </table>
+        </div>
+        <div class="tab-pane fade" id="tabProvisoes">
+          <table class="table table-sm table-hover">
+            <thead>
+              <tr>
+                <th style="width:110px">Data Prev.</th>
+                <th>Tipo</th>
+                <th>Descricao</th>
+                <th>Categoria</th>
+                <th>Status</th>
+                <th class="text-end">Valor</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyProvisoes"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ===== Modal drilldown de fatura ===== #}
+<div class="modal fade" id="modalDrilldown" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-credit-card"></i> Compras da fatura
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="drilldownBody">
+        <div class="text-center text-muted">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const fmtBR = (v) => {
+    if (v === null || v === undefined) return '-';
+    const n = Number(v);
+    return n.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
+  };
+  const moeda = (v) => 'R$ ' + fmtBR(v);
+  const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  // === Helpers de seguranca (evitar XSS via innerHTML) ===
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // CSRF: token da meta tag do base.html (CSRF esta ativo no projeto)
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+  // Wrapper de fetch com CSRF + tratamento de erro de rede
+  async function apiCall(url, opts = {}) {
+    const headers = Object.assign({'Content-Type': 'application/json'}, opts.headers || {});
+    const method = (opts.method || 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD') {
+      headers['X-CSRFToken'] = CSRF_TOKEN;
+    }
+    try {
+      const resp = await fetch(url, Object.assign({}, opts, {headers}));
+      if (!resp.ok && resp.status >= 500) {
+        return {sucesso: false, mensagem: `Erro ${resp.status} do servidor`};
+      }
+      return await resp.json();
+    } catch (err) {
+      return {sucesso: false, mensagem: 'Erro de rede: ' + (err.message || err)};
+    }
+  }
+
+  function mostrarErroTabela(tbodyId, msg) {
+    $(tbodyId).innerHTML = '';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 10;
+    td.className = 'text-center text-danger py-3';
+    td.textContent = msg;
+    tr.appendChild(td);
+    $(tbodyId).appendChild(tr);
+  }
+
+  let mesSelecionadoAno = {{ ano }};
+  let mesSelecionadoMes = {{ mes }};
+
+  async function carregarSerie() {
+    const ano = Number($('ano').value);
+    const mes = Number($('mes').value);
+    const anteriores = Number($('meses_anteriores').value);
+    const futuros = Number($('meses_futuros').value);
+    const saldoInicial = Number($('saldo_inicial').value);
+
+    const qs = new URLSearchParams({
+      ano, mes,
+      meses_anteriores: anteriores,
+      meses_futuros: futuros,
+      saldo_inicial: saldoInicial,
+    });
+
+    const data = await apiCall('/pessoal/api/fluxo-caixa/serie?' + qs);
+    if (!data.sucesso) {
+      mostrarErroTabela('tbodyTimeline', data.mensagem);
+      return;
+    }
+    renderTimeline(data.serie, ano, mes);
+  }
+
+  function renderTimeline(serie, anoSel, mesSel) {
+    const tbody = $('tbodyTimeline');
+    tbody.innerHTML = '';
+    let mesAtualRow = null;
+
+    serie.forEach((m) => {
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.dataset.ano = m.ano;
+      tr.dataset.mes = m.mes;
+
+      if (m.ano === anoSel && m.mes === mesSel) {
+        tr.classList.add('table-active');
+        mesAtualRow = m;
+      } else if (m.is_futuro) {
+        tr.classList.add('text-muted');
+      }
+
+      const corSaldoMes = m.saldo_mes >= 0 ? 'text-success' : 'text-danger';
+      const corAcum = m.saldo_acumulado >= 0 ? 'text-primary' : 'text-danger';
+
+      tr.innerHTML = `
+        <td>
+          <strong>${esc(m.mes_label)}</strong>
+          ${m.is_atual ? '<span class="badge bg-info">atual</span>' : ''}
+          ${m.is_futuro ? '<small class="text-muted">(futuro)</small>' : ''}
+        </td>
+        <td class="text-end text-success">${moeda(m.entradas_realizadas)}</td>
+        <td class="text-end text-danger">${moeda(m.saidas_realizadas)}</td>
+        <td class="text-end text-muted">${moeda(m.entradas_provisionadas)}</td>
+        <td class="text-end text-muted">${moeda(m.saidas_provisionadas)}</td>
+        <td class="text-end fw-bold ${corSaldoMes}">${moeda(m.saldo_mes)}</td>
+        <td class="text-end fw-bold ${corAcum}">${moeda(m.saldo_acumulado)}</td>
+        <td class="text-end">${m.orcamento_global !== null ? moeda(m.orcamento_global) : '-'}</td>
+        <td class="text-end">${m.percentual_orcamento !== null ? m.percentual_orcamento + '%' : '-'}</td>
+      `;
+      tr.addEventListener('click', () => {
+        mesSelecionadoAno = m.ano;
+        mesSelecionadoMes = m.mes;
+        document.querySelectorAll('#tbodyTimeline tr').forEach((r) => {
+          r.classList.remove('table-active');
+        });
+        tr.classList.add('table-active');
+        carregarDetalhe(m.ano, m.mes);
+      });
+      tbody.appendChild(tr);
+    });
+
+    if (mesAtualRow) {
+      atualizarKpis(mesAtualRow);
+    }
+  }
+
+  function atualizarKpis(m) {
+    $('kpiEntradasReal').textContent = moeda(m.entradas_realizadas);
+    $('kpiSaidasReal').textContent = moeda(m.saidas_realizadas);
+    $('kpiProvisoesEntradas').textContent = '+ provisoes: ' + moeda(m.entradas_provisionadas);
+    $('kpiProvisoesSaidas').textContent = '+ provisoes: ' + moeda(m.saidas_provisionadas);
+    $('kpiSaldoMes').textContent = moeda(m.saldo_mes);
+    $('kpiSaldoMes').className = 'fs-5 fw-bold ' + (m.saldo_mes >= 0 ? 'text-success' : 'text-danger');
+    $('kpiSaldoRealizado').textContent = 'realizado: ' + moeda(m.entradas_realizadas - m.saidas_realizadas);
+    $('kpiSaldoAcumulado').textContent = moeda(m.saldo_acumulado);
+    $('kpiSaldoAcumulado').className = 'fs-5 fw-bold ' + (m.saldo_acumulado >= 0 ? 'text-primary' : 'text-danger');
+    $('kpiOrcamento').textContent = 'orcamento: ' + (m.orcamento_global !== null ? moeda(m.orcamento_global) : '-');
+  }
+
+  async function carregarDetalhe(ano, mes) {
+    $('detalheMesLabel').textContent = `${MESES_PT[mes-1]}/${ano}`;
+
+    const tbodies = ['tbodyEntradas','tbodySaidas','tbodyCartoes','tbodyProvisoes'];
+    tbodies.forEach(id => { $(id).innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Carregando...</td></tr>'; });
+
+    const data = await apiCall(`/pessoal/api/fluxo-caixa/detalhe?ano=${ano}&mes=${mes}`);
+    if (!data.sucesso) {
+      tbodies.forEach(id => mostrarErroTabela(id, data.mensagem));
+      return;
+    }
+    const d = data.detalhe;
+    renderEntradas(d.entradas);
+    renderSaidas(d.saidas);
+    renderCartoes(d.pagamentos_cartao);
+    renderProvisoes(d.provisoes);
+
+    $('countEntradas').textContent = d.entradas.length;
+    $('countSaidas').textContent = d.saidas.length;
+    $('countCartoes').textContent = d.pagamentos_cartao.length;
+    $('countProvisoes').textContent = d.provisoes.length;
+  }
+
+  // Sanitiza classes FontAwesome (apenas fa-* + whitelist de modificadores)
+  function iconeSafe(icone) {
+    const fallback = 'fa-tag';
+    if (!icone || typeof icone !== 'string') return fallback;
+    if (!/^[a-z0-9\-\s]+$/i.test(icone)) return fallback;
+    return icone;
+  }
+
+  function catBadge(t) {
+    if (!t.categoria_nome) {
+      return '<span class="text-muted small">sem categoria</span>';
+    }
+    return `<small><i class="fas ${esc(iconeSafe(t.categoria_icone))}"></i> ${esc(t.categoria_nome)}</small>`;
+  }
+
+  function renderTxRow(t, corValor) {
+    const tr = document.createElement('tr');
+    const descricaoHtml = t.descricao
+      ? ` <span class="text-muted">- ${esc(t.descricao)}</span>`
+      : '';
+    tr.innerHTML = `
+      <td>${esc(t.data)}</td>
+      <td><small>${esc(t.historico || '')}${descricaoHtml}</small></td>
+      <td><small>${esc(t.conta_nome || '-')}</small></td>
+      <td>${catBadge(t)}</td>
+      <td><small>${esc(t.membro_nome || '-')}</small></td>
+      <td class="text-end ${corValor} fw-bold">${moeda(t.valor)}</td>
+    `;
+    return tr;
+  }
+
+  function renderEntradas(items) {
+    const tbody = $('tbodyEntradas');
+    tbody.innerHTML = '';
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Nenhuma entrada</td></tr>';
+      return;
+    }
+    items.forEach((t) => tbody.appendChild(renderTxRow(t, 'text-success')));
+  }
+
+  function renderSaidas(items) {
+    const tbody = $('tbodySaidas');
+    tbody.innerHTML = '';
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Nenhuma saida</td></tr>';
+      return;
+    }
+    items.forEach((t) => tbody.appendChild(renderTxRow(t, 'text-danger')));
+  }
+
+  function renderCartoes(items) {
+    const tbody = $('tbodyCartoes');
+    tbody.innerHTML = '';
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum pagamento de cartao</td></tr>';
+      return;
+    }
+    items.forEach((t) => {
+      const fat = t.fatura;
+      const tr = document.createElement('tr');
+      const faturaInfo = fat
+        ? `${esc(fat.periodo_inicio || '-')} a ${esc(fat.periodo_fim || '-')}<br><small class="text-muted">${esc(fat.nome_arquivo || '')}</small>`
+        : '<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> sem vinculo</span>';
+      const divergencia = fat
+        ? `<span class="${fat.divergencia_valor >= 0 ? 'text-warning' : 'text-success'}">${moeda(fat.divergencia_valor)}</span>`
+        : '-';
+
+      const drillBtn = fat
+        ? `<button class="btn btn-sm btn-outline-primary btn-drilldown" data-id="${esc(t.id)}"><i class="fas fa-search-plus"></i> Compras</button>`
+        : `<small class="text-muted">vincule em /fluxo-caixa/faturas</small>`;
+
+      tr.innerHTML = `
+        <td>${esc(t.data)}</td>
+        <td><small>${esc(t.conta_nome || '-')}</small></td>
+        <td><small>${faturaInfo}</small></td>
+        <td>${fat ? esc(fat.n_compras) : '-'}</td>
+        <td class="text-end">${fat ? moeda(fat.total_compras) : '-'}</td>
+        <td class="text-end text-danger fw-bold">${moeda(t.valor)}</td>
+        <td class="text-end">${divergencia}</td>
+        <td>${drillBtn}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-drilldown').forEach((b) => {
+      b.addEventListener('click', () => abrirDrilldown(b.dataset.id));
+    });
+  }
+
+  function renderProvisoes(items) {
+    const tbody = $('tbodyProvisoes');
+    tbody.innerHTML = '';
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Nenhuma provisao</td></tr>';
+      return;
+    }
+    items.forEach((p) => {
+      const tr = document.createElement('tr');
+      const corValor = p.tipo === 'entrada' ? 'text-success' : 'text-danger';
+      const iconeTipo = p.tipo === 'entrada' ? 'fa-arrow-down text-success' : 'fa-arrow-up text-danger';
+      const bdgStatus = {
+        'PROVISIONADA': 'bg-info',
+        'REALIZADA': 'bg-success',
+        'CANCELADA': 'bg-secondary',
+      }[p.status] || 'bg-secondary';
+      tr.innerHTML = `
+        <td>${esc(p.data_prevista_br || p.data_prevista)}</td>
+        <td><i class="fas ${iconeTipo}"></i> ${esc(p.tipo)}</td>
+        <td><small>${esc(p.descricao)}</small></td>
+        <td><small>${esc(p.categoria_nome || '-')}</small></td>
+        <td><span class="badge ${bdgStatus}">${esc(p.status)}</span></td>
+        <td class="text-end fw-bold ${corValor}">${moeda(p.valor)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function abrirDrilldown(transacaoId) {
+    const body = $('drilldownBody');
+    body.innerHTML = '<div class="text-center text-muted py-3">Carregando...</div>';
+    const modal = new bootstrap.Modal($('modalDrilldown'));
+    modal.show();
+
+    const data = await apiCall(`/pessoal/api/fluxo-caixa/drilldown-fatura/${transacaoId}`);
+    if (!data.sucesso) {
+      body.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'alert alert-danger';
+      div.textContent = data.mensagem;
+      body.appendChild(div);
+      return;
+    }
+    const d = data.dados;
+    if (d.erro) {
+      body.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'alert alert-warning';
+      div.textContent = d.erro;
+      body.appendChild(div);
+      return;
+    }
+    const html = `
+      <div class="row g-2 mb-3">
+        <div class="col-md-6">
+          <strong>Pagamento:</strong><br>
+          <small>
+            ${esc(d.pagamento.data)} | ${esc(d.pagamento.historico)}<br>
+            <span class="text-danger fw-bold">${moeda(d.pagamento.valor)}</span>
+          </small>
+        </div>
+        <div class="col-md-6">
+          <strong>Fatura:</strong><br>
+          <small>
+            ${esc(d.fatura.nome_arquivo || '')}<br>
+            periodo ${esc(d.fatura.periodo_inicio || '-')} a ${esc(d.fatura.periodo_fim || '-')}
+          </small>
+        </div>
+      </div>
+      <h6 class="mt-3">Categorias</h6>
+      <table class="table table-sm">
+        <thead><tr><th>Categoria</th><th>Qt</th><th class="text-end">Total</th></tr></thead>
+        <tbody>
+          ${d.por_categoria.map(c => `
+            <tr>
+              <td><i class="fas ${esc(iconeSafe(c.categoria_icone))}"></i> ${esc(c.categoria_nome)}</td>
+              <td>${esc(c.count)}</td>
+              <td class="text-end">${moeda(c.total)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr class="fw-bold">
+            <td colspan="2">Total compras</td>
+            <td class="text-end">${moeda(d.total_compras)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <h6 class="mt-3">Compras detalhadas</h6>
+      <table class="table table-sm">
+        <thead><tr><th>Data</th><th>Historico</th><th>Categoria</th><th>Parc.</th><th class="text-end">Valor</th></tr></thead>
+        <tbody>
+          ${d.compras.map(c => `
+            <tr>
+              <td>${esc(c.data)}</td>
+              <td><small>${esc(c.historico)}</small></td>
+              <td><small>${esc(c.categoria_nome || '-')}</small></td>
+              <td><small>${esc(c.parcela_atual || '')}/${esc(c.parcela_total || '')}</small></td>
+              <td class="text-end">${moeda(c.valor)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    body.innerHTML = html;
+  }
+
+  // Init
+  document.addEventListener('DOMContentLoaded', async () => {
+    $('btnRecarregar').addEventListener('click', carregarSerie);
+    await carregarSerie();
+    await carregarDetalhe(mesSelecionadoAno, mesSelecionadoMes);
+  });
+})();
+</script>
+{% endblock %}

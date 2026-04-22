@@ -1,7 +1,8 @@
 """Rotas de transacoes — listagem, filtros e categorizacao inline."""
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
-from sqlalchemy import or_, func
+from sqlalchemy import and_, or_, func
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.pessoal import pode_acessar_pessoal
@@ -13,9 +14,95 @@ from app.pessoal.services.aprendizado_service import (
     simular_propagacao, propagar_regra_para_pendentes, propagar_parcelas,
 )
 from app.pessoal.services.categorizacao_service import eh_categoria_desconsiderar
+from app.pessoal.services.fluxo_caixa_service import motivos_exclusao_batch
 from app.utils.timezone import agora_utc_naive
 
 transacoes_bp = Blueprint('pessoal_transacoes', __name__)
+
+
+def _aplicar_filtro_motivo_exclusao(query, motivo: str):
+    """Filtra transacoes pelo motivo da exclusao do relatorio.
+
+    Ordem de precedencia (alinhada com fluxo_caixa_service.motivo_exclusao):
+    1. PAGAMENTO_CARTAO  - eh_pagamento_cartao=True
+    2. TRANSF_PROPRIA    - eh_transferencia_propria=True (e nao pagamento cartao)
+    3. COMPENSADA        - valor_compensado >= valor (e nao pagamento/transf)
+    4. EMPRESA           - categoria grupo=Desconsiderar OU compensavel_tipo NOT NULL
+                            (e nao pagamento/transf/compensada)
+    5. OUTRO             - excluir_relatorio=True sem motivo claro
+
+    Args:
+        query: PessoalTransacao.query (ou derivado)
+        motivo: codigo do motivo
+    """
+    motivo = (motivo or '').upper()
+    # Todos os motivos implicam excluir_relatorio=True
+    query = query.filter_by(excluir_relatorio=True)
+
+    if motivo == 'PAGAMENTO_CARTAO':
+        return query.filter(PessoalTransacao.eh_pagamento_cartao.is_(True))
+
+    if motivo == 'TRANSF_PROPRIA':
+        return query.filter(
+            PessoalTransacao.eh_pagamento_cartao.is_(False),
+            PessoalTransacao.eh_transferencia_propria.is_(True),
+        )
+
+    if motivo == 'COMPENSADA':
+        return query.filter(
+            PessoalTransacao.eh_pagamento_cartao.is_(False),
+            PessoalTransacao.eh_transferencia_propria.is_(False),
+            PessoalTransacao.valor_compensado >= PessoalTransacao.valor,
+            PessoalTransacao.valor > 0,
+        )
+
+    if motivo == 'EMPRESA':
+        # Junta com categoria para verificar grupo/compensavel
+        query = query.join(
+            PessoalCategoria,
+            PessoalCategoria.id == PessoalTransacao.categoria_id,
+            isouter=True,
+        )
+        return query.filter(
+            PessoalTransacao.eh_pagamento_cartao.is_(False),
+            PessoalTransacao.eh_transferencia_propria.is_(False),
+            # Nao 100% compensada (deixa COMPENSADA levar esse grupo)
+            or_(
+                PessoalTransacao.valor_compensado < PessoalTransacao.valor,
+                PessoalTransacao.valor_compensado.is_(None),
+            ),
+            or_(
+                PessoalCategoria.grupo == 'Desconsiderar',
+                PessoalCategoria.compensavel_tipo.isnot(None),
+            ),
+        )
+
+    if motivo == 'OUTRO':
+        # Excluida sem motivo identificavel
+        query = query.join(
+            PessoalCategoria,
+            PessoalCategoria.id == PessoalTransacao.categoria_id,
+            isouter=True,
+        )
+        return query.filter(
+            PessoalTransacao.eh_pagamento_cartao.is_(False),
+            PessoalTransacao.eh_transferencia_propria.is_(False),
+            or_(
+                PessoalTransacao.valor_compensado < PessoalTransacao.valor,
+                PessoalTransacao.valor_compensado.is_(None),
+                PessoalTransacao.valor == 0,
+            ),
+            or_(
+                PessoalCategoria.id.is_(None),
+                and_(
+                    PessoalCategoria.grupo != 'Desconsiderar',
+                    PessoalCategoria.compensavel_tipo.is_(None),
+                ),
+            ),
+        )
+
+    # Motivo desconhecido — retorna query sem filtro extra
+    return query
 
 
 def aplicar_filtros_extras(query, valor_min=None, valor_max=None,
@@ -69,6 +156,9 @@ def listar():
     # 'nao' -> somente nao excluidas
     # None  -> sem filtro (combinado com excluir_filtradas='0' mostra todas)
     somente_excluidas = request.args.get('somente_excluidas')
+    # Motivo de exclusao: EMPRESA | PAGAMENTO_CARTAO | TRANSF_PROPRIA | COMPENSADA | OUTRO
+    # Quando informado, ja implica excluir_relatorio=True.
+    motivo_exclusao = request.args.get('motivo_exclusao')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
     sort_by = request.args.get('sort_by', 'data')
@@ -108,7 +198,10 @@ def listar():
     # - excluir_filtradas='1' (default): oculta excluidas
     # - excluir_filtradas='0': inclui todas
     # - somente_excluidas='1': ATALHO para ver SO as excluidas (ignora excluir_filtradas)
-    if somente_excluidas == '1':
+    # - motivo_exclusao=...: filtra pelo motivo da exclusao (implica excluir_relatorio=True)
+    if motivo_exclusao:
+        query = _aplicar_filtro_motivo_exclusao(query, motivo_exclusao)
+    elif somente_excluidas == '1':
         query = query.filter_by(excluir_relatorio=True)
     elif excluir_filtradas == '1':
         query = query.filter_by(excluir_relatorio=False)
@@ -149,6 +242,13 @@ def listar():
     else:
         query = query.order_by(sort_col.desc(), PessoalTransacao.id.desc())
 
+    # Eager-load categoria para evitar N+1 no template (usado por motivos_map
+    # e pela coluna Categoria renderizada pelo Jinja).
+    query = query.options(
+        joinedload(PessoalTransacao.categoria),
+        joinedload(PessoalTransacao.membro),
+    )
+
     # Paginar
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
@@ -177,6 +277,12 @@ def listar():
             t.historico_completo or t.historico, 0
         )
 
+    # Motivo de exclusao de cada transacao visivel (para badge + filtro)
+    motivos_map = motivos_exclusao_batch(list(paginacao.items))
+
+    # Contadores por motivo (para mostrar atalhos na UI)
+    contadores_motivo = _contar_por_motivo()
+
     return render_template(
         'pessoal/transacoes.html',
         transacoes=paginacao.items,
@@ -186,6 +292,8 @@ def listar():
         membros=membros,
         total_pendentes=total_pendentes,
         similares_map=similares_map,
+        motivos_map=motivos_map,
+        contadores_motivo=contadores_motivo,
         filtros={
             'data_inicio': data_inicio,
             'data_fim': data_fim,
@@ -200,10 +308,88 @@ def listar():
             'tem_categoria': tem_categoria,
             'excluir_filtradas': excluir_filtradas,
             'somente_excluidas': somente_excluidas,
+            'motivo_exclusao': motivo_exclusao,
             'sort_by': sort_by,
             'sort_order': sort_order,
         },
     )
+
+
+def _contar_por_motivo() -> dict:
+    """Conta transacoes por motivo de exclusao para exibir atalhos na UI."""
+    contadores = {
+        'EMPRESA': 0,
+        'PAGAMENTO_CARTAO': 0,
+        'TRANSF_PROPRIA': 0,
+        'COMPENSADA': 0,
+        'OUTRO': 0,
+    }
+
+    # PAGAMENTO_CARTAO
+    contadores['PAGAMENTO_CARTAO'] = PessoalTransacao.query.filter(
+        PessoalTransacao.excluir_relatorio.is_(True),
+        PessoalTransacao.eh_pagamento_cartao.is_(True),
+    ).count()
+
+    # TRANSF_PROPRIA
+    contadores['TRANSF_PROPRIA'] = PessoalTransacao.query.filter(
+        PessoalTransacao.excluir_relatorio.is_(True),
+        PessoalTransacao.eh_pagamento_cartao.is_(False),
+        PessoalTransacao.eh_transferencia_propria.is_(True),
+    ).count()
+
+    # COMPENSADA
+    contadores['COMPENSADA'] = PessoalTransacao.query.filter(
+        PessoalTransacao.excluir_relatorio.is_(True),
+        PessoalTransacao.eh_pagamento_cartao.is_(False),
+        PessoalTransacao.eh_transferencia_propria.is_(False),
+        PessoalTransacao.valor_compensado >= PessoalTransacao.valor,
+        PessoalTransacao.valor > 0,
+    ).count()
+
+    # EMPRESA (categoria Desconsiderar ou compensavel)
+    contadores['EMPRESA'] = db.session.query(PessoalTransacao).join(
+        PessoalCategoria,
+        PessoalCategoria.id == PessoalTransacao.categoria_id,
+        isouter=True,
+    ).filter(
+        PessoalTransacao.excluir_relatorio.is_(True),
+        PessoalTransacao.eh_pagamento_cartao.is_(False),
+        PessoalTransacao.eh_transferencia_propria.is_(False),
+        or_(
+            PessoalTransacao.valor_compensado < PessoalTransacao.valor,
+            PessoalTransacao.valor_compensado.is_(None),
+        ),
+        or_(
+            PessoalCategoria.grupo == 'Desconsiderar',
+            PessoalCategoria.compensavel_tipo.isnot(None),
+        ),
+    ).count()
+
+    # OUTRO
+    contadores['OUTRO'] = db.session.query(PessoalTransacao).join(
+        PessoalCategoria,
+        PessoalCategoria.id == PessoalTransacao.categoria_id,
+        isouter=True,
+    ).filter(
+        PessoalTransacao.excluir_relatorio.is_(True),
+        PessoalTransacao.eh_pagamento_cartao.is_(False),
+        PessoalTransacao.eh_transferencia_propria.is_(False),
+        or_(
+            PessoalTransacao.valor_compensado < PessoalTransacao.valor,
+            PessoalTransacao.valor_compensado.is_(None),
+            PessoalTransacao.valor == 0,
+        ),
+        or_(
+            PessoalCategoria.id.is_(None),
+            and_(
+                PessoalCategoria.grupo != 'Desconsiderar',
+                PessoalCategoria.compensavel_tipo.is_(None),
+            ),
+        ),
+    ).count()
+
+    return contadores
 
 
 @transacoes_bp.route('/transacoes/pendentes')

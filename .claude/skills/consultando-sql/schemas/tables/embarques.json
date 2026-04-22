@@ -302,17 +302,17 @@
       "unique": false
     },
     {
-      "name": "idx_emb_transportadora_status",
+      "name": "idx_emb_data_embarque",
       "columns": [
-        "transportadora_id",
-        "status"
+        "data_embarque"
       ],
       "unique": false
     },
     {
-      "name": "idx_emb_data_embarque",
+      "name": "idx_emb_transportadora_status",
       "columns": [
-        "data_embarque"
+        "transportadora_id",
+        "status"
       ],
       "unique": false
     }

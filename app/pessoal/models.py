@@ -6,7 +6,7 @@ Convencao monetaria: Numeric(15,2) para valores em R$, Numeric(15,4) para USD.
 """
 from app import db
 from app.utils.timezone import agora_utc_naive
-from sqlalchemy import Index
+from sqlalchemy import Index, event
 from sqlalchemy.dialects.postgresql import JSONB
 import json
 
@@ -227,6 +227,16 @@ class PessoalImportacao(db.Model):
     periodo_inicio = db.Column(db.Date)
     periodo_fim = db.Column(db.Date)
     situacao_fatura = db.Column(db.String(30))  # PAGO | ABERTA (so cartao)
+    # Fluxo de Caixa (vertente): data em que esta fatura foi PAGA (saida de caixa real).
+    # Diferente de periodo_fim (fechamento da fatura). Preenchido manualmente ou via
+    # matching com transacao_pagamento_id na CC.
+    data_pagamento = db.Column(db.Date)
+    # Vinculo inverso: transacao de pagamento na CC (eh_pagamento_cartao=True) que
+    # liquidou esta fatura. Permite drilldown: pagamento -> fatura -> compras.
+    transacao_pagamento_id = db.Column(
+        db.Integer,
+        db.ForeignKey('pessoal_transacoes.id', ondelete='SET NULL'),
+    )
     total_linhas = db.Column(db.Integer, default=0)
     linhas_importadas = db.Column(db.Integer, default=0)
     linhas_duplicadas = db.Column(db.Integer, default=0)
@@ -236,7 +246,13 @@ class PessoalImportacao(db.Model):
     criado_por = db.Column(db.String(100))
 
     # Relacionamentos
-    transacoes = db.relationship('PessoalTransacao', backref='importacao', lazy='dynamic')
+    transacoes = db.relationship(
+        'PessoalTransacao', backref='importacao', lazy='dynamic',
+        foreign_keys='PessoalTransacao.importacao_id',
+    )
+    transacao_pagamento = db.relationship(
+        'PessoalTransacao', foreign_keys=[transacao_pagamento_id], post_update=True,
+    )
 
     def __repr__(self):
         return f'<PessoalImportacao {self.nome_arquivo} ({self.status})>'
@@ -251,6 +267,8 @@ class PessoalImportacao(db.Model):
             'periodo_inicio': self.periodo_inicio.isoformat() if self.periodo_inicio else None,
             'periodo_fim': self.periodo_fim.isoformat() if self.periodo_fim else None,
             'situacao_fatura': self.situacao_fatura,
+            'data_pagamento': self.data_pagamento.isoformat() if self.data_pagamento else None,
+            'transacao_pagamento_id': self.transacao_pagamento_id,
             'total_linhas': self.total_linhas,
             'linhas_importadas': self.linhas_importadas,
             'linhas_duplicadas': self.linhas_duplicadas,
@@ -564,6 +582,137 @@ pessoal_grupos_analise_categorias = db.Table(
 
 
 # =============================================================================
+# 10. PROVISOES (forecast de entradas/saidas futuras — vertente Fluxo de Caixa)
+# =============================================================================
+class PessoalProvisao(db.Model):
+    """Lancamento provisionado (forecast manual).
+
+    Representa entradas/saidas FUTURAS esperadas que ainda nao foram realizadas.
+    Usado na vertente Fluxo de Caixa para projecao de saldo.
+
+    Exemplos:
+      - Pro-labore previsto: R$10k em 05/05/2026 (entrada)
+      - Aluguel provisionado: R$3k em 10/05/2026 (saida, vindo de orcamento datado)
+      - Reembolso empresarial: R$5k em 20/05/2026 (entrada)
+
+    Ciclo de vida:
+      - PROVISIONADA: lancamento previsto, ainda nao ocorreu
+      - REALIZADA: foi efetivado e vinculado a transacao_id (transacao real)
+      - CANCELADA: cancelado sem realizacao (nao entra no fluxo)
+    """
+    __tablename__ = 'pessoal_provisoes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(10), nullable=False)  # entrada | saida
+    data_prevista = db.Column(db.Date, nullable=False)
+    valor = db.Column(db.Numeric(15, 2), nullable=False)  # sempre positivo
+    descricao = db.Column(db.String(300), nullable=False)
+
+    # Categoria opcional (ajuda a classificar no fluxo)
+    categoria_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_categorias.id', ondelete='SET NULL'),
+    )
+    # Membro opcional
+    membro_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_membros.id', ondelete='SET NULL'),
+    )
+    # Conta opcional (se for de conta especifica)
+    conta_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_contas.id', ondelete='SET NULL'),
+    )
+
+    # Se veio de um orcamento datado, aponta para ele
+    orcamento_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_orcamentos.id', ondelete='SET NULL'),
+    )
+
+    # Se foi REALIZADA, aponta para a transacao real que materializou
+    transacao_id = db.Column(
+        db.Integer, db.ForeignKey('pessoal_transacoes.id', ondelete='SET NULL'),
+    )
+
+    # PROVISIONADA | REALIZADA | CANCELADA
+    status = db.Column(db.String(20), nullable=False, default='PROVISIONADA')
+
+    # Recorrencia (opcional): clona provisao para meses seguintes
+    recorrente = db.Column(db.Boolean, default=False)
+    # mensal | semanal | anual (NULL se nao recorrente)
+    recorrencia_tipo = db.Column(db.String(20))
+    # Data-limite da recorrencia (NULL = sem limite, gera ate N meses a frente)
+    recorrencia_ate = db.Column(db.Date)
+
+    observacao = db.Column(db.Text)
+
+    criado_em = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(
+        db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive, nullable=False,
+    )
+    criado_por = db.Column(db.String(100))
+    realizado_em = db.Column(db.DateTime)
+
+    # Relacionamentos
+    categoria = db.relationship('PessoalCategoria', foreign_keys=[categoria_id])
+    membro = db.relationship('PessoalMembro', foreign_keys=[membro_id])
+    conta = db.relationship('PessoalConta', foreign_keys=[conta_id])
+    orcamento = db.relationship('PessoalOrcamento', foreign_keys=[orcamento_id])
+    transacao = db.relationship('PessoalTransacao', foreign_keys=[transacao_id])
+
+    __table_args__ = (
+        db.CheckConstraint("tipo IN ('entrada', 'saida')", name='ck_provisoes_tipo'),
+        db.CheckConstraint(
+            "status IN ('PROVISIONADA', 'REALIZADA', 'CANCELADA')",
+            name='ck_provisoes_status',
+        ),
+        db.CheckConstraint('valor > 0', name='ck_provisoes_valor_positivo'),
+        db.CheckConstraint(
+            "recorrencia_tipo IS NULL OR recorrencia_tipo IN ('mensal', 'semanal', 'anual')",
+            name='ck_provisoes_recorrencia_tipo',
+        ),
+        Index('idx_pessoal_provisoes_data', 'data_prevista'),
+        Index('idx_pessoal_provisoes_status', 'status'),
+        Index('idx_pessoal_provisoes_tipo', 'tipo'),
+    )
+
+    def __repr__(self):
+        return (
+            f'<PessoalProvisao #{self.id} {self.tipo} {self.data_prevista} '
+            f'R${self.valor} [{self.status}]>'
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'tipo': self.tipo,
+            'data_prevista': self.data_prevista.isoformat() if self.data_prevista else None,
+            'data_prevista_br': (
+                self.data_prevista.strftime('%d/%m/%Y') if self.data_prevista else None
+            ),
+            'valor': float(self.valor) if self.valor else 0,
+            'descricao': self.descricao,
+            'categoria_id': self.categoria_id,
+            'categoria_nome': self.categoria.nome if self.categoria else None,
+            'categoria_grupo': self.categoria.grupo if self.categoria else None,
+            'categoria_icone': self.categoria.icone if self.categoria else None,
+            'membro_id': self.membro_id,
+            'membro_nome': self.membro.nome if self.membro else None,
+            'conta_id': self.conta_id,
+            'conta_nome': self.conta.nome if self.conta else None,
+            'orcamento_id': self.orcamento_id,
+            'transacao_id': self.transacao_id,
+            'status': self.status,
+            'recorrente': self.recorrente,
+            'recorrencia_tipo': self.recorrencia_tipo,
+            'recorrencia_ate': self.recorrencia_ate.isoformat() if self.recorrencia_ate else None,
+            'observacao': self.observacao,
+            'criado_em': self.criado_em.strftime('%d/%m/%Y %H:%M') if self.criado_em else None,
+            'criado_por': self.criado_por,
+            'realizado_em': (
+                self.realizado_em.strftime('%d/%m/%Y %H:%M') if self.realizado_em else None
+            ),
+        }
+
+
+# =============================================================================
 # STAGING PLUGGY — 4 tabelas para Open Finance (Fase 1)
 # =============================================================================
 # Recebem dados fieis ao payload Pluggy. NAO tocam PessoalTransacao/PessoalConta.
@@ -845,3 +994,21 @@ class PessoalPluggyCategoriaMap(db.Model):
             'origem': self.origem,
             'observacao': self.observacao,
         }
+
+
+# =============================================================================
+# EVENT LISTENERS — invariantes de consistencia
+# =============================================================================
+@event.listens_for(PessoalTransacao, 'after_delete')
+def _limpar_data_pagamento_em_faturas(mapper, connection, target):
+    """Quando uma PessoalTransacao e deletada, limpar data_pagamento nas faturas
+    que a apontavam via transacao_pagamento_id.
+
+    O FK tem ON DELETE SET NULL (transacao_pagamento_id vira NULL automaticamente),
+    mas data_pagamento ficaria orfa. Aqui sincronizamos.
+    """
+    connection.execute(
+        PessoalImportacao.__table__.update().where(
+            PessoalImportacao.__table__.c.transacao_pagamento_id == target.id
+        ).values(data_pagamento=None)
+    )

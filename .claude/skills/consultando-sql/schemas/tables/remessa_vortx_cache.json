@@ -110,16 +110,16 @@
   ],
   "indices": [
     {
-      "name": "ix_remessa_vortx_cache_etapa",
+      "name": "ix_remessa_vortx_cache_company_id_odoo",
       "columns": [
-        "etapa"
+        "company_id_odoo"
       ],
       "unique": false
     },
     {
-      "name": "ix_remessa_vortx_cache_company_id_odoo",
+      "name": "ix_remessa_vortx_cache_etapa",
       "columns": [
-        "company_id_odoo"
+        "etapa"
       ],
       "unique": false
     }

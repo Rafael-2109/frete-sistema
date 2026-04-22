@@ -259,13 +259,6 @@
   ],
   "indices": [
     {
-      "name": "idx_extrato_item_cnpj",
-      "columns": [
-        "cnpj_pagador"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_extrato_item_statement_line",
       "columns": [
         "statement_line_id"
@@ -339,6 +332,13 @@
       "name": "idx_extrato_item_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_extrato_item_cnpj",
+      "columns": [
+        "cnpj_pagador"
       ],
       "unique": false
     }

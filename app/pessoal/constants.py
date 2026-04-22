@@ -126,6 +126,9 @@ CATEGORIAS_DESPESAS = [
     {"nome": "Juros/Multa", "grupo": "Financeiro", "icone": "fa-percentage", "ordem": 111},
     {"nome": "Emprestimo/Financiamento", "grupo": "Financeiro", "icone": "fa-hand-holding-usd", "ordem": 112},
     {"nome": "Investimento", "grupo": "Financeiro", "icone": "fa-chart-line", "ordem": 113},
+    # Usada na vertente Fluxo de Caixa para agrupar pagamentos de fatura de cartao
+    # (1 linha por fatura paga, com drilldown para compras originais).
+    {"nome": "Cartao de Credito", "grupo": "Financeiro", "icone": "fa-credit-card", "ordem": 114},
     # --- Receitas ---
     {"nome": "Salario", "grupo": "Receitas", "icone": "fa-money-bill-wave", "ordem": 200},
     {"nome": "Pro-labore", "grupo": "Receitas", "icone": "fa-briefcase", "ordem": 201},

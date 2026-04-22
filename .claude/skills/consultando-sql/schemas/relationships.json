@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 315,
+  "total_relationships": 321,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1629,6 +1629,12 @@
       "to_column": "id"
     },
     {
+      "from_table": "pessoal_importacoes",
+      "from_column": "transacao_pagamento_id",
+      "to_table": "pessoal_transacoes",
+      "to_column": "id"
+    },
+    {
       "from_table": "pessoal_orcamentos",
       "from_column": "categoria_id",
       "to_table": "pessoal_categorias",
@@ -1661,6 +1667,36 @@
     {
       "from_table": "pessoal_pluggy_transacoes_stg",
       "from_column": "transacao_pessoal_id",
+      "to_table": "pessoal_transacoes",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_provisoes",
+      "from_column": "categoria_id",
+      "to_table": "pessoal_categorias",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_provisoes",
+      "from_column": "membro_id",
+      "to_table": "pessoal_membros",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_provisoes",
+      "from_column": "conta_id",
+      "to_table": "pessoal_contas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_provisoes",
+      "from_column": "orcamento_id",
+      "to_table": "pessoal_orcamentos",
+      "to_column": "id"
+    },
+    {
+      "from_table": "pessoal_provisoes",
+      "from_column": "transacao_id",
       "to_table": "pessoal_transacoes",
       "to_column": "id"
     },

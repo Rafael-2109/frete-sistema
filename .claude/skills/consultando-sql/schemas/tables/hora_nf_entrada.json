@@ -94,16 +94,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_nf_entrada_loja_destino_id",
+      "name": "ix_hora_nf_entrada_cnpj_destinatario",
       "columns": [
-        "loja_destino_id"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_pedido_id",
+      "name": "ix_hora_nf_entrada_loja_destino_id",
       "columns": [
-        "pedido_id"
+        "loja_destino_id"
       ],
       "unique": false
     },
@@ -115,16 +115,16 @@
       "unique": true
     },
     {
-      "name": "ix_hora_nf_entrada_cnpj_emitente",
+      "name": "ix_hora_nf_entrada_pedido_id",
       "columns": [
-        "cnpj_emitente"
+        "pedido_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_cnpj_destinatario",
+      "name": "ix_hora_nf_entrada_cnpj_emitente",
       "columns": [
-        "cnpj_destinatario"
+        "cnpj_emitente"
       ],
       "unique": false
     }

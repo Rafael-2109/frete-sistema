@@ -150,11 +150,71 @@
                 <option value="nao" {{ 'selected' if filtros.tem_categoria == 'nao' }}>Sem categoria</option>
               </select>
             </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-0">
+                Motivo da exclusao
+                <i class="fas fa-question-circle text-muted"
+                   title="Por que uma transacao esta com excluir_relatorio=True"></i>
+              </label>
+              <select name="motivo_exclusao" class="form-select form-select-sm">
+                <option value="">Qualquer</option>
+                <option value="EMPRESA" {{ 'selected' if filtros.motivo_exclusao == 'EMPRESA' }}>
+                  Empresa (categoria Desconsiderar/compensavel){% if contadores_motivo %} — {{ contadores_motivo.EMPRESA }}{% endif %}
+                </option>
+                <option value="PAGAMENTO_CARTAO" {{ 'selected' if filtros.motivo_exclusao == 'PAGAMENTO_CARTAO' }}>
+                  Pagamento de Cartao{% if contadores_motivo %} — {{ contadores_motivo.PAGAMENTO_CARTAO }}{% endif %}
+                </option>
+                <option value="TRANSF_PROPRIA" {{ 'selected' if filtros.motivo_exclusao == 'TRANSF_PROPRIA' }}>
+                  Transferencia Propria{% if contadores_motivo %} — {{ contadores_motivo.TRANSF_PROPRIA }}{% endif %}
+                </option>
+                <option value="COMPENSADA" {{ 'selected' if filtros.motivo_exclusao == 'COMPENSADA' }}>
+                  Compensada 100%{% if contadores_motivo %} — {{ contadores_motivo.COMPENSADA }}{% endif %}
+                </option>
+                <option value="OUTRO" {{ 'selected' if filtros.motivo_exclusao == 'OUTRO' }}>
+                  Outro (revisar){% if contadores_motivo %} — {{ contadores_motivo.OUTRO }}{% endif %}
+                </option>
+              </select>
+            </div>
           </div>
         </div>
       </form>
     </div>
   </div>
+
+  {# ===== Atalhos por motivo de exclusao =====
+       Preservam filtros ativos (exceto motivo_exclusao e page) via urlencode,
+       alinhado com o padrao do ns_sort.qs para links de sort. #}
+  {% if contadores_motivo %}
+  {% set ns_atalho = namespace(qs='') %}
+  {% for key, value in request.args.items(multi=True) %}
+    {% if key not in ('page', 'motivo_exclusao') and value %}
+      {% set ns_atalho.qs = ns_atalho.qs ~ '&' ~ key|urlencode ~ '=' ~ value|urlencode %}
+    {% endif %}
+  {% endfor %}
+  <div class="mb-3">
+    <small class="text-muted me-2">Atalhos excluidas:</small>
+    <a href="?motivo_exclusao=EMPRESA{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-warning">
+      <i class="fas fa-briefcase"></i> Empresa
+      <span class="badge bg-warning text-dark">{{ contadores_motivo.EMPRESA }}</span>
+    </a>
+    <a href="?motivo_exclusao=OUTRO{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-danger">
+      <i class="fas fa-question"></i> Outro (revisar)
+      <span class="badge bg-danger">{{ contadores_motivo.OUTRO }}</span>
+    </a>
+    <a href="?motivo_exclusao=PAGAMENTO_CARTAO{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-credit-card"></i> Pagto Cartao
+      <span class="badge bg-secondary">{{ contadores_motivo.PAGAMENTO_CARTAO }}</span>
+    </a>
+    <a href="?motivo_exclusao=TRANSF_PROPRIA{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-exchange-alt"></i> Transf Propria
+      <span class="badge bg-secondary">{{ contadores_motivo.TRANSF_PROPRIA }}</span>
+    </a>
+    <a href="?motivo_exclusao=COMPENSADA{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-info">
+      <i class="fas fa-balance-scale"></i> Compensada
+      <span class="badge bg-info">{{ contadores_motivo.COMPENSADA }}</span>
+    </a>
+  </div>
+  {% endif %}
 
   {# ===== QS para links de sort (sem page/sort_by/sort_order) ===== #}
   {% set ns_sort = namespace(qs='') %}
@@ -210,6 +270,17 @@
                 {% endif %}
                 {% if t.eh_pagamento_cartao %}
                 <span class="badge bg-secondary" title="Pagamento de cartao">CC</span>
+                {% endif %}
+                {# Badge do motivo de exclusao, se houver #}
+                {% set motivo = motivos_map.get(t.id) if motivos_map is defined else None %}
+                {% if motivo == 'EMPRESA' %}
+                  <span class="badge bg-warning text-dark" title="Categoria empresarial (Desconsiderar/compensavel)">Emp</span>
+                {% elif motivo == 'TRANSF_PROPRIA' %}
+                  <span class="badge bg-secondary" title="Transferencia propria">T.P.</span>
+                {% elif motivo == 'COMPENSADA' %}
+                  <span class="badge bg-info" title="Compensada 100%">Comp</span>
+                {% elif motivo == 'OUTRO' %}
+                  <span class="badge bg-danger" title="Excluida sem motivo claro — revisar">Revisar</span>
                 {% endif %}
               </td>
               <td class="small">

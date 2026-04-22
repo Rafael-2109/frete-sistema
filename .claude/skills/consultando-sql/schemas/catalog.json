@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 207,
+  "total_tabelas": 208,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1625,6 +1625,15 @@
         "pluggy_account_pk",
         "pluggy_transaction_id",
         "date"
+      ]
+    },
+    {
+      "name": "pessoal_provisoes",
+      "description": "Tabela pessoal_provisoes",
+      "key_fields": [
+        "tipo",
+        "data_prevista",
+        "valor"
       ]
     },
     {
