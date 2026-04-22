@@ -186,3 +186,10 @@
     </a>
 
 </nav>
+
+{# ── SswProgress: tracker global de operacoes SSW (Playwright) ──
+   Exibe toast fixo bottom-right com etapa corrente de emissoes/atualizacoes
+   SSW. Persiste em localStorage para sobreviver a reload. Carregado em
+   todas as telas CarVia via quick_nav. API: window.SswProgress.start({...}).
+#}
+<script src="{{ url_for('static', filename='js/carvia/ssw_progress.js') }}"></script>

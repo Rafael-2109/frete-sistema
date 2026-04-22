@@ -936,6 +936,68 @@ async def emitir_cte(args):
                     )
                     break
 
+                # ── 6d. RE-CONFIRMAR Frete informado ANTES de Gravar ──
+                #
+                # O SSW pode re-calcular o valor pela TABELA apos avisos
+                # (peso_real_invalido, GNRE, cliente_bloqueado) que
+                # disparam re-simulacoes. Essas re-simulacoes silenciosamente
+                # sobrescrevem o valor digitado em "Frete informado" com o
+                # valor da tabela interna. Para garantir que o frete fornecido
+                # pelo usuario prevalece, re-abrimos o painel "Frete informado"
+                # apos o loop de avisos e antes do GRAVAR, re-preenchendo o
+                # valor e re-confirmando via #lnk_frt_inf_env.
+                #
+                # Se o painel ja esta fechado (resumo pos-simular), o click em
+                # "Frete informado:" re-abre. Se algum passo falhar, seguimos
+                # com o fluxo original (logamos em avisos_tratados para debug).
+                try:
+                    await popup.get_by_role(
+                        "link", name="Frete informado:"
+                    ).click(timeout=5000)
+                    # Aguarda o painel AJAX renderizar (SSW pode levar 2-3s em
+                    # carga alta — 0.5s era insuficiente e jogava no fallback).
+                    await popup.locator('#id_frt_inf_frete_peso').wait_for(
+                        state='visible', timeout=8000
+                    )
+                    await popup.locator('#id_frt_inf_frete_peso').fill(frete_peso)
+                    await asyncio.sleep(0.3)
+                    await popup.locator('#lnk_frt_inf_env').click()
+                    await asyncio.sleep(2)
+                    avisos_tratados.append(
+                        f"FRETE_REINFORMADO_PRE_GRAVAR:{frete_peso}"
+                    )
+                    await capturar_screenshot_local(
+                        popup, "07b_frete_reinformado"
+                    )
+                except Exception as e_reinf:
+                    # Fallback: tentar via JS se o click nativo falhou
+                    # (errorpanel interceptando, painel ja fechado, etc).
+                    # `frete_peso` e passado como ARGUMENTO ao evaluate
+                    # (nao interpolado em f-string) para evitar JS injection
+                    # caso o valor contenha aspas ou quebras de linha.
+                    try:
+                        reaplicou = await popup.evaluate(
+                            """(val) => {
+                                const el = document.getElementById('id_frt_inf_frete_peso');
+                                if (!el) return 'sem_campo';
+                                el.value = val;
+                                el.dispatchEvent(new Event('change', {bubbles: true}));
+                                el.dispatchEvent(new Event('blur', {bubbles: true}));
+                                const lnk = document.getElementById('lnk_frt_inf_env');
+                                if (lnk) { lnk.click(); return 'ok_js'; }
+                                return 'sem_lnk';
+                            }""",
+                            frete_peso,
+                        )
+                        await asyncio.sleep(2)
+                        avisos_tratados.append(
+                            f"FRETE_REINFORMADO_JS:{reaplicou}:{frete_peso}"
+                        )
+                    except Exception as e_js:
+                        avisos_tratados.append(
+                            f"FRETE_REINFORMADO_ERRO: native={e_reinf}, js={e_js}"
+                        )
+
                 # ── 7. GRAVAR pre-CTRC (match flexivel + fallback JS) ──
                 await capturar_screenshot_local(popup, "08_pre_gravar")
                 gravar_clicked = False

@@ -298,15 +298,32 @@
 </script>
 {% endif %}
 
-{# A3.5 (2026-04-17): JS do botao "Atualizar CTRC" — pattern identico ao detalhe_operacao.html #}
+{# A3.5 (2026-04-17): JS do botao "Atualizar CTRC" — pattern identico ao detalhe_operacao.html
+   2026-04-22: integrado ao SswProgress (toast global com progresso).
+#}
 <script>
 function atualizarCtrcCteCompSsw(id) {
-    if (!confirm('Re-consultar CTRC no SSW? (leva ~20-30s)')) return;
     var btn = document.getElementById('btn-atualizar-ctrc-cte-comp-' + id);
     var labelOriginal = '<i class="fas fa-sync"></i> Atualizar CTRC';
+
+    // Guard contra double-click: desabilita ANTES do confirm. Senao,
+    // clicar 2x rapido enfileiraria 2 jobs RQ que rodam Playwright.
+    if (btn && btn.disabled) return;
+    if (btn) { btn.disabled = true; }
+
+    if (!confirm(
+        'Atualizar CTRC e PDF no SSW agora?\n\n'
+        + 'O que acontece:\n'
+        + '• SSW opcao 101 busca pelo numero do CTe\n'
+        + '• Atualiza o CTRC no banco (se divergente)\n'
+        + '• Baixa o DACTE PDF se ainda nao foi baixado\n\n'
+        + 'Duracao tipica: 30-45s. O progresso aparece no canto inferior direito.'
+    )) {
+        if (btn) { btn.disabled = false; }
+        return;
+    }
     if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enfileirando...';
     }
     var csrf = document.querySelector('meta[name="csrf-token"]')?.content
             || document.querySelector('input[name="csrf_token"]')?.value || '';
@@ -319,10 +336,17 @@ function atualizarCtrcCteCompSsw(id) {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.sucesso) {
-            alert(data.mensagem);
-            if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW...'; }
-            setTimeout(function() { window.location.reload(); }, 30000);
+        if (data.sucesso && data.job_id) {
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW…';
+            }
+            window.SswProgress && window.SswProgress.start({
+                label: 'Atualizando CTRC + PDF — CTe Comp. ' + id,
+                descricao: 'SSW opcao 101 --cte → atualiza CTRC + baixa DACTE (se ausente) → S3.',
+                statusUrl: '/carvia/api/ssw-jobs/' + data.job_id + '/status',
+                statusType: 'rq_job',
+                reloadOnDone: true,
+            });
         } else {
             alert('Erro: ' + (data.erro || 'Falha desconhecida'));
             if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }

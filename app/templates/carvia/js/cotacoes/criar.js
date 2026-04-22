@@ -427,6 +427,7 @@ function wizConcluir() {
                 bootstrap.Modal.getInstance(document.getElementById('modalWizardNF')).hide();
                 aplicarDadosNF(_setupData);
                 aplicarRestricoesTardia();
+                processarNfExtras();
             })
             .catch(err => {
                 document.getElementById('btnWizAvancar').disabled = false;
@@ -439,6 +440,7 @@ function wizConcluir() {
         bootstrap.Modal.getInstance(document.getElementById('modalWizardNF')).hide();
         aplicarDadosNF(_setupData);
         aplicarRestricoesTardia();
+        processarNfExtras();
         return;
     }
 
@@ -501,6 +503,7 @@ function wizConcluir() {
         bootstrap.Modal.getInstance(document.getElementById('modalWizardNF')).hide();
         aplicarDadosNF(_setupData);
         aplicarRestricoesTardia();
+        processarNfExtras();
     })
     .catch(err => {
         document.getElementById('btnWizAvancar').disabled = false;
@@ -911,6 +914,7 @@ document.getElementById('formCotacao').addEventListener('submit', async function
             // Cliente e enderecos ja existem — preencher form direto
             aplicarDadosNF(d);
             aplicarRestricoesTardia();
+            processarNfExtras();
         }
     })
     .catch(err => {
@@ -920,6 +924,71 @@ document.getElementById('formCotacao').addEventListener('submit', async function
         }
     });
 })();
+
+/* ===== NF Extras (multi-selecao de "NFs sem Cotacao") =====
+ * Quando a cotacao e iniciada via /cotacoes/nova?nf_id=X&nf_extras=Y,Z,W,
+ * a primeira NF (X) vai pelo auto-setup normal. As extras (Y,Z,W) sao
+ * anexadas DEPOIS que a primeira foi resolvida (via wizard ou direto),
+ * para reutilizar cliente + enderecos ja configurados. Cada extra passa
+ * por setup-nf-existente (para reconhecimento de motos), depois entra
+ * no _nfsCollection via adicionarNfAoCollection — que atualiza totais.
+ */
+let _nfExtrasProcessadas = false;
+function processarNfExtras() {
+    if (_nfExtrasProcessadas) return;  // evita duplicacao (wizConcluir pode chamar 2x)
+    const extras = (CARVIA_DATA.nfExtrasIds || []).slice();
+    if (!extras.length) return;
+    _nfExtrasProcessadas = true;
+
+    const fb = document.getElementById('nfExistenteFeedback') || document.getElementById('prePreencherFeedback');
+    if (fb) {
+        fb.innerHTML += '<div class="alert alert-info py-1 small mb-0 mt-2" id="nfExtrasFeedback">' +
+            '<i class="fas fa-spinner fa-spin me-1"></i> Adicionando ' + extras.length + ' NF(s) extra(s)...' +
+            '</div>';
+        fb.style.display = 'block';
+    }
+
+    const promises = extras.map(function(nfId) {
+        return fetch('/carvia/api/cotacoes/setup-nf-existente/' + encodeURIComponent(nfId))
+            .then(function(r) { return r.json().then(function(d) { return {nfId: nfId, data: d}; }); });
+    });
+
+    Promise.all(promises).then(function(resultados) {
+        let adicionadas = 0;
+        const erros = [];
+        resultados.forEach(function(res) {
+            const d = res.data;
+            if (!d || !d.sucesso) {
+                erros.push('NF ' + res.nfId + ': ' + ((d && d.erro) || 'erro desconhecido'));
+                return;
+            }
+            // Skip duplicata
+            const jaExiste = _nfsCollection.some(function(n) {
+                return n.nf.numero_nf === d.nf.numero_nf
+                    && n.nf.cnpj_emitente === d.nf.cnpj_emitente;
+            });
+            if (jaExiste) return;
+            adicionarNfAoCollection(d);
+            adicionadas++;
+        });
+
+        const fbExtras = document.getElementById('nfExtrasFeedback');
+        if (fbExtras) {
+            let html = '<i class="fas fa-check-circle me-1"></i> ' + adicionadas + ' NF(s) extra(s) adicionada(s).';
+            if (erros.length > 0) {
+                html += '<br><small class="text-warning">' + erros.join('; ') + '</small>';
+            }
+            fbExtras.innerHTML = html;
+            fbExtras.className = 'alert alert-success py-1 small mb-0 mt-2';
+        }
+    }).catch(function(err) {
+        const fbExtras = document.getElementById('nfExtrasFeedback');
+        if (fbExtras) {
+            fbExtras.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> Erro ao adicionar NFs extras: ' + err.message;
+            fbExtras.className = 'alert alert-danger py-1 small mb-0 mt-2';
+        }
+    });
+}
 
 /* ===== Criacao Tardia: lock campos apos setup ===== */
 function aplicarRestricoesTardia() {

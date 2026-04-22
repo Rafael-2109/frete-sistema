@@ -927,11 +927,26 @@ function iniciarEmissaoCte(comFatura) {
         });
 }
 
-// Validar captcha no input
-document.getElementById('inpCaptchaCte')?.addEventListener('input', function() {
-    document.getElementById('btnConfirmarEmissao').disabled =
-        this.value.trim() !== _emissaoCaptcha;
-});
+// Validar captcha no input.
+// NOTA: o modal #modalEmitirCteCotacao e incluido no template APOS este script
+// (bloco {% if cotacao.status == 'APROVADO' %}), entao #inpCaptchaCte ainda nao
+// esta no DOM quando este arquivo executa. Anexamos o listener dentro do
+// DOMContentLoaded ou via delegacao para garantir que roda quando o elemento
+// realmente existe.
+function _bindCaptchaListener() {
+    const input = document.getElementById('inpCaptchaCte');
+    const btn = document.getElementById('btnConfirmarEmissao');
+    if (!input || !btn || input.dataset.captchaBound === '1') return;
+    input.addEventListener('input', function() {
+        btn.disabled = this.value.trim() !== _emissaoCaptcha;
+    });
+    input.dataset.captchaBound = '1';
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _bindCaptchaListener);
+} else {
+    _bindCaptchaListener();
+}
 
 function confirmarEmissaoCte() {
     const btn = document.getElementById('btnConfirmarEmissao');
@@ -960,16 +975,40 @@ function confirmarEmissaoCte() {
     .then(r => r.json().then(d => ({status: r.status, data: d})))
     .then(({status, data}) => {
         if (status === 202 && data.sucesso) {
-            successDiv.classList.remove('d-none');
-            const qtd = data.emissoes.filter(e => e.status !== 'ERRO').length;
-            const erros = data.emissoes.filter(e => e.status === 'ERRO');
-            let msg = `${qtd} emissao(oes) enfileirada(s) com sucesso!`;
+            const okEmissoes = (data.emissoes || []).filter(e => e.status !== 'ERRO' && e.emissao_id);
+            const erros = (data.emissoes || []).filter(e => e.status === 'ERRO');
+
+            // Fecha o modal e entrega tracking ao SswProgress — uma entrada
+            // por NF/emissao. Cada toast mostra progresso independente
+            // (LOGIN/PREENCHIMENTO/SEFAZ/...) e persiste entre reloads.
+            const modalEl = document.getElementById('modalEmitirCteCotacao');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+
+            const descBase = _emissaoComFatura
+                ? 'SSW: login → preenchimento → SEFAZ → consulta 101 → importacao XML/DACTE → fatura 437.'
+                : 'SSW: login → preenchimento → SEFAZ → consulta 101 → importacao XML/DACTE.';
+
+            okEmissoes.forEach(function(em) {
+                window.SswProgress && window.SswProgress.start({
+                    label: 'Emitindo CTe SSW — NF ' + (em.numero_nf || em.nf_id),
+                    descricao: descBase,
+                    statusUrl: '/carvia/api/emissao-cte/' + em.emissao_id + '/status',
+                    statusType: 'emissao_cte',
+                    // Nao recarrega automaticamente na cotacao para nao
+                    // interromper as outras NFs em progresso. Usuario
+                    // recarrega manualmente quando todas terminarem.
+                    reloadOnDone: false,
+                });
+            });
+
             if (erros.length > 0) {
-                msg += `<br><small class="text-danger">${erros.length} erro(s): ${erros.map(e => e.erro).join('; ')}</small>`;
+                alert(erros.length + ' NF(s) nao puderam ser enfileiradas:\n'
+                    + erros.map(e => '• NF ' + (e.numero_nf || e.nf_id) + ': ' + e.erro).join('\n'));
             }
-            msg += '<br><small>Acompanhe o progresso na tela de detalhe de cada NF.</small>';
-            successDiv.innerHTML = msg;
-            btn.innerHTML = '<i class="fas fa-check"></i> Emissao disparada';
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-bolt"></i> Confirmar Emissao';
         } else {
             erroDiv.classList.remove('d-none');
             erroDiv.textContent = data.erro || 'Erro ao emitir';

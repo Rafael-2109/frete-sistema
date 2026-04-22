@@ -1037,24 +1037,49 @@ function abrirOuBaixarPdfSsw(id, temPath) {
     var btn = document.getElementById('btn-pdf-ssw-' + id);
     var labelOriginal = '<i class="fas fa-file-pdf"></i> PDF SSW';
 
-    function iniciarAguardoSsw(msg) {
-        // Job SSW enfileirado — desabilita botao e agenda reload.
-        alert(msg || 'Rebuscando no SSW. Aguarde ~30-45s e a pagina recarregara.');
+    function iniciarTrackingSsw(data) {
+        // Job SSW enfileirado — entrega ao SswProgress global (toast fixo).
+        // Botao continua desabilitado; SswProgress recarrega a pagina
+        // automaticamente quando o job termina.
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW…';
         }
-        setTimeout(function() { window.location.reload(); }, 45000);
+        if (window.SswProgress && data && data.job_id) {
+            window.SswProgress.start({
+                label: 'Baixando DACTE PDF — CTe-' + id,
+                descricao: 'SSW opcao 101 --cte --baixar-dacte → upload S3.',
+                statusUrl: '/carvia/api/ssw-jobs/' + data.job_id + '/status',
+                statusType: 'rq_job',
+                reloadOnDone: true,
+            });
+        } else {
+            // Fallback: sem job_id, reload em 45s
+            setTimeout(function() { window.location.reload(); }, 45000);
+        }
     }
 
     function enfileirarBuscaSsw() {
         // Usado quando NAO ha cte_pdf_path (primeira busca).
-        if (!confirm('PDF ainda nao foi baixado do SSW. Deseja buscar agora? (leva ~30-45s)')) {
+        // Desabilita o botao ANTES do confirm para evitar race de double-click
+        // (usuario clicar novamente enquanto o dialog esta aberto dispararia
+        // 2 jobs RQ que rodam Playwright — caro e enfileirado 2x no SSW).
+        if (btn && btn.disabled) return;
+        if (btn) { btn.disabled = true; }
+
+        if (!confirm(
+            'Buscar o PDF DACTE no SSW agora?\n\n'
+            + 'O que acontece:\n'
+            + '• SSW opcao 101 consulta pelo numero do CTe\n'
+            + '• Baixa DACTE e envia para S3\n'
+            + '• Atualiza o caminho do PDF nesta operacao\n\n'
+            + 'Duracao tipica: 30-45s. O progresso aparece no canto inferior direito.'
+        )) {
+            if (btn) { btn.disabled = false; }
             return;
         }
         if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enfileirando...';
         }
         var csrf = document.querySelector('meta[name="csrf-token"]')?.content
                 || document.querySelector('input[name="csrf_token"]')?.value || '';
@@ -1068,7 +1093,7 @@ function abrirOuBaixarPdfSsw(id, temPath) {
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.sucesso) {
-                iniciarAguardoSsw(data.mensagem);
+                iniciarTrackingSsw(data);
             } else {
                 alert('Erro: ' + (data.erro || 'Falha desconhecida'));
                 if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }
@@ -1087,7 +1112,7 @@ function abrirOuBaixarPdfSsw(id, temPath) {
 
     // temPath=true — verificar disponibilidade ANTES de abrir.
     // Se arquivo sumiu do storage, backend ja limpa path e re-enfileira
-    // job SSW automaticamente; frontend so precisa aguardar.
+    // job SSW automaticamente; frontend entrega tracking ao SswProgress.
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
@@ -1104,7 +1129,7 @@ function abrirOuBaixarPdfSsw(id, temPath) {
             return;
         }
         if (data.rebuscando_ssw) {
-            iniciarAguardoSsw(data.mensagem);
+            iniciarTrackingSsw(data);
             return;
         }
         alert(data.mensagem || data.erro || 'PDF indisponivel.');
@@ -1118,12 +1143,27 @@ function abrirOuBaixarPdfSsw(id, temPath) {
 
 // ─── Atualizar CTRC — re-consulta SSW opcao 101 ───
 function atualizarCtrcSsw(id) {
-    if (!confirm('Re-consultar CTRC no SSW? (leva ~20-30s)')) return;
     var btn = document.getElementById('btn-atualizar-ctrc-' + id);
     var labelOriginal = '<i class="fas fa-sync"></i> Atualizar CTRC';
+
+    // Guard contra double-click: desabilita ANTES do confirm. Senao,
+    // clicar 2x rapido antes do fetch retornar enfileiraria 2 jobs RQ.
+    if (btn && btn.disabled) return;
+    if (btn) { btn.disabled = true; }
+
+    if (!confirm(
+        'Re-consultar CTRC no SSW agora?\n\n'
+        + 'O que acontece:\n'
+        + '• SSW opcao 101 consulta pelo numero do CTe\n'
+        + '• Compara CTRC retornado com o armazenado\n'
+        + '• Se divergir, corrige no banco e atualiza emissoes vinculadas\n\n'
+        + 'Duracao tipica: 20-30s. O progresso aparece no canto inferior direito.'
+    )) {
+        if (btn) { btn.disabled = false; }
+        return;
+    }
     if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enfileirando...';
     }
     var csrf = document.querySelector('meta[name="csrf-token"]')?.content
             || document.querySelector('input[name="csrf_token"]')?.value || '';
@@ -1136,11 +1176,19 @@ function atualizarCtrcSsw(id) {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.sucesso) {
-            alert(data.mensagem);
-            // NAO reabilita — mantem desabilitado ate reload.
-            if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW...'; }
-            setTimeout(function() { window.location.reload(); }, 30000);
+        if (data.sucesso && data.job_id) {
+            // Mantem botao desabilitado enquanto o job roda (SswProgress
+            // recarrega a pagina automaticamente no final).
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando SSW…';
+            }
+            window.SswProgress && window.SswProgress.start({
+                label: 'Atualizando CTRC — CTe-' + id,
+                descricao: 'SSW opcao 101 → compara CTRC → atualiza banco.',
+                statusUrl: '/carvia/api/ssw-jobs/' + data.job_id + '/status',
+                statusType: 'rq_job',
+                reloadOnDone: true,
+            });
         } else {
             alert('Erro: ' + (data.erro || 'Falha desconhecida'));
             if (btn) { btn.disabled = false; btn.innerHTML = labelOriginal; }

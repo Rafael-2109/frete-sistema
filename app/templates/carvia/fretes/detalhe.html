@@ -931,58 +931,24 @@
 
 {% block scripts %}
 <script>
-// Polling do status de emissao SSW (CTe Complementar 222) das despesas deste frete.
-// Consome GET /carvia/api/custos-entrega/emissao-comp/<id>/status a cada 5s para
-// cada badge com data-polling-emissao-id. Para de pollear ao atingir estado final.
+// Emissoes CTe Complementar 222 em progresso deste frete — entrega tracking
+// ao SswProgress (toast global bottom-right). Cada badge com
+// data-polling-emissao-id vira uma entrada; ao terminar, reload automatico.
 (function() {
     const badges = document.querySelectorAll('.despesa-emissao-badge[data-polling-emissao-id]');
-    if (!badges.length) return;
-
-    const INTERVAL_MS = 5000;
-    const ESTADOS_FINAIS = ['SUCESSO', 'ERRO'];
-
-    function atualizarBadge(badge, data) {
-        if (ESTADOS_FINAIS.includes(data.status)) {
-            // Ao atingir estado final, recarrega a pagina para refletir no template
-            // (coluna CTe Vinculado passa a mostrar numero_comp ou erro).
-            window.location.reload();
-            return true; // parou
-        }
-        // Atualiza tooltip com etapa atual (feedback progressivo)
-        if (data.etapa) {
-            badge.setAttribute('title', 'Etapa: ' + data.etapa);
-        }
-        return false;
-    }
-
-    const MAX_FALHAS = 5;  // circuit-breaker: para apos 5 falhas consecutivas
+    if (!badges.length || !window.SswProgress) return;
 
     badges.forEach(function(badge) {
         const emissaoId = badge.getAttribute('data-polling-emissao-id');
         if (!emissaoId) return;
-        const url = '/carvia/api/custos-entrega/emissao-comp/' + emissaoId + '/status';
-        let falhas = 0;
-
-        const timer = setInterval(function() {
-            fetch(url, { credentials: 'same-origin' })
-                .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
-                .then(function(data) {
-                    falhas = 0;  // reset no sucesso
-                    const parou = atualizarBadge(badge, data);
-                    if (parou) clearInterval(timer);
-                })
-                .catch(function(err) {
-                    falhas++;
-                    console.warn('Polling emissao', emissaoId, 'falhou (' + falhas + '/' + MAX_FALHAS + '):', err);
-                    if (falhas >= MAX_FALHAS) {
-                        clearInterval(timer);
-                        badge.classList.remove('bg-warning', 'text-dark');
-                        badge.classList.add('bg-secondary');
-                        badge.setAttribute('title', 'Polling interrompido apos ' + MAX_FALHAS + ' falhas. Recarregue a pagina.');
-                        badge.innerHTML = '<i class="fas fa-question-circle"></i> Status indisponivel';
-                    }
-                });
-        }, INTERVAL_MS);
+        window.SswProgress.start({
+            id: 'emissao_cte_comp_' + emissaoId,  // idempotente
+            label: 'Emitindo CTe Complementar — Emissao #' + emissaoId,
+            descricao: 'SSW 222 → SEFAZ → consulta 101 → upload XML/DACTE.',
+            statusUrl: '/carvia/api/custos-entrega/emissao-comp/' + emissaoId + '/status',
+            statusType: 'emissao_cte_comp',
+            reloadOnDone: true,
+        });
     });
 })();
 </script>

@@ -921,30 +921,20 @@ function excluirAnexo(anexoId) {
     });
 }
 
-// Polling de emissao CTe Complementar
+// Emissao CTe Complementar em progresso — entrega tracking ao SswProgress.
+// O toast global (bottom-right) mostra etapa atual e recarrega a pagina
+// automaticamente quando termina. Substitui o polling inline antigo.
 {% if emissao_comp and emissao_comp.status in ('PENDENTE', 'EM_PROCESSAMENTO') %}
 (function() {
-    var pollUrl = '{{ url_for("carvia.status_emissao_cte_complementar", emissao_comp_id=emissao_comp.id) }}';
-    var intervalId = setInterval(function() {
-        fetch(pollUrl)
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                var el = document.getElementById('emissao-status');
-                if (!el) { clearInterval(intervalId); return; }
-
-                if (data.status === 'SUCESSO') {
-                    clearInterval(intervalId);
-                    location.reload();
-                } else if (data.status === 'ERRO') {
-                    clearInterval(intervalId);
-                    location.reload();
-                } else if (data.etapa) {
-                    var small = el.querySelector('small');
-                    if (small) { small.textContent = '(' + data.etapa + ')'; }
-                }
-            })
-            .catch(function() { /* silenciar erros de rede */ });
-    }, 3000); // Poll a cada 3 segundos
+    if (!window.SswProgress) return;
+    window.SswProgress.start({
+        id: 'emissao_cte_comp_{{ emissao_comp.id }}',  // idempotente: mesmo id nao duplica
+        label: 'Emitindo CTe Complementar SSW (222)',
+        descricao: 'SSW: preenchimento 222 → SEFAZ → consulta 101 → upload XML/DACTE.',
+        statusUrl: '{{ url_for("carvia.status_emissao_cte_complementar", emissao_comp_id=emissao_comp.id) }}',
+        statusType: 'emissao_cte_comp',
+        reloadOnDone: true,
+    });
 })();
 {% endif %}
 </script>

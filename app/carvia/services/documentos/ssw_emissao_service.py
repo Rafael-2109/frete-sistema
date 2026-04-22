@@ -189,10 +189,22 @@ class SswEmissaoService:
         """Cria N emissoes individuais na fila RQ (uma por NF).
 
         Returns:
-            list de dicts [{nf_id, emissao_id, status}] ou {nf_id, erro}
+            list de dicts [{nf_id, numero_nf, emissao_id, status}]
+            ou {nf_id, numero_nf, erro} quando falha enfileirar.
+            numero_nf incluido para o SswProgress exibir label amigavel.
         """
+        from app.carvia.models import CarviaNf
+
         resultados = []
         for nf_id in nf_ids:
+            # Resolve numero_nf para label amigavel no tracker
+            numero_nf = None
+            try:
+                nf_obj = db.session.get(CarviaNf, nf_id)
+                numero_nf = nf_obj.numero_nf if nf_obj else None
+            except Exception:
+                pass
+
             try:
                 resultado = SswEmissaoService.preparar_emissao(
                     nf_id=nf_id,
@@ -205,10 +217,12 @@ class SswEmissaoService:
                     uf_origem=uf_origem,
                 )
                 resultado['nf_id'] = nf_id
+                resultado['numero_nf'] = numero_nf
                 resultados.append(resultado)
             except (ValueError, Exception) as e:
                 resultados.append({
                     'nf_id': nf_id,
+                    'numero_nf': numero_nf,
                     'erro': str(e),
                     'status': 'ERRO',
                 })

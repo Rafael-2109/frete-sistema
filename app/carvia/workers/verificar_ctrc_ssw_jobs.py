@@ -195,18 +195,24 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
     """Job RQ: consulta SSW opcao 101 para obter/verificar ctrc_numero
     de um CarviaCteComplementar.
 
-    A3.2 (2026-04-17): 3 casos tratados explicitamente
-      - Caso A (EXTRACAO): ctrc_numero vazio + cte_numero preenchido ->
-        busca SSW via --cte (simetrico a verificar_ctrc_operacao_job).
-        Se SSW retornar ctrc_completo -> persistido; senao ERRO.
-      - Caso B (VERIFICACAO): ctrc_numero preenchido -> delega para
-        resolver_ctrc_ssw (logica original — compara com SSW, corrige
-        se divergir).
-      - Caso C (SKIPPED): ambos vazios -> SKIPPED com motivo explicito.
+    2026-04-22 (refator): **prioriza busca por --cte** sempre que
+    `cte_numero` estiver preenchido, mesmo se `ctrc_numero` tambem tiver
+    valor. O CTRC salvo pode estar divergente (captura manual errada ou
+    dedupe 222 anterior); buscar pelo numero do CTe e a fonte confiavel.
+    O CTRC existente e sobrescrito se o SSW retornar divergente.
+    **Tambem baixa DACTE PDF em UMA CHAMADA** quando `cte_pdf_path`
+    estiver vazio — evita segunda ida ao SSW pelo botao "Atualizar CTRC".
 
-    R15 SSL resilience: Caso A usa liberar_conexao_antes_playwright() +
-    commit_com_retry (mesmo padrao do verificar_ctrc_operacao_job).
-    Caso B mantem compatibilidade com fluxo original (commit direto).
+    Casos:
+      - CTE_DISPONIVEL: cte_numero preenchido -> busca SSW via --cte e
+        sobrescreve ctrc_numero com o valor retornado (EXTRAIDO ou
+        CORRIGIDO conforme ctrc anterior estivesse ou nao vazio).
+        Se `cte_pdf_path` vazio, tambem baixa DACTE -> S3 carvia/ctes_pdf/.
+      - SO_CTRC (fallback): cte_numero vazio + ctrc_numero preenchido ->
+        usa resolver_ctrc_ssw (logica antiga, busca por --ctrc).
+      - SKIPPED: ambos vazios.
+
+    R15 SSL resilience: aplica commit_com_retry nos casos que mexem em DB.
 
     Args:
         cte_comp_id: ID do CarviaCteComplementar a verificar
@@ -222,6 +228,7 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
     )
     from app.carvia.workers._ssw_helpers import (
         consultar_101_por_cte,
+        consultar_101_por_cte_com_dacte,
         formatar_ctrc_ssw,
         liberar_conexao_antes_playwright,
         commit_com_retry,
@@ -244,8 +251,10 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
 
         ctrc_anterior = cte_comp.ctrc_numero
         cte_numero_local = cte_comp.cte_numero
+        pdf_path_anterior = cte_comp.cte_pdf_path
+        baixar_dacte = not pdf_path_anterior
 
-        # ────────────── Caso C: ambos vazios — SKIPPED ──────────────
+        # ────────────── SKIPPED: ambos vazios ──────────────
         if not ctrc_anterior and not cte_numero_local:
             logger.info(
                 "verificar_ctrc_cte_comp_job: CTe Comp %s sem ctrc_numero "
@@ -257,27 +266,37 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
                 'motivo': 'CTe Comp sem ctrc_numero e sem cte_numero',
             }
 
-        # ────────────── Caso A: EXTRACAO (ctrc vazio + cte_numero) ──────────────
-        if not ctrc_anterior and cte_numero_local:
+        # ────────────── CTE_DISPONIVEL: usar --cte (prioritario) ──────────────
+        # Busca por --cte sobrescreve ctrc_numero mesmo se ja existente
+        # (CTRC salvo pode ser stale — confianca e no retorno da 101).
+        if cte_numero_local:
             cte_numero_str = normalizar_cte_numero(cte_numero_local)
 
             # R15: libera conexao antes do Playwright (60-120s+)
             liberar_conexao_antes_playwright()
 
             try:
-                resultado = consultar_101_por_cte(
-                    cte_numero_str, filial='CAR'
-                )
+                if baixar_dacte:
+                    # Uma so consulta 101: busca CTRC + baixa DACTE PDF
+                    # (output_dir por cte_comp_id evita colisao entre jobs).
+                    resultado = consultar_101_por_cte_com_dacte(
+                        cte_numero_str, filial='CAR',
+                        operacao_id=f'cte_comp_{cte_comp_id}',
+                    )
+                else:
+                    resultado = consultar_101_por_cte(
+                        cte_numero_str, filial='CAR'
+                    )
             except Exception as e:
                 logger.exception(
                     "verificar_ctrc_cte_comp_job: erro ao consultar SSW "
-                    "opcao 101 --cte %s (cte_comp=%s)",
-                    cte_numero_str, cte_comp_id,
+                    "opcao 101 --cte %s (cte_comp=%s, baixar_dacte=%s)",
+                    cte_numero_str, cte_comp_id, baixar_dacte,
                 )
                 return {
                     'status': 'ERRO',
                     'erro': str(e),
-                    'ctrc_anterior': None,
+                    'ctrc_anterior': ctrc_anterior,
                     'cte_numero': cte_numero_str,
                 }
 
@@ -291,7 +310,7 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
                 return {
                     'status': 'ERRO',
                     'erro': erro_msg,
-                    'ctrc_anterior': None,
+                    'ctrc_anterior': ctrc_anterior,
                     'cte_numero': cte_numero_str,
                 }
 
@@ -308,44 +327,108 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
                 return {
                     'status': 'ERRO',
                     'erro': 'SSW nao retornou ctrc_completo',
-                    'ctrc_anterior': None,
+                    'ctrc_anterior': ctrc_anterior,
                     'cte_numero': cte_numero_str,
                 }
 
-            # Persistir com retry (R15)
-            def _aplicar_extracao():
+            # Upload DACTE PDF para S3 (se baixado com sucesso) ANTES
+            # do commit, para sincronizar ctrc_numero + cte_pdf_path.
+            dacte_s3_path = None
+            dacte_path_local = dados.get('dacte') if baixar_dacte else None
+            if baixar_dacte and dacte_path_local and os.path.exists(dacte_path_local):
+                try:
+                    from app.utils.file_storage import get_file_storage
+                    from io import BytesIO
+
+                    storage = get_file_storage()
+                    with open(dacte_path_local, 'rb') as f:
+                        dacte_bytes = f.read()
+
+                    buf = BytesIO(dacte_bytes)
+                    # Inclui cte_comp_id na chave S3 para evitar colisao quando
+                    # dois CTe Comps distintos compartilham o mesmo CTRC
+                    # (caso raro mas possivel em complementares da mesma
+                    # perna de transporte — sem o suffix, um sobrescreveria o outro).
+                    buf.name = (
+                        f"{ctrc_novo or cte_numero_str}-{cte_comp_id}-dacte.pdf"
+                    )
+                    dacte_s3_path = storage.save_file(
+                        buf, folder='carvia/ctes_pdf', filename=buf.name,
+                    )
+                    if not dacte_s3_path:
+                        logger.warning(
+                            "verificar_ctrc_cte_comp_job: upload S3 retornou "
+                            "vazio (cte_comp=%s)", cte_comp_id,
+                        )
+                except Exception as e_pdf:
+                    logger.exception(
+                        "verificar_ctrc_cte_comp_job: falha upload DACTE S3 "
+                        "(cte_comp=%s): %s", cte_comp_id, e_pdf,
+                    )
+                    dacte_s3_path = None
+            elif baixar_dacte:
+                logger.warning(
+                    "verificar_ctrc_cte_comp_job: baixar_dacte solicitado mas "
+                    "SSW nao retornou arquivo (cte_comp=%s, dacte=%r)",
+                    cte_comp_id, dacte_path_local,
+                )
+
+            # SSW confirmou o mesmo CTRC ja salvo → so atualizar se PDF mudou
+            if ctrc_anterior and ctrc_novo == ctrc_anterior and not dacte_s3_path:
+                logger.info(
+                    "verificar_ctrc_cte_comp_job: CTe Comp %s — CTRC %s "
+                    "confirmado pelo SSW (via --cte %s, sem alteracao)",
+                    cte_comp_id, ctrc_anterior, cte_numero_str,
+                )
+                return {
+                    'status': 'OK',
+                    'ctrc': ctrc_anterior,
+                    'cte_numero': cte_numero_str,
+                }
+
+            # Persistir com retry (R15) — sobrescreve ctrc se divergente
+            # e/ou grava cte_pdf_path quando DACTE baixado.
+            def _aplicar_ctrc_ssw():
                 cc = db.session.get(CarviaCteComplementar, cte_comp_id)
                 if not cc:
                     raise ValueError(
                         f"CTe Comp {cte_comp_id} desapareceu pos-Playwright"
                     )
-                # Guard: nao sobrescreve se outro worker ja populou
-                if cc.ctrc_numero:
-                    logger.info(
-                        "verificar_ctrc_cte_comp_job: CTe Comp %s ja tem "
-                        "ctrc_numero=%s (definido por outro job) — "
-                        "ignorando novo valor %s",
-                        cte_comp_id, cc.ctrc_numero, ctrc_novo,
-                    )
-                    return
-                cc.ctrc_numero = ctrc_novo
+                if ctrc_novo and ctrc_novo != cc.ctrc_numero:
+                    cc.ctrc_numero = ctrc_novo
+                if dacte_s3_path:
+                    cc.cte_pdf_path = dacte_s3_path
                 cc.atualizado_em = agora_utc_naive()
 
-            commit_com_retry(_aplicar_extracao)
+            commit_com_retry(_aplicar_ctrc_ssw)
 
+            if ctrc_novo != ctrc_anterior:
+                status_final = 'EXTRAIDO' if not ctrc_anterior else 'CORRIGIDO'
+            else:
+                status_final = 'OK'  # so PDF atualizado
             logger.info(
-                "verificar_ctrc_cte_comp_job: CTe Comp %s — CTRC EXTRAIDO "
-                "%s (via 101 --cte %s)",
-                cte_comp_id, ctrc_novo, cte_numero_str,
+                "verificar_ctrc_cte_comp_job: CTe Comp %s — CTRC %s "
+                "%s -> %s, pdf=%s (via 101 --cte %s)",
+                cte_comp_id, status_final.lower(),
+                ctrc_anterior or '(vazio)', ctrc_novo,
+                'atualizado' if dacte_s3_path else 'mantido',
+                cte_numero_str,
             )
             return {
-                'status': 'EXTRAIDO',
-                'ctrc_anterior': None,
+                'status': status_final,
+                'ctrc_anterior': ctrc_anterior,
                 'ctrc_novo': ctrc_novo,
                 'cte_numero': cte_numero_str,
+                'cte_pdf_path': dacte_s3_path or pdf_path_anterior,
             }
 
-        # ────────────── Caso B: VERIFICACAO (ctrc preenchido) ──────────────
+        # ────────────── SO_CTRC: fallback sem cte_numero ──────────────
+        # (Caso raro — legado. Usa busca por --ctrc.)
+        # R15: resolver_ctrc_ssw tambem abre sessao Playwright (60-120s+),
+        # entao precisamos liberar a conexao antes e usar commit_com_retry
+        # depois — caso contrario o commit falha por SSL drop no Render.
+        liberar_conexao_antes_playwright()
+
         try:
             ctrc_corrigido = resolver_ctrc_ssw(
                 ctrc_atual=ctrc_anterior,
@@ -354,7 +437,7 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
         except Exception as e:
             logger.exception(
                 "verificar_ctrc_cte_comp_job: erro ao consultar SSW "
-                "para CTe Comp %s",
+                "para CTe Comp %s (fallback --ctrc)",
                 cte_comp_id,
             )
             return {
@@ -364,12 +447,20 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
             }
 
         if ctrc_corrigido and ctrc_corrigido != ctrc_anterior:
-            cte_comp.ctrc_numero = ctrc_corrigido
-            cte_comp.atualizado_em = agora_utc_naive()
-            db.session.commit()
+            def _aplicar_fallback_ctrc():
+                cc = db.session.get(CarviaCteComplementar, cte_comp_id)
+                if not cc:
+                    raise ValueError(
+                        f"CTe Comp {cte_comp_id} desapareceu pos-Playwright"
+                    )
+                cc.ctrc_numero = ctrc_corrigido
+                cc.atualizado_em = agora_utc_naive()
+
+            commit_com_retry(_aplicar_fallback_ctrc)
+
             logger.info(
                 "verificar_ctrc_cte_comp_job: CTe Comp %s — CTRC corrigido "
-                "%s -> %s",
+                "%s -> %s (fallback --ctrc)",
                 cte_comp_id, ctrc_anterior, ctrc_corrigido,
             )
             return {
@@ -380,7 +471,7 @@ def verificar_ctrc_cte_comp_job(cte_comp_id: int) -> dict:
 
         logger.info(
             "verificar_ctrc_cte_comp_job: CTe Comp %s — CTRC %s confirmado "
-            "(sem alteracao)",
+            "(fallback --ctrc, sem alteracao)",
             cte_comp_id, ctrc_anterior,
         )
         return {

@@ -515,6 +515,7 @@
 const CARVIA_DATA = {
     modelosMoto: {{ modelos_moto_json|safe }},
     nfIdParam: {{ nf_id_param | tojson }},
+    nfExtrasIds: {{ (nf_extras_ids | default([])) | tojson }},
     criacaoTardia: {{ criacao_tardia|default(false)|tojson }},
 };
 </script>
@@ -637,13 +638,93 @@ function atualizarSelecaoNfs() {
 function usarNfsSelecionadas() {
     const selecionados = Array.from(document.querySelectorAll('.chk-nf-sem-cot:checked'));
     if (!selecionados.length) return;
-    if (selecionados.length > 1) {
-        alert('Selecao multipla sera suportada em versao futura. Por enquanto, selecione apenas 1 NF.');
+
+    // Caso 1: primeiro carregamento (nenhuma NF na cotacao ainda) —
+    // redireciona para /cotacoes/nova?nf_id=X (fluxo ja existente que
+    // passa por setup-nf-existente e inicia o wizard de cliente/enderecos).
+    // Se houver mais de 1 selecionada, a primeira vira NF base; as
+    // demais sao passadas em nfs_extras para anexacao automatica apos
+    // o wizard resolver cliente/enderecos.
+    if (_nfsCollection.length === 0) {
+        const nfIds = selecionados.map(s => s.value);
+        const primeira = nfIds.shift();
+        let url = '/carvia/cotacoes/nova?nf_id=' + encodeURIComponent(primeira);
+        if (nfIds.length > 0) {
+            url += '&nf_extras=' + encodeURIComponent(nfIds.join(','));
+        }
+        window.location.href = url;
         return;
     }
-    const nfId = selecionados[0].value;
-    // Redirecionar para criar cotacao com nf_id na URL (fluxo ja existente)
-    window.location.href = '/carvia/cotacoes/nova?nf_id=' + encodeURIComponent(nfId);
+
+    // Caso 2: ja existem NFs no collection — adicionar as selecionadas
+    // sem recarregar a pagina. Usa setup-nf-existente para enriquecer
+    // com motos reconhecidas e depois adicionarNfAoCollection(d) que
+    // atualiza totais automaticamente via atualizarTotaisNfs().
+    const btnUsar = document.getElementById('btnUsarNfsSelecionadas');
+    const labelOriginal = btnUsar.innerHTML;
+    btnUsar.disabled = true;
+    btnUsar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Adicionando...';
+
+    const promises = selecionados.map(function(chk) {
+        const nfId = chk.value;
+        return fetch('/carvia/api/cotacoes/setup-nf-existente/' + encodeURIComponent(nfId))
+            .then(function(r) { return r.json().then(function(d) { return {nfId: nfId, data: d}; }); });
+    });
+
+    Promise.all(promises).then(function(resultados) {
+        let adicionadas = 0;
+        const erros = [];
+        resultados.forEach(function(res) {
+            const d = res.data;
+            if (!d || !d.sucesso) {
+                erros.push('NF ' + res.nfId + ': ' + ((d && d.erro) || 'erro desconhecido'));
+                return;
+            }
+            // Checar duplicata (mesmo numero + CNPJ emitente)
+            const jaExiste = _nfsCollection.some(function(n) {
+                return n.nf.numero_nf === d.nf.numero_nf
+                    && n.nf.cnpj_emitente === d.nf.cnpj_emitente;
+            });
+            if (jaExiste) {
+                erros.push('NF ' + d.nf.numero_nf + ' ja esta na lista');
+                return;
+            }
+            adicionarNfAoCollection(d);
+            adicionadas++;
+        });
+
+        btnUsar.disabled = false;
+        btnUsar.innerHTML = labelOriginal;
+
+        // Feedback no card de upload
+        const fb = document.getElementById('prePreencherFeedback');
+        if (fb) {
+            let html = '';
+            if (adicionadas > 0) {
+                html += '<div class="alert alert-success py-1 small mb-1">'
+                     + '<i class="fas fa-check-circle me-1"></i>' + adicionadas + ' NF(s) adicionada(s).'
+                     + '</div>';
+            }
+            if (erros.length > 0) {
+                html += '<div class="alert alert-warning py-1 small mb-0">'
+                     + erros.map(function(e) { return '<div>' + e + '</div>'; }).join('')
+                     + '</div>';
+            }
+            fb.innerHTML = html;
+            fb.style.display = 'block';
+        }
+
+        // Fechar modal (se houve pelo menos 1 sucesso)
+        if (adicionadas > 0) {
+            const modalEl = document.getElementById('modalNfsSemCotacao');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
+    }).catch(function(err) {
+        btnUsar.disabled = false;
+        btnUsar.innerHTML = labelOriginal;
+        alert('Erro ao adicionar NFs: ' + err.message);
+    });
 }
 </script>
 {% endblock %}

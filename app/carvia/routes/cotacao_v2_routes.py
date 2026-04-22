@@ -924,9 +924,20 @@ def register_cotacao_v2_routes(bp):
         if request.method == 'GET':
             nf_id_param = request.args.get('nf_id', type=int)
             criacao_tardia_param = bool(request.args.get('criacao_tardia', type=int, default=0))
+            # nf_extras: CSV de IDs de NFs adicionais (multi-selecao em
+            # "NFs sem Cotacao"). A primeira vai via nf_id (base do wizard);
+            # as extras sao anexadas automaticamente apos resolver cliente/enderecos.
+            nf_extras_raw = (request.args.get('nf_extras') or '').strip()
+            nf_extras_ids = []
+            if nf_extras_raw:
+                for part in nf_extras_raw.split(','):
+                    part = part.strip()
+                    if part.isdigit():
+                        nf_extras_ids.append(int(part))
             return render_template(
                 'carvia/cotacoes/criar.html',
                 nf_id_param=nf_id_param,
+                nf_extras_ids=nf_extras_ids,
                 criacao_tardia=criacao_tardia_param,
                 **_ctx_criar(),
             )
@@ -2244,51 +2255,33 @@ def register_cotacao_v2_routes(bp):
                 soma_valor = agg['valor_total'] + valor_nova
                 soma_volumes = agg['quantidade_volumes'] + volumes_nova
 
-                # Teto cubado: MOTO -> peso_total_motos (property); CARGA_GERAL -> peso_cubado
-                if cotacao.tipo_material == 'MOTO':
-                    teto_peso_cubado = float(cotacao.peso_total_motos or 0)
-                else:
-                    teto_peso_cubado = float(cotacao.peso_cubado or 0)
                 teto_peso = float(cotacao.peso or 0)
                 teto_valor = float(cotacao.valor_mercadoria or 0)
 
-                if cotacao.status == 'APROVADO':
-                    excessos = []
-                    if teto_peso > 0 and soma_peso > teto_peso + _TOL_KG:
-                        excessos.append(
-                            f"peso {soma_peso:.2f}/{teto_peso:.2f} kg"
-                        )
-                    if teto_peso_cubado > 0 and soma_cubado > teto_peso_cubado + _TOL_KG:
-                        excessos.append(
-                            f"peso cubado {soma_cubado:.2f}/{teto_peso_cubado:.2f} kg"
-                        )
-                    if teto_valor > 0 and soma_valor > teto_valor + _TOL_VAL:
-                        excessos.append(
-                            f"valor R$ {soma_valor:.2f}/{teto_valor:.2f}"
-                        )
-                    if excessos:
-                        db.session.rollback()
-                        return jsonify({
-                            'erro': (
-                                f'NF excede limites da cotacao aprovada: '
-                                f'{"; ".join(excessos)}. Cancele a cotacao '
-                                f'ou reabra-a (status != APROVADO) para recalcular.'
-                            )
-                        }), 400
-                else:
-                    # Nao-APROVADO: recalcular totais da cotacao (apenas aumenta)
-                    if soma_peso > teto_peso + _TOL_KG:
-                        cotacao.peso = soma_peso
-                    if cotacao.tipo_material != 'MOTO':
-                        # CARGA_GERAL: atualiza peso_cubado quando excedido
-                        if soma_cubado > float(cotacao.peso_cubado or 0) + _TOL_KG:
-                            cotacao.peso_cubado = soma_cubado
-                    # MOTO: peso_total_motos e property derivada de CarviaCotacaoMoto
-                    if soma_valor > teto_valor + _TOL_VAL:
-                        cotacao.valor_mercadoria = soma_valor
+                # 2026-04-22: relaxado o bloqueio de teto em APROVADO.
+                # Comportamento unificado: em QUALQUER status editavel
+                # (inclusive APROVADO), apenas recalcular totais da cotacao
+                # quando a nova NF excede os limites. O usuario quer adicionar
+                # NFs a cotacoes ja aprovadas e ter os dados quantitativos
+                # (Volume, Peso, Valor) atualizados automaticamente.
+                # valor_tabela / valor_final_aprovado / pricing permanecem
+                # CONGELADOS — o usuario reprecifica manualmente se quiser.
+                if soma_peso > teto_peso + _TOL_KG:
+                    cotacao.peso = soma_peso
+                if cotacao.tipo_material != 'MOTO':
+                    # CARGA_GERAL: atualiza peso_cubado quando excedido
+                    if soma_cubado > float(cotacao.peso_cubado or 0) + _TOL_KG:
+                        cotacao.peso_cubado = soma_cubado
+                # MOTO: peso_total_motos e property derivada de CarviaCotacaoMoto
+                # (recalcula automaticamente a partir das motos; nao precisamos
+                # setar campo porque nao existe).
+                if soma_valor > teto_valor + _TOL_VAL:
+                    cotacao.valor_mercadoria = soma_valor
+                # Simetrico aos outros totais: apenas aumenta. Se a NF nova
+                # nao tem quantidade_volumes (PDF parse falho), soma_volumes
+                # pode ser menor que o atual — nao queremos regredir.
+                if soma_volumes > int(cotacao.volumes or 0):
                     cotacao.volumes = soma_volumes
-                    # valor_tabela / valor_final_aprovado permanecem congelados;
-                    # usuario reprecifica manualmente se desejar.
 
             # 3. Criar CarviaNf + itens (se nao reutilizada)
             if not nf:

@@ -832,9 +832,9 @@ def register_api_routes(bp):
             return jsonify({'erro': 'Operacao nao encontrada'}), 404
 
         def _reenfileirar_job_ssw():
-            """Limpa cte_pdf_path, enfileira job e retorna tuple (sucesso, msg)."""
+            """Limpa cte_pdf_path, enfileira job e retorna tuple (sucesso, msg, job_id)."""
             if not op.cte_numero:
-                return (False, 'Operacao sem cte_numero — nao e possivel buscar no SSW')
+                return (False, 'Operacao sem cte_numero — nao e possivel buscar no SSW', None)
             try:
                 op.cte_pdf_path = None
                 db.session.commit()
@@ -843,22 +843,26 @@ def register_api_routes(bp):
                 logger.error(
                     f"Falha ao limpar cte_pdf_path op={operacao_id}: {e}"
                 )
-                return (False, 'Falha ao limpar path — tente novamente')
+                return (False, 'Falha ao limpar path — tente novamente', None)
             try:
                 from app.portal.workers import enqueue_job
                 from app.carvia.workers.verificar_ctrc_ssw_jobs import (
                     baixar_pdf_ssw_operacao_job,
                 )
-                enqueue_job(
+                job = enqueue_job(
                     baixar_pdf_ssw_operacao_job, operacao_id,
                     queue_name='default', timeout='10m',
                 )
-                return (True, 'PDF ausente no storage. Nova busca no SSW enfileirada — atualize em ~30-45s.')
+                return (
+                    True,
+                    'PDF ausente no storage. Nova busca no SSW enfileirada — acompanhe o progresso no canto inferior direito.',
+                    job.id,
+                )
             except Exception as e:
                 logger.error(
                     f"Falha ao enfileirar baixar-pdf-ssw op={operacao_id}: {e}"
                 )
-                return (False, f'Falha ao enfileirar job SSW: {e}')
+                return (False, f'Falha ao enfileirar job SSW: {e}', None)
 
         if not op.cte_pdf_path:
             if want_json:
@@ -903,18 +907,20 @@ def register_api_routes(bp):
             logger.warning(f"Falha ao verificar/gerar presigned URL para {path}: {e}")
 
         # Arquivo ausente — limpa path, re-enfileira job SSW
-        sucesso, mensagem = _reenfileirar_job_ssw()
+        sucesso, mensagem, job_id_rebusca = _reenfileirar_job_ssw()
         status = 202 if sucesso else 500
         if want_json:
             return jsonify({
                 'disponivel': False,
                 'rebuscando_ssw': sucesso,
                 'mensagem': mensagem,
+                'job_id': job_id_rebusca,
             }), status
         return jsonify({
             'erro': 'Arquivo nao encontrado',
             'rebuscando_ssw': sucesso,
             'mensagem': mensagem,
+            'job_id': job_id_rebusca,
         }), status
 
     # ------------------------------------------------------------------
@@ -1026,10 +1032,14 @@ def register_api_routes(bp):
         via SSW opcao 101.
 
         A3.5 (2026-04-17): equivalente a `api_atualizar_ctrc_operacao`.
-        O worker `verificar_ctrc_cte_comp_job` trata 3 casos:
-          - Caso A (EXTRACAO): ctrc_numero vazio + cte_numero preenchido
-          - Caso B (VERIFICACAO): ctrc_numero preenchido (divergencia)
-          - Caso C (SKIPPED): ambos vazios
+        2026-04-22: worker agora prioriza busca por --cte (em vez de
+        --ctrc) sempre que cte_numero estiver preenchido, e baixa o
+        DACTE PDF na mesma chamada quando cte_pdf_path vazio.
+
+        Casos tratados no worker:
+          - CTE_DISPONIVEL: cte_numero preenchido -> --cte + PDF (se vazio)
+          - SO_CTRC (fallback): so ctrc_numero -> --ctrc (legado)
+          - SKIPPED: ambos vazios
         """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1062,7 +1072,8 @@ def register_api_routes(bp):
                 'sucesso': True,
                 'job_id': job.id,
                 'mensagem': (
-                    'Atualizacao do CTRC (CTe Complementar) enfileirada. '
+                    'Atualizacao do CTRC (e PDF, se ausente) do CTe '
+                    'Complementar enfileirada via SSW 101 --cte. '
                     'Atualize a pagina em alguns segundos.'
                 ),
             }), 202
@@ -1071,6 +1082,76 @@ def register_api_routes(bp):
             logger.error(
                 f'Erro ao enfileirar atualizar-ctrc cte_comp={cte_comp_id}: {e}'
             )
+            return jsonify({'erro': str(e)}), 500
+
+    # ------------------------------------------------------------------
+    # Status generico de job RQ — usado pelo SswProgress para jobs
+    # sem modelo proprio de tracking (atualizar-ctrc, baixar-pdf-ssw,
+    # verificar_ctrc_cte_comp, etc).
+    # ------------------------------------------------------------------
+
+    @bp.route('/api/ssw-jobs/<job_id>/status', methods=['GET'])
+    @login_required
+    def api_ssw_job_status(job_id):
+        """Retorna status de um job RQ generico.
+
+        Usado pelo cliente JS SswProgress.start({statusType: 'rq_job'})
+        para acompanhar jobs sem modelo proprio — quando o job termina,
+        `result` carrega o dict retornado pela funcao (CTRC atualizado,
+        path do PDF, etc) e a UI usa isso para gerar mensagem final.
+
+        Returns:
+            200 {status, result, erro}
+              status: queued | started | finished | failed | deferred |
+                      scheduled | not_found
+            404 quando job expirou do redis (TTL).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado'}), 403
+
+        try:
+            from rq.job import Job
+            from app.portal.workers import get_redis_connection
+
+            conn = get_redis_connection()
+            try:
+                job = Job.fetch(job_id, connection=conn)
+            except Exception:
+                return jsonify({
+                    'status': 'not_found',
+                    'erro': 'Job nao encontrado (expirou do cache ou ID invalido)',
+                }), 404
+
+            status = job.get_status()
+            payload = {'job_id': job_id, 'status': status}
+
+            if status == 'finished':
+                try:
+                    payload['result'] = job.result
+                except Exception as e:
+                    payload['erro'] = f'Falha ao ler resultado: {e}'
+            elif status == 'failed':
+                # RQ 1.x: `job.exc_info` esta deprecated e pode ser None em
+                # serializers nao-default. `job.latest_result()` expoe o
+                # `exc_string` canonico da ultima execucao.
+                exc_str = None
+                try:
+                    result = job.latest_result()
+                    if result is not None:
+                        exc_str = getattr(result, 'exc_string', None)
+                except Exception:
+                    pass
+                # Fallback para API legada
+                if not exc_str:
+                    try:
+                        exc_str = job.exc_info
+                    except Exception:
+                        exc_str = None
+                payload['erro'] = (exc_str or 'Falha no job')[-1500:]
+
+            return jsonify(payload)
+        except Exception as e:
+            logger.error(f'Erro ao consultar status job {job_id}: {e}')
             return jsonify({'erro': str(e)}), 500
 
     # ------------------------------------------------------------------

@@ -1269,8 +1269,33 @@ function abrirModalEmissaoSsw(modo) {
         .then(r => r.json().then(data => ({status: r.status, data})))
         .then(({status, data}) => {
             if (status === 202 && data.emissao_id) {
-                statusMsg.textContent = 'Emissao na fila. Aguardando processamento...';
-                iniciarPolling(data.emissao_id);
+                // Fecha modal e entrega tracking ao SswProgress global.
+                // O progresso (LOGIN/PREENCHIMENTO/SEFAZ/...) aparece como
+                // toast fixo bottom-right e persiste entre reloads.
+                const modalEl = document.getElementById('modalEmitirCteSsw');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+
+                const labelOp = (modoEmissaoSsw === 'cte_fatura')
+                    ? 'Emitindo CTe + Fatura SSW — NF {{ nf.numero_nf }}'
+                    : 'Emitindo CTe SSW — NF {{ nf.numero_nf }}';
+                const desc = 'SSW: login → preenchimento → SEFAZ → consulta 101 → '
+                           + 'importacao XML/DACTE'
+                           + (modoEmissaoSsw === 'cte_fatura' ? ' → fatura 437.' : '.');
+
+                window.SswProgress && window.SswProgress.start({
+                    label: labelOp,
+                    descricao: desc,
+                    statusUrl: `/carvia/api/emissao-cte/${data.emissao_id}/status`,
+                    statusType: 'emissao_cte',
+                    reloadOnDone: true,
+                });
+
+                // Reset botao para proxima emissao
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = modoEmissaoSsw === 'cte_fatura'
+                    ? '<i class="fas fa-file-invoice"></i> Emitir CTe + Fatura'
+                    : '<i class="fas fa-bolt"></i> Emitir CTe';
             } else {
                 statusErro.classList.remove('d-none');
                 statusErro.textContent = data.erro || 'Erro ao enfileirar';
@@ -1287,42 +1312,6 @@ function abrirModalEmissaoSsw(modo) {
             btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Emitir CTe SSW';
         });
     });
-
-    function iniciarPolling(emissaoId) {
-        pollingInterval = setInterval(() => {
-            fetch(`/carvia/api/emissao-cte/${emissaoId}/status`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.etapa) {
-                        statusEtapa.textContent = ETAPAS_LABEL[data.etapa] || data.etapa;
-                    }
-
-                    if (data.status === 'SUCESSO') {
-                        clearInterval(pollingInterval);
-                        statusMsg.textContent = '';
-                        statusSucesso.classList.remove('d-none');
-                        let msg = `CTe ${data.ctrc || ''} emitido com sucesso!`;
-                        if (data.fatura_numero) msg += ` Fatura: ${data.fatura_numero}`;
-                        statusSucesso.innerHTML = msg;
-                        if (data.operacao_id) {
-                            statusSucesso.innerHTML += ` <a href="/carvia/operacoes/${data.operacao_id}" class="btn btn-sm btn-outline-success ms-2">Ver Operacao</a>`;
-                        }
-                        btnSubmit.disabled = false;
-                        btnSubmit.innerHTML = modoEmissaoSsw === 'cte_fatura'
-                    ? '<i class="fas fa-file-invoice"></i> Emitir CTe + Fatura'
-                    : '<i class="fas fa-bolt"></i> Emitir CTe';
-                    } else if (data.status === 'ERRO') {
-                        clearInterval(pollingInterval);
-                        statusMsg.textContent = '';
-                        statusErro.classList.remove('d-none');
-                        statusErro.textContent = `Erro: ${data.erro || 'Falha desconhecida'}`;
-                        btnSubmit.disabled = false;
-                        btnSubmit.innerHTML = '<i class="fas fa-bolt"></i> Tentar Novamente';
-                    }
-                })
-                .catch(() => {});
-        }, 5000);
-    }
 })();
 </script>
 {% endif %}
