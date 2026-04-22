@@ -262,29 +262,8 @@ def arquivar_entrega_carvia_cancelada(numero_nf: str) -> None:
     db.session.commit()
 
 
-def arquivar_entrega_transferencia_virou_efetiva(numero_nf: str) -> None:
-    """Arquiva EntregaMonitorada de NF que virou transferencia efetiva.
-
-    Chamado por `CarviaNfTransferenciaService.criar_vinculos` apos commit:
-    a NF transferencia nao deve mais aparecer como entrega autonoma no
-    monitoramento.
-
-    Regra simetrica a `arquivar_entrega_carvia_cancelada`:
-    - Se entrega nao existe: nada a fazer.
-    - Se operador ja finalizou manualmente: NAO sobrescrever (preserva historico).
-    - Caso contrario: marca 'Cancelada por Transferencia' para rastreabilidade.
-    """
-    entrega = (
-        EntregaMonitorada.query
-        .filter_by(numero_nf=numero_nf, origem='CARVIA')
-        .first()
-    )
-    if not entrega:
-        return
-    if entrega.status_finalizacao:
-        return
-
-    entrega.status_finalizacao = 'Cancelada por Transferencia'
-    entrega.finalizado_por = 'Sistema CarVia (R18)'
-    entrega.finalizado_em = agora_utc_naive()
-    db.session.commit()
+# R18: NF transferencia efetiva NAO deve aparecer no monitoramento.
+# Abordagem: filtrar na query de listagem (ver app/monitoramento/routes.py
+# listar_entregas). NAO arquivamos/deletamos a EntregaMonitorada ja existente
+# — preserva FKs (agendamentos, comentarios, eventos, contas_a_receber, etc)
+# e historico sem introduzir status ambiguo.

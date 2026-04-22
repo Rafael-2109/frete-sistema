@@ -891,6 +891,41 @@ def listar_entregas():
     if origem_filtro in ('NACOM', 'CARVIA'):
         query = query.filter(EntregaMonitorada.origem == origem_filtro)
 
+    # R18 NF Triangular: esconder EntregaMonitorada de NFs que sao
+    # transferencia efetiva (registradas em carvia_nf_vinculos_transferencia
+    # como nf_transferencia_id). Nao deletamos/arquivamos o registro — FKs
+    # e historico sao preservados. O filtro afeta APENAS origem=CARVIA:
+    # uma NF Nacom com mesmo numero_nf nao e filtrada.
+    try:
+        from app.carvia.models import CarviaNf
+        from app.carvia.models.documentos import (
+            CarviaNfVinculoTransferencia,
+        )
+        subq_nums_transf_efetivas = db.session.query(
+            CarviaNf.numero_nf,
+        ).join(
+            CarviaNfVinculoTransferencia,
+            CarviaNfVinculoTransferencia.nf_transferencia_id == CarviaNf.id,
+        ).filter(
+            CarviaNf.status == 'ATIVA',
+            CarviaNf.numero_nf.isnot(None),
+        ).distinct().subquery()
+        query = query.filter(
+            db.or_(
+                EntregaMonitorada.origem != 'CARVIA',
+                ~EntregaMonitorada.numero_nf.in_(
+                    db.session.query(subq_nums_transf_efetivas.c.numero_nf)
+                ),
+            )
+        )
+    except Exception:
+        # Nao-bloqueante: se o modulo CarVia falhar ao importar, nao
+        # quebra o monitoramento principal (Nacom)
+        import logging as _lg
+        _lg.getLogger(__name__).exception(
+            'R18 filter (esconder transf efetiva) falhou'
+        )
+
     # Filtro sem_agendamento — usa cache de contatos e IN() ao invés de OR-explosion
     if status == 'sem_agendamento':
         cnpjs_validos = _get_cnpjs_que_precisam_agendamento()
