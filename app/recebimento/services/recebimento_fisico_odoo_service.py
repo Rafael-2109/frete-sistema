@@ -342,15 +342,16 @@ class RecebimentoFisicoOdooService:
             else:
                 exp_date_str = str(lote.data_validade) + ' 00:00:00'
 
-            # Verificar se lote ja existe no Odoo
-            lote_existente = odoo.search('stock.lot', [
-                ['name', '=', (lote.lote_nome or '').strip()],
-                ['product_id', '=', product_id],
-                ['company_id', '=', company_id],
-            ])
+            nome_limpo = (lote.lote_nome or '').strip()
 
-            if lote_existente:
-                lot_id = lote_existente[0]
+            # Verificar se lote ja existe no Odoo
+            # BUG WORKAROUND: operador '=' em stock.lot.name retorna vazio de
+            # forma intermitente mesmo com lote existente. Usar 'in [valor]'.
+            lot_id = self._buscar_stock_lot_existente(
+                odoo, nome_limpo, product_id, company_id
+            )
+
+            if lot_id:
                 # Atualizar expiration_date
                 odoo.write('stock.lot', lot_id, {
                     'expiration_date': exp_date_str,
@@ -359,13 +360,11 @@ class RecebimentoFisicoOdooService:
                     f"  stock.lot {lot_id} atualizado com expiration_date={exp_date_str}"
                 )
             else:
-                # Criar stock.lot manualmente COM expiration_date
-                lot_id = odoo.create('stock.lot', {
-                    'name': (lote.lote_nome or '').strip(),
-                    'product_id': product_id,
-                    'company_id': company_id,
-                    'expiration_date': exp_date_str,
-                })
+                # Criar stock.lot manualmente COM expiration_date (+ fallback)
+                lot_id = self._criar_stock_lot_com_fallback(
+                    odoo, nome_limpo, product_id, company_id,
+                    extras={'expiration_date': exp_date_str},
+                )
                 logger.debug(
                     f"  stock.lot {lot_id} criado: '{lote.lote_nome}' "
                     f"expiration_date={exp_date_str}"
@@ -377,6 +376,110 @@ class RecebimentoFisicoOdooService:
         else:
             # Sem validade: usar lot_name (Odoo cria auto ao validar)
             return {'lot_name': lote.lote_nome}
+
+    # =================================================================
+    # Helpers stock.lot (workaround para bug intermitente do Odoo)
+    # =================================================================
+    #
+    # BUG: o operador '=' no campo stock.lot.name pode retornar vazio mesmo
+    # quando o lote EXISTE. Reproduzido em producao 2026-04-22 com lotes
+    # '105/26' (produto 29925) e '106/26' (produto 27753): search com '='
+    # retorna [], mas search com 'in [valor]' ou '=like' retorna os ids.
+    # O read direto por id retorna name='105/26' (bytes corretos).
+    # Consequencia: sistema cria novo stock.lot e Odoo rejeita por unique
+    # constraint (Fault 2: 'A combinacao ... deve ser exclusiva em uma empresa').
+    #
+    # Workaround:
+    #   1. Search primario usa operador 'in [valor]' (nao sofre do bug).
+    #   2. Create envolvido em try/except — se falhar com unique constraint,
+    #      re-busca com '=like' e reusa o lote existente.
+    # =================================================================
+
+    def _buscar_stock_lot_existente(self, odoo, nome, product_id, company_id):
+        """
+        Busca stock.lot por (name, product_id, company_id) usando operador 'in'
+        para contornar bug do operador '=' no campo name.
+
+        Returns:
+            int: ID do stock.lot se encontrado
+            None: se nao existe
+        """
+        if not nome:
+            return None
+        resultado = odoo.search('stock.lot', [
+            ['name', 'in', [nome]],
+            ['product_id', '=', product_id],
+            ['company_id', '=', company_id],
+        ], limit=1)
+        return resultado[0] if resultado else None
+
+    def _criar_stock_lot_com_fallback(
+        self, odoo, nome, product_id, company_id, extras=None
+    ):
+        """
+        Cria stock.lot. Se falhar por unique constraint (bug do search '='
+        nao detectou existente), re-busca via '=like' e reusa.
+
+        Args:
+            nome: Nome do lote (ja .strip()ado)
+            product_id: int
+            company_id: int
+            extras: dict com campos adicionais (ex: expiration_date)
+
+        Returns:
+            int: ID do stock.lot (criado ou recuperado)
+        """
+        values = {
+            'name': nome,
+            'product_id': product_id,
+            'company_id': company_id,
+        }
+        if extras:
+            values.update(extras)
+
+        try:
+            return odoo.create('stock.lot', values)
+        except Exception as exc:
+            err_str = str(exc).lower()
+            is_unique = (
+                'exclusiva em uma empresa' in err_str
+                or 'must be unique' in err_str
+                or 'unique_lot_product' in err_str
+                or 'name_ref_uniq' in err_str
+            )
+            if not is_unique:
+                raise
+
+            # Unique constraint acionada — o lote JA existe mas o search com 'in'
+            # tambem nao o encontrou. Fallback: '=like' (escape wildcards %/_).
+            nome_escaped = (
+                nome.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+            )
+            candidatos = odoo.search('stock.lot', [
+                ['name', '=like', nome_escaped],
+                ['product_id', '=', product_id],
+                ['company_id', '=', company_id],
+            ], limit=10)
+
+            # Confirmar match exato lendo o name (defende contra match parcial)
+            for cand_id in candidatos:
+                cand = odoo.read('stock.lot', [cand_id], fields=['id', 'name'])
+                if cand and (cand[0]['name'] or '').strip() == nome:
+                    logger.warning(
+                        f"  stock.lot '{nome}' recuperado via fallback "
+                        f"(bug search '='): id={cand_id}"
+                    )
+                    # Aplicar extras (ex: expiration_date) ao lote existente
+                    if extras:
+                        odoo.write('stock.lot', cand_id, extras)
+                    return cand_id
+
+            # Nao achou mesmo com fallback — propagar erro original
+            logger.error(
+                f"  Falha ao recuperar stock.lot '{nome}' apos unique "
+                f"constraint. Candidatos retornados: {candidatos}"
+            )
+            raise
 
     def _preencher_quality_checks_passfail(self, odoo, checks):
         """Executa do_pass ou do_fail para cada check passfail."""
