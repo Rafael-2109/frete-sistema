@@ -76,7 +76,9 @@ def index():
     ).outerjoin(
         EntregaMonitorada, EntregaMonitorada.numero_nf == NFDevolucao.numero_nf_venda
     ).filter(
-        OcorrenciaDevolucao.ativo == True
+        OcorrenciaDevolucao.ativo == True,
+        # Excluir devolucoes de pallet/vasilhame — sao tratadas em app/pallet
+        NFDevolucao.e_pallet_devolucao.is_(False)
     )
 
     # Excluir CNPJs de empresas internas (La Famiglia e Nacom Goya)
@@ -317,12 +319,22 @@ def index():
                 info = vendedor_por_cnpj.get(cnpj_fmt)
         oc.vendedor_info = info or {}
 
-    # Estatisticas
+    # Estatisticas (excluindo NFDs de pallet — tratadas em app/pallet)
+    _stats_base = db.session.query(
+        OcorrenciaDevolucao.status, func.count(OcorrenciaDevolucao.id)
+    ).join(
+        NFDevolucao, OcorrenciaDevolucao.nf_devolucao_id == NFDevolucao.id
+    ).filter(
+        OcorrenciaDevolucao.ativo == True,
+        NFDevolucao.e_pallet_devolucao.is_(False),
+    ).group_by(OcorrenciaDevolucao.status).all()
+
+    _stats_map = {s: c for s, c in _stats_base}
     stats = {
-        'total': OcorrenciaDevolucao.query.filter_by(ativo=True).count(),
-        'pendentes': OcorrenciaDevolucao.query.filter_by(ativo=True, status='PENDENTE').count(),
-        'em_andamento': OcorrenciaDevolucao.query.filter_by(ativo=True, status='EM_ANDAMENTO').count(),
-        'resolvidos': OcorrenciaDevolucao.query.filter_by(ativo=True, status='RESOLVIDO').count(),
+        'total': sum(_stats_map.values()),
+        'pendentes': _stats_map.get('PENDENTE', 0),
+        'em_andamento': _stats_map.get('EM_ANDAMENTO', 0),
+        'resolvidos': _stats_map.get('RESOLVIDO', 0),
     }
 
     # Buscar transportadoras unicas para o filtro (entrega)
@@ -856,20 +868,28 @@ def api_stats():
     Retorna estatisticas das ocorrencias
     """
     try:
+        # Base query excluindo pallet (tratado em app/pallet)
+        base_filters = [
+            OcorrenciaDevolucao.ativo == True,
+            NFDevolucao.e_pallet_devolucao.is_(False),
+        ]
+
         # Por status
         stats_status = db.session.query(
             OcorrenciaDevolucao.status,
             func.count(OcorrenciaDevolucao.id)
-        ).filter(
-            OcorrenciaDevolucao.ativo == True
-        ).group_by(OcorrenciaDevolucao.status).all()
+        ).join(
+            NFDevolucao, OcorrenciaDevolucao.nf_devolucao_id == NFDevolucao.id
+        ).filter(*base_filters).group_by(OcorrenciaDevolucao.status).all()
 
         # Por categoria
         stats_categoria = db.session.query(
             OcorrenciaDevolucao.categoria,
             func.count(OcorrenciaDevolucao.id)
+        ).join(
+            NFDevolucao, OcorrenciaDevolucao.nf_devolucao_id == NFDevolucao.id
         ).filter(
-            OcorrenciaDevolucao.ativo == True,
+            *base_filters,
             OcorrenciaDevolucao.categoria.isnot(None)
         ).group_by(OcorrenciaDevolucao.categoria).all()
 
@@ -877,8 +897,10 @@ def api_stats():
         stats_responsavel = db.session.query(
             OcorrenciaDevolucao.responsavel,
             func.count(OcorrenciaDevolucao.id)
+        ).join(
+            NFDevolucao, OcorrenciaDevolucao.nf_devolucao_id == NFDevolucao.id
         ).filter(
-            OcorrenciaDevolucao.ativo == True,
+            *base_filters,
             OcorrenciaDevolucao.responsavel.isnot(None)
         ).group_by(OcorrenciaDevolucao.responsavel).all()
 
@@ -1470,7 +1492,9 @@ def exportar_relatorio():
     ).join(
         NFDevolucao, OcorrenciaDevolucao.nf_devolucao_id == NFDevolucao.id
     ).filter(
-        OcorrenciaDevolucao.ativo == True
+        OcorrenciaDevolucao.ativo == True,
+        # Excluir devolucoes de pallet/vasilhame — sao tratadas em app/pallet
+        NFDevolucao.e_pallet_devolucao.is_(False)
     )
 
     # Excluir CNPJs de empresas internas

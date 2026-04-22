@@ -91,6 +91,7 @@ async function carregarCadastros(tipo) {
 function renderizarLinhaCadastro(tipo, item) {
     const classeInativo = item.ativo ? '' : 'cadastro-item-inativo';
     const btnToggleText = item.ativo ? 'Desativar' : 'Ativar';
+    const btnToggleIcon = item.ativo ? 'eye-slash' : 'eye';
     const btnToggleClass = item.ativo ? 'btn-outline-warning' : 'btn-outline-success';
     const temCategoria = TIPOS_COM_CATEGORIA.includes(tipo);
 
@@ -111,10 +112,10 @@ function renderizarLinhaCadastro(tipo, item) {
             <td>
                 <div class="btn-group btn-group-sm">
                     <button class="btn btn-outline-primary btn-sm" onclick="iniciarEdicao('${tipo}', ${item.id})" title="Editar">
-                        <i class="bi bi-pencil"></i>
+                        <i class="bi bi-pencil"></i> Editar
                     </button>
                     <button class="btn ${btnToggleClass} btn-sm" onclick="toggleCadastro('${tipo}', ${item.id})" title="${btnToggleText}">
-                        <i class="bi bi-${item.ativo ? 'eye-slash' : 'eye'}"></i>
+                        <i class="bi bi-${btnToggleIcon}"></i> ${btnToggleText}
                     </button>
                 </div>
             </td>
@@ -135,9 +136,10 @@ function iniciarEdicao(tipo, id) {
     // Trocar botao editar por confirmar
     const row = inputDesc.closest('tr');
     const btnEditar = row.querySelector('.btn-outline-primary');
-    btnEditar.innerHTML = '<i class="bi bi-check-lg"></i>';
+    btnEditar.innerHTML = '<i class="bi bi-check-lg"></i> Salvar';
     btnEditar.className = 'btn btn-success btn-sm';
     btnEditar.setAttribute('onclick', `confirmarEdicao('${tipo}', ${id})`);
+    btnEditar.setAttribute('title', 'Salvar alteracao');
 }
 
 // =========================================================================

@@ -122,7 +122,7 @@ Gotchas rapidos:
 | Seguranca | `app/seguranca/routes/`, `app/seguranca/services/`, `app/templates/seguranca/` — ver `app/seguranca/CLAUDE.md` |
 | Fretes | `app/fretes/routes.py`, `app/fretes/services/`, `app/templates/fretes/` |
 | Recebimento | `app/recebimento/routes/`, `app/recebimento/services/`, `app/recebimento/workers/` |
-| Devolucao | `app/devolucao/routes/`, `app/devolucao/services/` — ver `app/devolucao/README.md` |
+| Devolucao | `app/devolucao/routes/`, `app/devolucao/services/` — ver `app/devolucao/CLAUDE.md` (dev) ou `app/devolucao/README.md` (narrativa) |
 | Pallet | `app/pallet/routes/`, `app/pallet/services/`, `app/templates/pallet/` |
 | Producao | `app/producao/routes.py`, `app/producao/models.py` |
 | Pedidos | `app/pedidos/routes/`, `app/pedidos/services/`, `app/pedidos/workers/` |

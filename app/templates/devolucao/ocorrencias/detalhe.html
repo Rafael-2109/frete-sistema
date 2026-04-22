@@ -373,6 +373,10 @@
                 </div>
                 <div class="card-body">
                     <form id="form-comercial">
+                        <!-- =============================================
+                             LINHA SUPERIOR: Metadados da ocorrencia
+                             (Status auto-computado + Momento + Autorizado Por)
+                             ============================================= -->
                         <div class="row">
                             <!-- Status (auto-computado, read-only) -->
                             <div class="col-md-3 mb-3">
@@ -397,32 +401,16 @@
                                 </select>
                             </div>
 
-                            <!-- Responsavel (SELECT do banco) -->
-                            <div class="col-md-3 mb-3">
+                            <!-- Autorizado Por (SELECT do banco) -->
+                            <div class="col-md-6 mb-3">
                                 <label class="form-label">
-                                    Responsavel
-                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('responsaveis')" title="Gerenciar">+</button>
+                                    Autorizado Por
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('autorizados')" title="Gerenciar">+</button>
                                 </label>
-                                <select class="form-select" name="responsavel_id">
+                                <select class="form-select" name="autorizado_por_id">
                                     <option value="">Selecione...</option>
-                                    {% for item in opcoes_responsavel %}
-                                    <option value="{{ item.id }}" data-categoria-id="{{ item.categoria_id }}" {% if ocorrencia.responsavel_id == item.id %}selected{% endif %}>
-                                        {{ item.descricao }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-
-                            <!-- Origem (SELECT do banco) -->
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">
-                                    Origem
-                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('origens')" title="Gerenciar">+</button>
-                                </label>
-                                <select class="form-select" name="origem_id">
-                                    <option value="">Selecione...</option>
-                                    {% for item in opcoes_origem %}
-                                    <option value="{{ item.id }}" {% if ocorrencia.origem_id == item.id %}selected{% endif %}>
+                                    {% for item in opcoes_autorizado %}
+                                    <option value="{{ item.id }}" {% if ocorrencia.autorizado_por_id == item.id %}selected{% endif %}>
                                         {{ item.descricao }}
                                     </option>
                                     {% endfor %}
@@ -430,13 +418,22 @@
                             </div>
                         </div>
 
-                        <div class="row">
-                            <!-- Categorias (multi-select com rows dinamicas) -->
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">
+                        <!-- =============================================
+                             CADEIA DE CLASSIFICACAO (ordem vertical)
+                             (1) Categorias -> (2) Subcategorias -> (3) Responsavel -> (4) Origem
+                             Subcategorias e Responsavel dependem de Categoria (cascade filter via JS).
+                             Origem e standalone.
+                             ============================================= -->
+                        <div class="cadeia-classificacao border-start border-3 border-primary ps-3 mb-3">
+
+                            <!-- (1) Categorias -->
+                            <div class="mb-3 classificacao-item" data-nivel="1">
+                                <label class="form-label fw-semibold">
+                                    <span class="badge bg-primary me-1">1</span>
                                     Categorias
                                     <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('categorias')" title="Gerenciar">+</button>
                                 </label>
+                                <small class="text-muted d-block mb-1">Ponto de partida — filtra Subcategorias e Responsavel abaixo.</small>
                                 <div id="grupo-categorias">
                                     {% if ocorrencia.categorias %}
                                         {% for cat in ocorrencia.categorias %}
@@ -449,7 +446,7 @@
                                                 </option>
                                                 {% endfor %}
                                             </select>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.categoria-row').remove()">X</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.categoria-row').remove(); if(typeof filtrarPorCategorias==='function') filtrarPorCategorias();">X</button>
                                         </div>
                                         {% endfor %}
                                     {% else %}
@@ -460,7 +457,7 @@
                                                 <option value="{{ item.id }}">{{ item.descricao }}</option>
                                                 {% endfor %}
                                             </select>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.categoria-row').remove()">X</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.categoria-row').remove(); if(typeof filtrarPorCategorias==='function') filtrarPorCategorias();">X</button>
                                         </div>
                                     {% endif %}
                                 </div>
@@ -469,10 +466,14 @@
                                 </button>
                             </div>
 
-                            <!-- Subcategorias (multi-select com rows dinamicas) -->
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">
+                            <!-- (2) Subcategorias — vinculadas a categoria -->
+                            <div class="mb-3 classificacao-item ps-3 border-start border-2 border-info" data-nivel="2">
+                                <label class="form-label fw-semibold">
+                                    <span class="badge bg-info me-1">2</span>
                                     Subcategorias
+                                    <small class="text-muted fw-normal">
+                                        <i class="bi bi-arrow-return-right"></i> filtrada por Categoria
+                                    </small>
                                     <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('subcategorias')" title="Gerenciar">+</button>
                                 </label>
                                 <div id="grupo-subcategorias">
@@ -506,25 +507,46 @@
                                     + Adicionar Subcategoria
                                 </button>
                             </div>
-                        </div>
 
-                        <div class="row">
-                            <!-- Autorizado Por (SELECT do banco) -->
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">
-                                    Autorizado Por
-                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('autorizados')" title="Gerenciar">+</button>
+                            <!-- (3) Responsavel — vinculado a categoria -->
+                            <div class="mb-3 classificacao-item ps-3 border-start border-2 border-info" data-nivel="3">
+                                <label class="form-label fw-semibold">
+                                    <span class="badge bg-info me-1">3</span>
+                                    Responsavel
+                                    <small class="text-muted fw-normal">
+                                        <i class="bi bi-arrow-return-right"></i> filtrado por Categoria
+                                    </small>
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('responsaveis')" title="Gerenciar">+</button>
                                 </label>
-                                <select class="form-select" name="autorizado_por_id">
+                                <select class="form-select form-select-sm" name="responsavel_id">
                                     <option value="">Selecione...</option>
-                                    {% for item in opcoes_autorizado %}
-                                    <option value="{{ item.id }}" {% if ocorrencia.autorizado_por_id == item.id %}selected{% endif %}>
+                                    {% for item in opcoes_responsavel %}
+                                    <option value="{{ item.id }}" data-categoria-id="{{ item.categoria_id }}" {% if ocorrencia.responsavel_id == item.id %}selected{% endif %}>
                                         {{ item.descricao }}
                                     </option>
                                     {% endfor %}
                                 </select>
                             </div>
-                        </div>
+
+                            <!-- (4) Origem — standalone (nao depende de Categoria) -->
+                            <div class="mb-0 classificacao-item" data-nivel="4">
+                                <label class="form-label fw-semibold">
+                                    <span class="badge bg-secondary me-1">4</span>
+                                    Origem
+                                    <small class="text-muted fw-normal">(independente)</small>
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="abrirCadastrosCom('origens')" title="Gerenciar">+</button>
+                                </label>
+                                <select class="form-select form-select-sm" name="origem_id">
+                                    <option value="">Selecione...</option>
+                                    {% for item in opcoes_origem %}
+                                    <option value="{{ item.id }}" {% if ocorrencia.origem_id == item.id %}selected{% endif %}>
+                                        {{ item.descricao }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                        </div><!-- /.cadeia-classificacao -->
 
                         <div class="mb-3">
                             <label class="form-label">Descricao Comercial</label>
