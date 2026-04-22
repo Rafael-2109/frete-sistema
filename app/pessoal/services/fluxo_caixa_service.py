@@ -77,8 +77,13 @@ def _janela_meses(ano_ref: int, mes_ref: int, meses: int) -> list[dict]:
 # =============================================================================
 # FILTROS DE QUERY (regras de fluxo de caixa)
 # =============================================================================
-def _filtros_caixa_base():
-    """Filtros SQL comuns para transacoes que afetam caixa (CC, nao transf propria)."""
+def _filtros_cc_sem_transf():
+    """Base: CC + nao transf propria. NAO filtra excluir_relatorio.
+
+    Usado por _pagamento_cartao_to_linha — pagamentos de fatura tem
+    excluir_relatorio=True (sao excluidos da vertente competencia), mas
+    DEVEM aparecer como saida no fluxo de caixa.
+    """
     return [
         PessoalTransacao.eh_transferencia_propria.is_(False),
         # Apenas transacoes em conta corrente (cartao de credito nao entra — fica
@@ -89,6 +94,27 @@ def _filtros_caixa_base():
             )
         ),
     ]
+
+
+def _filtros_caixa_base():
+    """Filtros para entradas/saidas comuns do fluxo (exceto pagamentos de cartao).
+
+    Inclui excluir_relatorio=False: transacoes 100% compensadas (pares empresa,
+    saldo anterior, itens em categoria Desconsiderar) ficam fora.
+    Residuos parciais (valor_compensado < valor) permanecem com excluir_relatorio=False
+    e entram somados como (valor - valor_compensado) via _EXPR_VALOR_EFETIVO.
+    """
+    return [
+        PessoalTransacao.excluir_relatorio.is_(False),
+        *_filtros_cc_sem_transf(),
+    ]
+
+
+# Expressao SQL para "valor efetivo" = valor - valor_compensado (nunca negativo).
+# Usada nas agregacoes mensais para refletir residuo de compensacoes parciais.
+_EXPR_VALOR_EFETIVO = (
+    PessoalTransacao.valor - func.coalesce(PessoalTransacao.valor_compensado, 0)
+)
 
 
 def _filtro_entrada():
@@ -200,10 +226,10 @@ def fluxo_por_mes(
     inicio_total = janela[0]['inicio']
     fim_total = janela[-1]['proximo']
 
-    # Entradas realizadas
+    # Entradas realizadas (soma valor_efetivo = valor - valor_compensado)
     entradas_real = dict(db.session.query(
         func.to_char(PessoalTransacao.data, 'YYYY-MM').label('mes_str'),
-        func.sum(PessoalTransacao.valor),
+        func.sum(_EXPR_VALOR_EFETIVO),
     ).filter(
         and_(
             PessoalTransacao.data >= inicio_total,
@@ -212,15 +238,31 @@ def fluxo_por_mes(
         )
     ).group_by('mes_str').all())
 
-    # Saidas realizadas
+    # Saidas realizadas (soma valor_efetivo) — exclui pagtos cartao e compensadas
     saidas_real = dict(db.session.query(
         func.to_char(PessoalTransacao.data, 'YYYY-MM').label('mes_str'),
-        func.sum(PessoalTransacao.valor),
+        func.sum(_EXPR_VALOR_EFETIVO),
     ).filter(
         and_(
             PessoalTransacao.data >= inicio_total,
             PessoalTransacao.data < fim_total,
+            PessoalTransacao.eh_pagamento_cartao.is_(False),  # exclui — somado abaixo
             *_filtro_saida(),
+        )
+    ).group_by('mes_str').all())
+
+    # Pagamentos de fatura de cartao — saida real de caixa, mesmo com
+    # excluir_relatorio=True (bypass do filtro base via _filtros_cc_sem_transf).
+    pagtos_cartao_real = dict(db.session.query(
+        func.to_char(PessoalTransacao.data, 'YYYY-MM').label('mes_str'),
+        func.sum(_EXPR_VALOR_EFETIVO),
+    ).filter(
+        and_(
+            PessoalTransacao.data >= inicio_total,
+            PessoalTransacao.data < fim_total,
+            PessoalTransacao.tipo == 'debito',
+            PessoalTransacao.eh_pagamento_cartao.is_(True),
+            *_filtros_cc_sem_transf(),
         )
     ).group_by('mes_str').all())
 
@@ -261,7 +303,9 @@ def fluxo_por_mes(
     for m in janela:
         mes_str = m['mes_str']
         entradas = float(entradas_real.get(mes_str, 0) or 0)
-        saidas = float(saidas_real.get(mes_str, 0) or 0)
+        saidas_comuns = float(saidas_real.get(mes_str, 0) or 0)
+        pagtos_cartao = float(pagtos_cartao_real.get(mes_str, 0) or 0)
+        saidas = saidas_comuns + pagtos_cartao
         prov_e = float(prov_entradas.get(mes_str, 0) or 0)
         prov_s = float(prov_saidas.get(mes_str, 0) or 0)
 
@@ -331,12 +375,14 @@ def detalhe_do_mes(ano: int, mes: int) -> dict:
     saidas = [_transacao_to_linha(t, 'saida') for t in q_saidas.all()]
 
     # PAGAMENTOS DE CARTAO (fatura) — 1 linha por pagamento, com link para fatura
+    # Usa _filtros_cc_sem_transf (NAO filtra excluir_relatorio) — pagamentos de
+    # fatura sao sempre excluir_relatorio=True mas DEVEM aparecer no fluxo.
     q_pagtos = PessoalTransacao.query.filter(
         and_(
             PessoalTransacao.data >= inicio,
             PessoalTransacao.data < proximo,
             PessoalTransacao.eh_pagamento_cartao.is_(True),
-            *_filtros_caixa_base(),  # CC + nao transf propria
+            *_filtros_cc_sem_transf(),
         )
     ).order_by(PessoalTransacao.data.asc())
 
@@ -392,13 +438,22 @@ def detalhe_do_mes(ano: int, mes: int) -> dict:
 
 
 def _transacao_to_linha(t: PessoalTransacao, lado: str) -> dict:
-    """Converte PessoalTransacao para linha resumida do fluxo (sem drilldown)."""
+    """Converte PessoalTransacao para linha resumida do fluxo (sem drilldown).
+
+    Exibe valor_efetivo (valor - valor_compensado) quando ha compensacao parcial —
+    residuos de compensacoes empresa aparecem com o saldo real, nao o valor nominal.
+    """
+    valor_nominal = float(t.valor)
+    compensado = float(t.valor_compensado or 0)
+    valor_efetivo = max(valor_nominal - compensado, 0.0)
+    tem_residuo = compensado > 0 and compensado < valor_nominal
     return {
         'id': t.id,
         'tipo_fluxo': lado,  # entrada | saida
         'data': t.data.strftime('%d/%m/%Y') if t.data else None,
         'data_iso': t.data.isoformat() if t.data else None,
-        'valor': float(t.valor),
+        'valor': valor_efetivo,           # exibicao padrao = residuo
+        'valor_nominal': valor_nominal,   # valor original para tooltip
         'historico': t.historico,
         'descricao': t.descricao,
         'conta_id': t.conta_id,
@@ -410,7 +465,8 @@ def _transacao_to_linha(t: PessoalTransacao, lado: str) -> dict:
         'membro_id': t.membro_id,
         'membro_nome': t.membro.nome if t.membro else None,
         'excluir_relatorio': t.excluir_relatorio,
-        'valor_compensado': float(t.valor_compensado or 0),
+        'valor_compensado': compensado,
+        'tem_residuo': tem_residuo,       # flag para UI marcar "resto apos compensacao"
         'origem': 'realizada',
     }
 
@@ -572,17 +628,21 @@ def motivo_exclusao(t: PessoalTransacao) -> Optional[str]:
     """Determina por que uma transacao esta com excluir_relatorio=True.
 
     Ordem de prioridade (uma unica causa sera reportada):
-    1. 'PAGAMENTO_CARTAO'    - eh_pagamento_cartao=True
-    2. 'TRANSF_PROPRIA'      - eh_transferencia_propria=True
-    3. 'COMPENSADA'          - valor_compensado >= valor (ambas pernas compensadas)
-    4. 'EMPRESA'             - categoria grupo='Desconsiderar' OU compensavel_tipo is not None
-    5. None                  - excluir_relatorio=False
+    1. 'SALDO_ANTERIOR'      - historico comeca com SALDO ANTERIOR (ruido de fatura)
+    2. 'PAGAMENTO_CARTAO'    - eh_pagamento_cartao=True
+    3. 'TRANSF_PROPRIA'      - eh_transferencia_propria=True
+    4. 'COMPENSADA'          - valor_compensado >= valor (ambas pernas compensadas)
+    5. 'EMPRESA'             - categoria grupo='Desconsiderar' OU compensavel_tipo is not None
+    6. None                  - excluir_relatorio=False
 
     Returns:
         str (codigo do motivo) ou None se nao esta excluida.
     """
     if not t.excluir_relatorio:
         return None
+    historico_norm = (t.historico or '').strip().upper()
+    if historico_norm.startswith('SALDO ANTERIOR'):
+        return 'SALDO_ANTERIOR'
     if t.eh_pagamento_cartao:
         return 'PAGAMENTO_CARTAO'
     if t.eh_transferencia_propria:

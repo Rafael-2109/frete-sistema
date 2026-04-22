@@ -24,32 +24,38 @@ def _aplicar_filtro_motivo_exclusao(query, motivo: str):
     """Filtra transacoes pelo motivo da exclusao do relatorio.
 
     Ordem de precedencia (alinhada com fluxo_caixa_service.motivo_exclusao):
-    1. PAGAMENTO_CARTAO  - eh_pagamento_cartao=True
-    2. TRANSF_PROPRIA    - eh_transferencia_propria=True (e nao pagamento cartao)
-    3. COMPENSADA        - valor_compensado >= valor (e nao pagamento/transf)
-    4. EMPRESA           - categoria grupo=Desconsiderar OU compensavel_tipo NOT NULL
-                            (e nao pagamento/transf/compensada)
-    5. OUTRO             - excluir_relatorio=True sem motivo claro
-
-    Args:
-        query: PessoalTransacao.query (ou derivado)
-        motivo: codigo do motivo
+    1. SALDO_ANTERIOR    - historico comeca com SALDO ANTERIOR
+    2. PAGAMENTO_CARTAO  - eh_pagamento_cartao=True
+    3. TRANSF_PROPRIA    - eh_transferencia_propria=True (e nao pagamento cartao)
+    4. COMPENSADA        - valor_compensado >= valor (e nao pagamento/transf)
+    5. EMPRESA           - categoria grupo=Desconsiderar OU compensavel_tipo NOT NULL
+    6. OUTRO             - excluir_relatorio=True sem motivo claro
     """
     motivo = (motivo or '').upper()
     # Todos os motivos implicam excluir_relatorio=True
     query = query.filter_by(excluir_relatorio=True)
 
+    if motivo == 'SALDO_ANTERIOR':
+        return query.filter(
+            func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
+        )
+
     if motivo == 'PAGAMENTO_CARTAO':
-        return query.filter(PessoalTransacao.eh_pagamento_cartao.is_(True))
+        return query.filter(
+            ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
+            PessoalTransacao.eh_pagamento_cartao.is_(True),
+        )
 
     if motivo == 'TRANSF_PROPRIA':
         return query.filter(
+            ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
             PessoalTransacao.eh_pagamento_cartao.is_(False),
             PessoalTransacao.eh_transferencia_propria.is_(True),
         )
 
     if motivo == 'COMPENSADA':
         return query.filter(
+            ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
             PessoalTransacao.eh_pagamento_cartao.is_(False),
             PessoalTransacao.eh_transferencia_propria.is_(False),
             PessoalTransacao.valor_compensado >= PessoalTransacao.valor,
@@ -64,6 +70,7 @@ def _aplicar_filtro_motivo_exclusao(query, motivo: str):
             isouter=True,
         )
         return query.filter(
+            ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
             PessoalTransacao.eh_pagamento_cartao.is_(False),
             PessoalTransacao.eh_transferencia_propria.is_(False),
             # Nao 100% compensada (deixa COMPENSADA levar esse grupo)
@@ -85,6 +92,7 @@ def _aplicar_filtro_motivo_exclusao(query, motivo: str):
             isouter=True,
         )
         return query.filter(
+            ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
             PessoalTransacao.eh_pagamento_cartao.is_(False),
             PessoalTransacao.eh_transferencia_propria.is_(False),
             or_(
@@ -318,6 +326,7 @@ def listar():
 def _contar_por_motivo() -> dict:
     """Conta transacoes por motivo de exclusao para exibir atalhos na UI."""
     contadores = {
+        'SALDO_ANTERIOR': 0,
         'EMPRESA': 0,
         'PAGAMENTO_CARTAO': 0,
         'TRANSF_PROPRIA': 0,
@@ -325,15 +334,25 @@ def _contar_por_motivo() -> dict:
         'OUTRO': 0,
     }
 
+    nao_saldo = ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%')
+
+    # SALDO_ANTERIOR (ruido de fatura — nao e movimentacao)
+    contadores['SALDO_ANTERIOR'] = PessoalTransacao.query.filter(
+        PessoalTransacao.excluir_relatorio.is_(True),
+        func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
+    ).count()
+
     # PAGAMENTO_CARTAO
     contadores['PAGAMENTO_CARTAO'] = PessoalTransacao.query.filter(
         PessoalTransacao.excluir_relatorio.is_(True),
+        nao_saldo,
         PessoalTransacao.eh_pagamento_cartao.is_(True),
     ).count()
 
     # TRANSF_PROPRIA
     contadores['TRANSF_PROPRIA'] = PessoalTransacao.query.filter(
         PessoalTransacao.excluir_relatorio.is_(True),
+        nao_saldo,
         PessoalTransacao.eh_pagamento_cartao.is_(False),
         PessoalTransacao.eh_transferencia_propria.is_(True),
     ).count()
@@ -341,19 +360,21 @@ def _contar_por_motivo() -> dict:
     # COMPENSADA
     contadores['COMPENSADA'] = PessoalTransacao.query.filter(
         PessoalTransacao.excluir_relatorio.is_(True),
+        nao_saldo,
         PessoalTransacao.eh_pagamento_cartao.is_(False),
         PessoalTransacao.eh_transferencia_propria.is_(False),
         PessoalTransacao.valor_compensado >= PessoalTransacao.valor,
         PessoalTransacao.valor > 0,
     ).count()
 
-    # EMPRESA (categoria Desconsiderar ou compensavel)
+    # EMPRESA (categoria Desconsiderar ou compensavel, nao 100% compensada)
     contadores['EMPRESA'] = db.session.query(PessoalTransacao).join(
         PessoalCategoria,
         PessoalCategoria.id == PessoalTransacao.categoria_id,
         isouter=True,
     ).filter(
         PessoalTransacao.excluir_relatorio.is_(True),
+        nao_saldo,
         PessoalTransacao.eh_pagamento_cartao.is_(False),
         PessoalTransacao.eh_transferencia_propria.is_(False),
         or_(
@@ -373,6 +394,7 @@ def _contar_por_motivo() -> dict:
         isouter=True,
     ).filter(
         PessoalTransacao.excluir_relatorio.is_(True),
+        nao_saldo,
         PessoalTransacao.eh_pagamento_cartao.is_(False),
         PessoalTransacao.eh_transferencia_propria.is_(False),
         or_(

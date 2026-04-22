@@ -47,6 +47,7 @@ from app.pessoal.routes.compensacao import compensacao_bp  # noqa: E402
 from app.pessoal.routes.pluggy import pluggy_bp  # noqa: E402
 from app.pessoal.routes.fluxo_caixa import fluxo_caixa_bp  # noqa: E402
 from app.pessoal.routes.provisao import provisao_bp  # noqa: E402
+from app.pessoal.routes.matches_empresa import matches_empresa_bp  # noqa: E402
 
 pessoal_bp.register_blueprint(importacao_bp)
 pessoal_bp.register_blueprint(transacoes_bp)
@@ -58,3 +59,4 @@ pessoal_bp.register_blueprint(compensacao_bp)
 pessoal_bp.register_blueprint(pluggy_bp)
 pessoal_bp.register_blueprint(fluxo_caixa_bp)
 pessoal_bp.register_blueprint(provisao_bp)
+pessoal_bp.register_blueprint(matches_empresa_bp)

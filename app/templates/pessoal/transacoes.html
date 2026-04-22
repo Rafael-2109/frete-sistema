@@ -158,6 +158,9 @@
               </label>
               <select name="motivo_exclusao" class="form-select form-select-sm">
                 <option value="">Qualquer</option>
+                <option value="SALDO_ANTERIOR" {{ 'selected' if filtros.motivo_exclusao == 'SALDO_ANTERIOR' }}>
+                  Saldo Anterior (ruido fatura){% if contadores_motivo %} — {{ contadores_motivo.SALDO_ANTERIOR }}{% endif %}
+                </option>
                 <option value="EMPRESA" {{ 'selected' if filtros.motivo_exclusao == 'EMPRESA' }}>
                   Empresa (categoria Desconsiderar/compensavel){% if contadores_motivo %} — {{ contadores_motivo.EMPRESA }}{% endif %}
                 </option>
@@ -193,6 +196,10 @@
   {% endfor %}
   <div class="mb-3">
     <small class="text-muted me-2">Atalhos excluidas:</small>
+    <a href="?motivo_exclusao=SALDO_ANTERIOR{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-clock"></i> Saldo Anterior
+      <span class="badge bg-secondary">{{ contadores_motivo.SALDO_ANTERIOR }}</span>
+    </a>
     <a href="?motivo_exclusao=EMPRESA{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-warning">
       <i class="fas fa-briefcase"></i> Empresa
       <span class="badge bg-warning text-dark">{{ contadores_motivo.EMPRESA }}</span>
@@ -273,7 +280,9 @@
                 {% endif %}
                 {# Badge do motivo de exclusao, se houver #}
                 {% set motivo = motivos_map.get(t.id) if motivos_map is defined else None %}
-                {% if motivo == 'EMPRESA' %}
+                {% if motivo == 'SALDO_ANTERIOR' %}
+                  <span class="badge bg-secondary" title="Saldo anterior — ruido de fatura">SA</span>
+                {% elif motivo == 'EMPRESA' %}
                   <span class="badge bg-warning text-dark" title="Categoria empresarial (Desconsiderar/compensavel)">Emp</span>
                 {% elif motivo == 'TRANSF_PROPRIA' %}
                   <span class="badge bg-secondary" title="Transferencia propria">T.P.</span>

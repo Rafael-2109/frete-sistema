@@ -71,6 +71,19 @@ echo "Criando tabela claude_session_store (SessionStore v0.1.64 Fase A)..."
 python scripts/migrations/2026_04_21_claude_session_store.py \
     || echo "⚠️ Migration claude_session_store falhou, continuando deploy..."
 
+# 8. Pessoal — vertente Fluxo de Caixa (one-shot, remover apos deploy).
+# Cria PessoalProvisao, campos data_pagamento/transacao_pagamento_id em
+# pessoal_importacoes, categoria seed 'Cartao de Credito'. Idempotente.
+echo "Migration pessoal_fluxo_caixa_vertente (one-shot)..."
+python scripts/migrations/pessoal_fluxo_caixa_vertente.py \
+    || echo "⚠️ Migration pessoal_fluxo_caixa_vertente falhou, continuando deploy..."
+
+# 9. Pessoal — grupo Movimentacoes Empresa + 2 categorias compensaveis
+# (Empresa - Entrada/Saida). Idempotente. Remover apos deploy.
+echo "Migration pessoal_movimentacoes_empresa (one-shot)..."
+python scripts/migrations/pessoal_movimentacoes_empresa.py \
+    || echo "⚠️ Migration pessoal_movimentacoes_empresa falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+{% block title %}Matches Empresa{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">
+      <i class="fas fa-link text-warning"></i> Matches Empresa Pendentes
+      <span class="badge bg-secondary">Vinculacao manual</span>
+    </h4>
+    <div>
+      <a href="{{ url_for('pessoal.pessoal_fluxo_caixa.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-water"></i> Fluxo de Caixa
+      </a>
+    </div>
+  </div>
+
+  <div class="alert alert-info py-2 mb-3">
+    <small>
+      <i class="fas fa-info-circle"></i> Dias com <strong>2+ pontas</strong> (entradas/saidas empresa intra-day)
+      que <strong>nao foram casados automaticamente</strong>. Vincule manualmente: selecione saida + entrada,
+      digite o valor a compensar (padrao = minimo dos residuos).
+    </small>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small mb-0">Data Inicio</label>
+          <input type="date" id="f_data_inicio" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small mb-0">Data Fim</label>
+          <input type="date" id="f_data_fim" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-3">
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="f_apenas_ambiguos" checked>
+            <label class="form-check-label small" for="f_apenas_ambiguos">
+              Apenas ambiguos (2+ pontas)
+            </label>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <button type="button" id="btnRecarregar" class="btn btn-primary btn-sm w-100">
+            <i class="fas fa-sync-alt"></i> Recarregar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="containerDias">
+    <div class="text-center text-muted py-3">Carregando...</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+  const moeda = (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+  const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+  async function apiCall(url, opts={}) {
+    const headers = Object.assign({'Content-Type': 'application/json'}, opts.headers || {});
+    const method = (opts.method || 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD') headers['X-CSRFToken'] = CSRF;
+    try {
+      const resp = await fetch(url, Object.assign({}, opts, {headers}));
+      // Tenta ler JSON mesmo em 4xx (backend devolve {sucesso:false,mensagem}).
+      // Se resposta nao for JSON (ex: HTML de erro), retorna mensagem clara.
+      let data = null;
+      try {
+        data = await resp.json();
+      } catch (_) {
+        return {
+          sucesso: false,
+          mensagem: resp.status === 403 ? 'Sessao expirada ou sem permissao'
+                  : resp.status === 404 ? 'Endpoint nao encontrado'
+                  : `Erro ${resp.status}: resposta nao-JSON`,
+        };
+      }
+      if (!resp.ok && data && typeof data === 'object' && 'sucesso' in data) {
+        return data;  // backend devolveu payload estruturado — repassa
+      }
+      if (!resp.ok) {
+        return {sucesso: false, mensagem: `Erro ${resp.status}`};
+      }
+      return data;
+    } catch (e) {
+      return {sucesso: false, mensagem: 'Erro de rede: ' + (e.message || e)};
+    }
+  }
+
+  function alerta(msg, tipo='success') {
+    const div = document.createElement('div');
+    div.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+    div.style.zIndex = '9999';
+    const span = document.createElement('span');
+    span.textContent = msg;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn-close'; btn.setAttribute('data-bs-dismiss', 'alert');
+    div.appendChild(span); div.appendChild(btn);
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 4500);
+  }
+
+  async function carregar() {
+    const qs = new URLSearchParams();
+    if ($('f_data_inicio').value) qs.set('data_inicio', $('f_data_inicio').value);
+    if ($('f_data_fim').value) qs.set('data_fim', $('f_data_fim').value);
+    qs.set('apenas_ambiguos', $('f_apenas_ambiguos').checked ? '1' : '0');
+
+    const container = $('containerDias');
+    container.innerHTML = '<div class="text-center text-muted py-3">Carregando...</div>';
+
+    const data = await apiCall('/pessoal/api/matches-empresa/pendentes?' + qs);
+    if (!data.sucesso) {
+      container.innerHTML = `<div class="alert alert-danger">${esc(data.mensagem)}</div>`;
+      return;
+    }
+
+    if (!data.dias.length) {
+      container.innerHTML = '<div class="alert alert-success">Nenhum dia pendente</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    data.dias.forEach((dia) => container.appendChild(renderDia(dia)));
+  }
+
+  function renderDia(dia) {
+    const card = document.createElement('div');
+    card.className = 'card mb-3';
+    const bateBdg = dia.soma_bate
+      ? '<span class="badge bg-success">soma bate</span>'
+      : `<span class="badge bg-warning text-dark">diff ${moeda(dia.diff)}</span>`;
+    card.innerHTML = `
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <strong>${esc(dia.data_br)}</strong>
+        <span>
+          ${esc(dia.n_entradas)} entradas (${moeda(dia.soma_entradas)})
+          |
+          ${esc(dia.n_saidas)} saidas (${moeda(dia.soma_saidas)})
+          ${bateBdg}
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div class="row g-0">
+          <div class="col-md-6 border-end">
+            <div class="p-2 bg-body-tertiary"><strong>Saidas</strong> <small class="text-muted">(selecione uma)</small></div>
+            <table class="table table-sm table-hover mb-0" data-tipo="saida" data-dia="${esc(dia.data)}">
+              <tbody>
+                ${dia.saidas.map(t => `
+                  <tr data-id="${esc(t.id)}" data-restante="${esc(t.valor_restante)}">
+                    <td><input type="radio" name="saida-${esc(dia.data)}" class="sel-saida"></td>
+                    <td><small>${esc(t.historico)}</small></td>
+                    <td><small class="text-muted">${esc(t.descricao || '')}</small></td>
+                    <td class="text-end text-danger fw-bold">${moeda(t.valor_restante)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="col-md-6">
+            <div class="p-2 bg-body-tertiary"><strong>Entradas</strong> <small class="text-muted">(selecione uma)</small></div>
+            <table class="table table-sm table-hover mb-0" data-tipo="entrada" data-dia="${esc(dia.data)}">
+              <tbody>
+                ${dia.entradas.map(t => `
+                  <tr data-id="${esc(t.id)}" data-restante="${esc(t.valor_restante)}">
+                    <td><input type="radio" name="entrada-${esc(dia.data)}" class="sel-entrada"></td>
+                    <td><small>${esc(t.historico)}</small></td>
+                    <td><small class="text-muted">${esc(t.descricao || '')}</small></td>
+                    <td class="text-end text-success fw-bold">${moeda(t.valor_restante)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="p-3 bg-body-tertiary d-flex align-items-center gap-2 justify-content-end">
+          <small class="text-muted">Valor a compensar:</small>
+          <input type="number" step="0.01" min="0.01" class="form-control form-control-sm input-valor" style="width:140px" placeholder="auto">
+          <input type="text" class="form-control form-control-sm input-obs" style="width:220px" placeholder="Observacao (opcional)">
+          <button type="button" class="btn btn-primary btn-sm btn-vincular">
+            <i class="fas fa-link"></i> Vincular
+          </button>
+        </div>
+      </div>
+    `;
+
+    const valorInput = card.querySelector('.input-valor');
+    let valorTocado = false;
+    valorInput.addEventListener('input', () => { valorTocado = true; });
+    card.querySelectorAll('input[type=radio]').forEach((r) => {
+      r.addEventListener('change', () => {
+        // Auto-preenche apenas se usuario ainda nao editou manualmente
+        if (valorTocado) return;
+        const saidaTr = card.querySelector('.sel-saida:checked')?.closest('tr');
+        const entradaTr = card.querySelector('.sel-entrada:checked')?.closest('tr');
+        if (saidaTr && entradaTr) {
+          const s = parseFloat(saidaTr.dataset.restante);
+          const e = parseFloat(entradaTr.dataset.restante);
+          valorInput.value = Math.min(s, e).toFixed(2);
+        }
+      });
+    });
+
+    card.querySelector('.btn-vincular').addEventListener('click', async () => {
+      const saidaTr = card.querySelector('.sel-saida:checked')?.closest('tr');
+      const entradaTr = card.querySelector('.sel-entrada:checked')?.closest('tr');
+      if (!saidaTr || !entradaTr) {
+        alerta('Selecione uma saida e uma entrada', 'warning');
+        return;
+      }
+      const valor = parseFloat(valorInput.value);
+      if (!valor || valor <= 0) {
+        alerta('Informe o valor a compensar (ou clique novamente nos radios para auto-preencher)', 'warning');
+        return;
+      }
+      const payload = {
+        saida_id: parseInt(saidaTr.dataset.id),
+        entrada_id: parseInt(entradaTr.dataset.id),
+        valor: valor,
+        observacao: card.querySelector('.input-obs').value || null,
+      };
+      const r = await apiCall('/pessoal/api/matches-empresa/vincular', {
+        method: 'POST', body: JSON.stringify(payload),
+      });
+      if (r.sucesso) {
+        alerta('Match aplicado (compensacao id=' + r.compensacao.id + ')');
+        carregar();
+      } else {
+        alerta('Erro: ' + r.mensagem, 'danger');
+      }
+    });
+
+    return card;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    $('btnRecarregar').addEventListener('click', carregar);
+    carregar();
+  });
+})();
+</script>
+{% endblock %}

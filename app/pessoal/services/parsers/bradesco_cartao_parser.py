@@ -1,8 +1,11 @@
 """Parser para fatura Bradesco Cartao de Credito (CSV separado por ;, encoding latin-1)."""
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 from app.pessoal.services.parsers.base_parser import (
     TransacaoRaw, parse_valor_brasileiro, parse_data_brasileira,
@@ -120,6 +123,36 @@ class BradescoFaturaCartao:
             if t.descricao:
                 partes.append(normalizar_historico(t.descricao))
             t.historico_completo = ' | '.join(partes)
+
+        # SANITY CHECK de ano: fatura de cartao tem datas no passado + no maximo
+        # ~60 dias de vencimento futuro. Se uma data esta > hoje+60d, provavelmente
+        # o parser interpretou ano errado (bug historico). Shift -1 ano APENAS
+        # nessas transacoes (preserva faturas cross-year legitimas como
+        # Dez/atual + Jan/proximo).
+        if transacoes:
+            hoje = date.today()
+            limite_futuro = hoje + timedelta(days=60)
+            datas_futuras = [t for t in transacoes if t.data > limite_futuro]
+            if datas_futuras:
+                logger.warning(
+                    'bradesco_cartao_parser: %d transacoes com data > %s — '
+                    'aplicando shift -1 ano APENAS nelas (ano_ref=%s, header=%s)',
+                    len(datas_futuras), limite_futuro, ano_ref, self.data_fatura,
+                )
+                for t in datas_futuras:
+                    try:
+                        t.data = t.data.replace(year=t.data.year - 1)
+                    except ValueError:
+                        t.data = t.data.replace(year=t.data.year - 1, day=28)
+                if self.data_fatura and self.data_fatura > limite_futuro:
+                    try:
+                        self.data_fatura = self.data_fatura.replace(
+                            year=self.data_fatura.year - 1,
+                        )
+                    except ValueError:
+                        self.data_fatura = self.data_fatura.replace(
+                            year=self.data_fatura.year - 1, day=28,
+                        )
 
         return transacoes
 
