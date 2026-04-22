@@ -209,7 +209,8 @@
       "Bash(ln -s ../../.venv .venv)",
       "mcp__sequential-thinking__sequentialthinking",
       "Skill(resolvendo-problemas)",
-      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/scripts/migrations/hora_*)"
+      "Bash(python /home/rafaelnascimento/projetos/frete_sistema/scripts/migrations/hora_*)",
+      "Bash(git push *)"
     ],
     "deny": [],
     "defaultMode": "auto"
