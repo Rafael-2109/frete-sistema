@@ -103,12 +103,13 @@ NUNCA usar `payment_id IS NOT NULL`, `sum(amount)`, ou status de pagamento.
 
 **Causa**: agente consultou apenas `extrato_item` (maior fonte) e achou que era completa.
 
-**Correcao**: aba 3 exige UNIAO de 3 fontes obrigatorias:
+**Correcao**: aba 3 exige UNIAO de 2 fontes obrigatorias (escopo Nacom Goya):
 1. Odoo `account.bank.statement.line` com `write_date::date = CURRENT_DATE - 1` e `is_reconciled=True`
-2. Local `lancamento_comprovante` com `data_conciliacao = CURRENT_DATE - 1`
-3. Local `carvia_conciliacoes` com `data = CURRENT_DATE - 1`
+2. Local `lancamento_comprovante` com `status='LANCADO'` e `DATE(lancado_em) = CURRENT_DATE - 1`
 
 Omitir qualquer fonte produz contagem, valores e usuarios incorretos SEM sinalizacao de erro.
+
+> CarVia (`carvia_conciliacoes`) **NAO** entra: empresa separada do grupo. Para CarVia usar skill `gerindo-carvia`.
 
 **Referencia**: memoria empresa id=529 (armadilha nivel 4).
 

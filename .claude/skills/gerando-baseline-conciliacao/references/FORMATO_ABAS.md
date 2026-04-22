@@ -71,12 +71,13 @@ Evolucao Baseline
 
 ## Aba 3: "Conciliacoes Dia Anterior" (posicao 3)
 
-**Fonte (UNIAO obrigatoria)**:
+**Fonte (UNIAO obrigatoria, escopo Nacom Goya)**:
 1. Odoo `account.bank.statement.line` onde `write_date::date = CURRENT_DATE - 1` AND `is_reconciled=True`
-2. Local `lancamento_comprovante` onde `data_conciliacao = CURRENT_DATE - 1`
-3. Local `carvia_conciliacoes` onde `data = CURRENT_DATE - 1`
+2. Local `lancamento_comprovante` onde `status='LANCADO'` AND `DATE(lancado_em) = CURRENT_DATE - 1`
 
-**ARMADILHA DOCUMENTADA**: consultar apenas uma fonte retorna resultado incompleto SEM sinalizacao (exemplo real: reportar 89 linhas quando total correto era 134).
+> CarVia (`carvia_conciliacoes`) NAO entra: empresa separada do grupo, fluxo financeiro proprio. Para auditoria CarVia usar skill `gerindo-carvia`.
+
+**ARMADILHA DOCUMENTADA**: consultar apenas uma das fontes Nacom Goya retorna resultado incompleto SEM sinalizacao (exemplo real: reportar 89 linhas quando total correto era 134).
 
 **Colunas EXATAS**:
 

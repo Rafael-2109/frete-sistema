@@ -149,20 +149,19 @@ for c in conciliacoes:
 **Fonte 2 — Local `lancamento_comprovante`** (Postgres Render):
 
 ```sql
-SELECT usuario, amount
+SELECT COALESCE(lancado_por, 'SEM_USUARIO') AS usuario,
+       COALESCE(valor_alocado, 0) AS valor
 FROM lancamento_comprovante
-WHERE data_conciliacao = CURRENT_DATE - INTERVAL '1 day';
+WHERE status = 'LANCADO'
+  AND lancado_em IS NOT NULL
+  AND DATE(lancado_em) = CURRENT_DATE - INTERVAL '1 day';
 ```
 
-**Fonte 3 — Local `carvia_conciliacoes`**:
+> Sinal: lancamentos sao debitos por natureza — popular como `amount = -abs(valor)`.
 
-```sql
-SELECT usuario, valor_total AS amount
-FROM carvia_conciliacoes
-WHERE data = CURRENT_DATE - INTERVAL '1 day';
-```
+**Fonte 3 (CarVia) — REMOVIDA em 22/04/2026**: baseline e exclusiva Nacom Goya. CarVia Logistica e empresa separada do grupo com fluxo financeiro proprio — para auditoria de CarVia, usar a skill `gerindo-carvia`.
 
-**UNIR as 3 fontes** em Python antes de popular a aba 3.
+**UNIR as 2 fontes** (Odoo + lancamento_comprovante) em Python antes de popular a aba 3.
 
 ---
 

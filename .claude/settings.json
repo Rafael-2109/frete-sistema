@@ -23,6 +23,8 @@
       "WebFetch(domain:code.claude.com)",
       "Write(/home/rafaelnascimento/projetos/frete_sistema/.claude/atualizacoes/**)",
       "Edit(/home/rafaelnascimento/projetos/frete_sistema/.claude/atualizacoes/**)",
+      "Write(/home/rafaelnascimento/projetos/frete_sistema/.claude/skills/**)",
+      "Edit(/home/rafaelnascimento/projetos/frete_sistema/.claude/skills/**)",
       "Bash(curl:*)",
       "Bash(echo:*)",
       "Bash(mkdir:*)",

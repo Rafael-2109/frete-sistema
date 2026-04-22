@@ -21,8 +21,24 @@ import sys
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-# Adicionar raiz do projeto ao path
-_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+# Adicionar raiz do projeto ao path (resiliente a copia para /tmp)
+def _find_project_root():
+    """Procura raiz via walk-up por app/__init__.py + fallback hardcoded."""
+    candidato = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+    if os.path.isfile(os.path.join(candidato, 'app', '__init__.py')):
+        return candidato
+    atual = os.path.abspath(os.getcwd())
+    while atual and atual != '/':
+        if os.path.isfile(os.path.join(atual, 'app', '__init__.py')):
+            return atual
+        atual = os.path.dirname(atual)
+    for fb in ('/opt/render/project/src', '/home/rafaelnascimento/projetos/frete_sistema'):
+        if os.path.isfile(os.path.join(fb, 'app', '__init__.py')):
+            return fb
+    raise RuntimeError('Nao foi possivel localizar a raiz do projeto (app/__init__.py).')
+
+
+_ROOT = _find_project_root()
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
@@ -51,18 +67,18 @@ def _fmt_data_ref(d):
 
 
 def query_odoo_pendentes(odoo_conn):
-    """Query 1: Agregacao Mes x Journal + Query 2: Top N detalhadas."""
-    models = odoo_conn['models']
-    uid = odoo_conn['uid']
-    db = odoo_conn['db']
-    password = odoo_conn['password']
+    """Query 1: Agregacao Mes x Journal + Query 2: Top N detalhadas.
 
+    Usa API real de OdooConnection (app/odoo/utils/connection.py): metodos
+    .search_read(model, domain, fields=, limit=, offset=). NAO usar dict-subscript.
+    """
     # Buscar IDs dos journals monitorados
-    journals = models.execute_kw(db, uid, password,
-        'account.journal', 'search_read',
-        [[['name', 'in', JOURNALS_MONITORADOS],
-          ['company_id', '=', COMPANY_ID_FB]]],
-        {'fields': ['id', 'name']})
+    journals = odoo_conn.search_read(
+        'account.journal',
+        [['name', 'in', JOURNALS_MONITORADOS],
+         ['company_id', '=', COMPANY_ID_FB]],
+        fields=['id', 'name'],
+    )
     journal_ids = [j['id'] for j in journals]
     journal_map = {j['id']: j['name'] for j in journals}
 
@@ -77,14 +93,16 @@ def query_odoo_pendentes(odoo_conn):
     offset = 0
     batch_size = 2000
     while True:
-        linhas = models.execute_kw(db, uid, password,
-            'account.bank.statement.line', 'search_read',
-            [[['is_reconciled', '=', False],
-              ['journal_id', 'in', journal_ids],
-              ['company_id', '=', COMPANY_ID_FB]]],
-            {'fields': ['journal_id', 'date', 'amount', 'payment_ref',
-                        'partner_id', 'payment_id'],
-             'limit': batch_size, 'offset': offset})
+        linhas = odoo_conn.search_read(
+            'account.bank.statement.line',
+            [['is_reconciled', '=', False],
+             ['journal_id', 'in', journal_ids],
+             ['company_id', '=', COMPANY_ID_FB]],
+            fields=['journal_id', 'date', 'amount', 'payment_ref',
+                    'partner_id', 'payment_id'],
+            limit=batch_size,
+            offset=offset,
+        )
         if not linhas:
             break
 
@@ -138,33 +156,28 @@ def query_conciliacoes_d1(odoo_conn, data_ref):
 
     # Fonte 1: Odoo account.bank.statement.line
     try:
-        models = odoo_conn['models']
-        uid = odoo_conn['uid']
-        odoo_db = odoo_conn['db']
-        password = odoo_conn['password']
-
-        journals = models.execute_kw(odoo_db, uid, password,
-            'account.journal', 'search_read',
-            [[['name', 'in', JOURNALS_MONITORADOS],
-              ['company_id', '=', COMPANY_ID_FB]]],
-            {'fields': ['id']})
+        journals = odoo_conn.search_read(
+            'account.journal',
+            [['name', 'in', JOURNALS_MONITORADOS],
+             ['company_id', '=', COMPANY_ID_FB]],
+            fields=['id'],
+        )
         journal_ids = [j['id'] for j in journals]
 
-        conciliacoes = models.execute_kw(odoo_db, uid, password,
-            'account.bank.statement.line', 'search_read',
-            [[['is_reconciled', '=', True],
-              ['write_date', '>=', inicio],
-              ['write_date', '<=', fim],
-              ['journal_id', 'in', journal_ids],
-              ['company_id', '=', COMPANY_ID_FB]]],
-            {'fields': ['write_uid', 'amount']})
+        conciliacoes = odoo_conn.search_read(
+            'account.bank.statement.line',
+            [['is_reconciled', '=', True],
+             ['write_date', '>=', inicio],
+             ['write_date', '<=', fim],
+             ['journal_id', 'in', journal_ids],
+             ['company_id', '=', COMPANY_ID_FB]],
+            fields=['write_uid', 'amount'],
+        )
 
         user_ids = list({c['write_uid'][0] for c in conciliacoes if c.get('write_uid')})
         user_map = {}
         if user_ids:
-            users = models.execute_kw(odoo_db, uid, password,
-                'res.users', 'read',
-                [user_ids, ['id', 'name']])
+            users = odoo_conn.read('res.users', user_ids, fields=['id', 'name'])
             user_map = {u['id']: u['name'] for u in users}
 
         for c in conciliacoes:
@@ -186,19 +199,24 @@ def query_conciliacoes_d1(odoo_conn, data_ref):
         print(f'[WARN] Fonte 1 (Odoo) falhou: {e}')
 
     # Fonte 2: Local lancamento_comprovante
+    # Campos reais (schema lancamento_comprovante.json): lancado_por, valor_alocado, lancado_em.
+    # Filtro: status='LANCADO' (demais status sao PENDENTE/REJEITADO/CONFIRMADO).
+    # Sinal: amount = -valor_alocado (lancamentos sao pagamentos/debitos por natureza).
     try:
         from sqlalchemy import text as sql_text
         result = db.session.execute(sql_text("""
-            SELECT COALESCE(criado_por, 'SEM_USUARIO') AS usuario,
-                   COALESCE(valor, 0) AS amount
+            SELECT COALESCE(lancado_por, 'SEM_USUARIO') AS usuario,
+                   COALESCE(valor_alocado, 0) AS valor
             FROM lancamento_comprovante
-            WHERE DATE(criado_em) = :ontem
+            WHERE status = 'LANCADO'
+              AND lancado_em IS NOT NULL
+              AND DATE(lancado_em) = :ontem
         """), {'ontem': ontem})
         for row in result:
             nome = row[0]
             if not nome or nome.upper().startswith('SYNC_'):
                 continue
-            amount = float(row[1] or 0)
+            amount = -abs(float(row[1] or 0))  # Lancamento = debito
             per_user[nome]['linhas'] += 1
             if amount < 0:
                 per_user[nome]['pgtos'] += 1
@@ -209,29 +227,9 @@ def query_conciliacoes_d1(odoo_conn, data_ref):
     except Exception as e:
         print(f'[WARN] Fonte 2 (lancamento_comprovante) falhou: {e}')
 
-    # Fonte 3: Local carvia_conciliacoes
-    try:
-        from sqlalchemy import text as sql_text
-        result = db.session.execute(sql_text("""
-            SELECT COALESCE(criado_por, 'SEM_USUARIO') AS usuario,
-                   COALESCE(valor_total, 0) AS amount
-            FROM carvia_conciliacoes
-            WHERE DATE(criado_em) = :ontem
-        """), {'ontem': ontem})
-        for row in result:
-            nome = row[0]
-            if not nome or nome.upper().startswith('SYNC_'):
-                continue
-            amount = float(row[1] or 0)
-            per_user[nome]['linhas'] += 1
-            if amount < 0:
-                per_user[nome]['pgtos'] += 1
-                per_user[nome]['vl_deb'] += amount
-            elif amount > 0:
-                per_user[nome]['recebs'] += 1
-                per_user[nome]['vl_cred'] += amount
-    except Exception as e:
-        print(f'[WARN] Fonte 3 (carvia_conciliacoes) falhou: {e}')
+    # Fonte 3 (carvia_conciliacoes): REMOVIDA em 22/04/2026.
+    # Baseline e EXCLUSIVA da Nacom Goya (Conservas Campo Belo). CarVia Logistica
+    # e empresa separada do grupo com fluxo financeiro proprio — NAO misturar.
 
     return dict(per_user)
 

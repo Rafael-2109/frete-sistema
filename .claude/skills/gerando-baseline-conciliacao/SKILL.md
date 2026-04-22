@@ -72,7 +72,7 @@ Detalhes por aba: `references/FORMATO_ABAS.md`.
 |-----|---------------|--------------|
 | 1 (Mes x Journal) | Odoo `account.bank.statement.line` WHERE `is_reconciled=False` | — |
 | 2 (Pendentes) | Mesma da 1, mas por linha individual | — |
-| 3 (Conciliacoes D-1) | Odoo `account.bank.statement.line` conciliadas em D-1 | UNIAO com `lancamento_comprovante` + `carvia_conciliacoes` (armadilha: omitir fonte = contagem errada) |
+| 3 (Conciliacoes D-1) | Odoo `account.bank.statement.line` conciliadas em D-1 | UNIAO com `lancamento_comprovante`. NAO incluir `carvia_conciliacoes` — baseline e exclusiva Nacom Goya |
 | 4 (Resumo) | Pivot sobre aba 1 | — |
 
 SQL completo: `references/SQL_ODOO.md`.
@@ -143,5 +143,14 @@ Saida:
 |------|-------|-------|
 | 09/04/2026 | 8.684 | — |
 | 16/04/2026 | 6.985 | -1.699 |
+| 17/04/2026 | 6.694 | -291 |
+| 18/04/2026 | 6.350 | -344 |
+| 22/04/2026 | 6.162 | -188 |
 
 Tabela local no mesmo dia: 18.158 — NAO usar (acumula ja conciliados).
+
+## Historico de fixes do script
+
+| Data | Fix | Sessao trigger |
+|------|-----|----------------|
+| 22/04/2026 | (1) API OdooConnection (search_read em vez de dict-subscript). (2) Campos reais lancamento_comprovante (lancado_por/valor_alocado/lancado_em + status='LANCADO'). (3) _ROOT resiliente a /tmp. (4) **Removida Fonte 3 carvia_conciliacoes** — baseline e exclusiva Nacom Goya, CarVia e empresa separada. Smoke test: 6.162 pendentes OK. | Sessao 459 (Marcus, 22/04) — IMP-2026-04-22-001 |
