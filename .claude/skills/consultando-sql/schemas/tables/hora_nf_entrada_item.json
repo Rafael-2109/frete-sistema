@@ -54,16 +54,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_nf_entrada_item_nf_id",
+      "name": "ix_hora_nf_entrada_item_numero_chassi",
       "columns": [
-        "nf_id"
+        "numero_chassi"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_item_numero_chassi",
+      "name": "ix_hora_nf_entrada_item_nf_id",
       "columns": [
-        "numero_chassi"
+        "nf_id"
       ],
       "unique": false
     }

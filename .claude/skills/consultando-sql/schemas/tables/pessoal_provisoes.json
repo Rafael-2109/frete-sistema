@@ -1,0 +1,144 @@
+{
+  "name": "pessoal_provisoes",
+  "description": "Tabela pessoal_provisoes",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "data_prevista",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "valor",
+      "type": "numeric(15,2)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(300)",
+      "nullable": false
+    },
+    {
+      "name": "categoria_id",
+      "type": "integer",
+      "description": "FK → pessoal_categorias.id"
+    },
+    {
+      "name": "membro_id",
+      "type": "integer",
+      "description": "FK → pessoal_membros.id"
+    },
+    {
+      "name": "conta_id",
+      "type": "integer",
+      "description": "FK → pessoal_contas.id"
+    },
+    {
+      "name": "orcamento_id",
+      "type": "integer",
+      "description": "FK → pessoal_orcamentos.id"
+    },
+    {
+      "name": "transacao_id",
+      "type": "integer",
+      "description": "FK → pessoal_transacoes.id"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PROVISIONADA"
+    },
+    {
+      "name": "recorrente",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "recorrencia_tipo",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "recorrencia_ate",
+      "type": "date"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "realizado_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "categoria_id",
+      "references": "pessoal_categorias.id"
+    },
+    {
+      "column": "membro_id",
+      "references": "pessoal_membros.id"
+    },
+    {
+      "column": "conta_id",
+      "references": "pessoal_contas.id"
+    },
+    {
+      "column": "orcamento_id",
+      "references": "pessoal_orcamentos.id"
+    },
+    {
+      "column": "transacao_id",
+      "references": "pessoal_transacoes.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_pessoal_provisoes_data",
+      "columns": [
+        "data_prevista"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_provisoes_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_provisoes_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

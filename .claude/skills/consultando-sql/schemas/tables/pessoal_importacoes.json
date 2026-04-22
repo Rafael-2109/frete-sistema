@@ -34,6 +34,15 @@
       "type": "varchar(30)"
     },
     {
+      "name": "data_pagamento",
+      "type": "date"
+    },
+    {
+      "name": "transacao_pagamento_id",
+      "type": "integer",
+      "description": "FK → pessoal_transacoes.id"
+    },
+    {
       "name": "total_linhas",
       "type": "integer",
       "default": 0
@@ -72,6 +81,10 @@
     {
       "column": "conta_id",
       "references": "pessoal_contas.id"
+    },
+    {
+      "column": "transacao_pagamento_id",
+      "references": "pessoal_transacoes.id"
     }
   ]
 }

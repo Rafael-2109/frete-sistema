@@ -64,9 +64,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_recebimento_conferencia_numero_chassi",
+      "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
       "columns": [
-        "numero_chassi"
+        "tipo_divergencia"
       ],
       "unique": false
     },
@@ -78,9 +78,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
+      "name": "ix_hora_recebimento_conferencia_numero_chassi",
       "columns": [
-        "tipo_divergencia"
+        "numero_chassi"
       ],
       "unique": false
     }
