@@ -11,8 +11,16 @@ Diferente de 'Desconsiderar':
 
 Idempotente (ON CONFLICT DO NOTHING).
 """
-from app import create_app, db
-from sqlalchemy import text
+import os
+import sys
+
+# Raiz do projeto no sys.path quando script e executado direto
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from app import create_app, db  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
 
 def main():
