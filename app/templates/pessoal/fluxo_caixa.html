@@ -295,6 +295,16 @@
             <span class="badge bg-info-subtle text-info-emphasis border">Provisao</span>
           </div>
         </div>
+        <div class="d-flex justify-content-between align-items-center small text-muted mb-2 flex-wrap gap-2">
+          <span>
+            <i class="fas fa-info-circle"></i>
+            Saldo cumulativo: <strong>Saldo D-1 + Entrada D+0 &minus; Saida D+0</strong>.
+            Apenas a menor quebra visivel (linha destacada) alimenta o calculo.
+          </span>
+          <span>
+            Saldo inicial (mes): <strong id="saldoInicialAgrupado">-</strong>
+          </span>
+        </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover table-bordered mb-0" id="tabelaAgrupada">
             <thead class="table-light">
@@ -887,14 +897,24 @@
   }
 
   function cellsValores(l) {
+    // Saldo (duas ultimas colunas) fica placeholder aqui — populado pelo
+    // recalcularSaldosCumulativos(), que considera hierarquia aberta e so
+    // acumula nas "folhas visiveis" (menor granularidade nao expandida).
     return `
       <td class="text-end">${moedaAgrup(l.entrada_realizado)}</td>
       <td class="text-end">${moedaAgrup(l.entrada_provisao)}</td>
       <td class="text-end">${moedaAgrup(l.saida_realizado)}</td>
       <td class="text-end">${moedaAgrup(l.saida_provisao)}</td>
-      <td class="text-end">${saldoHtml(l.saldo_realizado)}</td>
-      <td class="text-end">${saldoHtml(l.saldo_provisao)}</td>
+      <td class="text-end cell-saldo-real"><span class="text-muted">-</span></td>
+      <td class="text-end cell-saldo-prov"><span class="text-muted">-</span></td>
     `;
+  }
+
+  function setDatasetValores(tr, entReal, entProv, saiReal, saiProv) {
+    tr.dataset.entReal = Number(entReal || 0);
+    tr.dataset.entProv = Number(entProv || 0);
+    tr.dataset.saiReal = Number(saiReal || 0);
+    tr.dataset.saiProv = Number(saiProv || 0);
   }
 
   async function carregarAgrupado() {
@@ -918,6 +938,7 @@
     }
     tbody.innerHTML = '';
     linhas.forEach(l => tbody.appendChild(rowDia(l)));
+    recalcularSaldosCumulativos();
   }
 
   function rowDia(l) {
@@ -925,6 +946,8 @@
     tr.dataset.nivel = 'dia';
     tr.dataset.dia = l.dia;
     tr.className = 'row-dia';
+    setDatasetValores(tr, l.entrada_realizado, l.entrada_provisao,
+                      l.saida_realizado, l.saida_provisao);
     tr.innerHTML = `
       <td>
         <button class="btn btn-sm btn-link p-0 me-1 btn-toggle" data-dia="${esc(l.dia)}">
@@ -943,7 +966,12 @@
     tr.dataset.nivel = 'grupo';
     tr.dataset.dia = dia;
     tr.dataset.grupo = l.grupo;
-    tr.className = 'row-grupo table-light';
+    // NOTA: NAO usamos `table-light` aqui — ela define --bs-table-bg na tr,
+    // que o Bootstrap aplica nas <td> e vencia o destaque de row-saldo-ativo.
+    // O fundo cinza de grupo e aplicado via CSS em modules/_pessoal.css.
+    tr.className = 'row-grupo';
+    setDatasetValores(tr, l.entrada_realizado, l.entrada_provisao,
+                      l.saida_realizado, l.saida_provisao);
     tr.innerHTML = `
       <td class="ps-4">
         <button class="btn btn-sm btn-link p-0 me-1 btn-toggle-grupo"
@@ -966,6 +994,8 @@
     tr.dataset.grupo = grupo;
     tr.dataset.nome = l.nome;
     tr.className = 'row-nome';
+    setDatasetValores(tr, l.entrada_realizado, l.entrada_provisao,
+                      l.saida_realizado, l.saida_provisao);
     tr.innerHTML = `
       <td class="ps-5">
         <button class="btn btn-sm btn-link p-0 me-1 btn-toggle-nome"
@@ -991,16 +1021,22 @@
     const badgeTipo = l.tipo === 'realizada'
       ? '<span class="badge bg-success-subtle text-success border">Real</span>'
       : '<span class="badge bg-info-subtle text-info-emphasis border">Prov</span>';
-    // Valor entra em Realizado ou Provisao conforme tipo
+    // Valor entra em Realizado ou Provisao conforme (fluxo, tipo)
     const isEntrada = l.fluxo === 'entrada';
     const isReal = l.tipo === 'realizada';
+    const v = Number(l.valor || 0);
+    const entReal = (isEntrada && isReal) ? v : 0;
+    const entProv = (isEntrada && !isReal) ? v : 0;
+    const saiReal = (!isEntrada && isReal) ? v : 0;
+    const saiProv = (!isEntrada && !isReal) ? v : 0;
+    setDatasetValores(tr, entReal, entProv, saiReal, saiProv);
     const valorCells = `
-      <td class="text-end">${(isEntrada && isReal) ? moeda(l.valor) : '<span class="text-muted">-</span>'}</td>
-      <td class="text-end">${(isEntrada && !isReal) ? moeda(l.valor) : '<span class="text-muted">-</span>'}</td>
-      <td class="text-end">${(!isEntrada && isReal) ? moeda(l.valor) : '<span class="text-muted">-</span>'}</td>
-      <td class="text-end">${(!isEntrada && !isReal) ? moeda(l.valor) : '<span class="text-muted">-</span>'}</td>
-      <td class="text-end text-muted">-</td>
-      <td class="text-end text-muted">-</td>
+      <td class="text-end">${entReal ? moeda(entReal) : '<span class="text-muted">-</span>'}</td>
+      <td class="text-end">${entProv ? moeda(entProv) : '<span class="text-muted">-</span>'}</td>
+      <td class="text-end">${saiReal ? moeda(saiReal) : '<span class="text-muted">-</span>'}</td>
+      <td class="text-end">${saiProv ? moeda(saiProv) : '<span class="text-muted">-</span>'}</td>
+      <td class="text-end cell-saldo-real"><span class="text-muted">-</span></td>
+      <td class="text-end cell-saldo-prov"><span class="text-muted">-</span></td>
     `;
     tr.innerHTML = `
       <td class="ps-5" style="padding-left:3.5rem !important;">
@@ -1019,6 +1055,77 @@
     return `${String(dia).padStart(2,'0')}/${String(mesSelecionadoMes).padStart(2,'0')}`;
   }
 
+  // =========================================================================
+  // Saldo cumulativo hierarquico (Saldo D-1 + Entrada - Saida)
+  // Regra: cada linha pai que esta EXPANDIDA nao contribui para o saldo — a
+  // soma vai para os filhos (menor granularidade visivel). Folhas visiveis:
+  //  - linha nivel=dia com AGR.abertos['dia:N'] ausente
+  //  - linha nivel=grupo com AGR.abertos['grupo:N:X'] ausente
+  //  - linha nivel=nome com AGR.abertos['nome:N:X:Y'] ausente
+  //  - linha nivel=linha (sempre folha)
+  // =========================================================================
+  function ehFolhaVisivel(tr) {
+    const nivel = tr.dataset.nivel;
+    const dia = tr.dataset.dia;
+    const grupo = tr.dataset.grupo;
+    const nome = tr.dataset.nome;
+    if (nivel === 'dia') return !AGR.abertos[`dia:${dia}`];
+    if (nivel === 'grupo') return !AGR.abertos[`grupo:${dia}:${grupo}`];
+    if (nivel === 'nome') return !AGR.abertos[`nome:${dia}:${grupo}:${nome}`];
+    if (nivel === 'linha') return true;
+    return false;
+  }
+
+  function saldoCumulativoHtml(v) {
+    const n = Number(v) || 0;
+    const cls = n >= 0 ? 'text-primary' : 'text-danger';
+    return `<span class="${cls} fw-bold">${moeda(n)}</span>`;
+  }
+
+  function recalcularSaldosCumulativos() {
+    const tbody = $('tbodyAgrupada');
+    if (!tbody) return;
+
+    // Saldo inicial = saldo acumulado do mes anterior (do serieCache).
+    const saldoInicial = saldoInicialDoMes(mesSelecionadoAno, mesSelecionadoMes);
+    const elSaldoIni = $('saldoInicialAgrupado');
+    if (elSaldoIni) {
+      elSaldoIni.textContent = moeda(saldoInicial);
+      elSaldoIni.className = saldoInicial >= 0 ? 'text-primary' : 'text-danger';
+    }
+    let saldoReal = saldoInicial;
+    let saldoProv = saldoInicial;
+
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const cellReal = tr.querySelector('.cell-saldo-real');
+      const cellProv = tr.querySelector('.cell-saldo-prov');
+      if (!cellReal || !cellProv) return; // linhas placeholder (Carregando/Erro)
+
+      tr.classList.remove('row-saldo-ativo');
+
+      if (!ehFolhaVisivel(tr)) {
+        // Pai expandido: nao contribui; saldo fica vazio
+        cellReal.innerHTML = '<span class="text-muted">-</span>';
+        cellProv.innerHTML = '<span class="text-muted">-</span>';
+        return;
+      }
+
+      const entReal = parseFloat(tr.dataset.entReal) || 0;
+      const entProv = parseFloat(tr.dataset.entProv) || 0;
+      const saiReal = parseFloat(tr.dataset.saiReal) || 0;
+      const saiProv = parseFloat(tr.dataset.saiProv) || 0;
+
+      saldoReal += (entReal - saiReal);
+      saldoProv += (entReal + entProv) - (saiReal + saiProv);
+
+      cellReal.innerHTML = saldoCumulativoHtml(saldoReal);
+      cellProv.innerHTML = saldoCumulativoHtml(saldoProv);
+
+      // Enfase discreta: linha que realmente alimenta o saldo
+      tr.classList.add('row-saldo-ativo');
+    });
+  }
+
   async function toggleDia(trDia, dia) {
     const chave = `dia:${dia}`;
     if (AGR.abertos[chave]) {
@@ -1032,6 +1139,7 @@
           delete AGR.abertos[k];
         }
       });
+      recalcularSaldosCumulativos();
       return;
     }
 
@@ -1049,6 +1157,7 @@
     const frag = document.createDocumentFragment();
     (data.linhas || []).forEach(l => frag.appendChild(rowGrupo(l, dia)));
     trDia.after(frag);
+    recalcularSaldosCumulativos();
   }
 
   async function toggleGrupo(trGrupo, dia, grupo) {
@@ -1060,6 +1169,7 @@
       Object.keys(AGR.abertos).forEach(k => {
         if (k.startsWith(`nome:${dia}:${grupo}:`)) delete AGR.abertos[k];
       });
+      recalcularSaldosCumulativos();
       return;
     }
 
@@ -1078,6 +1188,7 @@
     const frag = document.createDocumentFragment();
     (data.linhas || []).forEach(l => frag.appendChild(rowNome(l, dia, grupo)));
     trGrupo.after(frag);
+    recalcularSaldosCumulativos();
   }
 
   async function toggleNome(trNome, dia, grupo, nome) {
@@ -1086,6 +1197,7 @@
       removerFilhas('nome', {dia, grupo, nome});
       trNome.querySelector('.btn-toggle-nome i').className = 'fas fa-chevron-right';
       delete AGR.abertos[chave];
+      recalcularSaldosCumulativos();
       return;
     }
 
@@ -1105,6 +1217,7 @@
     const frag = document.createDocumentFragment();
     (data.linhas || []).forEach(l => frag.appendChild(rowLinha(l, dia, grupo, nome)));
     trNome.after(frag);
+    recalcularSaldosCumulativos();
   }
 
   function removerFilhas(nivelPai, filtros) {
