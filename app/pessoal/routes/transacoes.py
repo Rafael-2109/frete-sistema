@@ -27,12 +27,24 @@ def _aplicar_filtro_motivo_exclusao(query, motivo: str):
     1. SALDO_ANTERIOR    - historico comeca com SALDO ANTERIOR
     2. PAGAMENTO_CARTAO  - eh_pagamento_cartao=True
     3. TRANSF_PROPRIA    - eh_transferencia_propria=True (e nao pagamento cartao)
-    4. COMPENSADA        - valor_compensado >= valor (e nao pagamento/transf)
+    4. COMPENSADA        - valor_compensado > 0 (parcial OU total; NAO exige excluir_relatorio=True)
     5. EMPRESA           - categoria grupo=Desconsiderar OU compensavel_tipo NOT NULL
     6. OUTRO             - excluir_relatorio=True sem motivo claro
     """
     motivo = (motivo or '').upper()
-    # Todos os motivos implicam excluir_relatorio=True
+
+    # COMPENSADA: pode ter excluir_relatorio=False (compensacoes parciais).
+    # Filtra ANTES de aplicar o excluir_relatorio=True global.
+    if motivo == 'COMPENSADA':
+        return query.filter(
+            ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
+            PessoalTransacao.eh_pagamento_cartao.is_(False),
+            PessoalTransacao.eh_transferencia_propria.is_(False),
+            PessoalTransacao.valor_compensado > 0,
+            PessoalTransacao.valor > 0,
+        )
+
+    # Demais motivos implicam excluir_relatorio=True
     query = query.filter_by(excluir_relatorio=True)
 
     if motivo == 'SALDO_ANTERIOR':
@@ -53,15 +65,6 @@ def _aplicar_filtro_motivo_exclusao(query, motivo: str):
             PessoalTransacao.eh_transferencia_propria.is_(True),
         )
 
-    if motivo == 'COMPENSADA':
-        return query.filter(
-            ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
-            PessoalTransacao.eh_pagamento_cartao.is_(False),
-            PessoalTransacao.eh_transferencia_propria.is_(False),
-            PessoalTransacao.valor_compensado >= PessoalTransacao.valor,
-            PessoalTransacao.valor > 0,
-        )
-
     if motivo == 'EMPRESA':
         # Junta com categoria para verificar grupo/compensavel
         query = query.join(
@@ -73,10 +76,10 @@ def _aplicar_filtro_motivo_exclusao(query, motivo: str):
             ~func.upper(func.trim(PessoalTransacao.historico)).like('SALDO ANTERIOR%'),
             PessoalTransacao.eh_pagamento_cartao.is_(False),
             PessoalTransacao.eh_transferencia_propria.is_(False),
-            # Nao 100% compensada (deixa COMPENSADA levar esse grupo)
+            # Sem qualquer compensacao (deixa COMPENSADA levar parciais e totais)
             or_(
-                PessoalTransacao.valor_compensado < PessoalTransacao.valor,
                 PessoalTransacao.valor_compensado.is_(None),
+                PessoalTransacao.valor_compensado == 0,
             ),
             or_(
                 PessoalCategoria.grupo == 'Desconsiderar',
@@ -96,8 +99,8 @@ def _aplicar_filtro_motivo_exclusao(query, motivo: str):
             PessoalTransacao.eh_pagamento_cartao.is_(False),
             PessoalTransacao.eh_transferencia_propria.is_(False),
             or_(
-                PessoalTransacao.valor_compensado < PessoalTransacao.valor,
                 PessoalTransacao.valor_compensado.is_(None),
+                PessoalTransacao.valor_compensado == 0,
                 PessoalTransacao.valor == 0,
             ),
             or_(

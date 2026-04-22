@@ -34,6 +34,15 @@ def index():
     )
 
 
+@fluxo_caixa_bp.route('/fluxo-caixa/faturas')
+@login_required
+def faturas_index():
+    """Tela de gerenciamento de faturas de cartao (vinculo com pagamento)."""
+    if not pode_acessar_pessoal(current_user):
+        return 'Acesso restrito.', 403
+    return render_template('pessoal/fluxo_caixa_faturas.html')
+
+
 # =============================================================================
 # APIs
 # =============================================================================
@@ -95,6 +104,92 @@ def api_drilldown_fatura(transacao_id: int):
     try:
         dados = fluxo_caixa_service.drilldown_fatura(transacao_id)
         return jsonify({'sucesso': True, 'dados': dados})
+    except Exception as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@fluxo_caixa_bp.route('/api/fluxo-caixa/agrupado', methods=['GET'])
+@login_required
+def api_agrupado():
+    """Visao agrupada hierarquica: dia -> grupo -> nome -> linhas.
+
+    Query params:
+      ano, mes (obrigatorios)
+      nivel: 'dia' (default) | 'grupo' | 'nome' | 'linhas'
+      dia   (obrigatorio se nivel != 'dia')
+      grupo (obrigatorio se nivel in ['nome', 'linhas'])
+      nome  (obrigatorio se nivel == 'linhas')
+      inc_real_e, inc_real_s, inc_prov_e, inc_prov_s (bool, default true)
+    """
+    if not pode_acessar_pessoal(current_user):
+        return jsonify({'sucesso': False, 'mensagem': 'Acesso restrito.'}), 403
+
+    hoje = date.today()
+    ano = request.args.get('ano', hoje.year, type=int)
+    mes = request.args.get('mes', hoje.month, type=int)
+    nivel = (request.args.get('nivel') or 'dia').lower()
+
+    def _bool(param, default=True):
+        raw = request.args.get(param)
+        if raw is None:
+            return default
+        return str(raw).lower() in ('1', 'true', 'yes', 'on')
+
+    inc_real_e = _bool('inc_real_e', True)
+    inc_real_s = _bool('inc_real_s', True)
+    inc_prov_e = _bool('inc_prov_e', True)
+    inc_prov_s = _bool('inc_prov_s', True)
+
+    dia = request.args.get('dia', type=int)
+    grupo = request.args.get('grupo')
+    nome = request.args.get('nome')
+
+    try:
+        if nivel == 'dia':
+            linhas = fluxo_caixa_service.agrupado_por_dia(
+                ano, mes, inc_real_e, inc_real_s, inc_prov_e, inc_prov_s,
+            )
+        elif nivel == 'grupo':
+            if not dia:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'parametro "dia" obrigatorio para nivel=grupo',
+                }), 400
+            linhas = fluxo_caixa_service.agrupado_por_grupo(
+                ano, mes, dia, inc_real_e, inc_real_s, inc_prov_e, inc_prov_s,
+            )
+        elif nivel == 'nome':
+            if not dia or not grupo:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'parametros "dia" e "grupo" obrigatorios para nivel=nome',
+                }), 400
+            linhas = fluxo_caixa_service.agrupado_por_nome(
+                ano, mes, dia, grupo,
+                inc_real_e, inc_real_s, inc_prov_e, inc_prov_s,
+            )
+        elif nivel == 'linhas':
+            if not dia or not grupo or not nome:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'parametros "dia", "grupo" e "nome" obrigatorios para nivel=linhas',
+                }), 400
+            linhas = fluxo_caixa_service.agrupado_linhas(
+                ano, mes, dia, grupo, nome,
+                inc_real_e, inc_real_s, inc_prov_e, inc_prov_s,
+            )
+        else:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': f'nivel invalido: {nivel} (use dia|grupo|nome|linhas)',
+            }), 400
+
+        return jsonify({
+            'sucesso': True,
+            'ano': ano, 'mes': mes, 'nivel': nivel,
+            'dia': dia, 'grupo': grupo, 'nome': nome,
+            'linhas': linhas,
+        })
     except Exception as e:
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 

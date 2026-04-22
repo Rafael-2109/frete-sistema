@@ -267,7 +267,10 @@
                 {{ t.descricao[:40] if t.descricao else '' }}
               </td>
               <td class="text-end small fw-bold {{ 'text-success' if t.tipo == 'credito' else 'text-danger' }}">
-                R$ {{ t.valor|numero_br(2) }}
+                R$ {{ t.valor_efetivo|numero_br(2) }}
+                {% if t.valor_compensado and t.valor_compensado > 0 and t.valor_efetivo < t.valor %}
+                <br><small class="text-muted fw-normal">orig: R$ {{ t.valor|numero_br(2) }}</small>
+                {% endif %}
               </td>
               <td>
                 {% if t.tipo == 'credito' %}
@@ -287,7 +290,11 @@
                 {% elif motivo == 'TRANSF_PROPRIA' %}
                   <span class="badge bg-secondary" title="Transferencia propria">T.P.</span>
                 {% elif motivo == 'COMPENSADA' %}
+                  {% if t.valor_efetivo > 0 %}
+                  <span class="badge bg-warning text-dark" title="Compensacao parcial (saldo R$ {{ t.valor_efetivo|numero_br(2) }})">Comp~</span>
+                  {% else %}
                   <span class="badge bg-info" title="Compensada 100%">Comp</span>
+                  {% endif %}
                 {% elif motivo == 'OUTRO' %}
                   <span class="badge bg-danger" title="Excluida sem motivo claro — revisar">Revisar</span>
                 {% endif %}

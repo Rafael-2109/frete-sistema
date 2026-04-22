@@ -27,7 +27,7 @@ from sqlalchemy import and_, func
 
 from app import db
 from app.pessoal.models import (
-    PessoalConta, PessoalImportacao, PessoalOrcamento,
+    PessoalCategoria, PessoalConta, PessoalImportacao, PessoalOrcamento,
     PessoalProvisao, PessoalTransacao,
 )
 from app.utils.timezone import agora_utc_naive
@@ -625,21 +625,29 @@ def drilldown_fatura(pagamento_transacao_id: int) -> dict:
 # MOTIVO DE EXCLUSAO (para filtro na tela de transacoes)
 # =============================================================================
 def motivo_exclusao(t: PessoalTransacao) -> Optional[str]:
-    """Determina por que uma transacao esta com excluir_relatorio=True.
+    """Determina motivo da exclusao de uma transacao OU compensacao parcial.
 
     Ordem de prioridade (uma unica causa sera reportada):
     1. 'SALDO_ANTERIOR'      - historico comeca com SALDO ANTERIOR (ruido de fatura)
     2. 'PAGAMENTO_CARTAO'    - eh_pagamento_cartao=True
     3. 'TRANSF_PROPRIA'      - eh_transferencia_propria=True
-    4. 'COMPENSADA'          - valor_compensado >= valor (ambas pernas compensadas)
+    4. 'COMPENSADA'          - valor_compensado > 0 (parcial ou total; mesmo excluir_relatorio=False)
     5. 'EMPRESA'             - categoria grupo='Desconsiderar' OU compensavel_tipo is not None
-    6. None                  - excluir_relatorio=False
+    6. None                  - excluir_relatorio=False e sem compensacao
 
     Returns:
         str (codigo do motivo) ou None se nao esta excluida.
     """
+    valor = float(t.valor or 0)
+    compensado = float(t.valor_compensado or 0)
+    eh_parcial = valor > 0 and 0 < compensado < valor - 0.01
+
+    # Transacoes NAO excluidas: so retornam motivo se houver compensacao parcial (Comp~)
     if not t.excluir_relatorio:
+        if eh_parcial:
+            return 'COMPENSADA'
         return None
+
     historico_norm = (t.historico or '').strip().upper()
     if historico_norm.startswith('SALDO ANTERIOR'):
         return 'SALDO_ANTERIOR'
@@ -647,9 +655,7 @@ def motivo_exclusao(t: PessoalTransacao) -> Optional[str]:
         return 'PAGAMENTO_CARTAO'
     if t.eh_transferencia_propria:
         return 'TRANSF_PROPRIA'
-    valor = float(t.valor or 0)
-    compensado = float(t.valor_compensado or 0)
-    if valor > 0 and compensado >= valor - 0.01:
+    if valor > 0 and compensado > 0:
         return 'COMPENSADA'
     cat = t.categoria
     if cat and (cat.grupo == 'Desconsiderar' or cat.compensavel_tipo is not None):
@@ -661,3 +667,402 @@ def motivo_exclusao(t: PessoalTransacao) -> Optional[str]:
 def motivos_exclusao_batch(transacoes: list[PessoalTransacao]) -> dict[int, Optional[str]]:
     """Versao batch que evita N+1 no template. Retorna {id: motivo}."""
     return {t.id: motivo_exclusao(t) for t in transacoes}
+
+
+# =============================================================================
+# VISAO AGRUPADA — Accordion hierarquico dia -> grupo -> nome -> linhas
+# =============================================================================
+# Semantica:
+#   - "Realizado" = PessoalTransacao com excluir_relatorio=False (regra de fluxo)
+#     + pagamentos de cartao (eh_pagamento_cartao=True, independente de excluir_relatorio)
+#     pagamentos de cartao caem em categoria virtual 'Financeiro' / 'Cartao de Credito'
+#   - "Provisao"  = PessoalProvisao com status='PROVISIONADA' (PROVISIONADA ainda nao
+#     materializou; REALIZADA ja virou transacao real)
+#   - Categoria NULL: exibida como grupo='Sem Categoria' / nome='Sem Categoria'
+#   - Dias sem movimento: nao aparecem
+GRUPO_CARTAO = 'Financeiro'
+NOME_CARTAO = 'Cartao de Credito'
+GRUPO_SEM_CATEGORIA = 'Sem Categoria'
+NOME_SEM_CATEGORIA = 'Sem Categoria'
+
+
+def _categorias_map_mes(ano: int, mes: int) -> dict[int, tuple[str, str]]:
+    """Retorna {categoria_id: (grupo, nome)} para categorias usadas no mes.
+
+    Cache local para evitar N+1 ao expandir grupo/nome.
+    """
+    return {
+        c.id: (c.grupo or GRUPO_SEM_CATEGORIA, c.nome or NOME_SEM_CATEGORIA)
+        for c in PessoalCategoria.query.all()
+    }
+
+
+def _q_real_entradas(ano: int, mes: int):
+    """Query de realizadas (ENTRADA) para o mes. Retorna SUM agregado."""
+    inicio, proximo = _range_mes(ano, mes)
+    return db.session.query(
+        PessoalTransacao.data.label('data'),
+        PessoalTransacao.categoria_id.label('categoria_id'),
+        func.sum(_EXPR_VALOR_EFETIVO).label('total'),
+    ).filter(
+        and_(
+            PessoalTransacao.data >= inicio,
+            PessoalTransacao.data < proximo,
+            *_filtro_entrada(),
+        )
+    ).group_by(PessoalTransacao.data, PessoalTransacao.categoria_id)
+
+
+def _q_real_saidas_base(ano: int, mes: int):
+    """Saidas realizadas normais (exclui pagamentos de cartao)."""
+    inicio, proximo = _range_mes(ano, mes)
+    return db.session.query(
+        PessoalTransacao.data.label('data'),
+        PessoalTransacao.categoria_id.label('categoria_id'),
+        func.sum(_EXPR_VALOR_EFETIVO).label('total'),
+    ).filter(
+        and_(
+            PessoalTransacao.data >= inicio,
+            PessoalTransacao.data < proximo,
+            PessoalTransacao.tipo == 'debito',
+            PessoalTransacao.eh_pagamento_cartao.is_(False),
+            *_filtros_caixa_base(),
+        )
+    ).group_by(PessoalTransacao.data, PessoalTransacao.categoria_id)
+
+
+def _q_real_pagamentos_cartao(ano: int, mes: int):
+    """Saidas = pagamentos de fatura. categoria_id = NULL (grupo virtual atribuido apos)."""
+    inicio, proximo = _range_mes(ano, mes)
+    return db.session.query(
+        PessoalTransacao.data.label('data'),
+        func.sum(PessoalTransacao.valor).label('total'),
+    ).filter(
+        and_(
+            PessoalTransacao.data >= inicio,
+            PessoalTransacao.data < proximo,
+            PessoalTransacao.tipo == 'debito',
+            PessoalTransacao.eh_pagamento_cartao.is_(True),
+            *_filtros_cc_sem_transf(),
+        )
+    ).group_by(PessoalTransacao.data)
+
+
+def _q_prov(ano: int, mes: int, tipo: str):
+    """Provisoes PROVISIONADAS agrupadas por (data_prevista, categoria_id)."""
+    inicio, proximo = _range_mes(ano, mes)
+    return db.session.query(
+        PessoalProvisao.data_prevista.label('data'),
+        PessoalProvisao.categoria_id.label('categoria_id'),
+        func.sum(PessoalProvisao.valor).label('total'),
+    ).filter(
+        and_(
+            PessoalProvisao.data_prevista >= inicio,
+            PessoalProvisao.data_prevista < proximo,
+            PessoalProvisao.status == 'PROVISIONADA',
+            PessoalProvisao.tipo == tipo,
+        )
+    ).group_by(PessoalProvisao.data_prevista, PessoalProvisao.categoria_id)
+
+
+def _resolve_grupo_nome(cat_id: Optional[int], cat_map: dict) -> tuple[str, str]:
+    if cat_id is None:
+        return (GRUPO_SEM_CATEGORIA, NOME_SEM_CATEGORIA)
+    return cat_map.get(cat_id, (GRUPO_SEM_CATEGORIA, NOME_SEM_CATEGORIA))
+
+
+def _acumular(dst: dict, chave, incremento: dict):
+    """Incrementa um dict de acumulador {chave: {entrada_real, entrada_prov, saida_real, saida_prov}}."""
+    bucket = dst.setdefault(chave, {
+        'entrada_real': 0.0, 'entrada_prov': 0.0,
+        'saida_real': 0.0, 'saida_prov': 0.0,
+    })
+    for k, v in incremento.items():
+        bucket[k] = (bucket.get(k, 0.0) or 0.0) + float(v or 0)
+
+
+def _linha_final(bucket: dict) -> dict:
+    """Converte bucket acumulado em linha retornada para UI."""
+    ent_r = round(bucket.get('entrada_real', 0.0), 2)
+    ent_p = round(bucket.get('entrada_prov', 0.0), 2)
+    sai_r = round(bucket.get('saida_real', 0.0), 2)
+    sai_p = round(bucket.get('saida_prov', 0.0), 2)
+    return {
+        'entrada_realizado': ent_r,
+        'entrada_provisao': ent_p,
+        'saida_realizado': sai_r,
+        'saida_provisao': sai_p,
+        'saldo_realizado': round(ent_r - sai_r, 2),
+        'saldo_provisao': round(ent_p - sai_p, 2),
+    }
+
+
+def agrupado_por_dia(
+    ano: int, mes: int,
+    inc_real_e: bool = True, inc_real_s: bool = True,
+    inc_prov_e: bool = True, inc_prov_s: bool = True,
+) -> list[dict]:
+    """Visao agrupada NIVEL 1: totais por dia."""
+    cat_map = _categorias_map_mes(ano, mes)
+    acc: dict[int, dict] = {}
+
+    if inc_real_e:
+        for row in _q_real_entradas(ano, mes).all():
+            dia = row.data.day
+            _acumular(acc, dia, {'entrada_real': row.total})
+
+    if inc_real_s:
+        for row in _q_real_saidas_base(ano, mes).all():
+            dia = row.data.day
+            _acumular(acc, dia, {'saida_real': row.total})
+        # Pagamentos de cartao tambem sao saidas realizadas
+        for row in _q_real_pagamentos_cartao(ano, mes).all():
+            dia = row.data.day
+            _acumular(acc, dia, {'saida_real': row.total})
+
+    if inc_prov_e:
+        for row in _q_prov(ano, mes, 'entrada').all():
+            dia = row.data.day
+            _acumular(acc, dia, {'entrada_prov': row.total})
+
+    if inc_prov_s:
+        for row in _q_prov(ano, mes, 'saida').all():
+            dia = row.data.day
+            _acumular(acc, dia, {'saida_prov': row.total})
+
+    linhas = []
+    for dia in sorted(acc.keys()):
+        linha = _linha_final(acc[dia])
+        linha['dia'] = dia
+        try:
+            linha['data_br'] = date(ano, mes, dia).strftime('%d/%m/%Y')
+        except ValueError:
+            linha['data_br'] = f'{dia:02d}/{mes:02d}/{ano}'
+        linha['tem_filhos'] = True
+        linhas.append(linha)
+    return linhas
+
+
+def agrupado_por_grupo(
+    ano: int, mes: int, dia: int,
+    inc_real_e: bool = True, inc_real_s: bool = True,
+    inc_prov_e: bool = True, inc_prov_s: bool = True,
+) -> list[dict]:
+    """Visao agrupada NIVEL 2: grupos do dia."""
+    cat_map = _categorias_map_mes(ano, mes)
+    data_alvo = date(ano, mes, dia)
+    acc: dict[str, dict] = {}
+
+    def _filtro_dia(q):
+        return q.filter(PessoalTransacao.data == data_alvo)
+
+    def _filtro_dia_prov(q):
+        return q.filter(PessoalProvisao.data_prevista == data_alvo)
+
+    if inc_real_e:
+        for row in _filtro_dia(_q_real_entradas(ano, mes)).all():
+            grupo, _ = _resolve_grupo_nome(row.categoria_id, cat_map)
+            _acumular(acc, grupo, {'entrada_real': row.total})
+
+    if inc_real_s:
+        for row in _filtro_dia(_q_real_saidas_base(ano, mes)).all():
+            grupo, _ = _resolve_grupo_nome(row.categoria_id, cat_map)
+            _acumular(acc, grupo, {'saida_real': row.total})
+        for row in _q_real_pagamentos_cartao(ano, mes).filter(
+            PessoalTransacao.data == data_alvo,
+        ).all():
+            _acumular(acc, GRUPO_CARTAO, {'saida_real': row.total})
+
+    if inc_prov_e:
+        for row in _filtro_dia_prov(_q_prov(ano, mes, 'entrada')).all():
+            grupo, _ = _resolve_grupo_nome(row.categoria_id, cat_map)
+            _acumular(acc, grupo, {'entrada_prov': row.total})
+
+    if inc_prov_s:
+        for row in _filtro_dia_prov(_q_prov(ano, mes, 'saida')).all():
+            grupo, _ = _resolve_grupo_nome(row.categoria_id, cat_map)
+            _acumular(acc, grupo, {'saida_prov': row.total})
+
+    linhas = []
+    for grupo in sorted(acc.keys()):
+        linha = _linha_final(acc[grupo])
+        linha['dia'] = dia
+        linha['grupo'] = grupo
+        linha['tem_filhos'] = True
+        linhas.append(linha)
+    return linhas
+
+
+def agrupado_por_nome(
+    ano: int, mes: int, dia: int, grupo: str,
+    inc_real_e: bool = True, inc_real_s: bool = True,
+    inc_prov_e: bool = True, inc_prov_s: bool = True,
+) -> list[dict]:
+    """Visao agrupada NIVEL 3: nomes dentro de (dia, grupo)."""
+    cat_map = _categorias_map_mes(ano, mes)
+    data_alvo = date(ano, mes, dia)
+    acc: dict[str, dict] = {}
+
+    # Categorias filtradas pelo grupo alvo (id -> nome)
+    cat_ids_do_grupo = {
+        cid: nome for cid, (g, nome) in cat_map.items() if g == grupo
+    }
+
+    def _filtro_dia(q):
+        return q.filter(PessoalTransacao.data == data_alvo)
+
+    def _filtro_dia_prov(q):
+        return q.filter(PessoalProvisao.data_prevista == data_alvo)
+
+    def _nome_para(cat_id):
+        if grupo == GRUPO_SEM_CATEGORIA and cat_id is None:
+            return NOME_SEM_CATEGORIA
+        return cat_ids_do_grupo.get(cat_id)
+
+    if inc_real_e:
+        for row in _filtro_dia(_q_real_entradas(ano, mes)).all():
+            nome = _nome_para(row.categoria_id)
+            if nome is None:
+                continue
+            _acumular(acc, nome, {'entrada_real': row.total})
+
+    if inc_real_s:
+        for row in _filtro_dia(_q_real_saidas_base(ano, mes)).all():
+            nome = _nome_para(row.categoria_id)
+            if nome is None:
+                continue
+            _acumular(acc, nome, {'saida_real': row.total})
+        # Pagamentos de cartao so entram se grupo == GRUPO_CARTAO
+        if grupo == GRUPO_CARTAO:
+            for row in _q_real_pagamentos_cartao(ano, mes).filter(
+                PessoalTransacao.data == data_alvo,
+            ).all():
+                _acumular(acc, NOME_CARTAO, {'saida_real': row.total})
+
+    if inc_prov_e:
+        for row in _filtro_dia_prov(_q_prov(ano, mes, 'entrada')).all():
+            nome = _nome_para(row.categoria_id)
+            if nome is None:
+                continue
+            _acumular(acc, nome, {'entrada_prov': row.total})
+
+    if inc_prov_s:
+        for row in _filtro_dia_prov(_q_prov(ano, mes, 'saida')).all():
+            nome = _nome_para(row.categoria_id)
+            if nome is None:
+                continue
+            _acumular(acc, nome, {'saida_prov': row.total})
+
+    linhas = []
+    for nome in sorted(acc.keys()):
+        linha = _linha_final(acc[nome])
+        linha['dia'] = dia
+        linha['grupo'] = grupo
+        linha['nome'] = nome
+        linha['tem_filhos'] = True
+        linhas.append(linha)
+    return linhas
+
+
+def agrupado_linhas(
+    ano: int, mes: int, dia: int, grupo: str, nome: str,
+    inc_real_e: bool = True, inc_real_s: bool = True,
+    inc_prov_e: bool = True, inc_prov_s: bool = True,
+) -> list[dict]:
+    """Visao agrupada NIVEL 4: linhas individuais (transacoes + provisoes)."""
+    cat_map = _categorias_map_mes(ano, mes)
+    data_alvo = date(ano, mes, dia)
+
+    # Conjunto de categoria_ids que casam (grupo, nome)
+    cat_ids_alvo = [
+        cid for cid, (g, n) in cat_map.items() if g == grupo and n == nome
+    ]
+    eh_cartao = (grupo == GRUPO_CARTAO and nome == NOME_CARTAO)
+    eh_sem_cat = (grupo == GRUPO_SEM_CATEGORIA and nome == NOME_SEM_CATEGORIA)
+
+    linhas = []
+
+    # --- REALIZADAS: transacoes do dia (entrada e saida base) ---
+    if inc_real_e or inc_real_s:
+        q_tx = PessoalTransacao.query.filter(
+            PessoalTransacao.data == data_alvo,
+            *_filtros_cc_sem_transf(),
+        )
+        if eh_cartao:
+            # Apenas pagamentos de cartao
+            q_tx = q_tx.filter(
+                PessoalTransacao.tipo == 'debito',
+                PessoalTransacao.eh_pagamento_cartao.is_(True),
+            )
+        else:
+            # Base: nao pagamento cartao + excluir_relatorio=False
+            q_tx = q_tx.filter(
+                PessoalTransacao.eh_pagamento_cartao.is_(False),
+                PessoalTransacao.excluir_relatorio.is_(False),
+            )
+            if eh_sem_cat:
+                q_tx = q_tx.filter(PessoalTransacao.categoria_id.is_(None))
+            elif cat_ids_alvo:
+                q_tx = q_tx.filter(PessoalTransacao.categoria_id.in_(cat_ids_alvo))
+            else:
+                # Nao ha categoria com este (grupo, nome): nao retorna realizadas comuns
+                q_tx = q_tx.filter(False)
+
+        for t in q_tx.order_by(PessoalTransacao.id).all():
+            if t.tipo == 'credito' and not inc_real_e:
+                continue
+            if t.tipo == 'debito' and not inc_real_s:
+                continue
+            valor = float(t.valor or 0) - float(t.valor_compensado or 0)
+            if valor < 0:
+                valor = 0
+            linhas.append({
+                'tipo': 'realizada',
+                'id': t.id,
+                'data_iso': t.data.isoformat() if t.data else None,
+                'data_br': t.data.strftime('%d/%m/%Y') if t.data else None,
+                'historico': t.historico,
+                'descricao': t.descricao,
+                'conta_nome': t.conta.nome if t.conta else None,
+                'valor': round(valor, 2),
+                'fluxo': 'entrada' if t.tipo == 'credito' else 'saida',
+                'eh_pagamento_cartao': t.eh_pagamento_cartao,
+            })
+
+    # --- PROVISOES do dia ---
+    if inc_prov_e or inc_prov_s:
+        q_prov = PessoalProvisao.query.filter(
+            PessoalProvisao.data_prevista == data_alvo,
+            PessoalProvisao.status == 'PROVISIONADA',
+        )
+        if eh_cartao:
+            # Provisoes nao tem categoria virtual "Financeiro/Cartao"
+            q_prov = q_prov.filter(False)
+        elif eh_sem_cat:
+            q_prov = q_prov.filter(PessoalProvisao.categoria_id.is_(None))
+        elif cat_ids_alvo:
+            q_prov = q_prov.filter(PessoalProvisao.categoria_id.in_(cat_ids_alvo))
+        else:
+            q_prov = q_prov.filter(False)
+
+        for p in q_prov.order_by(PessoalProvisao.id).all():
+            if p.tipo == 'entrada' and not inc_prov_e:
+                continue
+            if p.tipo == 'saida' and not inc_prov_s:
+                continue
+            linhas.append({
+                'tipo': 'provisao',
+                'id': p.id,
+                'data_iso': p.data_prevista.isoformat() if p.data_prevista else None,
+                'data_br': p.data_prevista.strftime('%d/%m/%Y') if p.data_prevista else None,
+                'historico': p.descricao,
+                'descricao': p.observacao,
+                'conta_nome': p.conta.nome if p.conta else None,
+                'valor': float(p.valor or 0),
+                'fluxo': p.tipo,
+                'eh_pagamento_cartao': False,
+            })
+
+    # Ordenar: realizadas primeiro, depois provisoes
+    linhas.sort(key=lambda l: (l['tipo'] != 'realizada', l['id']))
+    return linhas

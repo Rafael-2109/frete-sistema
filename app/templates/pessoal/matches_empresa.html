@@ -15,44 +15,120 @@
     </div>
   </div>
 
-  <div class="alert alert-info py-2 mb-3">
-    <small>
-      <i class="fas fa-info-circle"></i> Dias com <strong>2+ pontas</strong> (entradas/saidas empresa intra-day)
-      que <strong>nao foram casados automaticamente</strong>. Vincule manualmente: selecione saida + entrada,
-      digite o valor a compensar (padrao = minimo dos residuos).
-    </small>
-  </div>
+  <ul class="nav nav-tabs mb-3" id="tabsMatchEmpresa" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-pendentes-btn" data-bs-toggle="tab" data-bs-target="#tab-pendentes" type="button" role="tab">
+        <i class="fas fa-tasks"></i> Pendentes
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-historico-btn" data-bs-toggle="tab" data-bs-target="#tab-historico" type="button" role="tab">
+        <i class="fas fa-history"></i> Historico <span class="badge bg-secondary ms-1" id="badgeHistorico">-</span>
+      </button>
+    </li>
+  </ul>
 
-  <div class="card mb-3">
-    <div class="card-body py-2">
-      <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-          <label class="form-label small mb-0">Data Inicio</label>
-          <input type="date" id="f_data_inicio" class="form-control form-control-sm">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small mb-0">Data Fim</label>
-          <input type="date" id="f_data_fim" class="form-control form-control-sm">
-        </div>
-        <div class="col-md-3">
-          <div class="form-check mt-3">
-            <input class="form-check-input" type="checkbox" id="f_apenas_ambiguos" checked>
-            <label class="form-check-label small" for="f_apenas_ambiguos">
-              Apenas ambiguos (2+ pontas)
-            </label>
+  <div class="tab-content">
+    <div class="tab-pane fade show active" id="tab-pendentes" role="tabpanel">
+      <div class="alert alert-info py-2 mb-3">
+        <small>
+          <i class="fas fa-info-circle"></i> Dias com <strong>2+ pontas</strong> (entradas/saidas empresa intra-day)
+          que <strong>nao foram casados automaticamente</strong>. Vincule manualmente: selecione saida + entrada,
+          digite o valor a compensar (padrao = minimo dos residuos).
+        </small>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body py-2">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Data Inicio</label>
+              <input type="date" id="f_data_inicio" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Data Fim</label>
+              <input type="date" id="f_data_fim" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+              <div class="form-check mt-3">
+                <input class="form-check-input" type="checkbox" id="f_apenas_ambiguos" checked>
+                <label class="form-check-label small" for="f_apenas_ambiguos">
+                  Apenas ambiguos (2+ pontas)
+                </label>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <button type="button" id="btnRecarregar" class="btn btn-primary btn-sm w-100">
+                <i class="fas fa-sync-alt"></i> Recarregar
+              </button>
+            </div>
           </div>
         </div>
-        <div class="col-md-3">
-          <button type="button" id="btnRecarregar" class="btn btn-primary btn-sm w-100">
-            <i class="fas fa-sync-alt"></i> Recarregar
-          </button>
-        </div>
+      </div>
+
+      <div id="containerDias">
+        <div class="text-center text-muted py-3">Carregando...</div>
       </div>
     </div>
-  </div>
 
-  <div id="containerDias">
-    <div class="text-center text-muted py-3">Carregando...</div>
+    <div class="tab-pane fade" id="tab-historico" role="tabpanel">
+      <div class="card mb-3">
+        <div class="card-body py-2">
+          <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Status</label>
+              <select id="f_hist_status" class="form-select form-select-sm">
+                <option value="">Todas</option>
+                <option value="ATIVA" selected>Ativas</option>
+                <option value="REVERTIDA">Revertidas</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Origem</label>
+              <select id="f_hist_origem" class="form-select form-select-sm">
+                <option value="">Todas</option>
+                <option value="auto">Auto</option>
+                <option value="manual">Manual</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Limite</label>
+              <select id="f_hist_limit" class="form-select form-select-sm">
+                <option value="50">50</option>
+                <option value="200" selected>200</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <button type="button" id="btnRecarregarHist" class="btn btn-primary btn-sm w-100">
+                <i class="fas fa-sync-alt"></i> Recarregar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead class="table-light">
+            <tr>
+              <th style="width:120px">Criado em</th>
+              <th>Saida</th>
+              <th>Entrada</th>
+              <th class="text-end" style="width:120px">Compensado</th>
+              <th style="width:80px">Origem</th>
+              <th style="width:100px">Status</th>
+              <th>Criado por / Revertido por</th>
+              <th style="width:110px"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyHistorico">
+            <tr><td colspan="8" class="text-center text-muted py-3">Abra a aba para carregar</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -248,8 +324,135 @@
     return card;
   }
 
+  // ====== HISTORICO DE COMPENSACOES ======
+  let historicoCarregadoUmaVez = false;
+
+  function fmtDate(isoStr) {
+    if (!isoStr) return '-';
+    // aceita 'YYYY-MM-DD' e 'YYYY-MM-DDTHH:MM:SS'
+    const s = String(isoStr);
+    const [data, hora] = s.split('T');
+    const [y, m, d] = data.split('-');
+    if (!y) return s;
+    const base = `${d}/${m}/${y}`;
+    return hora ? `${base} ${hora.slice(0,5)}` : base;
+  }
+
+  function badgeOrigem(origem) {
+    const cls = origem === 'manual' ? 'bg-primary' : 'bg-secondary';
+    return `<span class="badge ${cls}">${esc(origem || '?')}</span>`;
+  }
+
+  function badgeStatus(status) {
+    const cls = status === 'ATIVA' ? 'bg-success' : 'bg-secondary text-light';
+    return `<span class="badge ${cls}">${esc(status || '?')}</span>`;
+  }
+
+  function renderPonta(p, corValor) {
+    if (!p) return '<span class="text-muted small">-</span>';
+    const efet = p.valor_efetivo !== undefined && p.valor_efetivo !== null
+      ? `<br><small class="text-muted">saldo: ${moeda(p.valor_efetivo)}</small>`
+      : '';
+    return `
+      <div><small class="text-muted">${esc(fmtDate(p.data))} #${esc(p.id)}</small></div>
+      <div><small>${esc((p.historico || '').slice(0, 60))}</small></div>
+      <div class="fw-bold ${corValor}">${p.valor !== null ? moeda(p.valor) : '-'}${efet}</div>
+    `;
+  }
+
+  async function carregarHistorico() {
+    const status = $('f_hist_status').value;
+    const origem = $('f_hist_origem').value;
+    const limit = $('f_hist_limit').value || '200';
+    const qs = new URLSearchParams({ limit });
+    if (status) qs.set('status', status);
+
+    const tbody = $('tbodyHistorico');
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Carregando...</td></tr>';
+
+    const data = await apiCall('/pessoal/api/matches-empresa/historico?' + qs);
+    if (!data.sucesso) {
+      tbody.innerHTML = `<tr><td colspan="8" class="text-danger py-2">${esc(data.mensagem)}</td></tr>`;
+      return;
+    }
+
+    // Filtro de origem lado-cliente (backend nao filtra por origem)
+    let lista = data.compensacoes || [];
+    if (origem) lista = lista.filter(c => c.origem === origem);
+
+    // Atualiza badge do tab com total de ATIVAS (sempre — ignora filtros)
+    const totalAtivas = (data.compensacoes || []).filter(c => c.status === 'ATIVA').length;
+    $('badgeHistorico').textContent = totalAtivas;
+
+    if (!lista.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Nenhuma compensacao para os filtros</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '';
+    lista.forEach((c) => {
+      const tr = document.createElement('tr');
+      const criadoEm = fmtDate(c.criado_em);
+      const revertidoInfo = c.status === 'REVERTIDA'
+        ? `<div><small class="text-muted">Revertido por: ${esc(c.revertido_por || '-')}</small></div>
+           <div><small class="text-muted">em ${esc(fmtDate(c.revertido_em))}</small></div>`
+        : '';
+      const btnReverter = c.status === 'ATIVA'
+        ? `<button class="btn btn-sm btn-outline-danger btn-reverter" data-id="${esc(c.id)}">
+             <i class="fas fa-undo"></i> Reverter
+           </button>`
+        : '<span class="text-muted small">—</span>';
+
+      tr.innerHTML = `
+        <td><small>${esc(criadoEm)}</small></td>
+        <td>${renderPonta(c.saida, 'text-danger')}</td>
+        <td>${renderPonta(c.entrada, 'text-success')}</td>
+        <td class="text-end fw-bold">${moeda(c.valor_compensado)}</td>
+        <td>${badgeOrigem(c.origem)}</td>
+        <td>${badgeStatus(c.status)}</td>
+        <td>
+          <div><small>Criou: ${esc(c.criado_por || '-')}</small></div>
+          ${revertidoInfo}
+        </td>
+        <td>${btnReverter}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-reverter').forEach((b) => {
+      b.addEventListener('click', () => reverterComp(b.dataset.id));
+    });
+  }
+
+  async function reverterComp(compId) {
+    if (!confirm('Reverter esta compensacao? As pontas voltam com residuo.')) return;
+    const r = await apiCall('/pessoal/api/matches-empresa/reverter/' + compId, {
+      method: 'POST',
+    });
+    if (r.sucesso) {
+      alerta('Compensacao revertida');
+      carregarHistorico();
+      carregar();  // recarrega pendentes (pontas voltam a aparecer)
+    } else {
+      alerta('Erro: ' + r.mensagem, 'danger');
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     $('btnRecarregar').addEventListener('click', carregar);
+    $('btnRecarregarHist').addEventListener('click', carregarHistorico);
+    $('f_hist_status').addEventListener('change', carregarHistorico);
+    $('f_hist_origem').addEventListener('change', carregarHistorico);
+    $('f_hist_limit').addEventListener('change', carregarHistorico);
+
+    // Carrega historico lazy (so ao primeiro click na aba)
+    $('tab-historico-btn').addEventListener('shown.bs.tab', () => {
+      if (!historicoCarregadoUmaVez) {
+        historicoCarregadoUmaVez = true;
+      }
+      carregarHistorico();
+    });
+
     carregar();
   });
 })();

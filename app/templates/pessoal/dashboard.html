@@ -274,7 +274,8 @@ $('#seletorMes').on('change', function() {
 });
 
 $('#btnMesAnterior').on('click', function() {
-  const d = new Date(mesAtual + '-01');
+  const [ano, mes] = mesAtual.split('-').map(Number);
+  const d = new Date(ano, mes - 1, 1);  // construtor numerico: local time, sem ambiguidade de fuso
   d.setMonth(d.getMonth() - 1);
   mesAtual = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   $('#seletorMes').val(mesAtual);
@@ -282,7 +283,8 @@ $('#btnMesAnterior').on('click', function() {
 });
 
 $('#btnMesProximo').on('click', function() {
-  const d = new Date(mesAtual + '-01');
+  const [ano, mes] = mesAtual.split('-').map(Number);
+  const d = new Date(ano, mes - 1, 1);  // construtor numerico: local time, sem ambiguidade de fuso
   d.setMonth(d.getMonth() + 1);
   mesAtual = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   $('#seletorMes').val(mesAtual);

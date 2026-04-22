@@ -1,0 +1,382 @@
+{% extends 'base.html' %}
+{% block title %}Faturas de Cartao{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">
+      <i class="fas fa-credit-card text-warning"></i> Faturas de Cartao
+      <span class="badge bg-secondary">Vinculo fatura x pagamento</span>
+    </h4>
+    <div>
+      <a href="{{ url_for('pessoal.pessoal_fluxo_caixa.index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-water"></i> Fluxo de Caixa
+      </a>
+    </div>
+  </div>
+
+  <div class="alert alert-info py-2 mb-3">
+    <small>
+      <i class="fas fa-info-circle"></i> Gerencie o vinculo entre <strong>faturas importadas</strong>
+      e a <strong>transacao de pagamento</strong> (debito na conta corrente). Sem vinculo, o detalhe
+      de "Pagamentos de Cartao" no Fluxo de Caixa mostra dados incompletos.
+    </small>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small mb-0">Status</label>
+          <select id="f_status" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            <option value="sem_vinculo" selected>Sem vinculo</option>
+            <option value="com_vinculo">Vinculadas</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-0">Limite</label>
+          <select id="f_limit" class="form-select form-select-sm">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <button type="button" id="btnRecarregar" class="btn btn-primary btn-sm w-100">
+            <i class="fas fa-sync-alt"></i> Recarregar
+          </button>
+        </div>
+        <div class="col-md-2">
+          <button type="button" id="btnBackfillDry" class="btn btn-outline-secondary btn-sm w-100" title="Simula vinculo automatico sem gravar">
+            <i class="fas fa-search"></i> Simular
+          </button>
+        </div>
+        <div class="col-md-2">
+          <button type="button" id="btnBackfill" class="btn btn-warning btn-sm w-100" title="Roda vinculo automatico (match exato, 1 candidata)">
+            <i class="fas fa-magic"></i> Vincular auto
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="resumoBackfill"></div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-hover">
+      <thead class="table-light">
+        <tr>
+          <th style="width:90px">Fatura</th>
+          <th>Conta</th>
+          <th style="width:180px">Periodo</th>
+          <th class="text-end" style="width:90px">N compras</th>
+          <th class="text-end" style="width:120px">Total fatura</th>
+          <th class="text-end" style="width:120px">Valor pago</th>
+          <th class="text-end" style="width:100px">Dif.</th>
+          <th style="width:100px">Status</th>
+          <th>Pagamento</th>
+          <th style="width:160px">Acoes</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyFaturas">
+        <tr><td colspan="10" class="text-center text-muted py-3">Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Sugestoes -->
+<div class="modal fade" id="modalSugestoes" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Sugestoes de vinculo — Fatura #<span id="modalFaturaId"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modalSugestoesBody">
+          <div class="text-center text-muted py-3">Carregando...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+  const moeda = (v) => {
+    if (v === null || v === undefined) return '-';
+    return 'R$ ' + Number(v).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
+  };
+  const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+  function fmtDate(iso) {
+    if (!iso) return '-';
+    const [y, m, d] = String(iso).split('T')[0].split('-');
+    return y ? `${d}/${m}/${y}` : iso;
+  }
+
+  async function apiCall(url, opts={}) {
+    const headers = Object.assign({'Content-Type': 'application/json'}, opts.headers || {});
+    const method = (opts.method || 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD') headers['X-CSRFToken'] = CSRF;
+    try {
+      const resp = await fetch(url, Object.assign({}, opts, {headers}));
+      let data = null;
+      try { data = await resp.json(); } catch (_) {
+        return {sucesso: false, mensagem: `Erro ${resp.status}`};
+      }
+      if (!resp.ok && data && 'sucesso' in data) return data;
+      if (!resp.ok) return {sucesso: false, mensagem: `Erro ${resp.status}`};
+      return data;
+    } catch (e) {
+      return {sucesso: false, mensagem: 'Erro de rede: ' + (e.message || e)};
+    }
+  }
+
+  function alerta(msg, tipo='success') {
+    const div = document.createElement('div');
+    div.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+    div.style.zIndex = '9999';
+    const span = document.createElement('span');
+    span.textContent = msg;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn-close'; btn.setAttribute('data-bs-dismiss', 'alert');
+    div.appendChild(span); div.appendChild(btn);
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 4500);
+  }
+
+  async function carregar() {
+    const status = $('f_status').value;
+    const limit = $('f_limit').value || '100';
+    const qs = new URLSearchParams({ limit });
+    if (status === 'sem_vinculo') qs.set('apenas_sem_vinculo', '1');
+
+    const tbody = $('tbodyFaturas');
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Carregando...</td></tr>';
+
+    const data = await apiCall('/pessoal/api/fluxo-caixa/faturas?' + qs);
+    if (!data.sucesso) {
+      tbody.innerHTML = `<tr><td colspan="10" class="text-danger py-2">${esc(data.mensagem)}</td></tr>`;
+      return;
+    }
+
+    let faturas = data.faturas || [];
+    // Filtro client-side para "com_vinculo"
+    if (status === 'com_vinculo') {
+      faturas = faturas.filter(f => f.transacao_pagamento_id);
+    }
+
+    if (!faturas.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Nenhuma fatura encontrada</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '';
+    faturas.forEach(f => tbody.appendChild(renderFatura(f)));
+  }
+
+  function renderFatura(f) {
+    const tr = document.createElement('tr');
+    const vinculada = !!f.transacao_pagamento_id;
+    const periodo = (f.periodo_inicio || f.periodo_fim)
+      ? `${fmtDate(f.periodo_inicio)} - ${fmtDate(f.periodo_fim)}`
+      : '-';
+    const statusBdg = vinculada
+      ? '<span class="badge bg-success">Vinculada</span>'
+      : '<span class="badge bg-warning text-dark">Pendente</span>';
+    const pag = f.pagamento;
+    const valorPago = pag ? moeda(pag.valor) : '-';
+    const dif = pag
+      ? `<span class="${pag.diff_valor === 0 ? 'text-success' : (pag.diff_valor > 0 ? 'text-warning' : 'text-danger')}">${moeda(pag.diff_valor)}</span>`
+      : '-';
+    const pagamentoInfo = pag
+      ? `<div><small class="text-muted">#${esc(pag.id)} — ${esc(fmtDate(pag.data))}</small></div>
+         <div><small>${esc((pag.historico || '').slice(0, 80))}</small></div>`
+      : '<span class="text-muted small">Sem vinculo</span>';
+    const acoes = vinculada
+      ? `<button class="btn btn-sm btn-outline-danger btn-desvincular" data-id="${esc(f.id)}">
+           <i class="fas fa-unlink"></i> Desvincular
+         </button>`
+      : `<button class="btn btn-sm btn-primary btn-sugerir" data-id="${esc(f.id)}">
+           <i class="fas fa-magic"></i> Sugerir
+         </button>`;
+
+    tr.innerHTML = `
+      <td><small>#${esc(f.id)}</small></td>
+      <td><small>${esc(f.conta_nome || '-')}<br>${esc(f.nome_arquivo || '')}</small></td>
+      <td><small>${esc(periodo)}</small></td>
+      <td class="text-end">${esc(f.n_compras || 0)}</td>
+      <td class="text-end">${moeda(f.total_compras)}</td>
+      <td class="text-end fw-bold">${valorPago}</td>
+      <td class="text-end">${dif}</td>
+      <td>${statusBdg}</td>
+      <td>${pagamentoInfo}</td>
+      <td>${acoes}</td>
+    `;
+    return tr;
+  }
+
+  async function abrirSugestoes(faturaId) {
+    $('modalFaturaId').textContent = faturaId;
+    const body = $('modalSugestoesBody');
+    body.innerHTML = '<div class="text-center text-muted py-3">Carregando...</div>';
+    const modal = new bootstrap.Modal($('modalSugestoes'));
+    modal.show();
+
+    const data = await apiCall(`/pessoal/api/fluxo-caixa/faturas/${faturaId}/sugerir-matches`);
+    if (!data.sucesso) {
+      body.innerHTML = `<div class="alert alert-danger">${esc(data.mensagem)}</div>`;
+      return;
+    }
+    const sugestoes = data.sugestoes || [];
+    if (!sugestoes.length) {
+      body.innerHTML = '<div class="alert alert-warning">Nenhum candidato encontrado (valor/data fora dos limites).</div>';
+      return;
+    }
+
+    body.innerHTML = `
+      <p class="small text-muted mb-2">
+        Clique em "Vincular" no candidato correto. Candidatos ordenados por score (match exato + proximidade de data).
+      </p>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>Data</th>
+              <th>Historico</th>
+              <th>Conta</th>
+              <th class="text-end">Valor</th>
+              <th class="text-end">Diff</th>
+              <th class="text-end">Dist dias</th>
+              <th>Score</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sugestoes.map((s, i) => `
+              <tr class="${s.match_exato ? 'table-success' : ''}">
+                <td><small>${esc(s.data_br)}</small></td>
+                <td><small>${esc((s.historico || '').slice(0, 60))}</small></td>
+                <td><small>${esc(s.conta_nome || '-')}</small></td>
+                <td class="text-end fw-bold">${moeda(s.valor)}</td>
+                <td class="text-end"><small>${moeda(s.diff_valor)}</small></td>
+                <td class="text-end"><small>${esc(s.dist_dias)}</small></td>
+                <td>
+                  ${s.match_exato ? '<span class="badge bg-success">Exato</span>' : ''}
+                  <small>${esc(s.score)}</small>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-primary btn-vincular-sug"
+                          data-fat="${esc(faturaId)}" data-tx="${esc(s.transacao_id)}"
+                          data-data="${esc(s.data)}">
+                    <i class="fas fa-link"></i> Vincular
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    body.querySelectorAll('.btn-vincular-sug').forEach(b => {
+      b.addEventListener('click', async () => {
+        const fat = b.dataset.fat;
+        const tx = b.dataset.tx;
+        const data_pag = b.dataset.data;
+        const r = await apiCall(`/pessoal/api/fluxo-caixa/faturas/${fat}/vincular`, {
+          method: 'POST',
+          body: JSON.stringify({
+            transacao_pagamento_id: parseInt(tx),
+            data_pagamento: data_pag,
+          }),
+        });
+        if (r.sucesso) {
+          alerta('Fatura vinculada com sucesso');
+          bootstrap.Modal.getInstance($('modalSugestoes')).hide();
+          carregar();
+        } else {
+          alerta('Erro: ' + r.mensagem, 'danger');
+        }
+      });
+    });
+  }
+
+  async function desvincularFatura(faturaId) {
+    if (!confirm('Desvincular esta fatura?')) return;
+    const r = await apiCall(`/pessoal/api/fluxo-caixa/faturas/${faturaId}/desvincular`, {
+      method: 'POST',
+    });
+    if (r.sucesso) {
+      alerta('Fatura desvinculada');
+      carregar();
+    } else {
+      alerta('Erro: ' + r.mensagem, 'danger');
+    }
+  }
+
+  async function rodarBackfill(dryRun) {
+    const box = $('resumoBackfill');
+    box.innerHTML = '<div class="alert alert-info">Rodando...</div>';
+    const r = await apiCall('/pessoal/api/fluxo-caixa/faturas/backfill', {
+      method: 'POST',
+      body: JSON.stringify({ dry_run: dryRun }),
+    });
+    if (!r.sucesso) {
+      box.innerHTML = `<div class="alert alert-danger">${esc(r.mensagem)}</div>`;
+      return;
+    }
+    const modo = dryRun ? '<span class="badge bg-secondary">simulacao</span>' : '<span class="badge bg-success">aplicado</span>';
+    box.innerHTML = `
+      <div class="alert alert-info">
+        ${modo}
+        <strong>Resultado do backfill:</strong>
+        <ul class="mb-0">
+          <li>Total sem vinculo: <strong>${esc(r.total_faturas_sem_vinculo)}</strong></li>
+          <li>Vinculadas: <strong class="text-success">${esc(r.vinculadas.length)}</strong></li>
+          <li>Ambiguas (2+ candidatas): <strong class="text-warning">${esc(r.ambiguas.length)}</strong></li>
+          <li>Sem match: <strong class="text-muted">${esc(r.sem_match.length)}</strong></li>
+          <li>Erros: <strong class="text-danger">${esc(r.erros.length)}</strong></li>
+        </ul>
+      </div>
+    `;
+    if (!dryRun) carregar();
+  }
+
+  // Delegated click (tabela pode ter muitas linhas)
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('.btn-sugerir');
+    if (b) { abrirSugestoes(b.dataset.id); return; }
+    const d = ev.target.closest('.btn-desvincular');
+    if (d) { desvincularFatura(d.dataset.id); return; }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    $('btnRecarregar').addEventListener('click', carregar);
+    $('f_status').addEventListener('change', carregar);
+    $('f_limit').addEventListener('change', carregar);
+    $('btnBackfillDry').addEventListener('click', () => rodarBackfill(true));
+    $('btnBackfill').addEventListener('click', () => {
+      if (confirm('Rodar vinculo automatico? Apenas matches exatos (valor + data) com candidata unica serao vinculados.')) {
+        rodarBackfill(false);
+      }
+    });
+    carregar();
+  });
+})();
+</script>
+{% endblock %}

@@ -128,12 +128,23 @@
 
   {# ===== Detalhe do mes selecionado ===== #}
   <div class="card">
-    <div class="card-header py-2">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
       <h6 class="mb-0">
         <i class="fas fa-list"></i> Detalhe de <span id="detalheMesLabel">-</span>
       </h6>
+      <div class="btn-group btn-group-sm" role="group" aria-label="Modo de visualizacao">
+        <input type="radio" class="btn-check" name="modoVisao" id="modoDetalhe" value="detalhe" checked>
+        <label class="btn btn-outline-secondary" for="modoDetalhe">
+          <i class="fas fa-list-ul"></i> Detalhe
+        </label>
+        <input type="radio" class="btn-check" name="modoVisao" id="modoAgrupado" value="agrupado">
+        <label class="btn btn-outline-secondary" for="modoAgrupado">
+          <i class="fas fa-layer-group"></i> Agrupado
+        </label>
+      </div>
     </div>
     <div class="card-body">
+      <div id="visaoDetalhe">
       <ul class="nav nav-tabs" role="tablist">
         <li class="nav-item">
           <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabEntradas">
@@ -159,6 +170,12 @@
             Provisoes <span id="countProvisoes" class="badge bg-info"></span>
           </button>
         </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabTodas">
+            <i class="fas fa-layer-group text-dark"></i>
+            Todas <span id="countTodas" class="badge bg-dark"></span>
+          </button>
+        </li>
       </ul>
       <div class="tab-content pt-3">
         <div class="tab-pane fade show active" id="tabEntradas">
@@ -169,7 +186,6 @@
                 <th>Historico</th>
                 <th>Conta</th>
                 <th>Categoria</th>
-                <th>Membro</th>
                 <th class="text-end">Valor</th>
               </tr>
             </thead>
@@ -184,7 +200,6 @@
                 <th>Historico</th>
                 <th>Conta</th>
                 <th>Categoria</th>
-                <th>Membro</th>
                 <th class="text-end">Valor</th>
               </tr>
             </thead>
@@ -221,6 +236,86 @@
               </tr>
             </thead>
             <tbody id="tbodyProvisoes"></tbody>
+          </table>
+        </div>
+        <div class="tab-pane fade" id="tabTodas">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="text-muted">
+              Linhas ordenadas por data. Saldo cumulativo parte do saldo acumulado do mes anterior.
+              <span class="badge bg-success-subtle text-success border">Entrada</span>
+              <span class="badge bg-danger-subtle text-danger border">Saida</span>
+              <span class="badge bg-warning-subtle text-warning-emphasis border">Pgto Cartao</span>
+              <span class="badge bg-info-subtle text-info-emphasis border">Provisao</span>
+            </small>
+            <small class="text-muted">
+              Saldo inicial: <strong id="saldoInicialTodas">-</strong>
+            </small>
+          </div>
+          <table class="table table-sm table-hover">
+            <thead>
+              <tr>
+                <th style="width:95px">Data</th>
+                <th>Historico</th>
+                <th>Conta</th>
+                <th>Grupo</th>
+                <th>Nome</th>
+                <th class="text-end">Entrada</th>
+                <th class="text-end">Saida</th>
+                <th class="text-end">Saldo</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyTodas"></tbody>
+          </table>
+        </div>
+      </div>
+      </div> {# /visaoDetalhe #}
+
+      {# ===== Visao Agrupada ===== #}
+      <div id="visaoAgrupada" style="display:none;">
+        <div class="d-flex flex-wrap gap-3 align-items-center mb-2 p-2 border rounded bg-body-tertiary">
+          <strong class="small">Incluir:</strong>
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input filtro-agrup" type="checkbox" id="inc_real_e" checked>
+            <label class="form-check-label small" for="inc_real_e">Realizadas Entrada</label>
+          </div>
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input filtro-agrup" type="checkbox" id="inc_real_s" checked>
+            <label class="form-check-label small" for="inc_real_s">Realizadas Saida</label>
+          </div>
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input filtro-agrup" type="checkbox" id="inc_prov_e" checked>
+            <label class="form-check-label small" for="inc_prov_e">Provisoes Entrada</label>
+          </div>
+          <div class="form-check form-check-inline mb-0">
+            <input class="form-check-input filtro-agrup" type="checkbox" id="inc_prov_s" checked>
+            <label class="form-check-label small" for="inc_prov_s">Provisoes Saida</label>
+          </div>
+          <div class="ms-auto small text-muted">
+            <span class="badge bg-success-subtle text-success border">Realizado</span>
+            <span class="badge bg-info-subtle text-info-emphasis border">Provisao</span>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover table-bordered mb-0" id="tabelaAgrupada">
+            <thead class="table-light">
+              <tr>
+                <th rowspan="2" style="vertical-align:middle; width:24%;">Agrupamento</th>
+                <th colspan="2" class="text-center">Entrada</th>
+                <th colspan="2" class="text-center">Saida</th>
+                <th colspan="2" class="text-center">Saldo</th>
+              </tr>
+              <tr>
+                <th class="text-end bg-success-subtle text-success">Realizado</th>
+                <th class="text-end bg-info-subtle text-info-emphasis">Provisao</th>
+                <th class="text-end bg-success-subtle text-success">Realizado</th>
+                <th class="text-end bg-info-subtle text-info-emphasis">Provisao</th>
+                <th class="text-end bg-success-subtle text-success">Realizado</th>
+                <th class="text-end bg-info-subtle text-info-emphasis">Provisao</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyAgrupada">
+              <tr><td colspan="7" class="text-center text-muted py-3">Carregando...</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
@@ -292,6 +387,19 @@
     }
   }
 
+  function alerta(msg, tipo='success') {
+    const div = document.createElement('div');
+    div.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+    div.style.zIndex = '9999';
+    const span = document.createElement('span');
+    span.textContent = msg;
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'btn-close'; btn.setAttribute('data-bs-dismiss', 'alert');
+    div.appendChild(span); div.appendChild(btn);
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 4500);
+  }
+
   function mostrarErroTabela(tbodyId, msg) {
     $(tbodyId).innerHTML = '';
     const tr = document.createElement('tr');
@@ -305,6 +413,21 @@
 
   let mesSelecionadoAno = {{ ano }};
   let mesSelecionadoMes = {{ mes }};
+  let serieCache = [];  // cache da serie para lookup de saldo inicial da aba "Todas"
+
+  function saldoInicialDoMes(ano, mes) {
+    // Saldo inicial do mes = saldo_acumulado do mes ANTERIOR (fim do mes anterior)
+    if (!serieCache || !serieCache.length) return 0;
+    // procura mes anterior (mes-1) ajustando virada de ano
+    let anoAnt = ano, mesAnt = mes - 1;
+    if (mesAnt < 1) { mesAnt = 12; anoAnt = ano - 1; }
+    const alvo = serieCache.find(m => m.ano === anoAnt && m.mes === mesAnt);
+    if (alvo) return Number(alvo.saldo_acumulado) || 0;
+    // fallback: se nao encontrou anterior mas tem o atual, usa (saldo_acumulado - saldo_mes)
+    const atual = serieCache.find(m => m.ano === ano && m.mes === mes);
+    if (atual) return (Number(atual.saldo_acumulado) || 0) - (Number(atual.saldo_mes) || 0);
+    return 0;
+  }
 
   async function carregarSerie() {
     const ano = Number($('ano').value);
@@ -325,6 +448,7 @@
       mostrarErroTabela('tbodyTimeline', data.mensagem);
       return;
     }
+    serieCache = data.serie || [];
     renderTimeline(data.serie, ano, mes);
   }
 
@@ -372,6 +496,11 @@
         });
         tr.classList.add('table-active');
         carregarDetalhe(m.ano, m.mes);
+        // Se a visao agrupada estiver ativa, recarregar com novo mes
+        const modoAtivo = document.querySelector('input[name="modoVisao"]:checked');
+        if (modoAtivo && modoAtivo.value === 'agrupado') {
+          carregarAgrupado();
+        }
       });
       tbody.appendChild(tr);
     });
@@ -397,7 +526,7 @@
   async function carregarDetalhe(ano, mes) {
     $('detalheMesLabel').textContent = `${MESES_PT[mes-1]}/${ano}`;
 
-    const tbodies = ['tbodyEntradas','tbodySaidas','tbodyCartoes','tbodyProvisoes'];
+    const tbodies = ['tbodyEntradas','tbodySaidas','tbodyCartoes','tbodyProvisoes','tbodyTodas'];
     tbodies.forEach(id => { $(id).innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Carregando...</td></tr>'; });
 
     const data = await apiCall(`/pessoal/api/fluxo-caixa/detalhe?ano=${ano}&mes=${mes}`);
@@ -410,11 +539,119 @@
     renderSaidas(d.saidas);
     renderCartoes(d.pagamentos_cartao);
     renderProvisoes(d.provisoes);
+    renderTodas(d, ano, mes);
 
     $('countEntradas').textContent = d.entradas.length;
     $('countSaidas').textContent = d.saidas.length;
     $('countCartoes').textContent = d.pagamentos_cartao.length;
     $('countProvisoes').textContent = d.provisoes.length;
+    $('countTodas').textContent = (
+      d.entradas.length + d.saidas.length + d.pagamentos_cartao.length + d.provisoes.length
+    );
+  }
+
+  function renderTodas(d, ano, mes) {
+    const tbody = $('tbodyTodas');
+    tbody.innerHTML = '';
+
+    // Saldo inicial = saldo_acumulado do mes anterior (via serieCache)
+    const saldoInicial = saldoInicialDoMes(ano, mes);
+    $('saldoInicialTodas').textContent = moeda(saldoInicial);
+    $('saldoInicialTodas').className = saldoInicial >= 0 ? 'text-primary' : 'text-danger';
+
+    // Unificar 4 fontes em array comum (data_iso = chave de ordenacao; data_br = exibicao)
+    const linhas = [];
+    (d.entradas || []).forEach(t => linhas.push({
+      tipo_linha: 'entrada', data_iso: t.data_iso, data_br: t.data, id: t.id,
+      historico: t.historico || t.descricao || '',
+      conta_nome: t.conta_nome || '-',
+      categoria_grupo: t.categoria_grupo || '',
+      categoria_nome: t.categoria_nome || '',
+      valor_entrada: Number(t.valor) || 0,
+      valor_saida: 0,
+    }));
+    (d.saidas || []).forEach(t => linhas.push({
+      tipo_linha: 'saida', data_iso: t.data_iso, data_br: t.data, id: t.id,
+      historico: t.historico || t.descricao || '',
+      conta_nome: t.conta_nome || '-',
+      categoria_grupo: t.categoria_grupo || '',
+      categoria_nome: t.categoria_nome || '',
+      valor_entrada: 0,
+      valor_saida: Number(t.valor) || 0,
+    }));
+    (d.pagamentos_cartao || []).forEach(t => linhas.push({
+      tipo_linha: 'cartao', data_iso: t.data_iso, data_br: t.data, id: t.id,
+      historico: t.historico || 'Pagamento de cartao',
+      conta_nome: t.conta_nome || '-',
+      categoria_grupo: 'Financeiro',
+      categoria_nome: 'Cartao de Credito',
+      valor_entrada: 0,
+      valor_saida: Number(t.valor) || 0,
+    }));
+    (d.provisoes || []).forEach(p => {
+      const ehEntrada = p.tipo === 'entrada';
+      linhas.push({
+        tipo_linha: 'provisao', data_iso: p.data_prevista, data_br: p.data_prevista_br,
+        id: 'p' + p.id,
+        historico: p.descricao || '(provisao)',
+        conta_nome: p.conta_nome || '-',
+        categoria_grupo: p.categoria_grupo || '',
+        categoria_nome: p.categoria_nome || '',
+        valor_entrada: ehEntrada ? Number(p.valor) || 0 : 0,
+        valor_saida: ehEntrada ? 0 : Number(p.valor) || 0,
+        eh_provisao: true,
+      });
+    });
+
+    // Ordenar por data_iso + id
+    linhas.sort((a, b) => {
+      const ca = String(a.data_iso || '');
+      const cb = String(b.data_iso || '');
+      if (ca !== cb) return ca < cb ? -1 : 1;
+      return String(a.id) < String(b.id) ? -1 : 1;
+    });
+
+    if (!linhas.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Nenhum movimento no mes</td></tr>';
+      return;
+    }
+
+    // Saldo cumulativo considera APENAS realizados (ignora provisoes)
+    let saldo = saldoInicial;
+    linhas.forEach(l => {
+      if (!l.eh_provisao) {
+        saldo += (l.valor_entrada - l.valor_saida);
+      }
+      const tr = document.createElement('tr');
+      if (l.eh_provisao) tr.style.opacity = '0.75';
+
+      const badgeTipo = {
+        'entrada':  '<span class="badge bg-success-subtle text-success border">E</span>',
+        'saida':    '<span class="badge bg-danger-subtle text-danger border">S</span>',
+        'cartao':   '<span class="badge bg-warning-subtle text-warning-emphasis border">C</span>',
+        'provisao': '<span class="badge bg-info-subtle text-info-emphasis border">P</span>',
+      }[l.tipo_linha] || '';
+
+      const entradaTxt = l.valor_entrada > 0
+        ? `<span class="text-success fw-bold">${moeda(l.valor_entrada)}</span>` : '-';
+      const saidaTxt = l.valor_saida > 0
+        ? `<span class="text-danger fw-bold">${moeda(l.valor_saida)}</span>` : '-';
+      const saldoTxt = l.eh_provisao
+        ? '<span class="text-muted">-</span>'
+        : `<span class="${saldo >= 0 ? 'text-primary' : 'text-danger'} fw-bold">${moeda(saldo)}</span>`;
+
+      tr.innerHTML = `
+        <td><small>${esc(l.data_br || l.data_iso)}</small> ${badgeTipo}</td>
+        <td><small>${esc((l.historico || '').slice(0, 90))}</small></td>
+        <td><small>${esc(l.conta_nome)}</small></td>
+        <td><small class="text-muted">${esc(l.categoria_grupo || '-')}</small></td>
+        <td><small>${esc(l.categoria_nome || '-')}</small></td>
+        <td class="text-end">${entradaTxt}</td>
+        <td class="text-end">${saidaTxt}</td>
+        <td class="text-end">${saldoTxt}</td>
+      `;
+      tbody.appendChild(tr);
+    });
   }
 
   // Sanitiza classes FontAwesome (apenas fa-* + whitelist de modificadores)
@@ -442,7 +679,6 @@
       <td><small>${esc(t.historico || '')}${descricaoHtml}</small></td>
       <td><small>${esc(t.conta_nome || '-')}</small></td>
       <td>${catBadge(t)}</td>
-      <td><small>${esc(t.membro_nome || '-')}</small></td>
       <td class="text-end ${corValor} fw-bold">${moeda(t.valor)}</td>
     `;
     return tr;
@@ -452,7 +688,7 @@
     const tbody = $('tbodyEntradas');
     tbody.innerHTML = '';
     if (!items.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Nenhuma entrada</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Nenhuma entrada</td></tr>';
       return;
     }
     items.forEach((t) => tbody.appendChild(renderTxRow(t, 'text-success')));
@@ -462,7 +698,7 @@
     const tbody = $('tbodySaidas');
     tbody.innerHTML = '';
     if (!items.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Nenhuma saida</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Nenhuma saida</td></tr>';
       return;
     }
     items.forEach((t) => tbody.appendChild(renderTxRow(t, 'text-danger')));
@@ -487,7 +723,7 @@
 
       const drillBtn = fat
         ? `<button class="btn btn-sm btn-outline-primary btn-drilldown" data-id="${esc(t.id)}"><i class="fas fa-search-plus"></i> Compras</button>`
-        : `<small class="text-muted">vincule em /fluxo-caixa/faturas</small>`;
+        : `<a href="{{ url_for('pessoal.pessoal_fluxo_caixa.faturas_index') }}" class="btn btn-sm btn-outline-warning"><i class="fas fa-link"></i> Vincular Fatura</a>`;
 
       tr.innerHTML = `
         <td>${esc(t.data)}</td>
@@ -614,9 +850,310 @@
     body.innerHTML = html;
   }
 
+  // ===========================================================================
+  // VISAO AGRUPADA (Accordion hierarquico dia -> grupo -> nome -> linhas)
+  // ===========================================================================
+  const AGR = {
+    // Estado: quais nos estao abertos
+    abertos: {
+      // chave 'dia:5' -> true (indica dia 5 expandido, grupos inseridos)
+      // chave 'grupo:5:Alimentacao' -> true (grupo expandido dentro do dia 5)
+      // chave 'nome:5:Alimentacao:Mercado' -> true (nome expandido)
+    },
+  };
+
+  function filtrosAgrupQS() {
+    const qs = new URLSearchParams({
+      ano: mesSelecionadoAno,
+      mes: mesSelecionadoMes,
+    });
+    ['inc_real_e','inc_real_s','inc_prov_e','inc_prov_s'].forEach(k => {
+      qs.set(k, $(k).checked ? '1' : '0');
+    });
+    return qs;
+  }
+
+  function moedaAgrup(v) {
+    if (v === null || v === undefined) return '-';
+    const n = Number(v);
+    if (!n) return '<span class="text-muted">-</span>';
+    return moeda(n);
+  }
+
+  function saldoHtml(v) {
+    if (v === null || v === undefined || !Number(v)) return '<span class="text-muted">-</span>';
+    const cls = Number(v) >= 0 ? 'text-success' : 'text-danger';
+    return `<span class="${cls} fw-bold">${moeda(v)}</span>`;
+  }
+
+  function cellsValores(l) {
+    return `
+      <td class="text-end">${moedaAgrup(l.entrada_realizado)}</td>
+      <td class="text-end">${moedaAgrup(l.entrada_provisao)}</td>
+      <td class="text-end">${moedaAgrup(l.saida_realizado)}</td>
+      <td class="text-end">${moedaAgrup(l.saida_provisao)}</td>
+      <td class="text-end">${saldoHtml(l.saldo_realizado)}</td>
+      <td class="text-end">${saldoHtml(l.saldo_provisao)}</td>
+    `;
+  }
+
+  async function carregarAgrupado() {
+    const tbody = $('tbodyAgrupada');
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Carregando...</td></tr>';
+
+    // Reset accordion state ao recarregar do zero
+    AGR.abertos = {};
+
+    const qs = filtrosAgrupQS();
+    qs.set('nivel', 'dia');
+    const data = await apiCall('/pessoal/api/fluxo-caixa/agrupado?' + qs);
+    if (!data.sucesso) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-danger py-2">${esc(data.mensagem)}</td></tr>`;
+      return;
+    }
+    const linhas = data.linhas || [];
+    if (!linhas.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Nenhum movimento no mes</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    linhas.forEach(l => tbody.appendChild(rowDia(l)));
+  }
+
+  function rowDia(l) {
+    const tr = document.createElement('tr');
+    tr.dataset.nivel = 'dia';
+    tr.dataset.dia = l.dia;
+    tr.className = 'row-dia';
+    tr.innerHTML = `
+      <td>
+        <button class="btn btn-sm btn-link p-0 me-1 btn-toggle" data-dia="${esc(l.dia)}">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+        <strong>${esc(l.data_br)}</strong>
+      </td>
+      ${cellsValores(l)}
+    `;
+    tr.querySelector('.btn-toggle').addEventListener('click', () => toggleDia(tr, l.dia));
+    return tr;
+  }
+
+  function rowGrupo(l, dia) {
+    const tr = document.createElement('tr');
+    tr.dataset.nivel = 'grupo';
+    tr.dataset.dia = dia;
+    tr.dataset.grupo = l.grupo;
+    tr.className = 'row-grupo table-light';
+    tr.innerHTML = `
+      <td class="ps-4">
+        <button class="btn btn-sm btn-link p-0 me-1 btn-toggle-grupo"
+                data-dia="${esc(dia)}" data-grupo="${esc(l.grupo)}">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+        <span class="text-muted small">${esc(dateBrFromDia(dia))}</span>
+        <strong> ${esc(l.grupo)}</strong>
+      </td>
+      ${cellsValores(l)}
+    `;
+    tr.querySelector('.btn-toggle-grupo').addEventListener('click', () => toggleGrupo(tr, dia, l.grupo));
+    return tr;
+  }
+
+  function rowNome(l, dia, grupo) {
+    const tr = document.createElement('tr');
+    tr.dataset.nivel = 'nome';
+    tr.dataset.dia = dia;
+    tr.dataset.grupo = grupo;
+    tr.dataset.nome = l.nome;
+    tr.className = 'row-nome';
+    tr.innerHTML = `
+      <td class="ps-5">
+        <button class="btn btn-sm btn-link p-0 me-1 btn-toggle-nome"
+                data-dia="${esc(dia)}" data-grupo="${esc(grupo)}" data-nome="${esc(l.nome)}">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+        <span class="text-muted small">${esc(dateBrFromDia(dia))} ${esc(grupo)} /</span>
+        <strong> ${esc(l.nome)}</strong>
+      </td>
+      ${cellsValores(l)}
+    `;
+    tr.querySelector('.btn-toggle-nome').addEventListener('click', () => toggleNome(tr, dia, grupo, l.nome));
+    return tr;
+  }
+
+  function rowLinha(l, dia, grupo, nome) {
+    const tr = document.createElement('tr');
+    tr.dataset.nivel = 'linha';
+    tr.dataset.dia = dia;
+    tr.dataset.grupo = grupo;
+    tr.dataset.nome = nome;
+    tr.className = 'row-linha';
+    const badgeTipo = l.tipo === 'realizada'
+      ? '<span class="badge bg-success-subtle text-success border">Real</span>'
+      : '<span class="badge bg-info-subtle text-info-emphasis border">Prov</span>';
+    // Valor entra em Realizado ou Provisao conforme tipo
+    const isEntrada = l.fluxo === 'entrada';
+    const isReal = l.tipo === 'realizada';
+    const valorCells = `
+      <td class="text-end">${(isEntrada && isReal) ? moeda(l.valor) : '<span class="text-muted">-</span>'}</td>
+      <td class="text-end">${(isEntrada && !isReal) ? moeda(l.valor) : '<span class="text-muted">-</span>'}</td>
+      <td class="text-end">${(!isEntrada && isReal) ? moeda(l.valor) : '<span class="text-muted">-</span>'}</td>
+      <td class="text-end">${(!isEntrada && !isReal) ? moeda(l.valor) : '<span class="text-muted">-</span>'}</td>
+      <td class="text-end text-muted">-</td>
+      <td class="text-end text-muted">-</td>
+    `;
+    tr.innerHTML = `
+      <td class="ps-5" style="padding-left:3.5rem !important;">
+        <span class="text-muted small">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        ${badgeTipo}
+        <small>${esc((l.historico || '').slice(0, 70))}</small>
+        <small class="text-muted d-block">${esc(l.conta_nome || '-')}</small>
+      </td>
+      ${valorCells}
+    `;
+    return tr;
+  }
+
+  function dateBrFromDia(dia) {
+    // Formatacao curta: dd/mm
+    return `${String(dia).padStart(2,'0')}/${String(mesSelecionadoMes).padStart(2,'0')}`;
+  }
+
+  async function toggleDia(trDia, dia) {
+    const chave = `dia:${dia}`;
+    if (AGR.abertos[chave]) {
+      // Colapsa: remove linhas filhas, restaura icone
+      removerFilhas('dia', {dia});
+      trDia.querySelector('.btn-toggle i').className = 'fas fa-chevron-right';
+      delete AGR.abertos[chave];
+      // Remove tambem estado de filhos
+      Object.keys(AGR.abertos).forEach(k => {
+        if (k.startsWith(`grupo:${dia}:`) || k.startsWith(`nome:${dia}:`)) {
+          delete AGR.abertos[k];
+        }
+      });
+      return;
+    }
+
+    const qs = filtrosAgrupQS();
+    qs.set('nivel', 'grupo');
+    qs.set('dia', dia);
+    const data = await apiCall('/pessoal/api/fluxo-caixa/agrupado?' + qs);
+    if (!data.sucesso) {
+      alerta('Erro ao carregar grupos: ' + (data.mensagem || '?'), 'danger');
+      return;
+    }
+    AGR.abertos[chave] = true;
+    trDia.querySelector('.btn-toggle i').className = 'fas fa-chevron-down';
+
+    const frag = document.createDocumentFragment();
+    (data.linhas || []).forEach(l => frag.appendChild(rowGrupo(l, dia)));
+    trDia.after(frag);
+  }
+
+  async function toggleGrupo(trGrupo, dia, grupo) {
+    const chave = `grupo:${dia}:${grupo}`;
+    if (AGR.abertos[chave]) {
+      removerFilhas('grupo', {dia, grupo});
+      trGrupo.querySelector('.btn-toggle-grupo i').className = 'fas fa-chevron-right';
+      delete AGR.abertos[chave];
+      Object.keys(AGR.abertos).forEach(k => {
+        if (k.startsWith(`nome:${dia}:${grupo}:`)) delete AGR.abertos[k];
+      });
+      return;
+    }
+
+    const qs = filtrosAgrupQS();
+    qs.set('nivel', 'nome');
+    qs.set('dia', dia);
+    qs.set('grupo', grupo);
+    const data = await apiCall('/pessoal/api/fluxo-caixa/agrupado?' + qs);
+    if (!data.sucesso) {
+      alerta('Erro ao carregar nomes: ' + (data.mensagem || '?'), 'danger');
+      return;
+    }
+    AGR.abertos[chave] = true;
+    trGrupo.querySelector('.btn-toggle-grupo i').className = 'fas fa-chevron-down';
+
+    const frag = document.createDocumentFragment();
+    (data.linhas || []).forEach(l => frag.appendChild(rowNome(l, dia, grupo)));
+    trGrupo.after(frag);
+  }
+
+  async function toggleNome(trNome, dia, grupo, nome) {
+    const chave = `nome:${dia}:${grupo}:${nome}`;
+    if (AGR.abertos[chave]) {
+      removerFilhas('nome', {dia, grupo, nome});
+      trNome.querySelector('.btn-toggle-nome i').className = 'fas fa-chevron-right';
+      delete AGR.abertos[chave];
+      return;
+    }
+
+    const qs = filtrosAgrupQS();
+    qs.set('nivel', 'linhas');
+    qs.set('dia', dia);
+    qs.set('grupo', grupo);
+    qs.set('nome', nome);
+    const data = await apiCall('/pessoal/api/fluxo-caixa/agrupado?' + qs);
+    if (!data.sucesso) {
+      alerta('Erro ao carregar linhas: ' + (data.mensagem || '?'), 'danger');
+      return;
+    }
+    AGR.abertos[chave] = true;
+    trNome.querySelector('.btn-toggle-nome i').className = 'fas fa-chevron-down';
+
+    const frag = document.createDocumentFragment();
+    (data.linhas || []).forEach(l => frag.appendChild(rowLinha(l, dia, grupo, nome)));
+    trNome.after(frag);
+  }
+
+  function removerFilhas(nivelPai, filtros) {
+    // Remove todas as rows cujos data-dia/grupo/nome correspondem aos filtros
+    // e cujo nivel seja abaixo do nivelPai.
+    const niveisAbaixo = {
+      'dia': ['grupo', 'nome', 'linha'],
+      'grupo': ['nome', 'linha'],
+      'nome': ['linha'],
+    }[nivelPai] || [];
+    const tbody = $('tbodyAgrupada');
+    tbody.querySelectorAll('tr').forEach(tr => {
+      if (!niveisAbaixo.includes(tr.dataset.nivel)) return;
+      if (filtros.dia && String(tr.dataset.dia) !== String(filtros.dia)) return;
+      if (filtros.grupo && tr.dataset.grupo !== filtros.grupo) return;
+      if (filtros.nome && tr.dataset.nome !== filtros.nome) return;
+      tr.remove();
+    });
+  }
+
+  function alternarVisao() {
+    const modo = document.querySelector('input[name="modoVisao"]:checked').value;
+    if (modo === 'agrupado') {
+      $('visaoDetalhe').style.display = 'none';
+      $('visaoAgrupada').style.display = 'block';
+      carregarAgrupado();
+    } else {
+      $('visaoDetalhe').style.display = 'block';
+      $('visaoAgrupada').style.display = 'none';
+    }
+  }
+
   // Init
   document.addEventListener('DOMContentLoaded', async () => {
     $('btnRecarregar').addEventListener('click', carregarSerie);
+
+    // Toggle Detalhe <-> Agrupado
+    document.querySelectorAll('input[name="modoVisao"]').forEach(r => {
+      r.addEventListener('change', alternarVisao);
+    });
+    // Checkboxes de filtro agrupado recarregam a visao
+    document.querySelectorAll('.filtro-agrup').forEach(chk => {
+      chk.addEventListener('change', () => {
+        if (document.querySelector('input[name="modoVisao"]:checked').value === 'agrupado') {
+          carregarAgrupado();
+        }
+      });
+    });
+
     await carregarSerie();
     await carregarDetalhe(mesSelecionadoAno, mesSelecionadoMes);
   });
