@@ -13,7 +13,7 @@ from typing import Iterable
 
 from app import db
 from app.auth.models import Usuario
-from app.hora.models import HoraUserPermissao, MODULOS_HORA, ACOES_HORA
+from app.hora.models import HoraUserPermissao, MODULOS_HORA, ACOES_HORA, MODULOS_SO_VER
 
 
 # Helpers ---------------------------------------------------------------
@@ -38,6 +38,14 @@ def listar_modulos() -> list[tuple[str, str]]:
 def listar_acoes() -> list[tuple[str, str]]:
     """Lista canonica de acoes: [(slug, label), ...]."""
     return list(ACOES_HORA)
+
+
+def modulos_so_ver() -> set[str]:
+    """Slugs dos modulos em que apenas a acao 'ver' tem semantica real.
+
+    Demais acoes (criar/editar/apagar/aprovar) ficam N/A na matriz.
+    """
+    return set(MODULOS_SO_VER)
 
 
 def is_admin(usuario: Usuario | None) -> bool:

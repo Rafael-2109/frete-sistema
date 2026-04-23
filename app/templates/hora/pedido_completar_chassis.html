@@ -56,7 +56,7 @@
                 <td>{{ i.id }}</td>
                 <td>{{ i.modelo.nome_modelo if i.modelo else '—' }}</td>
                 <td>{{ i.cor or '—' }}</td>
-                <td>R$ {{ "%.2f"|format(i.preco_compra_esperado) }}</td>
+                <td>{{ i.preco_compra_esperado|valor_br }}</td>
               </tr>
               {% endfor %}
             </tbody>

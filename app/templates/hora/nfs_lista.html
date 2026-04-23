@@ -35,7 +35,7 @@
             {% endif %}
           </td>
           <td>{{ nf.data_emissao.strftime('%d/%m/%Y') }}</td>
-          <td>R$ {{ "%.2f"|format(nf.valor_total) }}</td>
+          <td>{{ nf.valor_total|valor_br }}</td>
           <td>
             {{ nf.itens|length }}
             {% if nf.itens_divergem_declaracao %}
@@ -80,8 +80,17 @@
             {% endif %}
           </td>
           <td>
-            <a href="{{ url_for('hora.nfs_detalhe', nf_id=nf.id) }}"
-               class="btn btn-sm btn-outline-primary">Ver</a>
+            <div class="d-flex gap-1">
+              <a href="{{ url_for('hora.nfs_detalhe', nf_id=nf.id) }}"
+                 class="btn btn-sm btn-outline-primary" title="Abrir detalhes">Ver</a>
+              {% if nf.arquivo_pdf_s3_key %}
+                <a href="{{ url_for('hora.nfs_download_pdf', nf_id=nf.id) }}"
+                   class="btn btn-sm btn-outline-secondary" target="_blank"
+                   title="Baixar DANFE (PDF)">
+                  <i class="fas fa-file-pdf"></i>
+                </a>
+              {% endif %}
+            </div>
           </td>
         </tr>
       {% else %}

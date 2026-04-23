@@ -3,7 +3,14 @@
 {% block hora_content %}
 {% set t = comparativo.totais %}
 <div class="d-flex align-items-center justify-content-between mb-3">
-  <h2>Recebimento #{{ recebimento.id }} — Resumo</h2>
+  <h2>
+    Recebimento #{{ recebimento.id }} — Resumo
+    {% if not pode_ver_resumo_completo %}
+      <small class="text-muted fw-normal">
+        <i class="fas fa-filter"></i> apenas motos conferidas
+      </small>
+    {% endif %}
+  </h2>
   <div class="d-flex gap-2 align-items-center flex-wrap">
     <span class="badge fs-6 badge-status-{{ recebimento.status|lower }}">{{ recebimento.status }}</span>
     {% if recebimento.status == 'EM_CONFERENCIA' and t.conferido < t.qtd_declarada %}
@@ -29,10 +36,20 @@
 </div>
 
 <!-- KPIs -->
+{# O link da NF e a KPI "Esperado NF" revelam total da NF ao conferente —
+   exibidos apenas para quem pode ver o resumo completo. Quem nao pode, ainda
+   ve o numero da NF (precisa para contexto) mas nao o link clicavel que
+   exibe todos os itens. #}
 <div class="row g-3 mb-4">
   <div class="col-md-2"><div class="hora-kpi">
     <div class="hora-kpi-label">NF</div>
-    <div><a href="{{ url_for('hora.nfs_detalhe', nf_id=recebimento.nf_id) }}">{{ recebimento.nf.numero_nf }}</a></div>
+    <div>
+      {% if pode_ver_resumo_completo %}
+        <a href="{{ url_for('hora.nfs_detalhe', nf_id=recebimento.nf_id) }}">{{ recebimento.nf.numero_nf }}</a>
+      {% else %}
+        {{ recebimento.nf.numero_nf }}
+      {% endif %}
+    </div>
   </div></div>
   <div class="col-md-2"><div class="hora-kpi">
     <div class="hora-kpi-label">Loja</div>
@@ -42,10 +59,12 @@
     <div class="hora-kpi-label">Qtd declarada</div>
     <div class="hora-kpi-valor">{{ t.qtd_declarada }}</div>
   </div></div>
-  <div class="col-md-2"><div class="hora-kpi">
-    <div class="hora-kpi-label">Esperado NF</div>
-    <div class="hora-kpi-valor">{{ t.esperado }}</div>
-  </div></div>
+  {% if pode_ver_resumo_completo %}
+    <div class="col-md-2"><div class="hora-kpi">
+      <div class="hora-kpi-label">Esperado NF</div>
+      <div class="hora-kpi-valor">{{ t.esperado }}</div>
+    </div></div>
+  {% endif %}
   <div class="col-md-2"><div class="hora-kpi">
     <div class="hora-kpi-label">Conferidas</div>
     <div class="hora-kpi-valor">{{ t.conferido }}</div>
@@ -54,16 +73,25 @@
     <div class="hora-kpi-label">OK / Divergentes</div>
     <div>
       <span class="badge bg-success">{{ t.ok }} OK</span>
-      <span class="badge bg-warning text-dark">{{ t.com_divergencia }} div.</span>
+      {% if pode_ver_resumo_completo %}
+        <span class="badge bg-warning text-dark">{{ t.com_divergencia }} div.</span>
+      {% endif %}
     </div>
   </div></div>
 </div>
 
-{% if t.avarias or t.extras or t.faltantes %}
+{# Para o conferente "cego" (sem perm recebimento_resumo.ver) ocultamos
+   extras/faltantes do banner — isso revelaria diff entre NF e conferido.
+   Avarias podem aparecer (ele mesmo marcou). #}
+{% if pode_ver_resumo_completo and (t.avarias or t.extras or t.faltantes) %}
 <div class="alert alert-warning">
   {% if t.avarias %}<strong><i class="fas fa-triangle-exclamation"></i> {{ t.avarias }} com avaria física.</strong>{% endif %}
   {% if t.extras %} {{ t.extras }} chassi extra (fora da NF).{% endif %}
   {% if t.faltantes %} {{ t.faltantes }} chassi da NF faltando.{% endif %}
+</div>
+{% elif not pode_ver_resumo_completo and t.avarias %}
+<div class="alert alert-warning">
+  <strong><i class="fas fa-triangle-exclamation"></i> {{ t.avarias }} com avaria física.</strong>
 </div>
 {% endif %}
 
@@ -183,20 +211,22 @@
 </div>
 </form>
 
-<!-- Divergências por resolver -->
-{% set por_resolver = [] %}
-{% for linha in comparativo.linhas %}
-  {% if linha.conferencia and (linha.divergencias or linha.status != 'OK') %}
-    {% set _ = por_resolver.append(linha) %}
+<!-- Divergências por resolver (so para quem pode ver resumo completo) -->
+{% if pode_ver_resumo_completo %}
+  {% set por_resolver = [] %}
+  {% for linha in comparativo.linhas %}
+    {% if linha.conferencia and (linha.divergencias or linha.status != 'OK') %}
+      {% set _ = por_resolver.append(linha) %}
+    {% endif %}
+  {% endfor %}
+  {% if por_resolver and recebimento.status in ('COM_DIVERGENCIA', 'EM_CONFERENCIA') %}
+  <div class="mb-3">
+    <a href="{{ url_for('hora.recebimentos_resolver', recebimento_id=recebimento.id) }}"
+       class="btn btn-sm btn-warning">
+      <i class="fas fa-tools"></i> Resolver divergências ({{ por_resolver|length }})
+    </a>
+  </div>
   {% endif %}
-{% endfor %}
-{% if por_resolver and recebimento.status in ('COM_DIVERGENCIA', 'EM_CONFERENCIA') %}
-<div class="mb-3">
-  <a href="{{ url_for('hora.recebimentos_resolver', recebimento_id=recebimento.id) }}"
-     class="btn btn-sm btn-warning">
-    <i class="fas fa-tools"></i> Resolver divergências ({{ por_resolver|length }})
-  </a>
-</div>
 {% endif %}
 
 <!-- Auditoria -->
@@ -207,7 +237,9 @@
       <th>Quando</th>
       <th>Usuário</th>
       <th>Ação</th>
-      <th>Conf.</th>
+      <th title="Ordem da moto na fila de conferencia (posicao humana, nao o id autoincrement)">
+        Conf. (ordem)
+      </th>
       <th>Campo</th>
       <th>Antes</th>
       <th>Depois</th>
@@ -215,11 +247,15 @@
     </tr></thead>
     <tbody>
       {% for a in auditorias %}
+        {# ordens_por_conf_id: dict montado no route (inclui linhas substituidas).
+           Garante que reconferir a moto de ordem 1 mostre "1" aqui e nao "2"
+           (que seria o id autoincrement da nova linha ativa). #}
+        {% set ordem_humana = ordens_por_conf_id.get(a.conferencia_id) if a.conferencia_id else None %}
         <tr>
           <td><small>{{ a.criado_em.strftime('%d/%m %H:%M:%S') }}</small></td>
           <td><small>{{ a.usuario or '—' }}</small></td>
           <td><span class="badge bg-secondary">{{ a.acao }}</span></td>
-          <td><small>{{ a.conferencia_id or '—' }}</small></td>
+          <td><small>{{ ordem_humana if ordem_humana is not none else '—' }}</small></td>
           <td><small>{{ a.campo_alterado or '' }}</small></td>
           <td><small class="text-muted">{{ a.valor_antes or '' }}</small></td>
           <td><small><strong>{{ a.valor_depois or '' }}</strong></small></td>
@@ -238,26 +274,38 @@
 <!-- Modal Ajustar conferência -->
 <!-- ==================================================================== -->
 <div class="modal fade" id="modalAjustar" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-sliders"></i> Ajustar conferência</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        {# Botoes com layout vertical (flex-column + text-wrap) para nao
+           estourar a largura do modal com textos longos (bug 2026-04-23). #}
         <div class="d-grid gap-2">
-          <button type="button" class="btn btn-outline-primary text-start" id="btn-modo-qtd">
-            <i class="fas fa-hashtag"></i>
-            <strong>Alterar qtd total</strong>
-            <br><small class="text-muted">Atual: {{ t.qtd_declarada }} — ficará auditado.</small>
+          <button type="button"
+                  class="btn btn-outline-primary text-start d-flex flex-column align-items-start text-wrap p-3"
+                  id="btn-modo-qtd">
+            <span class="fw-semibold">
+              <i class="fas fa-hashtag me-1"></i> Alterar qtd total
+            </span>
+            <small class="text-muted mt-1">
+              Atual: {{ t.qtd_declarada }} — ficará auditado.
+            </small>
           </button>
-          <button type="button" class="btn btn-outline-primary text-start" id="btn-modo-reconf"
+
+          <button type="button"
+                  class="btn btn-outline-primary text-start d-flex flex-column align-items-start text-wrap p-3"
+                  id="btn-modo-reconf"
                   data-bs-dismiss="modal">
-            <i class="fas fa-list-check"></i>
-            <strong>Reconferir motos ({{ t.conferido }} confirmada(s))</strong>
-            <br><small class="text-muted">
-              Selecione na tabela quais refazer. Elas voltam para a fila do wizard
-              com campos pré-preenchidos.
+            <span class="fw-semibold">
+              <i class="fas fa-list-check me-1"></i>
+              Reconferir motos ({{ t.conferido }} confirmada(s))
+            </span>
+            <small class="text-muted mt-1">
+              Selecione na tabela quais refazer. Elas voltam para a fila do
+              wizard com campos pré-preenchidos.
             </small>
           </button>
         </div>
@@ -270,7 +318,12 @@
             <input type="number" name="qtd_declarada" class="form-control"
                    value="{{ t.qtd_declarada }}" min="1" required>
           </div>
-          <button type="submit" class="btn btn-primary">Confirmar alteração</button>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Confirmar alteração</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+              Cancelar
+            </button>
+          </div>
         </form>
       </div>
     </div>

@@ -30,20 +30,28 @@
   </div>
 </form>
 
+{% set pode_ver_motos_nf = current_user.tem_perm_hora('recebimento_motos_nf', 'ver') %}
 <div class="table-responsive">
   <table class="table table-hover">
     <thead><tr>
       <th>#</th><th>Data</th><th>NF</th><th>Loja</th>
-      <th>Chassis conferidos</th><th>Status</th><th></th>
+      <th>Chassis conferidos{% if pode_ver_motos_nf %} / NF{% endif %}</th>
+      <th>Status</th><th></th>
     </tr></thead>
     <tbody>
       {% for r in recebimentos %}
+        {# Contagem precisa usar SOMENTE conferencias ativas (substituida=False).
+           Apos uma reconferencia existem duas linhas com mesma ordem (antiga +
+           nova). Sem o filtro, o contador sobe para 2/... na ordem 1. #}
+        {% set confs_ativas = r.conferencias|rejectattr('substituida')|list %}
         <tr>
           <td><small>{{ r.id }}</small></td>
           <td>{{ r.data_recebimento.strftime('%d/%m/%Y') }}</td>
           <td>{{ r.nf.numero_nf }}</td>
           <td>{{ r.loja.nome }}</td>
-          <td>{{ r.conferencias|length }} / {{ r.nf.itens|length }}</td>
+          <td>
+            {{ confs_ativas|length }}{% if pode_ver_motos_nf %} / {{ r.nf.itens|length }}{% endif %}
+          </td>
           <td><span class="badge badge-status-{{ r.status|lower }}">{{ r.status }}</span></td>
           <td>
             <a href="{{ url_for('hora.recebimentos_detalhe', recebimento_id=r.id) }}"

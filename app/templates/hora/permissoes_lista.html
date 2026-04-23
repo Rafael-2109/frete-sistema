@@ -150,10 +150,14 @@
                 <tr>
                   <td><strong>{{ mod_label }}</strong> <small class="text-muted">({{ mod_slug }})</small></td>
                   {% for acao_slug, _ in acoes %}
-                    {# Aprovar so tem efeito real no modulo 'usuarios' (aprova cadastros pendentes).
-                       Para os demais modulos, mostrar '—' para evitar confusao. #}
+                    {# Regras de N/A:
+                       - Aprovar so tem efeito real no modulo 'usuarios'.
+                       - Modulos virtuais em MODULOS_SO_VER (ex.: 'recebimento_resumo',
+                         'recebimento_motos_nf') so usam a acao 'ver'. #}
                     {% if acao_slug == 'aprovar' and mod_slug != 'usuarios' %}
                       <td class="text-center text-muted" title="Acao 'Aprovar' so se aplica a Usuarios">—</td>
+                    {% elif mod_slug in modulos_so_ver and acao_slug != 'ver' %}
+                      <td class="text-center text-muted" title="Este modulo so usa a acao 'Ver'">—</td>
                     {% else %}
                       <td class="text-center">
                         <input type="checkbox" class="form-check-input hora-perm-cb"

@@ -74,6 +74,7 @@ def permissoes_lista():
         modulos=permissao_service.listar_modulos(),
         acoes=permissao_service.listar_acoes(),
         matrizes=matrizes,
+        modulos_so_ver=permissao_service.modulos_so_ver(),
     )
 
 

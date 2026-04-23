@@ -89,7 +89,18 @@ def recebimentos_novo():
         except (ValueError, KeyError) as exc:
             flash(f'Erro: {exc}', 'danger')
 
-    nfs = HoraNfEntrada.query.order_by(HoraNfEntrada.data_emissao.desc()).limit(100).all()
+    # Somente NFs que AINDA nao tem recebimento aberto: evita que operador
+    # inicie outra conferencia para uma NF ja processada.
+    # `HoraRecebimento.nf_id` tem UNIQUE(nf_id, loja_id), mas para a tela de
+    # "Novo Recebimento" consideramos qualquer recebimento existente como
+    # motivo suficiente para ocultar a NF.
+    nfs = (
+        HoraNfEntrada.query
+        .filter(~HoraNfEntrada.recebimentos.any())
+        .order_by(HoraNfEntrada.data_emissao.desc())
+        .limit(200)
+        .all()
+    )
     permitidas = lojas_permitidas_ids()
     lojas_q = HoraLoja.query.filter_by(ativa=True)
     if permitidas is not None:
@@ -149,7 +160,8 @@ def recebimentos_wizard(recebimento_id: int):
     confirmadas = sum(1 for c in confs_ativas if c.confirmado_em is not None)
 
     if pendente is None and confirmadas >= rec.qtd_declarada:
-        # Fila esgotada — ir para resumo.
+        # Fila esgotada — todos vao para o resumo (conferente ve apenas as
+        # linhas das motos que ELE conferiu; supervisor ve comparativo completo).
         return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=rec.id))
 
     ordem_atual = pendente.ordem if pendente else recebimento_service.proxima_ordem(rec.id)
@@ -174,6 +186,55 @@ def recebimentos_wizard(recebimento_id: int):
         modelos=modelos,
         cores_sugeridas=sorted(c for c in cores if c),
     )
+
+
+@hora_bp.route('/recebimentos/<int:recebimento_id>/motos-nf')
+@require_hora_perm('recebimento_motos_nf', 'ver')
+def recebimentos_motos_nf(recebimento_id: int):
+    """Retorna JSON com as motos da NF deste recebimento.
+
+    Usado pelo painel "Ver motos da NF" no wizard (item 4 do pedido
+    2026-04-23). Gate obrigatorio: permissao granular
+    `recebimento_motos_nf.ver` — conferentes sem essa perm nem veem o painel.
+
+    Query param `filtro` (opcional):
+      - 'todas' (default): lista tudo, cada item vem com conferida True/False
+      - 'conferidas': apenas itens com conferencia ativa e confirmada
+    """
+    rec = HoraRecebimento.query.get_or_404(recebimento_id)
+    if not usuario_tem_acesso_a_loja(rec.loja_id):
+        return jsonify({'ok': False, 'erro': 'acesso negado'}), 403
+
+    filtro = (request.args.get('filtro') or 'todas').strip().lower()
+    if filtro not in ('todas', 'conferidas'):
+        filtro = 'todas'
+
+    confs_ativas = [c for c in rec.conferencias if not c.substituida]
+    conf_por_chassi = {c.numero_chassi: c for c in confs_ativas}
+    total_conferidas = sum(1 for c in confs_ativas if c.confirmado_em is not None)
+
+    itens = []
+    for it in rec.nf.itens:
+        conf = conf_por_chassi.get(it.numero_chassi)
+        conferida = conf is not None and conf.confirmado_em is not None
+        if filtro == 'conferidas' and not conferida:
+            continue
+        itens.append({
+            'chassi': it.numero_chassi,
+            'modelo': it.modelo_texto_original,
+            'cor': it.cor_texto_original,
+            'motor': it.numero_motor_texto_original,
+            'conferida': conferida,
+            'ordem': conf.ordem if conf else None,
+        })
+
+    return jsonify({
+        'ok': True,
+        'filtro': filtro,
+        'total_na_nf': len(rec.nf.itens),
+        'total_conferidas': total_conferidas,
+        'itens': itens,
+    })
 
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/validar-chassi')
@@ -258,13 +319,33 @@ def recebimentos_detalhe(recebimento_id: int):
     if rec.qtd_declarada is None:
         return redirect(url_for('hora.recebimentos_qtd', recebimento_id=rec.id))
 
-    comparativo = recebimento_service.comparativo_recebimento_nf(rec.id)
+    # Regra: conferente SEM permissao `recebimento_resumo.ver` tambem ve o
+    # resumo, mas limitado as motos que ELE JA conferiu — nao exibimos motos
+    # da NF ainda pendentes nem linhas FALTANDO (isso seria "colar" da NF).
+    # Supervisor com a permissao ve o comparativo completo (com FALTANDO/EXTRA).
+    pode_ver_resumo_completo = current_user.tem_perm_hora('recebimento_resumo', 'ver')
+    comparativo = recebimento_service.comparativo_recebimento_nf(
+        rec.id,
+        apenas_conferidas=not pode_ver_resumo_completo,
+    )
     auditorias = recebimento_audit.listar_por_recebimento(rec.id, limit=200)
+
+    # Map conferencia_id -> ordem (inclui substituidas) para que a coluna
+    # "Conf." da tabela de auditoria mostre a ordem humana (ex: "CONF. 1"),
+    # NAO o id autoincrement (que sobe a cada reconferencia e confunde). Sem
+    # isso, reconferir a moto de ordem 1 exibe "CONF. 2/3/..." na auditoria.
+    todas_confs = HoraRecebimentoConferencia.query.filter_by(
+        recebimento_id=rec.id,
+    ).all()
+    ordens_por_conf_id = {c.id: c.ordem for c in todas_confs}
+
     return render_template(
         'hora/recebimento_detalhe.html',
         recebimento=rec,
         comparativo=comparativo,
         auditorias=auditorias,
+        ordens_por_conf_id=ordens_por_conf_id,
+        pode_ver_resumo_completo=pode_ver_resumo_completo,
     )
 
 
@@ -347,6 +428,14 @@ def recebimentos_resolver(recebimento_id: int):
     if not usuario_tem_acesso_a_loja(rec.loja_id):
         flash('Acesso negado.', 'danger')
         return redirect(url_for('hora.recebimentos_lista'))
+    # Expor divergencias equivale a "ver resumo" — mesma regra do detalhe,
+    # para nao dar ao conferente uma rota alternativa de "colar".
+    if not current_user.tem_perm_hora('recebimento_resumo', 'ver'):
+        flash(
+            'Acesso a divergencias restrito. Peca validacao ao supervisor.',
+            'warning',
+        )
+        return redirect(url_for('hora.recebimentos_lista'))
     divergencias = resolucao_service.listar_divergencias(recebimento_id)
     devolucoes_abertas = devolucao_service.listar_devolucoes(
         loja_id=rec.loja_id, status='ABERTA', limit=20,
@@ -368,6 +457,13 @@ def recebimentos_resolver_aplicar(recebimento_id: int, conferencia_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
         flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.recebimentos_lista'))
+    # Mesmo gate do GET: conferente sem permissao de resumo nao pode aplicar.
+    if not current_user.tem_perm_hora('recebimento_resumo', 'ver'):
+        flash(
+            'Acao restrita ao supervisor (resolucao de divergencias).',
+            'danger',
+        )
         return redirect(url_for('hora.recebimentos_lista'))
     conf = HoraRecebimentoConferencia.query.get_or_404(conferencia_id)
     if conf.recebimento_id != recebimento_id:

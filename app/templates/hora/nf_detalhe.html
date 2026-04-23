@@ -61,7 +61,7 @@
   </div></div>
   <div class="col-md-2"><div class="hora-kpi">
     <div class="hora-kpi-label">Valor total</div>
-    <div>R$ {{ "%.2f"|format(nf.valor_total) }}</div>
+    <div>{{ nf.valor_total|valor_br }}</div>
   </div></div>
 </div>
 

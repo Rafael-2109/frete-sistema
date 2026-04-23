@@ -75,8 +75,17 @@
           </td>
           <td><span class="badge badge-status-{{ p.status|lower }}">{{ p.status }}</span></td>
           <td>
-            <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=p.id) }}"
-               class="btn btn-sm btn-outline-primary">Ver</a>
+            <div class="d-flex gap-1">
+              <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=p.id) }}"
+                 class="btn btn-sm btn-outline-primary" title="Abrir detalhes">Ver</a>
+              {% if p.arquivo_origem_s3_key %}
+                <a href="{{ url_for('hora.pedidos_download_xlsx', pedido_id=p.id) }}"
+                   class="btn btn-sm btn-outline-secondary" target="_blank"
+                   title="Baixar XLSX original">
+                  <i class="fas fa-file-excel"></i>
+                </a>
+              {% endif %}
+            </div>
           </td>
         </tr>
       {% else %}

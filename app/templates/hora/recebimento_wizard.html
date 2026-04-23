@@ -1,12 +1,23 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
+{% set pode_ver_motos_nf = current_user.tem_perm_hora('recebimento_motos_nf', 'ver') %}
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h2>
     Conferência moto
     <span class="text-muted fw-normal">— #{{ ordem_atual }} de {{ recebimento.qtd_declarada }}</span>
   </h2>
-  <div class="d-flex gap-2 align-items-center">
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    {% if pode_ver_motos_nf %}
+      <button type="button" class="btn btn-sm btn-outline-info"
+              data-bs-toggle="modal" data-bs-target="#modalMotosNF"
+              title="Ver motos faturadas na NF (conferidas e pendentes)">
+        <i class="fas fa-clipboard-list"></i> Ver motos da NF
+      </button>
+    {% endif %}
+    {# Pausar e ver resumo: disponivel para todos. Conferente sem
+       permissao `recebimento_resumo.ver` ve apenas as linhas das motos
+       que ele JA conferiu (sem chassis pendentes/faltando da NF). #}
     <a href="{{ url_for('hora.recebimentos_detalhe', recebimento_id=recebimento.id) }}"
        class="btn btn-sm btn-outline-secondary">
       <i class="fas fa-pause"></i> Pausar e ver resumo
@@ -108,25 +119,52 @@
 <!-- ==================================================================== -->
 <div class="card p-3 mb-3 d-none" id="step-C">
   <h5>C. Cor</h5>
-  <p class="text-muted small mb-2">Digite ou escolha a cor da moto.</p>
+  <p class="text-muted small mb-2">Selecione uma cor da lista ou cadastre uma nova.</p>
 
   <div class="mb-3">
-    <input type="text" id="input-cor" class="form-control form-control-lg"
-           list="cores-sugeridas" placeholder="Ex.: VERMELHO">
-    <datalist id="cores-sugeridas">
+    <select id="select-cor" class="form-select form-select-lg">
+      <option value="">— Selecione uma cor —</option>
       {% for c in cores_sugeridas %}
-        <option value="{{ c }}">
+        <option value="{{ c }}">{{ c }}</option>
       {% endfor %}
-    </datalist>
+    </select>
   </div>
 
   <div class="d-flex gap-2">
+    <button type="button" id="btn-nova-cor" class="btn btn-outline-primary">
+      <i class="fas fa-plus"></i> Criar nova cor
+    </button>
     <button type="button" id="btn-voltar-B" class="btn btn-secondary ms-auto">
       <i class="fas fa-arrow-left"></i> Voltar
     </button>
     <button type="button" id="btn-avancar-C" class="btn btn-primary">
       Próximo <i class="fas fa-arrow-right"></i>
     </button>
+  </div>
+</div>
+
+<!-- Modal "criar cor rapida" (mesmo padrao do modelo — evita prompt() em iOS PWA) -->
+<div class="modal fade" id="modalNovaCor" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Criar cor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Nome da nova cor</label>
+        <input type="text" id="input-nova-cor" class="form-control"
+               autocomplete="off" maxlength="50" placeholder="Ex.: VERMELHO METALICO">
+        <div class="form-text">
+          Cores ficam disponiveis apenas nesta conferencia. Para padronizar
+          entre recebimentos, vincule a cor no pedido ou na NF.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btn-salvar-cor">Criar e selecionar</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -173,6 +211,68 @@
   </div>
 </div>
 
+{% if pode_ver_motos_nf %}
+<!-- ==================================================================== -->
+<!-- Modal "Ver motos da NF" — lista motos faturadas da NF com filtro    -->
+<!-- todas/conferidas. Acessivel so para usuarios com permissao granular. -->
+<!-- ==================================================================== -->
+<div class="modal fade" id="modalMotosNF" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-clipboard-list"></i> Motos da NF {{ recebimento.nf.numero_nf }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+          <div class="btn-group btn-group-sm" role="group"
+               aria-label="Filtro motos NF">
+            <input type="radio" class="btn-check" name="filtro-motos-nf"
+                   id="filtro-motos-todas" value="todas" checked>
+            <label class="btn btn-outline-primary" for="filtro-motos-todas">
+              Todas
+            </label>
+
+            <input type="radio" class="btn-check" name="filtro-motos-nf"
+                   id="filtro-motos-conferidas" value="conferidas">
+            <label class="btn btn-outline-primary" for="filtro-motos-conferidas">
+              Apenas conferidas
+            </label>
+          </div>
+          <small class="text-muted ms-auto" id="motos-nf-contador">—</small>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width:70px;">Ordem</th>
+                <th>Chassi</th>
+                <th>Modelo (NF)</th>
+                <th>Cor (NF)</th>
+                <th style="width:110px;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="motos-nf-tbody">
+              <tr><td colspan="5" class="text-center text-muted">
+                <i class="fas fa-spinner fa-spin"></i> Carregando...
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- ==================================================================== -->
 <!-- Modal "criar modelo rapido" (substitui prompt() que falha em iOS PWA) -->
 <div class="modal fade" id="modalNovoModelo" tabindex="-1" aria-hidden="true">
@@ -212,6 +312,8 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[ch]));
 
+  const URL_MOTOS_NF = {% if pode_ver_motos_nf %}"{{ url_for('hora.recebimentos_motos_nf', recebimento_id=recebimento.id) }}"{% else %}null{% endif %};
+
   const state = {
     chassi: null,
     modeloId: null,
@@ -221,6 +323,22 @@
     qrLido: false,
     contextoNF: null,
   };
+
+  // Helper: garante que um valor exista como <option> no select-cor e o seleciona.
+  // Usado tanto para pre-fill via contexto NF (cor_esperada) quanto ao criar
+  // nova cor manualmente.
+  function adicionarOuSelecionarCor(valor) {
+    const selectCor = document.getElementById('select-cor');
+    const cor = String(valor || '').trim().toUpperCase();
+    if (!cor) return;
+    const existente = Array.from(selectCor.options).find(o => o.value === cor);
+    if (existente) {
+      selectCor.value = cor;
+      return;
+    }
+    selectCor.add(new Option(cor, cor, true, true));
+    selectCor.value = cor;
+  }
 
   const steps = ['A', 'B', 'C', 'D'];
   function showStep(s) {
@@ -326,7 +444,7 @@
         }
       }
       if (data.cor_esperada) {
-        document.getElementById('input-cor').value = data.cor_esperada;
+        adicionarOuSelecionarCor(data.cor_esperada);
       }
       showStep('B');
     } catch (e) {
@@ -380,10 +498,34 @@
     }
   });
 
-  // ---------- Passo C ----------
+  // ---------- Passo C (cor via select + modal "nova cor") ----------
+  const selectCor = document.getElementById('select-cor');
+  const modalNovaCor = new bootstrap.Modal(document.getElementById('modalNovaCor'));
+  const inputNovaCor = document.getElementById('input-nova-cor');
+  const btnSalvarCor = document.getElementById('btn-salvar-cor');
+
+  document.getElementById('btn-nova-cor').addEventListener('click', () => {
+    inputNovaCor.value = '';
+    modalNovaCor.show();
+    setTimeout(() => inputNovaCor.focus(), 300);
+  });
+  inputNovaCor.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); btnSalvarCor.click(); }
+  });
+  btnSalvarCor.addEventListener('click', () => {
+    const nome = (inputNovaCor.value || '').trim().toUpperCase();
+    if (!nome) return;
+    // Cor nao e persistida em tabela propria (decisao 2026-04-23): vive
+    // apenas como texto em hora_recebimento_conferencia.cor_conferida +
+    // hora_nf_entrada_item.cor_texto_original. Aqui so adicionamos a option
+    // local para uso nesta sessao.
+    adicionarOuSelecionarCor(nome);
+    modalNovaCor.hide();
+  });
+
   document.getElementById('btn-avancar-C').addEventListener('click', () => {
-    const cor = document.getElementById('input-cor').value.trim().toUpperCase();
-    if (!cor) { alert('Informe a cor.'); return; }
+    const cor = (selectCor.value || '').trim().toUpperCase();
+    if (!cor) { alert('Selecione a cor (use "Criar nova cor" se necessario).'); return; }
     state.cor = cor;
     renderResumo();
     showStep('D');
@@ -486,9 +628,63 @@
     }
   });
 
+  // ---------- Modal "Ver motos da NF" (gate recebimento_motos_nf.ver) ----------
+  if (URL_MOTOS_NF) {
+    const modalEl = document.getElementById('modalMotosNF');
+    const tbody = document.getElementById('motos-nf-tbody');
+    const contador = document.getElementById('motos-nf-contador');
+
+    async function carregarMotosNF(filtro) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">'
+        + '<i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+      try {
+        const r = await fetch(URL_MOTOS_NF + '?filtro=' + encodeURIComponent(filtro));
+        const data = await r.json();
+        if (!data.ok) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">'
+            + esc(data.erro || 'falha ao carregar') + '</td></tr>';
+          return;
+        }
+        contador.textContent = data.total_conferidas + ' de ' + data.total_na_nf
+          + ' conferida(s) — filtro: ' + filtro;
+        if (!data.itens.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">'
+            + 'Nenhum item para o filtro selecionado.</td></tr>';
+          return;
+        }
+        const rows = data.itens.map(it => {
+          const badge = it.conferida
+            ? '<span class="badge bg-success"><i class="fas fa-check"></i> Conferida</span>'
+            : '<span class="badge bg-secondary"><i class="fas fa-clock"></i> Pendente</span>';
+          return '<tr>'
+            + '<td><small class="text-muted">' + (it.ordem != null ? '#' + it.ordem : '—') + '</small></td>'
+            + '<td class="chassi-mono">' + esc(it.chassi || '—') + '</td>'
+            + '<td>' + esc(it.modelo || '—') + '</td>'
+            + '<td>' + esc(it.cor || '—') + '</td>'
+            + '<td>' + badge + '</td>'
+          + '</tr>';
+        }).join('');
+        tbody.innerHTML = rows;
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">'
+          + 'Erro: ' + esc(String(e)) + '</td></tr>';
+      }
+    }
+
+    function filtroSelecionado() {
+      const el = document.querySelector('input[name="filtro-motos-nf"]:checked');
+      return el ? el.value : 'todas';
+    }
+
+    modalEl.addEventListener('show.bs.modal', () => carregarMotosNF(filtroSelecionado()));
+    document.querySelectorAll('input[name="filtro-motos-nf"]').forEach(el => {
+      el.addEventListener('change', () => carregarMotosNF(filtroSelecionado()));
+    });
+  }
+
   // Se veio de reconferencia com dados pre-preenchidos, opcional preencher os campos:
   {% if pendente %}
-    (function() {
+    (async function() {
       const preChassi = {{ pendente.numero_chassi|tojson }};
       const preModeloId = {{ pendente.modelo_id_conferido|tojson }};
       const preCor = {{ pendente.cor_conferida|tojson }};
@@ -498,9 +694,19 @@
         const sel = document.getElementById('select-modelo');
         sel.value = String(preModeloId);
       }
-      if (preCor != null) document.getElementById('input-cor').value = preCor;
+      if (preCor != null) adicionarOuSelecionarCor(preCor);
       document.getElementById('check-avaria').checked = !!preAvaria;
       state.avaria = !!preAvaria;
+      // Busca contexto NF para o chassi pre-preenchido — sem isso
+      // state.contextoNF ficaria null e o passo D mostraria "CHASSI_EXTRA"
+      // falso para motos validamente na NF (bug 2026-04-23 revisao).
+      if (preChassi) {
+        try {
+          const r = await fetch(URL_VALIDAR + '?chassi=' + encodeURIComponent(preChassi));
+          state.contextoNF = await r.json();
+          state.chassi = preChassi;
+        } catch (_) { /* silencioso: backend revalida no submit */ }
+      }
     })();
   {% endif %}
 })();

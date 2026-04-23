@@ -112,7 +112,7 @@
               </td>
               <td>{{ item.modelo or '—' }}</td>
               <td>{{ item.cor or '—' }}</td>
-              <td>R$ {{ "%.2f"|format(item.preco_compra_esperado) if item.preco_compra_esperado else '—' }}</td>
+              <td>{{ item.preco_compra_esperado|valor_br if item.preco_compra_esperado else '—' }}</td>
               <td>
                 {% if item.aviso == 'chassi_pendente' %}
                   <span class="badge hora-badge-divergencia">chassi pendente</span>

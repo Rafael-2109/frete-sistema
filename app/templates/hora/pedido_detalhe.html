@@ -163,7 +163,7 @@
           <td>{{ nf.numero_nf }}</td>
           <td>{{ nf.nome_emitente or nf.cnpj_emitente }}</td>
           <td>{{ nf.data_emissao.strftime('%d/%m/%Y') }}</td>
-          <td>R$ {{ "%.2f"|format(nf.valor_total) }}</td>
+          <td>{{ nf.valor_total|valor_br }}</td>
           <td>{{ nf.itens|length }}</td>
         </tr>
       {% endfor %}

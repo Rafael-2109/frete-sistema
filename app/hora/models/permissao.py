@@ -25,12 +25,24 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('pedidos', 'Pedidos'),
     ('nfs', 'NFs de Entrada'),
     ('recebimentos', 'Recebimentos'),
+    ('recebimento_resumo', 'Recebimento: Ver resumo/comparativo'),
+    ('recebimento_motos_nf', 'Recebimento: Ver motos da NF'),
     ('estoque', 'Estoque'),
     ('devolucoes', 'Devolucoes'),
     ('pecas', 'Pecas faltando'),
     ('transferencias', 'Transferencias entre filiais'),
     ('avarias', 'Avarias'),
 ]
+
+# Modulos virtuais onde apenas a acao 'ver' tem semantica. As demais colunas
+# da matriz aparecem como "—" (N/A) para evitar confusao do admin.
+# Ex.: 'recebimento_resumo' controla se o conferente enxerga a tela-resumo
+# com NF x Conferencia (item 3 do pedido do usuario 2026-04-23); 'criar/editar/
+# apagar/aprovar' nao fazem sentido para essa feature.
+MODULOS_SO_VER: set[str] = {
+    'recebimento_resumo',
+    'recebimento_motos_nf',
+}
 
 ACOES_HORA: list[tuple[str, str]] = [
     ('ver', 'Ver'),

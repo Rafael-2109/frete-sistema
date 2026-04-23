@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from sqlalchemy.orm import selectinload
+
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.hora.models import (
@@ -501,13 +503,22 @@ def finalizar_recebimento(
 # Comparativo lado-a-lado (tela T4)
 # ========================================================================
 
-def comparativo_recebimento_nf(recebimento_id: int) -> dict:
+def comparativo_recebimento_nf(
+    recebimento_id: int,
+    apenas_conferidas: bool = False,
+) -> dict:
     """Produz dict para a tela de resumo lado-a-lado.
 
     {
       'linhas': [ {chassi, nf_item, conferencia, divergencias, status, avaria} ],
       'totais': {esperado, conferido, ok, com_divergencia, avarias, extras, faltantes}
     }
+
+    Parametros:
+      apenas_conferidas: se True, filtra as linhas e devolve somente chassis
+        com conferencia ATIVA (substituida=False). Usado para o conferente
+        "cego" enxergar o resumo do proprio trabalho SEM ver motos da NF que
+        ele ainda nao conferiu (evita "colar" da NF).
     """
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
 
@@ -518,15 +529,22 @@ def comparativo_recebimento_nf(recebimento_id: int) -> dict:
 
     todos = []
     seen = set()
-    # Preserva ordem NF primeiro, depois extras na ordem de conferencia
-    for c in chassis_nf:
-        if c not in seen:
-            todos.append(c)
-            seen.add(c)
-    for c in chassis_conf:
-        if c not in seen:
-            todos.append(c)
-            seen.add(c)
+    if apenas_conferidas:
+        # So as que passaram pela conferencia (nao vaza chassis so-NF)
+        for c in chassis_conf:
+            if c not in seen:
+                todos.append(c)
+                seen.add(c)
+    else:
+        # Preserva ordem NF primeiro, depois extras na ordem de conferencia
+        for c in chassis_nf:
+            if c not in seen:
+                todos.append(c)
+                seen.add(c)
+        for c in chassis_conf:
+            if c not in seen:
+                todos.append(c)
+                seen.add(c)
 
     nf_por_chassi = {i.numero_chassi: i for i in rec.nf.itens if i.numero_chassi}
     conf_por_chassi = {c.numero_chassi: c for c in confs_ativas}
@@ -567,14 +585,24 @@ def comparativo_recebimento_nf(recebimento_id: int) -> dict:
             'status': status,
         })
 
+    # Em modo `apenas_conferidas` (conferente "cego"), o denominador publico
+    # deve refletir APENAS o que o operador vai ver — senao vazamos a qtd
+    # da NF via `esperado`, e `faltantes` ainda exporia motos pendentes.
+    if apenas_conferidas:
+        esperado_exposto = len(confs_ativas)
+        faltantes_exposto = 0
+    else:
+        esperado_exposto = len(chassis_nf)
+        faltantes_exposto = faltantes
+
     totais = {
-        'esperado': len(chassis_nf),
+        'esperado': esperado_exposto,
         'conferido': len(confs_ativas),
         'ok': ok,
         'com_divergencia': com_divergencia,
         'avarias': avarias,
         'extras': extras,
-        'faltantes': faltantes,
+        'faltantes': faltantes_exposto,
         'qtd_declarada': rec.qtd_declarada or 0,
     }
     return {'linhas': linhas, 'totais': totais}
@@ -590,7 +618,13 @@ def listar_recebimentos(
     limit: int = 100,
     lojas_permitidas_ids=None,
 ) -> List[HoraRecebimento]:
-    query = HoraRecebimento.query.order_by(
+    # selectinload em conferencias e nf.itens: o template `recebimentos_lista`
+    # usa `r.conferencias|rejectattr('substituida')` e `r.nf.itens|length`
+    # para cada linha. Sem eager-load vira N+1 (200 queries extras).
+    query = HoraRecebimento.query.options(
+        selectinload(HoraRecebimento.conferencias),
+        selectinload(HoraRecebimento.nf).selectinload(HoraNfEntrada.itens),
+    ).order_by(
         HoraRecebimento.data_recebimento.desc(),
         HoraRecebimento.id.desc(),
     )
