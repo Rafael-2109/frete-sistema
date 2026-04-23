@@ -22,10 +22,17 @@ def main():
             ALTER TABLE pessoal_categorias
             ADD COLUMN IF NOT EXISTS compensavel_tipo CHAR(1)
         """))
+        # PostgreSQL nao suporta ADD CONSTRAINT IF NOT EXISTS — usar DO com catch
+        # de duplicate_object para manter idempotencia. Fixes PYTHON-FLASK-NP.
         db.session.execute(text("""
-            ALTER TABLE pessoal_categorias
-            ADD CONSTRAINT IF NOT EXISTS ck_pessoal_categorias_compensavel_tipo
-            CHECK (compensavel_tipo IS NULL OR compensavel_tipo IN ('S', 'E'))
+            DO $$
+            BEGIN
+                ALTER TABLE pessoal_categorias
+                ADD CONSTRAINT ck_pessoal_categorias_compensavel_tipo
+                CHECK (compensavel_tipo IS NULL OR compensavel_tipo IN ('S', 'E'));
+            EXCEPTION WHEN duplicate_object THEN
+                RAISE NOTICE 'ck_pessoal_categorias_compensavel_tipo ja existe';
+            END $$
         """))
         db.session.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_pessoal_categorias_compensavel
