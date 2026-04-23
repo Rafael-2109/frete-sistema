@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from app.chat.realtime.publisher import publish, channel_for
 
