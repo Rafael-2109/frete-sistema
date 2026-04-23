@@ -42,8 +42,12 @@ def render_markdown(text: str) -> str:
     return md_lib.markdown(text, extensions=['extra', 'sane_lists'])
 
 
-def _add_rel_noopener(attrs, new=False):
-    """Callback bleach: adiciona rel=noopener nofollow e target=_blank em links."""
+def _add_rel_noopener(attrs, _new=False):
+    """Callback bleach: adiciona rel=noopener nofollow e target=_blank em links.
+
+    Assinatura segue contrato de bleach.linkify — `_new` e obrigatorio mesmo
+    quando nao usado (leading underscore silencia linters).
+    """
     attrs[(None, 'rel')] = 'noopener nofollow'
     attrs[(None, 'target')] = '_blank'
     return attrs
