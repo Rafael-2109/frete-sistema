@@ -111,13 +111,6 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_emissao_cte_complementar_custo_entrega_id",
-      "columns": [
-        "custo_entrega_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_emissao_cte_complementar_cte_complementar_id",
       "columns": [
         "cte_complementar_id"
@@ -128,6 +121,13 @@
       "name": "ix_carvia_emissao_cte_complementar_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_emissao_cte_complementar_custo_entrega_id",
+      "columns": [
+        "custo_entrega_id"
       ],
       "unique": false
     }

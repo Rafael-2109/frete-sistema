@@ -362,31 +362,9 @@
   ],
   "indices": [
     {
-      "name": "idx_carteira_produto_saldo",
+      "name": "ix_carteira_principal_data_pedido",
       "columns": [
-        "cod_produto",
-        "qtd_saldo_produto_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_cnpj_cpf",
-      "columns": [
-        "cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_num_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_odoo_write_date",
-      "columns": [
-        "odoo_write_date"
+        "data_pedido"
       ],
       "unique": false
     },
@@ -399,22 +377,24 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_data_pedido",
+      "name": "idx_carteira_produto_saldo",
       "columns": [
-        "data_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_ativo",
-      "columns": [
-        "ativo"
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
       ],
       "unique": false
     },
     {
       "name": "ix_carteira_principal_cod_produto",
       "columns": [
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_ativo_saldo",
+      "columns": [
+        "num_pedido",
         "cod_produto"
       ],
       "unique": false
@@ -434,10 +414,9 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_ativo_saldo",
+      "name": "ix_carteira_principal_ativo",
       "columns": [
-        "num_pedido",
-        "cod_produto"
+        "ativo"
       ],
       "unique": false
     },
@@ -445,6 +424,27 @@
       "name": "ix_carteira_principal_status_pedido",
       "columns": [
         "status_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_odoo_write_date",
+      "columns": [
+        "odoo_write_date"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cnpj_cpf",
+      "columns": [
+        "cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_num_pedido",
+      "columns": [
+        "num_pedido"
       ],
       "unique": false
     },

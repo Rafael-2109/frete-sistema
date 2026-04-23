@@ -60,17 +60,17 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_conf_historico_frete_data",
+      "name": "ix_carvia_conferencia_historico_frete_id",
       "columns": [
-        "frete_id",
-        "data"
+        "frete_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_conferencia_historico_frete_id",
+      "name": "ix_carvia_conf_historico_frete_data",
       "columns": [
-        "frete_id"
+        "frete_id",
+        "data"
       ],
       "unique": false
     }
