@@ -5,7 +5,7 @@ Referencia: docs/superpowers/specs/2026-04-23-chat-inapp-design.md secao 4.
 """
 from sqlalchemy import (
     Column, BigInteger, Integer, String, Text, Boolean, DateTime,
-    ForeignKey, Index, UniqueConstraint, CheckConstraint
+    ForeignKey, Index, UniqueConstraint, CheckConstraint, text
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import relationship
@@ -34,11 +34,20 @@ class ChatThread(db.Model):
     __table_args__ = (
         # Partial unique index: only one thread per entity_type+entity_id when entity_type is set.
         # UniqueConstraint does not support postgresql_where; use Index(unique=True) instead.
+        # `text()` evita referencia a Column detached em __table_args__ (garante DDL correto).
         Index(
             'uq_chat_threads_entity',
             'entity_type', 'entity_id',
             unique=True,
-            postgresql_where=(Column('entity_type').isnot(None)),
+            postgresql_where=text("entity_type IS NOT NULL"),
+        ),
+        # Garante 1 caixa de entrada de sistema por usuario (spec secao 4.1).
+        # Previne race condition no SystemNotifier._get_or_create_system_dm.
+        Index(
+            'uq_chat_threads_system_dm',
+            'criado_por_id',
+            unique=True,
+            postgresql_where=text("tipo = 'system_dm'"),
         ),
         Index('idx_chat_threads_last_msg', 'last_message_at'),
         CheckConstraint("tipo IN ('dm','group','entity','system_dm')", name='ck_chat_threads_tipo'),
@@ -99,7 +108,7 @@ class ChatMessage(db.Model):
     __table_args__ = (
         Index('idx_chat_messages_thread_time', 'thread_id', 'criado_em'),
         Index('idx_chat_messages_sender_time', 'sender_user_id', 'criado_em',
-              postgresql_where=(Column('sender_type') == 'user')),
+              postgresql_where=text("sender_type = 'user'")),
         Index('idx_chat_messages_content_tsv', 'content_tsv', postgresql_using='gin'),
         CheckConstraint("sender_type IN ('user','system')", name='ck_chat_messages_sender_type'),
         CheckConstraint(
