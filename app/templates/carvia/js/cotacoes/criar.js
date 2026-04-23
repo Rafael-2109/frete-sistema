@@ -555,10 +555,17 @@ function renderNfsList() {
 }
 
 function atualizarTotaisNfs() {
+    // valor_mercadoria da cotacao = soma de vProd dos itens (valor_total_item),
+    // NAO vNF (nf.valor_total). vNF inclui IPI/frete/seguro que nao aparecem nos
+    // pedido_itens — usar vNF causaria sobra residual na cotacao (bug das COT-56/57/58).
     let totalPeso = 0, totalValor = 0, totalVolumes = 0;
     _nfsCollection.forEach(d => {
         totalPeso += d.nf.peso_bruto || 0;
-        totalValor += d.nf.valor_total || 0;
+        const somaItens = (d.itens || []).reduce(
+            (acc, it) => acc + (parseFloat(it.valor_total) || 0), 0
+        );
+        // Fallback: se NF nao tem itens parseados, cair em nf.valor_total
+        totalValor += somaItens > 0 ? somaItens : (d.nf.valor_total || 0);
         totalVolumes += d.nf.quantidade_volumes || 0;
     });
 

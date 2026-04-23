@@ -245,11 +245,16 @@ class CarviaPreVinculoService:
         linhas = [linha for linha in linhas if linha.id not in ids_com_prev]
 
         # Construir doc "fake" da cotacao para reutilizar pontuar_documentos
+        # CarviaCliente NAO tem campo cnpj — CNPJ vive em CarviaClienteEndereco.
+        # Preferir destino (pagador tipico) com fallback para origem.
         nome_doc = ''
         cnpj_doc = ''
         if cotacao.cliente:
             nome_doc = cotacao.cliente.nome_comercial or ''
-            cnpj_doc = (cotacao.cliente.cnpj or '').strip()
+        if cotacao.endereco_destino and cotacao.endereco_destino.cnpj:
+            cnpj_doc = (cotacao.endereco_destino.cnpj or '').strip()
+        elif cotacao.endereco_origem and cotacao.endereco_origem.cnpj:
+            cnpj_doc = (cotacao.endereco_origem.cnpj or '').strip()
 
         data_cotacao_br = (
             cotacao.data_cotacao.strftime('%d/%m/%Y')
