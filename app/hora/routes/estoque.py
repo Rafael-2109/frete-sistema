@@ -1,10 +1,11 @@
-"""Rotas de Estoque HORA: KPIs, listagem chassi-a-chassi, historico de moto."""
+"""Rotas de Estoque HORA: KPIs, listagem chassi-a-chassi, rastreamento de moto."""
 from __future__ import annotations
 
 from flask import flash, redirect, render_template, request, url_for
 
+from app import db
 from app.hora.decorators import require_hora_perm
-from app.hora.models import HoraLoja, HoraModelo, HoraMoto
+from app.hora.models import HoraLoja, HoraMoto
 from app.hora.routes import hora_bp
 from app.hora.services import estoque_service
 from app.hora.services.auth_helper import (
@@ -30,6 +31,7 @@ def estoque_lista():
 
     incluir_avariadas = request.args.get('incluir_avariadas', '1') == '1'
     incluir_faltando_peca = request.args.get('incluir_faltando_peca', '1') == '1'
+    incluir_fora_estoque = request.args.get('incluir_fora_estoque', '0') == '1'
 
     motos = estoque_service.listar_estoque(
         loja_id=loja_id,
@@ -37,6 +39,7 @@ def estoque_lista():
         cor=cor,
         incluir_avariadas=incluir_avariadas,
         incluir_faltando_peca=incluir_faltando_peca,
+        incluir_fora_estoque=incluir_fora_estoque,
         lojas_permitidas_ids=permitidas,
     )
     kpis_loja = estoque_service.kpis_estoque_por_loja(
@@ -57,7 +60,7 @@ def estoque_lista():
     else:
         lojas = lojas_q.order_by(HoraLoja.nome).all()
 
-    modelos = HoraModelo.query.filter_by(ativo=True).order_by(HoraModelo.nome_modelo).all()
+    opcoes = estoque_service.opcoes_filtro_estoque(lojas_permitidas_ids=permitidas)
 
     return render_template(
         'hora/estoque_lista.html',
@@ -65,51 +68,48 @@ def estoque_lista():
         kpis_loja=kpis_loja,
         kpis_modelo=kpis_modelo,
         lojas=lojas,
-        modelos=modelos,
+        modelos=opcoes['modelos'],
+        cores=opcoes['cores'],
         filtro_loja_id=loja_id,
         filtro_modelo_id=modelo_id,
         filtro_cor=cor,
         incluir_avariadas=incluir_avariadas,
         incluir_faltando_peca=incluir_faltando_peca,
+        incluir_fora_estoque=incluir_fora_estoque,
     )
 
 
 @hora_bp.route('/estoque/chassi/<numero_chassi>')
 @require_hora_perm('estoque', 'ver')
 def estoque_chassi_detalhe(numero_chassi: str):
-    from app.hora.models import (
-        HoraAvaria, HoraTransferencia, HoraTransferenciaItem,
-    )
+    from app.hora.models import HoraMotoEvento
 
     chassi = numero_chassi.strip().upper()
     moto = HoraMoto.query.get_or_404(chassi)
-    eventos = estoque_service.historico_chassi(chassi)
-    if eventos:
-        ult_loja = eventos[0]['loja_id']
-        if ult_loja and not usuario_tem_acesso_a_loja(ult_loja):
-            flash('Acesso negado a loja desse chassi.', 'danger')
-            return redirect(url_for('hora.estoque_lista'))
 
-    avarias = (
-        HoraAvaria.query
-        .filter_by(numero_chassi=chassi)
-        .order_by(HoraAvaria.criado_em.desc())
-        .all()
-    )
-    transferencias = (
-        HoraTransferencia.query
-        .join(HoraTransferenciaItem,
-              HoraTransferenciaItem.transferencia_id == HoraTransferencia.id)
-        .filter(HoraTransferenciaItem.numero_chassi == chassi)
-        .distinct()
-        .order_by(HoraTransferencia.emitida_em.desc())
-        .all()
-    )
+    rastreio = estoque_service.rastreamento_completo(chassi)
+
+    # Autorizacao: usuario deve ter acesso a ALGUMA loja pela qual este chassi
+    # ja passou. Admin (lojas_permitidas_ids() is None) sempre passa.
+    permitidas = lojas_permitidas_ids()
+    if permitidas is not None:
+        if not permitidas:
+            flash('Sem acesso a nenhuma loja.', 'danger')
+            return redirect(url_for('hora.estoque_lista'))
+        tem_vinculo = (
+            db.session.query(HoraMotoEvento.id)
+            .filter(
+                HoraMotoEvento.numero_chassi == chassi,
+                HoraMotoEvento.loja_id.in_(permitidas),
+            )
+            .first()
+        )
+        if not tem_vinculo:
+            flash('Acesso negado a esse chassi.', 'danger')
+            return redirect(url_for('hora.estoque_lista'))
 
     return render_template(
         'hora/estoque_chassi_detalhe.html',
         moto=moto,
-        eventos=eventos,
-        avarias=avarias,
-        transferencias=transferencias,
+        rastreio=rastreio,
     )

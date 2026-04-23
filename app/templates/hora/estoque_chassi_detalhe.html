@@ -2,10 +2,23 @@
 
 {% block hora_content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>Chassi <span class="chassi-mono">{{ moto.numero_chassi }}</span></h2>
+  <h2>
+    Chassi <span class="chassi-mono">{{ moto.numero_chassi }}</span>
+    {% if rastreio.ultimo_evento %}
+      <span class="badge hora-badge-{{ rastreio.ultimo_evento.tipo|lower }} ms-2">
+        {{ rastreio.ultimo_evento.tipo }}
+      </span>
+      {% if rastreio.moto_disponivel %}
+        <span class="badge bg-success ms-1">Disponível</span>
+      {% else %}
+        <span class="badge bg-secondary ms-1">Fora de estoque</span>
+      {% endif %}
+    {% endif %}
+  </h2>
   <a href="{{ url_for('hora.estoque_lista') }}" class="btn btn-sm btn-secondary">Voltar</a>
 </div>
 
+{# ========== DADOS DA MOTO ========== #}
 <div class="row g-3 mb-4">
   <div class="col-md-3"><div class="hora-kpi">
     <div class="hora-kpi-label">Modelo</div>
@@ -27,74 +40,335 @@
   </div></div>
 </div>
 
-<div class="row">
-  <div class="col-md-6">
-    <h4><i class="fas fa-exclamation-triangle text-warning"></i> Avarias ({{ avarias|default([])|length }})</h4>
-    <div class="card p-2 mb-3">
-      {% if avarias %}
-        <ul class="list-unstyled mb-0">
-          {% for a in avarias %}
-            <li class="mb-2 pb-2 border-bottom">
-              <a href="{{ url_for('hora.avaria_detalhe', avaria_id=a.id) }}">Avaria #{{ a.id }}</a>
-              {% if a.status=='ABERTA' %}<span class="badge bg-warning text-dark">Aberta</span>
-              {% elif a.status=='RESOLVIDA' %}<span class="badge bg-success">Resolvida</span>
-              {% else %}<span class="badge bg-secondary">Ignorada</span>{% endif %}
-              <br>
-              <small class="text-muted">{{ a.criado_em.strftime('%d/%m/%Y') }} — {{ a.descricao[:100] }}{% if a.descricao|length > 100 %}…{% endif %}</small>
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="text-muted mb-0">Sem avarias registradas.</p>
-      {% endif %}
+{# ========== 1. PEDIDO DE ORIGEM ========== #}
+<h4><i class="fas fa-clipboard-list text-primary"></i> Pedido de origem</h4>
+<div class="card p-3 mb-3">
+  {% if rastreio.pedido %}
+    <div class="row">
+      <div class="col-md-3"><small class="text-muted">Nº Pedido</small><br>
+        <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=rastreio.pedido.id) }}"
+           class="btn btn-sm btn-outline-primary">
+          {{ rastreio.pedido.numero_pedido }}
+        </a>
+      </div>
+      <div class="col-md-2"><small class="text-muted">Data</small><br>
+        {{ rastreio.pedido.data_pedido.strftime('%d/%m/%Y') if rastreio.pedido.data_pedido else '—' }}
+      </div>
+      <div class="col-md-3"><small class="text-muted">Status</small><br>
+        <span class="badge bg-info">{{ rastreio.pedido.status }}</span>
+      </div>
+      <div class="col-md-4"><small class="text-muted">Loja destino</small><br>
+        {{ rastreio.pedido.loja_destino.rotulo_display if rastreio.pedido.loja_destino else '—' }}
+      </div>
     </div>
-  </div>
-  <div class="col-md-6">
-    <h4><i class="fas fa-exchange-alt text-info"></i> Transferências ({{ transferencias|default([])|length }})</h4>
-    <div class="card p-2 mb-3">
-      {% if transferencias %}
-        <ul class="list-unstyled mb-0">
-          {% for t in transferencias %}
-            <li class="mb-2 pb-2 border-bottom">
-              <a href="{{ url_for('hora.transferencia_detalhe', transferencia_id=t.id) }}">Transf #{{ t.id }}</a>
-              {% if t.status=='EM_TRANSITO' %}<span class="badge bg-info">Em trânsito</span>
-              {% elif t.status=='CONFIRMADA' %}<span class="badge bg-success">Confirmada</span>
-              {% else %}<span class="badge bg-secondary">Cancelada</span>{% endif %}
-              <br>
-              <small class="text-muted">
-                {{ t.loja_origem.rotulo_display }} → {{ t.loja_destino.rotulo_display }}
-                ({{ t.emitida_em.strftime('%d/%m/%Y') }})
-              </small>
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="text-muted mb-0">Sem transferências.</p>
-      {% endif %}
-    </div>
-  </div>
+  {% else %}
+    <p class="text-muted mb-0">Sem pedido vinculado — moto possivelmente cadastrada manualmente ou entrou em NF sem pedido prévio.</p>
+  {% endif %}
 </div>
 
-<h4>Histórico de eventos</h4>
-<div class="table-responsive">
-  <table class="table table-sm table-striped">
-    <thead><tr>
-      <th>Quando</th><th>Tipo</th><th>Loja</th><th>Operador</th><th>Detalhe</th><th>Origem</th>
-    </tr></thead>
-    <tbody>
-      {% for e in eventos %}
-      <tr>
-        <td><small>{{ e.timestamp.strftime('%d/%m/%Y %H:%M') }}</small></td>
-        <td><span class="badge hora-badge-{{ e.tipo|lower }}">{{ e.tipo }}</span></td>
-        <td>{{ e.loja_nome or '—' }}</td>
-        <td>{{ e.operador or '—' }}</td>
-        <td><small>{{ e.detalhe or '' }}</small></td>
-        <td><small class="text-muted">{{ e.origem_tabela or '' }}{% if e.origem_id %} #{{ e.origem_id }}{% endif %}</small></td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="text-muted text-center">Sem eventos.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+{# ========== 2. NF DE ENTRADA + ITEM ========== #}
+<h4><i class="fas fa-file-invoice text-primary"></i> NF de entrada</h4>
+<div class="card p-3 mb-3">
+  {% if rastreio.nf %}
+    <div class="row">
+      <div class="col-md-2"><small class="text-muted">NF</small><br>
+        <a href="{{ url_for('hora.nfs_detalhe', nf_id=rastreio.nf.id) }}"
+           class="btn btn-sm btn-outline-primary">
+          {{ rastreio.nf.numero_nf }}
+        </a>
+      </div>
+      <div class="col-md-2"><small class="text-muted">Data emissão</small><br>
+        {{ rastreio.nf.data_emissao.strftime('%d/%m/%Y') if rastreio.nf.data_emissao else '—' }}
+      </div>
+      <div class="col-md-4"><small class="text-muted">Emitente</small><br>
+        {{ rastreio.nf.nome_emitente or rastreio.nf.cnpj_emitente }}
+      </div>
+      <div class="col-md-2"><small class="text-muted">Valor total</small><br>
+        R$ {{ rastreio.nf.valor_total|valor_br(2) if rastreio.nf.valor_total else '—' }}
+      </div>
+      <div class="col-md-2"><small class="text-muted">Preço desta moto</small><br>
+        {% if rastreio.nf_item and rastreio.nf_item.preco_real %}
+          R$ {{ rastreio.nf_item.preco_real|valor_br(2) }}
+        {% else %}—{% endif %}
+      </div>
+    </div>
+    {% if rastreio.nf_item and (rastreio.nf_item.modelo_texto_original or rastreio.nf_item.cor_texto_original) %}
+      <hr class="my-2">
+      <small class="text-muted">Texto original na NF:
+        {{ rastreio.nf_item.modelo_texto_original }}
+        {% if rastreio.nf_item.cor_texto_original %} — {{ rastreio.nf_item.cor_texto_original }}{% endif %}
+      </small>
+    {% endif %}
+  {% else %}
+    <p class="text-muted mb-0">Sem NF de entrada vinculada.</p>
+  {% endif %}
 </div>
+
+{# ========== 3. RECEBIMENTO + CONFERÊNCIA ========== #}
+<h4><i class="fas fa-truck-loading text-primary"></i> Recebimento & conferência</h4>
+<div class="card p-3 mb-3">
+  {% if rastreio.recebimento %}
+    <div class="row">
+      <div class="col-md-2"><small class="text-muted">Recebimento</small><br>
+        <a href="{{ url_for('hora.recebimentos_detalhe', recebimento_id=rastreio.recebimento.id) }}"
+           class="btn btn-sm btn-outline-primary">
+          #{{ rastreio.recebimento.id }}
+        </a>
+      </div>
+      <div class="col-md-2"><small class="text-muted">Data</small><br>
+        {{ rastreio.recebimento.data_recebimento.strftime('%d/%m/%Y') if rastreio.recebimento.data_recebimento else '—' }}
+      </div>
+      <div class="col-md-2"><small class="text-muted">Loja</small><br>
+        {{ rastreio.recebimento.loja.rotulo_display if rastreio.recebimento.loja else '—' }}
+      </div>
+      <div class="col-md-3"><small class="text-muted">Operador</small><br>
+        {{ rastreio.recebimento.operador or '—' }}
+      </div>
+      <div class="col-md-3"><small class="text-muted">Status recebimento</small><br>
+        <span class="badge bg-info">{{ rastreio.recebimento.status }}</span>
+      </div>
+    </div>
+    {% if rastreio.conferencia %}
+      <hr class="my-2">
+      <div class="row">
+        <div class="col-md-2"><small class="text-muted">Ordem na fila</small><br>
+          {{ rastreio.conferencia.ordem }}
+        </div>
+        <div class="col-md-3"><small class="text-muted">Conferida em</small><br>
+          {{ rastreio.conferencia.conferido_em.strftime('%d/%m/%Y %H:%M') if rastreio.conferencia.conferido_em else '—' }}
+        </div>
+        <div class="col-md-2"><small class="text-muted">QR lido</small><br>
+          {{ 'Sim' if rastreio.conferencia.qr_code_lido else 'Não' }}
+        </div>
+        <div class="col-md-2"><small class="text-muted">Avaria física?</small><br>
+          {% if rastreio.conferencia.avaria_fisica %}
+            <span class="badge bg-warning text-dark">Sim</span>
+          {% else %}Não{% endif %}
+        </div>
+        <div class="col-md-3"><small class="text-muted">Operador</small><br>
+          {{ rastreio.conferencia.operador or '—' }}
+        </div>
+      </div>
+      {% if rastreio.conferencia_divergencias %}
+        <hr class="my-2">
+        <small class="text-muted">Divergências detectadas na conferência:</small>
+        <ul class="mb-0 mt-1">
+          {% for d in rastreio.conferencia_divergencias %}
+            <li>
+              <strong>{{ d.tipo }}</strong>
+              {% if d.valor_esperado or d.valor_conferido %}
+                — esperado: <code>{{ d.valor_esperado or '—' }}</code>,
+                conferido: <code>{{ d.valor_conferido or '—' }}</code>
+              {% endif %}
+              {% if d.detalhe %}<br><small class="text-muted">{{ d.detalhe }}</small>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% else %}
+      <hr class="my-2">
+      <p class="text-muted mb-0"><small>Moto ainda não conferida no recebimento.</small></p>
+    {% endif %}
+  {% else %}
+    <p class="text-muted mb-0">Sem recebimento registrado.</p>
+  {% endif %}
+</div>
+
+{# ========== 4. TRANSFERÊNCIAS ========== #}
+<h4 id="transferencias">
+  <i class="fas fa-exchange-alt text-info"></i>
+  Transferências ({{ rastreio.transferencias|length }})
+</h4>
+<div class="card p-3 mb-3">
+  {% if rastreio.transferencias %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead><tr>
+          <th>#</th><th>Origem → Destino</th><th>Emitida</th>
+          <th>Confirmada</th><th>Status</th><th>Operador</th>
+        </tr></thead>
+        <tbody>
+          {% for t in rastreio.transferencias %}
+          <tr>
+            <td>
+              <a href="{{ url_for('hora.transferencia_detalhe', transferencia_id=t.id) }}"
+                 class="btn btn-sm btn-outline-primary py-0">
+                #{{ t.id }}
+              </a>
+            </td>
+            <td>
+              {{ t.loja_origem.rotulo_display if t.loja_origem else '?' }}
+              →
+              {{ t.loja_destino.rotulo_display if t.loja_destino else '?' }}
+            </td>
+            <td><small>{{ t.emitida_em.strftime('%d/%m/%Y %H:%M') if t.emitida_em else '—' }}</small></td>
+            <td><small>{{ t.confirmada_em.strftime('%d/%m/%Y %H:%M') if t.confirmada_em else '—' }}</small></td>
+            <td>
+              {% if t.status=='EM_TRANSITO' %}<span class="badge bg-info">Em trânsito</span>
+              {% elif t.status=='CONFIRMADA' %}<span class="badge bg-success">Confirmada</span>
+              {% elif t.status=='CANCELADA' %}<span class="badge bg-secondary">Cancelada</span>
+              {% else %}<span class="badge bg-light text-dark">{{ t.status }}</span>{% endif %}
+            </td>
+            <td><small>{{ t.emitida_por or '—' }}</small></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-muted mb-0">Sem transferências.</p>
+  {% endif %}
+</div>
+
+{# ========== 5. AVARIAS ========== #}
+<h4 id="avarias">
+  <i class="fas fa-exclamation-triangle text-warning"></i>
+  Avarias ({{ rastreio.avarias|length }})
+</h4>
+<div class="card p-3 mb-3">
+  {% if rastreio.avarias %}
+    <ul class="list-unstyled mb-0">
+      {% for a in rastreio.avarias %}
+        <li class="mb-2 pb-2 border-bottom">
+          <a href="{{ url_for('hora.avaria_detalhe', avaria_id=a.id) }}"
+             class="btn btn-sm btn-outline-primary py-0">Avaria #{{ a.id }}</a>
+          {% if a.status=='ABERTA' %}<span class="badge bg-warning text-dark">Aberta</span>
+          {% elif a.status=='RESOLVIDA' %}<span class="badge bg-success">Resolvida</span>
+          {% else %}<span class="badge bg-secondary">Ignorada</span>{% endif %}
+          <small class="text-muted">
+            {{ a.criado_em.strftime('%d/%m/%Y') }} — {{ a.criado_por or '—' }}
+            · Loja: {{ a.loja.rotulo_display if a.loja else '—' }}
+          </small>
+          <br>
+          <small>{{ a.descricao[:200] }}{% if a.descricao|length > 200 %}…{% endif %}</small>
+          {% if a.resolvido_em %}
+            <br><small class="text-muted">
+              Resolvida {{ a.resolvido_em.strftime('%d/%m/%Y') }} por {{ a.resolvido_por or '—' }}
+              {% if a.resolucao_observacao %}: {{ a.resolucao_observacao[:150] }}{% endif %}
+            </small>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted mb-0">Sem avarias registradas.</p>
+  {% endif %}
+</div>
+
+{# ========== 6. PEÇAS FALTANDO ========== #}
+<h4 id="pecas">
+  <i class="fas fa-tools text-info"></i>
+  Peças faltando ({{ rastreio.pecas_faltando|length }})
+</h4>
+<div class="card p-3 mb-3">
+  {% if rastreio.pecas_faltando %}
+    <ul class="list-unstyled mb-0">
+      {% for p in rastreio.pecas_faltando %}
+        <li class="mb-2 pb-2 border-bottom">
+          <a href="{{ url_for('hora.pecas_detalhe', peca_id=p.id) }}"
+             class="btn btn-sm btn-outline-primary py-0">Peça #{{ p.id }}</a>
+          {% if p.status=='ABERTA' %}<span class="badge bg-warning text-dark">Aberta</span>
+          {% elif p.status=='RESOLVIDA' %}<span class="badge bg-success">Resolvida</span>
+          {% else %}<span class="badge bg-secondary">Cancelada</span>{% endif %}
+          <strong>{{ p.descricao }}</strong>
+          <br>
+          <small class="text-muted">
+            {{ p.criado_em.strftime('%d/%m/%Y') }} — {{ p.criado_por or '—' }}
+          </small>
+          {% if p.chassi_doador %}
+            <br><small class="text-info">
+              ↔ Canibalização: peça cedida por
+              <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=p.chassi_doador) }}"
+                 class="chassi-mono">{{ p.chassi_doador }}</a>
+            </small>
+          {% endif %}
+          {% if p.resolvido_em %}
+            <br><small class="text-muted">
+              Resolvida {{ p.resolvido_em.strftime('%d/%m/%Y') }} por {{ p.resolvido_por or '—' }}
+            </small>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="text-muted mb-0">Sem peças faltando.</p>
+  {% endif %}
+</div>
+
+{# ========== 7. VENDA ========== #}
+<h4><i class="fas fa-dollar-sign text-success"></i> Venda</h4>
+<div class="card p-3 mb-3">
+  {% if rastreio.venda %}
+    <div class="row">
+      <div class="col-md-2"><small class="text-muted">Venda</small><br>
+        <span class="badge bg-success">#{{ rastreio.venda.id }}</span>
+      </div>
+      <div class="col-md-2"><small class="text-muted">Data</small><br>
+        {{ rastreio.venda.data_venda.strftime('%d/%m/%Y') if rastreio.venda.data_venda else '—' }}
+      </div>
+      <div class="col-md-2"><small class="text-muted">Loja</small><br>
+        {{ rastreio.venda.loja.rotulo_display if rastreio.venda.loja else '—' }}
+      </div>
+      <div class="col-md-3"><small class="text-muted">Cliente</small><br>
+        {{ rastreio.venda.nome_cliente }}
+        <br><small class="text-muted">{{ rastreio.venda.cpf_cliente }}</small>
+      </div>
+      <div class="col-md-3"><small class="text-muted">Preço / Forma pgto</small><br>
+        {% if rastreio.venda_item %}
+          <strong>R$ {{ rastreio.venda_item.preco_final|valor_br(2) }}</strong>
+          {% if rastreio.venda_item.desconto_aplicado and rastreio.venda_item.desconto_aplicado > 0 %}
+            <small class="text-muted">
+              (tabela R$ {{ rastreio.venda_item.preco_tabela_referencia|valor_br(2) }},
+              desc. R$ {{ rastreio.venda_item.desconto_aplicado|valor_br(2) }})
+            </small>
+          {% endif %}
+        {% endif %}
+        <br><small>{{ rastreio.venda.forma_pagamento }}</small>
+      </div>
+    </div>
+    {% if rastreio.venda.nf_saida_numero %}
+      <hr class="my-2">
+      <small class="text-muted">NF saída: {{ rastreio.venda.nf_saida_numero }}
+        {% if rastreio.venda.nf_saida_emitida_em %}
+          — emitida em {{ rastreio.venda.nf_saida_emitida_em.strftime('%d/%m/%Y %H:%M') }}
+        {% endif %}
+      </small>
+    {% endif %}
+  {% else %}
+    <p class="text-muted mb-0">Moto não vendida.</p>
+  {% endif %}
+</div>
+
+{# ========== 8. DEVOLUÇÕES AO FORNECEDOR ========== #}
+{% if rastreio.devolucoes %}
+<h4><i class="fas fa-undo text-danger"></i> Devoluções ao fornecedor ({{ rastreio.devolucoes|length }})</h4>
+<div class="card p-3 mb-3">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead><tr>
+        <th>#</th><th>Data</th><th>Motivo</th><th>Status</th><th>Loja</th>
+      </tr></thead>
+      <tbody>
+        {% for d in rastreio.devolucoes %}
+        <tr>
+          <td>
+            <a href="{{ url_for('hora.devolucoes_detalhe', devolucao_id=d.id) }}"
+               class="btn btn-sm btn-outline-primary py-0">#{{ d.id }}</a>
+          </td>
+          <td><small>{{ d.data_devolucao.strftime('%d/%m/%Y') if d.data_devolucao else '—' }}</small></td>
+          <td>{{ d.motivo }}</td>
+          <td>
+            {% if d.status=='ABERTA' %}<span class="badge bg-warning text-dark">Aberta</span>
+            {% elif d.status=='ENVIADA' %}<span class="badge bg-info">Enviada</span>
+            {% elif d.status=='CONFIRMADA' %}<span class="badge bg-success">Confirmada</span>
+            {% else %}<span class="badge bg-secondary">{{ d.status }}</span>{% endif %}
+          </td>
+          <td><small>{{ d.loja.rotulo_display if d.loja else '—' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
