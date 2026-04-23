@@ -131,8 +131,12 @@ def pedidos_novo():
 
 # ----------------------------- Importação XLSX -----------------------------
 
-def _serializar_extracao(pedido_extraido) -> str:
-    """Serializa PedidoExtraido em JSON + base64 para round-trip no form."""
+def _serializar_extracao(
+    pedido_extraido,
+    xlsx_bytes: bytes | None = None,
+    xlsx_nome_original: str | None = None,
+) -> str:
+    """Serializa PedidoExtraido + (opcional) bytes do XLSX em JSON + base64."""
     payload = {
         'numero_pedido': pedido_extraido.numero_pedido,
         'cnpj_destino': pedido_extraido.cnpj_destino,
@@ -155,12 +159,16 @@ def _serializar_extracao(pedido_extraido) -> str:
             }
             for i in pedido_extraido.itens
         ],
+        'xlsx_bytes_b64': (
+            base64.b64encode(xlsx_bytes).decode('ascii') if xlsx_bytes else None
+        ),
+        'xlsx_nome_original': xlsx_nome_original,
     }
     return base64.b64encode(json.dumps(payload).encode('utf-8')).decode('ascii')
 
 
 def _deserializar_extracao(token: str):
-    """Reconstroi PedidoExtraido a partir do JSON+base64."""
+    """Reconstroi (PedidoExtraido, xlsx_bytes|None, xlsx_nome|None)."""
     from app.hora.services.parsers import PedidoExtraido, ItemPedidoExtraido
 
     payload = json.loads(base64.b64decode(token).decode('utf-8'))
@@ -175,7 +183,7 @@ def _deserializar_extracao(token: str):
         )
         for d in payload['itens']
     ]
-    return PedidoExtraido(
+    extraido = PedidoExtraido(
         numero_pedido=payload['numero_pedido'],
         cnpj_destino=payload['cnpj_destino'],
         cnpjs_candidatos=payload.get('cnpjs_candidatos', []),
@@ -188,6 +196,10 @@ def _deserializar_extracao(token: str):
         avisos=payload['avisos'],
         itens=itens,
     )
+    xlsx_b64 = payload.get('xlsx_bytes_b64')
+    xlsx_bytes = base64.b64decode(xlsx_b64) if xlsx_b64 else None
+    xlsx_nome = payload.get('xlsx_nome_original')
+    return extraido, xlsx_bytes, xlsx_nome
 
 
 @hora_bp.route('/pedidos/importar-xlsx', methods=['GET', 'POST'])
@@ -202,8 +214,20 @@ def pedidos_importar_xlsx():
         flash('Selecione um arquivo XLSX.', 'danger')
         return render_template('hora/pedido_importar.html')
 
+    # Limite de 2 MB: XLSX vai round-trip no form em base64 (~30% overhead).
+    # Acima disso o token estoura limites default de proxies (nginx 1 MB) e
+    # infla sessao/POST desnecessariamente. Um pedido normal da HORA nao
+    # passa de ~100 KB.
+    MAX_XLSX_BYTES = 2 * 1024 * 1024
     try:
         conteudo = arquivo.read()
+        if len(conteudo) > MAX_XLSX_BYTES:
+            flash(
+                f'Arquivo muito grande ({len(conteudo) // 1024} KB; max '
+                f'{MAX_XLSX_BYTES // 1024} KB). Divida o pedido em arquivos menores.',
+                'danger',
+            )
+            return render_template('hora/pedido_importar.html')
         extracao = parse_pedido_xlsx(conteudo, nome_arquivo=arquivo.filename)
     except PedidoParseError as exc:
         flash(f'Erro ao parsear: {exc}', 'danger')
@@ -230,7 +254,9 @@ def pedidos_importar_xlsx():
 
     lojas_ativas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.nome).all()
 
-    token = _serializar_extracao(extracao)
+    token = _serializar_extracao(
+        extracao, xlsx_bytes=conteudo, xlsx_nome_original=arquivo.filename,
+    )
     return render_template(
         'hora/pedido_importar_preview.html',
         extracao=extracao,
@@ -257,11 +283,32 @@ def pedidos_importar_xlsx_confirmar():
         return redirect(url_for('hora.pedidos_importar_xlsx'))
 
     try:
-        extracao = _deserializar_extracao(token)
+        extracao, xlsx_bytes, xlsx_nome = _deserializar_extracao(token)
+
+        # Persiste XLSX original no storage. Falha nao aborta a criacao.
+        arquivo_origem_s3_key = None
+        if xlsx_bytes:
+            try:
+                import io as _io
+                buf = _io.BytesIO(xlsx_bytes)
+                buf.name = xlsx_nome or f'pedido_{extracao.numero_pedido}.xlsx'
+                from app.utils.file_storage import FileStorage
+                arquivo_origem_s3_key = FileStorage().save_file(
+                    buf, folder='hora/pedidos',
+                    filename=f'{extracao.numero_pedido}.xlsx',
+                    allowed_extensions=['xlsx', 'xls'],
+                )
+            except Exception as exc:
+                from flask import current_app as _app
+                _app.logger.warning(
+                    f'hora: falha ao persistir XLSX do pedido '
+                    f'{extracao.numero_pedido}: {exc}'
+                )
 
         pedido = pedido_service.criar_pedido_a_partir_de_extracao(
             pedido_extraido=extracao,
             loja_destino_id=int(loja_destino_id_str),
+            arquivo_origem_s3_key=arquivo_origem_s3_key,
             criado_por=current_user.nome if hasattr(current_user, 'nome') else None,
         )
         flash(
@@ -273,6 +320,33 @@ def pedidos_importar_xlsx_confirmar():
     except ValueError as exc:
         flash(f'Erro ao criar pedido: {exc}', 'danger')
         return redirect(url_for('hora.pedidos_importar_xlsx'))
+
+
+# ========================================================================
+# Download XLSX de origem
+# ========================================================================
+
+@hora_bp.route('/pedidos/<int:pedido_id>/download-xlsx')
+@require_hora_perm('pedidos', 'ver')
+def pedidos_download_xlsx(pedido_id: int):
+    """Redireciona para URL (S3 presigned ou local) do XLSX original do pedido."""
+    pedido = HoraPedido.query.get_or_404(pedido_id)
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
+    if not pedido.arquivo_origem_s3_key:
+        flash(
+            'XLSX deste pedido nao esta armazenado (pedido manual ou import anterior a esta feature).',
+            'warning',
+        )
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    from app.utils.file_storage import FileStorage
+    url = FileStorage().get_file_url(pedido.arquivo_origem_s3_key)
+    if not url:
+        flash('Falha ao gerar URL do XLSX.', 'danger')
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+    return redirect(url)
 
 
 # ========================================================================

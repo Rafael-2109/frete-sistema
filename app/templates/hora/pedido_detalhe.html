@@ -5,6 +5,13 @@
   <h2>Pedido {{ pedido.numero_pedido }}</h2>
   <div class="d-flex gap-2 align-items-center">
     <span class="badge fs-6 badge-status-{{ pedido.status|lower }}">{{ pedido.status }}</span>
+    {% if pedido.arquivo_origem_s3_key %}
+      <a href="{{ url_for('hora.pedidos_download_xlsx', pedido_id=pedido.id) }}"
+         class="btn btn-sm btn-outline-secondary" target="_blank"
+         title="Baixar XLSX original">
+        <i class="fas fa-file-excel"></i> Baixar XLSX
+      </a>
+    {% endif %}
     {% set pendentes = pedido.itens|selectattr('numero_chassi', 'none')|list %}
     {% if pendentes|length > 0 %}
       <a href="{{ url_for('hora.pedidos_completar_chassis', pedido_id=pedido.id) }}"

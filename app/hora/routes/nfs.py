@@ -183,6 +183,93 @@ def nfs_upload():
 
 
 # ------------------------------------------------------------------------
+# Download PDF DANFE
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/nfs/<int:nf_id>/download-pdf')
+@require_hora_perm('nfs', 'ver')
+def nfs_download_pdf(nf_id: int):
+    """Redireciona para URL (S3 presigned ou local) do PDF DANFE da NF."""
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+    if not nf.arquivo_pdf_s3_key:
+        flash('PDF desta NF nao esta armazenado (import anterior a esta feature).', 'warning')
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    from app.utils.file_storage import FileStorage
+    url = FileStorage().get_file_url(nf.arquivo_pdf_s3_key)
+    if not url:
+        flash('Falha ao gerar URL do PDF.', 'danger')
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+    return redirect(url)
+
+
+# ------------------------------------------------------------------------
+# Edicao manual de item da NF (corrigir chassi/motor)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/nfs/<int:nf_id>/itens/<int:item_id>/editar', methods=['POST'])
+@require_hora_perm('nfs', 'editar')
+def nfs_editar_item(nf_id: int, item_id: int):
+    """Corrige numero_chassi e/ou numero_motor_texto_original de um item de NF.
+
+    Use case: parser LLM inverteu chassi<->motor, ou emissor emitiu NF com
+    chassi divergente do pedido (ex: digito do meio errado). Operador
+    autorizado pode corrigir aqui.
+    """
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+    is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'
+
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': 'acesso negado'}), 403
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+
+    # NF sem loja atribuida: somente admin (escopo None = todas lojas) pode editar.
+    # Usuario com escopo restrito nao deve editar NF "flutuante" — pode pertencer
+    # a loja fora do escopo dele.
+    if not nf.loja_destino_id and lojas_permitidas_ids() is not None:
+        if is_ajax:
+            return jsonify({
+                'ok': False,
+                'erro': 'NF sem loja atribuida; defina a loja antes de editar itens.'
+            }), 403
+        flash(
+            'NF sem loja atribuida. Defina a loja de destino antes de editar itens.',
+            'warning',
+        )
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    numero_chassi = (request.form.get('numero_chassi') or '').strip().upper() or None
+    numero_motor = (request.form.get('numero_motor_texto_original') or '').strip() or None
+
+    try:
+        res = nf_entrada_service.editar_nf_item_manual(
+            nf_id=nf.id,
+            nf_item_id=item_id,
+            numero_chassi=numero_chassi,
+            numero_motor_texto_original=numero_motor,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        if is_ajax:
+            return jsonify(res)
+        # Mostra resultado da revalidacao (ex.: "casa com pedido vinculado")
+        msg = f"Item atualizado — vinculo: {res.get('vinculo_status', 'n/a')}"
+        if res.get('pedidos_revalidados'):
+            msg += f" · pedidos revalidados: {res['pedidos_revalidados']}"
+        flash(msg, 'success')
+    except ValueError as exc:
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': str(exc)}), 400
+        flash(f'Erro: {exc}', 'danger')
+
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+
+# ------------------------------------------------------------------------
 # Definir loja (NF legada)
 # ------------------------------------------------------------------------
 

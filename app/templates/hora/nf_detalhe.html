@@ -4,6 +4,13 @@
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h2>NF {{ nf.numero_nf }}</h2>
   <div class="d-flex gap-2">
+    {% if nf.arquivo_pdf_s3_key %}
+      <a href="{{ url_for('hora.nfs_download_pdf', nf_id=nf.id) }}"
+         class="btn btn-sm btn-outline-secondary" target="_blank"
+         title="Baixar DANFE original">
+        <i class="fas fa-file-pdf"></i> Baixar PDF
+      </a>
+    {% endif %}
     {% if nf.pedido_id %}
       <span class="badge bg-success">Vinculada ao pedido {{ nf.pedido.numero_pedido }}</span>
     {% else %}
@@ -110,6 +117,7 @@
 {% endif %}
 
 <h4>Chassis faturados <small class="text-muted">— 1ª linha = dados da NF · 2ª linha = vinculo com pedido</small></h4>
+{% set pode_editar_nf = current_user.tem_perm_hora('nfs', 'editar') %}
 <div class="table-responsive mb-3">
   <table class="table table-sm table-hover align-middle">
     <thead><tr>
@@ -119,6 +127,7 @@
       <th>Motor (texto NF)</th>
       <th>Preço real</th>
       <th>Vinculo</th>
+      {% if pode_editar_nf %}<th class="text-end">Ações</th>{% endif %}
     </tr></thead>
     <tbody>
       {% for item in nf.itens %}
@@ -144,9 +153,22 @@
               </span>
             {% endif %}
           </td>
+          {% if pode_editar_nf %}
+          <td class="text-end">
+            <button type="button" class="btn btn-sm btn-outline-warning"
+                    data-bs-toggle="modal" data-bs-target="#editarItemNfModal"
+                    data-item-id="{{ item.id }}"
+                    data-chassi="{{ item.numero_chassi }}"
+                    data-motor="{{ item.numero_motor_texto_original or '' }}"
+                    data-modelo="{{ item.modelo_texto_original or '' }}"
+                    title="Corrigir chassi/motor deste item">
+              <i class="fas fa-pen"></i>
+            </button>
+          </td>
+          {% endif %}
         </tr>
         <tr class="{% if not v %}text-muted{% endif %}" style="background-color: rgba(0,0,0,.02);">
-          <td colspan="6" class="ps-4 small">
+          <td colspan="{{ 7 if pode_editar_nf else 6 }}" class="ps-4 small">
             {% if v %}
               <i class="fas fa-arrow-turn-down {% if v.vinculado_a_nf %}text-success{% else %}text-warning{% endif %} me-1"></i>
               <strong>Pedido {{ v.pedido.numero_pedido }}</strong>
@@ -190,4 +212,71 @@
 </div>
 
 <a href="{{ url_for('hora.nfs_lista') }}" class="btn btn-secondary">Voltar</a>
+
+{% if pode_editar_nf %}
+<!-- Modal: editar chassi/motor do item da NF -->
+<div class="modal fade" id="editarItemNfModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" id="editarItemNfForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Corrigir item da NF</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          <i class="fas fa-info-circle"></i>
+          Use quando o parser inverter chassi↔motor ou a NF vier com chassi
+          divergente do pedido. A moto correta sera criada/reaproveitada
+          automaticamente em <code>hora_moto</code>.
+        </p>
+        <div class="mb-2">
+          <label class="form-label small text-muted">Modelo (so leitura)</label>
+          <input type="text" class="form-control form-control-sm" id="editarItemNfModelo" readonly>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Nº Chassi <span class="text-danger">*</span></label>
+          <input type="text" name="numero_chassi" class="form-control chassi-mono"
+                 id="editarItemNfChassi" required maxlength="30"
+                 placeholder="Ex: 172922506731648">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Nº Motor (texto)</label>
+          <input type="text" name="numero_motor_texto_original" class="form-control chassi-mono"
+                 id="editarItemNfMotor" maxlength="100"
+                 placeholder="Ex: LM60V1000W2025062100443 (opcional)">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-warning">
+          <i class="fas fa-save"></i> Salvar correção
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  const modalEl = document.getElementById('editarItemNfModal');
+  if (!modalEl) return;
+  const form = document.getElementById('editarItemNfForm');
+  const inputChassi = document.getElementById('editarItemNfChassi');
+  const inputMotor = document.getElementById('editarItemNfMotor');
+  const inputModelo = document.getElementById('editarItemNfModelo');
+  const urlBase = "{{ url_for('hora.nfs_editar_item', nf_id=nf.id, item_id=0) }}";
+
+  modalEl.addEventListener('show.bs.modal', function(ev){
+    const btn = ev.relatedTarget;
+    if (!btn) return;
+    const itemId = btn.getAttribute('data-item-id');
+    inputChassi.value = btn.getAttribute('data-chassi') || '';
+    inputMotor.value = btn.getAttribute('data-motor') || '';
+    inputModelo.value = btn.getAttribute('data-modelo') || '';
+    // URL vem como /hora/nfs/<nf>/itens/0/editar — trocar /itens/0/ pelo id real
+    form.action = urlBase.replace('/itens/0/editar', '/itens/' + itemId + '/editar');
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

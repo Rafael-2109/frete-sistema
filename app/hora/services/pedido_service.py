@@ -111,6 +111,7 @@ def criar_pedido_a_partir_de_extracao(
     pedido_extraido,
     cnpj_destino_override: Optional[str] = None,
     loja_destino_id: Optional[int] = None,
+    arquivo_origem_s3_key: Optional[str] = None,
     criado_por: Optional[str] = None,
 ):
     """Cria HoraPedido a partir de um PedidoExtraido (output do parser XLSX).
@@ -121,6 +122,7 @@ def criar_pedido_a_partir_de_extracao(
             permite forçar (ex.: CNPJ da loja HORA resolvido via lookup).
         loja_destino_id: OBRIGATÓRIO. Loja HORA que receberá fisicamente as motos.
             Selecionado manualmente na UI (pode ser auto-sugerido via apelido_detectado).
+        arquivo_origem_s3_key: chave S3/local do XLSX original (para download).
         criado_por: usuário que importou.
     """
     cnpj = cnpj_destino_override or pedido_extraido.cnpj_destino
@@ -151,6 +153,7 @@ def criar_pedido_a_partir_de_extracao(
         apelido_detectado=pedido_extraido.apelido_detectado,
         data_pedido=pedido_extraido.data_pedido or date.today(),
         itens=itens,
+        arquivo_origem_s3_key=arquivo_origem_s3_key,
         observacoes='\n'.join(pedido_extraido.avisos) if pedido_extraido.avisos else None,
         criado_por=criado_por,
     )
