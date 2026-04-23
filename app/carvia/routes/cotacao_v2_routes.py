@@ -2147,9 +2147,13 @@ def register_cotacao_v2_routes(bp):
         # SELECT FOR UPDATE: serializa anexacoes concorrentes na mesma cotacao
         # (evita race condition onde 2 requests leem agg base identico e ambas
         # passam pelo teto de peso/valor em APROVADA).
+        # `of=CarviaCotacao` restringe o lock a tabela principal — sem isso o
+        # Postgres rejeita com FeatureNotSupported, pois CarviaCotacao tem 5
+        # relationships lazy='joined' (LEFT JOIN) e FOR UPDATE nao pode ser
+        # aplicado na nullable side de outer join (PYTHON-FLASK-NT).
         cotacao = CarviaCotacao.query.filter_by(
             id=cotacao_id
-        ).with_for_update().first()
+        ).with_for_update(of=CarviaCotacao).first()
         if not cotacao:
             return jsonify({'erro': 'Cotacao nao encontrada.'}), 404
         # Status permitidos: qualquer um editavel + APROVADO (com validacao de teto adiante)
