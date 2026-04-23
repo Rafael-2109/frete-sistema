@@ -135,6 +135,47 @@ def listar_modelos(apenas_ativos: bool = True) -> Iterable[HoraModelo]:
     return query.all()
 
 
+def atualizar_modelo(
+    modelo_id: int,
+    nome_modelo: str,
+    potencia_motor: Optional[str] = None,
+    descricao: Optional[str] = None,
+) -> HoraModelo:
+    """Atualiza atributos descritivos do modelo. Não altera `ativo` (use `toggle_ativo_modelo`)."""
+    modelo = HoraModelo.query.get(modelo_id)
+    if modelo is None:
+        raise ValueError(f"Modelo não encontrado: id={modelo_id}")
+
+    nome_norm = (nome_modelo or '').strip()
+    if not nome_norm:
+        raise ValueError("nome_modelo obrigatório")
+
+    if nome_norm != modelo.nome_modelo:
+        duplicado = (
+            HoraModelo.query
+            .filter(HoraModelo.nome_modelo == nome_norm, HoraModelo.id != modelo_id)
+            .first()
+        )
+        if duplicado is not None:
+            raise ValueError(f"Já existe outro modelo com o nome: {nome_norm}")
+
+    modelo.nome_modelo = nome_norm
+    modelo.potencia_motor = (potencia_motor or '').strip() or None
+    modelo.descricao = (descricao or '').strip() or None
+    db.session.commit()
+    return modelo
+
+
+def toggle_ativo_modelo(modelo_id: int) -> HoraModelo:
+    """Alterna a flag `ativo` do modelo (inativação soft)."""
+    modelo = HoraModelo.query.get(modelo_id)
+    if modelo is None:
+        raise ValueError(f"Modelo não encontrado: id={modelo_id}")
+    modelo.ativo = not modelo.ativo
+    db.session.commit()
+    return modelo
+
+
 # ----------------------------- Tabela de Preço -----------------------------
 
 def criar_tabela_preco(

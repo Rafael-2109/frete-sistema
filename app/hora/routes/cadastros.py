@@ -259,3 +259,40 @@ def modelos_novo():
             flash(f'Erro: {exc}', 'danger')
 
     return render_template('hora/modelos_novo.html')
+
+
+@hora_bp.route('/modelos/<int:modelo_id>/editar', methods=['GET', 'POST'])
+@require_hora_perm('modelos', 'editar')
+def modelos_editar(modelo_id: int):
+    from app.hora.models import HoraModelo
+    modelo = HoraModelo.query.get_or_404(modelo_id)
+
+    if request.method == 'POST':
+        try:
+            cadastro_service.atualizar_modelo(
+                modelo_id=modelo.id,
+                nome_modelo=request.form['nome_modelo'],
+                potencia_motor=request.form.get('potencia_motor') or None,
+                descricao=request.form.get('descricao') or None,
+            )
+            flash('Modelo atualizado com sucesso.', 'success')
+            return redirect(url_for('hora.modelos_lista'))
+        except ValueError as exc:
+            flash(f'Erro: {exc}', 'danger')
+
+    return render_template('hora/modelos_editar.html', modelo=modelo)
+
+
+@hora_bp.route('/modelos/<int:modelo_id>/toggle-ativo', methods=['POST'])
+@require_hora_perm('modelos', 'apagar')
+def modelos_toggle_ativo(modelo_id: int):
+    """Alterna ativo/inativo do modelo (soft inactivate)."""
+    try:
+        modelo = cadastro_service.toggle_ativo_modelo(modelo_id)
+        flash(
+            f'Modelo "{modelo.nome_modelo}" {"ativado" if modelo.ativo else "inativado"}.',
+            'success',
+        )
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.modelos_lista'))

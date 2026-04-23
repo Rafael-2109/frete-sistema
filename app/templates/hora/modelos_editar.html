@@ -1,0 +1,29 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3">Editar Modelo</h2>
+
+<form method="post" class="card p-3" style="max-width: 700px;">
+  <div class="mb-3">
+    <label class="form-label">Nome do modelo <span class="text-danger">*</span></label>
+    <input type="text" name="nome_modelo" class="form-control" required
+           value="{{ modelo.nome_modelo }}"
+           placeholder="Ex.: X11-MINI, JOY SUPER, DOT">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Potência</label>
+    <input type="text" name="potencia_motor" class="form-control"
+           value="{{ modelo.potencia_motor or '' }}"
+           placeholder="Ex.: 1000W">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Descrição</label>
+    <textarea name="descricao" class="form-control" rows="3">{{ modelo.descricao or '' }}</textarea>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Salvar alterações</button>
+    <a href="{{ url_for('hora.modelos_lista') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
