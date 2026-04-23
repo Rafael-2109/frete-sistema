@@ -1,0 +1,87 @@
+{
+  "name": "chat_threads",
+  "description": "Tabela chat_threads",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "titulo",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "entity_type",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "entity_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "sistemas_required",
+      "type": "jsonb",
+      "nullable": false
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "arquivado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "last_message_at",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_chat_threads_last_msg",
+      "columns": [
+        "last_message_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_chat_threads_entity",
+      "columns": [
+        "entity_type",
+        "entity_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "uq_chat_threads_system_dm",
+      "columns": [
+        "criado_por_id"
+      ],
+      "unique": true
+    }
+  ]
+}

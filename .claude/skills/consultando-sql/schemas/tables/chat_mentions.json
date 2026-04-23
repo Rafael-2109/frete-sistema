@@ -1,0 +1,33 @@
+{
+  "name": "chat_mentions",
+  "description": "Tabela chat_mentions",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "message_id",
+      "type": "bigint",
+      "description": "FK → chat_messages.id",
+      "nullable": false
+    },
+    {
+      "name": "mentioned_user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "message_id",
+      "references": "chat_messages.id"
+    },
+    {
+      "column": "mentioned_user_id",
+      "references": "usuarios.id"
+    }
+  ]
+}

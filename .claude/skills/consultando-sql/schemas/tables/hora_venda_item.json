@@ -56,18 +56,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_item_venda_id",
-      "columns": [
-        "venda_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_venda_item_numero_chassi",
       "columns": [
         "numero_chassi"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_venda_item_venda_id",
+      "columns": [
+        "venda_id"
+      ],
+      "unique": false
     }
   ]
 }

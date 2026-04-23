@@ -165,6 +165,20 @@
   ],
   "indices": [
     {
+      "name": "ix_contas_a_pagar_metodo_baixa",
+      "columns": [
+        "metodo_baixa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_odoo_line_id",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": true
+    },
+    {
       "name": "idx_conta_pagar_vencimento",
       "columns": [
         "vencimento"
@@ -172,9 +186,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_empresa",
+      "name": "ix_contas_a_pagar_cnpj",
       "columns": [
-        "empresa"
+        "cnpj"
       ],
       "unique": false
     },
@@ -182,6 +196,13 @@
       "name": "idx_conta_pagar_cnpj",
       "columns": [
         "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_empresa",
+      "columns": [
+        "empresa"
       ],
       "unique": false
     },
@@ -200,6 +221,13 @@
       "unique": false
     },
     {
+      "name": "idx_conta_pagar_odoo_line",
+      "columns": [
+        "odoo_line_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
         "titulo_nf"
@@ -214,9 +242,9 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_odoo_line",
+      "name": "ix_contas_a_pagar_parcela",
       "columns": [
-        "odoo_line_id"
+        "parcela"
       ],
       "unique": false
     },
@@ -228,39 +256,11 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_parcela",
-      "columns": [
-        "parcela"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_metodo_baixa",
-      "columns": [
-        "metodo_baixa"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_pagar_partner_id",
       "columns": [
         "partner_id"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_odoo_line_id",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": true
     }
   ]
 }

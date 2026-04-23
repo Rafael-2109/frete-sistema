@@ -259,16 +259,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_cotacoes_status",
+      "name": "ix_carvia_cotacoes_veiculo_id",
       "columns": [
-        "status"
+        "veiculo_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cotacoes_veiculo_id",
+      "name": "ix_carvia_cotacoes_status",
       "columns": [
-        "veiculo_id"
+        "status"
       ],
       "unique": false
     },
