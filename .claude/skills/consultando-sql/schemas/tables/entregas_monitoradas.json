@@ -160,23 +160,9 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_origem",
+      "name": "idx_em_transportadora",
       "columns": [
-        "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_status_finalizacao",
-      "columns": [
-        "status_finalizacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_entregue",
-      "columns": [
-        "entregue"
+        "transportadora"
       ],
       "unique": false
     },
@@ -188,9 +174,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_transportadora",
+      "name": "idx_em_reagendar",
       "columns": [
-        "transportadora"
+        "reagendar"
       ],
       "unique": false
     },
@@ -198,6 +184,20 @@
       "name": "idx_em_data_agenda",
       "columns": [
         "data_agenda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_faturamento",
+      "columns": [
+        "data_faturamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_nf_cd",
+      "columns": [
+        "nf_cd"
       ],
       "unique": false
     },
@@ -216,20 +216,6 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_faturamento",
-      "columns": [
-        "data_faturamento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_reagendar",
-      "columns": [
-        "reagendar"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
@@ -237,9 +223,23 @@
       "unique": false
     },
     {
-      "name": "idx_em_nf_cd",
+      "name": "idx_em_status_finalizacao",
       "columns": [
-        "nf_cd"
+        "status_finalizacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_origem",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_entregue",
+      "columns": [
+        "entregue"
       ],
       "unique": false
     }

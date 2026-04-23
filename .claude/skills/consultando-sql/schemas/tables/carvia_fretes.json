@@ -326,16 +326,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_fretes_subcontrato_id",
+      "name": "ix_carvia_fretes_status_conferencia",
       "columns": [
-        "subcontrato_id"
+        "status_conferencia"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_fretes_status_conferencia",
+      "name": "ix_carvia_fretes_subcontrato_id",
       "columns": [
-        "status_conferencia"
+        "subcontrato_id"
       ],
       "unique": false
     }

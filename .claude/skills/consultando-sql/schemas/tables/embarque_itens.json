@@ -235,9 +235,9 @@
       "unique": false
     },
     {
-      "name": "idx_ei_cnpj_cliente",
+      "name": "idx_ei_uf_destino",
       "columns": [
-        "cnpj_cliente"
+        "uf_destino"
       ],
       "unique": false
     },
@@ -249,9 +249,9 @@
       "unique": false
     },
     {
-      "name": "idx_ei_uf_destino",
+      "name": "idx_ei_cnpj_cliente",
       "columns": [
-        "uf_destino"
+        "cnpj_cliente"
       ],
       "unique": false
     },
