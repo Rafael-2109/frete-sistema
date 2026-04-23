@@ -2091,6 +2091,30 @@ class LancamentoOdooService:
                 )
 
                 if not sucesso:
+                    # Idempotencia: Odoo rejeita action_post em invoice ja 'posted' com
+                    # mensagem "deve ser provisorio". Isso acontece por cache stale em
+                    # _verificar_lancamento_existente (Odoo retorna state=draft mas ja
+                    # foi postado) ou retry do RQ worker apos sucesso parcial.
+                    # Re-ler o state: se ja esta posted, tratar como sucesso.
+                    # Fixes PYTHON-FLASK-9J.
+                    erro_lower = (erro or '').lower()
+                    if 'deve ser provisório' in erro_lower or 'deve ser provisorio' in erro_lower:
+                        try:
+                            state_check = self.odoo.read('account.move', [invoice_id], ['state'])
+                            if state_check and state_check[0].get('state') == 'posted':
+                                current_app.logger.info(
+                                    f"✅ [ETAPA 15] Invoice {invoice_id} ja esta 'posted' — "
+                                    f"tratando action_post duplicado como sucesso (idempotencia)"
+                                )
+                                resultado['etapas_concluidas'] = 15
+                                erro = None
+                                sucesso = True
+                        except Exception as check_err:
+                            current_app.logger.warning(
+                                f"⚠️ Falha ao verificar state do invoice {invoice_id} apos erro: {check_err}"
+                            )
+
+                if not sucesso:
                     resultado['erro'] = erro
                     resultado['mensagem'] = f"Erro na etapa 15: {erro}"
                     resultado['rollback_executado'] = self._rollback_frete_odoo(frete_id, resultado['etapas_concluidas'])
