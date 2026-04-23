@@ -411,11 +411,376 @@ def build_ruptura_card(data: dict) -> dict:
     return card
 
 
+def build_validacao_nf_po_card(data: dict) -> dict:
+    """Adaptive Card para match NF x PO (Fase 2 Recebimento).
+
+    Campos esperados em `data`:
+        dfe_numero: str (numero da NF)
+        dfe_chave: str (44 digitos ou truncada)
+        fornecedor: str (razao social ou CNPJ)
+        valor_nf: num (valor total)
+        pos_candidatos: list de {po: str, valor: num, match_score: num 0-100,
+                                  divergencia: str (opcional)}
+        divergencias: list de str (opcional — bloqueios gerais)
+        actions: list (ex: vincular_po com po_id, rejeitar_dfe)
+    """
+    dfe_numero = data.get("dfe_numero", "-")
+    dfe_chave = data.get("dfe_chave", "")
+    fornecedor = data.get("fornecedor", "-")
+    valor_nf = data.get("valor_nf")
+    pos = data.get("pos_candidatos") or []
+    divergencias = data.get("divergencias") or []
+
+    facts = []
+    facts.append({"title": "NF", "value": str(dfe_numero)})
+    if dfe_chave:
+        short_chave = dfe_chave if len(dfe_chave) <= 20 else f"...{dfe_chave[-12:]}"
+        facts.append({"title": "Chave", "value": short_chave})
+    facts.append({"title": "Fornecedor", "value": fornecedor})
+    if valor_nf is not None:
+        facts.append({"title": "Valor NF", "value": f"R$ {_fmt_number(valor_nf, 2)}"})
+    facts.append({"title": "POs candidatos", "value": str(len(pos))})
+
+    body = [
+        {
+            "type": "TextBlock",
+            "text": f"Validacao NF x PO — DFE {dfe_numero}",
+            "weight": "Bolder",
+            "size": "Medium",
+            "color": "Accent",
+            "wrap": True,
+        },
+        {
+            "type": "FactSet",
+            "facts": facts,
+            "spacing": "Medium",
+        },
+    ]
+
+    # Tabela de POs candidatos
+    if pos:
+        pos_rows = [
+            {
+                "type": "TextBlock",
+                "text": "Pedidos de compra candidatos",
+                "weight": "Bolder",
+                "size": "Small",
+                "spacing": "Medium",
+            },
+        ]
+        for po in pos[:6]:
+            po_num = po.get("po", "-")
+            po_valor = po.get("valor")
+            score = po.get("match_score")
+            diverg = po.get("divergencia", "")
+            cor = "Default"
+            score_str = ""
+            if score is not None:
+                try:
+                    score_num = float(score)
+                    score_str = f" ({score_num:.0f}%)"
+                    if score_num >= 90:
+                        cor = "Good"
+                    elif score_num >= 60:
+                        cor = "Warning"
+                    else:
+                        cor = "Attention"
+                except (TypeError, ValueError):
+                    pass
+            linha = f"{po_num}{score_str}"
+            if po_valor is not None:
+                linha += f" — R$ {_fmt_number(po_valor, 2)}"
+            if diverg:
+                linha += f" | {diverg}"
+            pos_rows.append({
+                "type": "TextBlock",
+                "text": linha,
+                "wrap": True,
+                "size": "Small",
+                "color": cor,
+                "spacing": "None",
+            })
+        body.extend(pos_rows)
+
+    if divergencias:
+        body.append({
+            "type": "TextBlock",
+            "text": "Bloqueios",
+            "weight": "Bolder",
+            "size": "Small",
+            "color": "Attention",
+            "spacing": "Medium",
+        })
+        for d in divergencias[:5]:
+            body.append({
+                "type": "TextBlock",
+                "text": f"• {d}",
+                "wrap": True,
+                "size": "Small",
+                "color": "Attention",
+                "spacing": "None",
+            })
+
+    card = {
+        "type": "AdaptiveCard",
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "version": "1.4",
+        "msteams": {"width": "Full"},
+        "body": body,
+    }
+    actions = _build_actions_row(data.get("actions") or [])
+    if actions:
+        card["actions"] = actions
+    return card
+
+
+def build_criar_separacao_preview_card(data: dict) -> dict:
+    """Adaptive Card para preview antes de criar separacao.
+
+    Campos esperados em `data`:
+        pedido: str (num_pedido)
+        cliente: str
+        data_expedicao: str (data ISO)
+        agendamento: str (data ISO, opcional)
+        protocolo: str (opcional)
+        itens: list de {cod_produto, descricao, qtd, peso (opcional)}
+        total_peso: num (opcional)
+        total_valor: num (opcional)
+        actions: list (ex: confirmar_separacao com preview_id, cancelar)
+    """
+    pedido = data.get("pedido", "-")
+    cliente = data.get("cliente", "-")
+    data_exp = _fmt_data(data.get("data_expedicao"))
+    agendamento = _fmt_data(data.get("agendamento"))
+    protocolo = data.get("protocolo", "")
+    itens = data.get("itens") or []
+    total_peso = data.get("total_peso")
+    total_valor = data.get("total_valor")
+
+    facts = [
+        {"title": "Pedido", "value": str(pedido)},
+        {"title": "Cliente", "value": cliente},
+    ]
+    if data_exp != "-":
+        facts.append({"title": "Expedicao", "value": data_exp})
+    if agendamento != "-":
+        facts.append({"title": "Agendamento", "value": agendamento})
+    if protocolo:
+        facts.append({"title": "Protocolo", "value": str(protocolo)})
+    facts.append({"title": "Itens", "value": str(len(itens))})
+    if total_peso is not None:
+        facts.append({"title": "Peso total", "value": f"{_fmt_number(total_peso)} kg"})
+    if total_valor is not None:
+        facts.append({"title": "Valor total", "value": f"R$ {_fmt_number(total_valor, 2)}"})
+
+    body = [
+        {
+            "type": "TextBlock",
+            "text": f"Preview Separacao — {pedido}",
+            "weight": "Bolder",
+            "size": "Medium",
+            "color": "Accent",
+            "wrap": True,
+        },
+        {
+            "type": "FactSet",
+            "facts": facts,
+            "spacing": "Medium",
+        },
+    ]
+
+    # Itens (primeiros 8)
+    if itens:
+        body.append({
+            "type": "TextBlock",
+            "text": "Itens da separacao",
+            "weight": "Bolder",
+            "size": "Small",
+            "spacing": "Medium",
+        })
+        for item in itens[:8]:
+            cod = item.get("cod_produto", "-")
+            desc = item.get("descricao", "")
+            qtd = item.get("qtd")
+            peso = item.get("peso")
+            linha = f"{cod}"
+            if desc:
+                linha += f" {desc[:50]}"
+            if qtd is not None:
+                linha += f" — {_fmt_number(qtd, 2)}"
+            if peso is not None:
+                linha += f" ({_fmt_number(peso)} kg)"
+            body.append({
+                "type": "TextBlock",
+                "text": linha,
+                "wrap": True,
+                "size": "Small",
+                "spacing": "None",
+            })
+        if len(itens) > 8:
+            body.append({
+                "type": "TextBlock",
+                "text": f"...e mais {len(itens) - 8} itens",
+                "size": "Small",
+                "color": "Light",
+                "spacing": "None",
+            })
+
+    body.append({
+        "type": "TextBlock",
+        "text": "Confirme para criar a separacao. Acao irreversivel.",
+        "wrap": True,
+        "size": "Small",
+        "color": "Warning",
+        "spacing": "Medium",
+    })
+
+    card = {
+        "type": "AdaptiveCard",
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "version": "1.4",
+        "msteams": {"width": "Full"},
+        "body": body,
+    }
+    actions = _build_actions_row(data.get("actions") or [])
+    if actions:
+        card["actions"] = actions
+    return card
+
+
+def build_conciliar_extrato_preview_card(data: dict) -> dict:
+    """Adaptive Card para preview de conciliacao extrato x titulo.
+
+    Campos esperados em `data`:
+        extrato_id: int/str
+        extrato_descricao: str (narrativa do extrato)
+        extrato_valor: num
+        extrato_data: str (data ISO)
+        titulos_candidatos: list de {titulo_id, documento, fornecedor (opt),
+                                      cliente (opt), valor, match_score,
+                                      data_vencimento (opt)}
+        diferenca: num (opt — valor extrato - valor titulo)
+        actions: list (ex: conciliar com extrato_id+titulo_id, pular)
+    """
+    extrato_id = data.get("extrato_id", "-")
+    extrato_desc = data.get("extrato_descricao", "-")
+    extrato_valor = data.get("extrato_valor")
+    extrato_data = _fmt_data(data.get("extrato_data"))
+    titulos = data.get("titulos_candidatos") or []
+    diferenca = data.get("diferenca")
+
+    facts = [
+        {"title": "Extrato", "value": str(extrato_id)},
+    ]
+    if extrato_data != "-":
+        facts.append({"title": "Data", "value": extrato_data})
+    if extrato_valor is not None:
+        facts.append({"title": "Valor", "value": f"R$ {_fmt_number(extrato_valor, 2)}"})
+    facts.append({"title": "Candidatos", "value": str(len(titulos))})
+    if diferenca is not None:
+        try:
+            dif_num = float(diferenca)
+            sig = "+" if dif_num > 0 else ""
+            facts.append({
+                "title": "Diferenca",
+                "value": f"{sig}R$ {_fmt_number(abs(dif_num), 2)}",
+            })
+        except (TypeError, ValueError):
+            pass
+
+    body = [
+        {
+            "type": "TextBlock",
+            "text": "Preview Conciliacao — Extrato x Titulo",
+            "weight": "Bolder",
+            "size": "Medium",
+            "color": "Accent",
+            "wrap": True,
+        },
+    ]
+    if extrato_desc and extrato_desc != "-":
+        body.append({
+            "type": "TextBlock",
+            "text": extrato_desc[:200],
+            "wrap": True,
+            "size": "Small",
+            "color": "Light",
+            "spacing": "Small",
+        })
+    body.append({
+        "type": "FactSet",
+        "facts": facts,
+        "spacing": "Medium",
+    })
+
+    # Titulos candidatos
+    if titulos:
+        body.append({
+            "type": "TextBlock",
+            "text": "Titulos candidatos",
+            "weight": "Bolder",
+            "size": "Small",
+            "spacing": "Medium",
+        })
+        for t in titulos[:5]:
+            doc = t.get("documento", "-")
+            parte = t.get("fornecedor") or t.get("cliente") or ""
+            valor = t.get("valor")
+            score = t.get("match_score")
+            venc = _fmt_data(t.get("data_vencimento"))
+
+            cor = "Default"
+            score_str = ""
+            if score is not None:
+                try:
+                    sn = float(score)
+                    score_str = f" ({sn:.0f}%)"
+                    if sn >= 90:
+                        cor = "Good"
+                    elif sn >= 60:
+                        cor = "Warning"
+                    else:
+                        cor = "Attention"
+                except (TypeError, ValueError):
+                    pass
+
+            linha = f"{doc}{score_str}"
+            if parte:
+                linha += f" — {parte[:40]}"
+            if valor is not None:
+                linha += f" — R$ {_fmt_number(valor, 2)}"
+            if venc != "-":
+                linha += f" | venc {venc}"
+            body.append({
+                "type": "TextBlock",
+                "text": linha,
+                "wrap": True,
+                "size": "Small",
+                "color": cor,
+                "spacing": "None",
+            })
+
+    card = {
+        "type": "AdaptiveCard",
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "version": "1.4",
+        "msteams": {"width": "Full"},
+        "body": body,
+    }
+    actions = _build_actions_row(data.get("actions") or [])
+    if actions:
+        card["actions"] = actions
+    return card
+
+
 # Mapa template → builder. Deve ficar em sincronia com _ALLOWED_TEMPLATES
 # em app/agente/tools/teams_card_tool.py.
 CARD_BUILDERS = {
     "pedido_status": build_pedido_card,
     "ruptura": build_ruptura_card,
+    "validacao_nf_po": build_validacao_nf_po_card,
+    "criar_separacao_preview": build_criar_separacao_preview_card,
+    "conciliar_extrato_preview": build_conciliar_extrato_preview_card,
 }
 
 
@@ -1445,6 +1810,85 @@ class FreteBot(ActivityHandler):
             await turn_context.send_activity(
                 "Consulta cancelada. Envie uma nova mensagem para tentar novamente."
             )
+
+        elif action:
+            # Card action estruturada (nova em 2026-04-22) — templates pedido_status,
+            # ruptura, validacao_nf_po, criar_separacao_preview, conciliar_extrato_preview.
+            # Encaminha ao agente como nova turn com mensagem sintetica prefixada.
+            # O agente decide acionar skills pelo contexto da conversa + payload da action.
+            user_id_from = (
+                turn_context.activity.from_property.aad_object_id
+                or turn_context.activity.from_property.id
+                or ""
+            )
+
+            # Construir mensagem sintetica a partir do payload (action + campos extras)
+            extras = {k: v for k, v in value.items() if k not in ("action", "task_id")}
+            if extras:
+                extras_str = ", ".join(f"{k}={v}" for k, v in extras.items())
+                synth_msg = f"[CARD_ACTION] {action} ({extras_str})"
+            else:
+                synth_msg = f"[CARD_ACTION] {action}"
+
+            logger.info(
+                f"[BOT] Card action estruturada: action={action} "
+                f"extras={list(extras.keys())} "
+                f"conv={conversation_id[:30]}..."
+            )
+
+            # Typing + dispatch como mensagem normal via /bot/message
+            await turn_context.send_activity(Activity(type=ActivityTypes.typing))
+
+            try:
+                result = await call_backend(
+                    endpoint="/api/teams/bot/message",
+                    payload={
+                        "mensagem": synth_msg,
+                        "usuario": user_name,
+                        "usuario_id": str(user_id_from),
+                        "conversation_id": conversation_id,
+                    },
+                    session=http_session,
+                )
+            except Exception as e:
+                logger.error(
+                    f"[BOT] Erro ao encaminhar card action: {e}",
+                    exc_info=True,
+                )
+                await turn_context.send_activity(
+                    MessageFactory.attachment(
+                        CardFactory.adaptive_card(
+                            build_error_card(
+                                f"Nao consegui processar a acao: {str(e)[:200]}"
+                            )
+                        )
+                    )
+                )
+                return
+
+            # Modo async: polling ate completar
+            new_task_id = result.get("task_id")
+            new_status = result.get("status")
+            if new_task_id and new_status in ("processing", "busy", "queued"):
+                if new_status == "busy":
+                    await turn_context.send_activity(
+                        result.get("resposta", "Sistema ocupado.")
+                    )
+                    return
+                if new_status == "queued":
+                    await turn_context.send_activity(
+                        result.get(
+                            "resposta",
+                            "Recebi a acao. Processando na sequencia.",
+                        )
+                    )
+                await _poll_and_respond(
+                    turn_context, new_task_id, user_name, http_session=http_session
+                )
+            else:
+                # Fallback sync: envia resposta direta
+                resposta = result.get("resposta", "Acao processada.")
+                await _send_split_response(turn_context, resposta)
 
         else:
             logger.warning(

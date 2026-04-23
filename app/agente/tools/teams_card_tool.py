@@ -42,8 +42,11 @@ logger = logging.getLogger(__name__)
 # =====================================================================
 
 _ALLOWED_TEMPLATES = {
-    "pedido_status",   # Raio-X de pedido (carteira ou embarque)
-    "ruptura",         # Alerta de ruptura com pedidos afetados
+    "pedido_status",             # Raio-X de pedido (carteira ou embarque)
+    "ruptura",                   # Alerta de ruptura com pedidos afetados
+    "validacao_nf_po",           # DFE + POs candidatos + divergencias (Recebimento F2)
+    "criar_separacao_preview",   # Preview separacao antes de criar (Carteira)
+    "conciliar_extrato_preview", # Preview conciliacao extrato x titulo (Financeiro)
 }
 
 
@@ -63,11 +66,25 @@ try:
         "Chame esta tool NO FINAL do turno, APOS ter coletado os dados. "
         "O agente deve AINDA responder com texto curto de resumo — o card aparece "
         "ADICIONALMENTE, nao substitui a resposta. "
+        "Cada action deve ter: title (texto do botao), action (string identificadora "
+        "do routing backend), style opcional ('positive'|'destructive'), + campos de "
+        "contexto (pedido, dfe_id, etc) que serao repassados ao handler. "
         "Templates suportados: "
-        "- 'pedido_status': raio-x de pedido (campos: pedido, cliente, prioridade, "
-        "estoque_atual, estoque_necessario, previsao, transportadora, actions). "
-        "- 'ruptura': alerta de ruptura (campos: produto, estoque_atual, deficit_kg, "
-        "pedidos_afetados, producao_programada_data, actions). "
+        "(1) 'pedido_status' — raio-x de pedido. Campos: pedido, cliente, prioridade, "
+        "estoque_atual, estoque_necessario, previsao, transportadora, status, actions. "
+        "(2) 'ruptura' — alerta de ruptura. Campos: produto, estoque_atual, deficit_kg, "
+        "pedidos_afetados (int ou list), producao_programada_data, producao_programada_qtd, actions. "
+        "(3) 'validacao_nf_po' — match DFE com POs (Fase 2 Recebimento). Campos: dfe_numero, "
+        "dfe_chave, fornecedor, valor_nf, pos_candidatos (list de {po, valor, match_score, "
+        "divergencia}), divergencias (list de str), actions (ex: vincular_po com po_id, rejeitar_dfe). "
+        "(4) 'criar_separacao_preview' — preview antes de criar separacao. Campos: pedido, "
+        "cliente, data_expedicao, agendamento (opcional), protocolo (opcional), itens "
+        "(list de {cod_produto, descricao, qtd, peso}), total_peso, total_valor, actions "
+        "(ex: confirmar_separacao com preview_id, cancelar). "
+        "(5) 'conciliar_extrato_preview' — preview conciliacao financeira. Campos: "
+        "extrato_id, extrato_descricao, extrato_valor, extrato_data, titulos_candidatos "
+        "(list de {titulo_id, documento, fornecedor, valor, match_score}), diferenca, "
+        "actions (ex: conciliar com extrato_id+titulo_id, pular). "
         "Exemplo: render_teams_card({'template': 'pedido_status', 'data': "
         "{'pedido': 'VCD123', 'cliente': 'Atacadao SP', 'prioridade': 'P3', "
         "'estoque_atual': 8500, 'estoque_necessario': 10000, 'previsao': '2026-04-25', "

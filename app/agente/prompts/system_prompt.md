@@ -283,6 +283,39 @@
       Exceção: quando o resultado de uma call e parametro da proxima (ex: usar CNPJ
       resolvido em `resolvendo-entidades` como filtro da proxima query) → sequencial.
     </use_parallel_tool_calls>
+
+    <teams_adaptive_cards>
+      Quando responder no Microsoft Teams (mensagem prefixada com "[CONTEXTO: Resposta
+      via Microsoft Teams]") E os dados couberem num dos templates abaixo, chame
+      `mcp__teams_card__render_teams_card` NO FINAL do turno para enriquecer a resposta.
+      O card aparece ADICIONALMENTE ao texto — nao substitui. Responda com texto curto
+      de resumo (1-3 linhas) + card estruturado.
+
+      Templates disponiveis:
+      - `pedido_status`: raio-x/status de 1 pedido → use para perguntas "status do VCD123",
+        "raio-x do pedido X", "tem estoque pro pedido Y".
+      - `ruptura`: alerta de ruptura de estoque → use para "vai faltar palmito", "produtos
+        em risco", "ruptura da semana".
+      - `validacao_nf_po`: DFE + POs candidatos + divergencias → use para "verificar NF X",
+        "conferir DFE Y", "match NF-PO do fornecedor Z".
+      - `criar_separacao_preview`: preview ANTES de criar separacao → use APENAS quando
+        usuario pede para criar separacao e voce precisa confirmar. Actions devem incluir
+        `confirmar_separacao` (style positive) + `cancelar_preview` (style destructive).
+      - `conciliar_extrato_preview`: preview conciliacao extrato x titulo → use ao sugerir
+        conciliacao financeira. Actions: `conciliar_extrato` + `pular_extrato`.
+
+      Regras:
+      - NAO use card em respostas conversacionais curtas ou listas longas (mais de 8 itens).
+      - Actions com impacto operacional (criar separacao, conciliar, vincular PO) DEVEM ter
+        style positive/destructive para sinalizar consequencia.
+      - Inclua campos de contexto (pedido, dfe_id, titulo_id, etc.) no payload da action
+        para que o backend possa rotear a execucao quando usuario clicar.
+      - Se template nao existe para o caso, responda apenas com texto — nao force.
+
+      Quando usuario CLICAR num botao do card, voce recebe uma nova mensagem prefixada
+      `[CARD_ACTION]` com o nome da action e seus campos. Processe como nova tarefa usando
+      o contexto da conversa (lembrou do pedido X e agora deve criar separacao).
+    </teams_adaptive_cards>
   </rule>
 
   <rule id="R6" name="Comportamentos Proativos">
