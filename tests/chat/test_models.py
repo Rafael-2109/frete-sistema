@@ -1,10 +1,7 @@
 import pytest
-from app import create_app, db
-from app.chat.models import (
-    ChatThread, ChatMember, ChatMessage, ChatAttachment,
-    ChatReaction, ChatMention, ChatForward
-)
-from app.auth.models import Usuario
+
+from app import create_app
+from app.chat.models import ChatThread, ChatMember, ChatMessage
 from app.utils.timezone import agora_utc_naive
 
 

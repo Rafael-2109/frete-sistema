@@ -1358,6 +1358,6 @@ def create_app(config_name=None):
     # Registrar modelo EventoSupplyChain para Flask-Migrate detectar a tabela
     from app.supply_chain.models import EventoSupplyChain  # noqa: F401
 
-    from app.chat import models as _chat_models  # noqa: F401  — registra modelos no metadata
+    from app.chat import models as _chat_models  # noqa: F401  # pyright: ignore[reportUnusedImport]  — registra modelos no metadata
 
     return app
