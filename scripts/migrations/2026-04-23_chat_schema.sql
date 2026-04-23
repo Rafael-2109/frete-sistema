@@ -2,8 +2,11 @@
 -- Cria 7 tabelas + indices + trigger FTS do modulo chat in-app.
 -- Idempotente: pode rodar multiplas vezes sem erro.
 -- Fonte de verdade: app/chat/models.py (ler antes de editar este SQL).
-
-BEGIN;
+--
+-- NOTA: BEGIN/COMMIT removidos intencionalmente — o caller (Python ou psql)
+-- gerencia a transacao. O script Python usa `engine.begin()` (auto-commit/rollback).
+-- Para rodar manualmente em Render Shell via psql, rode dentro de `psql -1` ou
+-- envolva no `\begin\commit` do psql conforme necessario.
 
 -- ============================================================================
 -- 1) chat_threads
@@ -107,6 +110,11 @@ CREATE TABLE IF NOT EXISTS chat_members (
 CREATE INDEX IF NOT EXISTS idx_chat_members_user_thread
     ON chat_members(user_id, thread_id);
 
+-- Partial unique: garante 1 membership ativo por (thread, user).
+-- Soft-remove via `removido_em`; re-adicao cria nova linha.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_chat_members_active
+    ON chat_members(thread_id, user_id) WHERE removido_em IS NULL;
+
 
 -- ============================================================================
 -- 4) chat_attachments
@@ -156,5 +164,3 @@ CREATE TABLE IF NOT EXISTS chat_forwards (
     forwarded_by_id INTEGER NOT NULL REFERENCES usuarios(id),
     criado_em TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'UTC')
 );
-
-COMMIT;

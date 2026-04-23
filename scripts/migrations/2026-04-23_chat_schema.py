@@ -61,13 +61,17 @@ def main():
         with sql_path.open() as f:
             ddl = f.read()
 
-        with db.engine.connect() as conn:
+        # engine.begin() abre transacao e commita automaticamente ao sair do bloco
+        # (ou faz rollback se houver excecao). Evita ambiguidade com BEGIN/COMMIT inline.
+        with db.engine.begin() as conn:
             check_tables(conn, 'BEFORE')
 
             print('\nExecutando DDL...')
-            # exec_driver_sql envia raw SQL direto ao psycopg2, garantindo
-            # execucao correta de multi-statement dentro de BEGIN/COMMIT.
-            conn.exec_driver_sql(ddl)
+            # exec_driver_sql envia raw SQL direto ao psycopg2 (multi-statement OK).
+            try:
+                conn.exec_driver_sql(ddl)
+            except Exception as e:
+                raise SystemExit(f'ERRO ao executar DDL: {e}') from e
 
             print()
             missing_after = check_tables(conn, 'AFTER')

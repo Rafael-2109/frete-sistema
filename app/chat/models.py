@@ -78,6 +78,13 @@ class ChatMember(db.Model):
 
     __table_args__ = (
         Index('idx_chat_members_user_thread', 'user_id', 'thread_id'),
+        # Partial unique: 1 membership ativo por (thread, user). Soft-remove permite re-adicao.
+        Index(
+            'uq_chat_members_active',
+            'thread_id', 'user_id',
+            unique=True,
+            postgresql_where=text("removido_em IS NULL"),
+        ),
         CheckConstraint("role IN ('owner','admin','member')", name='ck_chat_members_role'),
     )
 
