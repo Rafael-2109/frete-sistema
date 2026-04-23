@@ -281,6 +281,11 @@ def bot_task_status(task_id: str):
 
     if task.status == 'completed':
         result["resposta"] = task.resposta or "Sem resposta do sistema."
+        # Fase 1 MVP cards ricos: quando presente, a Azure Function (bot.py)
+        # renderiza via build_<template>_card em vez de enviar texto puro.
+        # Formato: {"template": str, "data": dict}. Fallback: `resposta` (texto).
+        if task.resposta_card:
+            result["resposta_card"] = task.resposta_card
 
     elif task.status == 'error':
         result["resposta"] = task.resposta or "Erro ao processar mensagem."

@@ -165,10 +165,53 @@ def cleanup_teams_task_context(session_id: str) -> None:
     with _context_lock:
         removed = _teams_task_context.pop(session_id, None)
         _teams_ask_attempts.pop(session_id, None)
+        _pending_teams_card.pop(session_id, None)
         if removed:
             logger.debug(
                 f"[PERMISSION] Teams task context cleaned: session={session_id[:8]}..."
             )
+
+
+# =============================================================================
+# TEAMS: Pending Adaptive Card estruturado (Fase 1 MVP cards ricos)
+# =============================================================================
+# Quando o agente chama a MCP tool `render_teams_card(template, data)`, o card
+# fica armazenado aqui (keyed por session_id) ate process_teams_task_async
+# buscar e persistir em TeamsTask.resposta_card antes de marcar status='completed'.
+#
+# A Azure Function (bot.py) detecta task.resposta_card no polling e renderiza
+# via build_<template>_card em vez de retornar texto puro.
+# =============================================================================
+_pending_teams_card: Dict[str, Dict[str, Any]] = {}  # session_id → {template, data}
+
+
+def set_pending_teams_card(session_id: str, card: Dict[str, Any]) -> None:
+    """Armazena card estruturado pendente para persistir em TeamsTask.
+
+    Args:
+        session_id: Session ID da sessao Teams.
+        card: Dict com formato {"template": str, "data": dict}.
+    """
+    if not session_id or not isinstance(card, dict):
+        return
+    with _context_lock:
+        _pending_teams_card[session_id] = card
+        logger.debug(
+            f"[PERMISSION] Pending card set: session={session_id[:8]}... "
+            f"template={card.get('template')}"
+        )
+
+
+def get_pending_teams_card(session_id: str) -> Dict[str, Any] | None:
+    """Recupera card estruturado pendente (nao remove)."""
+    with _context_lock:
+        return _pending_teams_card.get(session_id)
+
+
+def pop_pending_teams_card(session_id: str) -> Dict[str, Any] | None:
+    """Recupera e remove card estruturado pendente."""
+    with _context_lock:
+        return _pending_teams_card.pop(session_id, None)
 
 
 # =============================================================================

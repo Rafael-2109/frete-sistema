@@ -34,6 +34,9 @@ class TeamsTask(db.Model):
         status: Estado atual da tarefa
         mensagem: Texto da mensagem do usuário
         resposta: Texto da resposta do agente (preenchido ao completar)
+        resposta_card: Card Adaptive estruturado (JSONB) — quando presente,
+            a Azure Function renderiza via build_<template>_card em vez de
+            retornar texto simples. Formato: {"template": str, "data": dict}.
         pending_questions: JSON com perguntas do AskUserQuestion
         pending_question_session_id: session_id para submit_answer()
         created_at: Timestamp de criação
@@ -55,6 +58,7 @@ class TeamsTask(db.Model):
     )
     mensagem = db.Column(db.Text, nullable=False)
     resposta = db.Column(db.Text, nullable=True)
+    resposta_card = db.Column(db.JSON, nullable=True)
     pending_questions = db.Column(db.JSON, nullable=True)
     pending_question_session_id = db.Column(db.String(255), nullable=True)
     created_at = db.Column(

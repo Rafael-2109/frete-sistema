@@ -1428,6 +1428,16 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro MCP routes: {e}")
 
+        # Teams Card (Adaptive Cards estruturados — Fase 1 MVP 2026-04-22)
+        try:
+            from ..tools.teams_card_tool import teams_card_server
+            if _register_mcp("teams_card", teams_card_server):
+                logger.info("[AGENT_CLIENT] MCP 'teams_card' registrada (1 operação)")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] MCP teams_card não disponível")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro MCP teams_card: {e}")
+
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(
             f"[AGENT_CLIENT] Options: model={options_dict.get('model')}, "

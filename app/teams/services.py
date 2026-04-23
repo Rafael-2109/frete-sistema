@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from app.utils.timezone import agora_utc_naive
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,9 @@ class StreamResult:
         cost_usd: custo reportado pelo SDK (ResultMessage.total_cost_usd)
         cache_read_tokens: tokens servidos do cache (Fase 4 observabilidade)
         cache_creation_tokens: tokens escritos no cache
+        resposta_card: card Adaptive estruturado (Fase 1 MVP, 2026-04-22) —
+            quando presente, a Azure Function renderiza via build_<template>_card
+            em vez de enviar texto puro. Formato: {"template": str, "data": dict}.
     """
     resposta_texto: Optional[str]
     sdk_session_id: Optional[str]
@@ -54,6 +57,7 @@ class StreamResult:
     cost_usd: float = 0.0
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
+    resposta_card: Optional[Dict[str, Any]] = None
 
     def __iter__(self):
         # Backward compat: permite unpacking posicional antigo de 6 campos.
@@ -1272,6 +1276,7 @@ def _obter_resposta_agente_streaming(
                 cost_usd=stream_result.cost_usd,
                 cache_read_tokens=stream_result.cache_read_tokens,
                 cache_creation_tokens=stream_result.cache_creation_tokens,
+                resposta_card=stream_result.resposta_card,
             )
 
         # Fase B: backup_session_transcript removido — SDK TranscriptMirrorBatcher
@@ -1411,6 +1416,11 @@ def process_teams_task_async(
             output_tokens = 0
             tools_used: List[str] = []
             cost_usd = 0.0
+            # Fase 4 (2026-04-21): cache tokens inicializados aqui para evitar
+            # UnboundLocalError caso todas as tentativas do retry loop falhem
+            # antes de atingir o bloco que os atribui (linhas 1464-1465).
+            cache_read_tokens = 0
+            cache_creation_tokens = 0
 
             # C1: Smart model routing
             selected_model = _select_model_for_message(mensagem)
@@ -1624,6 +1634,29 @@ def process_teams_task_async(
             except Exception as eff_err:
                 logger.warning(f"[TEAMS-ASYNC] Memory effectiveness tracking falhou: {eff_err}")
 
+            # Buscar card estruturado pendente (Fase 1 MVP cards ricos).
+            # Se o agente chamou render_teams_card durante o turno, o card
+            # estara disponivel aqui e sera persistido em task.resposta_card.
+            # sanitize_for_json aplica-se porque `data` pode conter Decimal
+            # (cod_produto, valores monetarios) vindos de queries SQL ou APIs
+            # Odoo que o LLM repassa sem conversao — regra CLAUDE.md 2026-04-14.
+            pending_card = None
+            try:
+                from app.agente.config.permissions import pop_pending_teams_card
+                from app.utils.json_helpers import sanitize_for_json
+                raw_card = pop_pending_teams_card(teams_session_id) if teams_session_id else None
+                if raw_card:
+                    pending_card = sanitize_for_json(raw_card)
+                    logger.info(
+                        f"[TEAMS-ASYNC] Card estruturado encontrado: "
+                        f"template={pending_card.get('template')} "
+                        f"task={task_id[:8]}..."
+                    )
+            except Exception as card_err:
+                logger.warning(
+                    f"[TEAMS-ASYNC] Erro ao buscar pending card (ignorado): {card_err}"
+                )
+
             # Atualizar TeamsTask com resultado (retry para SSL dropped)
             # no_autoflush previne flush automático de dirty objects ao fazer get()
             with db.session.no_autoflush:
@@ -1632,6 +1665,7 @@ def process_teams_task_async(
                 if resposta_texto:
                     task.status = 'completed'
                     task.resposta = _sanitizar_texto(resposta_texto)
+                    task.resposta_card = pending_card
                     task.completed_at = agora_utc_naive()
                 else:
                     task.status = 'error'
@@ -1656,6 +1690,7 @@ def process_teams_task_async(
                                 if resposta_texto:
                                     task.status = 'completed'
                                     task.resposta = _sanitizar_texto(resposta_texto)
+                                    task.resposta_card = pending_card
                                     task.completed_at = agora_utc_naive()
                                 else:
                                     task.status = 'error'
@@ -1674,7 +1709,8 @@ def process_teams_task_async(
             logger.info(
                 f"[TEAMS-ASYNC] Task completada: task={task_id[:8]}... "
                 f"status={task.status if task else 'N/A'} "
-                f"resposta_len={len(resposta_texto) if resposta_texto else 0}"
+                f"resposta_len={len(resposta_texto) if resposta_texto else 0} "
+                f"card={pending_card.get('template') if pending_card else 'none'}"
             )
 
             # Verificar fila de mensagens pendentes para esta conversa

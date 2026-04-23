@@ -159,6 +159,302 @@ def build_error_card(mensagem: str) -> dict:
     }
 
 
+def _fmt_number(value, casas: int = 0) -> str:
+    """Formata numero no padrao brasileiro (1.234,56).
+
+    Args:
+        value: numero a formatar (int, float, Decimal, str)
+        casas: casas decimais
+
+    Returns:
+        String formatada ou '-' se value e None/invalido
+    """
+    if value is None or value == "":
+        return "-"
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    formatted = f"{num:,.{casas}f}"
+    # Trocar separadores para padrao BR
+    return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _fmt_data(value) -> str:
+    """Formata data ISO (YYYY-MM-DD) para DD/MM/YYYY. Aceita str ou None."""
+    if not value:
+        return "-"
+    try:
+        if isinstance(value, str) and len(value) >= 10:
+            # Aceita YYYY-MM-DD ou YYYY-MM-DD HH:MM:SS
+            ano, mes, dia = value[:10].split("-")
+            return f"{dia}/{mes}/{ano}"
+        return str(value)
+    except Exception:
+        return str(value)
+
+
+def _build_actions_row(actions: list, max_actions: int = 5) -> list:
+    """Constroi lista de Action.Submit a partir de dicts do agente.
+
+    Cada action: {"title": str, "action": str, ...demais_dados}.
+    Os dados extras sao embutidos em `data` para o backend roteal no /bot/answer.
+    """
+    out = []
+    for a in (actions or [])[:max_actions]:
+        if not isinstance(a, dict) or not a.get("title"):
+            continue
+        action_data = {k: v for k, v in a.items() if k != "title"}
+        # style opcional: 'positive', 'destructive', default
+        style = a.get("style")
+        kwargs = {
+            "type": "Action.Submit",
+            "title": str(a["title"])[:40],
+            "data": action_data,
+        }
+        if style in ("positive", "destructive"):
+            kwargs["style"] = style
+            # Remove style do data para nao poluir payload
+            action_data.pop("style", None)
+        out.append(kwargs)
+    return out
+
+
+def build_pedido_card(data: dict) -> dict:
+    """Adaptive Card para status/raio-X de um pedido.
+
+    Campos esperados em `data`:
+        pedido: str (num_pedido)
+        cliente: str (nome cliente)
+        prioridade: str (P1..P7)
+        estoque_atual: num (kg ou caixas disponivel)
+        estoque_necessario: num (kg ou caixas do pedido)
+        previsao: str (data ISO YYYY-MM-DD)
+        transportadora: str (sigla)
+        status: str (opcional — ex: 'Em separacao', 'Aguardando producao')
+        actions: list (ate 5 Action.Submit)
+        observacao: str (opcional)
+    """
+    pedido = data.get("pedido", "-")
+    cliente = data.get("cliente", "-")
+    prioridade = data.get("prioridade", "").upper()
+    status = data.get("status", "")
+    transp = data.get("transportadora", "-")
+
+    estoque_atual = data.get("estoque_atual")
+    estoque_nec = data.get("estoque_necessario")
+    previsao = _fmt_data(data.get("previsao"))
+    observacao = data.get("observacao", "")
+
+    # Header dinamico por prioridade
+    prio_cor = "Default"
+    if prioridade.startswith("P1") or prioridade.startswith("P2"):
+        prio_cor = "Attention"
+    elif prioridade.startswith("P3") or prioridade.startswith("P4"):
+        prio_cor = "Warning"
+    elif prioridade.startswith("P5") or prioridade.startswith("P6") or prioridade.startswith("P7"):
+        prio_cor = "Good"
+
+    header_fact_str = f"{pedido} - {cliente}"
+    if prioridade:
+        header_fact_str += f" ({prioridade})"
+
+    facts = []
+    if status:
+        facts.append({"title": "Status", "value": status})
+    if estoque_atual is not None and estoque_nec is not None:
+        cobertura = ""
+        try:
+            if float(estoque_nec) > 0:
+                pct = float(estoque_atual) / float(estoque_nec) * 100
+                cobertura = f" ({pct:.0f}%)"
+        except (TypeError, ValueError):
+            pass
+        facts.append({
+            "title": "Estoque",
+            "value": f"{_fmt_number(estoque_atual)} / {_fmt_number(estoque_nec)} kg{cobertura}",
+        })
+    if previsao != "-":
+        facts.append({"title": "Previsao", "value": previsao})
+    if transp != "-":
+        facts.append({"title": "Transportadora", "value": transp})
+
+    body = [
+        {
+            "type": "TextBlock",
+            "text": header_fact_str,
+            "weight": "Bolder",
+            "size": "Medium",
+            "color": prio_cor,
+            "wrap": True,
+        },
+    ]
+    if facts:
+        body.append({
+            "type": "FactSet",
+            "facts": facts,
+            "spacing": "Medium",
+        })
+    if observacao:
+        body.append({
+            "type": "TextBlock",
+            "text": observacao,
+            "wrap": True,
+            "size": "Small",
+            "color": "Light",
+            "spacing": "Medium",
+        })
+
+    card = {
+        "type": "AdaptiveCard",
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "version": "1.4",
+        "msteams": {"width": "Full"},
+        "body": body,
+    }
+    actions = _build_actions_row(data.get("actions") or [])
+    if actions:
+        card["actions"] = actions
+    return card
+
+
+def build_ruptura_card(data: dict) -> dict:
+    """Adaptive Card para alerta de ruptura de estoque.
+
+    Campos esperados em `data`:
+        produto: str (nome do produto ou cod_produto)
+        estoque_atual: num (kg ou caixas disponivel hoje)
+        deficit_kg: num (deficit projetado em kg)
+        pedidos_afetados: num (quantidade) OU list (primeiros N pedidos)
+        producao_programada_data: str (data ISO)
+        producao_programada_qtd: num (opcional)
+        actions: list (ate 5 Action.Submit)
+    """
+    produto = data.get("produto", "-")
+    estoque_atual = data.get("estoque_atual")
+    deficit = data.get("deficit_kg")
+    pedidos_afetados = data.get("pedidos_afetados")
+    prog_data = _fmt_data(data.get("producao_programada_data"))
+    prog_qtd = data.get("producao_programada_qtd")
+
+    # Parsear pedidos_afetados (int ou lista)
+    if isinstance(pedidos_afetados, list):
+        qtd_afetados = len(pedidos_afetados)
+        lista_str = ", ".join(str(p) for p in pedidos_afetados[:8])
+        if len(pedidos_afetados) > 8:
+            lista_str += f" (+{len(pedidos_afetados) - 8})"
+    else:
+        qtd_afetados = pedidos_afetados
+        lista_str = ""
+
+    facts = []
+    if estoque_atual is not None:
+        facts.append({
+            "title": "Estoque atual",
+            "value": f"{_fmt_number(estoque_atual)} kg",
+        })
+    if deficit is not None:
+        facts.append({
+            "title": "Deficit projetado",
+            "value": f"{_fmt_number(deficit)} kg",
+        })
+    if qtd_afetados is not None:
+        facts.append({
+            "title": "Pedidos afetados",
+            "value": str(qtd_afetados),
+        })
+    if prog_data != "-":
+        valor = prog_data
+        if prog_qtd is not None:
+            valor += f" ({_fmt_number(prog_qtd)} kg)"
+        facts.append({
+            "title": "Producao programada",
+            "value": valor,
+        })
+
+    body = [
+        {
+            "type": "TextBlock",
+            "text": f"Ruptura detectada: {produto}",
+            "weight": "Bolder",
+            "size": "Medium",
+            "color": "Attention",
+            "wrap": True,
+        },
+    ]
+    if facts:
+        body.append({
+            "type": "FactSet",
+            "facts": facts,
+            "spacing": "Medium",
+        })
+    if lista_str:
+        body.append({
+            "type": "TextBlock",
+            "text": f"Pedidos: {lista_str}",
+            "wrap": True,
+            "size": "Small",
+            "color": "Light",
+            "spacing": "Small",
+        })
+
+    card = {
+        "type": "AdaptiveCard",
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "version": "1.4",
+        "msteams": {"width": "Full"},
+        "body": body,
+    }
+    actions = _build_actions_row(data.get("actions") or [])
+    if actions:
+        card["actions"] = actions
+    return card
+
+
+# Mapa template → builder. Deve ficar em sincronia com _ALLOWED_TEMPLATES
+# em app/agente/tools/teams_card_tool.py.
+CARD_BUILDERS = {
+    "pedido_status": build_pedido_card,
+    "ruptura": build_ruptura_card,
+}
+
+
+def render_resposta_card(resposta_card: dict) -> dict | None:
+    """Renderiza dict {template, data} como Adaptive Card via builder.
+
+    Args:
+        resposta_card: Dict persistido em TeamsTask.resposta_card no backend.
+
+    Returns:
+        Adaptive Card dict, ou None se template desconhecido/invalido.
+    """
+    if not isinstance(resposta_card, dict):
+        return None
+    template = resposta_card.get("template")
+    data = resposta_card.get("data")
+    if not template or not isinstance(data, dict):
+        logger.warning(
+            f"[BOT] resposta_card invalido: template={template} "
+            f"data_type={type(data).__name__}"
+        )
+        return None
+    builder = CARD_BUILDERS.get(template)
+    if builder is None:
+        logger.warning(
+            f"[BOT] Template '{template}' sem builder registrado. "
+            f"Templates disponiveis: {list(CARD_BUILDERS.keys())}"
+        )
+        return None
+    try:
+        return builder(data)
+    except Exception as e:
+        logger.error(
+            f"[BOT] Erro ao renderizar card '{template}': {e}",
+            exc_info=True,
+        )
+        return None
+
+
 def build_ask_user_card(task_id: str, questions: list) -> dict:
     """
     Adaptive Card para AskUserQuestion — apresenta perguntas interativas.
@@ -579,8 +875,27 @@ async def _poll_and_respond(
 
             elif status == "completed":
                 resposta = result.get("resposta", "Sem resposta do sistema.")
+                resposta_card = result.get("resposta_card")  # Fase 1 MVP cards ricos
                 processing_time = time.monotonic() - poll_start_time  # tempo real
                 delivered = False
+
+                # Renderizar Adaptive Card estruturado se presente.
+                # O card NAO substitui o texto — ambos sao enviados (texto primeiro
+                # via update_activity ou _send_split_response, card adicionalmente).
+                adaptive_card_rendered = None
+                if resposta_card:
+                    adaptive_card_rendered = render_resposta_card(resposta_card)
+                    if adaptive_card_rendered:
+                        logger.info(
+                            f"[BOT] Adaptive Card estruturado preparado: "
+                            f"template={resposta_card.get('template')} "
+                            f"task={task_id[:8]}..."
+                        )
+                    else:
+                        logger.warning(
+                            f"[BOT] resposta_card recebido mas nao renderizou: "
+                            f"{resposta_card.get('template') if isinstance(resposta_card, dict) else '?'}"
+                        )
 
                 if progressive_activity_id and processing_time < 120:
                     # Só tenta update_activity se processamento foi rápido (<2 min).
@@ -629,6 +944,26 @@ async def _poll_and_respond(
                         logger.error(
                             f"[BOT] FALHA ao entregar resposta: "
                             f"task={task_id[:8]}... error={send_err}"
+                        )
+
+                # Enviar Adaptive Card estruturado APOS o texto (se foi renderizado)
+                if adaptive_card_rendered:
+                    try:
+                        await turn_context.send_activity(
+                            MessageFactory.attachment(
+                                CardFactory.adaptive_card(adaptive_card_rendered)
+                            )
+                        )
+                        logger.info(
+                            f"[BOT] Adaptive Card estruturado enviado: "
+                            f"template={resposta_card.get('template')} "
+                            f"task={task_id[:8]}..."
+                        )
+                    except Exception as card_err:
+                        logger.error(
+                            f"[BOT] Erro ao enviar Adaptive Card estruturado "
+                            f"(texto ja foi entregue): {card_err}",
+                            exc_info=True,
                         )
 
                 if not delivered:
