@@ -362,9 +362,24 @@
   ],
   "indices": [
     {
-      "name": "ix_carteira_principal_ativo",
+      "name": "idx_carteira_produto_saldo",
       "columns": [
-        "ativo"
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cnpj_cpf",
+      "columns": [
+        "cnpj_cpf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_num_pedido",
+      "columns": [
+        "num_pedido"
       ],
       "unique": false
     },
@@ -372,14 +387,6 @@
       "name": "ix_carteira_principal_odoo_write_date",
       "columns": [
         "odoo_write_date"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_produto_saldo",
-      "columns": [
-        "cod_produto",
-        "qtd_saldo_produto_pedido"
       ],
       "unique": false
     },
@@ -399,24 +406,9 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_ativo_saldo",
+      "name": "ix_carteira_principal_ativo",
       "columns": [
-        "num_pedido",
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_cnpj_cpf",
-      "columns": [
-        "cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carteira_principal_num_pedido",
-      "columns": [
-        "num_pedido"
+        "ativo"
       ],
       "unique": false
     },
@@ -442,10 +434,10 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_status_data",
+      "name": "idx_carteira_ativo_saldo",
       "columns": [
-        "status_pedido",
-        "data_pedido"
+        "num_pedido",
+        "cod_produto"
       ],
       "unique": false
     },
@@ -453,6 +445,14 @@
       "name": "ix_carteira_principal_status_pedido",
       "columns": [
         "status_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_carteira_status_data",
+      "columns": [
+        "status_pedido",
+        "data_pedido"
       ],
       "unique": false
     }

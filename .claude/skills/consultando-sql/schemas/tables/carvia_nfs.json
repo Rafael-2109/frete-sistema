@@ -125,16 +125,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_nfs_status",
+      "name": "ix_carvia_nfs_numero_nf",
       "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_nfs_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
+        "numero_nf"
       ],
       "unique": false
     },
@@ -146,9 +139,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_nfs_numero_nf",
+      "name": "ix_carvia_nfs_cnpj_emitente",
       "columns": [
-        "numero_nf"
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_nfs_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }
