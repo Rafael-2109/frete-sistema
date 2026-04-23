@@ -9,7 +9,7 @@
     {% else %}<span class="badge bg-secondary">Cancelada</span>{% endif %}
   </h2>
   <div>
-    {% if t.status=='EM_TRANSITO' and current_user.tem_perm_hora('transferencias', 'editar') %}
+    {% if t.status=='EM_TRANSITO' and acesso_destino and current_user.tem_perm_hora('transferencias', 'editar') %}
       <a href="{{ url_for('hora.transferencia_confirmar_wizard', transferencia_id=t.id) }}" class="btn btn-sm btn-success">
         <i class="fas fa-qrcode"></i> Confirmar chegada (wizard)
       </a>
@@ -46,7 +46,7 @@
     </div>
   </div>
   <div class="col-md-6">
-    {% if t.status=='EM_TRANSITO' and current_user.tem_perm_hora('transferencias', 'editar') %}
+    {% if t.status=='EM_TRANSITO' and acesso_origem and current_user.tem_perm_hora('transferencias', 'editar') %}
     <div class="card p-3 mb-3 border-danger-subtle">
       <h5 class="text-danger">Cancelar transferência</h5>
       <p class="small text-muted mb-2">

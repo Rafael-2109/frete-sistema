@@ -45,7 +45,9 @@ def registrar_avaria(
         ValueError: se >=1 foto nao fornecida, descricao curta, chassi
             inexistente, ou chassi fora de estoque.
     """
-    fotos_list: List[Tuple[str, Optional[str]]] = list(fotos)
+    fotos_list: List[Tuple[str, Optional[str]]] = [
+        (fk, leg) for fk, leg in list(fotos) if fk and fk.strip()
+    ]
     if not fotos_list:
         raise ValueError("Avaria requer pelo menos 1 foto")
 
@@ -75,8 +77,6 @@ def registrar_avaria(
     db.session.flush()
 
     for foto_s3_key, legenda in fotos_list:
-        if not foto_s3_key:
-            continue
         foto = HoraAvariaFoto(
             avaria_id=avaria.id,
             foto_s3_key=foto_s3_key,

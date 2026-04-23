@@ -138,3 +138,21 @@ CREATE TABLE IF NOT EXISTS hora_avaria_foto (
 
 CREATE INDEX IF NOT EXISTS ix_hora_avaria_foto_avaria
     ON hora_avaria_foto(avaria_id);
+
+-- ============================================================
+-- DEFAULTS para colunas de timestamp NOT NULL
+-- (protege contra INSERT bruto fora do ORM)
+-- ============================================================
+ALTER TABLE hora_transferencia
+    ALTER COLUMN emitida_em SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN criado_em SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN atualizado_em SET DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE hora_transferencia_auditoria
+    ALTER COLUMN criado_em SET DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE hora_avaria
+    ALTER COLUMN criado_em SET DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE hora_avaria_foto
+    ALTER COLUMN criado_em SET DEFAULT CURRENT_TIMESTAMP;

@@ -14,6 +14,7 @@
     <div class="col-md-6">
       <label class="form-label">Loja *</label>
       <select name="loja_id" required class="form-select">
+        <option value="">(selecione a loja)</option>
         {% for l in lojas %}
           <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
         {% endfor %}

@@ -240,15 +240,22 @@ def historico_chassi(numero_chassi: str) -> List[dict]:
 def listar_em_transito(
     lojas_permitidas_ids: Optional[List[int]] = None,
 ) -> List[dict]:
-    """Motos com ultimo evento EM_TRANSITO, filtradas por loja_id do evento.
+    """Motos com ultimo evento EM_TRANSITO, visiveis para origem OU destino.
 
-    Interpretacao: o evento EM_TRANSITO e emitido com loja_id=destino
-    (para que operador do destino veja 'motos chegando'). Origem ve pelo
-    detalhe ou consulta alternativa.
+    Interpretacao: evento EM_TRANSITO e emitido com loja_id=destino. Para que
+    a loja origem tambem enxergue o que saiu, fazemos JOIN com
+    hora_transferencia_item -> hora_transferencia e filtramos onde
+    loja_origem_id ou loja_destino_id esta em lojas_permitidas_ids.
     """
+    from app.hora.models import HoraTransferencia, HoraTransferenciaItem
+    from sqlalchemy import or_
+
     sub = _subquery_ultimo_evento_id()
     q = (
-        db.session.query(HoraMotoEvento, HoraMoto, HoraModelo, HoraLoja)
+        db.session.query(
+            HoraMotoEvento, HoraMoto, HoraModelo,
+            HoraTransferencia, HoraLoja,
+        )
         .join(
             sub,
             and_(
@@ -259,13 +266,27 @@ def listar_em_transito(
         .join(HoraMoto, HoraMotoEvento.numero_chassi == HoraMoto.numero_chassi)
         .join(HoraModelo, HoraMoto.modelo_id == HoraModelo.id)
         .outerjoin(HoraLoja, HoraMotoEvento.loja_id == HoraLoja.id)
+        .join(
+            HoraTransferenciaItem,
+            and_(
+                HoraTransferenciaItem.id == HoraMotoEvento.origem_id,
+                HoraMotoEvento.origem_tabela == 'hora_transferencia_item',
+            ),
+        )
+        .join(
+            HoraTransferencia,
+            HoraTransferencia.id == HoraTransferenciaItem.transferencia_id,
+        )
         .filter(HoraMotoEvento.tipo == 'EM_TRANSITO')
     )
 
     if lojas_permitidas_ids is not None:
         if not lojas_permitidas_ids:
             return []
-        q = q.filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
+        q = q.filter(or_(
+            HoraTransferencia.loja_origem_id.in_(lojas_permitidas_ids),
+            HoraTransferencia.loja_destino_id.in_(lojas_permitidas_ids),
+        ))
 
     q = q.order_by(HoraMotoEvento.timestamp.desc())
 
@@ -277,8 +298,10 @@ def listar_em_transito(
             'cor': moto.cor,
             'loja_destino_id': loja.id if loja else None,
             'loja_destino_nome': loja.rotulo_display if loja else None,
+            'loja_origem_id': transferencia.loja_origem_id,
+            'transferencia_id': transferencia.id,
             'emitido_em': ev.timestamp,
             'detalhe': ev.detalhe,
         }
-        for ev, moto, modelo, loja in q.all()
+        for ev, moto, modelo, transferencia, loja in q.all()
     ]

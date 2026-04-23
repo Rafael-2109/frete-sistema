@@ -134,9 +134,17 @@ def confirmar_item_destino(
     foto_s3_key: Optional[str] = None,
     observacao: Optional[str] = None,
 ) -> HoraTransferenciaItem:
-    """Confirma chegada de 1 chassi no destino. Idempotente se ja confirmado."""
+    """Confirma chegada de 1 chassi no destino. Idempotente se ja confirmado.
+
+    Usa SELECT FOR UPDATE no header para bloquear concorrencia com cancelar.
+    """
     chassi = numero_chassi.strip().upper()
-    transferencia = HoraTransferencia.query.get(transferencia_id)
+    transferencia = (
+        db.session.query(HoraTransferencia)
+        .filter(HoraTransferencia.id == transferencia_id)
+        .with_for_update()
+        .first()
+    )
     if not transferencia:
         raise ValueError(f"transferencia {transferencia_id} inexistente")
     if transferencia.status != 'EM_TRANSITO':
@@ -189,8 +197,16 @@ def confirmar_item_destino(
 
 
 def finalizar_se_tudo_confirmado(transferencia_id: int) -> bool:
-    """Muda status → CONFIRMADA se todos itens confirmados. Retorna True se finalizou."""
-    transferencia = HoraTransferencia.query.get(transferencia_id)
+    """Muda status → CONFIRMADA se todos itens confirmados. Retorna True se finalizou.
+
+    Usa SELECT FOR UPDATE para evitar race com cancelamento concorrente.
+    """
+    transferencia = (
+        db.session.query(HoraTransferencia)
+        .filter(HoraTransferencia.id == transferencia_id)
+        .with_for_update()
+        .first()
+    )
     if not transferencia or transferencia.status != 'EM_TRANSITO':
         return False
     pendentes = [i for i in transferencia.itens if i.conferido_destino_em is None]
@@ -221,12 +237,20 @@ def cancelar_transferencia(
     motivo: str,
     usuario: str,
 ) -> HoraTransferencia:
-    """Cancela transferencia em transito. Emite CANCELADA para itens nao confirmados."""
+    """Cancela transferencia em transito. Emite CANCELADA para itens nao confirmados.
+
+    Usa SELECT FOR UPDATE no header para bloquear concorrencia com confirmar.
+    """
     motivo_limpo = (motivo or '').strip()
     if len(motivo_limpo) < 3:
         raise ValueError("motivo de cancelamento obrigatorio (min 3 chars)")
 
-    transferencia = HoraTransferencia.query.get(transferencia_id)
+    transferencia = (
+        db.session.query(HoraTransferencia)
+        .filter(HoraTransferencia.id == transferencia_id)
+        .with_for_update()
+        .first()
+    )
     if not transferencia:
         raise ValueError(f"transferencia {transferencia_id} inexistente")
     if transferencia.status != 'EM_TRANSITO':

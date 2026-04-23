@@ -52,10 +52,16 @@ def transferencias_lista():
 @require_hora_perm('transferencias', 'ver')
 def transferencia_detalhe(transferencia_id):
     t = HoraTransferencia.query.get_or_404(transferencia_id)
-    if not (usuario_tem_acesso_a_loja(t.loja_origem_id)
-            or usuario_tem_acesso_a_loja(t.loja_destino_id)):
+    acesso_origem = usuario_tem_acesso_a_loja(t.loja_origem_id)
+    acesso_destino = usuario_tem_acesso_a_loja(t.loja_destino_id)
+    if not (acesso_origem or acesso_destino):
         abort(403)
-    return render_template('hora/transferencia_detalhe.html', t=t)
+    return render_template(
+        'hora/transferencia_detalhe.html',
+        t=t,
+        acesso_origem=acesso_origem,
+        acesso_destino=acesso_destino,
+    )
 
 
 @hora_bp.route('/transferencias/nova', methods=['GET', 'POST'])
