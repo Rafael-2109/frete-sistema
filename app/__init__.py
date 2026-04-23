@@ -1226,6 +1226,10 @@ def create_app(config_name=None):
     from app.teams import teams_bp
     app.register_blueprint(teams_bp)
 
+    # 💬 Chat In-App
+    from app.chat import chat_bp
+    app.register_blueprint(chat_bp)
+
     # 📦 Recebimento de Materiais - FASE 1: Validacao Fiscal
     from app.recebimento import init_app as init_recebimento
     init_recebimento(app)
