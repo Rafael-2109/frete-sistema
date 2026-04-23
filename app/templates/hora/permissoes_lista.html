@@ -52,14 +52,21 @@
                 </form>
               </td>
               <td>
-                <form method="post" action="{{ url_for('hora.permissoes_rejeitar', user_id=p.id) }}"
-                      class="m-0"
-                      onsubmit="this.motivo.value = prompt('Motivo (opcional):') || ''; return confirm('Rejeitar {{ p.nome }}?');">
-                  <input type="hidden" name="motivo" value="">
-                  <button type="submit" class="btn btn-sm btn-outline-danger">
-                    <i class="fas fa-times"></i> Rejeitar
-                  </button>
-                </form>
+                {# Form inline colapsavel (Bootstrap collapse) — substitui prompt() JS por textarea acessivel. #}
+                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="collapse"
+                        data-bs-target="#rejeitar-{{ p.id }}" aria-expanded="false">
+                  <i class="fas fa-times"></i> Rejeitar
+                </button>
+                <div id="rejeitar-{{ p.id }}" class="collapse mt-2">
+                  <form method="post" action="{{ url_for('hora.permissoes_rejeitar', user_id=p.id) }}"
+                        onsubmit="return confirm('Rejeitar {{ p.nome }}?');">
+                    <textarea name="motivo" class="form-control form-control-sm mb-1" rows="2"
+                              placeholder="Motivo (opcional)" maxlength="500"></textarea>
+                    <button type="submit" class="btn btn-sm btn-danger w-100">
+                      Confirmar rejeicao
+                    </button>
+                  </form>
+                </div>
               </td>
             </tr>
           {% endfor %}

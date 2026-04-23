@@ -1,7 +1,7 @@
 # Módulo HORA — Lojas Motochefe
 
-**Data**: 2026-04-18
-**Status**: skeleton — modelos e migrations não implementados ainda.
+**Data**: 2026-04-22 (atualizado)
+**Status**: em produção — modelos, migrations e fluxos pedido→NF→recebimento implementados; permissões granulares ativas.
 **Propósito**: controle de estoque unitário de motos elétricas nas lojas físicas da HORA (PJ distinta da Motochefe-distribuidora e CarVia).
 
 ---
@@ -80,6 +80,46 @@ Documentação detalhada no plano `/home/rafaelnascimento/.claude/plans/toasty-s
 **Histórico**:
 - `hora_moto_evento` — log de todas as transições de estado por chassi.
 
+**Autorização (adicionada 2026-04-22)**:
+- `hora_user_permissao` — permissões granulares por (`user_id`, `modulo`) com flags `pode_ver/criar/editar/apagar/aprovar`. Sem FK para `usuarios` (mantém `app/hora` independente de `app/auth`). Migration: `scripts/migrations/hora_13_user_permissao.{py,sql}`.
+
+---
+
+## Autorização granular (decorator + service)
+
+> Substitui o antigo `require_lojas` (mantido apenas para retrocompat). Use sempre `require_hora_perm` em rotas novas.
+
+**10 módulos canônicos** (em `app/hora/models/permissao.py:MODULOS_HORA`):
+`usuarios, dashboard, lojas, modelos, pedidos, nfs, recebimentos, estoque, devolucoes, pecas`.
+
+**5 ações** (`ACOES_HORA`): `ver, criar, editar, apagar, aprovar`.
+A ação `aprovar` é semântica e só tem decorator real no módulo `usuarios` (aprovação de cadastros pendentes). Para os demais, a flag é armazenada mas ignorada — o template marca a célula com `—`.
+
+**Como usar em rotas novas**:
+```python
+from app.hora.decorators import require_hora_perm
+
+@hora_bp.route('/pedidos')
+@require_hora_perm('pedidos', 'ver')   # admin sempre passa; usuario inativo bloqueado; resto via tabela
+def pedidos_lista(): ...
+```
+
+**Como usar em templates**:
+```jinja
+{% if current_user.tem_perm_hora('lojas', 'criar') %}
+  <a href="{{ url_for('hora.lojas_novo') }}">Nova loja</a>
+{% endif %}
+```
+`Usuario.tem_perm_hora` (em `app/auth/models.py`) tem cache `_hora_perm_cache` por instância — uma única query por request resolve N chamadas no menu.
+
+**Service** (`app/hora/services/permissao_service.py`):
+- `tem_perm(user, modulo, acao)` — fonte de verdade (admin sempre True; status≠ativo False; sem entry False).
+- `get_matriz(user_id)` — dict `{modulo: {acao: bool}}` com 10 módulos × 5 ações.
+- `get_matrizes_batch(user_ids)` — versão N-usuarios em 1 query (usado na tela de gestão).
+- `salvar_matriz_completa(user_id, matriz, atualizado_por_id)` — upsert em batch + commit.
+
+**Tela de gestão**: `/hora/permissoes` (rota `hora.permissoes_lista`). Decorator `usuarios/ver` para abrir; `usuarios/editar` para toggle/loja/granular; `usuarios/aprovar` para o card de pendentes (aprovar/rejeitar com escolha de loja). Self-edit e edição de admin por não-admin são bloqueados.
+
 ---
 
 ## Parsers reusados (via adapter)
@@ -124,11 +164,12 @@ Se um comportamento específico da HORA for necessário (ex.: validação adicio
 
 Segue o plano aprovado em 2026-04-18:
 
-1. **P1** (esta fase): documentos contratuais — `docs/hora/INVARIANTES.md` e este `app/hora/CLAUDE.md`. **Concluído**.
-2. **P2**: migrations + modelos SQLAlchemy das 13 tabelas. Dois artefatos por migration (`scripts/migrations/*.py` + `*.sql` — regra universal do sistema).
-3. **P3**: fluxo pedido → NF → recebimento → conferência (ingestão e confronto).
-4. **P4**: fluxo venda com tabela de preço + desconto auditável.
-5. **Fase 2 futura**: financeiro (títulos a pagar/receber, conciliação, comissões). Todas as tabelas novas com `chassi` FK conforme invariante 2.
+1. **P1**: documentos contratuais — `docs/hora/INVARIANTES.md` e este `app/hora/CLAUDE.md`. **Concluído**.
+2. **P2**: migrations + modelos SQLAlchemy das 13 tabelas. **Concluído** (+ tabela 14 `hora_user_permissao` em 2026-04-22).
+3. **P3**: fluxo pedido → NF → recebimento → conferência (ingestão e confronto). **Concluído**.
+4. **P4**: fluxo venda com tabela de preço + desconto auditável. *Em andamento*.
+5. **P5** (2026-04-22): autorização granular por usuário × módulo × ação. **Concluído** — todas as 64 rotas usam `require_hora_perm`.
+6. **Fase 2 futura**: financeiro (títulos a pagar/receber, conciliação, comissões). Todas as tabelas novas com `chassi` FK conforme invariante 2.
 
 ---
 
