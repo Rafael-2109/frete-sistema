@@ -46,3 +46,18 @@ def usuario_tem_acesso_a_loja(loja_id: int) -> bool:
     if ids is None:
         return True
     return loja_id in ids
+
+
+def loja_origem_permitida_para_transferencia() -> Optional[int]:
+    """Retorna loja_id obrigatoria como origem para o usuario atual.
+
+    Returns:
+        None se user e admin ou sem loja atribuida (pode escolher qualquer origem).
+        int (loja_hora_id) se user e escopado a 1 loja.
+    """
+    if not current_user.is_authenticated:
+        return None
+    perfil = getattr(current_user, 'perfil', None)
+    if perfil == 'administrador':
+        return None
+    return getattr(current_user, 'loja_hora_id', None)
