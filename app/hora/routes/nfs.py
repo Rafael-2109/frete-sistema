@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
-from app.hora.decorators import require_lojas as login_required
+from app.hora.decorators import require_hora_perm
 
 from app.hora.models import HoraLoja, HoraNfEntrada, HoraPedido
 from app.hora.routes import hora_bp
@@ -51,7 +51,7 @@ def _lojas_ativas_permitidas():
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/nfs')
-@login_required
+@require_hora_perm('nfs', 'ver')
 def nfs_lista():
     nfs = nf_entrada_service.listar_nfs_entrada(
         limit=200,
@@ -68,7 +68,7 @@ def nfs_lista():
 
 
 @hora_bp.route('/nfs/<int:nf_id>')
-@login_required
+@require_hora_perm('nfs', 'ver')
 def nfs_detalhe(nf_id: int):
     nf = HoraNfEntrada.query.get_or_404(nf_id)
     if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
@@ -104,7 +104,7 @@ def nfs_detalhe(nf_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/nfs/upload', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('nfs', 'criar')
 def nfs_upload():
     """Upload DANFE PDF. Parsea via adapter e cria HoraNfEntrada + itens."""
     permitidas = lojas_permitidas_ids()
@@ -187,7 +187,7 @@ def nfs_upload():
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/nfs/<int:nf_id>/definir-loja', methods=['POST'])
-@login_required
+@require_hora_perm('nfs', 'editar')
 def nfs_definir_loja(nf_id: int):
     """Preenche loja_destino_id em NF legada (pre-requisito para match)."""
     from app import db
@@ -222,7 +222,7 @@ def nfs_definir_loja(nf_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/nfs/<int:nf_id>/vincular-pedido', methods=['POST'])
-@login_required
+@require_hora_perm('nfs', 'editar')
 def nfs_vincular_pedido(nf_id: int):
     nf = HoraNfEntrada.query.get_or_404(nf_id)
     if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
@@ -260,7 +260,7 @@ def nfs_vincular_pedido(nf_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/nfs/<int:nf_id>/match')
-@login_required
+@require_hora_perm('nfs', 'ver')
 def nfs_match(nf_id: int):
     """Modal/tela de vinculo NF -> Pedido com candidatos ordenados por match."""
     nf = HoraNfEntrada.query.get_or_404(nf_id)
@@ -300,7 +300,7 @@ def nfs_match(nf_id: int):
 
 
 @hora_bp.route('/nfs/<int:nf_id>/match/preview')
-@login_required
+@require_hora_perm('nfs', 'ver')
 def nfs_match_preview(nf_id: int):
     """JSON com itens NF + itens do pedido escolhido + totais (verde/vermelho)."""
     nf = HoraNfEntrada.query.get_or_404(nf_id)
@@ -330,7 +330,7 @@ def nfs_match_preview(nf_id: int):
 
 
 @hora_bp.route('/nfs/<int:nf_id>/match/corrigir-pedido', methods=['POST'])
-@login_required
+@require_hora_perm('nfs', 'editar')
 def nfs_match_corrigir_pedido(nf_id: int):
     """Copia chassi da NF para o item do pedido (preenche pendente ou substitui)."""
     nf = HoraNfEntrada.query.get_or_404(nf_id)
@@ -358,7 +358,7 @@ def nfs_match_corrigir_pedido(nf_id: int):
 
 
 @hora_bp.route('/nfs/<int:nf_id>/match/corrigir-nf', methods=['POST'])
-@login_required
+@require_hora_perm('nfs', 'editar')
 def nfs_match_corrigir_nf(nf_id: int):
     """Copia chassi do pedido para o item da NF."""
     nf = HoraNfEntrada.query.get_or_404(nf_id)
@@ -386,7 +386,7 @@ def nfs_match_corrigir_nf(nf_id: int):
 
 
 @hora_bp.route('/nfs/<int:nf_id>/match/confirmar', methods=['POST'])
-@login_required
+@require_hora_perm('nfs', 'editar')
 def nfs_match_confirmar(nf_id: int):
     """Confirma vinculo final (depois de corrigir divergencias)."""
     nf = HoraNfEntrada.query.get_or_404(nf_id)

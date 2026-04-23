@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from app.hora.decorators import require_lojas as login_required
+from app.hora.decorators import require_hora_perm
 from app.hora.models import (
     HoraDevolucaoFornecedor,
     HoraLoja,
@@ -37,7 +37,7 @@ def _lojas_permitidas():
 
 
 @hora_bp.route('/devolucoes')
-@login_required
+@require_hora_perm('devolucoes', 'ver')
 def devolucoes_lista():
     permitidas = lojas_permitidas_ids()
     status = (request.args.get('status') or '').strip() or None
@@ -60,7 +60,7 @@ def devolucoes_lista():
 
 
 @hora_bp.route('/devolucoes/novo', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('devolucoes', 'criar')
 def devolucoes_novo():
     lojas = _lojas_permitidas()
     permitidas = lojas_permitidas_ids()
@@ -117,7 +117,7 @@ def devolucoes_novo():
 
 
 @hora_bp.route('/devolucoes/<int:devolucao_id>')
-@login_required
+@require_hora_perm('devolucoes', 'ver')
 def devolucoes_detalhe(devolucao_id: int):
     dev = HoraDevolucaoFornecedor.query.get_or_404(devolucao_id)
     if not usuario_tem_acesso_a_loja(dev.loja_id):
@@ -126,7 +126,7 @@ def devolucoes_detalhe(devolucao_id: int):
 
 
 @hora_bp.route('/devolucoes/<int:devolucao_id>/adicionar-item', methods=['POST'])
-@login_required
+@require_hora_perm('devolucoes', 'editar')
 def devolucoes_adicionar_item(devolucao_id: int):
     dev = HoraDevolucaoFornecedor.query.get_or_404(devolucao_id)
     if not usuario_tem_acesso_a_loja(dev.loja_id):
@@ -148,7 +148,7 @@ def devolucoes_adicionar_item(devolucao_id: int):
 
 
 @hora_bp.route('/devolucoes/<int:devolucao_id>/remover-item/<int:item_id>', methods=['POST'])
-@login_required
+@require_hora_perm('devolucoes', 'apagar')
 def devolucoes_remover_item(devolucao_id: int, item_id: int):
     dev = HoraDevolucaoFornecedor.query.get_or_404(devolucao_id)
     if not usuario_tem_acesso_a_loja(dev.loja_id):
@@ -162,7 +162,7 @@ def devolucoes_remover_item(devolucao_id: int, item_id: int):
 
 
 @hora_bp.route('/devolucoes/<int:devolucao_id>/enviar', methods=['POST'])
-@login_required
+@require_hora_perm('devolucoes', 'editar')
 def devolucoes_enviar(devolucao_id: int):
     dev = HoraDevolucaoFornecedor.query.get_or_404(devolucao_id)
     if not usuario_tem_acesso_a_loja(dev.loja_id):
@@ -183,7 +183,7 @@ def devolucoes_enviar(devolucao_id: int):
 
 
 @hora_bp.route('/devolucoes/<int:devolucao_id>/confirmar', methods=['POST'])
-@login_required
+@require_hora_perm('devolucoes', 'editar')
 def devolucoes_confirmar(devolucao_id: int):
     dev = HoraDevolucaoFornecedor.query.get_or_404(devolucao_id)
     if not usuario_tem_acesso_a_loja(dev.loja_id):
@@ -197,7 +197,7 @@ def devolucoes_confirmar(devolucao_id: int):
 
 
 @hora_bp.route('/devolucoes/<int:devolucao_id>/cancelar', methods=['POST'])
-@login_required
+@require_hora_perm('devolucoes', 'apagar')
 def devolucoes_cancelar(devolucao_id: int):
     dev = HoraDevolucaoFornecedor.query.get_or_404(devolucao_id)
     if not usuario_tem_acesso_a_loja(dev.loja_id):

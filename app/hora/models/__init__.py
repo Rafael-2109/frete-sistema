@@ -22,6 +22,11 @@ from app.hora.models.devolucao import (
     HoraDevolucaoFornecedorItem,
 )
 from app.hora.models.peca import HoraPecaFaltando, HoraPecaFaltandoFoto
+from app.hora.models.permissao import (
+    HoraUserPermissao,
+    MODULOS_HORA,
+    ACOES_HORA,
+)
 
 __all__ = [
     'HoraLoja',
@@ -43,4 +48,7 @@ __all__ = [
     'HoraDevolucaoFornecedorItem',
     'HoraPecaFaltando',
     'HoraPecaFaltandoFoto',
+    'HoraUserPermissao',
+    'MODULOS_HORA',
+    'ACOES_HORA',
 ]

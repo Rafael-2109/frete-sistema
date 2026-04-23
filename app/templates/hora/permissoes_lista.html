@@ -1,75 +1,204 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
-<h2 class="mb-3">Usuários com acesso a Lojas HORA</h2>
-<p class="text-muted">
-  Toggle <strong>Acesso</strong> habilita/desabilita <code>sistema_lojas</code>.
-  <strong>Loja</strong> define segregação — "Todas" permite ver dados de todas as lojas.
+<h2 class="mb-1">Usuários — acesso e permissões granulares</h2>
+<p class="text-muted small mb-3">
+  <strong>Acesso</strong> liga/desliga <code>sistema_lojas</code>.
+  <strong>Loja</strong> define a segregação ("Todas" = sem restrição).
+  Para usuários habilitados, defina abaixo o que cada um pode <strong>Ver / Criar / Editar / Apagar</strong> em cada módulo.
+  Administradores sempre têm acesso a tudo.
 </p>
 
-<div class="table-responsive">
-  <table class="table table-hover align-middle">
-    <thead>
-      <tr>
-        <th>Usuário</th>
-        <th>E-mail</th>
-        <th>Perfil</th>
-        <th>Status</th>
-        <th>Acesso Lojas</th>
-        <th style="min-width: 260px;">Loja (segregação)</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for u in usuarios %}
-        <tr class="{% if u.sistema_lojas %}table-success{% endif %}">
-          <td><strong>{{ u.nome }}</strong></td>
-          <td><small>{{ u.email }}</small></td>
-          <td><span class="{{ u.perfil_badge_class }}">{{ u.perfil_nome }}</span></td>
-          <td><span class="{{ u.status_badge_class }}">{{ u.status }}</span></td>
-          <td>
-            <form method="post" action="{{ url_for('hora.permissoes_toggle', user_id=u.id) }}"
-                  style="display: inline;">
-              {% if u.sistema_lojas %}
-                <button type="submit" class="btn btn-sm btn-success">
-                  <i class="fas fa-check-circle"></i> Habilitado
-                </button>
-              {% else %}
-                <button type="submit" class="btn btn-sm btn-outline-secondary">
-                  <i class="fas fa-times-circle"></i> Desabilitado
-                </button>
-              {% endif %}
-            </form>
-          </td>
-          <td>
-            <form method="post" action="{{ url_for('hora.permissoes_set_loja', user_id=u.id) }}"
-                  class="d-flex gap-2">
-              <select name="loja_hora_id" class="form-select form-select-sm"
-                      {% if not u.sistema_lojas %}disabled{% endif %}>
-                <option value="" {% if not u.loja_hora_id %}selected{% endif %}>Todas as lojas</option>
-                {% for l in lojas %}
-                  <option value="{{ l.id }}" {% if u.loja_hora_id == l.id %}selected{% endif %}>
-                    {{ l.nome }} ({{ l.cnpj }})
-                  </option>
-                {% endfor %}
-              </select>
-              <button type="submit" class="btn btn-sm btn-primary"
-                      {% if not u.sistema_lojas %}disabled{% endif %}>
-                Salvar
-              </button>
-            </form>
-          </td>
-        </tr>
-      {% else %}
-        <tr><td colspan="6" class="text-center text-muted">Nenhum usuário cadastrado.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+{# ===== Pendentes de aprovacao ===== #}
+{% if pendentes and current_user.tem_perm_hora('usuarios', 'aprovar') %}
+  <div class="card border-warning mb-4">
+    <div class="card-header bg-warning text-dark">
+      <i class="fas fa-user-clock"></i>
+      <strong>Solicitações pendentes</strong>
+      <span class="badge bg-dark">{{ pendentes|length }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nome</th>
+            <th>E-mail</th>
+            <th>Empresa / Cargo</th>
+            <th>Solicitado em</th>
+            <th style="min-width: 280px;">Aprovar — escolha a loja</th>
+            <th>Rejeitar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pendentes %}
+            <tr>
+              <td><strong>{{ p.nome }}</strong></td>
+              <td><small>{{ p.email }}</small></td>
+              <td><small>{{ p.empresa or '-' }} / {{ p.cargo or '-' }}</small></td>
+              <td><small>{{ p.criado_em.strftime('%d/%m/%Y %H:%M') if p.criado_em else '-' }}</small></td>
+              <td>
+                <form method="post" action="{{ url_for('hora.permissoes_aprovar', user_id=p.id) }}"
+                      class="d-flex gap-1 m-0">
+                  <select name="loja_hora_id" class="form-select form-select-sm">
+                    <option value="">Todas as lojas</option>
+                    {% for l in lojas %}
+                      <option value="{{ l.id }}">{{ l.nome }} ({{ l.cnpj }})</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-success"
+                          onclick="return confirm('Aprovar {{ p.nome }} para Lojas HORA?');">
+                    <i class="fas fa-check"></i> Aprovar
+                  </button>
+                </form>
+              </td>
+              <td>
+                <form method="post" action="{{ url_for('hora.permissoes_rejeitar', user_id=p.id) }}"
+                      class="m-0"
+                      onsubmit="this.motivo.value = prompt('Motivo (opcional):') || ''; return confirm('Rejeitar {{ p.nome }}?');">
+                  <input type="hidden" name="motivo" value="">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="fas fa-times"></i> Rejeitar
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer small text-muted">
+      Ao aprovar, o usuário é ativado, recebe <code>sistema_lojas=True</code> e a loja escolhida.
+      Defina depois as permissões granulares no card do usuário abaixo.
+    </div>
+  </div>
+{% endif %}
 
-<div class="alert alert-info mt-3">
-  <i class="fas fa-info-circle"></i>
+{% for u in usuarios %}
+  <div class="card mb-3 {% if u.sistema_lojas %}border-success{% else %}border-secondary{% endif %}">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+      <strong class="me-2">{{ u.nome }}</strong>
+      <span class="text-muted small">{{ u.email }}</span>
+      <span class="ms-2 {{ u.perfil_badge_class }}">{{ u.perfil_nome }}</span>
+      <span class="ms-1 {{ u.status_badge_class }}">{{ u.status }}</span>
+
+      <div class="ms-auto d-flex gap-2 flex-wrap">
+        {# Toggle Acesso #}
+        <form method="post" action="{{ url_for('hora.permissoes_toggle', user_id=u.id) }}" class="m-0">
+          {% if u.sistema_lojas %}
+            <button type="submit" class="btn btn-sm btn-success" title="Clique para desabilitar">
+              <i class="fas fa-check-circle"></i> Acesso habilitado
+            </button>
+          {% else %}
+            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Clique para habilitar">
+              <i class="fas fa-times-circle"></i> Acesso desabilitado
+            </button>
+          {% endif %}
+        </form>
+
+        {# Loja segregada #}
+        <form method="post" action="{{ url_for('hora.permissoes_set_loja', user_id=u.id) }}"
+              class="d-flex gap-1 m-0">
+          <select name="loja_hora_id" class="form-select form-select-sm"
+                  {% if not u.sistema_lojas %}disabled{% endif %}>
+            <option value="" {% if not u.loja_hora_id %}selected{% endif %}>Todas as lojas</option>
+            {% for l in lojas %}
+              <option value="{{ l.id }}" {% if u.loja_hora_id == l.id %}selected{% endif %}>
+                {{ l.nome }} ({{ l.cnpj }})
+              </option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-sm btn-outline-primary"
+                  {% if not u.sistema_lojas %}disabled{% endif %}>Salvar loja</button>
+        </form>
+      </div>
+    </div>
+
+    {# Matriz granular: visivel apenas se sistema_lojas=True #}
+    {% if u.sistema_lojas %}
+      {% set m = matrizes.get(u.id, {}) %}
+      <form method="post" action="{{ url_for('hora.permissoes_salvar_granular', user_id=u.id) }}"
+            class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 35%;">Módulo</th>
+                {% for acao_slug, acao_label in acoes %}
+                  <th class="text-center">
+                    <span title="{{ acao_label }}">{{ acao_label }}</span>
+                    <br>
+                    <button type="button"
+                            class="btn btn-link btn-sm p-0 hora-perm-toggle-col text-muted"
+                            data-acao="{{ acao_slug }}" data-user="{{ u.id }}"
+                            title="Marcar/desmarcar todos para esta ação">
+                      <small>todos</small>
+                    </button>
+                  </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for mod_slug, mod_label in modulos %}
+                {% set flags = m.get(mod_slug, {'ver': False, 'criar': False, 'editar': False, 'apagar': False, 'aprovar': False}) %}
+                <tr>
+                  <td><strong>{{ mod_label }}</strong> <small class="text-muted">({{ mod_slug }})</small></td>
+                  {% for acao_slug, _ in acoes %}
+                    {# Aprovar so tem efeito real no modulo 'usuarios' (aprova cadastros pendentes).
+                       Para os demais modulos, mostrar '—' para evitar confusao. #}
+                    {% if acao_slug == 'aprovar' and mod_slug != 'usuarios' %}
+                      <td class="text-center text-muted" title="Acao 'Aprovar' so se aplica a Usuarios">—</td>
+                    {% else %}
+                      <td class="text-center">
+                        <input type="checkbox" class="form-check-input hora-perm-cb"
+                               name="perm_{{ mod_slug }}_{{ acao_slug }}"
+                               value="1"
+                               data-acao="{{ acao_slug }}"
+                               data-user="{{ u.id }}"
+                               {% if flags[acao_slug] %}checked{% endif %}>
+                      </td>
+                    {% endif %}
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="p-2 d-flex justify-content-end border-top">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="fas fa-save"></i> Salvar permissões granulares
+          </button>
+        </div>
+      </form>
+    {% else %}
+      <div class="card-body text-muted small">
+        <i class="fas fa-info-circle"></i> Habilite o acesso (botão acima) para definir permissões granulares.
+      </div>
+    {% endif %}
+  </div>
+{% else %}
+  <div class="alert alert-warning">Nenhum usuário cadastrado.</div>
+{% endfor %}
+
+<div class="alert alert-secondary mt-3 small">
+  <i class="fas fa-shield-alt"></i>
   Para editar outros dados do usuário (perfil, status, outros sistemas),
   use <a href="{{ url_for('auth.listar_usuarios') }}">Usuários (auth)</a>.
-  Administradores sempre veem dados de todas as lojas, independente do campo "Loja".
+  Administradores ignoram todas as restrições e sempre vêem dados de todas as lojas.
 </div>
+
+<script>
+// Toggle "todos" por coluna (ação): marca/desmarca todos os checkboxes da mesma ação no mesmo card.
+document.querySelectorAll('.hora-perm-toggle-col').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var acao = btn.dataset.acao;
+    var user = btn.dataset.user;
+    var card = btn.closest('form');
+    if (!card) return;
+    var cbs = card.querySelectorAll('.hora-perm-cb[data-acao="' + acao + '"][data-user="' + user + '"]');
+    var algumDesmarcado = false;
+    cbs.forEach(function(cb) { if (!cb.checked) algumDesmarcado = true; });
+    cbs.forEach(function(cb) { cb.checked = algumDesmarcado; });
+  });
+});
+</script>
 {% endblock %}

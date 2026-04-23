@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from app.hora.decorators import require_lojas as login_required
+from app.hora.decorators import require_hora_perm
 from app.hora.models import HoraMoto, HoraPecaFaltando
 from app.hora.routes import hora_bp
 from app.hora.services import estoque_service, peca_service
@@ -33,7 +33,7 @@ def _redirect_sem_acesso():
 
 
 @hora_bp.route('/pecas-faltando')
-@login_required
+@require_hora_perm('pecas', 'ver')
 def pecas_lista():
     permitidas = lojas_permitidas_ids()
     status = (request.args.get('status') or '').strip() or None
@@ -52,7 +52,7 @@ def pecas_lista():
 
 
 @hora_bp.route('/pecas-faltando/novo', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('pecas', 'criar')
 def pecas_novo():
     if request.method == 'POST':
         try:
@@ -84,7 +84,7 @@ def pecas_novo():
 
 
 @hora_bp.route('/pecas-faltando/<int:peca_id>')
-@login_required
+@require_hora_perm('pecas', 'ver')
 def pecas_detalhe(peca_id: int):
     peca = HoraPecaFaltando.query.get_or_404(peca_id)
     if not _check_acesso_peca(peca):
@@ -107,7 +107,7 @@ def pecas_detalhe(peca_id: int):
 
 
 @hora_bp.route('/pecas-faltando/<int:peca_id>/fotos', methods=['POST'])
-@login_required
+@require_hora_perm('pecas', 'editar')
 def pecas_upload_foto(peca_id: int):
     peca = HoraPecaFaltando.query.get_or_404(peca_id)
     if not _check_acesso_peca(peca):
@@ -132,7 +132,7 @@ def pecas_upload_foto(peca_id: int):
 
 
 @hora_bp.route('/pecas-faltando/<int:peca_id>/fotos/<int:foto_id>/remover', methods=['POST'])
-@login_required
+@require_hora_perm('pecas', 'apagar')
 def pecas_remover_foto(peca_id: int, foto_id: int):
     peca = HoraPecaFaltando.query.get_or_404(peca_id)
     if not _check_acesso_peca(peca):
@@ -146,7 +146,7 @@ def pecas_remover_foto(peca_id: int, foto_id: int):
 
 
 @hora_bp.route('/pecas-faltando/<int:peca_id>/canibalizar', methods=['POST'])
-@login_required
+@require_hora_perm('pecas', 'editar')
 def pecas_canibalizar(peca_id: int):
     peca = HoraPecaFaltando.query.get_or_404(peca_id)
     if not _check_acesso_peca(peca):
@@ -181,7 +181,7 @@ def pecas_canibalizar(peca_id: int):
 
 
 @hora_bp.route('/pecas-faltando/<int:peca_id>/resolver', methods=['POST'])
-@login_required
+@require_hora_perm('pecas', 'editar')
 def pecas_resolver(peca_id: int):
     peca = HoraPecaFaltando.query.get_or_404(peca_id)
     if not _check_acesso_peca(peca):
@@ -201,7 +201,7 @@ def pecas_resolver(peca_id: int):
 
 
 @hora_bp.route('/pecas-faltando/<int:peca_id>/cancelar', methods=['POST'])
-@login_required
+@require_hora_perm('pecas', 'apagar')
 def pecas_cancelar(peca_id: int):
     peca = HoraPecaFaltando.query.get_or_404(peca_id)
     if not _check_acesso_peca(peca):
@@ -218,7 +218,7 @@ def pecas_cancelar(peca_id: int):
 
 
 @hora_bp.route('/pecas-faltando/autocomplete-chassi')
-@login_required
+@require_hora_perm('pecas', 'ver')
 def pecas_autocomplete_chassi():
     """Busca parcial de chassis (para campo chassi_doador)."""
     q = (request.args.get('q') or '').strip().upper()

@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
-from app.hora.decorators import require_lojas as login_required
+from app.hora.decorators import require_hora_perm
 
 from app import db
 from app.hora.models import HoraLoja
@@ -17,14 +17,14 @@ from app.hora.services.geocoding_service import geocodar_loja, GeocodingError
 # ----------------------------- Lojas -----------------------------
 
 @hora_bp.route('/lojas')
-@login_required
+@require_hora_perm('lojas', 'ver')
 def lojas_lista():
     lojas = cadastro_service.listar_lojas(apenas_ativas=False)
     return render_template('hora/lojas_lista.html', lojas=lojas)
 
 
 @hora_bp.route('/lojas/novo', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('lojas', 'criar')
 def lojas_novo():
     if request.method == 'POST':
         try:
@@ -63,7 +63,7 @@ def lojas_novo():
 
 
 @hora_bp.route('/lojas/<int:loja_id>')
-@login_required
+@require_hora_perm('lojas', 'ver')
 def lojas_detalhe(loja_id: int):
     """Tela de detalhe com todas as infos da loja + mini-mapa + metadados."""
     loja = HoraLoja.query.get_or_404(loja_id)
@@ -87,7 +87,7 @@ def lojas_detalhe(loja_id: int):
 
 
 @hora_bp.route('/lojas/<int:loja_id>/atualizar-receita', methods=['POST'])
-@login_required
+@require_hora_perm('lojas', 'editar')
 def lojas_atualizar_receita(loja_id: int):
     """Re-consulta ReceitaWS e atualiza campos fiscais/endereço da loja existente."""
     from app.utils.timezone import agora_utc_naive
@@ -125,7 +125,7 @@ def lojas_atualizar_receita(loja_id: int):
 
 
 @hora_bp.route('/lojas/<int:loja_id>/toggle-ativa', methods=['POST'])
-@login_required
+@require_hora_perm('lojas', 'apagar')
 def lojas_toggle_ativa(loja_id: int):
     """Ativa/desativa loja."""
     loja = HoraLoja.query.get_or_404(loja_id)
@@ -136,7 +136,7 @@ def lojas_toggle_ativa(loja_id: int):
 
 
 @hora_bp.route('/lojas/<int:loja_id>/editar-apelido', methods=['POST'])
-@login_required
+@require_hora_perm('lojas', 'editar')
 def lojas_editar_apelido(loja_id: int):
     """AJAX inline edit do apelido + campos manuais simples."""
     loja = HoraLoja.query.get_or_404(loja_id)
@@ -150,7 +150,7 @@ def lojas_editar_apelido(loja_id: int):
 
 
 @hora_bp.route('/lojas/mapa')
-@login_required
+@require_hora_perm('lojas', 'ver')
 def lojas_mapa():
     """Renderiza mapa com todas as lojas (Google Maps se chave; Leaflet fallback)."""
     lojas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.nome).all()
@@ -186,7 +186,7 @@ def lojas_mapa():
 
 
 @hora_bp.route('/lojas/<int:loja_id>/geocodar', methods=['POST'])
-@login_required
+@require_hora_perm('lojas', 'editar')
 def lojas_geocodar(loja_id: int):
     """AJAX: força geocoding da loja e retorna novas coords."""
     loja = HoraLoja.query.get_or_404(loja_id)
@@ -210,7 +210,7 @@ def lojas_geocodar(loja_id: int):
 
 
 @hora_bp.route('/lojas/consultar-cnpj')
-@login_required
+@require_hora_perm('lojas', 'criar')
 def lojas_consultar_cnpj():
     """Endpoint AJAX: consulta ReceitaWS e retorna JSON.
 
@@ -237,14 +237,14 @@ def lojas_consultar_cnpj():
 # ----------------------------- Modelos -----------------------------
 
 @hora_bp.route('/modelos')
-@login_required
+@require_hora_perm('modelos', 'ver')
 def modelos_lista():
     modelos = cadastro_service.listar_modelos(apenas_ativos=False)
     return render_template('hora/modelos_lista.html', modelos=modelos)
 
 
 @hora_bp.route('/modelos/novo', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('modelos', 'criar')
 def modelos_novo():
     if request.method == 'POST':
         try:

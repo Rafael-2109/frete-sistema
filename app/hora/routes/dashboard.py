@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from flask import render_template
-from app.hora.decorators import require_lojas as login_required
+from app.hora.decorators import require_hora_perm
 from sqlalchemy import func
 
 from app import db
@@ -18,7 +18,7 @@ from app.hora.routes import hora_bp
 
 
 @hora_bp.route('/')
-@login_required
+@require_hora_perm('dashboard', 'ver')
 def dashboard():
     """Dashboard do módulo HORA."""
     total_motos = db.session.query(func.count(HoraMoto.numero_chassi)).scalar() or 0

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from flask import flash, redirect, render_template, request, url_for
 
-from app.hora.decorators import require_lojas as login_required
+from app.hora.decorators import require_hora_perm
 from app.hora.models import HoraLoja, HoraModelo, HoraMoto
 from app.hora.routes import hora_bp
 from app.hora.services import estoque_service
@@ -14,7 +14,7 @@ from app.hora.services.auth_helper import (
 
 
 @hora_bp.route('/estoque')
-@login_required
+@require_hora_perm('estoque', 'ver')
 def estoque_lista():
     permitidas = lojas_permitidas_ids()
     loja_id_str = (request.args.get('loja_id') or '').strip()
@@ -75,7 +75,7 @@ def estoque_lista():
 
 
 @hora_bp.route('/estoque/chassi/<numero_chassi>')
-@login_required
+@require_hora_perm('estoque', 'ver')
 def estoque_chassi_detalhe(numero_chassi: str):
     chassi = numero_chassi.strip().upper()
     moto = HoraMoto.query.get_or_404(chassi)

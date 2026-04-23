@@ -167,7 +167,13 @@ class Usuario(db.Model, UserMixin):
         return self.sistema_remessa_vortx or self.perfil == 'administrador'
 
     def pode_acessar_lojas(self):
-        """Verifica se pode acessar o modulo Lojas HORA (varejo B2C)."""
+        """Verifica se pode acessar o modulo Lojas HORA (varejo B2C).
+
+        Usuario com status != 'ativo' (bloqueado, rejeitado, pendente) NAO acessa,
+        mesmo com sistema_lojas=True. Admin segue o mesmo gate.
+        """
+        if self.status != 'ativo':
+            return False
         return self.sistema_lojas or self.perfil == 'administrador'
 
     def lojas_hora_ids_permitidas(self):
@@ -182,6 +188,47 @@ class Usuario(db.Model, UserMixin):
         if self.loja_hora_id is None:
             return None
         return [self.loja_hora_id]
+
+    def tem_perm_hora(self, modulo: str, acao: str = 'ver') -> bool:
+        """Atalho para checar permissao granular HORA em templates Jinja.
+
+        Admin com status='ativo' sempre True; usuario com status != 'ativo' False;
+        usuario sem sistema_lojas e nao-admin False.
+        Demais casos consultam tabela hora_user_permissao via service.
+
+        Usa cache por instancia (`_hora_perm_cache`) para evitar N+1 quando o
+        template chama este metodo varias vezes (uma por link no menu).
+        Como `current_user` e resolvido 1x por request pelo flask-login, o cache
+        fica per-request naturalmente.
+        """
+        # Validacao de inputs primeiro — typo no template falha rapido para todos
+        # (incluindo admin), evitando que strings invalidas vazem silenciosas.
+        try:
+            from app.hora.services.permissao_service import (
+                get_matriz, _validar_modulo, _validar_acao,
+            )
+        except ImportError:
+            return False
+        try:
+            _validar_modulo(modulo)
+            _validar_acao(acao)
+        except ValueError:
+            return False
+
+        # Gates rapidos (sem query) — inativo/admin/sem sistema_lojas.
+        if self.status != 'ativo':
+            return False
+        if self.perfil == 'administrador':
+            return True
+        if not self.sistema_lojas:
+            return False
+
+        # Cache por instancia (per-request via current_user).
+        cache = getattr(self, '_hora_perm_cache', None)
+        if cache is None:
+            cache = get_matriz(self.id)
+            self._hora_perm_cache = cache
+        return cache.get(modulo, {}).get(acao, False)
 
     def __repr__(self):
         return f'<Usuario {self.email}>'

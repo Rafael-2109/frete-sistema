@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
-from app.hora.decorators import require_lojas as login_required
+from app.hora.decorators import require_hora_perm
 
 from app.hora.models import HoraLoja, HoraPedido, HoraNfEntrada
 from app.hora.routes import hora_bp
@@ -24,7 +24,7 @@ from app.hora.services.parsers import (
 
 
 @hora_bp.route('/pedidos')
-@login_required
+@require_hora_perm('pedidos', 'ver')
 def pedidos_lista():
     status = request.args.get('status') or None
     pedidos = pedido_service.listar_pedidos(
@@ -48,7 +48,7 @@ def pedidos_lista():
 
 
 @hora_bp.route('/pedidos/<int:pedido_id>')
-@login_required
+@require_hora_perm('pedidos', 'ver')
 def pedidos_detalhe(pedido_id: int):
     pedido = HoraPedido.query.get_or_404(pedido_id)
     # Autorização por loja_destino
@@ -79,7 +79,7 @@ def pedidos_detalhe(pedido_id: int):
 
 
 @hora_bp.route('/pedidos/novo', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('pedidos', 'criar')
 def pedidos_novo():
     """Formulário simples manual (para P3a). Import Excel virá em P3b."""
     if request.method == 'POST':
@@ -191,7 +191,7 @@ def _deserializar_extracao(token: str):
 
 
 @hora_bp.route('/pedidos/importar-xlsx', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('pedidos', 'criar')
 def pedidos_importar_xlsx():
     """Upload de XLSX → parseia → mostra preview com resolução de loja."""
     if request.method == 'GET':
@@ -243,7 +243,7 @@ def pedidos_importar_xlsx():
 
 
 @hora_bp.route('/pedidos/importar-xlsx/confirmar', methods=['POST'])
-@login_required
+@require_hora_perm('pedidos', 'criar')
 def pedidos_importar_xlsx_confirmar():
     """Confirma a importação: cria HoraPedido a partir da extração preservada."""
     token = request.form.get('token')
@@ -280,7 +280,7 @@ def pedidos_importar_xlsx_confirmar():
 # ========================================================================
 
 @hora_bp.route('/pedidos/<int:pedido_id>/completar-chassis', methods=['GET'])
-@login_required
+@require_hora_perm('pedidos', 'editar')
 def pedidos_completar_chassis(pedido_id: int):
     """Tela-wizard: pareia item_pedido (chassi=NULL) com nf_item da mesma loja."""
     pedido = HoraPedido.query.get_or_404(pedido_id)
@@ -315,7 +315,7 @@ def pedidos_completar_chassis(pedido_id: int):
 
 
 @hora_bp.route('/pedidos/<int:pedido_id>/completar-chassis', methods=['POST'])
-@login_required
+@require_hora_perm('pedidos', 'editar')
 def pedidos_completar_chassis_aplicar(pedido_id: int):
     """Recebe pares pedido_item_id + nf_item_id e aplica em transacao."""
     pedido = HoraPedido.query.get_or_404(pedido_id)
@@ -366,7 +366,7 @@ def pedidos_completar_chassis_aplicar(pedido_id: int):
     '/pedidos/<int:pedido_id>/itens/<int:item_id>/editar',
     methods=['POST'],
 )
-@login_required
+@require_hora_perm('pedidos', 'editar')
 def pedidos_editar_item(pedido_id: int, item_id: int):
     pedido = HoraPedido.query.get_or_404(pedido_id)
     is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'

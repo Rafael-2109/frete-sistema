@@ -15,7 +15,7 @@ from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 from sqlalchemy.exc import IntegrityError
 from app import db
-from app.hora.decorators import require_lojas as login_required
+from app.hora.decorators import require_hora_perm
 
 from app.hora.models import (
     HoraLoja,
@@ -44,7 +44,7 @@ def _op_name() -> str | None:
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/recebimentos')
-@login_required
+@require_hora_perm('recebimentos', 'ver')
 def recebimentos_lista():
     loja_id_str = request.args.get('loja_id') or ''
     status = request.args.get('status') or None
@@ -73,7 +73,7 @@ def recebimentos_lista():
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/recebimentos/novo', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('recebimentos', 'criar')
 def recebimentos_novo():
     if request.method == 'POST':
         try:
@@ -103,7 +103,7 @@ def recebimentos_novo():
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/qtd', methods=['GET', 'POST'])
-@login_required
+@require_hora_perm('recebimentos', 'editar')
 def recebimentos_qtd(recebimento_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -128,7 +128,7 @@ def recebimentos_qtd(recebimento_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/wizard')
-@login_required
+@require_hora_perm('recebimentos', 'editar')
 def recebimentos_wizard(recebimento_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -177,7 +177,7 @@ def recebimentos_wizard(recebimento_id: int):
 
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/validar-chassi')
-@login_required
+@require_hora_perm('recebimentos', 'ver')
 def recebimentos_validar_chassi(recebimento_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -190,7 +190,7 @@ def recebimentos_validar_chassi(recebimento_id: int):
 
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/conferir', methods=['POST'])
-@login_required
+@require_hora_perm('recebimentos', 'editar')
 def recebimentos_conferir(recebimento_id: int):
     """Recebe submissao do wizard. JSON por padrao."""
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
@@ -248,7 +248,7 @@ def recebimentos_conferir(recebimento_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>')
-@login_required
+@require_hora_perm('recebimentos', 'ver')
 def recebimentos_detalhe(recebimento_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -273,7 +273,7 @@ def recebimentos_detalhe(recebimento_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/alterar-qtd', methods=['POST'])
-@login_required
+@require_hora_perm('recebimentos', 'editar')
 def recebimentos_alterar_qtd(recebimento_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -291,7 +291,7 @@ def recebimentos_alterar_qtd(recebimento_id: int):
 
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/reconferir', methods=['POST'])
-@login_required
+@require_hora_perm('recebimentos', 'editar')
 def recebimentos_reconferir(recebimento_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -320,7 +320,7 @@ def recebimentos_reconferir(recebimento_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/finalizar', methods=['POST'])
-@login_required
+@require_hora_perm('recebimentos', 'editar')
 def recebimentos_finalizar(recebimento_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -341,7 +341,7 @@ def recebimentos_finalizar(recebimento_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/recebimentos/<int:recebimento_id>/resolver')
-@login_required
+@require_hora_perm('recebimentos', 'ver')
 def recebimentos_resolver(recebimento_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -363,7 +363,7 @@ def recebimentos_resolver(recebimento_id: int):
     '/recebimentos/<int:recebimento_id>/resolver/<int:conferencia_id>',
     methods=['POST'],
 )
-@login_required
+@require_hora_perm('recebimentos', 'editar')
 def recebimentos_resolver_aplicar(recebimento_id: int, conferencia_id: int):
     rec = HoraRecebimento.query.get_or_404(recebimento_id)
     if not usuario_tem_acesso_a_loja(rec.loja_id):
@@ -403,7 +403,7 @@ def recebimentos_resolver_aplicar(recebimento_id: int, conferencia_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/modelos/criar-rapido', methods=['POST'])
-@login_required
+@require_hora_perm('modelos', 'criar')
 def modelos_criar_rapido():
     nome = (request.form.get('nome_modelo') or '').strip()
     if not nome:
