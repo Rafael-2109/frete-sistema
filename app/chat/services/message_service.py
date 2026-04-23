@@ -23,6 +23,15 @@ def _is_active_member(user_id: int, thread_id: int) -> bool:
     ).first() is not None
 
 
+def _escape_like(value: str) -> str:
+    """Escape SQL LIKE metacaracteres. `_` e `%` sao wildcards, `\\` e o escape char.
+
+    Sem isso, mentions como @user_123 viram `LIKE 'user_123@%'` que casa com
+    qualquer email de 8 chars + `@` (user_ aaa, userXaaa, etc.) — matches falsos.
+    """
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 class MessageService:
 
     @staticmethod
@@ -66,7 +75,10 @@ class MessageService:
                 ).all()
             }
             resolved = db.session.query(Usuario).filter(
-                db.or_(*[Usuario.email.like(f'{u}@%') for u in usernames])
+                db.or_(*[
+                    Usuario.email.like(f'{_escape_like(u)}@%', escape='\\')
+                    for u in usernames
+                ])
             ).all()
             for u in resolved:
                 if u.id in member_ids and u.id != sender.id:

@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch
 import uuid
 
+from app import db
 from app.chat.services.message_service import MessageService, MessageError
 from app.chat.services.thread_service import ThreadService
 from app.chat.models import ChatMessage, ChatMention
@@ -57,7 +58,28 @@ def test_send_with_mentions_persists_rows(mock_pub, db_session, user_factory):
     assert any(m.mentioned_user_id == b.id for m in mentions)
 
 
-def test_edit_within_window(db_session, user_factory):
+@patch('app.chat.realtime.publisher.publish')
+def test_send_with_mention_escapes_like_wildcards(mock_pub, db_session, user_factory):
+    """Regression: `_` e wildcard LIKE single-char. Sem escape, @user_1 casa com userX1,
+    userY1, etc. Garantir que mention literal com `_` so resolve o usuario exato."""
+    u_exato = user_factory(email=f'userWS_1_{_RUN}@t.local')
+    u_falso = user_factory(email=f'userWSX1_{_RUN}@t.local')  # casaria sem escape
+    thread = ThreadService.get_or_create_dm(u_exato, u_falso)
+
+    msg = MessageService.send(
+        sender=u_exato, thread_id=thread.id,
+        content=f'ola @userWS_1_{_RUN} (literal)',
+    )
+    mentioned_ids = {
+        m.mentioned_user_id for m in ChatMention.query.filter_by(message_id=msg.id).all()
+    }
+    # Apenas u_exato referenciado por mention (u_exato tambem nao pode se auto-mencionar,
+    # entao mentioned_ids pode estar vazio — o importante e NAO incluir u_falso).
+    assert u_falso.id not in mentioned_ids
+
+
+@patch('app.chat.realtime.publisher.publish')
+def test_edit_within_window(mock_pub, db_session, user_factory):
     a = user_factory(email=f'ed_a_{_RUN}@t.local')
     b = user_factory(email=f'ed_b_{_RUN}@t.local')
     thread = ThreadService.get_or_create_dm(a, b)
@@ -67,12 +89,15 @@ def test_edit_within_window(db_session, user_factory):
     assert edited.editado_em is not None
 
 
-def test_soft_delete(db_session, user_factory):
+@patch('app.chat.realtime.publisher.publish')
+def test_soft_delete(mock_pub, db_session, user_factory):
     a = user_factory(email=f'del_a_{_RUN}@t.local')
     b = user_factory(email=f'del_b_{_RUN}@t.local')
     thread = ThreadService.get_or_create_dm(a, b)
     msg = MessageService.send(sender=a, thread_id=thread.id, content='tchau')
     MessageService.delete(user=a, message_id=msg.id)
-    reloaded = ChatMessage.query.get(msg.id)
+    db.session.expire_all()  # forcar SELECT em vez de identity map
+    reloaded = db.session.get(ChatMessage, msg.id)
+    assert reloaded is not None
     assert reloaded.deletado_em is not None
     assert reloaded.deletado_por_id == a.id
