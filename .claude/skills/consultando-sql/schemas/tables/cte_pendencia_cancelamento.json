@@ -70,9 +70,9 @@
   ],
   "indices": [
     {
-      "name": "ix_cte_pendencia_cancelamento_cte_id",
+      "name": "ix_cte_pendencia_cancelamento_chave_acesso",
       "columns": [
-        "cte_id"
+        "chave_acesso"
       ],
       "unique": false
     },
@@ -91,9 +91,9 @@
       "unique": false
     },
     {
-      "name": "ix_cte_pendencia_cancelamento_chave_acesso",
+      "name": "ix_cte_pendencia_cancelamento_cte_id",
       "columns": [
-        "chave_acesso"
+        "cte_id"
       ],
       "unique": false
     },

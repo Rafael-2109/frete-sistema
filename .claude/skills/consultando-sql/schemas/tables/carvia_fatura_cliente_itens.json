@@ -109,9 +109,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_cliente_itens_nf_id",
+      "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
       "columns": [
-        "nf_id"
+        "fatura_cliente_id"
       ],
       "unique": false
     },
@@ -123,9 +123,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
+      "name": "ix_carvia_fatura_cliente_itens_nf_id",
       "columns": [
-        "fatura_cliente_id"
+        "nf_id"
       ],
       "unique": false
     }
