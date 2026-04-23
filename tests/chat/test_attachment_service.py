@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 from io import BytesIO
 
 from app.chat.services.attachment_service import (
-    AttachmentService, AttachmentError, ALLOWED_MIME_TYPES, MAX_SIZE_BYTES,
+    AttachmentService, AttachmentError, MAX_SIZE_BYTES,
 )
 
 

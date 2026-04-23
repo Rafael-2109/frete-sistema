@@ -1,12 +1,12 @@
 """Upload de anexos para S3 + validacao."""
 import os
 import uuid
-from datetime import datetime
 from typing import BinaryIO, Optional
 
 import boto3
 
 from app.utils.logging_config import logger
+from app.utils.timezone import agora_utc_naive
 
 
 MAX_SIZE_BYTES = 20 * 1024 * 1024  # 20MB
@@ -51,7 +51,7 @@ class AttachmentService:
         self.validate_upload(stream, filename, mime_type, size)
         key = (
             f'chat/attachments/{user_id}/'
-            f'{datetime.utcnow():%Y/%m/%d}/'
+            f'{agora_utc_naive():%Y/%m/%d}/'
             f'{uuid.uuid4().hex}_{filename}'
         )
         client = boto3.client('s3', region_name=S3_REGION)
