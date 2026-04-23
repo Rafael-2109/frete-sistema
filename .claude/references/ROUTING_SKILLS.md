@@ -35,6 +35,10 @@
 | PROBLEMA COMPLEXO (investigacao, root cause) | "resolver problema complexo em...", "investigar bug em...", "por que X esta...", "analisar modulo completo", "mapear dependencias", "root cause analysis" | -> `resolvendo-problemas` |
 | LOJAS HORA — ESTOQUE (motos eletricas B2C) | "quantas motos tenho?", "quanto de <modelo>?", "em transito", "estoque por loja" — APENAS no Agente Lojas HORA | -> `consultando-estoque-loja` |
 | LOJAS HORA — RASTREAR CHASSI | "cade o chassi XYZ?", "historico do chassi", "essa moto foi vendida?", "em que pedido veio" — APENAS no Agente Lojas HORA | -> `rastreando-chassi` |
+| LOJAS HORA — ACOMPANHAR PEDIDO | "meu pedido X ja chegou?", "pedidos pendentes", "faltam quantas motos?" — APENAS no Agente Lojas HORA | -> `acompanhando-pedido` |
+| LOJAS HORA — CONFERENCIA | "como esta a conferencia?", "quantos chassis faltam conferir?", "tem divergencia?" — APENAS no Agente Lojas HORA | -> `conferindo-recebimento` |
+| LOJAS HORA — PECAS FALTANDO | "pecas faltando?", "pecas pendentes", "chassi doador" — APENAS no Agente Lojas HORA | -> `consultando-pecas-faltando` |
+| LOJAS HORA — CROSS-ENTIDADE (orquestra varias skills) | "como esta minha loja hoje?", "o que preciso fazer?", "resumo operacional" — APENAS no Agente Lojas HORA | -> Subagente `orientador-loja` |
 
 ---
 
