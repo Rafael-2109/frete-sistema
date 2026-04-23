@@ -28,6 +28,8 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('estoque', 'Estoque'),
     ('devolucoes', 'Devolucoes'),
     ('pecas', 'Pecas faltando'),
+    ('transferencias', 'Transferencias entre filiais'),
+    ('avarias', 'Avarias'),
 ]
 
 ACOES_HORA: list[tuple[str, str]] = [
