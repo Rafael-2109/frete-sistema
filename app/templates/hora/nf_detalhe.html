@@ -109,24 +109,80 @@
 </form>
 {% endif %}
 
-<h4>Chassis faturados</h4>
+<h4>Chassis faturados <small class="text-muted">— 1ª linha = dados da NF · 2ª linha = vinculo com pedido</small></h4>
 <div class="table-responsive mb-3">
-  <table class="table table-sm table-hover">
+  <table class="table table-sm table-hover align-middle">
     <thead><tr>
       <th>Chassi</th>
       <th>Modelo (texto NF)</th>
       <th>Cor (texto NF)</th>
       <th>Motor (texto NF)</th>
       <th>Preço real</th>
+      <th>Vinculo</th>
     </tr></thead>
     <tbody>
       {% for item in nf.itens %}
-        <tr>
-          <td class="chassi-mono">{{ item.numero_chassi }}</td>
+        {% set v = vinculos_por_chassi.get(item.numero_chassi) %}
+        <tr class="border-top border-2">
+          <td class="chassi-mono">
+            <i class="fas fa-motorcycle text-secondary"></i> {{ item.numero_chassi }}
+          </td>
           <td>{{ item.modelo_texto_original or '—' }}</td>
           <td>{{ item.cor_texto_original or '—' }}</td>
           <td class="chassi-mono small">{{ item.numero_motor_texto_original or '—' }}</td>
-          <td>R$ {{ "%.2f"|format(item.preco_real) }}</td>
+          <td>{{ item.preco_real|valor_br if item.preco_real is not none else '—' }}</td>
+          <td>
+            {% if v and v.vinculado_a_nf %}
+              <span class="badge bg-success"><i class="fas fa-check"></i> casa com pedido</span>
+            {% elif v %}
+              <span class="badge bg-warning text-dark" title="Chassi existe em outro pedido (nao vinculado a esta NF)">
+                <i class="fas fa-exclamation-triangle"></i> pedido diferente
+              </span>
+            {% else %}
+              <span class="badge bg-danger" title="Chassi nao casa com nenhum pedido">
+                <i class="fas fa-unlink"></i> sem pedido
+              </span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr class="{% if not v %}text-muted{% endif %}" style="background-color: rgba(0,0,0,.02);">
+          <td colspan="6" class="ps-4 small">
+            {% if v %}
+              <i class="fas fa-arrow-turn-down {% if v.vinculado_a_nf %}text-success{% else %}text-warning{% endif %} me-1"></i>
+              <strong>Pedido {{ v.pedido.numero_pedido }}</strong>
+              <span class="text-muted">({{ v.pedido.data_pedido.strftime('%d/%m/%Y') }})</span>
+              {% if v.pedido_item.preco_compra_esperado is not none %}
+                · Preço esperado <strong>{{ v.pedido_item.preco_compra_esperado|valor_br }}</strong>
+              {% endif %}
+              {% if item.preco_real is not none and v.pedido_item.preco_compra_esperado is not none %}
+                {% set delta = item.preco_real - v.pedido_item.preco_compra_esperado %}
+                {% if delta != 0 %}
+                  {% if delta > 0 %}
+                    <span class="badge bg-danger ms-1" title="Preço real acima do esperado">
+                      Δ +{{ delta|valor_br }}
+                    </span>
+                  {% else %}
+                    <span class="badge bg-success ms-1" title="Preço real abaixo do esperado">
+                      Δ {{ delta|valor_br }}
+                    </span>
+                  {% endif %}
+                {% else %}
+                  <span class="badge bg-light text-dark ms-1">= esperado</span>
+                {% endif %}
+              {% endif %}
+              · status pedido: <span class="badge badge-status-{{ v.pedido.status|lower }}">{{ v.pedido.status }}</span>
+              {% if not v.vinculado_a_nf %}
+                · <span class="text-warning"><i class="fas fa-exclamation-triangle"></i>
+                  Pedido NAO vinculado a esta NF (chassi aparece em outro pedido).</span>
+              {% endif %}
+              · <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=v.pedido.id) }}" class="text-decoration-none">
+                  <i class="fas fa-external-link-alt"></i> ver pedido
+                </a>
+            {% else %}
+              <i class="fas fa-arrow-turn-down me-1"></i>
+              <em>Chassi extra: nao consta em nenhum pedido cadastrado.</em>
+            {% endif %}
+          </td>
         </tr>
       {% endfor %}
     </tbody>

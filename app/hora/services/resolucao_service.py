@@ -41,7 +41,12 @@ def listar_divergencias(recebimento_id: int):
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
         raise ValueError(f'recebimento {recebimento_id} nao encontrado')
-    divergencias = [c for c in rec.conferencias if c.tipo_divergencia]
+    # Ativas (nao substituidas) que tenham: (a) tipo_divergencia snapshot OU
+    # (b) ao menos 1 linha em hora_conferencia_divergencia (1-N pos-redesign).
+    divergencias = [
+        c for c in rec.conferencias
+        if not c.substituida and (c.tipo_divergencia or c.divergencias)
+    ]
     return divergencias
 
 

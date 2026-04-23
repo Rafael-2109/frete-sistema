@@ -1,289 +1,318 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
+{% set t = comparativo.totais %}
 <div class="d-flex align-items-center justify-content-between mb-3">
-  <h2>Recebimento #{{ recebimento.id }}</h2>
-  <div class="d-flex gap-2 align-items-center">
+  <h2>Recebimento #{{ recebimento.id }} — Resumo</h2>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
     <span class="badge fs-6 badge-status-{{ recebimento.status|lower }}">{{ recebimento.status }}</span>
-    {% set divs = recebimento.conferencias|selectattr('tipo_divergencia')|list %}
-    {% if divs|length > 0 %}
-      <a href="{{ url_for('hora.recebimentos_resolver', recebimento_id=recebimento.id) }}"
-         class="btn btn-sm btn-warning">
-        <i class="fas fa-tools"></i> Resolver divergências ({{ divs|length }})
+    {% if recebimento.status == 'EM_CONFERENCIA' and t.conferido < t.qtd_declarada %}
+      <a href="{{ url_for('hora.recebimentos_wizard', recebimento_id=recebimento.id) }}"
+         class="btn btn-sm btn-primary">
+        <i class="fas fa-arrow-right"></i> Continuar conferência ({{ t.conferido }}/{{ t.qtd_declarada }})
       </a>
     {% endif %}
+    {% if recebimento.status == 'EM_CONFERENCIA' %}
+      <form method="post"
+            action="{{ url_for('hora.recebimentos_finalizar', recebimento_id=recebimento.id) }}"
+            onsubmit="return confirm('Finalizar este recebimento? Chassis da NF sem conferência serão marcados MOTO_FALTANDO.');">
+        <button type="submit" class="btn btn-sm btn-success">
+          <i class="fas fa-check"></i> Finalizar
+        </button>
+      </form>
+    {% endif %}
+    <button type="button" class="btn btn-sm btn-outline-warning"
+            data-bs-toggle="modal" data-bs-target="#modalAjustar">
+      <i class="fas fa-sliders"></i> Ajustar conferência
+    </button>
   </div>
 </div>
 
+<!-- KPIs -->
 <div class="row g-3 mb-4">
-  <div class="col-md-3"><div class="hora-kpi">
+  <div class="col-md-2"><div class="hora-kpi">
     <div class="hora-kpi-label">NF</div>
     <div><a href="{{ url_for('hora.nfs_detalhe', nf_id=recebimento.nf_id) }}">{{ recebimento.nf.numero_nf }}</a></div>
   </div></div>
-  <div class="col-md-3"><div class="hora-kpi">
+  <div class="col-md-2"><div class="hora-kpi">
     <div class="hora-kpi-label">Loja</div>
     <div>{{ recebimento.loja.rotulo_display }}</div>
   </div></div>
-  <div class="col-md-3"><div class="hora-kpi">
-    <div class="hora-kpi-label">Data</div>
-    <div>{{ recebimento.data_recebimento.strftime('%d/%m/%Y') }}</div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Qtd declarada</div>
+    <div class="hora-kpi-valor">{{ t.qtd_declarada }}</div>
   </div></div>
-  <div class="col-md-3"><div class="hora-kpi">
-    <div class="hora-kpi-label">Progresso</div>
-    <div>{{ recebimento.conferencias|length }} / {{ recebimento.nf.itens|length }}</div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Esperado NF</div>
+    <div class="hora-kpi-valor">{{ t.esperado }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Conferidas</div>
+    <div class="hora-kpi-valor">{{ t.conferido }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">OK / Divergentes</div>
+    <div>
+      <span class="badge bg-success">{{ t.ok }} OK</span>
+      <span class="badge bg-warning text-dark">{{ t.com_divergencia }} div.</span>
+    </div>
   </div></div>
 </div>
 
-{% if chassis_esperados_nao_conferidos %}
+{% if t.avarias or t.extras or t.faltantes %}
 <div class="alert alert-warning">
-  <strong>{{ chassis_esperados_nao_conferidos|length }} chassi(s) esperados mas ainda não conferidos:</strong>
-  <div class="chassi-mono small mt-1">{{ chassis_esperados_nao_conferidos|join(', ') }}</div>
+  {% if t.avarias %}<strong><i class="fas fa-triangle-exclamation"></i> {{ t.avarias }} com avaria física.</strong>{% endif %}
+  {% if t.extras %} {{ t.extras }} chassi extra (fora da NF).{% endif %}
+  {% if t.faltantes %} {{ t.faltantes }} chassi da NF faltando.{% endif %}
 </div>
 {% endif %}
 
-{% if chassis_extras %}
-<div class="alert alert-danger">
-  <strong>{{ chassis_extras|length }} chassi(s) conferidos que NÃO estão na NF:</strong>
-  <div class="chassi-mono small mt-1">{{ chassis_extras|join(', ') }}</div>
-</div>
-{% endif %}
-
-{% if recebimento.status == 'EM_CONFERENCIA' %}
-<div class="card p-3 mb-4">
-  <h5>Conferir chassi</h5>
-  <form method="post" action="{{ url_for('hora.recebimentos_conferir', recebimento_id=recebimento.id) }}"
-        id="form-conferencia">
-    <div class="row g-2">
-      <div class="col-md-3">
-        <label class="form-label">Chassi (QR Code) <span class="text-danger">*</span></label>
-        <input type="text" name="numero_chassi" id="input-chassi"
-               class="form-control chassi-mono" required autofocus
-               placeholder="escaneie ou digite"
-               data-validate-url="{{ url_for('hora.recebimentos_validar_chassi', recebimento_id=recebimento.id) }}">
-      </div>
-      <div class="col-md-2 d-flex align-items-end">
-        <div class="form-check">
-          <input type="checkbox" name="qr_code_lido" id="qr_code_lido" class="form-check-input" checked>
-          <label for="qr_code_lido" class="form-check-label">QR Code lido</label>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Divergência (se houver)</label>
-        <select name="tipo_divergencia" id="select-divergencia" class="form-select">
-          <option value="">— Sem divergência (OK) —</option>
-          <option value="MODELO_DIFERENTE">Modelo diferente</option>
-          <option value="COR_DIFERENTE">Cor diferente</option>
-          <option value="MOTOR_DIFERENTE">Motor diferente</option>
-          <option value="AVARIA_FISICA">Avaria física</option>
-          <option value="MOTO_FALTANDO">Moto faltando</option>
-          <option value="CHASSI_EXTRA">Chassi extra (não está na NF)</option>
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">Detalhe</label>
-        <input type="text" name="detalhe_divergencia" class="form-control">
-      </div>
-    </div>
-
-    <!-- Sugestoes de modelo/cor (preenchidas dinamicamente) -->
-    <div id="sugestoes" class="mt-2 small d-none">
-      <div>
-        <strong>Modelos no contexto:</strong>
-        <span id="sug-modelos"></span>
-        <button type="button" class="btn btn-link btn-sm p-0 ms-2" id="btn-criar-modelo">
-          <i class="fas fa-plus"></i> criar novo
-        </button>
-      </div>
-      <div>
-        <strong>Cores no contexto:</strong>
-        <span id="sug-cores"></span>
-      </div>
-    </div>
-
-    <!-- Feedback visual da validação automática -->
-    <div id="chassi-feedback" class="mt-3" style="display: none;">
-      <div class="alert d-flex align-items-start gap-2 mb-0" role="alert">
-        <i class="fas fa-info-circle mt-1"></i>
-        <div class="flex-grow-1">
-          <strong id="feedback-titulo"></strong>
-          <div id="feedback-mensagem" class="small"></div>
-          <div id="feedback-esperado" class="small mt-1"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="mt-3">
-      <button type="submit" class="btn btn-success" id="btn-registrar">Registrar conferência</button>
-    </div>
-  </form>
-</div>
-
-<script>
-(function() {
-  const input = document.getElementById('input-chassi');
-  const feedback = document.getElementById('chassi-feedback');
-  const feedbackAlert = feedback.querySelector('.alert');
-  const feedbackIcon = feedback.querySelector('i');
-  const feedbackTitulo = document.getElementById('feedback-titulo');
-  const feedbackMensagem = document.getElementById('feedback-mensagem');
-  const feedbackEsperado = document.getElementById('feedback-esperado');
-  const selectDiv = document.getElementById('select-divergencia');
-  const sugBox = document.getElementById('sugestoes');
-  const sugModelos = document.getElementById('sug-modelos');
-  const sugCores = document.getElementById('sug-cores');
-  const btnCriarModelo = document.getElementById('btn-criar-modelo');
-  const url = input.dataset.validateUrl;
-
-  // Escape HTML para prevenir XSS quando injetamos dados do backend via innerHTML.
-  // Dados de modelo/cor podem vir de DANFE manipulado com <script> embutido.
-  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, ch => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  }[ch]));
-
-  let debounce;
-
-  function limparFeedback() {
-    feedback.style.display = 'none';
-    feedbackAlert.className = 'alert d-flex align-items-start gap-2 mb-0';
-    sugBox.classList.add('d-none');
-  }
-
-  function setFeedback(tipo, titulo, mensagem, esperado) {
-    feedback.style.display = 'block';
-    feedbackAlert.className = 'alert d-flex align-items-start gap-2 mb-0';
-    const mapClasse = {
-      ok: 'alert-success', aviso: 'alert-warning', erro: 'alert-danger',
-    };
-    const mapIcone = {
-      ok: 'fa-check-circle', aviso: 'fa-exclamation-triangle', erro: 'fa-times-circle',
-    };
-    feedbackAlert.classList.add(mapClasse[tipo] || 'alert-info');
-    feedbackIcon.className = 'fas ' + (mapIcone[tipo] || 'fa-info-circle') + ' mt-1';
-    feedbackTitulo.textContent = titulo;
-    feedbackMensagem.textContent = mensagem || '';
-    feedbackEsperado.innerHTML = esperado || '';
-  }
-
-  function renderSugestoes(data) {
-    if (!data.modelos_sugeridos?.length && !data.cores_sugeridas?.length) {
-      sugBox.classList.add('d-none');
-      return;
-    }
-    sugBox.classList.remove('d-none');
-    sugModelos.innerHTML = (data.modelos_sugeridos || [])
-      .map(m => `<span class="badge bg-light text-dark border me-1">${esc(m)}</span>`)
-      .join('');
-    sugCores.innerHTML = (data.cores_sugeridas || [])
-      .map(c => `<span class="badge bg-light text-dark border me-1">${esc(c)}</span>`)
-      .join('');
-  }
-
-  async function validar() {
-    const chassi = input.value.trim().toUpperCase();
-    if (!chassi || chassi.length < 5) { limparFeedback(); return; }
-
-    try {
-      const resp = await fetch(url + '?chassi=' + encodeURIComponent(chassi));
-      if (!resp.ok) { limparFeedback(); return; }
-      const data = await resp.json();
-
-      let esperadoHtml = '';
-      if (data.modelo_esperado || data.cor_esperada) {
-        esperadoHtml = '<strong>Esperado (NF):</strong> ';
-        if (data.modelo_esperado) esperadoHtml += 'Modelo <code>' + esc(data.modelo_esperado) + '</code> ';
-        if (data.cor_esperada) esperadoHtml += 'Cor <code>' + esc(data.cor_esperada) + '</code>';
-      }
-
-      if (!data.na_nf) {
-        setFeedback('erro', 'CHASSI EXTRA', data.mensagem, esperadoHtml);
-        selectDiv.value = 'CHASSI_EXTRA';
-      } else if (data.ja_conferido) {
-        setFeedback('aviso', 'Já conferido', data.mensagem, esperadoHtml);
-      } else {
-        setFeedback('ok', 'Chassi OK', data.mensagem + ' Compare modelo/cor.', esperadoHtml);
-        if (selectDiv.value === 'CHASSI_EXTRA') selectDiv.value = '';
-      }
-      renderSugestoes(data);
-    } catch (err) {
-      console.error(err);
-      limparFeedback();
-    }
-  }
-
-  input.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(validar, 250); });
-  input.addEventListener('blur', validar);
-  input.addEventListener('change', validar);
-
-  // Criar modelo rapido (inline)
-  btnCriarModelo.addEventListener('click', async () => {
-    const nome = prompt('Nome do novo modelo:');
-    if (!nome) return;
-    const fd = new FormData();
-    fd.append('nome_modelo', nome.trim());
-    try {
-      const r = await fetch("{{ url_for('hora.modelos_criar_rapido') }}",
-                            { method: 'POST', body: fd });
-      const data = await r.json();
-      if (!data.ok) { alert('Erro: ' + (data.erro || 'falha')); return; }
-      const novo = `<span class="badge bg-success border me-1">${esc(data.nome_modelo)} (novo)</span>`;
-      sugModelos.innerHTML = novo + sugModelos.innerHTML;
-    } catch (e) { alert('Erro: ' + e); }
-  });
-})();
-</script>
-{% endif %}
-
-<h4>Conferências registradas</h4>
+<!-- Comparativo lado a lado: Recebimento vs NF -->
+<h4>Conferência × NF <small class="text-muted">— lado a lado por chassi</small></h4>
+<form method="post" action="{{ url_for('hora.recebimentos_reconferir', recebimento_id=recebimento.id) }}"
+      id="form-reconferir">
 <div class="table-responsive mb-3">
-  <table class="table table-sm table-hover">
-    <thead><tr>
-      <th>Chassi</th>
-      <th>Conferido em</th>
-      <th>QR</th>
-      <th>Divergência</th>
-      <th>Detalhe</th>
-      <th>Operador</th>
-    </tr></thead>
+  <table class="table table-sm table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th style="width:30px;" class="text-center reconf-col d-none">
+          <i class="fas fa-check-square" title="Selecionar para reconferir"></i>
+        </th>
+        <th style="width:60px;">#</th>
+        <th>Chassi</th>
+        <th colspan="3" class="border-start bg-success-subtle">Conferido (físico)</th>
+        <th colspan="3" class="border-start bg-info-subtle">NF (esperado)</th>
+        <th>Status</th>
+      </tr>
+      <tr>
+        <th class="reconf-col d-none"></th>
+        <th></th>
+        <th></th>
+        <th class="border-start">Modelo</th>
+        <th>Cor</th>
+        <th>Avaria</th>
+        <th class="border-start">Modelo</th>
+        <th>Cor</th>
+        <th>Motor</th>
+        <th></th>
+      </tr>
+    </thead>
     <tbody>
-      {% for c in recebimento.conferencias %}
-        <tr class="{% if c.tipo_divergencia %}table-warning{% endif %}">
-          <td class="chassi-mono">{{ c.numero_chassi }}</td>
-          <td><small>{{ c.conferido_em.strftime('%d/%m %H:%M') }}</small></td>
-          <td>{% if c.qr_code_lido %}<i class="fas fa-qrcode text-success"></i>{% else %}—{% endif %}</td>
-          <td>
-            {% if c.tipo_divergencia %}
-              <span class="badge hora-badge-divergencia">{{ c.tipo_divergencia }}</span>
-            {% else %}
-              <span class="badge bg-success">OK</span>
+      {% for linha in comparativo.linhas %}
+        {% set conf = linha.conferencia %}
+        {% set nf_item = linha.nf_item %}
+        {% set row_class = {
+          'OK': 'table-success',
+          'DIVERGENTE': 'table-warning',
+          'EXTRA': 'table-danger',
+          'FALTANDO': 'table-secondary',
+        }.get(linha.status, '') %}
+        <tr class="{{ row_class }}">
+          <td class="text-center reconf-col d-none">
+            {% if conf %}
+              <input type="checkbox" name="conferencia_id[]" value="{{ conf.id }}"
+                     class="form-check-input reconf-check">
             {% endif %}
           </td>
-          <td><small>{{ c.detalhe_divergencia or '' }}</small></td>
-          <td>{{ c.operador or '—' }}</td>
+          <td>{% if conf %}<small class="text-muted">#{{ conf.ordem }}</small>{% endif %}</td>
+          <td class="chassi-mono">
+            <i class="fas fa-motorcycle"></i> {{ linha.chassi }}
+          </td>
+
+          <!-- Conferido -->
+          <td class="border-start">
+            {% if conf and conf.modelo_conferido %}
+              {{ conf.modelo_conferido.nome_modelo }}
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td>{{ conf.cor_conferida if conf and conf.cor_conferida else '—' }}</td>
+          <td class="text-center">
+            {% if conf and conf.avaria_fisica %}
+              <span class="badge bg-danger" title="Avaria fisica marcada">
+                <i class="fas fa-triangle-exclamation"></i> Avaria
+              </span>
+            {% else %}—{% endif %}
+          </td>
+
+          <!-- NF -->
+          <td class="border-start">
+            {{ nf_item.modelo_texto_original if nf_item and nf_item.modelo_texto_original else '—' }}
+          </td>
+          <td>{{ nf_item.cor_texto_original if nf_item and nf_item.cor_texto_original else '—' }}</td>
+          <td class="chassi-mono small">
+            {{ nf_item.numero_motor_texto_original if nf_item and nf_item.numero_motor_texto_original else '—' }}
+          </td>
+
+          <!-- Status + divergencias compactas -->
+          <td>
+            {% if linha.status == 'OK' %}
+              <span class="badge bg-success"><i class="fas fa-check"></i> bate</span>
+            {% elif linha.status == 'FALTANDO' %}
+              <span class="badge bg-secondary"><i class="fas fa-ghost"></i> não conferida</span>
+            {% elif linha.status == 'EXTRA' %}
+              <span class="badge bg-danger"><i class="fas fa-plus"></i> extra (não NF)</span>
+            {% else %}
+              {% for d in linha.divergencias %}
+                <span class="badge bg-warning text-dark"
+                      title="{{ d.detalhe or '' }}">{{ d.tipo }}</span>
+              {% endfor %}
+            {% endif %}
+          </td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="text-center text-muted">Nenhum chassi conferido ainda.</td></tr>
+        <tr><td colspan="10" class="text-center text-muted">Sem dados.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 
-{% if recebimento.status == 'EM_CONFERENCIA' %}
-<form method="post" action="{{ url_for('hora.recebimentos_finalizar', recebimento_id=recebimento.id) }}"
-      onsubmit="return confirm('Finalizar este recebimento? Não será possível registrar novas conferências.');">
-  <div class="form-check mb-2">
-    <input type="checkbox" name="marcar_faltantes_em_batch" id="batch" class="form-check-input"
-           {% if chassis_esperados_nao_conferidos %}checked{% endif %}>
-    <label for="batch" class="form-check-label">
-      Marcar chassis esperados não conferidos como <strong>MOTO_FALTANDO</strong> em batch
-      ({{ chassis_esperados_nao_conferidos|length }})
-    </label>
+<!-- Barra de ação visível apenas quando modo "Selecionar motos" está ativo -->
+<div id="reconf-bar" class="d-none mb-3">
+  <div class="alert alert-info d-flex align-items-center gap-2">
+    <i class="fas fa-info-circle"></i>
+    <div class="flex-grow-1">
+      <strong><span id="reconf-count">0</span></strong> moto(s) selecionada(s) para reconferência.
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm" id="btn-reconf-submit" disabled>
+      <i class="fas fa-redo"></i> Reiniciar conferência destas motos
+    </button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-reconf-cancel">
+      Cancelar
+    </button>
   </div>
-  <button type="submit" class="btn btn-primary">
-    <i class="fas fa-check"></i> Finalizar recebimento
-  </button>
-  <a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Voltar</a>
+</div>
 </form>
-{% else %}
-<a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Voltar</a>
+
+<!-- Divergências por resolver -->
+{% set por_resolver = [] %}
+{% for linha in comparativo.linhas %}
+  {% if linha.conferencia and (linha.divergencias or linha.status != 'OK') %}
+    {% set _ = por_resolver.append(linha) %}
+  {% endif %}
+{% endfor %}
+{% if por_resolver and recebimento.status in ('COM_DIVERGENCIA', 'EM_CONFERENCIA') %}
+<div class="mb-3">
+  <a href="{{ url_for('hora.recebimentos_resolver', recebimento_id=recebimento.id) }}"
+     class="btn btn-sm btn-warning">
+    <i class="fas fa-tools"></i> Resolver divergências ({{ por_resolver|length }})
+  </a>
+</div>
 {% endif %}
+
+<!-- Auditoria -->
+<h4 class="mt-4">Auditoria da conferência</h4>
+<div class="table-responsive mb-3">
+  <table class="table table-sm">
+    <thead class="table-light"><tr>
+      <th>Quando</th>
+      <th>Usuário</th>
+      <th>Ação</th>
+      <th>Conf.</th>
+      <th>Campo</th>
+      <th>Antes</th>
+      <th>Depois</th>
+      <th>Detalhe</th>
+    </tr></thead>
+    <tbody>
+      {% for a in auditorias %}
+        <tr>
+          <td><small>{{ a.criado_em.strftime('%d/%m %H:%M:%S') }}</small></td>
+          <td><small>{{ a.usuario or '—' }}</small></td>
+          <td><span class="badge bg-secondary">{{ a.acao }}</span></td>
+          <td><small>{{ a.conferencia_id or '—' }}</small></td>
+          <td><small>{{ a.campo_alterado or '' }}</small></td>
+          <td><small class="text-muted">{{ a.valor_antes or '' }}</small></td>
+          <td><small><strong>{{ a.valor_depois or '' }}</strong></small></td>
+          <td><small>{{ a.detalhe or '' }}</small></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="text-center text-muted">Sem auditorias.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Voltar</a>
+
+<!-- ==================================================================== -->
+<!-- Modal Ajustar conferência -->
+<!-- ==================================================================== -->
+<div class="modal fade" id="modalAjustar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-sliders"></i> Ajustar conferência</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-grid gap-2">
+          <button type="button" class="btn btn-outline-primary text-start" id="btn-modo-qtd">
+            <i class="fas fa-hashtag"></i>
+            <strong>Alterar qtd total</strong>
+            <br><small class="text-muted">Atual: {{ t.qtd_declarada }} — ficará auditado.</small>
+          </button>
+          <button type="button" class="btn btn-outline-primary text-start" id="btn-modo-reconf"
+                  data-bs-dismiss="modal">
+            <i class="fas fa-list-check"></i>
+            <strong>Reconferir motos ({{ t.conferido }} confirmada(s))</strong>
+            <br><small class="text-muted">
+              Selecione na tabela quais refazer. Elas voltam para a fila do wizard
+              com campos pré-preenchidos.
+            </small>
+          </button>
+        </div>
+
+        <!-- Sub-form alterar qtd -->
+        <form method="post" id="form-alterar-qtd" class="mt-3 d-none"
+              action="{{ url_for('hora.recebimentos_alterar_qtd', recebimento_id=recebimento.id) }}">
+          <div class="mb-2">
+            <label class="form-label">Nova qtd total</label>
+            <input type="number" name="qtd_declarada" class="form-control"
+                   value="{{ t.qtd_declarada }}" min="1" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Confirmar alteração</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const reconfCols = document.querySelectorAll('.reconf-col');
+  const reconfBar = document.getElementById('reconf-bar');
+  const reconfCount = document.getElementById('reconf-count');
+  const formReconf = document.getElementById('form-reconferir');
+  const btnCancel = document.getElementById('btn-reconf-cancel');
+
+  function setModoReconf(on) {
+    reconfCols.forEach(c => c.classList.toggle('d-none', !on));
+    reconfBar.classList.toggle('d-none', !on);
+    if (!on) {
+      document.querySelectorAll('.reconf-check').forEach(c => c.checked = false);
+      reconfCount.textContent = '0';
+    }
+  }
+  document.getElementById('btn-modo-reconf').addEventListener('click', () => setModoReconf(true));
+  btnCancel.addEventListener('click', () => setModoReconf(false));
+  const btnSubmitReconf = document.getElementById('btn-reconf-submit');
+  formReconf.addEventListener('change', () => {
+    const n = document.querySelectorAll('.reconf-check:checked').length;
+    reconfCount.textContent = String(n);
+    btnSubmitReconf.disabled = (n === 0);
+  });
+  // Proteção server-side adicional: bloqueia submit com 0 selecionados.
+  formReconf.addEventListener('submit', (e) => {
+    const n = document.querySelectorAll('.reconf-check:checked').length;
+    if (n === 0) {
+      e.preventDefault();
+      alert('Selecione ao menos uma moto para reconferir.');
+    }
+  });
+
+  document.getElementById('btn-modo-qtd').addEventListener('click', () => {
+    document.getElementById('form-alterar-qtd').classList.remove('d-none');
+  });
+})();
+</script>
 {% endblock %}

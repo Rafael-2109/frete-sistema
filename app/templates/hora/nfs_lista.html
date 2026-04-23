@@ -46,10 +46,37 @@
             {% endif %}
           </td>
           <td>
+            {% set r = resumos.get(nf.id, {}) %}
             {% if nf.pedido_id %}
-              <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=nf.pedido_id) }}">{{ nf.pedido.numero_pedido }}</a>
+              <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=nf.pedido_id) }}"
+                 class="fw-semibold">
+                <i class="fas fa-link"></i> {{ nf.pedido.numero_pedido }}
+              </a>
+              {% set match = r.get('match', 0) %}
+              {% set total_nf = r.get('total_nf', nf.itens|length) %}
+              {% if match == total_nf and total_nf > 0 %}
+                <span class="badge bg-success" title="Todos chassis da NF casam com o pedido">
+                  {{ match }}/{{ total_nf }}
+                </span>
+              {% elif match > 0 %}
+                <span class="badge bg-warning text-dark"
+                      title="{{ total_nf - match }} chassi(s) da NF nao estao no pedido vinculado">
+                  {{ match }}/{{ total_nf }}
+                </span>
+              {% else %}
+                <span class="badge bg-danger"
+                      title="Nenhum chassi da NF casa com o pedido vinculado — possivel vinculo errado">
+                  0/{{ total_nf }}
+                </span>
+              {% endif %}
             {% else %}
-              <span class="text-muted">sem pedido</span>
+              <span class="badge bg-warning text-dark"><i class="fas fa-unlink"></i> sem pedido</span>
+              {% if nf.loja_destino_id %}
+                <a href="{{ url_for('hora.nfs_match', nf_id=nf.id) }}"
+                   class="btn btn-sm btn-outline-primary ms-1" title="Vincular via match">
+                  <i class="fas fa-link"></i>
+                </a>
+              {% endif %}
             {% endif %}
           </td>
           <td>

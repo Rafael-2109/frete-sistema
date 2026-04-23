@@ -57,7 +57,14 @@ def nfs_lista():
         limit=200,
         lojas_permitidas_ids=lojas_permitidas_ids(),
     )
-    return render_template('hora/nfs_lista.html', nfs=nfs)
+    # Bulk: chassis de cada pedido vinculado (1 query vs N).
+    pedido_ids = list({nf.pedido_id for nf in nfs if nf.pedido_id})
+    chassis_por_pedido = matching_service.chassis_pedido_batch(pedido_ids)
+    resumos = {
+        nf.id: matching_service.resumo_vinculo_nf(nf, chassis_por_pedido)
+        for nf in nfs
+    }
+    return render_template('hora/nfs_lista.html', nfs=nfs, resumos=resumos)
 
 
 @hora_bp.route('/nfs/<int:nf_id>')
@@ -79,11 +86,16 @@ def nfs_detalhe(nf_id: int):
             loja_id=nf.loja_destino_id,
             limit=50,
         )
+
+    # Vinculo por chassi: {chassi: {'pedido': ..., 'pedido_item': ..., 'vinculado_a_nf': bool}}
+    vinculos = matching_service.vinculo_por_chassi_nf(nf.id)
+
     return render_template(
         'hora/nf_detalhe.html',
         nf=nf,
         pedidos_disponiveis=pedidos_disponiveis,
         lojas_ativas=lojas_ativas,
+        vinculos_por_chassi=vinculos,
     )
 
 

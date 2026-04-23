@@ -23,8 +23,8 @@ class HoraPedido(db.Model):
     # Selecionado manualmente no import (ou auto-sugerido via match do apelido no header).
 
     data_pedido = db.Column(db.Date, nullable=False)
-    status = db.Column(db.String(20), nullable=False, default='ABERTO', index=True)
-    # Valores: ABERTO, PARCIALMENTE_FATURADO, FATURADO, CANCELADO
+    status = db.Column(db.String(30), nullable=False, default='ABERTO', index=True)
+    # Valores: ABERTO, PARCIALMENTE_FATURADO (22 char), FATURADO, CANCELADO
 
     arquivo_origem_s3_key = db.Column(db.String(500), nullable=True)
     # Excel original (quando importado do WhatsApp).

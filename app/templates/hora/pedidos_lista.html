@@ -32,11 +32,20 @@
       <th>Data</th>
       <th>Loja Destino</th>
       <th>Itens</th>
+      <th>Faturamento</th>
       <th>Status</th>
       <th></th>
     </tr></thead>
     <tbody>
       {% for p in pedidos %}
+        {% set r = resumos.get(p.id, {'total': p.itens|length, 'faturados': 0, 'pendentes_chassi': 0, 'pct': 0}) %}
+        {% if r.pct >= 100 %}
+          {% set fat_color = 'success' %}
+        {% elif r.pct > 0 %}
+          {% set fat_color = 'warning' %}
+        {% else %}
+          {% set fat_color = 'secondary' %}
+        {% endif %}
         <tr>
           <td><small>{{ p.id }}</small></td>
           <td><strong>{{ p.numero_pedido }}</strong></td>
@@ -48,7 +57,22 @@
               <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> sem loja</span>
             {% endif %}
           </td>
-          <td>{{ p.itens|length }}</td>
+          <td>
+            {{ r.total }}
+            {% if r.pendentes_chassi > 0 %}
+              <span class="badge bg-warning text-dark" title="Chassis ainda nao atribuidos no pedido">
+                <i class="fas fa-hourglass-half"></i> {{ r.pendentes_chassi }} sem chassi
+              </span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge bg-{{ fat_color }}" title="{{ r.faturados }} de {{ r.total }} chassi(s) faturados">
+              <i class="fas fa-file-invoice"></i> {{ r.faturados }}/{{ r.total }}
+            </span>
+            {% if r.pct > 0 and r.pct < 100 %}
+              <small class="text-muted">({{ r.pct }}%)</small>
+            {% endif %}
+          </td>
           <td><span class="badge badge-status-{{ p.status|lower }}">{{ p.status }}</span></td>
           <td>
             <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=p.id) }}"
@@ -56,7 +80,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="7" class="text-center text-muted">Nenhum pedido encontrado.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted">Nenhum pedido encontrado.</td></tr>
       {% endfor %}
     </tbody>
   </table>

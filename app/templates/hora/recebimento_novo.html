@@ -22,7 +22,9 @@
     <select name="loja_id" class="form-select" required>
       <option value="">— Selecione —</option>
       {% for l in lojas %}
-        <option value="{{ l.id }}">{{ l.nome }}</option>
+        <option value="{{ l.id }}">
+          {{ l.rotulo_display }}{% if l.cidade %} — {{ l.cidade }}{% if l.uf %}/{{ l.uf }}{% endif %}{% endif %}
+        </option>
       {% endfor %}
     </select>
   </div>

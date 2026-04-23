@@ -48,31 +48,47 @@
 </div>
 {% endif %}
 
-<h4>Itens do pedido</h4>
+<h4>Itens do pedido <small class="text-muted">— 1 linha = dados do pedido · 2ª linha = vinculo com NF</small></h4>
 <div class="table-responsive mb-4">
-  <table class="table table-sm table-hover">
+  <table class="table table-sm table-hover align-middle">
     <thead><tr>
-      <th>#</th>
+      <th style="width:40px;">#</th>
       <th>Chassi</th>
       <th>Modelo</th>
       <th>Cor</th>
       <th>Preço esperado</th>
-      <th style="width:120px;"></th>
+      <th>Faturamento</th>
+      <th style="width:100px;"></th>
     </tr></thead>
     <tbody>
       {% for item in pedido.itens %}
-        <tr {% if not item.numero_chassi %}class="table-warning"{% endif %}>
-          <td>{{ item.id }}</td>
+        {% set v = vinculos_por_chassi.get(item.numero_chassi) if item.numero_chassi else None %}
+        <tr class="border-top border-2 {% if not item.numero_chassi %}table-warning{% endif %}">
+          <td rowspan="2" class="align-middle text-muted"><small>{{ item.id }}</small></td>
           <td class="chassi-mono">
-            {{ item.numero_chassi or '' }}
-            {% if not item.numero_chassi %}
-              <em class="text-muted">pendente</em>
+            {% if item.numero_chassi %}
+              <i class="fas fa-motorcycle text-secondary"></i> {{ item.numero_chassi }}
+            {% else %}
+              <em class="text-muted"><i class="fas fa-hourglass-half"></i> chassi pendente</em>
             {% endif %}
           </td>
           <td>{{ item.modelo.nome_modelo if item.modelo else '—' }}</td>
           <td>{{ item.cor or '—' }}</td>
-          <td>R$ {{ "%.2f"|format(item.preco_compra_esperado) }}</td>
+          <td>{{ item.preco_compra_esperado|valor_br if item.preco_compra_esperado is not none else '—' }}</td>
           <td>
+            {% if v %}
+              <span class="badge bg-success">
+                <i class="fas fa-check"></i> faturado
+              </span>
+            {% elif item.numero_chassi %}
+              <span class="badge bg-secondary">
+                <i class="fas fa-clock"></i> aguardando NF
+              </span>
+            {% else %}
+              <span class="badge bg-warning text-dark">sem chassi</span>
+            {% endif %}
+          </td>
+          <td rowspan="2" class="align-middle">
             <button type="button" class="btn btn-sm btn-outline-secondary btn-editar-item"
                     data-bs-toggle="modal" data-bs-target="#modalEditarItem"
                     data-item-id="{{ item.id }}"
@@ -82,6 +98,44 @@
               Editar
             </button>
           </td>
+        </tr>
+        <tr class="{% if not v %}text-muted{% endif %}" style="background-color: rgba(0,0,0,.02);">
+          <td colspan="5" class="ps-4 small">
+            {% if v %}
+              <i class="fas fa-arrow-turn-down text-success me-1"></i>
+              <strong>NF {{ v.nf.numero_nf }}</strong>
+              <span class="text-muted">({{ v.nf.data_emissao.strftime('%d/%m/%Y') }})</span>
+              {% if v.nf_item.preco_real is not none %}
+                · Preço real <strong>{{ v.nf_item.preco_real|valor_br }}</strong>
+              {% endif %}
+              {% if v.nf_item.preco_real is not none and item.preco_compra_esperado is not none %}
+                {% set delta = v.nf_item.preco_real - item.preco_compra_esperado %}
+                {% if delta != 0 %}
+                  {% if delta > 0 %}
+                    <span class="badge bg-danger ms-1" title="Preço real acima do esperado">
+                      +{{ delta|valor_br }}
+                    </span>
+                  {% else %}
+                    <span class="badge bg-success ms-1" title="Preço real abaixo do esperado">
+                      {{ delta|valor_br }}
+                    </span>
+                  {% endif %}
+                {% else %}
+                  <span class="badge bg-light text-dark ms-1">= esperado</span>
+                {% endif %}
+              {% endif %}
+              · <a href="{{ url_for('hora.nfs_detalhe', nf_id=v.nf.id) }}" class="text-decoration-none">
+                  <i class="fas fa-external-link-alt"></i> ver NF
+                </a>
+            {% elif item.numero_chassi %}
+              <i class="fas fa-arrow-turn-down me-1"></i>
+              <em>Chassi ainda nao apareceu em nenhuma NF vinculada a este pedido.</em>
+            {% else %}
+              <i class="fas fa-arrow-turn-down me-1"></i>
+              <em>Chassi pendente — sera preenchido quando NF chegar.</em>
+            {% endif %}
+          </td>
+          <td></td>
         </tr>
       {% endfor %}
     </tbody>

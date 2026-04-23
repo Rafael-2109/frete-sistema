@@ -32,7 +32,19 @@ def pedidos_lista():
         limit=200,
         lojas_permitidas_ids=lojas_permitidas_ids(),
     )
-    return render_template('hora/pedidos_lista.html', pedidos=pedidos, filtro_status=status)
+    # Bulk load para evitar N+1 (uma query agregada em vez de N por pedido).
+    pedido_ids = [p.id for p in pedidos]
+    fat_batch = matching_service.chassis_faturados_por_pedido_batch(pedido_ids)
+    resumos = {
+        p.id: matching_service.resumo_faturamento_pedido(p, fat_batch)
+        for p in pedidos
+    }
+    return render_template(
+        'hora/pedidos_lista.html',
+        pedidos=pedidos,
+        filtro_status=status,
+        resumos=resumos,
+    )
 
 
 @hora_bp.route('/pedidos/<int:pedido_id>')
@@ -53,12 +65,16 @@ def pedidos_detalhe(pedido_id: int):
     chassis_nao_faturados = sorted(chassis_pedido - chassis_faturados)
     chassis_extra_em_nf = sorted(chassis_faturados - chassis_pedido)
 
+    # Vinculo por chassi: {chassi: {'nf': ..., 'nf_item': ...}}
+    vinculos = matching_service.vinculos_por_chassi_pedido(pedido.id)
+
     return render_template(
         'hora/pedido_detalhe.html',
         pedido=pedido,
         nfs_vinculadas=nfs_vinculadas,
         chassis_nao_faturados=chassis_nao_faturados,
         chassis_extra_em_nf=chassis_extra_em_nf,
+        vinculos_por_chassi=vinculos,
     )
 
 

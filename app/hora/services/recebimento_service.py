@@ -1,13 +1,26 @@
-"""Service de recebimento físico: conferência por chassi + emissão de eventos."""
+"""Service de recebimento físico: conferência CEGA por chassi + auditoria.
+
+Fluxo:
+  1. iniciar_recebimento(nf_id, loja_id) -> status=AGUARDANDO_QTD
+  2. definir_qtd_declarada(id, qtd)      -> status=EM_CONFERENCIA, ordem=1..qtd
+  3. registrar_conferencia_cega(id, ordem, chassi, modelo_id, cor, avaria, ...)
+     - deriva divergencias 1-N em hora_conferencia_divergencia
+     - grava auditoria
+  4. finalizar_recebimento(id)          -> marca MOTO_FALTANDO em batch + status
+  5. Reconferencia: reiniciar_conferencia_para_chassis(id, [chassis])
+     - cria NOVAS linhas; antigas -> substituida=True (historico 3a)
+"""
 from __future__ import annotations
 
-from app.utils.timezone import agora_utc_naive
 from typing import List, Optional
 
 from app import db
+from app.utils.timezone import agora_utc_naive
 from app.hora.models import (
+    HoraConferenciaDivergencia,
     HoraLoja,
     HoraMoto,
+    HoraModelo,
     HoraNfEntrada,
     HoraNfEntradaItem,
     HoraPedidoItem,
@@ -15,34 +28,47 @@ from app.hora.models import (
     HoraRecebimentoConferencia,
 )
 from app.hora.services.moto_service import registrar_evento
+from app.hora.services import recebimento_audit
 
 
+# MOTOR_DIFERENTE removido: nao existe base para conferir motor.
 TIPOS_DIVERGENCIA = {
     'MODELO_DIFERENTE',
     'COR_DIFERENTE',
     'MOTO_FALTANDO',
     'CHASSI_EXTRA',
-    'MOTOR_DIFERENTE',
     'AVARIA_FISICA',
 }
 
+
+# ========================================================================
+# Helpers
+# ========================================================================
+
+def _normalizar_cor(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    return v.strip().upper() or None
+
+
+def _normalizar_modelo_nome(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    return v.strip().upper() or None
+
+
+# ========================================================================
+# Validacao pre-conferencia (usado pelo wizard ao scanear chassi)
+# ========================================================================
 
 def validar_chassi_contra_recebimento(
     recebimento_id: int,
     numero_chassi: str,
 ) -> dict:
-    """Valida um chassi contra a NF (e pedido vinculado) do recebimento.
+    """Chamada no passo A do wizard, logo apos scan do chassi.
 
-    Retorna dict com:
-        na_nf: bool — chassi presente em algum item da NF do recebimento
-        no_pedido: bool | None — chassi em item do pedido vinculado (None se pedido ausente)
-        ja_conferido: bool — conferência já registrada para este chassi neste recebimento
-        moto_existe: bool — registro HoraMoto existe
-        modelo_esperado: str | None — da NF (texto original) ou do cadastro
-        cor_esperada: str | None
-        motor_esperado: str | None
-        divergencia_sugerida: str | None — enum TIPOS_DIVERGENCIA ou None
-        mensagem: str
+    Retorna dict com contexto para o wizard: item da NF (se existir),
+    sugestoes de modelo/cor, ja_conferido.
     """
     chassi_norm = (numero_chassi or '').strip().upper()
     resultado = {
@@ -50,123 +76,96 @@ def validar_chassi_contra_recebimento(
         'na_nf': False,
         'no_pedido': None,
         'ja_conferido': False,
+        'conferencia_ativa_id': None,
         'moto_existe': False,
         'modelo_esperado': None,
         'cor_esperada': None,
-        'motor_esperado': None,
-        'divergencia_sugerida': None,
         'mensagem': '',
-        # Sugestoes: listas agregadas da NF + pedido + cadastro
         'modelos_sugeridos': [],
         'cores_sugeridas': [],
     }
-
     if not chassi_norm:
         resultado['mensagem'] = 'Chassi vazio.'
-        resultado['divergencia_sugerida'] = 'CHASSI_EXTRA'
         return resultado
 
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
-        resultado['mensagem'] = f'Recebimento {recebimento_id} não encontrado.'
+        resultado['mensagem'] = f'Recebimento {recebimento_id} nao encontrado.'
         return resultado
 
-    # Item da NF com este chassi?
     item_nf = (
         HoraNfEntradaItem.query
         .filter_by(nf_id=rec.nf_id, numero_chassi=chassi_norm)
         .first()
     )
     resultado['na_nf'] = item_nf is not None
-
     if item_nf:
         resultado['modelo_esperado'] = item_nf.modelo_texto_original
         resultado['cor_esperada'] = item_nf.cor_texto_original
-        resultado['motor_esperado'] = item_nf.numero_motor_texto_original
 
-    # HoraMoto existe?
     moto = HoraMoto.query.get(chassi_norm)
     resultado['moto_existe'] = moto is not None
-    if moto and not resultado['modelo_esperado']:
-        resultado['modelo_esperado'] = moto.modelo.nome_modelo if moto.modelo else None
-        resultado['cor_esperada'] = moto.cor
 
-    # Pedido vinculado?
-    if rec.nf and rec.nf.pedido_id:
-        pedido_item = (
+    if rec.nf and rec.nf.pedido_id and rec.nf.pedido:
+        ped_item = (
             HoraPedidoItem.query
             .filter_by(pedido_id=rec.nf.pedido_id, numero_chassi=chassi_norm)
             .first()
         )
-        resultado['no_pedido'] = pedido_item is not None
+        resultado['no_pedido'] = ped_item is not None
 
-    # Já conferido neste recebimento?
-    existente = HoraRecebimentoConferencia.query.filter_by(
-        recebimento_id=recebimento_id,
-        numero_chassi=chassi_norm,
-    ).first()
-    resultado['ja_conferido'] = existente is not None
+    existente = (
+        HoraRecebimentoConferencia.query
+        .filter_by(recebimento_id=recebimento_id, numero_chassi=chassi_norm,
+                   substituida=False)
+        .first()
+    )
+    if existente:
+        resultado['ja_conferido'] = True
+        resultado['conferencia_ativa_id'] = existente.id
 
-    # Sugestoes de modelo/cor para UI: agrega NF + pedido (contexto proximo).
-    # NAO consulta o catalogo geral (hora_modelo) aqui — essa query e chamada
-    # a cada keystroke no input de chassi. Se o operador precisar de um modelo
-    # fora do contexto, usa o botao "criar novo" que faz uma chamada dedicada.
-    modelos = set()
-    cores = set()
-    for item_nf_rec in rec.nf.itens:
-        if item_nf_rec.modelo_texto_original:
-            modelos.add(item_nf_rec.modelo_texto_original.strip())
-        if item_nf_rec.cor_texto_original:
-            cores.add(item_nf_rec.cor_texto_original.strip().upper())
-    if rec.nf.pedido_id:
-        for item_ped in rec.nf.pedido.itens:
-            if item_ped.modelo and item_ped.modelo.nome_modelo:
-                modelos.add(item_ped.modelo.nome_modelo.strip())
-            if item_ped.cor:
-                cores.add(item_ped.cor.strip().upper())
-
+    modelos, cores = set(), set()
+    for i in rec.nf.itens:
+        if i.modelo_texto_original:
+            modelos.add(i.modelo_texto_original.strip())
+        if i.cor_texto_original:
+            cores.add(i.cor_texto_original.strip().upper())
+    if rec.nf.pedido_id and rec.nf.pedido:
+        for pi in rec.nf.pedido.itens:
+            if pi.modelo and pi.modelo.nome_modelo:
+                modelos.add(pi.modelo.nome_modelo.strip())
+            if pi.cor:
+                cores.add(pi.cor.strip().upper())
     resultado['modelos_sugeridos'] = sorted(m for m in modelos if m)
     resultado['cores_sugeridas'] = sorted(c for c in cores if c)
 
-    # Divergência sugerida
     if not resultado['na_nf']:
-        resultado['divergencia_sugerida'] = 'CHASSI_EXTRA'
-        if resultado['no_pedido'] is True:
-            resultado['mensagem'] = (
-                'Chassi está no pedido mas NÃO na NF. Faturamento pode ter errado.'
-            )
-        else:
-            resultado['mensagem'] = (
-                'Chassi NÃO consta na NF deste recebimento. Marque como CHASSI_EXTRA '
-                'ou cancele a leitura.'
-            )
-    elif resultado['ja_conferido']:
         resultado['mensagem'] = (
-            'Chassi já foi conferido neste recebimento — registro existente será atualizado.'
+            'Chassi NAO consta na NF deste recebimento. Sera registrado como CHASSI_EXTRA.'
         )
+    elif resultado['ja_conferido']:
+        resultado['mensagem'] = 'Chassi ja conferido nesta sessao (ativo).'
     else:
-        resultado['mensagem'] = 'Chassi OK — está na NF.'
-        if resultado['no_pedido'] is False:
-            resultado['mensagem'] += ' (mas não consta no pedido — NF tem item extra)'
-
+        resultado['mensagem'] = 'Chassi OK — esta na NF.'
     return resultado
 
+
+# ========================================================================
+# Fluxo principal
+# ========================================================================
 
 def iniciar_recebimento(
     nf_id: int,
     loja_id: int,
     operador: Optional[str] = None,
 ) -> HoraRecebimento:
-    """Cria um recebimento em status EM_CONFERENCIA para uma NF + loja.
-
-    Idempotente: se já existe um recebimento (UNIQUE nf_id+loja_id), retorna ele.
-    """
+    """Cria (ou retorna existente) recebimento em AGUARDANDO_QTD."""
     nf = HoraNfEntrada.query.get(nf_id)
     if not nf:
-        raise ValueError(f"NF {nf_id} não encontrada")
+        raise ValueError(f"NF {nf_id} nao encontrada")
     loja = HoraLoja.query.get(loja_id)
     if not loja:
-        raise ValueError(f"Loja {loja_id} não encontrada")
+        raise ValueError(f"Loja {loja_id} nao encontrada")
 
     existente = HoraRecebimento.query.filter_by(nf_id=nf_id, loja_id=loja_id).first()
     if existente:
@@ -177,199 +176,413 @@ def iniciar_recebimento(
         loja_id=loja_id,
         data_recebimento=agora_utc_naive().date(),
         operador=operador,
-        status='EM_CONFERENCIA',
+        status='AGUARDANDO_QTD',
     )
     db.session.add(rec)
+    db.session.flush()
+    recebimento_audit.registrar(
+        recebimento_id=rec.id,
+        acao='INICIOU_RECEBIMENTO',
+        usuario=operador,
+        detalhe=f'NF {nf.numero_nf} -> loja {loja.rotulo_display}',
+    )
     db.session.commit()
     return rec
 
 
-def registrar_conferencia(
+def definir_qtd_declarada(
+    recebimento_id: int,
+    qtd: int,
+    usuario: Optional[str] = None,
+) -> HoraRecebimento:
+    """Etapa 2: conferência cega macro.
+
+    Valor baixo NAO bloqueia (auditoria mostra se operador burlar).
+    """
+    rec = HoraRecebimento.query.get_or_404(recebimento_id)
+    if qtd is None or qtd < 1:
+        raise ValueError("Qtd deve ser >= 1")
+    if rec.status not in ('AGUARDANDO_QTD', 'EM_CONFERENCIA'):
+        raise ValueError(f"Recebimento em status {rec.status} nao aceita alterar qtd")
+
+    valor_antes = rec.qtd_declarada
+    acao = 'ALTEROU_QTD' if valor_antes is not None else 'DEFINIU_QTD'
+
+    rec.qtd_declarada = qtd
+    if rec.status == 'AGUARDANDO_QTD':
+        rec.status = 'EM_CONFERENCIA'
+
+    recebimento_audit.registrar(
+        recebimento_id=rec.id,
+        acao=acao,
+        usuario=usuario,
+        campo_alterado='qtd_declarada',
+        valor_antes=valor_antes,
+        valor_depois=qtd,
+    )
+    db.session.commit()
+    return rec
+
+
+def proxima_ordem(recebimento_id: int) -> int:
+    """Menor inteiro >= 1 sem conferência ATIVA (substituida=false) no recebimento."""
+    usados = {
+        row[0]
+        for row in (
+            db.session.query(HoraRecebimentoConferencia.ordem)
+            .filter(HoraRecebimentoConferencia.recebimento_id == recebimento_id,
+                    HoraRecebimentoConferencia.substituida.is_(False))
+            .all()
+        )
+    }
+    i = 1
+    while i in usados:
+        i += 1
+    return i
+
+
+def registrar_conferencia_cega(
     recebimento_id: int,
     numero_chassi: str,
-    qr_code_lido: bool,
+    modelo_id_conferido: Optional[int],
+    cor_conferida: Optional[str],
+    avaria_fisica: bool,
+    qr_code_lido: bool = False,
     foto_s3_key: Optional[str] = None,
-    tipo_divergencia: Optional[str] = None,
-    detalhe_divergencia: Optional[str] = None,
+    ordem: Optional[int] = None,
     operador: Optional[str] = None,
 ) -> HoraRecebimentoConferencia:
-    """Registra conferência de um chassi + emite evento RECEBIDA ou CONFERIDA.
+    """Registra conferencia cega: chassi + modelo + cor + avaria.
 
-    Se há divergência, evento é CONFERIDA com detalhe (indicando problema).
-    Se está OK, evento é RECEBIDA.
+    Backend compara com NF e deriva divergencias 1-N em
+    hora_conferencia_divergencia.
     """
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
-        raise ValueError(f"Recebimento {recebimento_id} não encontrado")
+        raise ValueError(f"Recebimento {recebimento_id} nao encontrado")
     if rec.status != 'EM_CONFERENCIA':
         raise ValueError(
-            f"Recebimento {recebimento_id} não está EM_CONFERENCIA (status={rec.status})"
+            f"Recebimento {recebimento_id} em status {rec.status} nao aceita conferencia"
         )
 
-    chassi_norm = numero_chassi.strip().upper()
+    chassi_norm = (numero_chassi or '').strip().upper()
+    if not chassi_norm:
+        raise ValueError("numero_chassi obrigatorio")
+    cor_norm = _normalizar_cor(cor_conferida)
 
-    if tipo_divergencia and tipo_divergencia not in TIPOS_DIVERGENCIA:
-        raise ValueError(
-            f"tipo_divergencia inválido: {tipo_divergencia}. "
-            f"Aceitos: {TIPOS_DIVERGENCIA}"
-        )
+    # Se ja existe conferencia ATIVA para este chassi, reusar (update-in-place)
+    conf = (
+        HoraRecebimentoConferencia.query
+        .filter_by(recebimento_id=recebimento_id, numero_chassi=chassi_norm,
+                   substituida=False)
+        .first()
+    )
 
-    # Validação AUTOMÁTICA: detecta CHASSI_EXTRA mesmo sem operador marcar.
-    validacao = validar_chassi_contra_recebimento(recebimento_id, chassi_norm)
-
-    if not validacao['na_nf']:
-        # Chassi desconhecido neste recebimento → força CHASSI_EXTRA.
-        if not tipo_divergencia:
-            tipo_divergencia = 'CHASSI_EXTRA'
-        # Cria HoraMoto mínima para não violar FK (moto "fantasma" com origem
-        # desconhecida — operador pode complementar depois).
-        if not validacao['moto_existe']:
-            from app.hora.services.moto_service import get_or_create_moto
-            get_or_create_moto(
-                numero_chassi=chassi_norm,
-                modelo_nome='CHASSI_EXTRA_DESCONHECIDO',
-                cor='NAO_INFORMADA',
-                criado_por=operador,
-            )
-    else:
-        moto = HoraMoto.query.get(chassi_norm)
-        if not moto:
-            raise ValueError(
-                f"Chassi {chassi_norm} está na NF mas não existe em hora_moto. "
-                f"Reimporte a NF."
-            )
-
-    # Idempotência: se já tem conferência deste chassi neste recebimento, atualizar.
-    existente = HoraRecebimentoConferencia.query.filter_by(
-        recebimento_id=recebimento_id,
-        numero_chassi=chassi_norm,
-    ).first()
-
-    if existente:
-        # Update-in-place permitido aqui (é registro transacional, não HoraMoto).
-        existente.qr_code_lido = qr_code_lido
-        existente.foto_s3_key = foto_s3_key or existente.foto_s3_key
-        existente.tipo_divergencia = tipo_divergencia
-        existente.detalhe_divergencia = detalhe_divergencia
-        existente.operador = operador
-        conferencia = existente
-    else:
-        conferencia = HoraRecebimentoConferencia(
+    is_new = conf is None
+    if is_new:
+        ordem_final = ordem if (ordem and ordem >= 1) else proxima_ordem(recebimento_id)
+        # Garantir HoraMoto existe (FK)
+        item_nf = HoraNfEntradaItem.query.filter_by(
+            nf_id=rec.nf_id, numero_chassi=chassi_norm,
+        ).first()
+        _garantir_moto(chassi_norm, item_nf, operador)
+        conf = HoraRecebimentoConferencia(
             recebimento_id=recebimento_id,
             numero_chassi=chassi_norm,
+            ordem=ordem_final,
             qr_code_lido=qr_code_lido,
             foto_s3_key=foto_s3_key,
-            tipo_divergencia=tipo_divergencia,
-            detalhe_divergencia=detalhe_divergencia,
+            modelo_id_conferido=modelo_id_conferido,
+            cor_conferida=cor_norm,
+            avaria_fisica=bool(avaria_fisica),
+            confirmado_em=agora_utc_naive(),
             operador=operador,
         )
-        db.session.add(conferencia)
+        db.session.add(conf)
         db.session.flush()
+    else:
+        # Update-in-place + auditoria campo a campo.
+        _audita_update(conf, {
+            'modelo_id_conferido': modelo_id_conferido,
+            'cor_conferida': cor_norm,
+            'avaria_fisica': bool(avaria_fisica),
+            'qr_code_lido': qr_code_lido or conf.qr_code_lido,
+            'foto_s3_key': foto_s3_key or conf.foto_s3_key,
+        }, usuario=operador, recebimento_id=recebimento_id)
+        conf.confirmado_em = agora_utc_naive()
+        conf.operador = operador
 
-    # Emitir evento correspondente
-    tipo_evento = 'CONFERIDA' if tipo_divergencia else 'RECEBIDA'
-    detalhe = None
-    if tipo_divergencia:
-        detalhe = f'Divergencia: {tipo_divergencia}'
-        if detalhe_divergencia:
-            detalhe += f' — {detalhe_divergencia}'
+    # Deriva divergencias 1-N
+    _redefinir_divergencias(conf, rec)
+
+    # Evento de moto
+    item_nf = HoraNfEntradaItem.query.filter_by(
+        nf_id=rec.nf_id, numero_chassi=chassi_norm,
+    ).first()
+    tipo_evento = 'RECEBIDA' if (item_nf and not conf.divergencias) else 'CONFERIDA'
+    detalhe_evento = None
+    if conf.divergencias:
+        tipos = ', '.join(sorted({d.tipo for d in conf.divergencias}))
+        detalhe_evento = f'Divergencias: {tipos}'
     registrar_evento(
         numero_chassi=chassi_norm,
         tipo=tipo_evento,
         origem_tabela='hora_recebimento_conferencia',
-        origem_id=conferencia.id,
+        origem_id=conf.id,
         loja_id=rec.loja_id,
         operador=operador,
-        detalhe=detalhe,
+        detalhe=detalhe_evento,
     )
 
+    # Auditoria header
+    recebimento_audit.registrar(
+        recebimento_id=rec.id,
+        conferencia_id=conf.id,
+        acao='CONFERIU_MOTO' if is_new else 'AJUSTOU_CAMPO',
+        usuario=operador,
+        detalhe=(
+            f'ordem={conf.ordem} chassi={chassi_norm} '
+            f'modelo_id={modelo_id_conferido} cor={cor_norm} avaria={bool(avaria_fisica)}'
+        ),
+    )
+    if avaria_fisica:
+        recebimento_audit.registrar(
+            recebimento_id=rec.id,
+            conferencia_id=conf.id,
+            acao='MARCOU_AVARIA',
+            usuario=operador,
+        )
+
     db.session.commit()
-    return conferencia
+    return conf
 
 
-def finalizar_recebimento(recebimento_id: int) -> HoraRecebimento:
-    """Conclui o recebimento. Status = CONCLUIDO (sem divergência) ou COM_DIVERGENCIA."""
+def reiniciar_conferencia_para_chassis(
+    recebimento_id: int,
+    conferencia_ids: List[int],
+    operador: Optional[str] = None,
+) -> List[HoraRecebimentoConferencia]:
+    """Reconferencia 3a): marca as linhas escolhidas como `substituida=True`
+    e cria NOVAS linhas pendentes (confirmado_em=NULL) com os mesmos
+    chassi/ordem para serem refeitas no wizard.
+
+    Retorna as NOVAS conferencias pendentes (enfileiradas).
+    """
+    rec = HoraRecebimento.query.get_or_404(recebimento_id)
+    if rec.status not in ('EM_CONFERENCIA', 'CONCLUIDO', 'COM_DIVERGENCIA'):
+        raise ValueError(f"Recebimento em status {rec.status} nao permite reconferencia")
+
+    # Se ja finalizado, volta a EM_CONFERENCIA para permitir reconferencia.
+    if rec.status in ('CONCLUIDO', 'COM_DIVERGENCIA'):
+        rec.status = 'EM_CONFERENCIA'
+        rec.finalizado_em = None
+
+    novas = []
+    for conf_id in conferencia_ids:
+        conf = HoraRecebimentoConferencia.query.get(conf_id)
+        if not conf or conf.recebimento_id != recebimento_id:
+            continue
+        if conf.substituida:
+            continue
+        # Marca antiga substituida
+        conf.substituida = True
+        # Garante que UNIQUE parcial nao conflite: ordem ficara livre ate commit
+        # da nova linha — flush intermediario.
+        db.session.flush()
+        # Nova linha pendente (confirmado_em=NULL) com mesmos chassi/ordem.
+        nova = HoraRecebimentoConferencia(
+            recebimento_id=recebimento_id,
+            numero_chassi=conf.numero_chassi,
+            ordem=conf.ordem,
+            qr_code_lido=False,
+            modelo_id_conferido=conf.modelo_id_conferido,
+            cor_conferida=conf.cor_conferida,
+            avaria_fisica=conf.avaria_fisica,
+            confirmado_em=None,
+            operador=operador,
+        )
+        db.session.add(nova)
+        db.session.flush()
+        conf.substituida_por_id = nova.id
+        novas.append(nova)
+
+        recebimento_audit.registrar(
+            recebimento_id=recebimento_id,
+            conferencia_id=conf.id,
+            acao='SUBSTITUIU_CONFERENCIA',
+            usuario=operador,
+            detalhe=f'substituida_por={nova.id} ordem={conf.ordem} chassi={conf.numero_chassi}',
+        )
+        recebimento_audit.registrar(
+            recebimento_id=recebimento_id,
+            conferencia_id=nova.id,
+            acao='RECONFEREU_MOTO',
+            usuario=operador,
+            detalhe=f'pendente ordem={nova.ordem} chassi={nova.numero_chassi}',
+        )
+    db.session.commit()
+    return novas
+
+
+def finalizar_recebimento(
+    recebimento_id: int,
+    operador: Optional[str] = None,
+) -> HoraRecebimento:
+    """Marca MOTO_FALTANDO em batch para chassis da NF sem conferencia ativa,
+    e seta status CONCLUIDO ou COM_DIVERGENCIA.
+    """
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
-        raise ValueError(f"Recebimento {recebimento_id} não encontrado")
+        raise ValueError(f"Recebimento {recebimento_id} nao encontrado")
 
-    houve_divergencia = any(c.tipo_divergencia for c in rec.conferencias)
+    chassis_nf = {i.numero_chassi for i in rec.nf.itens}
+    chassis_conferidos_ativos = {
+        c.numero_chassi for c in rec.conferencias if not c.substituida
+    }
+    faltantes = sorted(chassis_nf - chassis_conferidos_ativos)
+
+    # Garantir que cada chassi faltante vire uma conferencia MOTO_FALTANDO.
+    if faltantes:
+        for chassi in faltantes:
+            ordem = proxima_ordem(recebimento_id)
+            _garantir_moto(chassi, None, operador)
+            conf = HoraRecebimentoConferencia(
+                recebimento_id=recebimento_id,
+                numero_chassi=chassi,
+                ordem=ordem,
+                qr_code_lido=False,
+                avaria_fisica=False,
+                tipo_divergencia='MOTO_FALTANDO',
+                detalhe_divergencia='Faltante no fechamento',
+                operador=operador,
+            )
+            db.session.add(conf)
+            db.session.flush()
+            # Divergencia 1-N
+            db.session.add(HoraConferenciaDivergencia(
+                conferencia_id=conf.id,
+                tipo='MOTO_FALTANDO',
+                detalhe='Faltante no fechamento',
+            ))
+            registrar_evento(
+                numero_chassi=chassi,
+                tipo='CONFERIDA',
+                origem_tabela='hora_recebimento_conferencia',
+                origem_id=conf.id,
+                loja_id=rec.loja_id,
+                operador=operador,
+                detalhe='Divergencia: MOTO_FALTANDO (batch)',
+            )
+
+    # Recarrega conferencias (expira cache ORM apos batch insert de faltantes)
+    if faltantes:
+        db.session.expire(rec, ['conferencias'])
+    confs_ativas = [c for c in rec.conferencias if not c.substituida]
+    # Faltantes recem-criadas ja sao divergencia — cobertura explicita caso
+    # ORM cache nao refresque a tempo.
+    houve_divergencia = (
+        bool(faltantes)
+        or any(c.divergencias or c.tipo_divergencia for c in confs_ativas)
+    )
     rec.status = 'COM_DIVERGENCIA' if houve_divergencia else 'CONCLUIDO'
+    rec.finalizado_em = agora_utc_naive()
+
+    recebimento_audit.registrar(
+        recebimento_id=rec.id,
+        acao='FINALIZOU',
+        usuario=operador,
+        detalhe=f'status={rec.status} faltantes={len(faltantes)}',
+    )
     db.session.commit()
     return rec
 
 
-def chassis_esperados_mas_nao_conferidos(recebimento_id: int) -> List[str]:
-    """Retorna chassis que estão na NF mas ainda não foram conferidos (MOTO_FALTANDO candidata)."""
-    rec = HoraRecebimento.query.get(recebimento_id)
-    if not rec:
-        return []
+# ========================================================================
+# Comparativo lado-a-lado (tela T4)
+# ========================================================================
 
-    chassis_nf = {item.numero_chassi for item in rec.nf.itens}
-    chassis_conferidos = {c.numero_chassi for c in rec.conferencias}
-    return sorted(chassis_nf - chassis_conferidos)
+def comparativo_recebimento_nf(recebimento_id: int) -> dict:
+    """Produz dict para a tela de resumo lado-a-lado.
 
-
-def chassis_conferidos_nao_na_nf(recebimento_id: int) -> List[str]:
-    """Retorna chassis conferidos que NÃO estão na NF (CHASSI_EXTRA candidatos)."""
-    rec = HoraRecebimento.query.get(recebimento_id)
-    if not rec:
-        return []
-
-    chassis_nf = {item.numero_chassi for item in rec.nf.itens}
-    chassis_conferidos = {c.numero_chassi for c in rec.conferencias}
-    return sorted(chassis_conferidos - chassis_nf)
-
-
-def marcar_faltantes_em_batch(
-    recebimento_id: int,
-    operador: Optional[str] = None,
-    detalhe: Optional[str] = None,
-) -> int:
-    """Cria 1 conferencia MOTO_FALTANDO para cada chassi da NF que ainda
-    nao foi conferido. Retorna quantidade criada. Idempotente.
+    {
+      'linhas': [ {chassi, nf_item, conferencia, divergencias, status, avaria} ],
+      'totais': {esperado, conferido, ok, com_divergencia, avarias, extras, faltantes}
+    }
     """
-    rec = HoraRecebimento.query.get(recebimento_id)
-    if not rec:
-        raise ValueError(f'recebimento {recebimento_id} nao encontrado')
-    if rec.status != 'EM_CONFERENCIA':
-        raise ValueError(f'recebimento nao esta EM_CONFERENCIA (status={rec.status})')
+    rec = HoraRecebimento.query.get_or_404(recebimento_id)
 
-    faltantes = chassis_esperados_mas_nao_conferidos(recebimento_id)
-    total = 0
-    for chassi in faltantes:
-        conferencia = HoraRecebimentoConferencia(
-            recebimento_id=recebimento_id,
-            numero_chassi=chassi,
-            qr_code_lido=False,
-            tipo_divergencia='MOTO_FALTANDO',
-            detalhe_divergencia=detalhe or 'Marcado em batch no finalizar',
-            operador=operador,
-        )
-        db.session.add(conferencia)
-        db.session.flush()
-        registrar_evento(
-            numero_chassi=chassi,
-            tipo='CONFERIDA',
-            origem_tabela='hora_recebimento_conferencia',
-            origem_id=conferencia.id,
-            loja_id=rec.loja_id,
-            operador=operador,
-            detalhe='Divergencia: MOTO_FALTANDO (batch)',
-        )
-        total += 1
-    db.session.commit()
-    return total
+    # Chassis conhecidos: da NF + da conferencia ativa
+    chassis_nf = [i.numero_chassi for i in rec.nf.itens if i.numero_chassi]
+    confs_ativas = [c for c in rec.conferencias if not c.substituida]
+    chassis_conf = [c.numero_chassi for c in confs_ativas]
+
+    todos = []
+    seen = set()
+    # Preserva ordem NF primeiro, depois extras na ordem de conferencia
+    for c in chassis_nf:
+        if c not in seen:
+            todos.append(c)
+            seen.add(c)
+    for c in chassis_conf:
+        if c not in seen:
+            todos.append(c)
+            seen.add(c)
+
+    nf_por_chassi = {i.numero_chassi: i for i in rec.nf.itens if i.numero_chassi}
+    conf_por_chassi = {c.numero_chassi: c for c in confs_ativas}
+
+    linhas = []
+    ok = com_divergencia = avarias = extras = faltantes = 0
+    for chassi in todos:
+        nf_item = nf_por_chassi.get(chassi)
+        conf = conf_por_chassi.get(chassi)
+        divergencias = []
+        if conf:
+            divergencias = list(conf.divergencias)
+            if conf.tipo_divergencia and not divergencias:
+                # Legado (MOTO_FALTANDO em batch)
+                divergencias = [_divergencia_legado(conf)]
+        if not conf:
+            status = 'FALTANDO'
+            faltantes += 1
+        elif not nf_item:
+            status = 'EXTRA'
+            extras += 1
+            if conf.avaria_fisica:
+                avarias += 1
+            com_divergencia += 1
+        elif divergencias:
+            status = 'DIVERGENTE'
+            com_divergencia += 1
+            if conf.avaria_fisica:
+                avarias += 1
+        else:
+            status = 'OK'
+            ok += 1
+        linhas.append({
+            'chassi': chassi,
+            'nf_item': nf_item,
+            'conferencia': conf,
+            'divergencias': divergencias,
+            'status': status,
+        })
+
+    totais = {
+        'esperado': len(chassis_nf),
+        'conferido': len(confs_ativas),
+        'ok': ok,
+        'com_divergencia': com_divergencia,
+        'avarias': avarias,
+        'extras': extras,
+        'faltantes': faltantes,
+        'qtd_declarada': rec.qtd_declarada or 0,
+    }
+    return {'linhas': linhas, 'totais': totais}
 
 
-def finalizar_com_faltantes_em_batch(
-    recebimento_id: int,
-    operador: Optional[str] = None,
-) -> HoraRecebimento:
-    """Marca faltantes em batch E finaliza em uma chamada."""
-    marcar_faltantes_em_batch(recebimento_id, operador=operador)
-    return finalizar_recebimento(recebimento_id)
-
+# ========================================================================
+# Listagem (mantida)
+# ========================================================================
 
 def listar_recebimentos(
     loja_id: Optional[int] = None,
@@ -377,7 +590,6 @@ def listar_recebimentos(
     limit: int = 100,
     lojas_permitidas_ids=None,
 ) -> List[HoraRecebimento]:
-    """Lista recebimentos. lojas_permitidas_ids=None → todas; filtra por loja_id."""
     query = HoraRecebimento.query.order_by(
         HoraRecebimento.data_recebimento.desc(),
         HoraRecebimento.id.desc(),
@@ -391,3 +603,136 @@ def listar_recebimentos(
     if status:
         query = query.filter_by(status=status)
     return query.limit(limit).all()
+
+
+def chassis_esperados_mas_nao_conferidos(recebimento_id: int) -> List[str]:
+    rec = HoraRecebimento.query.get(recebimento_id)
+    if not rec:
+        return []
+    chassis_nf = {i.numero_chassi for i in rec.nf.itens}
+    chassis_conf = {c.numero_chassi for c in rec.conferencias if not c.substituida}
+    return sorted(chassis_nf - chassis_conf)
+
+
+def chassis_conferidos_nao_na_nf(recebimento_id: int) -> List[str]:
+    rec = HoraRecebimento.query.get(recebimento_id)
+    if not rec:
+        return []
+    chassis_nf = {i.numero_chassi for i in rec.nf.itens}
+    chassis_conf = {c.numero_chassi for c in rec.conferencias if not c.substituida}
+    return sorted(chassis_conf - chassis_nf)
+
+
+# ========================================================================
+# Privados
+# ========================================================================
+
+def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: Optional[str]):
+    """Cria HoraMoto minima se nao existe (FK para conferencia)."""
+    if HoraMoto.query.get(chassi):
+        return
+    from app.hora.services.moto_service import get_or_create_moto
+    if item_nf:
+        get_or_create_moto(
+            numero_chassi=chassi,
+            modelo_nome=(item_nf.modelo_texto_original or 'DESCONHECIDO').strip() or 'DESCONHECIDO',
+            cor=(item_nf.cor_texto_original or 'NAO_INFORMADA').strip().upper() or 'NAO_INFORMADA',
+            criado_por=operador,
+        )
+    else:
+        get_or_create_moto(
+            numero_chassi=chassi,
+            modelo_nome='CHASSI_EXTRA_DESCONHECIDO',
+            cor='NAO_INFORMADA',
+            criado_por=operador,
+        )
+
+
+def _redefinir_divergencias(conf: HoraRecebimentoConferencia, rec: HoraRecebimento):
+    """Recalcula 1-N divergencias da conferencia vs NF."""
+    # Remove divergencias existentes (recria tudo a partir do estado atual)
+    for d in list(conf.divergencias):
+        db.session.delete(d)
+    db.session.flush()
+
+    item_nf = HoraNfEntradaItem.query.filter_by(
+        nf_id=rec.nf_id, numero_chassi=conf.numero_chassi,
+    ).first()
+
+    # Mantem o snapshot tipo_divergencia (compat) = prioridade: CHASSI_EXTRA > modelo/cor > avaria
+    snapshot = None
+
+    if not item_nf:
+        db.session.add(HoraConferenciaDivergencia(
+            conferencia_id=conf.id,
+            tipo='CHASSI_EXTRA',
+            detalhe='Chassi nao esta na NF',
+        ))
+        snapshot = 'CHASSI_EXTRA'
+    else:
+        modelo_nf = _normalizar_modelo_nome(item_nf.modelo_texto_original)
+        modelo_conf_nome = None
+        if conf.modelo_id_conferido:
+            m = HoraModelo.query.get(conf.modelo_id_conferido)
+            if m:
+                modelo_conf_nome = _normalizar_modelo_nome(m.nome_modelo)
+        if modelo_nf and modelo_conf_nome and modelo_nf != modelo_conf_nome:
+            db.session.add(HoraConferenciaDivergencia(
+                conferencia_id=conf.id,
+                tipo='MODELO_DIFERENTE',
+                valor_esperado=item_nf.modelo_texto_original,
+                valor_conferido=modelo_conf_nome,
+            ))
+            snapshot = snapshot or 'MODELO_DIFERENTE'
+
+        cor_nf = _normalizar_cor(item_nf.cor_texto_original)
+        cor_conf = _normalizar_cor(conf.cor_conferida)
+        if cor_nf and cor_conf and cor_nf != cor_conf:
+            db.session.add(HoraConferenciaDivergencia(
+                conferencia_id=conf.id,
+                tipo='COR_DIFERENTE',
+                valor_esperado=item_nf.cor_texto_original,
+                valor_conferido=cor_conf,
+            ))
+            snapshot = snapshot or 'COR_DIFERENTE'
+
+    if conf.avaria_fisica:
+        db.session.add(HoraConferenciaDivergencia(
+            conferencia_id=conf.id,
+            tipo='AVARIA_FISICA',
+            detalhe='Marcado pelo operador no wizard',
+        ))
+        snapshot = snapshot or 'AVARIA_FISICA'
+
+    conf.tipo_divergencia = snapshot
+    conf.detalhe_divergencia = None
+    db.session.flush()
+
+
+def _divergencia_legado(conf: HoraRecebimentoConferencia):
+    """Adapta conferencias legado (sem divergencias 1-N) para exibicao uniforme."""
+    return type('LegadoDiv', (), {
+        'tipo': conf.tipo_divergencia,
+        'detalhe': conf.detalhe_divergencia,
+        'valor_esperado': None,
+        'valor_conferido': None,
+    })()
+
+
+def _audita_update(conf: HoraRecebimentoConferencia, novos: dict, usuario, recebimento_id):
+    """Compara valores atuais vs novos e grava auditoria por campo alterado."""
+    for campo, novo in novos.items():
+        antes = getattr(conf, campo)
+        if antes != novo:
+            recebimento_audit.registrar(
+                recebimento_id=recebimento_id,
+                conferencia_id=conf.id,
+                acao='AJUSTOU_CAMPO',
+                usuario=usuario,
+                campo_alterado=campo,
+                valor_antes=antes,
+                valor_depois=novo,
+                flush=False,
+            )
+            setattr(conf, campo, novo)
+    db.session.flush()

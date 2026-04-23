@@ -585,3 +585,170 @@ def editar_pedido_item_manual(
         'pedido_item_id': pi.id,
         'numero_chassi': pi.numero_chassi,
     }
+
+
+# ------------------------------------------------------------------------
+# Vinculos por chassi (para UI de detalhe com granularidade por moto)
+# ------------------------------------------------------------------------
+
+def vinculos_por_chassi_pedido(pedido_id: int) -> dict:
+    """Para cada chassi do pedido, retorna a NF (+item) que o faturou.
+
+    Retorna: {chassi: {'nf': HoraNfEntrada, 'nf_item': HoraNfEntradaItem}}
+
+    Considera apenas NFs com pedido_id == este pedido. Chassi do pedido
+    ausente do dict significa: ainda nao faturado.
+    """
+    rows = (
+        db.session.query(HoraNfEntradaItem, HoraNfEntrada)
+        .join(HoraNfEntrada, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+        .filter(HoraNfEntrada.pedido_id == pedido_id)
+        .all()
+    )
+    resultado = {}
+    for nf_item, nf in rows:
+        if nf_item.numero_chassi:
+            resultado[nf_item.numero_chassi] = {'nf': nf, 'nf_item': nf_item}
+    return resultado
+
+
+def vinculo_por_chassi_nf(nf_id: int) -> dict:
+    """Para cada chassi da NF, retorna o pedido (+item) que o contem.
+
+    Busca entre todos os pedidos que usam o chassi (prioriza pedido vinculado
+    a esta NF; se nao achar la, busca em qualquer pedido com o mesmo chassi).
+
+    Retorna: {chassi: {'pedido': HoraPedido, 'pedido_item': HoraPedidoItem,
+                        'vinculado_a_nf': bool}}
+    Chassi ausente do dict = chassi da NF nao casa com nenhum pedido (extra).
+    """
+    nf = HoraNfEntrada.query.get(nf_id)
+    if not nf:
+        return {}
+
+    chassis_nf = [i.numero_chassi for i in nf.itens if i.numero_chassi]
+    if not chassis_nf:
+        return {}
+
+    # 1) pedido diretamente vinculado a esta NF (prioridade)
+    resultado = {}
+    if nf.pedido_id:
+        pedido = HoraPedido.query.get(nf.pedido_id)
+        if pedido:
+            for pi in pedido.itens:
+                if pi.numero_chassi and pi.numero_chassi in chassis_nf:
+                    resultado[pi.numero_chassi] = {
+                        'pedido': pedido,
+                        'pedido_item': pi,
+                        'vinculado_a_nf': True,
+                    }
+
+    # 2) chassis ainda nao resolvidos: busca em qualquer pedido
+    chassis_pendentes = [c for c in chassis_nf if c not in resultado]
+    if chassis_pendentes:
+        itens_extras = (
+            db.session.query(HoraPedidoItem, HoraPedido)
+            .join(HoraPedido, HoraPedidoItem.pedido_id == HoraPedido.id)
+            .filter(HoraPedidoItem.numero_chassi.in_(chassis_pendentes))
+            .all()
+        )
+        for pi, pedido in itens_extras:
+            if pi.numero_chassi not in resultado:
+                resultado[pi.numero_chassi] = {
+                    'pedido': pedido,
+                    'pedido_item': pi,
+                    'vinculado_a_nf': False,
+                }
+    return resultado
+
+
+def resumo_faturamento_pedido(
+    pedido: HoraPedido,
+    chassis_faturados_por_pedido: Optional[dict] = None,
+) -> dict:
+    """Agregado para lista/dashboard: {total, faturados, pendentes_chassi, pct}.
+
+    `chassis_faturados_por_pedido` (opcional): dict {pedido_id: set(chassis)}
+    pre-carregado em batch para evitar N+1. Se None, consulta individual.
+
+    pct e calculado sobre base conhecida (chassis com chassi preenchido).
+    Chassis pendentes nao entram na base do percentual (nao ha como faturar
+    um item sem chassi); aparecem em `pendentes_chassi` separadamente.
+    """
+    total = len(pedido.itens)
+    chassis_pedido = {i.numero_chassi for i in pedido.itens if i.numero_chassi}
+    pendentes_chassi = total - len(chassis_pedido)
+    if chassis_faturados_por_pedido is not None:
+        fat_set = chassis_faturados_por_pedido.get(pedido.id, set())
+    else:
+        fat_set = _chassis_ja_faturados_no_pedido(pedido.id)
+    faturados = len(fat_set & chassis_pedido)
+    base = len(chassis_pedido)
+    return {
+        'total': total,
+        'faturados': faturados,
+        'pendentes_chassi': pendentes_chassi,
+        'pct': int((faturados * 100) / base) if base else 0,
+    }
+
+
+def chassis_faturados_por_pedido_batch(pedido_ids: list) -> dict:
+    """Bulk load: {pedido_id: set(chassis_faturados)} em 1 query."""
+    if not pedido_ids:
+        return {}
+    rows = (
+        db.session.query(
+            HoraNfEntrada.pedido_id,
+            HoraNfEntradaItem.numero_chassi,
+        )
+        .join(HoraNfEntradaItem, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+        .filter(HoraNfEntrada.pedido_id.in_(pedido_ids))
+        .all()
+    )
+    out: dict = {pid: set() for pid in pedido_ids}
+    for pid, chassi in rows:
+        if chassi:
+            out.setdefault(pid, set()).add(chassi)
+    return out
+
+
+def resumo_vinculo_nf(
+    nf: HoraNfEntrada,
+    chassis_por_pedido: Optional[dict] = None,
+) -> dict:
+    """Agregado para lista de NFs. `chassis_por_pedido` (opcional):
+    {pedido_id: set(chassis_do_pedido)} pre-carregado para evitar N+1.
+    """
+    total_nf = len(nf.itens)
+    if not nf.pedido_id:
+        return {'total_nf': total_nf, 'match': 0, 'sem_pedido': True}
+    chassis_nf = {i.numero_chassi for i in nf.itens if i.numero_chassi}
+    if chassis_por_pedido is not None:
+        chassis_ped = chassis_por_pedido.get(nf.pedido_id, set())
+    else:
+        pedido = HoraPedido.query.get(nf.pedido_id)
+        if not pedido:
+            return {'total_nf': total_nf, 'match': 0, 'sem_pedido': True}
+        chassis_ped = {i.numero_chassi for i in pedido.itens if i.numero_chassi}
+    match = len(chassis_nf & chassis_ped)
+    return {
+        'total_nf': total_nf,
+        'match': match,
+        'sem_pedido': False,
+    }
+
+
+def chassis_pedido_batch(pedido_ids: list) -> dict:
+    """Bulk load: {pedido_id: set(chassis_preenchidos)} em 1 query."""
+    if not pedido_ids:
+        return {}
+    rows = (
+        db.session.query(HoraPedidoItem.pedido_id, HoraPedidoItem.numero_chassi)
+        .filter(HoraPedidoItem.pedido_id.in_(pedido_ids))
+        .filter(HoraPedidoItem.numero_chassi.isnot(None))
+        .all()
+    )
+    out: dict = {pid: set() for pid in pedido_ids}
+    for pid, chassi in rows:
+        out.setdefault(pid, set()).add(chassi)
+    return out
