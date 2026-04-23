@@ -143,6 +143,12 @@ class CteCancelamentoOutlookJob:
             'cancelados_ok': 0,
             'pendencias': 0,
             'erros': 0,
+            # Reprocessamento automatico de ORPHANs/ERROs (race condition sync)
+            'reprocess_total': 0,
+            'reprocess_ok': 0,
+            'reprocess_ainda_orphan': 0,
+            'reprocess_pulados': 0,
+            'reprocess_outros': 0,
             'mensagem': '',
         }
 
@@ -185,6 +191,45 @@ class CteCancelamentoOutlookJob:
             f"janela={janela_horas}h (+{JANELA_GORDURA_MINUTOS}min gordura), "
             f"desde={received_since.isoformat()}"
         )
+
+        # FASE 0: Reprocessar ORPHANs/ERROs recentes antes de olhar emails novos.
+        # Cobre race condition: email chegou antes do CTe sincronizar no Odoo.
+        # Configuravel via env:
+        # - CTE_CANCELAMENTO_REPROCESS_DIAS (default 15)
+        # - CTE_CANCELAMENTO_REPROCESS_LIMIT (default 50)
+        # - CTE_CANCELAMENTO_REPROCESS_ENABLED (default true)
+        reprocess_enabled = (
+            os.environ.get('CTE_CANCELAMENTO_REPROCESS_ENABLED', 'true').lower()
+            in ('true', '1', 'yes', 'on')
+        )
+        if reprocess_enabled:
+            try:
+                reprocess_dias = int(
+                    os.environ.get('CTE_CANCELAMENTO_REPROCESS_DIAS', '15')
+                )
+                reprocess_limit = int(
+                    os.environ.get('CTE_CANCELAMENTO_REPROCESS_LIMIT', '50')
+                )
+                reprocess_stats = (
+                    self._get_cancelamento_service()
+                    .reprocessar_pendentes_antigas(
+                        janela_dias=reprocess_dias,
+                        limit=reprocess_limit,
+                    )
+                )
+                stats['reprocess_total'] = reprocess_stats.get('reprocessadas', 0)
+                stats['reprocess_ok'] = reprocess_stats.get('cancelados_ok', 0)
+                stats['reprocess_ainda_orphan'] = reprocess_stats.get('ainda_orphan', 0)
+                stats['reprocess_pulados'] = reprocess_stats.get('pulados', 0)
+                stats['reprocess_outros'] = reprocess_stats.get('outros', 0)
+                logger.info(
+                    f"[CteCancelamentoJob] Fase 0 (reprocess): {reprocess_stats}"
+                )
+            except Exception as e:
+                # Nao e fatal — continuar com o processamento dos emails novos
+                logger.exception(
+                    f"[CteCancelamentoJob] Erro na fase 0 de reprocess: {e}"
+                )
 
         # Processar cada pasta
         try:
@@ -257,6 +302,9 @@ class CteCancelamentoOutlookJob:
                 stats['erros'] += resultado_email['erros']
 
         stats['mensagem'] = (
+            f"reprocess={stats['reprocess_total']} "
+            f"(ok={stats['reprocess_ok']}, ainda_orphan={stats['reprocess_ainda_orphan']}, "
+            f"outros={stats['reprocess_outros']}, pulados={stats['reprocess_pulados']}) | "
             f"{stats['pastas_processadas']} pasta(s) / "
             f"{stats['emails_encontrados']} email(s) encontrado(s) / "
             f"{stats['emails_duplicados']} dedup / "

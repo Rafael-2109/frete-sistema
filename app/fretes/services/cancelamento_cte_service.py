@@ -105,6 +105,161 @@ class CancelamentoCteService:
         return existe is not None
 
     # ------------------------------------------------------------------
+    # Auto-reprocessamento de pendencias ORPHAN/ERRO
+    # ------------------------------------------------------------------
+
+    def reprocessar_pendentes_antigas(
+        self,
+        janela_dias: int = 15,
+        limit: int = 50,
+    ) -> Dict[str, int]:
+        """
+        Reprocessa pendencias ORPHAN/ERRO nao resolvidas criadas nos ultimos
+        `janela_dias` dias.
+
+        Motivacao: race condition entre email de cancelamento e sync Odoo.
+        Se o XML chega antes do CTe ser sincronizado do Odoo para o banco
+        local, a pendencia vira ORPHAN. Reprocessando periodicamente, assim
+        que a sync pegar o CTe, a pendencia se resolve automaticamente.
+
+        Idempotente: cada chamada a cancelar_por_chave() cria uma nova pendencia
+        e marca a antiga como resolvida (substituida). Se o CTe ainda nao
+        sincronizou, gera nova ORPHAN, que sera retentada no proximo ciclo.
+
+        Args:
+            janela_dias: quantos dias retroativos considerar (default 15)
+            limit: numero maximo de pendencias a reprocessar por run (protecao)
+
+        Returns:
+            Dict com:
+                - reprocessadas: total tentado
+                - cancelados_ok: viraram CANCELADO_OK
+                - ainda_orphan: continuaram ORPHAN (CTe nao sincronizou)
+                - outros: viraram outro status (ERRO, PENDENTE_FATURA, etc)
+                - pulados: sem xml_raw ou parse invalido
+        """
+        from datetime import timedelta
+        from app.utils.cte_evento_parser import CteEventoParser
+        from app.utils.timezone import agora_utc_naive as _agora
+
+        stats = {
+            'reprocessadas': 0,
+            'cancelados_ok': 0,
+            'ainda_orphan': 0,
+            'outros': 0,
+            'pulados': 0,
+        }
+
+        limite_criado = _agora() - timedelta(days=janela_dias)
+
+        # Buscar pendencias ORPHAN/ERRO nao resolvidas dentro da janela
+        pendencias = (
+            db.session.query(CtePendenciaCancelamento)
+            .filter(
+                CtePendenciaCancelamento.status.in_([
+                    CtePendenciaCancelamento.STATUS_ORPHAN,
+                    CtePendenciaCancelamento.STATUS_ERRO,
+                ]),
+                CtePendenciaCancelamento.resolvido_em.is_(None),
+                CtePendenciaCancelamento.criado_em >= limite_criado,
+                CtePendenciaCancelamento.xml_raw.isnot(None),
+            )
+            .order_by(CtePendenciaCancelamento.criado_em.asc())
+            .limit(limit)
+            .all()
+        )
+
+        if not pendencias:
+            logger.info(
+                f"[CancelamentoCTe] reprocessar_pendentes_antigas: "
+                f"nenhuma pendencia ORPHAN/ERRO nos ultimos {janela_dias} dias"
+            )
+            return stats
+
+        logger.info(
+            f"[CancelamentoCTe] reprocessar_pendentes_antigas: "
+            f"{len(pendencias)} pendencia(s) ORPHAN/ERRO para tentar novamente"
+        )
+
+        parser = CteEventoParser()
+
+        for pendencia in pendencias:
+            stats['reprocessadas'] += 1
+            try:
+                # Capturar TUDO que precisarmos ANTES de qualquer commit interno
+                # de cancelar_por_chave (SQLAlchemy expira objetos ORM apos commit).
+                # Se ler atributos depois do commit, dispara lazy-reload por campo.
+                pendencia_id = pendencia.id
+                status_anterior = pendencia.status
+                chave_acesso = pendencia.chave_acesso
+                email_subject_original = pendencia.email_subject or ''
+                xml_raw = pendencia.xml_raw
+
+                if isinstance(xml_raw, str):
+                    xml_bytes = xml_raw.encode('utf-8')
+                else:
+                    xml_bytes = xml_raw
+
+                evento_info = parser.parse_evento(xml_bytes)
+                if not evento_info or not evento_info.get('cancelamento'):
+                    stats['pulados'] += 1
+                    logger.warning(
+                        f"[CancelamentoCTe] pend #{pendencia_id}: "
+                        f"xml_raw nao representa evento de cancelamento, pulando"
+                    )
+                    continue
+
+                resultado = self.cancelar_por_chave(
+                    chave_acesso=chave_acesso,
+                    evento_info=evento_info,
+                    xml_raw=xml_raw if isinstance(xml_raw, str) else xml_bytes.decode('utf-8', errors='replace'),
+                    email_message_id=None,  # sem dedup — reprocessamento
+                    email_subject=email_subject_original + ' [AUTO-REPROCESS]',
+                )
+
+                novo_status = resultado.get('status')
+                nova_pend_id = resultado.get('pendencia_id')
+
+                # Marcar pendencia antiga como resolvida (substituida pela nova)
+                pend_db = db.session.get(CtePendenciaCancelamento, pendencia_id)
+                if pend_db and pend_db.resolvido_em is None:
+                    pend_db.resolvido_em = _agora()
+                    pend_db.resolvido_por = (
+                        f"Auto-reprocess -> pend #{nova_pend_id} ({novo_status})"
+                    )
+                    db.session.commit()
+
+                if novo_status == CtePendenciaCancelamento.STATUS_CANCELADO_OK:
+                    stats['cancelados_ok'] += 1
+                    logger.info(
+                        f"[CancelamentoCTe] pend #{pendencia_id} ({status_anterior}) "
+                        f"-> CANCELADO_OK (nova pend #{nova_pend_id})"
+                    )
+                elif novo_status == CtePendenciaCancelamento.STATUS_ORPHAN:
+                    stats['ainda_orphan'] += 1
+                    logger.info(
+                        f"[CancelamentoCTe] pend #{pendencia_id} continua ORPHAN "
+                        f"(CTe ainda nao sincronizou no Odoo)"
+                    )
+                else:
+                    stats['outros'] += 1
+                    logger.info(
+                        f"[CancelamentoCTe] pend #{pendencia_id} ({status_anterior}) "
+                        f"-> {novo_status} (nova pend #{nova_pend_id})"
+                    )
+            except Exception as e:
+                stats['pulados'] += 1
+                logger.exception(
+                    f"[CancelamentoCTe] Erro ao reprocessar pend #{pendencia.id}: {e}"
+                )
+                db.session.rollback()
+
+        logger.info(
+            f"[CancelamentoCTe] reprocessar_pendentes_antigas concluido: {stats}"
+        )
+        return stats
+
+    # ------------------------------------------------------------------
     # API principal
     # ------------------------------------------------------------------
 
@@ -173,7 +328,13 @@ class CancelamentoCteService:
                 f"Tentando importar do Odoo..."
             )
             try:
-                cte = self.cte_service.importar_cte_por_chave(chave_acesso)
+                # ignorar_filtro_valor=True: precisamos materializar CTe mesmo
+                # com valor simbolico (ex: R$ 0,01) para marcar CANCELADO no
+                # Odoo e auditar. Sem bypass, CTes de valor baixo viravam ORPHAN.
+                cte = self.cte_service.importar_cte_por_chave(
+                    chave_acesso,
+                    ignorar_filtro_valor=True,
+                )
             except Exception as e:
                 logger.error(
                     f"[CancelamentoCTe] Erro ao importar CTe {chave_acesso}: {e}"

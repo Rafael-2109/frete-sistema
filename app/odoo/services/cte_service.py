@@ -423,13 +423,20 @@ class CteService:
             logger.error(f"❌ Erro ao buscar CTes por período do Odoo: {e}")
             return []
 
-    def _processar_cte(self, cte_data: Dict, mapa_refs: Dict = None) -> Dict:
+    def _processar_cte(
+        self,
+        cte_data: Dict,
+        mapa_refs: Dict = None,
+        ignorar_filtro_valor: bool = False,
+    ) -> Dict:
         """
         Processa um CTe e cria/atualiza ConhecimentoTransporte
 
         Args:
             cte_data: Dados do CTe do Odoo
             mapa_refs: Mapa {ref_id: numero_nf} para evitar N+1
+            ignorar_filtro_valor: Se True, ignora o filtro "valor<R$1,00"
+                (usado no fluxo de cancelamento via importar_cte_por_chave).
 
         Returns:
             Dict com estatísticas
@@ -485,7 +492,13 @@ class CteService:
         valor_icms = cte_data.get('nfe_infnfe_total_icms_vicms')
 
         # 🔴 FILTRO: Ignorar CTes com valor total < R$ 1,00
-        if valor_total is not None and valor_total < 1.00:
+        # Excecao: fluxo de cancelamento bypass (precisa materializar o CTe
+        # mesmo com valor simbolico para marcar CANCELADO no Odoo e auditar).
+        if (
+            valor_total is not None
+            and valor_total < 1.00
+            and not ignorar_filtro_valor
+        ):
             logger.info(f"   ⏭️  CTe {numero_cte} ignorado - Valor total R$ {valor_total:.2f} < R$ 1,00")
             return {'novo': False, 'ignorado': True}
 
@@ -987,6 +1000,7 @@ class CteService:
     def importar_cte_por_chave(
         self,
         chave_acesso: str,
+        ignorar_filtro_valor: bool = False,
     ) -> Optional[ConhecimentoTransporte]:
         """
         Busca CTe no Odoo pela chave de acesso (SEM filtro de data e SEM filtro
@@ -1001,12 +1015,21 @@ class CteService:
 
         Args:
             chave_acesso: Chave de 44 digitos do CTe
+            ignorar_filtro_valor: Se True, bypass do filtro "valor<R$1,00" do
+                `_processar_cte`. Usado no fluxo de CANCELAMENTO, onde precisamos
+                materializar o CTe no local mesmo com valor simbolico para
+                conseguir marca-lo como CANCELADO no Odoo e rastrear auditoria.
 
         Returns:
             ConhecimentoTransporte persistido, ou None se:
             - chave invalida
             - CTe nao existe no Odoo
-            - erro na importacao
+            - erro de rede/RPC ao buscar no Odoo (logado + swallowed)
+
+        Raises:
+            Exception: erros internos de `_processar_cte` (S3, IBS/CBS,
+                constraint violation) sao PROPAGADOS para que o chamador
+                possa classifica-los como ERRO em vez de ORPHAN enganoso.
 
         Nota: NAO faz commit. O chamador e responsavel por `db.session.commit()`.
         """
@@ -1016,6 +1039,7 @@ class CteService:
             )
             return None
 
+        # 1) Buscar no Odoo (erros de RPC/rede: swallow + return None)
         try:
             # Filtro: is_cte=True AND chave=X (aceitando active=True OR active=False)
             filtros = [
@@ -1049,35 +1073,39 @@ class CteService:
                 [filtros],
                 {'fields': campos, 'limit': 1},
             )
-
-            if not ctes:
-                logger.info(
-                    f"   ℹ️ CTe chave={chave_acesso} nao encontrado no Odoo"
-                )
-                return None
-
-            cte_data = ctes[0]
-
-            # Reaproveitar _processar_cte (cria ou atualiza ConhecimentoTransporte)
-            # Mapa de refs NULL = sem enriquecimento de NFs aqui (e lookup secundario)
-            self._processar_cte(cte_data, mapa_refs=None)
-
-            # Re-buscar o model persistido
-            cte_local = ConhecimentoTransporte.query.filter_by(
-                chave_acesso=chave_acesso
-            ).first()
-
-            if cte_local:
-                logger.info(
-                    f"   ✅ CTe chave={chave_acesso} importado: id={cte_local.id}"
-                )
-            return cte_local
-
         except Exception as e:
             logger.error(
-                f"   ❌ Erro ao importar CTe por chave {chave_acesso}: {e}"
+                f"   ❌ Erro RPC ao buscar CTe por chave {chave_acesso}: {e}"
             )
             return None
+
+        if not ctes:
+            logger.info(
+                f"   ℹ️ CTe chave={chave_acesso} nao encontrado no Odoo"
+            )
+            return None
+
+        cte_data = ctes[0]
+
+        # 2) Processar/persistir (exceções PROPAGADAS para que o chamador
+        #    classifique como ERRO via pendencia, em vez de virar ORPHAN enganoso).
+        #    Ver docstring "Raises".
+        self._processar_cte(
+            cte_data,
+            mapa_refs=None,
+            ignorar_filtro_valor=ignorar_filtro_valor,
+        )
+
+        # 3) Re-buscar o model persistido
+        cte_local = ConhecimentoTransporte.query.filter_by(
+            chave_acesso=chave_acesso
+        ).first()
+
+        if cte_local:
+            logger.info(
+                f"   ✅ CTe chave={chave_acesso} importado: id={cte_local.id}"
+            )
+        return cte_local
 
     def marcar_cancelado_no_odoo(self, dfe_id) -> bool:
         """

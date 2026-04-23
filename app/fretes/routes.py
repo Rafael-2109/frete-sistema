@@ -6556,21 +6556,76 @@ def listar_pendencias_cancelamento_cte():
 
     Filtros via query string:
         - status: filtra por status especifico (ex: PENDENTE_FATURA_CONFERIDA)
-        - apenas_pendentes: '1' para esconder resolvidos (default: '1')
+        - escopo: 'pendentes' (default) | 'todos' | 'resolvidos'
+        - q: busca por chave de acesso OU numero_cte OU nome_emitente (ILIKE)
+        - desde / ate: intervalo de criado_em (YYYY-MM-DD)
     """
     status_filtro = (request.args.get("status") or "").strip().upper()
-    apenas_pendentes = request.args.get("apenas_pendentes", "1") == "1"
+    escopo = (request.args.get("escopo") or "pendentes").strip().lower()
+    if escopo not in ("pendentes", "todos", "resolvidos"):
+        escopo = "pendentes"
+    termo = (request.args.get("q") or "").strip()
+    desde_str = (request.args.get("desde") or "").strip()
+    ate_str = (request.args.get("ate") or "").strip()
 
-    query = CtePendenciaCancelamento.query
+    # Parse datas (YYYY-MM-DD) — silenciosamente ignora formato invalido
+    desde_dt = None
+    ate_dt = None
+    if desde_str:
+        try:
+            desde_dt = datetime.strptime(desde_str, "%Y-%m-%d")
+        except ValueError:
+            desde_str = ""
+    if ate_str:
+        try:
+            ate_dt = datetime.strptime(ate_str, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59
+            )
+        except ValueError:
+            ate_str = ""
+
+    # Query com LEFT JOIN + contains_eager para popular CtePendenciaCancelamento.cte
+    # numa unica SELECT (sem contains_eager o relationship `cte` segue lazy=True e
+    # dispara N+1 no template quando acessa p.cte.nome_emitente etc).
+    from sqlalchemy.orm import contains_eager
+    query = (
+        db.session.query(CtePendenciaCancelamento)
+        .outerjoin(
+            ConhecimentoTransporte,
+            ConhecimentoTransporte.id == CtePendenciaCancelamento.cte_id,
+        )
+        .options(contains_eager(CtePendenciaCancelamento.cte))
+    )
 
     if status_filtro:
         query = query.filter(CtePendenciaCancelamento.status == status_filtro)
-    elif apenas_pendentes:
+    elif escopo == "pendentes":
         query = query.filter(
             CtePendenciaCancelamento.status.in_(
                 CtePendenciaCancelamento.STATUS_PENDENTES
             )
         )
+    elif escopo == "resolvidos":
+        query = query.filter(
+            CtePendenciaCancelamento.resolvido_em.isnot(None)
+        )
+    # escopo == 'todos' -> sem filtro adicional
+
+    if termo:
+        padrao = f"%{termo}%"
+        query = query.filter(
+            or_(
+                CtePendenciaCancelamento.chave_acesso.ilike(padrao),
+                ConhecimentoTransporte.numero_cte.ilike(padrao),
+                ConhecimentoTransporte.nome_emitente.ilike(padrao),
+                CtePendenciaCancelamento.email_subject.ilike(padrao),
+            )
+        )
+
+    if desde_dt is not None:
+        query = query.filter(CtePendenciaCancelamento.criado_em >= desde_dt)
+    if ate_dt is not None:
+        query = query.filter(CtePendenciaCancelamento.criado_em <= ate_dt)
 
     pendencias = (
         query.order_by(CtePendenciaCancelamento.criado_em.desc())
@@ -6578,7 +6633,8 @@ def listar_pendencias_cancelamento_cte():
         .all()
     )
 
-    # Contadores por status (para dashboard rapido)
+    # Contadores por status (para dashboard rapido) — sempre globais, nao
+    # afetados por filtros, pra dar visao geral do volume
     contadores_rows = (
         db.session.query(
             CtePendenciaCancelamento.status,
@@ -6594,8 +6650,12 @@ def listar_pendencias_cancelamento_cte():
         pendencias=pendencias,
         contadores=contadores,
         status_filtro=status_filtro,
-        apenas_pendentes=apenas_pendentes,
+        escopo=escopo,
+        termo=termo,
+        desde_str=desde_str,
+        ate_str=ate_str,
         status_pendentes=CtePendenciaCancelamento.STATUS_PENDENTES,
+        status_resolvidos=CtePendenciaCancelamento.STATUS_RESOLVIDOS,
     )
 
 
@@ -6626,5 +6686,110 @@ def resolver_pendencia_cancelamento_cte(pendencia_id):
     except Exception as e:
         db.session.rollback()
         flash(f"Erro ao resolver pendencia: {e}", "error")
+
+    return redirect(url_for("fretes.listar_pendencias_cancelamento_cte"))
+
+
+@fretes_bp.route("/cte-cancelamento/pendencias/<int:pendencia_id>/reprocessar", methods=["POST"])
+@login_required
+@require_financeiro()
+def reprocessar_pendencia_cancelamento_cte(pendencia_id):
+    """
+    Reexecuta o cancelamento para uma pendencia ORPHAN/ERRO.
+
+    Motivacao: o email de cancelamento pode chegar antes da sincronizacao do CTe
+    original do Odoo para o banco local (race condition). Este endpoint tenta
+    buscar o CTe de novo e aplicar o cancelamento. Novo resultado gera nova
+    pendencia, mantendo a antiga como historico (marcada como resolvida).
+
+    Restrito a status ORPHAN e ERRO — demais statuses requerem revisao humana
+    pontual e nao devem ser reprocessados automaticamente.
+    """
+    pendencia = CtePendenciaCancelamento.query.get_or_404(pendencia_id)
+
+    if pendencia.status not in (
+        CtePendenciaCancelamento.STATUS_ORPHAN,
+        CtePendenciaCancelamento.STATUS_ERRO,
+    ):
+        flash(
+            f"Reprocessamento disponivel apenas para ORPHAN e ERRO. "
+            f"Status atual: {pendencia.status}.",
+            "warning",
+        )
+        return redirect(url_for("fretes.listar_pendencias_cancelamento_cte"))
+
+    if pendencia.resolvido_em is not None:
+        flash("Pendencia ja esta resolvida.", "info")
+        return redirect(url_for("fretes.listar_pendencias_cancelamento_cte"))
+
+    # Reconstruir evento_info a partir do xml_raw persistido
+    xml_raw = pendencia.xml_raw
+    if not xml_raw:
+        flash(
+            "xml_raw ausente na pendencia — nao e possivel reprocessar. "
+            "Marque como resolvida e trate manualmente.",
+            "error",
+        )
+        return redirect(url_for("fretes.listar_pendencias_cancelamento_cte"))
+
+    try:
+        from app.utils.cte_evento_parser import CteEventoParser
+        from app.odoo.services.cte_service import CteService
+        from app.fretes.services.cancelamento_cte_service import (
+            CancelamentoCteService,
+        )
+
+        parser = CteEventoParser()
+        evento_info = parser.parse_evento(xml_raw.encode("utf-8") if isinstance(xml_raw, str) else xml_raw)
+
+        if not evento_info or not evento_info.get("cancelamento"):
+            flash(
+                f"XML nao representa evento de cancelamento valido "
+                f"(parse retornou {evento_info!r}).",
+                "error",
+            )
+            return redirect(url_for("fretes.listar_pendencias_cancelamento_cte"))
+
+        # Capturar identificadores antes do commit interno de cancelar_por_chave,
+        # que expira objetos ORM (SQLAlchemy) desta sessao.
+        pendencia_id_local = pendencia.id
+        email_subject_original = pendencia.email_subject or ""
+        chave_local = pendencia.chave_acesso
+
+        servico = CancelamentoCteService(cte_service=CteService())
+        resultado = servico.cancelar_por_chave(
+            chave_acesso=chave_local,
+            evento_info=evento_info,
+            xml_raw=xml_raw,
+            email_message_id=None,  # dedup nao se aplica em reprocessamento manual
+            email_subject=email_subject_original + " [REPROCESSADO]",
+        )
+
+        # Re-fetch + guard: o job Fase 0 pode ter resolvido esta mesma pendencia
+        # em paralelo. Se ja esta resolvida, nao sobrescrever o resolvido_por
+        # (preserva quem resolveu primeiro — auditoria correta).
+        pendencia_atual = db.session.get(
+            CtePendenciaCancelamento, pendencia_id_local
+        )
+        nova_pend_id = resultado.get("pendencia_id")
+        if pendencia_atual and pendencia_atual.resolvido_em is None:
+            pendencia_atual.resolvido_em = agora_utc_naive()
+            pendencia_atual.resolvido_por = (
+                getattr(current_user, "nome", None)
+                or getattr(current_user, "email", "Sistema")
+            ) + f" (reprocessada -> pend #{nova_pend_id})"
+            db.session.commit()
+
+        flash(
+            f"Reprocessado. Novo status: {resultado.get('status')}. "
+            f"Pendencia gerada: #{nova_pend_id}.",
+            "success" if resultado.get("status") == CtePendenciaCancelamento.STATUS_CANCELADO_OK else "warning",
+        )
+    except Exception as e:
+        db.session.rollback()
+        logger.exception(
+            f"[ReprocessarPendencia] Erro ao reprocessar pendencia #{pendencia_id}"
+        )
+        flash(f"Erro ao reprocessar: {e}", "error")
 
     return redirect(url_for("fretes.listar_pendencias_cancelamento_cte"))
