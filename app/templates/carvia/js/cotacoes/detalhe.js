@@ -929,10 +929,10 @@ function iniciarEmissaoCte(comFatura) {
 
 // Validar captcha no input.
 // NOTA: o modal #modalEmitirCteCotacao e incluido no template APOS este script
-// (bloco {% if cotacao.status == 'APROVADO' %}), entao #inpCaptchaCte ainda nao
-// esta no DOM quando este arquivo executa. Anexamos o listener dentro do
-// DOMContentLoaded ou via delegacao para garantir que roda quando o elemento
-// realmente existe.
+// (dentro de bloco if cotacao.status == 'APROVADO'), entao #inpCaptchaCte
+// ainda nao esta no DOM quando este arquivo executa. Anexamos o listener
+// dentro do DOMContentLoaded ou via delegacao para garantir que roda quando
+// o elemento realmente existe.
 function _bindCaptchaListener() {
     const input = document.getElementById('inpCaptchaCte');
     const btn = document.getElementById('btnConfirmarEmissao');
