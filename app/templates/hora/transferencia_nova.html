@@ -1,0 +1,54 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2><i class="fas fa-exchange-alt"></i> Nova transferência</h2>
+<form method="post" class="card p-3">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">Loja origem *</label>
+      {% if origem_fixa %}
+        {% for l in lojas %}
+          {% if l.id == origem_fixa %}
+            <input type="text" class="form-control" value="{{ l.rotulo_display }}" disabled>
+            <input type="hidden" name="loja_origem_id" value="{{ origem_fixa }}">
+          {% endif %}
+        {% endfor %}
+        <small class="text-muted">Sua loja é a origem (escopo de permissão).</small>
+      {% else %}
+        <select name="loja_origem_id" required class="form-select">
+          <option value="">(selecione)</option>
+          {% for l in lojas %}
+            <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
+          {% endfor %}
+        </select>
+      {% endif %}
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Loja destino *</label>
+      <select name="loja_destino_id" required class="form-select">
+        <option value="">(selecione)</option>
+        {% for l in lojas %}
+          <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Chassis * (1 por linha)</label>
+      <textarea name="chassis" required rows="6" class="form-control chassi-mono text-uppercase"
+                placeholder="9ABCDTEST1111111111111111&#10;9ABCDTEST2222222222222222"></textarea>
+      <small class="text-muted">
+        Cole a lista de chassis, um por linha. Todos devem estar em estoque da loja origem
+        e não podem estar em outra transferência ativa.
+      </small>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Observações (opcional)</label>
+      <textarea name="observacoes" rows="2" class="form-control"></textarea>
+    </div>
+  </div>
+  <div class="d-flex justify-content-between mt-3">
+    <a href="{{ url_for('hora.transferencias_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+    <button class="btn btn-primary">Emitir transferência</button>
+  </div>
+</form>
+{% endblock %}

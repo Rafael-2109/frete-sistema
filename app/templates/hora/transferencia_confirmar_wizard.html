@@ -1,0 +1,117 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2><i class="fas fa-qrcode"></i> Confirmar chegada — Transferência #{{ t.id }}</h2>
+<p class="text-muted">
+  De: <strong>{{ t.loja_origem.rotulo_display }}</strong> →
+  Para: <strong>{{ t.loja_destino.rotulo_display }}</strong>
+  &nbsp;&nbsp;|&nbsp;&nbsp;
+  <span id="contador-status">
+    {{ t.itens|selectattr('conferido_destino_em')|list|length }} / {{ t.itens|length }} confirmados
+  </span>
+</p>
+
+<div class="card p-3 mb-3">
+  <h5>Escanear ou digitar chassi</h5>
+  <div class="input-group mb-2">
+    <input type="text" id="chassi-input" class="form-control chassi-mono text-uppercase"
+           placeholder="9XXXXXXX..." autofocus>
+    <button id="btn-confirmar" class="btn btn-success">
+      <i class="fas fa-check"></i> Confirmar chegada
+    </button>
+  </div>
+  <div class="form-check">
+    <input type="checkbox" id="qr-lido" class="form-check-input">
+    <label class="form-check-label small">Escaneado via QR code</label>
+  </div>
+  <textarea id="observacao" rows="2" class="form-control form-control-sm mt-2"
+            placeholder="Observação opcional"></textarea>
+  <div id="msg" class="mt-2 small"></div>
+</div>
+
+<h5>Itens da transferência</h5>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0" id="itens-table">
+      <thead class="table-light">
+        <tr><th>Chassi</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for item in t.itens %}
+        <tr data-chassi="{{ item.numero_chassi }}">
+          <td><code class="chassi-mono">{{ item.numero_chassi }}</code></td>
+          <td class="status-cell">
+            {% if item.conferido_destino_em %}
+              <span class="badge bg-success">Confirmado</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Pendente</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mt-3">
+  <a href="{{ url_for('hora.transferencia_detalhe', transferencia_id=t.id) }}" class="btn btn-outline-secondary">
+    Concluir e voltar
+  </a>
+</div>
+
+<script>
+document.getElementById('btn-confirmar').addEventListener('click', async () => {
+  const input = document.getElementById('chassi-input');
+  const chassi = input.value.trim().toUpperCase();
+  const qrLido = document.getElementById('qr-lido').checked;
+  const obs = document.getElementById('observacao').value.trim();
+  const msg = document.getElementById('msg');
+  msg.innerHTML = '';
+
+  if (!chassi) {
+    msg.innerHTML = '<span class="text-danger">Digite ou escaneie um chassi.</span>';
+    return;
+  }
+
+  const form = new FormData();
+  form.append('numero_chassi', chassi);
+  form.append('qr_code_lido', qrLido ? 'true' : 'false');
+  if (obs) form.append('observacao', obs);
+
+  try {
+    const res = await fetch(
+      "{{ url_for('hora.transferencia_confirmar_item', transferencia_id=t.id) }}",
+      { method: 'POST', body: form, credentials: 'same-origin' }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      msg.innerHTML = `<span class="text-danger">Erro: ${data.error || 'desconhecido'}</span>`;
+      return;
+    }
+    msg.innerHTML = `<span class="text-success">✓ Confirmado. Status: ${data.status}</span>`;
+
+    const row = document.querySelector(`tr[data-chassi="${chassi}"]`);
+    if (row) row.querySelector('.status-cell').innerHTML = '<span class="badge bg-success">Confirmado</span>';
+
+    // Atualiza contador
+    const confirmados = document.querySelectorAll('#itens-table .badge.bg-success').length;
+    const total = document.querySelectorAll('#itens-table tr[data-chassi]').length;
+    document.getElementById('contador-status').textContent = `${confirmados} / ${total} confirmados`;
+
+    input.value = '';
+    input.focus();
+  } catch (e) {
+    msg.innerHTML = `<span class="text-danger">Erro de rede: ${e.message}</span>`;
+  }
+});
+
+// Enter no input dispara confirmacao
+document.getElementById('chassi-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('btn-confirmar').click();
+  }
+});
+</script>
+{% endblock %}

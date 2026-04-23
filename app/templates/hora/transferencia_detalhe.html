@@ -1,0 +1,115 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <h2>
+    <i class="fas fa-exchange-alt"></i> Transferência #{{ t.id }}
+    {% if t.status=='EM_TRANSITO' %}<span class="badge bg-info">Em trânsito</span>
+    {% elif t.status=='CONFIRMADA' %}<span class="badge bg-success">Confirmada</span>
+    {% else %}<span class="badge bg-secondary">Cancelada</span>{% endif %}
+  </h2>
+  <div>
+    {% if t.status=='EM_TRANSITO' and current_user.tem_perm_hora('transferencias', 'editar') %}
+      <a href="{{ url_for('hora.transferencia_confirmar_wizard', transferencia_id=t.id) }}" class="btn btn-sm btn-success">
+        <i class="fas fa-qrcode"></i> Confirmar chegada (wizard)
+      </a>
+    {% endif %}
+    <a href="{{ url_for('hora.transferencias_lista') }}" class="btn btn-sm btn-outline-secondary">← Voltar</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card p-3 mb-3">
+      <dl class="row mb-0">
+        <dt class="col-sm-4">De</dt>
+        <dd class="col-sm-8">{{ t.loja_origem.rotulo_display }}</dd>
+        <dt class="col-sm-4">Para</dt>
+        <dd class="col-sm-8">{{ t.loja_destino.rotulo_display }}</dd>
+        <dt class="col-sm-4">Emitida</dt>
+        <dd class="col-sm-8">{{ t.emitida_em.strftime('%d/%m/%Y %H:%M') }} por {{ t.emitida_por }}</dd>
+        {% if t.confirmada_em %}
+          <dt class="col-sm-4">Confirmada</dt>
+          <dd class="col-sm-8">{{ t.confirmada_em.strftime('%d/%m/%Y %H:%M') }} por {{ t.confirmada_por }}</dd>
+        {% endif %}
+        {% if t.cancelada_em %}
+          <dt class="col-sm-4">Cancelada</dt>
+          <dd class="col-sm-8">{{ t.cancelada_em.strftime('%d/%m/%Y %H:%M') }} por {{ t.cancelada_por }}</dd>
+          <dt class="col-sm-4">Motivo</dt>
+          <dd class="col-sm-8">{{ t.motivo_cancelamento }}</dd>
+        {% endif %}
+        {% if t.observacoes %}
+          <dt class="col-sm-4">Observações</dt>
+          <dd class="col-sm-8">{{ t.observacoes }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+  <div class="col-md-6">
+    {% if t.status=='EM_TRANSITO' and current_user.tem_perm_hora('transferencias', 'editar') %}
+    <div class="card p-3 mb-3 border-danger-subtle">
+      <h5 class="text-danger">Cancelar transferência</h5>
+      <p class="small text-muted mb-2">
+        Só a loja origem pode cancelar enquanto em trânsito. Motos já confirmadas no destino permanecem.
+      </p>
+      <form method="post" action="{{ url_for('hora.transferencia_cancelar', transferencia_id=t.id) }}"
+            onsubmit="return confirm('Cancelar essa transferência? Motos não confirmadas voltarão para origem.');">
+        <textarea name="motivo" required minlength="3" rows="2" class="form-control form-control-sm"
+                  placeholder="Motivo (mín. 3 chars)"></textarea>
+        <button class="btn btn-danger btn-sm mt-2">Cancelar transferência</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<h5>Itens ({{ t.itens|length }})</h5>
+<div class="card mb-3">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Chassi</th><th>Status</th><th>Confirmado em</th><th>Por</th><th>QR</th><th>Obs.</th></tr>
+      </thead>
+      <tbody>
+        {% for item in t.itens %}
+        <tr>
+          <td><code class="chassi-mono">{{ item.numero_chassi }}</code></td>
+          <td>
+            {% if item.conferido_destino_em %}
+              <span class="badge bg-success">Confirmado</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Pendente</span>
+            {% endif %}
+          </td>
+          <td>{% if item.conferido_destino_em %}{{ item.conferido_destino_em.strftime('%d/%m %H:%M') }}{% endif %}</td>
+          <td>{{ item.conferido_destino_por or '—' }}</td>
+          <td>{% if item.qr_code_lido %}<i class="fas fa-check text-success"></i>{% else %}—{% endif %}</td>
+          <td><small class="text-muted">{{ item.observacao_item or '' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h5>Auditoria</h5>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Detalhe</th></tr>
+      </thead>
+      <tbody>
+        {% for a in t.auditoria %}
+        <tr>
+          <td><small>{{ a.criado_em.strftime('%d/%m %H:%M:%S') }}</small></td>
+          <td>{{ a.usuario }}</td>
+          <td><code>{{ a.acao }}</code></td>
+          <td><small>{{ a.detalhe or '' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

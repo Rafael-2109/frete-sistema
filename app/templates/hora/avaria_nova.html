@@ -1,0 +1,62 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2><i class="fas fa-exclamation-triangle"></i> Nova avaria</h2>
+<form method="post" class="card p-3">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">Chassi *</label>
+      <input type="text" name="numero_chassi" required minlength="5"
+             class="form-control chassi-mono text-uppercase"
+             placeholder="Digite ou cole o chassi">
+      <small class="text-muted">A moto deve estar em estoque da loja selecionada.</small>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Loja *</label>
+      <select name="loja_id" required class="form-select">
+        {% for l in lojas %}
+          <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Descrição *</label>
+      <textarea name="descricao" required minlength="3" rows="3" class="form-control"
+                placeholder="Ex: arranhão profundo no para-lama esquerdo; bateria com problema"></textarea>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Fotos * (mín. 1)</label>
+      <div id="fotos-container">
+        <div class="input-group mb-2">
+          <input type="text" name="foto_s3_key" required class="form-control" placeholder="S3 key (ex: hora/avarias/tmp/abc.jpg)">
+          <input type="text" name="foto_legenda" class="form-control" placeholder="Legenda (opcional)">
+        </div>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="adicionarFoto()">
+        <i class="fas fa-plus"></i> Adicionar outra foto
+      </button>
+      <small class="d-block text-muted mt-1">
+        Upload real de S3 segue padrão de <code>hora_peca_faltando_foto</code> (a implementar).
+      </small>
+    </div>
+  </div>
+  <div class="d-flex justify-content-between mt-3">
+    <a href="{{ url_for('hora.avarias_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+    <button class="btn btn-primary">Registrar avaria</button>
+  </div>
+</form>
+
+<script>
+function adicionarFoto() {
+  const c = document.getElementById('fotos-container');
+  const row = document.createElement('div');
+  row.className = 'input-group mb-2';
+  row.innerHTML = `
+    <input type="text" name="foto_s3_key" class="form-control" placeholder="S3 key">
+    <input type="text" name="foto_legenda" class="form-control" placeholder="Legenda">
+    <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+  `;
+  c.appendChild(row);
+}
+</script>
+{% endblock %}

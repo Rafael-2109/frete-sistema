@@ -46,6 +46,14 @@
       <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.pecas') %}active{% endif %}"
          href="{{ url_for('hora.pecas_lista') }}">Peças faltando</a>
     {% endif %}
+    {% if current_user.tem_perm_hora('transferencias', 'ver') %}
+      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.transferencia') %}active{% endif %}"
+         href="{{ url_for('hora.transferencias_lista') }}"><i class="fas fa-exchange-alt"></i> Transferências</a>
+    {% endif %}
+    {% if current_user.tem_perm_hora('avarias', 'ver') %}
+      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.avaria') %}active{% endif %}"
+         href="{{ url_for('hora.avarias_lista') }}"><i class="fas fa-exclamation-triangle"></i> Avarias</a>
+    {% endif %}
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
