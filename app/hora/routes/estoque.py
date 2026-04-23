@@ -77,17 +77,39 @@ def estoque_lista():
 @hora_bp.route('/estoque/chassi/<numero_chassi>')
 @require_hora_perm('estoque', 'ver')
 def estoque_chassi_detalhe(numero_chassi: str):
+    from app.hora.models import (
+        HoraAvaria, HoraTransferencia, HoraTransferenciaItem,
+    )
+
     chassi = numero_chassi.strip().upper()
     moto = HoraMoto.query.get_or_404(chassi)
     eventos = estoque_service.historico_chassi(chassi)
-    # Se o ultimo evento esta em loja especifica, valida acesso
     if eventos:
         ult_loja = eventos[0]['loja_id']
         if ult_loja and not usuario_tem_acesso_a_loja(ult_loja):
             flash('Acesso negado a loja desse chassi.', 'danger')
             return redirect(url_for('hora.estoque_lista'))
+
+    avarias = (
+        HoraAvaria.query
+        .filter_by(numero_chassi=chassi)
+        .order_by(HoraAvaria.criado_em.desc())
+        .all()
+    )
+    transferencias = (
+        HoraTransferencia.query
+        .join(HoraTransferenciaItem,
+              HoraTransferenciaItem.transferencia_id == HoraTransferencia.id)
+        .filter(HoraTransferenciaItem.numero_chassi == chassi)
+        .distinct()
+        .order_by(HoraTransferencia.emitida_em.desc())
+        .all()
+    )
+
     return render_template(
         'hora/estoque_chassi_detalhe.html',
         moto=moto,
         eventos=eventos,
+        avarias=avarias,
+        transferencias=transferencias,
     )

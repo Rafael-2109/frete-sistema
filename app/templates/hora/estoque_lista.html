@@ -104,7 +104,12 @@
         <td>{{ m.modelo_nome }}</td>
         <td>{{ m.cor }}</td>
         <td>{{ m.loja_nome or '—' }}</td>
-        <td><span class="badge hora-badge-{{ m.ultimo_evento|lower }}">{{ m.ultimo_evento }}</span></td>
+        <td>
+          <span class="badge hora-badge-{{ m.ultimo_evento|lower }}">{{ m.ultimo_evento }}</span>
+          {% if m.avarias_abertas and m.avarias_abertas > 0 %}
+            <span class="badge bg-warning text-dark" title="Avarias abertas">⚠ {{ m.avarias_abertas }}</span>
+          {% endif %}
+        </td>
         <td><small>{{ m.ultimo_evento_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
         <td>
           <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=m.chassi) }}"

@@ -106,6 +106,14 @@ def listar_estoque(
             'ultimo_evento_em': ev.timestamp,
             'ultimo_evento_detalhe': ev.detalhe,
         })
+
+    # Badge de avarias abertas
+    if resultado:
+        from app.hora.services.avaria_service import avarias_abertas_por_chassi
+        chassis = [r['chassi'] for r in resultado]
+        abertas = avarias_abertas_por_chassi(chassis)
+        for r in resultado:
+            r['avarias_abertas'] = abertas.get(r['chassi'], 0)
     return resultado
 
 
