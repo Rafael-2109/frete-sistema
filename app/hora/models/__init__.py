@@ -27,6 +27,12 @@ from app.hora.models.permissao import (
     MODULOS_HORA,
     ACOES_HORA,
 )
+from app.hora.models.transferencia import (
+    HoraTransferencia,
+    HoraTransferenciaItem,
+    HoraTransferenciaAuditoria,
+)
+from app.hora.models.avaria import HoraAvaria, HoraAvariaFoto
 
 __all__ = [
     'HoraLoja',
@@ -51,4 +57,9 @@ __all__ = [
     'HoraUserPermissao',
     'MODULOS_HORA',
     'ACOES_HORA',
+    'HoraTransferencia',
+    'HoraTransferenciaItem',
+    'HoraTransferenciaAuditoria',
+    'HoraAvaria',
+    'HoraAvariaFoto',
 ]
