@@ -6,15 +6,22 @@ from app.hora.models import HoraLoja, HoraModelo, HoraMoto  # noqa: F401
 from app.hora.services.moto_service import get_or_create_moto, registrar_evento
 
 
+def _nova_loja(cnpj, apelido, nome):
+    from app.utils.timezone import agora_utc_naive
+    return HoraLoja(
+        cnpj=cnpj,
+        apelido=apelido,
+        nome=nome,
+        razao_social=f'{nome} LTDA',
+        nome_fantasia=nome,
+        ativa=True,
+        atualizado_em=agora_utc_naive(),
+    )
+
+
 @pytest.fixture
 def loja_origem(db):
-    loja = HoraLoja(
-        cnpj='11111111000101',
-        apelido='LojaOrigemTest',
-        razao_social='Loja Origem LTDA',
-        nome_fantasia='Loja Origem',
-        ativa=True,
-    )
+    loja = _nova_loja('11111111000101', 'LojaOrigemTest', 'Loja Origem')
     _db.session.add(loja)
     _db.session.flush()
     return loja
@@ -22,13 +29,7 @@ def loja_origem(db):
 
 @pytest.fixture
 def loja_destino(db):
-    loja = HoraLoja(
-        cnpj='22222222000102',
-        apelido='LojaDestinoTest',
-        razao_social='Loja Destino LTDA',
-        nome_fantasia='Loja Destino',
-        ativa=True,
-    )
+    loja = _nova_loja('22222222000102', 'LojaDestinoTest', 'Loja Destino')
     _db.session.add(loja)
     _db.session.flush()
     return loja

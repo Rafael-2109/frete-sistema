@@ -64,6 +64,7 @@ def registrar_evento(
     """Registra transição em `hora_moto_evento`. Append-only."""
     TIPOS_VALIDOS = {
         'RECEBIDA', 'CONFERIDA', 'TRANSFERIDA',
+        'EM_TRANSITO', 'CANCELADA',
         'RESERVADA', 'VENDIDA', 'DEVOLVIDA', 'AVARIADA',
         'FALTANDO_PECA',
     }
