@@ -169,7 +169,17 @@ Segue o plano aprovado em 2026-04-18:
 3. **P3**: fluxo pedido → NF → recebimento → conferência (ingestão e confronto). **Concluído**.
 4. **P4**: fluxo venda com tabela de preço + desconto auditável. *Em andamento*.
 5. **P5** (2026-04-22): autorização granular por usuário × módulo × ação. **Concluído** — todas as 64 rotas usam `require_hora_perm`.
-6. **Fase 2 futura**: financeiro (títulos a pagar/receber, conciliação, comissões). Todas as tabelas novas com `chassi` FK conforme invariante 2.
+6. **P6** (2026-04-22): **Transferência entre filiais + Registro de avaria em estoque**. **Concluído**.
+   - 5 tabelas novas: `hora_transferencia`, `hora_transferencia_item`, `hora_transferencia_auditoria`, `hora_avaria`, `hora_avaria_foto` (migration `hora_15`).
+   - 2 tipos de evento novos em `hora_moto_evento.tipo`: `EM_TRANSITO`, `CANCELADA`.
+   - Fluxo transferência: Loja A emite → `EM_TRANSITO` (loja_id=destino). Loja B confirma → `TRANSFERIDA`. A pode cancelar enquanto em trânsito → `CANCELADA` (loja_id=origem). Itens já confirmados no destino permanecem.
+   - Avaria: **não bloqueia venda**. Registra + emite evento `AVARIADA`. Foto obrigatória + descrição ≥ 3 chars + múltiplas avarias por chassi permitidas. Listagem de estoque mostra badge "⚠ N" quando há avarias abertas.
+   - `EVENTOS_EM_ESTOQUE` agora inclui `CANCELADA`. `EM_TRANSITO` fica em limbo (helper `listar_em_transito` em `estoque_service`).
+   - Services: `transferencia_service`, `transferencia_audit`, `avaria_service` + helper `loja_origem_permitida_para_transferencia` em `auth_helper`.
+   - 36 testes em `tests/hora/` cobrindo regras de negócio.
+   - Spec: `docs/superpowers/specs/2026-04-22-hora-transferencia-e-avaria-design.md`.
+   - Plano: `docs/superpowers/plans/2026-04-22-hora-transferencia-e-avaria.md`.
+7. **Fase 2 futura**: financeiro (títulos a pagar/receber, conciliação, comissões). Todas as tabelas novas com `chassi` FK conforme invariante 2.
 
 ---
 

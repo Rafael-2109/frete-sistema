@@ -1,0 +1,52 @@
+{
+  "name": "hora_avaria_foto",
+  "description": "Tabela hora_avaria_foto",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "avaria_id",
+      "type": "integer",
+      "description": "FK → hora_avaria.id",
+      "nullable": false
+    },
+    {
+      "name": "foto_s3_key",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "legenda",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "avaria_id",
+      "references": "hora_avaria.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_avaria_foto_avaria_id",
+      "columns": [
+        "avaria_id"
+      ],
+      "unique": false
+    }
+  ]
+}

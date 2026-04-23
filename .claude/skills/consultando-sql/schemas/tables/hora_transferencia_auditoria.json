@@ -1,0 +1,87 @@
+{
+  "name": "hora_transferencia_auditoria",
+  "description": "Tabela hora_transferencia_auditoria",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "transferencia_id",
+      "type": "integer",
+      "description": "FK → hora_transferencia.id",
+      "nullable": false
+    },
+    {
+      "name": "item_id",
+      "type": "integer",
+      "description": "FK → hora_transferencia_item.id"
+    },
+    {
+      "name": "usuario",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "acao",
+      "type": "varchar(40)",
+      "nullable": false
+    },
+    {
+      "name": "campo_alterado",
+      "type": "varchar(60)"
+    },
+    {
+      "name": "valor_antes",
+      "type": "text"
+    },
+    {
+      "name": "valor_depois",
+      "type": "text"
+    },
+    {
+      "name": "detalhe",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "transferencia_id",
+      "references": "hora_transferencia.id"
+    },
+    {
+      "column": "item_id",
+      "references": "hora_transferencia_item.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_transferencia_auditoria_transferencia_id",
+      "columns": [
+        "transferencia_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_transferencia_auditoria_item_id",
+      "columns": [
+        "item_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_transferencia_auditoria_acao",
+      "columns": [
+        "acao"
+      ],
+      "unique": false
+    }
+  ]
+}

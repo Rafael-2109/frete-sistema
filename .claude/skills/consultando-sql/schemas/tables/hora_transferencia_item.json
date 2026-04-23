@@ -1,0 +1,76 @@
+{
+  "name": "hora_transferencia_item",
+  "description": "Tabela hora_transferencia_item",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "transferencia_id",
+      "type": "integer",
+      "description": "FK → hora_transferencia.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_chassi",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "conferido_destino_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "conferido_destino_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "qr_code_lido",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "foto_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "observacao_item",
+      "type": "text"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "transferencia_id",
+      "references": "hora_transferencia.id"
+    },
+    {
+      "column": "numero_chassi",
+      "references": "hora_moto.numero_chassi"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "transferencia_id",
+      "numero_chassi"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_transferencia_item_numero_chassi",
+      "columns": [
+        "numero_chassi"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_transferencia_item_transferencia_id",
+      "columns": [
+        "transferencia_id"
+      ],
+      "unique": false
+    }
+  ]
+}

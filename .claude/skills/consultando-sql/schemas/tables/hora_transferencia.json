@@ -1,0 +1,107 @@
+{
+  "name": "hora_transferencia",
+  "description": "Tabela hora_transferencia",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "loja_origem_id",
+      "type": "integer",
+      "description": "FK → hora_loja.id",
+      "nullable": false
+    },
+    {
+      "name": "loja_destino_id",
+      "type": "integer",
+      "description": "FK → hora_loja.id",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "emitida_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "emitida_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "confirmada_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "confirmada_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cancelada_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelada_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "motivo_cancelamento",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "observacoes",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "loja_origem_id",
+      "references": "hora_loja.id"
+    },
+    {
+      "column": "loja_destino_id",
+      "references": "hora_loja.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_transferencia_loja_origem_id",
+      "columns": [
+        "loja_origem_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_transferencia_loja_destino_id",
+      "columns": [
+        "loja_destino_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_transferencia_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}
