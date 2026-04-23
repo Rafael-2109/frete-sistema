@@ -121,13 +121,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_documentos_cnpj_emissor",
-      "columns": [
-        "cnpj_emissor"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_documento_validade",
       "columns": [
         "data_validade"
@@ -154,6 +147,13 @@
       "columns": [
         "tipo",
         "recebido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_documentos_cnpj_emissor",
+      "columns": [
+        "cnpj_emissor"
       ],
       "unique": false
     }

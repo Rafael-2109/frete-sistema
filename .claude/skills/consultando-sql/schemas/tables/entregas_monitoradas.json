@@ -160,9 +160,16 @@
   ],
   "indices": [
     {
-      "name": "idx_em_entregue",
+      "name": "ix_entregas_monitoradas_origem",
       "columns": [
-        "entregue"
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_status_finalizacao",
+      "columns": [
+        "status_finalizacao"
       ],
       "unique": false
     },
@@ -170,6 +177,13 @@
       "name": "idx_em_nf_cd",
       "columns": [
         "nf_cd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_entregue",
+      "columns": [
+        "entregue"
       ],
       "unique": false
     },
@@ -188,30 +202,16 @@
       "unique": false
     },
     {
+      "name": "ix_entregas_monitoradas_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_em_data_agenda",
       "columns": [
         "data_agenda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_transportadora",
-      "columns": [
-        "transportadora"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_data_faturamento",
-      "columns": [
-        "data_faturamento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
-      "columns": [
-        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -223,23 +223,23 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_origem",
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
-        "origem"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_numero_nf",
+      "name": "idx_em_data_faturamento",
       "columns": [
-        "numero_nf"
+        "data_faturamento"
       ],
       "unique": false
     },
     {
-      "name": "idx_em_status_finalizacao",
+      "name": "idx_em_transportadora",
       "columns": [
-        "status_finalizacao"
+        "transportadora"
       ],
       "unique": false
     }

@@ -162,18 +162,18 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_confirmado",
-      "columns": [
-        "confirmado",
-        "vinculacao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nf_solucao_emitente",
       "columns": [
         "cnpj_emitente",
         "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_solucao_tipo_vinculacao",
+      "columns": [
+        "tipo",
+        "vinculacao"
       ],
       "unique": false
     },
@@ -192,17 +192,17 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_tipo_vinculacao",
+      "name": "ix_pallet_nf_solucoes_tipo",
       "columns": [
-        "tipo",
-        "vinculacao"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_tipo",
+      "name": "idx_nf_solucao_confirmado",
       "columns": [
-        "tipo"
+        "confirmado",
+        "vinculacao"
       ],
       "unique": false
     },

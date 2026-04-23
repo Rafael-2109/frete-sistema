@@ -111,6 +111,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_cte_complementares_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_cte_complementares_cte_numero",
       "columns": [
         "cte_numero"
@@ -118,16 +125,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_operacao_id",
+      "name": "ix_carvia_cte_complementares_numero_comp",
       "columns": [
-        "operacao_id"
+        "numero_comp"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_status",
+      "name": "ix_carvia_cte_complementares_operacao_id",
       "columns": [
-        "status"
+        "operacao_id"
       ],
       "unique": false
     },
@@ -156,13 +163,6 @@
       "name": "ix_carvia_cte_complementares_ctrc_numero",
       "columns": [
         "ctrc_numero"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_cte_complementares_numero_comp",
-      "columns": [
-        "numero_comp"
       ],
       "unique": false
     }

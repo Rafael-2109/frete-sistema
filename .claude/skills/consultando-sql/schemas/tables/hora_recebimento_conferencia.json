@@ -14,6 +14,11 @@
       "nullable": false
     },
     {
+      "name": "ordem",
+      "type": "integer",
+      "nullable": false
+    },
+    {
       "name": "numero_chassi",
       "type": "varchar(30)",
       "nullable": false
@@ -22,6 +27,10 @@
       "name": "conferido_em",
       "type": "timestamp",
       "nullable": false
+    },
+    {
+      "name": "confirmado_em",
+      "type": "timestamp"
     },
     {
       "name": "qr_code_lido",
@@ -34,12 +43,37 @@
       "type": "varchar(500)"
     },
     {
+      "name": "modelo_id_conferido",
+      "type": "integer"
+    },
+    {
+      "name": "cor_conferida",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "avaria_fisica",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "tipo_divergencia",
       "type": "varchar(30)"
     },
     {
       "name": "detalhe_divergencia",
       "type": "text"
+    },
+    {
+      "name": "substituida",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "substituida_por_id",
+      "type": "integer",
+      "description": "FK → hora_recebimento_conferencia.id"
     },
     {
       "name": "operador",
@@ -54,21 +88,38 @@
     {
       "column": "numero_chassi",
       "references": "hora_moto.numero_chassi"
+    },
+    {
+      "column": "modelo_id_conferido",
+      "references": "hora_modelo.id"
+    },
+    {
+      "column": "substituida_por_id",
+      "references": "hora_recebimento_conferencia.id"
     }
   ],
-  "unique_constraints": [
-    [
-      "recebimento_id",
-      "numero_chassi"
-    ]
-  ],
   "indices": [
+    {
+      "name": "ix_hora_recebimento_conferencia_substituida",
+      "columns": [
+        "substituida"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_hora_recebimento_conferencia_numero_chassi",
       "columns": [
         "numero_chassi"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_hora_conferencia_ordem_ativa",
+      "columns": [
+        "recebimento_id",
+        "ordem"
+      ],
+      "unique": true
     },
     {
       "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
@@ -83,6 +134,14 @@
         "recebimento_id"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_hora_conferencia_ativa",
+      "columns": [
+        "recebimento_id",
+        "numero_chassi"
+      ],
+      "unique": true
     }
   ]
 }

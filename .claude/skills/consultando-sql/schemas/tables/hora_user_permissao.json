@@ -1,0 +1,84 @@
+{
+  "name": "hora_user_permissao",
+  "description": "Tabela hora_user_permissao",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "modulo",
+      "type": "varchar(40)",
+      "nullable": false
+    },
+    {
+      "name": "pode_ver",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "pode_criar",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "pode_editar",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "pode_apagar",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "pode_aprovar",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_por_id",
+      "type": "integer"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "user_id",
+      "modulo"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_user_permissao_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_hora_user_perm_lookup",
+      "columns": [
+        "user_id",
+        "modulo"
+      ],
+      "unique": false
+    }
+  ]
+}

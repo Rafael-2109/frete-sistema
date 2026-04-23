@@ -29,7 +29,7 @@
     },
     {
       "name": "status",
-      "type": "varchar(20)",
+      "type": "varchar(30)",
       "nullable": false,
       "default": "ABERTO"
     },
@@ -69,9 +69,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_pedido_loja_destino_id",
+      "name": "ix_hora_pedido_cnpj_destino",
       "columns": [
-        "loja_destino_id"
+        "cnpj_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_pedido_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -83,16 +90,9 @@
       "unique": true
     },
     {
-      "name": "ix_hora_pedido_cnpj_destino",
+      "name": "ix_hora_pedido_loja_destino_id",
       "columns": [
-        "cnpj_destino"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_pedido_status",
-      "columns": [
-        "status"
+        "loja_destino_id"
       ],
       "unique": false
     }

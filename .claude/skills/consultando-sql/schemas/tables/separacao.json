@@ -229,17 +229,23 @@
   ],
   "indices": [
     {
-      "name": "idx_sep_pedido_sync",
+      "name": "idx_sep_cotacao",
       "columns": [
-        "num_pedido",
-        "sincronizado_nf"
+        "cotacao_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_sep_falta_pgto_sync",
+      "name": "idx_sep_num_pedido",
       "columns": [
-        "falta_pagamento",
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_pedido_sync",
+      "columns": [
+        "num_pedido",
         "sincronizado_nf"
       ],
       "unique": false
@@ -254,16 +260,16 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_status",
+      "name": "ix_separacao_separacao_lote_id",
       "columns": [
-        "status"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
+      "name": "ix_separacao_status",
       "columns": [
-        "separacao_lote_id"
+        "status"
       ],
       "unique": false
     },
@@ -288,6 +294,14 @@
       "columns": [
         "expedicao",
         "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_falta_pgto_sync",
+      "columns": [
+        "falta_pagamento",
+        "sincronizado_nf"
       ],
       "unique": false
     },
@@ -323,13 +337,6 @@
       "unique": false
     },
     {
-      "name": "idx_sep_nf_cd",
-      "columns": [
-        "nf_cd"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_falta_item_sync",
       "columns": [
         "falta_item",
@@ -346,24 +353,17 @@
       "unique": false
     },
     {
+      "name": "idx_sep_nf_cd",
+      "columns": [
+        "nf_cd"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_sep_lote_status",
       "columns": [
         "separacao_lote_id",
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_cotacao",
-      "columns": [
-        "cotacao_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_num_pedido",
-      "columns": [
-        "num_pedido"
       ],
       "unique": false
     }

@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 208,
+  "total_tabelas": 216,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1041,6 +1041,42 @@
       ]
     },
     {
+      "name": "hora_avaria",
+      "description": "Tabela hora_avaria",
+      "key_fields": [
+        "numero_chassi",
+        "loja_id",
+        "descricao"
+      ]
+    },
+    {
+      "name": "hora_avaria_foto",
+      "description": "Tabela hora_avaria_foto",
+      "key_fields": [
+        "avaria_id",
+        "foto_s3_key",
+        "legenda"
+      ]
+    },
+    {
+      "name": "hora_conferencia_auditoria",
+      "description": "Tabela hora_conferencia_auditoria",
+      "key_fields": [
+        "recebimento_id",
+        "conferencia_id",
+        "usuario"
+      ]
+    },
+    {
+      "name": "hora_conferencia_divergencia",
+      "description": "Tabela hora_conferencia_divergencia",
+      "key_fields": [
+        "conferencia_id",
+        "tipo",
+        "detalhe"
+      ]
+    },
+    {
       "name": "hora_devolucao_fornecedor",
       "description": "Tabela hora_devolucao_fornecedor",
       "key_fields": [
@@ -1162,8 +1198,8 @@
       "description": "Tabela hora_recebimento_conferencia",
       "key_fields": [
         "recebimento_id",
-        "numero_chassi",
-        "conferido_em"
+        "ordem",
+        "numero_chassi"
       ]
     },
     {
@@ -1173,6 +1209,42 @@
         "modelo_id",
         "preco_tabela",
         "vigencia_inicio"
+      ]
+    },
+    {
+      "name": "hora_transferencia",
+      "description": "Tabela hora_transferencia",
+      "key_fields": [
+        "loja_origem_id",
+        "loja_destino_id",
+        "status"
+      ]
+    },
+    {
+      "name": "hora_transferencia_auditoria",
+      "description": "Tabela hora_transferencia_auditoria",
+      "key_fields": [
+        "transferencia_id",
+        "item_id",
+        "usuario"
+      ]
+    },
+    {
+      "name": "hora_transferencia_item",
+      "description": "Tabela hora_transferencia_item",
+      "key_fields": [
+        "transferencia_id",
+        "numero_chassi",
+        "conferido_destino_em"
+      ]
+    },
+    {
+      "name": "hora_user_permissao",
+      "description": "Tabela hora_user_permissao",
+      "key_fields": [
+        "user_id",
+        "modulo",
+        "pode_ver"
       ]
     },
     {

@@ -120,6 +120,13 @@
   ],
   "indices": [
     {
+      "name": "idx_pessoal_provisoes_data",
+      "columns": [
+        "data_prevista"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_pessoal_provisoes_tipo",
       "columns": [
         "tipo"
@@ -130,13 +137,6 @@
       "name": "idx_pessoal_provisoes_status",
       "columns": [
         "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_provisoes_data",
-      "columns": [
-        "data_prevista"
       ],
       "unique": false
     }

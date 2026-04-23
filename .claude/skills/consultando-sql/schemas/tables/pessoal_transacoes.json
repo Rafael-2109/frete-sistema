@@ -212,6 +212,13 @@
   ],
   "indices": [
     {
+      "name": "idx_pessoal_transacoes_membro",
+      "columns": [
+        "membro_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_pessoal_transacoes_status",
       "columns": [
         "status"
@@ -264,13 +271,6 @@
       "name": "idx_pessoal_transacoes_cpf_cnpj",
       "columns": [
         "cpf_cnpj_parte"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_membro",
-      "columns": [
-        "membro_id"
       ],
       "unique": false
     }

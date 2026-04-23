@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 321,
+  "total_relationships": 335,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1047,6 +1047,42 @@
       "to_column": "id"
     },
     {
+      "from_table": "hora_avaria",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_avaria",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_avaria_foto",
+      "from_column": "avaria_id",
+      "to_table": "hora_avaria",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_conferencia_auditoria",
+      "from_column": "recebimento_id",
+      "to_table": "hora_recebimento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_conferencia_auditoria",
+      "from_column": "conferencia_id",
+      "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_conferencia_divergencia",
+      "from_column": "conferencia_id",
+      "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_devolucao_fornecedor",
       "from_column": "loja_id",
       "to_table": "hora_loja",
@@ -1191,10 +1227,58 @@
       "to_column": "numero_chassi"
     },
     {
+      "from_table": "hora_recebimento_conferencia",
+      "from_column": "modelo_id_conferido",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_recebimento_conferencia",
+      "from_column": "substituida_por_id",
+      "to_table": "hora_recebimento_conferencia",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_tabela_preco",
       "from_column": "modelo_id",
       "to_table": "hora_modelo",
       "to_column": "id"
+    },
+    {
+      "from_table": "hora_transferencia",
+      "from_column": "loja_origem_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_transferencia",
+      "from_column": "loja_destino_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_transferencia_auditoria",
+      "from_column": "transferencia_id",
+      "to_table": "hora_transferencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_transferencia_auditoria",
+      "from_column": "item_id",
+      "to_table": "hora_transferencia_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_transferencia_item",
+      "from_column": "transferencia_id",
+      "to_table": "hora_transferencia",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_transferencia_item",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
     },
     {
       "from_table": "hora_venda",

@@ -71,16 +71,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_peca_faltando_numero_chassi",
+      "name": "ix_hora_peca_faltando_chassi_doador",
       "columns": [
-        "numero_chassi"
+        "chassi_doador"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_peca_faltando_chassi_doador",
+      "name": "ix_hora_peca_faltando_numero_chassi",
       "columns": [
-        "chassi_doador"
+        "numero_chassi"
       ],
       "unique": false
     },

@@ -30,9 +30,17 @@
     },
     {
       "name": "status",
-      "type": "varchar(20)",
+      "type": "varchar(30)",
       "nullable": false,
-      "default": "EM_CONFERENCIA"
+      "default": "AGUARDANDO_QTD"
+    },
+    {
+      "name": "qtd_declarada",
+      "type": "integer"
+    },
+    {
+      "name": "finalizado_em",
+      "type": "timestamp"
     },
     {
       "name": "observacoes",
@@ -68,13 +76,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_recebimento_loja_id",
-      "columns": [
-        "loja_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_recebimento_status",
       "columns": [
         "status"
@@ -85,6 +86,13 @@
       "name": "ix_hora_recebimento_nf_id",
       "columns": [
         "nf_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_recebimento_loja_id",
+      "columns": [
+        "loja_id"
       ],
       "unique": false
     }

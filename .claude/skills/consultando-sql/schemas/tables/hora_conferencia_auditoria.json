@@ -1,0 +1,101 @@
+{
+  "name": "hora_conferencia_auditoria",
+  "description": "Tabela hora_conferencia_auditoria",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "recebimento_id",
+      "type": "integer",
+      "description": "FK → hora_recebimento.id",
+      "nullable": false
+    },
+    {
+      "name": "conferencia_id",
+      "type": "integer",
+      "description": "FK → hora_recebimento_conferencia.id"
+    },
+    {
+      "name": "usuario",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "acao",
+      "type": "varchar(40)",
+      "nullable": false
+    },
+    {
+      "name": "campo_alterado",
+      "type": "varchar(60)"
+    },
+    {
+      "name": "valor_antes",
+      "type": "text"
+    },
+    {
+      "name": "valor_depois",
+      "type": "text"
+    },
+    {
+      "name": "detalhe",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "recebimento_id",
+      "references": "hora_recebimento.id"
+    },
+    {
+      "column": "conferencia_id",
+      "references": "hora_recebimento_conferencia.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_conferencia_auditoria_acao",
+      "columns": [
+        "acao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_conferencia_auditoria_recebimento_id",
+      "columns": [
+        "recebimento_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_conferencia_auditoria_conferencia_id",
+      "columns": [
+        "conferencia_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_conf_aud_rec_ts",
+      "columns": [
+        "recebimento_id",
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_conferencia_auditoria_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    }
+  ]
+}
