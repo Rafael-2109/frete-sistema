@@ -46,11 +46,17 @@ def permissoes_lista():
         .all()
     )
 
-    # Demais usuarios (qualquer status != pendente). Lista admins + ativos + bloqueados etc.
+    # Demais usuarios: apenas os com acesso a Lojas HORA (sistema_lojas=True) e
+    # que NAO sao administradores. Admin ja tem acesso total por bypass (ver
+    # Usuario.tem_perm_hora) e nao faz sentido gerenciar permissoes granulares
+    # para quem ignora todas as restricoes. Usuarios sem sistema_lojas nao
+    # pertencem ao escopo deste modulo — aprovar primeiro no card "Pendentes".
     usuarios = (
         Usuario.query
         .filter(Usuario.status != 'pendente')
-        .order_by(Usuario.sistema_lojas.desc(), Usuario.nome)
+        .filter(Usuario.sistema_lojas.is_(True))
+        .filter(Usuario.perfil != 'administrador')
+        .order_by(Usuario.nome)
         .all()
     )
     lojas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.nome).all()
