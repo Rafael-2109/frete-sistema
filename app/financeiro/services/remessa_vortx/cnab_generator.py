@@ -79,8 +79,8 @@ class CnabVortxGenerator:
         # [0] = '1'
         line[0] = '1'
 
-        # [1:20] = '00000 00000 0000000' (zeros+spaces, 19 chars)
-        line[1:20] = list('00000 00000 0000000')
+        # [1:20] = '00000 000000000000 ' (zeros+spaces, 19 chars)
+        line[1:20] = list('00000 000000000000 ')
 
         # [20:37] = id_empresa_detalhe() (17 chars)
         line[20:37] = list(id_empresa_detalhe())

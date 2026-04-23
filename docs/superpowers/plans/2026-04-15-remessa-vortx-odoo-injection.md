@@ -509,7 +509,7 @@ COMPANY_NAMES = {
     4: 'NACOM GOYA - CD',
 }
 
-CONTA_GRAFENO_HEADER = CONVENIO.rjust(20, '0')
+CONTA_GRAFENO_HEADER = CONTA_SEM_DV[-7:].rjust(20, '0')
 
 def id_empresa_detalhe():
     return '0' + CARTEIRA.zfill(3) + AGENCIA.zfill(5) + CONTA_SEM_DV[-7:] + CONTA_DV
@@ -569,7 +569,7 @@ class TestCnabVortxGenerator:
         gen = CnabVortxGenerator(data_geracao='150426', seq_remessa=1)
         gen.adicionar_boleto(self._boleto_exemplo())
         header = gen.gerar()[0]
-        assert header[26:46] == '00000000000001095757'
+        assert header[26:46] == '00000000000000109575'
 
     def test_detalhe_id_empresa(self):
         gen = CnabVortxGenerator(data_geracao='150426', seq_remessa=1)
@@ -682,7 +682,7 @@ class CnabVortxGenerator:
         d = [' '] * LINE_WIDTH
         id_emp = id_empresa_detalhe()
         d[0] = '1'
-        d[1:20] = list('0' * 5 + ' ' + '0' * 5 + '0' * 7 + ' ')
+        d[1:20] = list('00000 000000000000 ')
         d[20:37] = list(id_emp)
         d[37:62] = list(self._pad(boleto.get('nosso_antigo', ''), 25))
         d[62:65] = list(BANCO)

@@ -21,7 +21,7 @@ COMPANY_NAMES = {
     4: 'NACOM GOYA - CD',
 }
 
-CONTA_GRAFENO_HEADER = CONVENIO.rjust(20, '0')
+CONTA_GRAFENO_HEADER = CONTA_SEM_DV[-7:].rjust(20, '0')
 
 def id_empresa_detalhe():
     return '0' + CARTEIRA.zfill(3) + AGENCIA.zfill(5) + CONTA_SEM_DV[-7:] + CONTA_DV

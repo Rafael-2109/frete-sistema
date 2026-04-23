@@ -50,7 +50,7 @@ class TestCnabVortxGenerator:
         gen.adicionar_boleto(self._boleto_exemplo())
         lines = gen.gerar()
         header = lines[0]
-        assert header[26:46] == '00000000000001095757'
+        assert header[26:46] == '00000000000000109575'
 
     def test_detalhe_id_empresa(self):
         gen = self._make_generator()
