@@ -2,7 +2,7 @@
 
 **Branch**: `feature/chat-inapp`
 **Ultima atualizacao**: 2026-04-23
-**Progresso**: 9 de 25 tasks concluidas (36%)
+**Progresso**: 10 de 25 tasks concluidas (40%)
 
 ---
 
@@ -92,8 +92,8 @@ DB local tem 7 tabelas `chat_*` criadas (migration rodou). Indices + trigger FTS
 | 7 | AttachmentService | ✅ | `4f9226d5` + `ae131111` + `908ca958` | Fix review: `secure_filename` + S3_BUCKET guard |
 | 10 | Publisher Redis | ✅ | `c6799651` + `5a59c879` | — |
 | 11 | SSE generator | ✅ | `0c36f0ec` | — |
-| **8** | **MessageService** | ⏳ **PROXIMA** | — | Depende de 4+5+6+10 (todos feitos) |
-| 9 | SystemNotifier | pending | — | Depende de 6 + 10 |
+| 8 | MessageService | ✅ | `1a53bb1f` + `1b232823` + `7193a5f8` | Fixes review: SQL LIKE escape `_` + mock publish em edit/delete + `db.session.get` com expire_all |
+| **9** | **SystemNotifier** | ⏳ **PROXIMA** | — | Depende de 6 + 10 (ambos feitos) |
 | 12 | Rotas thread | pending | — | Depende de 6 |
 | 13 | Rotas mensagem | pending | — | Depende de 8 |
 | 14 | Rotas stream/unread/search | pending | — | Depende de 11 |
