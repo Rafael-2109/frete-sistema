@@ -5,7 +5,7 @@ import uuid
 from app import db
 from app.chat.services.message_service import MessageService, MessageError
 from app.chat.services.thread_service import ThreadService
-from app.chat.models import ChatMessage, ChatMention
+from app.chat.models import ChatMessage, ChatMention, ChatMember, ChatThread
 
 # Prefixo unico por run para evitar colisao de emails em DB com commits persistidos
 _RUN = uuid.uuid4().hex[:8]
@@ -60,22 +60,30 @@ def test_send_with_mentions_persists_rows(mock_pub, db_session, user_factory):
 
 @patch('app.chat.realtime.publisher.publish')
 def test_send_with_mention_escapes_like_wildcards(mock_pub, db_session, user_factory):
-    """Regression: `_` e wildcard LIKE single-char. Sem escape, @user_1 casa com userX1,
-    userY1, etc. Garantir que mention literal com `_` so resolve o usuario exato."""
+    """Regression: `_` e wildcard LIKE single-char. Sem escape, @userWS_1 casa com
+    userWSX1, userWSY1, etc. Thread com 3 membros: sender + alvo literal + falso positivo.
+    Mencao `@userWS_1_<run>` deve resolver APENAS o alvo literal."""
+    sender = user_factory(email=f'ms_sender_{_RUN}@t.local')
     u_exato = user_factory(email=f'userWS_1_{_RUN}@t.local')
-    u_falso = user_factory(email=f'userWSX1_{_RUN}@t.local')  # casaria sem escape
-    thread = ThreadService.get_or_create_dm(u_exato, u_falso)
+    u_falso = user_factory(email=f'userWSX1_{_RUN}@t.local')  # casaria sem escape do `_`
+
+    # Criar group thread com 3 membros (sender, u_exato, u_falso)
+    thread = ChatThread(tipo='group', titulo=f'regression_{_RUN}', criado_por_id=sender.id)
+    db.session.add(thread)
+    db.session.flush()
+    for u in (sender, u_exato, u_falso):
+        db.session.add(ChatMember(thread_id=thread.id, user_id=u.id, role='member'))
+    db.session.commit()
 
     msg = MessageService.send(
-        sender=u_exato, thread_id=thread.id,
-        content=f'ola @userWS_1_{_RUN} (literal)',
+        sender=sender, thread_id=thread.id,
+        content=f'ola @userWS_1_{_RUN}',
     )
     mentioned_ids = {
         m.mentioned_user_id for m in ChatMention.query.filter_by(message_id=msg.id).all()
     }
-    # Apenas u_exato referenciado por mention (u_exato tambem nao pode se auto-mencionar,
-    # entao mentioned_ids pode estar vazio — o importante e NAO incluir u_falso).
-    assert u_falso.id not in mentioned_ids
+    assert u_exato.id in mentioned_ids        # resolve o literal
+    assert u_falso.id not in mentioned_ids    # `_` escapado nao casa com 'X'
 
 
 @patch('app.chat.realtime.publisher.publish')
