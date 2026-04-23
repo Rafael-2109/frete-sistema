@@ -797,38 +797,144 @@ async def emitir_cte(args):
                         await asyncio.sleep(8)
                         continue
 
-                    # --- Aviso: Cliente bloqueado (desbloquear via popup real) ---
+                    # --- Aviso: Cliente bloqueado (desbloquear, 2 fluxos SSW) ---
+                    #
+                    # Ao clicar "Desbloquear cliente pagador" o SSW carrega a
+                    # tela 389/ssw1105 (Credito/Transportar). Testado com
+                    # MGS ELETRO (2026-04-23, emissoes id=11 e id=12):
+                    # o SSW abriu ssw1105 na MESMA popup, nao em nova page.
+                    # Por isso usamos expect_page com timeout curto e fazemos
+                    # fallback para detectar navegacao in-place via URL/body.
+                    # Em ambos casos: fill f2="S" + click "►" para gravar +
+                    # aguardar SSW voltar a tela 004 de emissao CTe.
                     if ('bloqueado' in body_lower or 'desbloquear' in body_lower) \
                             and 'transporte' in body_lower:
                         avisos_tratados.append("CLIENTE_BLOQUEADO")
                         await capturar_screenshot_local(popup, f"07_aviso_{aviso_idx}_bloqueio")
 
-                        # Clicar "Desbloquear cliente pagador" → abre popup real
+                        # Alvo do fill: desbloq_page se SSW abriu em nova janela,
+                        # ou o proprio popup se o SSW navegou in-place.
+                        desbloq_target = None
+                        desbloq_origem = None
                         try:
-                            async with context.expect_page(timeout=15000) as desbloq_info:
+                            async with context.expect_page(timeout=4000) as desbloq_info:
                                 await popup.get_by_role(
                                     "link", name="Desbloquear cliente pagador"
                                 ).click()
-                            desbloq_page = await desbloq_info.value
+                            desbloq_target = await desbloq_info.value
+                            desbloq_origem = "nova_page"
                             await asyncio.sleep(2)
-
-                            # Mudar campo [id="2"] de "N" para "S" e confirmar
-                            await desbloq_page.locator('[id="2"]').fill("S")
-                            await desbloq_page.get_by_role("link", name="►").click()
+                        except Exception:
+                            # Timeout curto: SSW provavelmente navegou a mesma popup
+                            # para ssw1105. Aguardar e verificar se o body mudou.
                             await asyncio.sleep(3)
-
-                            # Fechar popup de desbloqueio (pode fechar sozinho)
                             try:
-                                await desbloq_page.close()
+                                body_check = await popup.evaluate(
+                                    "() => (document.body?.innerText || '').substring(0,3000).toLowerCase()"
+                                )
                             except Exception:
-                                pass
+                                body_check = ''
+                            # Tela 389/ssw1105 tem "limites de credito" e "transportar:"
+                            if ('limites de cr' in body_check
+                                    and 'transportar' in body_check):
+                                desbloq_target = popup
+                                desbloq_origem = "inline_popup"
+                            else:
+                                avisos_tratados.append(
+                                    "DESBLOQUEIO_SEM_TARGET: body nao parece ssw1105"
+                                )
 
-                            avisos_tratados.append("CLIENTE_DESBLOQUEADO")
-                        except Exception as e:
-                            avisos_tratados.append(f"DESBLOQUEIO_ERRO: {e}")
+                        if desbloq_target is not None:
+                            avisos_tratados.append(
+                                f"DESBLOQUEIO_TARGET:{desbloq_origem}"
+                            )
+                            try:
+                                # Seletor robusto: HTML real do ssw1105 tem
+                                # <input name="f2" id="2" value="N" ...>.
+                                # Tentamos id="2" primeiro, depois name="f2".
+                                campo_f2 = desbloq_target.locator(
+                                    'input[id="2"], input[name="f2"]'
+                                ).first
+                                await campo_f2.wait_for(state="visible", timeout=5000)
+                                await campo_f2.fill("S")
+                                # Blur para disparar validacao SSW
+                                await campo_f2.press("Tab")
+                                await asyncio.sleep(0.5)
 
-                        # Re-simular na MESMA page2 apos desbloqueio (fallback JS)
-                        await asyncio.sleep(2)
+                                # Gravar (SALVAR): clicar "►" que dispara o
+                                # submit via concluir/ajaxEnvia e persiste.
+                                # Seletor robusto: a tela 389 pode ter outros
+                                # "►" (Consulta Serasa, paginacao). Priorizamos
+                                # o link com onclick contendo 'concluir' ou
+                                # 'ajaxEnvia' SEM parametros ('INA','SERASA')
+                                # que sinalizam ACOES auxiliares. Fallback para
+                                # get_by_role se nao achar via JS.
+                                clicou_gravar = await desbloq_target.evaluate(
+                                    """() => {
+                                        const links = document.querySelectorAll('a');
+                                        for (const el of links) {
+                                            const t = (el.textContent || '').trim();
+                                            if (t !== '►') continue;
+                                            const oc = el.getAttribute('onclick') || '';
+                                            // Links auxiliares (INA, SERASA)
+                                            // nao sao de gravar:
+                                            if (oc.includes("'INA'") ||
+                                                oc.includes("'SERASA'") ||
+                                                oc.includes("'INFO'")) continue;
+                                            el.click();
+                                            return oc.substring(0, 150);
+                                        }
+                                        return null;
+                                    }"""
+                                )
+                                if not clicou_gravar:
+                                    # Fallback: primeiro ► da DOM (codigo antigo)
+                                    await desbloq_target.get_by_role(
+                                        "link", name="►"
+                                    ).first.click(timeout=5000)
+                                    avisos_tratados.append(
+                                        "GRAVAR_F2_FALLBACK:first"
+                                    )
+                                else:
+                                    avisos_tratados.append(
+                                        f"GRAVAR_F2_ONCLICK:{clicou_gravar[:80]}"
+                                    )
+                                # Aguardar SSW processar gravacao + voltar
+                                # para tela 004 (ou fechar popup de desbloqueio).
+                                await asyncio.sleep(5)
+                                await capturar_screenshot_local(
+                                    desbloq_target, f"07_aviso_{aviso_idx}_f2_gravado"
+                                )
+
+                                # Se foi nova page, FECHAR (cliente pagador
+                                # gravou e o SSW espera fechamento manual).
+                                if desbloq_origem == "nova_page":
+                                    try:
+                                        await desbloq_target.close()
+                                    except Exception:
+                                        pass
+
+                                avisos_tratados.append("CLIENTE_DESBLOQUEADO")
+                                desbloqueio_ok = True
+                            except Exception as e:
+                                avisos_tratados.append(f"DESBLOQUEIO_ERRO: {e}")
+                                desbloqueio_ok = False
+                        else:
+                            desbloqueio_ok = False
+
+                        if not desbloqueio_ok:
+                            # Desbloqueio falhou (nova page nao abriu E navegacao
+                            # in-place nao foi detectada, OU o fill/click falhou).
+                            # Interromper loop: sem desbloqueio o proximo ciclo
+                            # veria o mesmo painel, gastando ate MAX_AVISOS=6
+                            # iteracoes (~84s) antes de falhar.
+                            avisos_tratados.append("CLIENTE_BLOQUEADO_ABORT")
+                            break
+
+                        # Re-simular na MESMA popup apos desbloqueio. Se o SSW
+                        # navegou in-place, pode ser necessario aguardar mais
+                        # tempo para ele retornar da tela 389 para a 004.
+                        await asyncio.sleep(3)
                         try:
                             await _clicar_simular(popup)
                         except Exception as e_resim:
