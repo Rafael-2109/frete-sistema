@@ -20,9 +20,15 @@ from app.hora.models import (
 
 
 # Eventos que significam "moto esta no estoque da loja do evento"
-EVENTOS_EM_ESTOQUE = ('RECEBIDA', 'CONFERIDA', 'TRANSFERIDA', 'AVARIADA', 'FALTANDO_PECA')
+EVENTOS_EM_ESTOQUE = (
+    'RECEBIDA', 'CONFERIDA', 'TRANSFERIDA',
+    'CANCELADA',  # transferencia cancelada — moto voltou a origem
+    'AVARIADA', 'FALTANDO_PECA',
+)
 # Eventos que tiram a moto do estoque
 EVENTOS_FORA_ESTOQUE = ('VENDIDA', 'DEVOLVIDA')
+# Eventos "em limbo" — nao estao no estoque de nenhuma loja
+EVENTOS_EM_TRANSITO = ('EM_TRANSITO',)
 
 
 def _subquery_ultimo_evento_id():
@@ -220,4 +226,51 @@ def historico_chassi(numero_chassi: str) -> List[dict]:
             'origem_id': e.origem_id,
         }
         for e in eventos
+    ]
+
+
+def listar_em_transito(
+    lojas_permitidas_ids: Optional[List[int]] = None,
+) -> List[dict]:
+    """Motos com ultimo evento EM_TRANSITO, filtradas por loja_id do evento.
+
+    Interpretacao: o evento EM_TRANSITO e emitido com loja_id=destino
+    (para que operador do destino veja 'motos chegando'). Origem ve pelo
+    detalhe ou consulta alternativa.
+    """
+    sub = _subquery_ultimo_evento_id()
+    q = (
+        db.session.query(HoraMotoEvento, HoraMoto, HoraModelo, HoraLoja)
+        .join(
+            sub,
+            and_(
+                HoraMotoEvento.numero_chassi == sub.c.chassi,
+                HoraMotoEvento.id == sub.c.max_id,
+            ),
+        )
+        .join(HoraMoto, HoraMotoEvento.numero_chassi == HoraMoto.numero_chassi)
+        .join(HoraModelo, HoraMoto.modelo_id == HoraModelo.id)
+        .outerjoin(HoraLoja, HoraMotoEvento.loja_id == HoraLoja.id)
+        .filter(HoraMotoEvento.tipo == 'EM_TRANSITO')
+    )
+
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        q = q.filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
+
+    q = q.order_by(HoraMotoEvento.timestamp.desc())
+
+    return [
+        {
+            'numero_chassi': moto.numero_chassi,
+            'modelo_id': modelo.id,
+            'modelo_nome': modelo.nome_modelo,
+            'cor': moto.cor,
+            'loja_destino_id': loja.id if loja else None,
+            'loja_destino_nome': loja.rotulo_display if loja else None,
+            'emitido_em': ev.timestamp,
+            'detalhe': ev.detalhe,
+        }
+        for ev, moto, modelo, loja in q.all()
     ]
