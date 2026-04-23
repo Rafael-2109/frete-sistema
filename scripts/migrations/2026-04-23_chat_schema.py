@@ -13,7 +13,6 @@ com psycopg2 (alternativa mais robusta que text() para blocos SQL inteiros).
 """
 
 import sys
-import os
 from pathlib import Path
 from sqlalchemy import text
 
