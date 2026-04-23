@@ -750,18 +750,35 @@
           </li>
           {% endif %}
 
-          <!-- 🤖 IA - Agente e Analytics -->
+          <!-- 🤖 IA - Agentes e Analytics -->
+          {# Visibilidade dos agentes:                                                 #}
+          {#   - Agente Nacom: sistema_logistica OR sistema_motochefe OR administrador #}
+          {#   - Agente Lojas HORA: sistema_lojas OR administrador                     #}
+          {# Rafael (admin) ve ambos.                                                  #}
+          {% set _can_agente_nacom = current_user.sistema_logistica or current_user.sistema_motochefe or current_user.perfil == 'administrador' %}
+          {% set _can_agente_lojas = current_user.sistema_lojas or current_user.perfil == 'administrador' %}
+          {% if _can_agente_nacom or _can_agente_lojas %}
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="menuIA" role="button" data-bs-toggle="dropdown">
               <i class="fas fa-robot text-info"></i> IA
             </a>
             <ul class="dropdown-menu">
+              {% if _can_agente_nacom %}
               <li><a class="dropdown-item" href="{{ url_for('agente.pagina_chat') }}"
-                  title="Agente Logístico - Consultas inteligentes de pedidos e estoque">
-                  <i class="fas fa-comments text-info"></i> Agente
+                  title="Agente Nacom — logistica, frete, carteira, Odoo, SSW">
+                  <i class="fas fa-comments text-info"></i> Agente Nacom
                   <span class="badge bg-primary ms-1" style="font-size: 0.6rem;">SDK</span>
                 </a></li>
+              {% endif %}
+              {% if _can_agente_lojas %}
+              <li><a class="dropdown-item" href="{{ url_for('agente_lojas.pagina_chat') }}"
+                  title="Agente Lojas HORA — varejo B2C de motos eletricas">
+                  <i class="fas fa-motorcycle text-primary"></i> Agente Lojas HORA
+                  <span class="badge bg-warning text-dark ms-1" style="font-size: 0.6rem;">M0</span>
+                </a></li>
+              {% endif %}
               {% if current_user.perfil == 'administrador' %}
+              <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="{{ url_for('agente.pagina_insights') }}"
                   title="Insights e Analytics do Agente">
                   <i class="fas fa-chart-bar text-warning"></i> Insights
@@ -773,6 +790,7 @@
               {% endif %}
             </ul>
           </li>
+          {% endif %}
 
           <!-- Theme Toggle -->
           <li class="nav-item">

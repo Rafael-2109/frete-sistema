@@ -950,6 +950,16 @@ def create_app(config_name=None):
     except Exception as e:
         app.logger.error(f"❌ Erro ao inicializar Agente Logístico: {e}")
 
+    # 🏪 Agente Lojas HORA - Claude Agent SDK (isolado do logistico)
+    try:
+        from app.agente_lojas import init_app as init_agente_lojas
+        init_agente_lojas(app)
+        app.logger.info("✅ Agente Lojas HORA registrado com sucesso")
+    except ImportError as e:
+        app.logger.warning(f"⚠️ Agente Lojas HORA não disponível: {e}")
+    except Exception as e:
+        app.logger.error(f"❌ Erro ao inicializar Agente Lojas HORA: {e}")
+
     # 🔐 Sistema de Permissões
 
     # 🎭 Registrar helpers de permissão nos templates

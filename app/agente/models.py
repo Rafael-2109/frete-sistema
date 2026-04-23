@@ -48,6 +48,11 @@ class AgentSession(db.Model):
     session_id = db.Column(db.String(255), unique=True, nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, index=True)
 
+    # Agente que produziu esta sessao: 'web' (Nacom logistico) | 'lojas' (Lojas HORA)
+    # Default 'web' mantem compat com dados legados. Migration:
+    # scripts/migrations/2026_04_22_add_agente_coluna.{py,sql}
+    agente = db.Column(db.String(20), nullable=False, default='web', index=True)
+
     # Campos para UI (FEAT-011)
     title = db.Column(db.String(200), nullable=True)
     message_count = db.Column(db.Integer, default=0)
@@ -496,6 +501,11 @@ class AgentMemory(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False, index=True)
+
+    # Agente dono da memoria: 'web' (Nacom logistico) | 'lojas' (Lojas HORA)
+    # Default 'web' mantem compat com dados legados. Retrieval DEVE filtrar por
+    # agente para evitar cross-contamination (op de loja nao ve memoria logistica).
+    agente = db.Column(db.String(20), nullable=False, default='web', index=True)
 
     # Path do arquivo virtual (ex: /memories/preferences.xml)
     path = db.Column(db.String(500), nullable=False)
