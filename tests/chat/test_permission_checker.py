@@ -3,7 +3,6 @@ Tests para PermissionChecker — Task 5 chat in-app.
 
 Todos os testes sao pure (sem DB): usam SimpleNamespace como stub de usuario.
 """
-import pytest
 from types import SimpleNamespace
 
 from app.chat.services.permission_checker import (
