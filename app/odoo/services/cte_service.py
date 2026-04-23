@@ -211,6 +211,13 @@ class CteService:
                     erro_msg = f"Erro ao processar CTe {cte_data.get('id')}: {str(e)}"
                     logger.error(f"❌ {erro_msg}")
                     resultado['erros'].append(erro_msg)
+                    # Rollback para liberar a sessao — sem isso o proximo CTe herda
+                    # PendingRollbackError e cascateia para todos os CTes restantes
+                    # (Sentry PYTHON-FLASK-NV: 1 timeout -> 376 erros em cascata).
+                    try:
+                        db.session.rollback()
+                    except Exception as rb_err:
+                        logger.error(f"   ⚠️  Falha ao rollback apos erro: {rb_err}")
 
             # 3. Commit final
             db.session.commit()

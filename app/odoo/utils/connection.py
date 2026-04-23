@@ -153,7 +153,7 @@ class OdooConnection:
 
             return False
     
-    def execute_kw(self, model: str, method: str, args: list, kwargs: Optional[dict] = None, timeout_override: Optional[int] = None) -> Any:
+    def execute_kw(self, model: str, method: str, args: list, kwargs: Optional[dict] = None, timeout_override: Optional[int] = None, expected_timeout: bool = False) -> Any:
         """
         Executa método no Odoo com retry automático
         Protegido por Circuit Breaker
@@ -164,6 +164,9 @@ class OdooConnection:
             args: Argumentos posicionais
             kwargs: Argumentos nomeados
             timeout_override: Timeout específico em segundos (sobrescreve o padrão para operações longas)
+            expected_timeout: Se True, timeout é parte normal do fluxo (ex: fire-and-poll).
+                              Loga como WARNING em vez de ERROR para evitar falso positivo no Sentry.
+                              Caller DEVE tratar o Exception e recuperar (polling, retry etc).
         """
         # 🔧 CORREÇÃO 15/12/2025: Determinar timeout efetivo ANTES da execução
         # O timeout_override SEMPRE deve ser aplicado quando especificado,
@@ -206,10 +209,18 @@ class OdooConnection:
                 return result
 
             except socket.timeout as e:
-                # ✅ Log específico para timeout de socket
-                logger.error(
-                    f"⏰ TIMEOUT de socket após {timeout_efetivo}s em {model}.{method}: {e}"
-                )
+                # ✅ Log específico para timeout de socket.
+                # Quando o caller sinaliza expected_timeout=True (ex: fire-and-poll),
+                # o timeout é parte normal do fluxo — loga como WARNING para evitar
+                # falso positivo no Sentry. Caller é responsável por tratar o Exception.
+                if expected_timeout:
+                    logger.warning(
+                        f"⏰ Timeout esperado após {timeout_efetivo}s em {model}.{method} (fire-and-poll): {e}"
+                    )
+                else:
+                    logger.error(
+                        f"⏰ TIMEOUT de socket após {timeout_efetivo}s em {model}.{method}: {e}"
+                    )
                 raise Exception(f"Timeout de {timeout_efetivo}s excedido em {model}.{method}")
 
             except Exception as e:

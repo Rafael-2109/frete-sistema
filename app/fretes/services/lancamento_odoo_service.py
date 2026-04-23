@@ -564,6 +564,7 @@ class LancamentoOdooService:
                 [[dfe_id]],
                 {'context': contexto},
                 timeout_override=self.FIRE_TIMEOUT_PO,
+                expected_timeout=True,  # fire-and-poll — timeout e fluxo normal
             )
         except Exception as e:
             erro_str = str(e)
