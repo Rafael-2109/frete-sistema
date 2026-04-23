@@ -33,6 +33,8 @@
 | LOCALIZAR ROTA/TELA/API | "onde fica X?", "qual URL de Y?", "quais APIs de Z?", "como acesso tela de W?" | -> `mcp__routes__search_routes` (MCP tool, agente web) / Grep+Glob (Claude Code) |
 | AGENTE (memorias, sessoes, diagnosticos) | "memorias do usuario", "sessoes anteriores", "health score agente", "knowledge graph", "consolidar memorias", "padroes aprendidos" | -> `gerindo-agente` |
 | PROBLEMA COMPLEXO (investigacao, root cause) | "resolver problema complexo em...", "investigar bug em...", "por que X esta...", "analisar modulo completo", "mapear dependencias", "root cause analysis" | -> `resolvendo-problemas` |
+| LOJAS HORA — ESTOQUE (motos eletricas B2C) | "quantas motos tenho?", "quanto de <modelo>?", "em transito", "estoque por loja" — APENAS no Agente Lojas HORA | -> `consultando-estoque-loja` |
+| LOJAS HORA — RASTREAR CHASSI | "cade o chassi XYZ?", "historico do chassi", "essa moto foi vendida?", "em que pedido veio" — APENAS no Agente Lojas HORA | -> `rastreando-chassi` |
 
 ---
 
