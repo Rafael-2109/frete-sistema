@@ -1,0 +1,51 @@
+{
+  "name": "chat_reactions",
+  "description": "Tabela chat_reactions",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "message_id",
+      "type": "bigint",
+      "description": "FK → chat_messages.id",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "emoji",
+      "type": "varchar(16)",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "message_id",
+      "references": "chat_messages.id"
+    },
+    {
+      "column": "user_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "message_id",
+      "user_id",
+      "emoji"
+    ]
+  ]
+}

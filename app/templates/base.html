@@ -822,6 +822,14 @@
           </li>
           {% endif %}
 
+          <!-- Chat in-app (Task 16) -->
+          {% include 'chat/_navbar_badge.html' %}
+
+          <!-- Compartilhar esta tela (Task 19) -->
+          <li class="nav-item d-flex align-items-center">
+            {% include 'chat/_share_button.html' %}
+          </li>
+
           <!-- Theme Toggle -->
           <li class="nav-item">
             <button class="nc-theme-toggle" type="button" title="Alternar tema">
@@ -863,6 +871,12 @@
     {% endif %}
     {% endwith %}
   </div>
+
+  <!-- Chat client JS (Task 17) + UI (Task 18). Apenas para usuarios autenticados. -->
+  {% if current_user.is_authenticated %}
+  <script src="{{ url_for('static', filename='chat/js/chat_client.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='chat/js/chat_ui.js') }}" defer></script>
+  {% endif %}
 
   <!-- Carregamento de bibliotecas principais ANTES do conteúdo -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

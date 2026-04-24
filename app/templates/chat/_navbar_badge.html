@@ -1,0 +1,13 @@
+{#
+  Task 16 — Botao de chat + badges (sistema/usuario) na navbar.
+  Renderizado em base.html antes do Theme Toggle.
+  Badges ficam hidden por padrao; JS (Task 17) torna visivel quando unread > 0.
+#}
+<li class="nav-item">
+  <button id="chat-toggle" type="button" class="chat-navbar-btn"
+          title="Chat" aria-label="Abrir chat">
+    <i class="fas fa-comment-dots"></i>
+    <span id="chat-badge-system" class="chat-badge chat-badge--system hidden" aria-live="polite">0</span>
+    <span id="chat-badge-user" class="chat-badge chat-badge--user hidden" aria-live="polite">0</span>
+  </button>
+</li>

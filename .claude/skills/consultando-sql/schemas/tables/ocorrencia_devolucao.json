@@ -180,54 +180,11 @@
   ],
   "indices": [
     {
-      "name": "ix_ocorrencia_devolucao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_autorizado_por_id",
-      "columns": [
-        "autorizado_por_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_ocorrencia_devolucao_nf_devolucao_id",
       "columns": [
         "nf_devolucao_id"
       ],
       "unique": true
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_numero_ocorrencia",
-      "columns": [
-        "numero_ocorrencia"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_ocorrencia_devolucao_origem_id",
-      "columns": [
-        "origem_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_ocorrencia_status_destino",
-      "columns": [
-        "status",
-        "destino"
-      ],
-      "unique": false
     },
     {
       "name": "idx_ocorrencia_categoria",
@@ -256,6 +213,49 @@
       "name": "idx_ocorrencia_data_abertura",
       "columns": [
         "data_abertura"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_autorizado_por_id",
+      "columns": [
+        "autorizado_por_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_ocorrencia_status_destino",
+      "columns": [
+        "status",
+        "destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_numero_ocorrencia",
+      "columns": [
+        "numero_ocorrencia"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_ocorrencia_devolucao_origem_id",
+      "columns": [
+        "origem_id"
       ],
       "unique": false
     }

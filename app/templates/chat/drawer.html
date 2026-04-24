@@ -1,0 +1,23 @@
+{#
+  Task 18 — Drawer lateral do chat.
+  Renderizado via GET /api/chat/ui/drawer (fetch HTML), injetado em <body>
+  por chat_ui.js. Nao estende base.html (e fragmento).
+#}
+<div class="chat-drawer" id="chat-drawer" aria-hidden="true" role="dialog" aria-label="Chat">
+  <div class="chat-drawer__header">
+    <h3 class="chat-drawer__title mb-0">Chat</h3>
+    <button class="chat-drawer__close" id="chat-drawer-close"
+            type="button" aria-label="Fechar chat">&times;</button>
+  </div>
+  <div class="chat-drawer__tabs" role="tablist">
+    <button class="chat-drawer__tab active" type="button" data-tipo="" role="tab">Todos</button>
+    <button class="chat-drawer__tab" type="button" data-tipo="dm" role="tab">DMs</button>
+    <button class="chat-drawer__tab" type="button" data-tipo="group" role="tab">Grupos</button>
+    <button class="chat-drawer__tab" type="button" data-tipo="entity" role="tab">Entidades</button>
+    <button class="chat-drawer__tab" type="button" data-tipo="system_dm" role="tab">Sistema</button>
+  </div>
+  <div class="chat-drawer__list" id="chat-thread-list">
+    <div class="text-muted p-3">Carregando...</div>
+  </div>
+  <div class="chat-drawer__panel" id="chat-panel-container" style="display:none"></div>
+</div>

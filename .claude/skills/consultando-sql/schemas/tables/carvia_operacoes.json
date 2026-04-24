@@ -218,16 +218,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_operacoes_cte_numero",
+      "name": "ix_carvia_operacoes_fatura_cliente_id",
       "columns": [
-        "cte_numero"
+        "fatura_cliente_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_fatura_cliente_id",
+      "name": "ix_carvia_operacoes_ctrc_numero",
       "columns": [
-        "fatura_cliente_id"
+        "ctrc_numero"
       ],
       "unique": false
     },
@@ -239,9 +239,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_operacoes_ctrc_numero",
+      "name": "ix_carvia_operacoes_cte_numero",
       "columns": [
-        "ctrc_numero"
+        "cte_numero"
       ],
       "unique": false
     }

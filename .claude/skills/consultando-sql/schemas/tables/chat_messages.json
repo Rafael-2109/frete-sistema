@@ -1,0 +1,119 @@
+{
+  "name": "chat_messages",
+  "description": "Tabela chat_messages",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "thread_id",
+      "type": "bigint",
+      "description": "FK → chat_threads.id",
+      "nullable": false
+    },
+    {
+      "name": "sender_type",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "sender_user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "sender_system_source",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "content_tsv",
+      "type": "tsvector"
+    },
+    {
+      "name": "reply_to_message_id",
+      "type": "bigint",
+      "description": "FK → chat_messages.id"
+    },
+    {
+      "name": "deep_link",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "nivel",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "dados",
+      "type": "jsonb"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "editado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "deletado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "deletado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "thread_id",
+      "references": "chat_threads.id"
+    },
+    {
+      "column": "sender_user_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "reply_to_message_id",
+      "references": "chat_messages.id"
+    },
+    {
+      "column": "deletado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_chat_messages_thread_time",
+      "columns": [
+        "thread_id",
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_chat_messages_content_tsv",
+      "columns": [
+        "content_tsv"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_chat_messages_sender_time",
+      "columns": [
+        "sender_user_id",
+        "criado_em"
+      ],
+      "unique": false
+    }
+  ]
+}

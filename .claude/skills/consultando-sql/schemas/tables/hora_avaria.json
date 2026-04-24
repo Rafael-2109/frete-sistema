@@ -72,9 +72,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_criado_em",
+      "name": "ix_hora_avaria_numero_chassi",
       "columns": [
-        "criado_em"
+        "numero_chassi"
       ],
       "unique": false
     },
@@ -86,9 +86,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_numero_chassi",
+      "name": "ix_hora_avaria_criado_em",
       "columns": [
-        "numero_chassi"
+        "criado_em"
       ],
       "unique": false
     }

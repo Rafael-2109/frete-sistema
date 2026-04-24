@@ -1,0 +1,273 @@
+/*
+ * Modulo chat — Task 16
+ * Segue sistema de layers + design tokens (NUNCA hex hardcoded).
+ * Dark mode adapta automaticamente via `var(--*)`.
+ */
+
+/* =========================================================================
+ * Navbar button + badges
+ * ========================================================================= */
+.chat-navbar-btn {
+  position: relative;
+  background: transparent;
+  border: 0;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  font-size: 1.15rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.chat-navbar-btn:hover,
+.chat-navbar-btn:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.chat-badge {
+  position: absolute;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px var(--bg);
+}
+.chat-badge--system {
+  top: 2px;
+  left: 2px;
+  background: var(--warning, #f59e0b);
+  color: #fff;
+}
+.chat-badge--user {
+  top: 2px;
+  right: 2px;
+  background: var(--danger, #dc2626);
+  color: #fff;
+}
+.chat-badge.hidden { display: none; }
+
+/* =========================================================================
+ * Drawer lateral
+ * ========================================================================= */
+.chat-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 100vw;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
+}
+.chat-drawer.open { transform: translateX(0); }
+
+.chat-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.chat-drawer__close {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  line-height: 1;
+}
+.chat-drawer__close:hover { color: var(--text); }
+
+.chat-drawer__tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+}
+.chat-drawer__tab {
+  background: none;
+  border: 0;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  font-size: 0.9rem;
+}
+.chat-drawer__tab:hover { color: var(--text); }
+.chat-drawer__tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.chat-drawer__list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* =========================================================================
+ * Lista de threads
+ * ========================================================================= */
+.chat-thread-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.chat-thread-item:hover { background: var(--bg-light); }
+.chat-thread-item--unread { font-weight: 600; }
+.chat-thread-item__title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.chat-thread-item__time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.chat-thread-item__preview {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =========================================================================
+ * Painel de mensagens
+ * ========================================================================= */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.chat-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.chat-panel__footer {
+  border-top: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.chat-panel__textarea {
+  flex: 1;
+  resize: none;
+  min-height: 2.5rem;
+  max-height: 8rem;
+  background: var(--bg-input, var(--bg));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.chat-panel__send {
+  background: var(--accent);
+  color: var(--bg);
+  border: 0;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+.chat-panel__send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =========================================================================
+ * Mensagens individuais
+ * ========================================================================= */
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-width: 85%;
+}
+.chat-message--own { align-self: flex-end; }
+.chat-message__sender {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.chat-message__body {
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-light);
+  border-radius: 6px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+.chat-message--own .chat-message__body {
+  background: var(--accent-light, var(--bg-light));
+  color: var(--text);
+}
+.chat-message--system .chat-message__body {
+  background: var(--info-bg, rgba(59, 130, 246, 0.1));
+  border-left: 3px solid var(--info, #3b82f6);
+}
+.chat-message--critico .chat-message__body {
+  background: var(--danger-bg, rgba(220, 38, 38, 0.1));
+  border-left: 3px solid var(--danger, #dc2626);
+}
+.chat-message--atencao .chat-message__body {
+  background: var(--warning-bg, rgba(245, 158, 11, 0.1));
+  border-left: 3px solid var(--warning, #f59e0b);
+}
+.chat-message__meta {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.chat-message__body a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.chat-message__body code {
+  background: var(--bg);
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
+/* =========================================================================
+ * Botao "Compartilhar esta tela"
+ * ========================================================================= */
+.chat-share-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.chat-share-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}

@@ -1,0 +1,90 @@
+{
+  "name": "chat_members",
+  "description": "Tabela chat_members",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "thread_id",
+      "type": "bigint",
+      "description": "FK → chat_threads.id",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "role",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "member"
+    },
+    {
+      "name": "adicionado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "adicionado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "last_read_message_id",
+      "type": "bigint",
+      "description": "FK → chat_messages.id"
+    },
+    {
+      "name": "silenciado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "removido_em",
+      "type": "timestamp"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "thread_id",
+      "references": "chat_threads.id"
+    },
+    {
+      "column": "user_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "adicionado_por_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "last_read_message_id",
+      "references": "chat_messages.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "idx_chat_members_user_thread",
+      "columns": [
+        "user_id",
+        "thread_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "uq_chat_members_active",
+      "columns": [
+        "thread_id",
+        "user_id"
+      ],
+      "unique": true
+    }
+  ]
+}

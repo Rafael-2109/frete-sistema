@@ -100,16 +100,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_recebimento_conferencia_substituida",
+      "name": "ix_hora_recebimento_conferencia_numero_chassi",
       "columns": [
-        "substituida"
+        "numero_chassi"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_conferencia_numero_chassi",
+      "name": "ix_hora_recebimento_conferencia_substituida",
       "columns": [
-        "numero_chassi"
+        "substituida"
       ],
       "unique": false
     },

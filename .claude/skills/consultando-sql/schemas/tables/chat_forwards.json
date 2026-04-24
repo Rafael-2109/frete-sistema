@@ -1,0 +1,49 @@
+{
+  "name": "chat_forwards",
+  "description": "Tabela chat_forwards",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "original_message_id",
+      "type": "bigint",
+      "description": "FK → chat_messages.id",
+      "nullable": false
+    },
+    {
+      "name": "forwarded_message_id",
+      "type": "bigint",
+      "description": "FK → chat_messages.id",
+      "nullable": false
+    },
+    {
+      "name": "forwarded_by_id",
+      "type": "integer",
+      "description": "FK → usuarios.id",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "original_message_id",
+      "references": "chat_messages.id"
+    },
+    {
+      "column": "forwarded_message_id",
+      "references": "chat_messages.id"
+    },
+    {
+      "column": "forwarded_by_id",
+      "references": "usuarios.id"
+    }
+  ]
+}
