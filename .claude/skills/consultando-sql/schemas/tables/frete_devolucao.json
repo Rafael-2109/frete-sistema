@@ -183,16 +183,16 @@
       "unique": false
     },
     {
-      "name": "ix_frete_devolucao_ativo",
+      "name": "idx_frete_dev_data_cotacao",
       "columns": [
-        "ativo"
+        "data_cotacao"
       ],
       "unique": false
     },
     {
-      "name": "idx_frete_dev_data_cotacao",
+      "name": "ix_frete_devolucao_ativo",
       "columns": [
-        "data_cotacao"
+        "ativo"
       ],
       "unique": false
     },

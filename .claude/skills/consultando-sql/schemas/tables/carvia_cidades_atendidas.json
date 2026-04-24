@@ -64,16 +64,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_cidade_ibge",
+      "name": "ix_carvia_cidade_uf_origem",
       "columns": [
-        "codigo_ibge"
+        "uf_origem"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cidade_uf_origem",
+      "name": "ix_carvia_cidade_ibge",
       "columns": [
-        "uf_origem"
+        "codigo_ibge"
       ],
       "unique": false
     },

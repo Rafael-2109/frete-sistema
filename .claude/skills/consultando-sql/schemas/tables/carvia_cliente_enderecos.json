@@ -127,16 +127,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_endereco_tipo",
+      "name": "ix_carvia_cliente_enderecos_cliente_id",
       "columns": [
-        "tipo"
+        "cliente_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cliente_enderecos_cliente_id",
+      "name": "ix_carvia_endereco_tipo",
       "columns": [
-        "cliente_id"
+        "tipo"
       ],
       "unique": false
     }

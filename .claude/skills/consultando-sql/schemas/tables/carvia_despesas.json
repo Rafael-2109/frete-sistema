@@ -96,9 +96,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_despesas_frete_id",
+      "name": "ix_carvia_despesas_tipo_despesa",
       "columns": [
-        "frete_id"
+        "tipo_despesa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_despesas_operacao_id",
+      "columns": [
+        "operacao_id"
       ],
       "unique": false
     },
@@ -110,16 +117,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_despesas_tipo_despesa",
+      "name": "ix_carvia_despesas_frete_id",
       "columns": [
-        "tipo_despesa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_despesas_operacao_id",
-      "columns": [
-        "operacao_id"
+        "frete_id"
       ],
       "unique": false
     }

@@ -121,16 +121,16 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_documentos_credito_id",
+      "name": "idx_documento_validade",
       "columns": [
-        "credito_id"
+        "data_validade"
       ],
       "unique": false
     },
     {
-      "name": "idx_documento_validade",
+      "name": "ix_pallet_documentos_credito_id",
       "columns": [
-        "data_validade"
+        "credito_id"
       ],
       "unique": false
     },

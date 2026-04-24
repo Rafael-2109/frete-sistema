@@ -76,16 +76,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_recebimento_status",
+      "name": "ix_hora_recebimento_loja_id",
       "columns": [
-        "status"
+        "loja_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_loja_id",
+      "name": "ix_hora_recebimento_status",
       "columns": [
-        "loja_id"
+        "status"
       ],
       "unique": false
     },

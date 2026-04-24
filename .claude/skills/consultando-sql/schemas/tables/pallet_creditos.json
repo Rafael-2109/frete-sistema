@@ -102,14 +102,6 @@
   ],
   "indices": [
     {
-      "name": "idx_credito_vencimento",
-      "columns": [
-        "data_vencimento",
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pallet_creditos_status",
       "columns": [
         "status"
@@ -142,6 +134,14 @@
       "name": "idx_credito_tipo_status",
       "columns": [
         "tipo_responsavel",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_credito_vencimento",
+      "columns": [
+        "data_vencimento",
         "status"
       ],
       "unique": false

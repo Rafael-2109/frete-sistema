@@ -78,16 +78,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_peca_faltando_status",
+      "name": "ix_hora_peca_faltando_chassi_doador",
       "columns": [
-        "status"
+        "chassi_doador"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_peca_faltando_chassi_doador",
+      "name": "ix_hora_peca_faltando_status",
       "columns": [
-        "chassi_doador"
+        "status"
       ],
       "unique": false
     }

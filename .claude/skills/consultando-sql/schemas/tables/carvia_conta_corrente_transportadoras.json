@@ -96,13 +96,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
       "columns": [
         "criado_em"
@@ -127,6 +120,13 @@
       "name": "ix_carvia_conta_corrente_transportadoras_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_conta_corrente_transportadoras_frete_id",
+      "columns": [
+        "frete_id"
       ],
       "unique": false
     }

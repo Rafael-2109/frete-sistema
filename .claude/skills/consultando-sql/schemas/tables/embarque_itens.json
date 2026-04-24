@@ -227,9 +227,16 @@
   ],
   "indices": [
     {
-      "name": "idx_ei_cnpj_cliente",
+      "name": "idx_ei_nota_fiscal",
       "columns": [
-        "cnpj_cliente"
+        "nota_fiscal"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_embarque_itens_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -242,9 +249,9 @@
       "unique": false
     },
     {
-      "name": "ix_embarque_itens_separacao_lote_id",
+      "name": "idx_ei_cnpj_cliente",
       "columns": [
-        "separacao_lote_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -259,13 +266,6 @@
       "name": "idx_ei_uf_destino",
       "columns": [
         "uf_destino"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_ei_nota_fiscal",
-      "columns": [
-        "nota_fiscal"
       ],
       "unique": false
     }
