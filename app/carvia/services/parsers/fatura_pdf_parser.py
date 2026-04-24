@@ -1082,13 +1082,17 @@ class FaturaPDFParser:
 
         for linha in linhas:
             # Pattern SSW: SEQ + CTe + DD/MM/YY + CNPJ14/CPF11 + NOME + NF_FLAG + NF_NUM + valores
+            # NOTA: `\s*` antes do NF_FLAG e flag restrito a `[01]` porque PDFs SSW com
+            # nome destinatario longo colam NOME+FLAG sem espaco (ex: "SUPERMERCADOXYZ1").
+            # Restringir flag a 0/1 previne colisao com nomes terminando em digito
+            # (ex: "LOJA 5 CENTRO" — non-greedy expande ate `[01]\s+\d{6,12}`).
             match = re.match(
                 r'\s*\d+\s+'                           # SEQ (descartado)
                 r'(\d{5,10})\s+'                       # CTe numero (5-10 digitos)
                 r'(\d{2}/\d{2}/\d{2,4})\s+'            # Data DD/MM/YY ou DD/MM/YYYY
                 r'(\d{11,14})\s+'                      # CNPJ (14) ou CPF (11), sem formatacao
-                r'(.+?)\s+'                            # Nome contraparte
-                r'(\d+)\s+'                            # NF flag (0 ou 1)
+                r'(.+?)\s*'                            # Nome contraparte (espaco opcional antes do flag)
+                r'([01])\s+'                           # NF flag (0 ou 1) — pode estar grudado no nome
                 r'(\d{6,12})\s+'                       # NF numero
                 r'([\d.,]+)\s+'                        # Valor mercadoria
                 r'(\d+)\s+'                            # Peso (inteiro)
