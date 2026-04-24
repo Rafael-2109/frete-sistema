@@ -62,16 +62,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_historico_match_extrato_descricao_tokens",
+      "name": "ix_carvia_histmatch_cnpj",
       "columns": [
-        "descricao_tokens"
+        "cnpj_pagador"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_histmatch_cnpj",
+      "name": "ix_carvia_historico_match_extrato_descricao_tokens",
       "columns": [
-        "cnpj_pagador"
+        "descricao_tokens"
       ],
       "unique": false
     }

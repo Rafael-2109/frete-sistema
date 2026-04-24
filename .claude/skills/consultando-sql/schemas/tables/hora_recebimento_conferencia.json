@@ -100,20 +100,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_recebimento_conferencia_substituida",
-      "columns": [
-        "substituida"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_recebimento_conferencia_numero_chassi",
-      "columns": [
-        "numero_chassi"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_conferencia_ordem_ativa",
       "columns": [
         "recebimento_id",
@@ -136,12 +122,26 @@
       "unique": false
     },
     {
+      "name": "ix_hora_recebimento_conferencia_substituida",
+      "columns": [
+        "substituida"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_conferencia_ativa",
       "columns": [
         "recebimento_id",
         "numero_chassi"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_recebimento_conferencia_numero_chassi",
+      "columns": [
+        "numero_chassi"
+      ],
+      "unique": false
     }
   ]
 }

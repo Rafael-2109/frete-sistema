@@ -83,13 +83,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_transferencia_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_transferencia_loja_destino_id",
       "columns": [
         "loja_destino_id"
@@ -100,6 +93,13 @@
       "name": "ix_hora_transferencia_loja_origem_id",
       "columns": [
         "loja_origem_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_transferencia_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

@@ -71,16 +71,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cidade_ibge",
+      "name": "ix_carvia_cidade_uf_destino",
       "columns": [
-        "codigo_ibge"
+        "uf_destino"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cidade_uf_destino",
+      "name": "ix_carvia_cidade_ibge",
       "columns": [
-        "uf_destino"
+        "codigo_ibge"
       ],
       "unique": false
     }
