@@ -2,7 +2,7 @@
 
 **Branch**: `feature/chat-inapp`
 **Ultima atualizacao**: 2026-04-23
-**Progresso**: 10 de 25 tasks concluidas (40%)
+**Progresso**: 15 de 25 tasks concluidas (60%) — **FASE D (Rotas HTTP) COMPLETA**
 
 ---
 
@@ -93,12 +93,12 @@ DB local tem 7 tabelas `chat_*` criadas (migration rodou). Indices + trigger FTS
 | 10 | Publisher Redis | ✅ | `c6799651` + `5a59c879` | — |
 | 11 | SSE generator | ✅ | `0c36f0ec` | — |
 | 8 | MessageService | ✅ | `1a53bb1f` + `1b232823` + `7193a5f8` | Fixes review: SQL LIKE escape `_` + mock publish em edit/delete + `db.session.get` com expire_all |
-| **9** | **SystemNotifier** | ⏳ **PROXIMA** | — | Depende de 6 + 10 (ambos feitos) |
-| 12 | Rotas thread | pending | — | Depende de 6 |
-| 13 | Rotas mensagem | pending | — | Depende de 8 |
-| 14 | Rotas stream/unread/search | pending | — | Depende de 11 |
-| 15 | Rotas share/entity | pending | — | Depende de 6 + 8 |
-| 16 | CSS + navbar badge | pending | — | — |
+| 9 | SystemNotifier | ✅ | `f0848a4b` + `a5003eb6` | Fix review: 2-pass atomic (commit parcial) + assert call_count |
+| 12 | Rotas thread | ✅ | `5169c600` + `6d7fcd81` | Fix review: select 2.x + entity_type lower + add_member 200 |
+| 13 | Rotas mensagem | ✅ | `9051d4e0` + `5b4cf0e1` | Fix review: forward valida membership origem + bloqueia deletada + audit best-effort |
+| 14 | Rotas stream/unread/search | ✅ | `864e07d9` + `acfeb838` | Fix review: NULL semantics em unread para sender_user_id IS NULL (system msgs) |
+| 15 | Rotas share/entity | ✅ | `6c584f5a` + `12b3f2b1` + `d8a13740` | Fix review: URL scheme allowlist (XSS + open redirect) + race guard IntegrityError |
+| **16** | **CSS + navbar badge** | ⏳ **PROXIMA (Fase E UI)** | — | Nao depende de nada |
 | 17 | JS ChatClient | pending | — | Depende de 14 |
 | 18 | Drawer + painel | pending | — | Depende de 12 + 13 |
 | 19 | Compartilhar tela | pending | — | Depende de 15 + 18 |
