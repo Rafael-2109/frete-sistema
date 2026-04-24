@@ -37,6 +37,11 @@ let debugModeEnabled = false;
 // FEAT-003: Estado do painel de thinking
 let thinkingCollapsed = false;
 
+// Thinking Display (SDK 0.1.65+): 'summarized' | 'omitted' | null (usa default do backend).
+// Persistido em Usuario.preferences via POST /agente/api/user-preferences.
+// Default OFF no UI = omitted (velocidade + economia). Ligado = summarized.
+let thinkingDisplay = null;
+
 // FEAT-006: Timeline de ações
 const actionTimeline = [];
 
@@ -302,6 +307,68 @@ if (debugModeToggle) {
         }
 
         console.log('[AGENTE] Debug Mode:', debugModeEnabled ? 'ATIVADO' : 'DESATIVADO');
+    });
+}
+
+// ============================================
+// THINKING DISPLAY TOGGLE (SDK 0.1.65+)
+// ============================================
+// Controla ThinkingConfig.display do Agent SDK via user preference persistente.
+// OFF (default) = omitted (modelo nao gera resumo do raciocinio, mais rapido).
+// ON = summarized (expoe raciocinio no painel, custo extra em tokens).
+const thinkingDisplayToggle = document.getElementById('thinking-display-toggle');
+
+if (thinkingDisplayToggle) {
+    // Mirror em localStorage: render instantaneo antes do GET retornar.
+    const cachedPref = localStorage.getItem('agent-thinking-display');
+    if (cachedPref === 'summarized') {
+        thinkingDisplayToggle.checked = true;
+        thinkingDisplay = 'summarized';
+    }
+
+    // GET da preference + binding do change listener — DOMContentLoaded garante
+    // que _csrfHeader (definido mais adiante no arquivo) ja esta inicializado.
+    document.addEventListener('DOMContentLoaded', function () {
+        fetch('/agente/api/user-preferences', { headers: _csrfHeader() })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.preferences) {
+                    const pref = data.preferences.agent_thinking_display;
+                    if (pref === 'summarized' || pref === 'omitted') {
+                        thinkingDisplay = pref;
+                        thinkingDisplayToggle.checked = (pref === 'summarized');
+                        localStorage.setItem('agent-thinking-display', pref);
+                    }
+                }
+            })
+            .catch(err => console.warn('[AGENTE] GET user-preferences falhou:', err));
+
+        thinkingDisplayToggle.addEventListener('change', function () {
+            const value = this.checked ? 'summarized' : 'omitted';
+            thinkingDisplay = value;
+            localStorage.setItem('agent-thinking-display', value);
+
+            fetch('/agente/api/user-preferences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ..._csrfHeader() },
+                body: JSON.stringify({ agent_thinking_display: value })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) {
+                        console.error('[AGENTE] POST user-preferences falhou:', data.error);
+                        thinkingDisplayToggle.checked = !thinkingDisplayToggle.checked;
+                        thinkingDisplay = thinkingDisplayToggle.checked ? 'summarized' : 'omitted';
+                    }
+                })
+                .catch(err => {
+                    console.error('[AGENTE] POST user-preferences erro:', err);
+                    thinkingDisplayToggle.checked = !thinkingDisplayToggle.checked;
+                    thinkingDisplay = thinkingDisplayToggle.checked ? 'summarized' : 'omitted';
+                });
+
+            console.log('[AGENTE] Thinking Display:', value);
+        });
     });
 }
 

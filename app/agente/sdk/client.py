@@ -1024,6 +1024,7 @@ Nunca invente informações."""
         output_format: Optional[Dict[str, Any]] = None,
         debug_mode: bool = False,
         resume_messages_fallback: Optional[str] = None,
+        thinking_display: Optional[str] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming.
@@ -1066,6 +1067,7 @@ Nunca invente informações."""
             output_format=output_format,
             debug_mode=debug_mode,
             resume_messages_fallback=resume_messages_fallback,
+            thinking_display=thinking_display,
         ):
             yield event
 
@@ -1082,6 +1084,7 @@ Nunca invente informações."""
         our_session_id: Optional[str] = None,
         stderr_queue: Optional['queue.SimpleQueue'] = None,
         resume_state: Optional[Dict] = None,
+        thinking_display: Optional[str] = None,
     ) -> 'ClaudeAgentOptions':
         """
         Constrói ClaudeAgentOptions para ClaudeSDKClient.
@@ -1255,6 +1258,28 @@ Nunca invente informações."""
         if effort_level and effort_level != "off":
             options_dict["effort"] = effort_level
             logger.info(f"[AGENT_CLIENT] Effort level: {effort_level}")
+
+            # Thinking display (SDK 0.1.65+): controla se o modelo gera texto
+            # sumarizado do raciocinio. 'summarized' = tokens extras + latencia.
+            # 'omitted' = pula a geracao (mesmo resultado final, mais rapido).
+            #
+            # Precedencia: thinking_display (param, normalmente user preference)
+            # > AGENT_THINKING_DISPLAY (flag env, default "omitted") > off (skip).
+            from ..config.feature_flags import AGENT_THINKING_DISPLAY
+            effective_display = (
+                (thinking_display or "").lower()
+                or AGENT_THINKING_DISPLAY
+            )
+            if effective_display in ("summarized", "omitted"):
+                options_dict["thinking"] = {
+                    "type": "adaptive",
+                    "display": effective_display,
+                }
+                logger.info(
+                    f"[AGENT_CLIENT] Thinking display: {effective_display} "
+                    f"(source={'user_pref' if thinking_display else 'env_flag'}, "
+                    "SDK 0.1.65+ --thinking-display)"
+                )
 
         # Callback de permissão
         if can_use_tool:
@@ -1463,6 +1488,7 @@ Nunca invente informações."""
         output_format: Optional[Dict[str, Any]] = None,
         debug_mode: bool = False,
         resume_messages_fallback: Optional[str] = None,
+        thinking_display: Optional[str] = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Gera resposta em streaming usando ClaudeSDKClient persistente.
@@ -1527,6 +1553,7 @@ Nunca invente informações."""
             our_session_id=our_session_id,
             stderr_queue=stderr_q,
             resume_state=resume_state,
+            thinking_display=thinking_display,
         )
 
         # ─── SDK 0.1.64 SessionStore (Fase B cutover — flag default ON) ───

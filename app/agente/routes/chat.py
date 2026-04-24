@@ -175,6 +175,18 @@ def api_chat():
             else:
                 logger.warning(f"[AGENTE] DEBUG MODE ativado por {user_name} (ID:{user_id})")
 
+        # Thinking display (SDK 0.1.65+): preferencia per-user sobrescreve env flag.
+        # Valores aceitos: 'summarized' (raciocinio visivel, custo extra), 'omitted'
+        # (sem resumo, mais rapido). None = usa AGENT_THINKING_DISPLAY env default.
+        # Admin respeita a propria preference (opcao b) — nao forcamos summarized.
+        thinking_display = None
+        try:
+            pref_value = current_user.get_preference('agent_thinking_display', None)
+            if pref_value in ('summarized', 'omitted'):
+                thinking_display = pref_value
+        except Exception as e:
+            logger.debug(f"[AGENTE] get_preference falhou (ignorado): {e}")
+
         # Log
         files_info = f" | Arquivos: {len(files)}" if files else ""
         debug_info = " | DEBUG MODE" if debug_mode else ""
@@ -386,6 +398,7 @@ def api_chat():
                 debug_mode=debug_mode,
                 output_format=output_format,
                 rotated_from_session_id=rotated_from_session_id,
+                thinking_display=thinking_display,
             )),
             mimetype='text/event-stream',
             headers={
@@ -429,6 +442,7 @@ async def _async_stream_sdk_client(
     app=None,
     debug_mode: bool = False,
     output_format: dict = None,
+    thinking_display: str = None,
 ):
     """
     Orquestra streaming via ClaudeSDKClient persistente (v3).
@@ -537,6 +551,7 @@ async def _async_stream_sdk_client(
             debug_mode=debug_mode,
             output_format=output_format,
             resume_messages_fallback=resume_messages_fallback,
+            thinking_display=thinking_display,
         ):
             should_continue = _process_stream_event(event)
             if should_continue:
@@ -601,6 +616,7 @@ def _stream_chat_response(
     debug_mode: bool = False,
     output_format: dict = None,
     rotated_from_session_id: str = None,
+    thinking_display: str = None,
 ) -> Generator[str, None, None]:
     """
     Gera resposta em streaming (SSE).
@@ -923,6 +939,7 @@ def _stream_chat_response(
                 app=app,
                 debug_mode=debug_mode,
                 output_format=output_format,
+                thinking_display=thinking_display,
             )
 
             # =============================================================

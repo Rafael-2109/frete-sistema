@@ -545,3 +545,27 @@ AGENT_SDK_SESSION_STORE_ENABLED = os.getenv(
 AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS = int(
     os.getenv("AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS", "30000")
 )
+
+# ====================================================================
+# Thinking Display (SDK 0.1.65+)
+# ====================================================================
+# Controla o campo `display` do ThinkingConfig (forwarded como --thinking-display CLI).
+#
+# MECANICA REAL (correcao ao framing anterior):
+#   - `summarized`: modelo gera texto sumarizado do raciocinio (tokens extras de
+#     output + latencia extra para essa geracao). Util para debug panel / UX.
+#   - `omitted`: modelo pula a geracao do resumo. Thinking tokens internos iguais,
+#     resposta final identica. Mais rapido e mais barato.
+#
+# ESTRATEGIA: default `omitted` (velocidade + custo). User pode habilitar via
+# toggle na UI (persistido em Usuario.preferences['agent_thinking_display']).
+# Esta flag atua como FALLBACK quando o user nao tem preferencia setada.
+#
+# Valores: "omitted" (default global, velocidade prioritaria), "summarized" (UX
+# com raciocinio visivel, custo extra), "off" (NAO passa o campo — SDK/CLI
+# decidem default; usar para rollback 0.1.65).
+#
+# Rollback: AGENT_THINKING_DISPLAY=off restaura comportamento pre-patch.
+#
+# Ref: https://github.com/anthropics/claude-agent-sdk-python (release 0.1.65, #830)
+AGENT_THINKING_DISPLAY = os.getenv("AGENT_THINKING_DISPLAY", "omitted").lower()

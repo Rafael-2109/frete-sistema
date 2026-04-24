@@ -46,6 +46,7 @@ from app.agente.routes import intelligence_report  # noqa: F401, E402
 from app.agente.routes import improvement_dialogue  # noqa: F401, E402
 from app.agente.routes import memories  # noqa: F401, E402
 from app.agente.routes import briefing  # noqa: F401, E402
+from app.agente.routes import user_preferences  # noqa: F401, E402
 
 # Re-export: helpers usados por app/teams/services.py
 # Mantem compatibilidade: from app.agente.routes import run_post_session_processing
