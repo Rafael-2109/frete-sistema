@@ -78,24 +78,9 @@
   ],
   "indices": [
     {
-      "name": "ix_lista_materiais_historico_lista_materiais_id",
+      "name": "ix_lista_materiais_historico_alterado_por",
       "columns": [
-        "lista_materiais_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_historico_produto_data",
-      "columns": [
-        "cod_produto_produzido",
-        "alterado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_lista_materiais_historico_cod_produto_componente",
-      "columns": [
-        "cod_produto_componente"
+        "alterado_por"
       ],
       "unique": false
     },
@@ -108,16 +93,24 @@
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_alterado_por",
+      "name": "ix_lista_materiais_historico_cod_produto_produzido",
       "columns": [
-        "alterado_por"
+        "cod_produto_produzido"
       ],
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_cod_produto_produzido",
+      "name": "ix_lista_materiais_historico_alterado_em",
       "columns": [
-        "cod_produto_produzido"
+        "alterado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_historico_produto_data",
+      "columns": [
+        "cod_produto_produzido",
+        "alterado_em"
       ],
       "unique": false
     },
@@ -129,9 +122,16 @@
       "unique": false
     },
     {
-      "name": "ix_lista_materiais_historico_alterado_em",
+      "name": "ix_lista_materiais_historico_lista_materiais_id",
       "columns": [
-        "alterado_em"
+        "lista_materiais_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_historico_cod_produto_componente",
+      "columns": [
+        "cod_produto_componente"
       ],
       "unique": false
     }

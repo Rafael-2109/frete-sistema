@@ -165,7 +165,28 @@
   ],
   "indices": [
     {
+      "name": "ix_contas_a_pagar_metodo_baixa",
+      "columns": [
+        "metodo_baixa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_vencimento",
+      "columns": [
+        "vencimento"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_pagar_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_conta_pagar_cnpj",
       "columns": [
         "cnpj"
       ],
@@ -179,23 +200,16 @@
       "unique": true
     },
     {
-      "name": "idx_conta_pagar_vencimento",
+      "name": "idx_conta_pagar_nf",
       "columns": [
-        "vencimento"
+        "titulo_nf"
       ],
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_cnpj",
+      "name": "idx_conta_pagar_odoo_line",
       "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_empresa",
-      "columns": [
-        "empresa"
+        "odoo_line_id"
       ],
       "unique": false
     },
@@ -207,7 +221,7 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_nf",
+      "name": "ix_contas_a_pagar_titulo_nf",
       "columns": [
         "titulo_nf"
       ],
@@ -221,20 +235,6 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_odoo_line",
-      "columns": [
-        "odoo_line_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_titulo_nf",
-      "columns": [
-        "titulo_nf"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_pagar_vencimento",
       "columns": [
         "vencimento"
@@ -242,16 +242,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_metodo_baixa",
+      "name": "ix_contas_a_pagar_parcela",
       "columns": [
-        "metodo_baixa"
+        "parcela"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_parcela",
+      "name": "ix_contas_a_pagar_empresa",
       "columns": [
-        "parcela"
+        "empresa"
       ],
       "unique": false
     },

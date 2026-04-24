@@ -120,16 +120,16 @@
   ],
   "indices": [
     {
-      "name": "ix_divergencia_nf_po_status",
+      "name": "ix_divergencia_nf_po_tipo_divergencia",
       "columns": [
-        "status"
+        "tipo_divergencia"
       ],
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_tipo_divergencia",
+      "name": "ix_divergencia_nf_po_status",
       "columns": [
-        "tipo_divergencia"
+        "status"
       ],
       "unique": false
     },

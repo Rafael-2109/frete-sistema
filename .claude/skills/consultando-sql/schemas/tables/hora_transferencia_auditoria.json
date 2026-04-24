@@ -63,16 +63,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_transferencia_auditoria_item_id",
+      "name": "ix_hora_transferencia_auditoria_acao",
       "columns": [
-        "item_id"
+        "acao"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_transferencia_auditoria_acao",
+      "name": "ix_hora_transferencia_auditoria_item_id",
       "columns": [
-        "acao"
+        "item_id"
       ],
       "unique": false
     },
