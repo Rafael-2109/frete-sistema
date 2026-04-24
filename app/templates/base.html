@@ -631,32 +631,6 @@
           </li>
           {% endif %}
 
-          <!-- BI - Business Intelligence & Analytics -->
-          {% if current_user.perfil in ['administrador'] %}
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="menuBI" role="button" data-bs-toggle="dropdown">
-              <i class="fas fa-chart-bar text-info"></i> BI & Analytics
-            </a>
-            <ul class="dropdown-menu">
-              <li>
-                <h6 class="dropdown-header">📊 Dashboards</h6>
-              </li>
-              <li><a class="dropdown-item" href="{{ url_for('bi.dashboard') }}">
-                  <i class="fas fa-tachometer-alt text-primary"></i> Dashboard Principal
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('bi.transportadoras') }}">
-                  <i class="fas fa-truck text-success"></i> Análise de Transportadoras
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('bi.regional') }}">
-                  <i class="fas fa-map-marked-alt text-warning"></i> Análise Regional
-                </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('bi.despesas') }}">
-                  <i class="fas fa-money-bill-wave text-danger"></i> Análise de Despesas
-                </a></li>
-            </ul>
-          </li>
-          {% endif %}
-
           <!-- COMERCIAL - Acompanhamento de vendas e clientes -->
           {% if current_user.is_authenticated and (current_user.tem_permissao('comercial') or
           current_user.tem_permissao('vendas') or current_user.perfil in ['administrador', 'diretoria',
