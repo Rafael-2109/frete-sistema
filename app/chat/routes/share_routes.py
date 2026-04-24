@@ -1,12 +1,27 @@
 """Rotas share/screen + post to entity thread — Task 15."""
+from urllib.parse import urlparse
+
 from flask import jsonify, request
 from flask_login import login_required, current_user
+from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.chat import chat_bp
 from app.chat.services.thread_service import ThreadService
 from app.chat.services.message_service import MessageService, MessageError
 from app.auth.models import Usuario
+
+
+# Schemes permitidos para deep_link. Bloqueia javascript:, data:, file:, etc.
+# URL relativa (scheme vazio, e.g. `/carteira/pedido/VCD123`) eh aceita.
+_ALLOWED_URL_SCHEMES = {'', 'http', 'https'}
+
+
+def _url_safe(url: str) -> bool:
+    try:
+        return urlparse(url).scheme.lower() in _ALLOWED_URL_SCHEMES
+    except ValueError:
+        return False
 
 
 @chat_bp.route('/share/screen', methods=['POST'])
@@ -21,6 +36,10 @@ def share_screen():
     url = (data.get('url') or '').strip()
     if not dst_id or not url:
         return jsonify({'error': 'destinatario_user_id e url obrigatorios'}), 400
+
+    # Bloqueia javascript:/data:/etc — deep_link eh aberto pelo browser do destinatario.
+    if not _url_safe(url):
+        return jsonify({'error': 'url invalida (scheme nao permitido)'}), 400
 
     target = db.session.get(Usuario, dst_id)
     if not target:
@@ -67,9 +86,18 @@ def post_to_entity_thread(entity_type, entity_id):
 
     thread = ThreadService.get_entity_thread(entity_type, entity_id)
     if thread is None:
-        thread = ThreadService.create_entity_thread(
-            entity_type, entity_id, creator=current_user,
-        )
+        # Race guard: se dois requests simultaneos tentarem criar,
+        # o unique partial index uq_chat_threads_entity faz o 2o lancar
+        # IntegrityError. Rollback + re-fetch retorna a thread criada pelo 1o.
+        try:
+            thread = ThreadService.create_entity_thread(
+                entity_type, entity_id, creator=current_user,
+            )
+        except IntegrityError:
+            db.session.rollback()
+            thread = ThreadService.get_entity_thread(entity_type, entity_id)
+            if thread is None:
+                return jsonify({'error': 'erro ao criar thread'}), 500
 
     try:
         msg = MessageService.send(

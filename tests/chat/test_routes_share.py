@@ -61,3 +61,17 @@ def test_share_screen_invalid_payload(mock_pub, client, user_factory, db_session
     _login(client, u)
     resp = client.post('/api/chat/share/screen', json={'url': '/x'})  # sem destinatario
     assert resp.status_code == 400
+
+
+@patch('app.chat.realtime.publisher.publish')
+def test_share_screen_rejects_javascript_url(mock_pub, client, user_factory, db_session):
+    """Security: deep_link nao pode ser javascript: (XSS no browser do destinatario)."""
+    a = user_factory(email=f'sxj_a_{_RUN}@t.local')
+    b = user_factory(email=f'sxj_b_{_RUN}@t.local')
+    _login(client, a)
+    resp = client.post('/api/chat/share/screen', json={
+        'destinatario_user_id': b.id,
+        'url': 'javascript:alert(1)',
+    })
+    assert resp.status_code == 400
+    assert 'url invalida' in resp.json['error']
