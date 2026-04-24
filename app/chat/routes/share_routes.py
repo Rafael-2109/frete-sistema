@@ -1,6 +1,4 @@
 """Rotas share/screen + post to entity thread — Task 15."""
-from urllib.parse import urlparse
-
 from flask import jsonify, request
 from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
@@ -9,27 +7,8 @@ from app import db
 from app.chat import chat_bp
 from app.chat.services.thread_service import ThreadService
 from app.chat.services.message_service import MessageService, MessageError
+from app.chat.utils import url_safe as _url_safe
 from app.auth.models import Usuario
-
-
-def _url_safe(url: str) -> bool:
-    """Valida deep_link: aceita http, https e paths absolutos do proprio site.
-
-    REJEITA:
-    - `javascript:`, `data:`, `file:`, etc (XSS / exfiltracao)
-    - Protocol-relative (`//evil.com/x`) — browser resolve como https (open redirect)
-    - String vazia
-    """
-    if not url:
-        return False
-    try:
-        scheme = urlparse(url).scheme.lower()
-    except ValueError:
-        return False
-    if scheme in ('http', 'https'):
-        return True
-    # Scheme vazio: so aceita path absoluto, NAO protocol-relative (`//host`)
-    return scheme == '' and url.startswith('/') and not url.startswith('//')
 
 
 @chat_bp.route('/share/screen', methods=['POST'])

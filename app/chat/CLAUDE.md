@@ -1,9 +1,10 @@
 # Chat — Guia de Desenvolvimento
 
-**LOC**: ~1.9K | **Arquivos**: 21 py/html + 2 JS + 1 CSS | **Atualizado**: 2026-04-23
+**LOC**: ~2.0K | **Arquivos**: 22 py/html + 2 JS + 1 CSS | **Atualizado**: 2026-04-24
 
 Modulo de chat in-app + alertas do sistema unificados. Implementado na
 branch `feature/chat-inapp` (plano 25 tasks, Fase F1 MVP).
+Hardening P0 aplicado na branch `fix/chat-audit-p0` (2026-04-24) — ver secao "Gotchas".
 
 **Spec**: `docs/superpowers/specs/2026-04-23-chat-inapp-design.md`
 **Plano**: `docs/superpowers/plans/2026-04-23-chat-inapp.md`
@@ -16,11 +17,12 @@ branch `feature/chat-inapp` (plano 25 tasks, Fase F1 MVP).
 app/chat/
   __init__.py                  # Blueprint chat_bp (/api/chat)
   models.py                    # 7 modelos SQLAlchemy (1 JSONB, 1 tsvector FTS)
-  markdown_parser.py           # extract_mentions + sanitize_html (bleach)
+  markdown_parser.py           # extract_mentions (usado) + render_markdown/sanitize_html (DEAD — ver Gotchas)
+  utils.py                     # url_safe(url) — validacao deep_link compartilhada
   routes/
     thread_routes.py           # GET/POST /threads + /dm + /group + /members + /entity/<t>/<id>/thread
     message_routes.py          # send / edit / delete / list / reactions / forward
-    stream_routes.py           # SSE /stream + /unread + /search FTS + /read + /ui/drawer
+    stream_routes.py           # /poll (realtime!) + /unread + /search FTS + /read + /ui/drawer + /stream (SSE legado)
     share_routes.py            # /share/screen + /entity/<t>/<id>/message
   services/
     permission_checker.py      # sistemas() + pode_adicionar() + pode_ver_thread()
@@ -58,14 +60,33 @@ scripts/migrations/
 `publisher.publish()` NAO lanca excecao se Redis down. Mensagem persiste
 no DB; client reconnecta e pega via catch-up (`Last-Event-ID` -> query DB).
 
-### R2: SSE usa padrao do agente
-`stream_with_context` + `mimetype='text/event-stream'` + headers
-`X-Accel-Buffering: no`, `Cache-Control: no-cache`, `Connection: keep-alive`.
-Heartbeat cada 25s (Render SSL drop 30-40s). Canal Redis: `chat_sse:{user_id}`.
+### R2: Realtime via POLLING (nao SSE)
+Desde 2026-04-24 (fix/chat-audit-p0), `chat_client.js` usa polling em
+`GET /api/chat/poll` a cada 4s (aba focada) / 15s (visivel sem foco) /
+pausado (document.hidden).
+
+Motivo: SSE mantinha 1 slot de worker gunicorn (`worker_class='gthread'`,
+4 workers × 2 threads = 8 slots) aberto por user permanentemente. Com
+agente web TAMBEM usando SSE, 4 users ativos = 8 slots consumidos =
+sistema trava para requests normais.
+
+Poll endpoint retorna `{new, edited, deleted, unread, last_id, server_ts}`.
+Client mantem `since_id` + `since_ts` para query incremental.
+
+**Rota `/stream` (SSE) permanece registrada** — codigo nao foi removido porque
+o padrao pode ser util se algum futuro endpoint precisar push real. Nenhum
+cliente consome hoje. Publisher Redis (`publisher.publish`) continua sendo
+chamado mas publica em canal sem subscribers (no-op efetivo).
 
 ### R3: PermissionChecker em TODA rota de escrita
 Revalidar mesmo que UI tenha filtrado. Admin bypass via
 `user.perfil == 'administrador'`. Forward exige membership na thread ORIGEM.
+
+**`ThreadService.add_member` (hardening P0 2026-04-24)**:
+- DM e system_dm NAO aceitam add (`raise PermissionError`).
+- group/entity: actor precisa ser `owner`/`admin` da thread OU admin global.
+- `pode_adicionar(actor, target)` continua como gate cross-domain (sistemas).
+Antes do fix, qualquer user podia se auto-adicionar em qualquer thread (IDOR).
 
 ### R4: `sanitize_for_json` em `ChatMessage.dados`
 `dados` e JSONB; valores Decimal/datetime quebram flush.
@@ -79,14 +100,24 @@ Nao criar tabela separada.
 Parser extrai `@usuario` do content. Se mencionado NAO e membro ativo,
 `chat_mention` nao e criada. SQL LIKE tem escape (`_` e wildcard single-char).
 
-### R7: URL validation em share_screen
-`deep_link` e aberto pelo browser do destinatario — bloqueia `javascript:`,
-`data:`, `file:`, `//host` (open redirect). So aceita http/https ou path
-absoluto `/...`.
+### R7: URL validation em deep_link
+`app/chat/utils.url_safe()` — fonte unica de validacao. Usado em:
+- `share_routes.py` share_screen
+- `MessageService.send` (toda mensagem com deep_link, inclusive forward)
+
+Bloqueia: `javascript:`, `data:`, `file:`, `//host` (open redirect),
+`/\t/host` / `/\n/host` (TAB/CR/LF injection pre-netloc). Aceita http/https
+ou path absoluto `/...` sem netloc. **NAO duplicar _url_safe** em novos endpoints
+— importar de `app.chat.utils`.
 
 ### R8: Soft delete esconde content
 `_message_dict` retorna `content=None` se `deletado_em IS NOT NULL`.
-Forward de msg deletada e bloqueado (evita bypass).
+Forward de msg deletada e bloqueado.
+Edit de msg deletada tambem e bloqueado (hardening P0): `edit` lancava SSE `message_edit`
+com `new_content` vazando preview oculto. Hoje levanta `MessageError`.
+SSE catch-up (`realtime/sse._catchup_events`) filtra `deletado_em IS NULL`
+— antes do fix, Last-Event-ID vazava preview de mensagens deletadas.
+`delete()` publica SSE `message_delete` para que clientes atualizem sem F5.
 
 ---
 
@@ -143,7 +174,29 @@ eram silenciosamente excluidas. Fix: `or_(is_(None), != current_user.id)`.
 
 ### Bug #5: Poluicao DB em tests
 Services commitam; `db_session` fixture com rollback nao desfaz.
-Solucao: emails com `uuid.uuid4().hex[:8]` prefix por run.
+Solucao: emails com `uuid.uuid4().hex[:8]` prefix por run. **TODOS** os arquivos
+de test devem ter `_RUN` no topo e usar `f'foo_{_RUN}@t.local'`.
+
+### Bug #6: `get_or_create_dm` cria duplicata em concorrencia (P0 fix)
+SELECT + INSERT sem lock criava 2 DMs em double-click. Solucao:
+`pg_advisory_xact_lock(hash(par_ordenado))` serializa por par.
+Mesmo padrao em `get_or_create_system_dm` (workers RQ concorrentes).
+
+### Bug #7: Markdown renderer e DEAD CODE
+`render_markdown` e `sanitize_html` em `markdown_parser.py` NAO sao invocados
+em lugar nenhum do backend. Frontend (`chat_ui.js:203`) usa `escapeHtml(m.content)`
+direto. Resultado: `**bold**` aparece literal, `[link](url)` nao vira link clicavel.
+O UNICO vetor de link e `deep_link` (validado via `url_safe`).
+
+Decisao pendente: ativar markdown (aplicar `sanitize_html` no `_message_dict`) OU
+remover o dead code e documentar que mensagens sao texto puro. Se ativar, revalidar
+testes de XSS (payloads com inline handlers `onerror`, base64 data URIs).
+
+### Débito: Hooks de alerta nao instalados em workers (nao e bug)
+`notify_recebimento_finalizado`, `notify_dfe_bloqueado`, `notify_cte_divergente`
+NAO sao chamados em `app/recebimento/` nem `app/fretes/`. Alertas estao
+prontos mas inativos. Instalar nos call-sites documentados em "Ativacao de
+alertas — tasks pendentes" abaixo.
 
 ---
 

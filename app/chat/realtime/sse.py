@@ -58,9 +58,12 @@ def _catchup_events(user_id: int, last_event_id: int) -> Generator[str, None, No
     ]
     if not thread_ids:
         return
+    # Filtrar soft-deleted: _message_dict da REST ja esconde content deletado (R8);
+    # aqui precisa o mesmo para nao vazar preview via Last-Event-ID catch-up.
     catchup = db.session.query(ChatMessage).filter(
         ChatMessage.thread_id.in_(thread_ids),
         ChatMessage.id > last_event_id,
+        ChatMessage.deletado_em.is_(None),
     ).order_by(ChatMessage.id.asc()).limit(CATCHUP_LIMIT).all()
     for m in catchup:
         yield _format_event('message_new', {
