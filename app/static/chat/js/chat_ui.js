@@ -224,12 +224,88 @@
   }
 
   // ==========================================================================
+  // Share screen modal (Task 19)
+  // ==========================================================================
+  function openShareModal() {
+    const existing = document.getElementById('chat-share-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'chat-share-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:var(--bg);color:var(--text);padding:1.5rem;border-radius:8px;min-width:400px;max-width:90vw;border:1px solid var(--border);">
+        <h4 style="margin-top:0">Compartilhar esta tela</h4>
+        <div style="margin-bottom:.75rem;font-size:.9rem;color:var(--text-muted)">
+          <strong>URL:</strong> <code>${escapeHtml(window.location.pathname + window.location.search)}</code>
+        </div>
+        <div style="margin-bottom:.75rem">
+          <label style="display:block;margin-bottom:.25rem">Destinatario (ID do usuario):</label>
+          <input id="chat-share-dst" type="number" min="1"
+                 class="form-control" placeholder="ex: 42" required>
+        </div>
+        <div style="margin-bottom:1rem">
+          <label style="display:block;margin-bottom:.25rem">Comentario (opcional):</label>
+          <textarea id="chat-share-cmt" rows="3" class="form-control"
+                    placeholder="Ex: pode conferir esse pedido?"></textarea>
+        </div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end">
+          <button id="chat-share-cancel" type="button" class="btn btn-secondary">Cancelar</button>
+          <button id="chat-share-send" type="button" class="btn btn-primary">Compartilhar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector('#chat-share-cancel').addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    modal.querySelector('#chat-share-send').addEventListener('click', async () => {
+      const dstRaw = modal.querySelector('#chat-share-dst').value.trim();
+      const cmt = modal.querySelector('#chat-share-cmt').value.trim();
+      const dstId = parseInt(dstRaw, 10);
+      if (isNaN(dstId) || dstId < 1) {
+        alert('Informe um ID de usuario valido (numerico).');
+        return;
+      }
+      const sendBtn = modal.querySelector('#chat-share-send');
+      sendBtn.disabled = true;
+      try {
+        await fetchJSON('/api/chat/share/screen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            destinatario_user_id: dstId,
+            comentario: cmt,
+            url: window.location.pathname + window.location.search,
+            title: document.title,
+          }),
+        });
+        close();
+        // Toast-like feedback (usa toastr se disponivel, senao alert)
+        if (window.toastr) {
+          window.toastr.success('Tela compartilhada!');
+        } else {
+          alert('Tela compartilhada!');
+        }
+      } catch (e) {
+        alert(`Erro: ${e.message}`);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+  }
+
+  // ==========================================================================
   // Bootstrap
   // ==========================================================================
   document.addEventListener('DOMContentLoaded', () => {
     const toggle = document.getElementById('chat-toggle');
     if (!toggle) return;
     toggle.addEventListener('click', openDrawer);
+
+    const shareBtn = document.getElementById('chat-share-screen');
+    if (shareBtn) shareBtn.addEventListener('click', openShareModal);
 
     // Atualizar lista/painel quando chegar nova mensagem via SSE
     if (window.ChatClient) {
@@ -257,5 +333,6 @@
     close: closeDrawer,
     refreshThreads,
     openPanel,
+    openShareModal,
   };
 })();
