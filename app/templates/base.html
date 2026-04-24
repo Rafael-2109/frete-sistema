@@ -867,6 +867,11 @@
     {% endwith %}
   </div>
 
+  <!-- Chat client JS (Task 17) — conecta SSE + badges. Requer DOM carregado. -->
+  {% if current_user.is_authenticated %}
+  <script src="{{ url_for('static', filename='chat/js/chat_client.js') }}" defer></script>
+  {% endif %}
+
   <!-- Carregamento de bibliotecas principais ANTES do conteúdo -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
