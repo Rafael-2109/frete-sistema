@@ -369,7 +369,9 @@
             map.addListener('zoom_changed', ajustarTamanhoMarkers);
 
             // Carregar pedidos automaticamente se houver selecionados
-            if (pedidosSelecionados.length > 0) {
+            // Aceita lotes[] (preferido — NACOM + CarVia via separacao_lote_id)
+            // ou pedidos[] (legado — num_pedido)
+            if (pedidosSelecionados.length > 0 || lotesSelecionados.length > 0) {
                 carregarPedidos();
             }
         }
