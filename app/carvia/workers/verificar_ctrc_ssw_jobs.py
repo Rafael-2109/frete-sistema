@@ -651,10 +651,11 @@ def verificar_ctrc_operacao_job(operacao_id: int) -> dict:
 # Job: Baixar DACTE PDF do SSW (opcao 101 --cte --baixar-dacte)
 # ────────────────────────────────────────────────────────────────────────────
 
-def baixar_pdf_ssw_operacao_job(operacao_id: int) -> dict:
+def baixar_pdf_ssw_operacao_job(operacao_id: int, user_id: int = None) -> dict:
     """Job RQ: baixa DACTE PDF do SSW (101 --cte --baixar-dacte),
-    faz upload para S3 em carvia/ctes_pdf/ e atualiza
-    `CarviaOperacao.cte_pdf_path`.
+    faz upload para S3 em carvia/ctes_pdf/, atualiza
+    `CarviaOperacao.cte_pdf_path` e envia PDF via chat para `user_id`
+    quando fornecido.
 
     NAO mexe em `cte_xml_path` (escopo limitado ao PDF — decisao 2026-04-15).
 
@@ -665,12 +666,16 @@ def baixar_pdf_ssw_operacao_job(operacao_id: int) -> dict:
       4. asyncio.run(consultar_ctrc(--cte=cte_numero, baixar_dacte=True))
       5. Le bytes do DACTE local e faz upload S3 (padrao BytesIO)
       6. Re-get operacao + atualiza `cte_pdf_path` (retry SSL/DBAPI)
+      7. Se `user_id` fornecido: upload do mesmo PDF para chat/attachments/
+         e envio via SystemNotifier.alert com attachment.
 
     Args:
         operacao_id: ID da CarviaOperacao
+        user_id: (opcional) ID do usuario que solicitou — recebera o PDF
+                 no chat (system_dm)
 
     Returns:
-        dict com {status, cte_pdf_path, motivo/erro}
+        dict com {status, cte_pdf_path, chat_enviado, motivo/erro}
         status: 'SUCESSO' | 'SKIPPED' | 'ERRO'
     """
     from app import create_app, db
@@ -795,8 +800,86 @@ def baixar_pdf_ssw_operacao_job(operacao_id: int) -> dict:
             "baixar_pdf_ssw_operacao_job: op %s -> cte_pdf_path=%s",
             operacao_id, dacte_s3_path,
         )
+
+        # ── Envio via chat ao usuario solicitante ──
+        # Se `user_id` foi passado, faz novo upload em chat/attachments/
+        # (bucket compartilhado, key distinta pra nao acoplar S3 lifecycles)
+        # e envia SystemNotifier.alert com o PDF anexado + deep_link.
+        #
+        # R15: SystemNotifier.alert faz commit interno; session do
+        # worker ja passou por multiplos Playwright + commit_com_retry,
+        # entao limpamos a session antes (close + ensure_connection)
+        # para garantir conexao fresca no commit do SystemNotifier.
+        chat_enviado = False
+        if user_id:
+            try:
+                from app.chat.services.attachment_service import AttachmentService
+                from app.chat.services.system_notifier import SystemNotifier
+                from app.utils.database_helpers import ensure_connection
+
+                # R15: fechar session potencialmente corrompida + forcar
+                # nova conexao antes do commit do SystemNotifier.
+                try:
+                    db.session.close()
+                except Exception:
+                    pass
+                ensure_connection()
+
+                att_service = AttachmentService()
+                filename = f'CTe_{cte_numero_str}-dacte.pdf'
+                size_bytes = len(dacte_bytes)
+                chat_stream = BytesIO(dacte_bytes)
+                chat_s3_key = att_service.upload(
+                    chat_stream, filename,
+                    mime_type='application/pdf',
+                    size=size_bytes,
+                    user_id=user_id,
+                )
+
+                SystemNotifier.alert(
+                    user_ids=[user_id],
+                    source='cte',
+                    titulo=f'CTe PDF {cte_numero_str} baixado do SSW',
+                    content=(
+                        f'Operacao #{operacao_id} — CTe numero '
+                        f'{cte_numero_str}. Arquivo anexado.'
+                    ),
+                    deep_link=f'/carvia/operacao/{operacao_id}',
+                    nivel='INFO',
+                    dados={
+                        'operacao_id': operacao_id,
+                        'cte_numero': cte_numero_str,
+                        'cte_pdf_path': dacte_s3_path,
+                    },
+                    attachments=[{
+                        's3_key': chat_s3_key,
+                        'filename': filename,
+                        'mime_type': 'application/pdf',
+                        'size_bytes': size_bytes,
+                    }],
+                )
+                chat_enviado = True
+                logger.info(
+                    "baixar_pdf_ssw_operacao_job: PDF enviado no chat "
+                    "para user_id=%s (op=%s)",
+                    user_id, operacao_id,
+                )
+            except Exception as e_chat:
+                logger.warning(
+                    "baixar_pdf_ssw_operacao_job: falha envio chat "
+                    "user_id=%s op=%s: %s",
+                    user_id, operacao_id, e_chat,
+                )
+                # Limpar session para nao vazar ChatMessage/ChatAttachment
+                # nao-commitadas para o proximo job no mesmo app_context.
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
         return {
             'status': 'SUCESSO',
             'cte_pdf_path': dacte_s3_path,
             'cte_numero': cte_numero_str,
+            'chat_enviado': chat_enviado,
         }

@@ -39,8 +39,8 @@ app/carvia/
   services/        # 46 services em 6 sub-pacotes:
                    #   admin/ (admin_service)
                    #   clientes/ (cliente_service)
-                   #   documentos/ (carvia_frete, conferencia, dacte_generator,
-                   #                embarque_carvia, linking, matching, operacao_cancel,
+                   #   documentos/ (carvia_frete, conferencia, embarque_carvia,
+                   #                linking, matching, operacao_cancel,
                    #                ssw_emissao, aprovacao_frete)
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
                    #                sugestao, comissao, conta_corrente, custo_entrega*,

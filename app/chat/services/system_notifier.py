@@ -2,7 +2,7 @@
 from typing import List, Optional
 
 from app import db
-from app.chat.models import ChatMessage
+from app.chat.models import ChatAttachment, ChatMessage
 from app.chat.services.thread_service import ThreadService
 from app.utils.json_helpers import sanitize_for_json
 from app.utils.logging_config import logger
@@ -22,12 +22,19 @@ class SystemNotifier:
         deep_link: Optional[str] = None,
         nivel: str = 'INFO',
         dados: Optional[dict] = None,
+        attachments: Optional[List[dict]] = None,
     ):
         """
         Dispara alerta do sistema para um ou mais usuarios.
 
         Cada usuario recebe na sua 'caixa de entrada' system_dm (criada lazy).
         Publica via SSE para entrega imediata se conectado.
+
+        Args:
+            attachments: lista opcional de dicts com
+                {s3_key, filename, mime_type, size_bytes}.
+                Cada anexo vira um `ChatAttachment` vinculado a TODAS as
+                mensagens disparadas (mesmo S3 key, sem re-upload).
         """
         if nivel not in VALID_NIVEIS:
             raise ValueError(f'nivel invalido: {nivel}')
@@ -63,6 +70,15 @@ class SystemNotifier:
             )
             db.session.add(msg)
             db.session.flush()
+            # Anexos: 1 ChatAttachment por anexo por mensagem.
+            for att in (attachments or []):
+                db.session.add(ChatAttachment(
+                    message_id=msg.id,
+                    s3_key=att['s3_key'],
+                    filename=att['filename'],
+                    mime_type=att['mime_type'],
+                    size_bytes=att['size_bytes'],
+                ))
             thread.last_message_at = msg.criado_em
             msgs.append((u, thread, msg))
 

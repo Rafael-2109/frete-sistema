@@ -46,23 +46,16 @@
             <button type="button" class="btn btn-outline-secondary btn-sm"
                     id="btn-pdf-ssw-{{ operacao.id }}"
                     onclick="abrirOuBaixarPdfSsw({{ operacao.id }}, {{ 'true' if operacao.cte_pdf_path else 'false' }})"
-                    title="{% if operacao.cte_pdf_path %}Abrir DACTE PDF (S3){% else %}Buscar DACTE no SSW (opcao 101){% endif %}">
-                <i class="fas fa-file-pdf"></i> PDF SSW
+                    title="{% if operacao.cte_pdf_path %}Abrir CTe PDF (S3){% else %}Buscar CTe PDF no SSW — sera enviado no chat{% endif %}">
+                <i class="fas fa-file-pdf"></i> CTe PDF
             </button>
             {% endif %}
             {% if operacao.cte_numero and operacao.status != 'CANCELADO' %}
             <button type="button" class="btn btn-outline-warning btn-sm"
                     id="btn-atualizar-ctrc-{{ operacao.id }}"
                     onclick="atualizarCtrcSsw({{ operacao.id }})"
-                    title="Re-consultar CTRC no SSW (opcao 101)">
-                <i class="fas fa-sync"></i> Atualizar CTRC
-            </button>
-            {% endif %}
-            {% if operacao.cte_xml_path or operacao.cte_chave_acesso %}
-            <button type="button" class="btn btn-outline-success btn-sm"
-                    onclick="window.open('/carvia/api/operacao/{{ operacao.id }}/dacte', '_blank')"
-                    title="Gerar DACTE PDF">
-                <i class="fas fa-file-pdf"></i> DACTE
+                    title="Re-consultar CTe no SSW (opcao 101) — atualiza CTRC">
+                <i class="fas fa-sync"></i> Atualizar CTe SSW
             </button>
             {% endif %}
             {% if operacao.cte_xml_path %}
@@ -1032,10 +1025,10 @@ function downloadCteXml(operacaoId) {
         .catch(() => alert('Erro de conexao ao baixar arquivo'));
 }
 
-// ─── PDF SSW (unificado: abre direto se ja tem cte_pdf_path + arquivo no storage; senao busca no SSW) ───
+// ─── CTe PDF (unificado: abre direto se ja tem cte_pdf_path + arquivo no storage; senao busca no SSW) ───
 function abrirOuBaixarPdfSsw(id, temPath) {
     var btn = document.getElementById('btn-pdf-ssw-' + id);
-    var labelOriginal = '<i class="fas fa-file-pdf"></i> PDF SSW';
+    var labelOriginal = '<i class="fas fa-file-pdf"></i> CTe PDF';
 
     function iniciarTrackingSsw(data) {
         // Job SSW enfileirado — entrega ao SswProgress global (toast fixo).
@@ -1047,8 +1040,8 @@ function abrirOuBaixarPdfSsw(id, temPath) {
         }
         if (window.SswProgress && data && data.job_id) {
             window.SswProgress.start({
-                label: 'Baixando DACTE PDF — CTe-' + id,
-                descricao: 'SSW opcao 101 --cte --baixar-dacte → upload S3.',
+                label: 'Baixando CTe PDF — CTe-' + id,
+                descricao: 'SSW opcao 101 — PDF sera enviado no seu chat.',
                 statusUrl: '/carvia/api/ssw-jobs/' + data.job_id + '/status',
                 statusType: 'rq_job',
                 reloadOnDone: true,
@@ -1068,11 +1061,11 @@ function abrirOuBaixarPdfSsw(id, temPath) {
         if (btn) { btn.disabled = true; }
 
         if (!confirm(
-            'Buscar o PDF DACTE no SSW agora?\n\n'
+            'Buscar o CTe PDF no SSW agora?\n\n'
             + 'O que acontece:\n'
             + '• SSW opcao 101 consulta pelo numero do CTe\n'
-            + '• Baixa DACTE e envia para S3\n'
-            + '• Atualiza o caminho do PDF nesta operacao\n\n'
+            + '• Baixa o CTe PDF, importa para esta operacao\n'
+            + '• Envia o PDF no SEU chat (icone no canto superior)\n\n'
             + 'Duracao tipica: 30-45s. O progresso aparece no canto inferior direito.'
         )) {
             if (btn) { btn.disabled = false; }

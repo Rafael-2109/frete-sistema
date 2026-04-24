@@ -216,36 +216,97 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
             logger.info("Emissao %s — CTe %s emitido", emissao_id, emissao.ctrc_numero)
 
             # ── Fase B: Baixar XML/DACTE via consultar_ctrc_101 e importar ──
-            # Snapshot de campos necessarios (emissao pode detachar)
+            # Chamamos `consultar_ctrc_101.py` em NOVA sessao Playwright —
+            # script read-only reusado por varios fluxos (verificar_ctrc,
+            # baixar_pdf, botao manual). Separacao de responsabilidades:
+            # 004 emite, 101 consulta/baixa. Retry 2x mitiga timing
+            # do SSW (CTe recem-autorizado pode demorar a aparecer).
+            #
+            # Ao contrario do fluxo antigo, aplicamos o CTRC autoritativo
+            # retornado pela 101 ANTES da importacao — elimina a race
+            # condition em que `CarviaOperacao` nasce com ctrc_numero
+            # provisorio e depois e corrigido por job tardio.
             ctrc_numero_local = emissao.ctrc_numero
             filial_local = emissao.filial_ssw or 'CAR'
             operacao_id_pos_import = None
             try:
+                from app.carvia.workers.verificar_ctrc_ssw_jobs import (
+                    _formatar_ctrc_ssw,
+                )
+                from app.utils.database_helpers import ensure_connection
+
                 # Libera conexao antes do Playwright (opcao 101)
                 _liberar_conexao_antes_playwright()
 
-                # Consulta 101 pelo CTRC capturado no 004 — apenas para
-                # baixar XML/DACTE. A CORRECAO do ctrc_numero e feita
-                # depois por `verificar_ctrc_operacao_job` que pesquisa
-                # por --cte (nCT do XML) — fonte autoritativa do SSW.
-                resultado_consulta = _executar_consulta_101(
-                    ctrc_numero_local, filial=filial_local
-                )
-                if resultado_consulta.get('sucesso'):
+                # Retry 2x — SSW as vezes demora pra 101 encontrar CTe
+                # recem-emitido; backoff linear (8s extra na segunda).
+                resultado_consulta = None
+                for tentativa in range(2):
+                    resultado_consulta = _executar_consulta_101(
+                        ctrc_numero_local, filial=filial_local
+                    )
+                    if resultado_consulta.get('sucesso') and (
+                        resultado_consulta.get('xml') or
+                        resultado_consulta.get('dacte')
+                    ):
+                        break
+                    if tentativa == 0:
+                        logger.info(
+                            "Emissao %s — 101 sem downloads na 1a tentativa, "
+                            "retry em 8s", emissao_id,
+                        )
+                        time.sleep(8)
+
+                if resultado_consulta and resultado_consulta.get('sucesso'):
                     resultado_cte['xml'] = resultado_consulta.get('xml')
                     resultado_cte['dacte'] = resultado_consulta.get('dacte')
 
+                    # CTRC autoritativo retornado pela 101 (formato SSW)
+                    ctrc_completo_ssw = (
+                        resultado_consulta.get('dados', {}) or {}
+                    ).get('ctrc_completo')
+                    ctrc_final = _formatar_ctrc_ssw(ctrc_completo_ssw)
+
+                    if not ctrc_final:
+                        # Fluxo raro: 101 respondeu OK mas sem ctrc_completo
+                        # no body. CTRC provisorio da Fase A sera importado;
+                        # `verificar_ctrc_operacao_job` fallback corrige.
+                        logger.warning(
+                            "Emissao %s — 101 retornou sucesso mas sem "
+                            "ctrc_completo; CTRC provisorio %s sera "
+                            "importado (fallback job corrige)",
+                            emissao_id, emissao.ctrc_numero,
+                        )
+                else:
+                    # 101 falhou em ambas tentativas — import com CTRC
+                    # provisorio; fallback job corrige em background.
+                    ctrc_final = None
+                    logger.warning(
+                        "Emissao %s — 101 falhou apos retry; CTRC "
+                        "provisorio %s importado, fallback job corrige",
+                        emissao_id, emissao.ctrc_numero,
+                    )
+
                 # Re-conecta e re-busca emissao antes de importar
-                from app.utils.database_helpers import ensure_connection
                 ensure_connection()
                 emissao = db.session.get(CarviaEmissaoCte, emissao_id)
+
+                # Atualizar CTRC autoritativo ANTES da importacao — fica
+                # coerente na criacao da CarviaOperacao.
+                if ctrc_final and emissao.ctrc_numero != ctrc_final:
+                    logger.info(
+                        "Emissao %s — CTRC corrigido via 101: %s -> %s",
+                        emissao_id, emissao.ctrc_numero, ctrc_final,
+                    )
+                    emissao.ctrc_numero = ctrc_final
 
                 SswEmissaoService.importar_resultado_cte(emissao, resultado_cte)
 
                 db.session.commit()
 
-                # Capturar operacao_id APOS commit para enfileirar job
-                # de verificacao CTRC (pos fase C).
+                # Capturar operacao_id APOS commit — usado como fallback
+                # para enfileirar `verificar_ctrc_operacao_job` se a 101
+                # nao retornou ctrc autoritativo (pos-fase C).
                 operacao_id_pos_import = emissao.operacao_id
             except Exception as e:
                 logger.warning("Falha ao importar XML (nao-bloqueante): %s", e)
@@ -332,10 +393,11 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
                 etapa=None,
             )
 
-            # Enfileirar verificacao CTRC via SSW (opcao 101 --cte).
-            # Pesquisa o nCT real do XML e atualiza `operacao.ctrc_numero`
-            # + `emissao.ctrc_numero` com o CTRC real do SSW. Nao-bloqueante:
-            # falha aqui nao afeta o SUCESSO do CTe (admin edit cobre).
+            # Fallback: se a 101 da Fase B NAO retornou ctrc_completo
+            # (timing SSW, rede, etc.), enfileirar verificacao tardia
+            # por `--cte {nCT}` (fonte autoritativa do XML). Em fluxo
+            # normal — Fase B ja corrigiu o CTRC — este job retorna
+            # status='OK' sem alteracao.
             op_id_verificar = operacao_id_pos_import or emissao.operacao_id
             if op_id_verificar:
                 try:
@@ -351,7 +413,7 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
                     )
                     logger.info(
                         "Emissao %s: job verificar_ctrc_operacao "
-                        "enfileirado (op=%s)",
+                        "enfileirado (fallback, op=%s)",
                         emissao_id, op_id_verificar,
                     )
                 except Exception as e_job:
@@ -460,7 +522,13 @@ def _executar_script_cte(args):
 
 
 def _executar_consulta_101(ctrc_numero, filial='CAR'):
-    """Executa consultar_ctrc_101.py para baixar XML e DACTE do CTe emitido."""
+    """Executa consultar_ctrc_101.py para baixar XML e DACTE do CTe emitido.
+
+    Script READ-ONLY reusado por varios fluxos (emissao Fase B,
+    verificar_ctrc_operacao_job, baixar_pdf_ssw_operacao_job,
+    botao "Atualizar CTe SSW"). Sempre nova sessao Playwright
+    (30-60s overhead) — trade-off aceito por clareza e reuso.
+    """
     if SSW_SCRIPTS not in sys.path:
         sys.path.insert(0, SSW_SCRIPTS)
 
@@ -469,6 +537,7 @@ def _executar_consulta_101(ctrc_numero, filial='CAR'):
     args_101 = argparse.Namespace(
         ctrc=str(ctrc_numero),
         nf=None,
+        cte=None,
         filial=filial,
         baixar_xml=True,
         baixar_dacte=True,

@@ -669,96 +669,6 @@ def register_api_routes(bp):
             return jsonify({'erro': str(e)}), 500
 
     # ------------------------------------------------------------------
-    # DACTE PDF — Geracao on-demand
-    # ------------------------------------------------------------------
-
-    @bp.route('/api/operacao/<int:operacao_id>/dacte')
-    @login_required
-    def api_download_operacao_dacte(operacao_id):
-        """Gera e retorna DACTE PDF de uma CarviaOperacao."""
-        if not getattr(current_user, 'sistema_carvia', False):
-            return jsonify({'erro': 'Acesso negado'}), 403
-
-        from flask import make_response
-        from app.carvia.models import CarviaOperacao
-        from app import db
-
-        operacao = db.session.get(CarviaOperacao, operacao_id)
-        if not operacao:
-            return jsonify({'erro': 'Operacao nao encontrada'}), 404
-
-        try:
-            from app.carvia.services.documentos.dacte_generator_service import DacteGeneratorService
-            service = DacteGeneratorService()
-            pdf_bytes = service.gerar_dacte_pdf('operacao', operacao_id)
-
-            response = make_response(pdf_bytes)
-            response.headers['Content-Type'] = 'application/pdf'
-            nome_arquivo = f'DACTE_{operacao.cte_numero or operacao_id}.pdf'
-            response.headers['Content-Disposition'] = (
-                f'inline; filename={nome_arquivo}'
-            )
-            return response
-
-        except ValueError as e:
-            return jsonify({'erro': str(e)}), 404
-        except Exception as e:
-            import xml.etree.ElementTree as ET
-            if isinstance(e, ET.ParseError) or 'not well-formed' in str(e):
-                logger.warning(
-                    f"XML invalido para DACTE operacao {operacao_id}: {e}"
-                )
-                return jsonify({
-                    'erro': 'XML do CTe invalido ou corrompido. '
-                            'Use o PDF Original.'
-                }), 422
-            logger.error(f"Erro ao gerar DACTE para operacao {operacao_id}: {e}")
-            return jsonify({'erro': f'Erro ao gerar DACTE: {e}'}), 500
-
-    @bp.route('/api/subcontrato/<int:subcontrato_id>/dacte')
-    @login_required
-    def api_download_subcontrato_dacte(subcontrato_id):
-        """Gera e retorna DACTE PDF de um CarviaSubcontrato."""
-        if not getattr(current_user, 'sistema_carvia', False):
-            return jsonify({'erro': 'Acesso negado'}), 403
-
-        from flask import make_response
-        from app.carvia.models import CarviaSubcontrato
-        from app import db
-
-        sub = db.session.get(CarviaSubcontrato, subcontrato_id)
-        if not sub:
-            return jsonify({'erro': 'Subcontrato nao encontrado'}), 404
-
-        try:
-            from app.carvia.services.documentos.dacte_generator_service import DacteGeneratorService
-            service = DacteGeneratorService()
-            pdf_bytes = service.gerar_dacte_pdf('subcontrato', subcontrato_id)
-
-            response = make_response(pdf_bytes)
-            response.headers['Content-Type'] = 'application/pdf'
-            nome_arquivo = f'DACTE_{sub.cte_numero or subcontrato_id}.pdf'
-            response.headers['Content-Disposition'] = (
-                f'inline; filename={nome_arquivo}'
-            )
-            return response
-
-        except ValueError as e:
-            return jsonify({'erro': str(e)}), 404
-        except Exception as e:
-            import xml.etree.ElementTree as ET
-            if isinstance(e, ET.ParseError) or 'not well-formed' in str(e):
-                logger.warning(
-                    f"XML invalido para DACTE subcontrato {subcontrato_id}: {e}"
-                )
-                return jsonify({
-                    'erro': 'XML do CTe invalido ou corrompido. '
-                            'Use o PDF Original.'
-                }), 422
-            logger.error(f"Erro ao gerar DACTE para subcontrato {subcontrato_id}: {e}")
-            return jsonify({'erro': f'Erro ao gerar DACTE: {e}'}), 500
-
-    # ------------------------------------------------------------------
     # Download PDF Original (CTe importado de PDF)
     # ------------------------------------------------------------------
 
@@ -849,13 +759,15 @@ def register_api_routes(bp):
                 from app.carvia.workers.verificar_ctrc_ssw_jobs import (
                     baixar_pdf_ssw_operacao_job,
                 )
+                # Passa current_user.id para que o PDF baixado seja enviado
+                # no chat do solicitante (consistente com endpoint direto).
                 job = enqueue_job(
-                    baixar_pdf_ssw_operacao_job, operacao_id,
+                    baixar_pdf_ssw_operacao_job, operacao_id, current_user.id,
                     queue_name='default', timeout='10m',
                 )
                 return (
                     True,
-                    'PDF ausente no storage. Nova busca no SSW enfileirada — acompanhe o progresso no canto inferior direito.',
+                    'PDF ausente no storage. Nova busca no SSW enfileirada — o PDF sera enviado no seu chat quando pronto.',
                     job.id,
                 )
             except Exception as e:
@@ -980,8 +892,10 @@ def register_api_routes(bp):
 
         Usa o worker `baixar_pdf_ssw_operacao_job` — roda
         `consultar_ctrc_101.py --cte {n} --baixar-dacte`, faz upload para S3
-        em `carvia/ctes_pdf/` e atualiza `CarviaOperacao.cte_pdf_path`.
-        Job assincrono (fila `default`, timeout 10m). NAO mexe em XML.
+        em `carvia/ctes_pdf/`, atualiza `CarviaOperacao.cte_pdf_path` e
+        envia o PDF via chat (SystemNotifier + ChatAttachment) para o
+        usuario solicitante. Job assincrono (fila `default`, timeout 10m).
+        NAO mexe em XML.
         """
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1002,15 +916,15 @@ def register_api_routes(bp):
                 baixar_pdf_ssw_operacao_job,
             )
             job = enqueue_job(
-                baixar_pdf_ssw_operacao_job, operacao_id,
+                baixar_pdf_ssw_operacao_job, operacao_id, current_user.id,
                 queue_name='default', timeout='10m',
             )
             return jsonify({
                 'sucesso': True,
                 'job_id': job.id,
                 'mensagem': (
-                    'Download do PDF SSW enfileirado. '
-                    'Atualize a pagina em ~30 segundos.'
+                    'Buscando CTe PDF no SSW. O arquivo sera '
+                    'enviado no seu chat quando pronto (~30s).'
                 ),
             }), 202
         except Exception as e:
