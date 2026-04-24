@@ -867,9 +867,10 @@
     {% endwith %}
   </div>
 
-  <!-- Chat client JS (Task 17) — conecta SSE + badges. Requer DOM carregado. -->
+  <!-- Chat client JS (Task 17) + UI (Task 18). Apenas para usuarios autenticados. -->
   {% if current_user.is_authenticated %}
   <script src="{{ url_for('static', filename='chat/js/chat_client.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='chat/js/chat_ui.js') }}" defer></script>
   {% endif %}
 
   <!-- Carregamento de bibliotecas principais ANTES do conteúdo -->

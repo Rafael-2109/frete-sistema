@@ -1,5 +1,5 @@
-"""Rotas de SSE stream + unread counters + FTS search + mark_read — Task 14."""
-from flask import Response, stream_with_context, jsonify, request
+"""Rotas de SSE stream + unread + FTS search + mark_read + UI fragments — Task 14/18."""
+from flask import Response, stream_with_context, jsonify, request, render_template
 from flask_login import login_required, current_user
 from sqlalchemy import select, func, or_
 
@@ -7,6 +7,13 @@ from app import db
 from app.chat import chat_bp
 from app.chat.realtime.sse import stream_chat_events
 from app.chat.models import ChatMessage, ChatMember
+
+
+@chat_bp.route('/ui/drawer', methods=['GET'])
+@login_required
+def ui_drawer():
+    """Fragmento HTML do drawer (Task 18). Injetado via fetch pelo chat_ui.js."""
+    return render_template('chat/drawer.html')
 
 
 @chat_bp.route('/stream', methods=['GET'])
