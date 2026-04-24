@@ -2,7 +2,7 @@
 
 **Branch**: `feature/chat-inapp`
 **Ultima atualizacao**: 2026-04-23
-**Progresso**: 15 de 25 tasks concluidas (60%) — **FASE D (Rotas HTTP) COMPLETA**
+**Progresso**: 20 de 25 tasks concluidas (80%) — **FASE D + FASE E (UI) COMPLETAS**
 
 ---
 
@@ -98,12 +98,12 @@ DB local tem 7 tabelas `chat_*` criadas (migration rodou). Indices + trigger FTS
 | 13 | Rotas mensagem | ✅ | `9051d4e0` + `5b4cf0e1` | Fix review: forward valida membership origem + bloqueia deletada + audit best-effort |
 | 14 | Rotas stream/unread/search | ✅ | `864e07d9` + `acfeb838` | Fix review: NULL semantics em unread para sender_user_id IS NULL (system msgs) |
 | 15 | Rotas share/entity | ✅ | `6c584f5a` + `12b3f2b1` + `d8a13740` | Fix review: URL scheme allowlist (XSS + open redirect) + race guard IntegrityError |
-| **16** | **CSS + navbar badge** | ⏳ **PROXIMA (Fase E UI)** | — | Nao depende de nada |
-| 17 | JS ChatClient | pending | — | Depende de 14 |
-| 18 | Drawer + painel | pending | — | Depende de 12 + 13 |
-| 19 | Compartilhar tela | pending | — | Depende de 15 + 18 |
-| 20 | Encaminhar msg UI | pending | — | Depende de 13 + 18 |
-| 21 | Integrar alerta recebimento | pending | — | Depende de 9 |
+| 16 | CSS + navbar badge | ✅ | `6f17979e` | CSS em modules/_chat.css (CLAUDE.md compliant), include _navbar_badge.html |
+| 17 | JS ChatClient | ✅ | `4c9c551e` | SSE client + badges + counters, node --check OK |
+| 18 | Drawer + painel | ✅ | `8995496b` | chat_ui.js + drawer.html + route /ui/drawer |
+| 19 | Compartilhar tela | ✅ | `330888c8` | Modal de compartilhamento integrado no navbar |
+| 20 | Encaminhar msg UI | ✅ | `1d844b82` | Botao ↪ em renderMessage + openForwardModal |
+| **21** | **Integrar alerta recebimento** | ⏳ **PROXIMA (Fase F)** | — | Depende de 9 (feito) |
 | 22 | Integrar alerta DFE | pending | — | Depende de 9 |
 | 23 | Integrar alerta CTe | pending | — | Depende de 9 |
 | 24 | CLAUDE.md modulo + raiz | pending | — | Documentacao |
