@@ -1,6 +1,7 @@
 """Rotas de thread do chat in-app — Task 12."""
 from flask import jsonify, request
 from flask_login import login_required, current_user
+from sqlalchemy import select
 
 from app import db
 from app.chat import chat_bp
@@ -55,7 +56,9 @@ def create_group():
     if not titulo:
         return jsonify({'error': 'titulo obrigatorio'}), 400
 
-    members = Usuario.query.filter(Usuario.id.in_(member_ids)).all() if member_ids else []
+    members = db.session.execute(
+        select(Usuario).where(Usuario.id.in_(member_ids))
+    ).scalars().all() if member_ids else []
     for m in members:
         if not pode_adicionar(current_user, m):
             return jsonify({'error': f'sem permissao para adicionar {m.id}'}), 403
@@ -96,12 +99,15 @@ def add_member(thread_id):
         ThreadService.add_member(thread, current_user, target)
     except PermissionError:
         return jsonify({'error': 'permissao negada'}), 403
-    return jsonify({'ok': True}), 201
+    return jsonify({'ok': True}), 200
 
 
 @chat_bp.route('/entity/<entity_type>/<entity_id>/thread', methods=['GET'])
 @login_required
 def get_entity_thread(entity_type, entity_id):
+    # entity_type eh canonico em lowercase (pedido, nf, recebimento).
+    # entity_id preserva case (ex: num_pedido='VCD123').
+    entity_type = entity_type.lower()
     t = ThreadService.get_entity_thread(entity_type, entity_id)
     if t is None:
         return jsonify({
