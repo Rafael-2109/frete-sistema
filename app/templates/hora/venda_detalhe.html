@@ -1,0 +1,317 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+{% set pode_editar = current_user.tem_perm_hora('vendas', 'editar') %}
+{% set pode_apagar = current_user.tem_perm_hora('vendas', 'apagar') %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>
+    Venda #{{ venda.id }}
+    <small class="text-muted">NF {{ venda.nf_saida_numero or '—' }}</small>
+  </h2>
+  <div class="d-flex gap-2">
+    {% if venda.arquivo_pdf_s3_key %}
+      <a href="{{ url_for('hora.vendas_download_pdf', venda_id=venda.id) }}"
+         class="btn btn-sm btn-outline-secondary" target="_blank"
+         title="Baixar DANFE original">
+        <i class="fas fa-file-pdf"></i> Baixar PDF
+      </a>
+    {% endif %}
+    {% if venda.status == 'CONCLUIDA' %}
+      <span class="badge bg-success">Concluida</span>
+    {% elif venda.status == 'CANCELADA' %}
+      <span class="badge bg-danger">Cancelada</span>
+    {% elif venda.status == 'DEVOLVIDA' %}
+      <span class="badge bg-warning text-dark">Devolvida</span>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------------------------------------------------------------
+   Divergencias abertas (bloco de alerta no topo)
+   --------------------------------------------------------------- #}
+{% if venda.divergencias_abertas %}
+<div class="alert alert-warning">
+  <h5 class="alert-heading">
+    <i class="fas fa-exclamation-triangle"></i>
+    {{ venda.divergencias_abertas|length }} divergencia(s) aberta(s)
+  </h5>
+  <p class="small text-muted mb-2">
+    Import permissivo — as divergencias abaixo foram registradas mas nao bloquearam a venda.
+    Revise cada uma e marque como resolvida apos tomar acao (ou cancele a venda).
+  </p>
+  <ul class="mb-0">
+    {% for d in venda.divergencias_abertas %}
+      <li>
+        <strong>{{ d.tipo }}</strong>
+        {%- if d.numero_chassi %} <span class="chassi-mono small">({{ d.numero_chassi }})</span>{% endif %}
+        {%- if d.detalhe %}: {{ d.detalhe }}{% endif %}
+        {% if d.valor_esperado or d.valor_conferido %}
+          <small class="text-muted">
+            esperado={{ d.valor_esperado or '—' }} · conferido={{ d.valor_conferido or '—' }}
+          </small>
+        {% endif %}
+        {% if pode_editar %}
+          <form method="post" action="{{ url_for('hora.vendas_resolver_divergencia', venda_id=venda.id, div_id=d.id) }}"
+                class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-link p-0 ms-2">
+              marcar como resolvida
+            </button>
+          </form>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{# ---------------------------------------------------------------
+   Header KPIs
+   --------------------------------------------------------------- #}
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Chave de acesso</div>
+    <div class="chassi-mono small">{{ venda.nf_saida_chave_44 or '—' }}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Loja emitente</div>
+    <div>
+      {% if venda.loja %}
+        <strong>{{ venda.loja.rotulo_display }}</strong>
+      {% else %}
+        <span class="text-warning">
+          <i class="fas fa-exclamation-triangle"></i> sem loja
+        </span>
+      {% endif %}
+    </div>
+    {% if venda.cnpj_emitente %}
+      <div class="chassi-mono small text-muted">CNPJ {{ venda.cnpj_emitente }}</div>
+    {% endif %}
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Data</div>
+    <div>{{ venda.data_venda.strftime('%d/%m/%Y') }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Valor total</div>
+    <div>{{ venda.valor_total|valor_br }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Chassis</div>
+    <div>{{ venda.itens|length }}</div>
+  </div></div>
+</div>
+
+{# ---------------------------------------------------------------
+   Definir loja (quando CNPJ emitente nao foi reconhecido)
+   --------------------------------------------------------------- #}
+{% if not venda.loja_id and lojas_ativas and pode_editar %}
+<form method="post" action="{{ url_for('hora.vendas_definir_loja', venda_id=venda.id) }}"
+      class="card p-3 mb-3 border-warning">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h5><i class="fas fa-exclamation-circle text-warning"></i> Definir loja emitente</h5>
+  <p class="text-muted small mb-2">
+    A NF foi importada sem loja (CNPJ emitente nao bate com nenhuma loja ativa cadastrada).
+    Selecione a loja correta para que os chassis apareçam na loja certa.
+  </p>
+  <div class="row">
+    <div class="col-md-8">
+      <select name="loja_id" class="form-select" required>
+        <option value="">— Selecione —</option>
+        {% for loja in lojas_ativas %}
+          <option value="{{ loja.id }}">
+            {{ loja.rotulo_display }}
+            {%- if loja.cnpj %} · CNPJ {{ loja.cnpj }}{% endif %}
+            {%- if loja.cidade %} ({{ loja.cidade }}){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <button type="submit" class="btn btn-warning">Definir loja</button>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+{# ---------------------------------------------------------------
+   Cliente + Dados editaveis
+   --------------------------------------------------------------- #}
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card p-3 h-100">
+      <h5 class="mb-3">Cliente</h5>
+      <div class="mb-2">
+        <div class="text-muted small">Nome</div>
+        <div><strong>{{ venda.nome_cliente }}</strong></div>
+      </div>
+      <div class="mb-2">
+        <div class="text-muted small">CPF</div>
+        <div class="chassi-mono">{{ venda.cpf_cliente }}</div>
+      </div>
+      <div class="mb-2">
+        <div class="text-muted small">Telefone</div>
+        <div>{{ venda.telefone_cliente or '—' }}</div>
+      </div>
+      <div>
+        <div class="text-muted small">Email</div>
+        <div>{{ venda.email_cliente or '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    {% if pode_editar and venda.status != 'CANCELADA' %}
+      <form method="post" action="{{ url_for('hora.vendas_editar', venda_id=venda.id) }}" class="card p-3 h-100">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h5 class="mb-3">Dados editaveis (pos-import)</h5>
+
+        <div class="mb-2">
+          <label class="form-label small mb-1">Vendedor</label>
+          <input type="text" name="vendedor" maxlength="100" class="form-control form-control-sm"
+                 value="{{ venda.vendedor or '' }}" placeholder="Nome do vendedor da loja">
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label small mb-1">Forma de pagamento</label>
+          <select name="forma_pagamento" class="form-select form-select-sm">
+            {% set atual = venda.forma_pagamento or 'NAO_INFORMADO' %}
+            <option value="NAO_INFORMADO" {% if atual == 'NAO_INFORMADO' %}selected{% endif %}>Nao informado</option>
+            <option value="PIX" {% if atual == 'PIX' %}selected{% endif %}>PIX</option>
+            <option value="CARTAO_CREDITO" {% if atual == 'CARTAO_CREDITO' %}selected{% endif %}>Cartao credito</option>
+            <option value="DINHEIRO" {% if atual == 'DINHEIRO' %}selected{% endif %}>Dinheiro</option>
+            <option value="MISTO" {% if atual == 'MISTO' %}selected{% endif %}>Misto</option>
+          </select>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label small mb-1">Telefone cliente</label>
+          <input type="text" name="telefone_cliente" maxlength="20" class="form-control form-control-sm"
+                 value="{{ venda.telefone_cliente or '' }}">
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label small mb-1">Email cliente</label>
+          <input type="email" name="email_cliente" maxlength="120" class="form-control form-control-sm"
+                 value="{{ venda.email_cliente or '' }}">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small mb-1">Observacoes</label>
+          <textarea name="observacoes" rows="2" class="form-control form-control-sm">{{ venda.observacoes or '' }}</textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-sm">Salvar edicao</button>
+      </form>
+    {% else %}
+      <div class="card p-3 h-100">
+        <h5 class="mb-3">Dados de operacao</h5>
+        <div class="mb-2"><div class="text-muted small">Vendedor</div><div>{{ venda.vendedor or '—' }}</div></div>
+        <div class="mb-2"><div class="text-muted small">Forma de pagamento</div><div>{{ venda.forma_pagamento }}</div></div>
+        <div class="mb-2"><div class="text-muted small">Observacoes</div><div>{{ venda.observacoes or '—' }}</div></div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------------------------------------------------------------
+   Chassis vendidos
+   --------------------------------------------------------------- #}
+<h4>Chassis vendidos</h4>
+<div class="table-responsive mb-4">
+  <table class="table table-sm">
+    <thead><tr>
+      <th>Chassi</th>
+      <th>Modelo</th>
+      <th>Cor</th>
+      <th>Preco tabela ref.</th>
+      <th>Desconto</th>
+      <th>Preco final</th>
+    </tr></thead>
+    <tbody>
+      {% for item in venda.itens %}
+        <tr>
+          <td>
+            <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=item.numero_chassi) }}"
+               class="chassi-mono">{{ item.numero_chassi }}</a>
+          </td>
+          <td>{{ item.moto.modelo.nome_modelo if item.moto and item.moto.modelo else '—' }}</td>
+          <td>{{ item.moto.cor if item.moto else '—' }}</td>
+          <td>{{ item.preco_tabela_referencia|valor_br }}</td>
+          <td>
+            {% if item.desconto_aplicado and item.desconto_aplicado > 0 %}
+              <span class="text-success">-{{ item.desconto_aplicado|valor_br }}</span>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td><strong>{{ item.preco_final|valor_br }}</strong></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="5" class="text-end">Total:</th>
+        <th>{{ venda.valor_total|valor_br }}</th>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+{# ---------------------------------------------------------------
+   Historico de divergencias (incluindo resolvidas)
+   --------------------------------------------------------------- #}
+{% if venda.divergencias %}
+<h5>Historico de divergencias</h5>
+<div class="table-responsive mb-4">
+  <table class="table table-sm">
+    <thead><tr>
+      <th>Tipo</th>
+      <th>Chassi</th>
+      <th>Detalhe</th>
+      <th>Criado em</th>
+      <th>Resolvida em</th>
+      <th>Por</th>
+    </tr></thead>
+    <tbody>
+      {% for d in venda.divergencias %}
+        <tr class="{% if d.resolvida_em %}text-muted{% endif %}">
+          <td><span class="badge bg-{% if d.resolvida_em %}secondary{% else %}warning text-dark{% endif %}">{{ d.tipo }}</span></td>
+          <td>{% if d.numero_chassi %}<code>{{ d.numero_chassi }}</code>{% else %}—{% endif %}</td>
+          <td><small>{{ d.detalhe or '—' }}</small></td>
+          <td><small>{{ d.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+          <td><small>{{ d.resolvida_em.strftime('%d/%m/%Y %H:%M') if d.resolvida_em else '—' }}</small></td>
+          <td><small>{{ d.resolvida_por or '—' }}</small></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{# ---------------------------------------------------------------
+   Cancelar venda (apenas CONCLUIDA)
+   --------------------------------------------------------------- #}
+{% if pode_apagar and venda.status == 'CONCLUIDA' %}
+<div class="card p-3 border-danger">
+  <h5><i class="fas fa-ban text-danger"></i> Cancelar venda</h5>
+  <p class="text-muted small">
+    Ao cancelar, a venda muda para status CANCELADA e os chassis recebem evento DEVOLVIDA.
+    Para voltar ao estoque, sera necessario nova NF de entrada (fluxo simetrico a devolucoes).
+    O registro da venda e preservado para auditoria.
+  </p>
+  <form method="post" action="{{ url_for('hora.vendas_cancelar', venda_id=venda.id) }}"
+        onsubmit="return confirm('Cancelar esta venda e emitir DEVOLVIDA em {{ venda.itens|length }} chassi(s)?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-2">
+      <label class="form-label small">Motivo (obrigatorio, min 3 chars)</label>
+      <input type="text" name="motivo" minlength="3" maxlength="255" required
+             class="form-control form-control-sm"
+             placeholder="Ex.: NF emitida em duplicidade, cliente desistiu, ...">
+    </div>
+    <button type="submit" class="btn btn-sm btn-danger">Cancelar venda</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

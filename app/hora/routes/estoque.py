@@ -1,11 +1,11 @@
 """Rotas de Estoque HORA: KPIs, listagem chassi-a-chassi, rastreamento de moto."""
 from __future__ import annotations
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 
 from app import db
 from app.hora.decorators import require_hora_perm
-from app.hora.models import HoraLoja, HoraMoto
+from app.hora.models import HoraLoja, HoraModelo, HoraMoto
 from app.hora.routes import hora_bp
 from app.hora.services import estoque_service
 from app.hora.services.auth_helper import (
@@ -14,16 +14,23 @@ from app.hora.services.auth_helper import (
 )
 
 
+def _int_arg(nome: str):
+    v = (request.args.get(nome) or '').strip()
+    return int(v) if v.isdigit() else None
+
+
 @hora_bp.route('/estoque')
 @require_hora_perm('estoque', 'ver')
 def estoque_lista():
     permitidas = lojas_permitidas_ids()
-    loja_id_str = (request.args.get('loja_id') or '').strip()
-    modelo_id_str = (request.args.get('modelo_id') or '').strip()
-    cor = (request.args.get('cor') or '').strip() or None
 
-    loja_id = int(loja_id_str) if loja_id_str.isdigit() else None
-    modelo_id = int(modelo_id_str) if modelo_id_str.isdigit() else None
+    loja_id = _int_arg('loja_id')
+    modelo_id = _int_arg('modelo_id')
+    cor = (request.args.get('cor') or '').strip() or None
+    chassi = (request.args.get('chassi') or '').strip() or None
+    pedido_id = _int_arg('pedido_id')
+    nf_entrada_id = _int_arg('nf_entrada_id')
+    venda_id = _int_arg('venda_id')
 
     if loja_id and not usuario_tem_acesso_a_loja(loja_id):
         flash('Acesso negado a essa loja.', 'danger')
@@ -33,6 +40,11 @@ def estoque_lista():
     incluir_faltando_peca = request.args.get('incluir_faltando_peca', '1') == '1'
     incluir_fora_estoque = request.args.get('incluir_fora_estoque', '0') == '1'
 
+    # Filtros por documento forcam `incluir_fora_estoque=True` para permitir
+    # ver vendidas ao filtrar por venda, NF entrada cujo chassi ja saiu, etc.
+    if pedido_id or nf_entrada_id or venda_id or chassi:
+        incluir_fora_estoque = True
+
     motos = estoque_service.listar_estoque(
         loja_id=loja_id,
         modelo_id=modelo_id,
@@ -41,6 +53,10 @@ def estoque_lista():
         incluir_faltando_peca=incluir_faltando_peca,
         incluir_fora_estoque=incluir_fora_estoque,
         lojas_permitidas_ids=permitidas,
+        pedido_id=pedido_id,
+        nf_entrada_id=nf_entrada_id,
+        venda_id=venda_id,
+        chassi=chassi,
     )
     kpis_loja = estoque_service.kpis_estoque_por_loja(
         lojas_permitidas_ids=permitidas,
@@ -61,6 +77,16 @@ def estoque_lista():
         lojas = lojas_q.order_by(HoraLoja.nome).all()
 
     opcoes = estoque_service.opcoes_filtro_estoque(lojas_permitidas_ids=permitidas)
+    opcoes_docs = estoque_service.opcoes_documentos_filtro(
+        lojas_permitidas_ids=permitidas,
+    )
+
+    # Para preencher input quando vier filtrado por modelo_id, precisamos do nome.
+    modelo_selecionado_nome = None
+    if modelo_id:
+        m = HoraModelo.query.get(modelo_id)
+        if m:
+            modelo_selecionado_nome = m.nome_modelo
 
     return render_template(
         'hora/estoque_lista.html',
@@ -70,13 +96,58 @@ def estoque_lista():
         lojas=lojas,
         modelos=opcoes['modelos'],
         cores=opcoes['cores'],
+        pedidos_filtro=opcoes_docs['pedidos'],
+        nfs_entrada_filtro=opcoes_docs['nfs_entrada'],
+        vendas_filtro=opcoes_docs['vendas'],
         filtro_loja_id=loja_id,
         filtro_modelo_id=modelo_id,
+        filtro_modelo_nome=modelo_selecionado_nome,
         filtro_cor=cor,
+        filtro_chassi=chassi,
+        filtro_pedido_id=pedido_id,
+        filtro_nf_entrada_id=nf_entrada_id,
+        filtro_venda_id=venda_id,
         incluir_avariadas=incluir_avariadas,
         incluir_faltando_peca=incluir_faltando_peca,
         incluir_fora_estoque=incluir_fora_estoque,
     )
+
+
+# ------------------------------------------------------------------
+# Autocomplete endpoints (JSON) — usados pelos inputs da tela de estoque.
+# ------------------------------------------------------------------
+
+@hora_bp.route('/estoque/autocomplete/chassi')
+@require_hora_perm('estoque', 'ver')
+def estoque_autocomplete_chassi():
+    q = request.args.get('q') or ''
+    return jsonify(estoque_service.autocomplete_chassi(
+        q=q,
+        lojas_permitidas_ids=lojas_permitidas_ids(),
+        limit=20,
+    ))
+
+
+@hora_bp.route('/estoque/autocomplete/modelo')
+@require_hora_perm('estoque', 'ver')
+def estoque_autocomplete_modelo():
+    q = request.args.get('q') or ''
+    return jsonify(estoque_service.autocomplete_modelo(
+        q=q,
+        lojas_permitidas_ids=lojas_permitidas_ids(),
+        limit=20,
+    ))
+
+
+@hora_bp.route('/estoque/autocomplete/cor')
+@require_hora_perm('estoque', 'ver')
+def estoque_autocomplete_cor():
+    q = request.args.get('q') or ''
+    return jsonify(estoque_service.autocomplete_cor(
+        q=q,
+        lojas_permitidas_ids=lojas_permitidas_ids(),
+        limit=20,
+    ))
 
 
 @hora_bp.route('/estoque/chassi/<numero_chassi>')

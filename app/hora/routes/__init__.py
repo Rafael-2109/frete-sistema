@@ -25,6 +25,7 @@ from . import (  # noqa: E402, F401
     pecas,
     transferencias,
     avarias,
+    vendas,
 )
 
 

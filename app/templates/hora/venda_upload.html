@@ -1,0 +1,38 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3">Importar NF de Saida (DANFE PDF)</h2>
+
+<form method="post" enctype="multipart/form-data" class="card p-3" style="max-width: 700px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="mb-3">
+    <label class="form-label">Arquivo DANFE da NF de saida <span class="text-danger">*</span></label>
+    <input type="file" name="pdf" accept="application/pdf" class="form-control" required>
+    <div class="form-text">
+      Parser reusado do CarVia: regex &rarr; Haiku (LLM) &rarr; Sonnet.
+      Extrai chave, numero, CPF/nome do cliente, chassis e valor.
+    </div>
+  </div>
+
+  <div class="alert alert-info small mb-3">
+    <i class="fas fa-info-circle"></i>
+    <strong>Import automatico:</strong> o sistema identifica a loja emitente pelo CNPJ da NF,
+    busca a tabela de preco vigente para cada chassi e ja dispara o evento <code>VENDIDA</code>
+    nos chassis (sai do estoque). Campos como <strong>vendedor</strong> e
+    <strong>forma de pagamento</strong> ficam para preencher manualmente na tela de detalhe apos
+    o import.
+  </div>
+
+  <div class="alert alert-warning small mb-3">
+    <i class="fas fa-exclamation-triangle"></i>
+    <strong>Divergencias sao registradas, nao bloqueiam.</strong> Se o chassi nao estiver em
+    estoque, estiver em outra loja, nao existir no sistema, ou o CNPJ emitente nao bater com
+    nenhuma loja cadastrada, a venda e criada mesmo assim com divergencias anexadas para revisao.
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Importar</button>
+    <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

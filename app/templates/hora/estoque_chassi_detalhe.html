@@ -301,7 +301,12 @@
   {% if rastreio.venda %}
     <div class="row">
       <div class="col-md-2"><small class="text-muted">Venda</small><br>
-        <span class="badge bg-success">#{{ rastreio.venda.id }}</span>
+        {% if current_user.tem_perm_hora('vendas', 'ver') %}
+          <a href="{{ url_for('hora.vendas_detalhe', venda_id=rastreio.venda.id) }}"
+             class="btn btn-sm btn-outline-success py-0">#{{ rastreio.venda.id }}</a>
+        {% else %}
+          <span class="badge bg-success">#{{ rastreio.venda.id }}</span>
+        {% endif %}
       </div>
       <div class="col-md-2"><small class="text-muted">Data</small><br>
         {{ rastreio.venda.data_venda.strftime('%d/%m/%Y') if rastreio.venda.data_venda else '—' }}
@@ -328,11 +333,30 @@
     </div>
     {% if rastreio.venda.nf_saida_numero %}
       <hr class="my-2">
-      <small class="text-muted">NF saída: {{ rastreio.venda.nf_saida_numero }}
-        {% if rastreio.venda.nf_saida_emitida_em %}
-          — emitida em {{ rastreio.venda.nf_saida_emitida_em.strftime('%d/%m/%Y %H:%M') }}
+      <div class="d-flex align-items-center gap-2">
+        <small class="text-muted">NF saída:</small>
+        {% if current_user.tem_perm_hora('vendas', 'ver') %}
+          <a href="{{ url_for('hora.vendas_detalhe', venda_id=rastreio.venda.id) }}"
+             class="btn btn-sm btn-outline-primary py-0"
+             title="Abrir venda com detalhes da NF saída">
+            <i class="fas fa-file-invoice-dollar"></i> {{ rastreio.venda.nf_saida_numero }}
+          </a>
+        {% else %}
+          <strong>{{ rastreio.venda.nf_saida_numero }}</strong>
         {% endif %}
-      </small>
+        {% if rastreio.venda.nf_saida_emitida_em %}
+          <small class="text-muted">
+            emitida em {{ rastreio.venda.nf_saida_emitida_em.strftime('%d/%m/%Y %H:%M') }}
+          </small>
+        {% endif %}
+        {% if rastreio.venda.arquivo_pdf_s3_key and current_user.tem_perm_hora('vendas', 'ver') %}
+          <a href="{{ url_for('hora.vendas_download_pdf', venda_id=rastreio.venda.id) }}"
+             class="btn btn-sm btn-outline-secondary py-0" target="_blank"
+             title="Baixar DANFE (PDF)">
+            <i class="fas fa-file-pdf"></i>
+          </a>
+        {% endif %}
+      </div>
     {% endif %}
   {% else %}
     <p class="text-muted mb-0">Moto não vendida.</p>

@@ -23,8 +23,9 @@
   {% endfor %}
 </div>
 
-<form method="get" class="card p-3 mb-3">
+<form method="get" class="card p-3 mb-3" id="estoque-filtros">
   <div class="row g-2">
+    {# Linha 1: Loja + Chassi (autocomplete) + Modelo (autocomplete) + Cor (autocomplete) #}
     <div class="col-md-3">
       <label class="form-label">Loja</label>
       <select name="loja_id" class="form-select">
@@ -36,27 +37,110 @@
         {% endfor %}
       </select>
     </div>
+
     <div class="col-md-3">
-      <label class="form-label">Modelo (em estoque)</label>
-      <select name="modelo_id" class="form-select">
-        <option value="">Todos</option>
+      <label class="form-label">Chassi (autocomplete — min. 2 chars)</label>
+      <input type="text" name="chassi" id="filtro-chassi"
+             class="form-control chassi-mono"
+             list="dl-chassi"
+             autocomplete="off"
+             maxlength="30"
+             value="{{ filtro_chassi or '' }}"
+             placeholder="Digite parte do chassi...">
+      <datalist id="dl-chassi"></datalist>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Modelo</label>
+      {# Duplo-campo: input texto (autocomplete) + hidden id selecionado. #}
+      <input type="text" id="filtro-modelo-input"
+             class="form-control"
+             list="dl-modelo"
+             autocomplete="off"
+             value="{{ filtro_modelo_nome or '' }}"
+             placeholder="Digite o nome do modelo...">
+      <input type="hidden" name="modelo_id" id="filtro-modelo-id"
+             value="{{ filtro_modelo_id or '' }}">
+      <datalist id="dl-modelo">
+        {# Pre-carga com modelos em estoque (snapshot), datalist completa via JS #}
         {% for m in modelos %}
-          <option value="{{ m.id }}" {% if filtro_modelo_id == m.id %}selected{% endif %}>
-            {{ m.nome_modelo }}
+          <option value="{{ m.nome_modelo }}" data-id="{{ m.id }}"></option>
+        {% endfor %}
+      </datalist>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Cor</label>
+      <input type="text" name="cor" id="filtro-cor"
+             class="form-control"
+             list="dl-cor"
+             autocomplete="off"
+             value="{{ filtro_cor or '' }}"
+             placeholder="Digite a cor...">
+      <datalist id="dl-cor">
+        {% for c in cores %}
+          <option value="{{ c }}"></option>
+        {% endfor %}
+      </datalist>
+    </div>
+  </div>
+
+  <div class="row g-2 mt-1">
+    {# Linha 2: Pedido + NF Entrada + NF Venda (SELECTs) #}
+    <div class="col-md-4">
+      <label class="form-label">
+        Pedido de compra <small class="text-muted">(HORA → Motochefe)</small>
+      </label>
+      <select name="pedido_id" class="form-select">
+        <option value="">Todos</option>
+        {% for p in pedidos_filtro %}
+          <option value="{{ p.id }}" {% if filtro_pedido_id == p.id %}selected{% endif %}>
+            {{ p.numero_pedido }}
+            {%- if p.loja_nome %} · {{ p.loja_nome }}{% endif %}
+            {%- if p.data_pedido %} ({{ p.data_pedido.strftime('%d/%m/%Y') }}){% endif %}
+            {%- if p.status %} [{{ p.status }}]{% endif %}
           </option>
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2">
-      <label class="form-label">Cor (em estoque)</label>
-      <select name="cor" class="form-select">
+
+    <div class="col-md-4">
+      <label class="form-label">
+        NF de entrada <small class="text-muted">(Motochefe → HORA)</small>
+      </label>
+      <select name="nf_entrada_id" class="form-select">
         <option value="">Todas</option>
-        {% for c in cores %}
-          <option value="{{ c }}" {% if filtro_cor == c %}selected{% endif %}>{{ c }}</option>
+        {% for nf in nfs_entrada_filtro %}
+          <option value="{{ nf.id }}" {% if filtro_nf_entrada_id == nf.id %}selected{% endif %}>
+            NF {{ nf.numero_nf }}
+            {%- if nf.loja_nome %} · {{ nf.loja_nome }}{% endif %}
+            {%- if nf.data_emissao %} ({{ nf.data_emissao.strftime('%d/%m/%Y') }}){% endif %}
+          </option>
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-4 d-flex flex-column justify-content-end">
+
+    <div class="col-md-4">
+      <label class="form-label">
+        NF de venda <small class="text-muted">(HORA → consumidor)</small>
+      </label>
+      <select name="venda_id" class="form-select">
+        <option value="">Todas</option>
+        {% for v in vendas_filtro %}
+          <option value="{{ v.id }}" {% if filtro_venda_id == v.id %}selected{% endif %}>
+            {% if v.nf_saida_numero %}NF {{ v.nf_saida_numero }}{% else %}Venda #{{ v.id }}{% endif %}
+            {%- if v.nome_cliente %} · {{ v.nome_cliente }}{% endif %}
+            {%- if v.loja_nome %} · {{ v.loja_nome }}{% endif %}
+            {%- if v.data_venda %} ({{ v.data_venda.strftime('%d/%m/%Y') }}){% endif %}
+            {%- if v.status and v.status != 'CONCLUIDA' %} [{{ v.status }}]{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="row g-2 mt-1">
+    <div class="col-md-12 d-flex flex-wrap gap-3">
       <div class="form-check">
         <input type="checkbox" name="incluir_avariadas" id="ia" class="form-check-input"
                value="1" {% if incluir_avariadas %}checked{% endif %}>
@@ -76,11 +160,151 @@
       </div>
     </div>
   </div>
+
   <div class="mt-2">
     <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
     <a href="{{ url_for('hora.estoque_lista') }}" class="btn btn-outline-secondary btn-sm">Limpar</a>
   </div>
 </form>
+
+{# --------------------------------------------------------------
+   Autocomplete JS: preenche datalists via fetch conforme digitacao.
+   Usa debounce de 250ms e respeita escopo de lojas (servidor filtra).
+   -------------------------------------------------------------- #}
+<script>
+(function(){
+  const URL_CHASSI = "{{ url_for('hora.estoque_autocomplete_chassi') }}";
+  const URL_MODELO = "{{ url_for('hora.estoque_autocomplete_modelo') }}";
+  const URL_COR    = "{{ url_for('hora.estoque_autocomplete_cor') }}";
+
+  function debounce(fn, ms){
+    let t = null;
+    return function(...args){
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
+
+  // Usa createElement + .value/.textContent (nunca innerHTML) para evitar XSS.
+  // Dados vem do DB mas podem conter caracteres derivados de parser LLM em
+  // modelo/cor/chassi — escape obrigatorio.
+  function limparDatalist(dl){
+    while (dl.firstChild) dl.removeChild(dl.firstChild);
+  }
+
+  function criarOption(value, textoSecundario, dataset){
+    const opt = document.createElement('option');
+    opt.value = value;
+    if (textoSecundario) opt.textContent = textoSecundario;
+    if (dataset) {
+      Object.entries(dataset).forEach(([k, v]) => {
+        opt.dataset[k] = v == null ? '' : String(v);
+      });
+    }
+    return opt;
+  }
+
+  async function carregarDatalist(url, input, dl, montarOption){
+    const q = (input.value || '').trim();
+    if (q.length < 2) return;
+    try {
+      const r = await fetch(`${url}?q=${encodeURIComponent(q)}`, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!r.ok) return;
+      const items = await r.json();
+      limparDatalist(dl);
+      items.forEach((it) => dl.appendChild(montarOption(it)));
+    } catch (err) {
+      // silencioso — autocomplete e best-effort
+    }
+  }
+
+  // Chassi
+  const chassiInput = document.getElementById('filtro-chassi');
+  const chassiDl = document.getElementById('dl-chassi');
+  if (chassiInput && chassiDl) {
+    chassiInput.addEventListener('input', debounce(() => {
+      carregarDatalist(URL_CHASSI, chassiInput, chassiDl, (it) =>
+        criarOption(
+          it.chassi,
+          `${it.modelo || ''} ${it.cor || ''}`.trim(),
+          null,
+        )
+      );
+    }, 250));
+  }
+
+  // Modelo (com hidden id)
+  const modeloInput = document.getElementById('filtro-modelo-input');
+  const modeloId = document.getElementById('filtro-modelo-id');
+  const modeloDl = document.getElementById('dl-modelo');
+  let modeloCache = {};  // nome -> id
+
+  // Seed do cache com os modelos ja pre-carregados no datalist.
+  if (modeloDl) {
+    modeloDl.querySelectorAll('option').forEach(o => {
+      const nome = o.value;
+      const id = o.dataset.id;
+      if (nome && id) modeloCache[nome.toUpperCase()] = id;
+    });
+  }
+
+  function sincronizarModeloId(){
+    if (!modeloInput || !modeloId) return;
+    const valor = (modeloInput.value || '').trim().toUpperCase();
+    modeloId.value = modeloCache[valor] || '';
+  }
+
+  if (modeloInput && modeloDl) {
+    modeloInput.addEventListener('input', debounce(async () => {
+      const q = (modeloInput.value || '').trim();
+      if (q.length < 1) return;
+      try {
+        const r = await fetch(`${URL_MODELO}?q=${encodeURIComponent(q)}`, {
+          headers: { 'Accept': 'application/json' },
+        });
+        if (!r.ok) return;
+        const items = await r.json();
+        limparDatalist(modeloDl);
+        items.forEach((it) => {
+          modeloCache[(it.nome_modelo || '').toUpperCase()] = it.id;
+          modeloDl.appendChild(criarOption(
+            it.nome_modelo, null, { id: it.id },
+          ));
+        });
+        sincronizarModeloId();
+      } catch (err) {}
+    }, 250));
+    modeloInput.addEventListener('change', sincronizarModeloId);
+    modeloInput.addEventListener('blur', sincronizarModeloId);
+  }
+
+  // Cor
+  const corInput = document.getElementById('filtro-cor');
+  const corDl = document.getElementById('dl-cor');
+  if (corInput && corDl) {
+    corInput.addEventListener('input', debounce(() => {
+      carregarDatalist(URL_COR, corInput, corDl, (cor) =>
+        criarOption(cor, null, null)
+      );
+    }, 250));
+  }
+
+  // Antes do submit: garantir que modelo_id esta sincronizado; limpar campos vazios.
+  const form = document.getElementById('estoque-filtros');
+  if (form) {
+    form.addEventListener('submit', (e) => {
+      sincronizarModeloId();
+      // Se o usuario digitou modelo mas nao bateu com nenhum id (texto livre),
+      // joga para a URL como parametro que sera ignorado. Avisa brevemente.
+      if (modeloInput && modeloInput.value.trim() && !modeloId.value) {
+        // Nao bloqueia — apenas nao filtra por modelo. O usuario percebe no resultado.
+      }
+    });
+  }
+})();
+</script>
 
 <h5 class="mt-3">Por modelo + cor (em estoque)</h5>
 <div class="table-responsive mb-3">
@@ -126,11 +350,21 @@
           {% if m.nf_id %}
             <a href="{{ url_for('hora.nfs_detalhe', nf_id=m.nf_id) }}"
                class="btn btn-sm btn-outline-primary py-0"
-               title="Ver NF de entrada">
-              {{ m.nf_numero }}
+               title="NF de entrada (Motochefe → HORA)">
+              <i class="fas fa-arrow-down"></i> {{ m.nf_numero }}
             </a>
           {% else %}
             <span class="text-muted">—</span>
+          {% endif %}
+          {% if m.nf_saida_numero and current_user.tem_perm_hora('vendas', 'ver') %}
+            <br>
+            <a href="{{ url_for('hora.vendas_detalhe', venda_id=m.venda_id) }}"
+               class="btn btn-sm btn-outline-success py-0 mt-1"
+               title="NF de saída (HORA → consumidor) — Venda #{{ m.venda_id }}">
+              <i class="fas fa-arrow-up"></i> {{ m.nf_saida_numero }}
+            </a>
+          {% elif m.nf_saida_numero %}
+            <br><small class="text-success"><i class="fas fa-arrow-up"></i> {{ m.nf_saida_numero }}</small>
           {% endif %}
         </td>
         <td>

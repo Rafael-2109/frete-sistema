@@ -38,6 +38,10 @@
       <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.estoque') %}active{% endif %}"
          href="{{ url_for('hora.estoque_lista') }}">Estoque</a>
     {% endif %}
+    {% if current_user.tem_perm_hora('vendas', 'ver') %}
+      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.vendas') %}active{% endif %}"
+         href="{{ url_for('hora.vendas_lista') }}">Vendas (NF saida)</a>
+    {% endif %}
     {% if current_user.tem_perm_hora('devolucoes', 'ver') %}
       <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.devolucoes') %}active{% endif %}"
          href="{{ url_for('hora.devolucoes_lista') }}">Devoluções</a>

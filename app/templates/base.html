@@ -188,7 +188,7 @@
                     <i class="fas fa-list"></i> Modelos
                 </a></li>
                 {% endif %}
-                {% if current_user.tem_perm_hora('pedidos', 'ver') or current_user.tem_perm_hora('nfs', 'ver') or current_user.tem_perm_hora('recebimentos', 'ver') or current_user.tem_perm_hora('estoque', 'ver') or current_user.tem_perm_hora('devolucoes', 'ver') or current_user.tem_perm_hora('pecas', 'ver') %}
+                {% if current_user.tem_perm_hora('pedidos', 'ver') or current_user.tem_perm_hora('nfs', 'ver') or current_user.tem_perm_hora('recebimentos', 'ver') or current_user.tem_perm_hora('estoque', 'ver') or current_user.tem_perm_hora('vendas', 'ver') or current_user.tem_perm_hora('devolucoes', 'ver') or current_user.tem_perm_hora('pecas', 'ver') %}
                 <li><hr class="dropdown-divider"></li>
                 <li><h6 class="dropdown-header"><i class="fas fa-exchange-alt"></i> Estoque</h6></li>
                 {% endif %}
@@ -210,6 +210,11 @@
                 {% if current_user.tem_perm_hora('estoque', 'ver') %}
                 <li><a class="dropdown-item" href="{{ url_for('hora.estoque_lista') }}">
                     <i class="fas fa-warehouse"></i> Estoque
+                </a></li>
+                {% endif %}
+                {% if current_user.tem_perm_hora('vendas', 'ver') %}
+                <li><a class="dropdown-item" href="{{ url_for('hora.vendas_lista') }}">
+                    <i class="fas fa-cash-register"></i> Vendas (NF saída)
                 </a></li>
                 {% endif %}
                 {% if current_user.tem_perm_hora('devolucoes', 'ver') %}

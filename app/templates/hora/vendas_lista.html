@@ -1,0 +1,86 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>Vendas (NF de Saida HORA &rarr; consumidor)</h2>
+  {% if current_user.tem_perm_hora('vendas', 'criar') %}
+    <a href="{{ url_for('hora.vendas_upload') }}" class="btn btn-primary">
+      <i class="fas fa-upload"></i> Importar NF de Saida (DANFE)
+    </a>
+  {% endif %}
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead><tr>
+      <th>#</th>
+      <th>NF</th>
+      <th>Loja Emitente</th>
+      <th>Cliente</th>
+      <th>CPF</th>
+      <th>Data</th>
+      <th>Valor</th>
+      <th>Chassis</th>
+      <th>Status</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+      {% for v in vendas %}
+        <tr class="{% if v.status == 'CANCELADA' %}text-muted{% endif %}">
+          <td><small>{{ v.id }}</small></td>
+          <td>
+            <strong>{{ v.nf_saida_numero or '—' }}</strong>
+            {% if v.tem_divergencia_aberta %}
+              <span class="text-warning ms-1"
+                    title="{{ v.divergencias_abertas|length }} divergencia(s) aberta(s)">
+                <i class="fas fa-exclamation-triangle"></i>
+              </span>
+            {% endif %}
+          </td>
+          <td>
+            {% if v.loja %}
+              <strong>{{ v.loja.rotulo_display }}</strong>
+            {% else %}
+              <span class="text-warning">
+                <i class="fas fa-exclamation-triangle"></i> sem loja
+                {% if v.cnpj_emitente %}<small class="text-muted">({{ v.cnpj_emitente }})</small>{% endif %}
+              </span>
+            {% endif %}
+          </td>
+          <td>{{ v.nome_cliente }}</td>
+          <td><small>{{ v.cpf_cliente }}</small></td>
+          <td>{{ v.data_venda.strftime('%d/%m/%Y') }}</td>
+          <td>{{ v.valor_total|valor_br }}</td>
+          <td>{{ v.itens|length }}</td>
+          <td>
+            {% if v.status == 'CONCLUIDA' %}
+              <span class="badge bg-success">Concluida</span>
+            {% elif v.status == 'CANCELADA' %}
+              <span class="badge bg-danger">Cancelada</span>
+            {% elif v.status == 'DEVOLVIDA' %}
+              <span class="badge bg-warning text-dark">Devolvida</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ v.status }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="{{ url_for('hora.vendas_detalhe', venda_id=v.id) }}"
+                 class="btn btn-sm btn-outline-primary" title="Abrir detalhes">Ver</a>
+              {% if v.arquivo_pdf_s3_key %}
+                <a href="{{ url_for('hora.vendas_download_pdf', venda_id=v.id) }}"
+                   class="btn btn-sm btn-outline-secondary" target="_blank"
+                   title="Baixar DANFE (PDF)">
+                  <i class="fas fa-file-pdf"></i>
+                </a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10" class="text-center text-muted">Nenhuma venda importada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

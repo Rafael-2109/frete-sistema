@@ -167,7 +167,15 @@ Segue o plano aprovado em 2026-04-18:
 1. **P1**: documentos contratuais — `docs/hora/INVARIANTES.md` e este `app/hora/CLAUDE.md`. **Concluído**.
 2. **P2**: migrations + modelos SQLAlchemy das 13 tabelas. **Concluído** (+ tabela 14 `hora_user_permissao` em 2026-04-22).
 3. **P3**: fluxo pedido → NF → recebimento → conferência (ingestão e confronto). **Concluído**.
-4. **P4**: fluxo venda com tabela de preço + desconto auditável. *Em andamento*.
+4. **P4**: fluxo venda com tabela de preço + desconto auditável. **Parcial — fluxo (a) concluído 2026-04-24**.
+   - **Fluxo (a) — import NF saída (DANFE PDF)**: operador sobe PDF emitido pelo ERP externo em `/hora/vendas/upload`; service `venda_service.importar_nf_saida_pdf` parseia via `danfe_adapter` (reuso CarVia + extensão CPF/nome destinatário), cria `HoraVenda` + `HoraVendaItem` + emite evento `VENDIDA` nos chassis, persiste PDF em `hora/vendas/` S3, preenche `cnpj_emitente`, `parser_usado`, `parseada_em`.
+   - **Fluxo permissivo**: problemas geram `HoraVendaDivergencia` (5 tipos: `CHASSI_NAO_CADASTRADO`, `CHASSI_INDISPONIVEL`, `LOJA_DIVERGENTE`, `CNPJ_DESCONHECIDO`, `TABELA_PRECO_AUSENTE`) sem bloquear o import.
+   - **Campos pós-import editáveis** na tela de detalhe: `vendedor` (NULL inicialmente, preenchido manualmente), `forma_pagamento` (default `'NAO_INFORMADO'`, operador troca para PIX/CARTAO_CREDITO/DINHEIRO/MISTO), telefone, email, observações.
+   - **Cancelamento**: `cancelar_venda` muda status=CANCELADA e emite evento `DEVOLVIDA` nos chassis (simetria com devolução).
+   - **Wiring no estoque**: `listar_estoque` enriquece com `venda_id`, `nf_saida_numero`, `venda_status`; template mostra link clicável para a venda na coluna NF (ambas entrada e saída) e em `estoque_chassi_detalhe.html` seção Venda.
+   - **Migration**: `scripts/migrations/hora_17_nf_saida.{py,sql}` — ALTER `hora_venda` (4 colunas novas + loja_id nullable + forma_pagamento default) + CREATE `hora_venda_divergencia`.
+   - **Permissão**: módulo `vendas` adicionado a `MODULOS_HORA` (`app/hora/models/permissao.py:35`).
+   - **Fluxo (c) — TagPlus**: ainda pendente (será em sessão futura quando houver integração de faturamento pelo sistema).
 5. **P5** (2026-04-22): autorização granular por usuário × módulo × ação. **Concluído** — todas as 64 rotas usam `require_hora_perm`.
 6. **P6** (2026-04-22): **Transferência entre filiais + Registro de avaria em estoque**. **Concluído**.
    - 5 tabelas novas: `hora_transferencia`, `hora_transferencia_item`, `hora_transferencia_auditoria`, `hora_avaria`, `hora_avaria_foto` (migration `hora_15`).

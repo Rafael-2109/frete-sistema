@@ -90,6 +90,43 @@ def _nf_recebimento_por_chassi(chassis: List[str]) -> Dict[str, dict]:
     }
 
 
+def _venda_nf_saida_por_chassi(chassis: List[str]) -> Dict[str, dict]:
+    """Para cada chassi, retorna {venda_id, nf_saida_numero, nf_saida_chave_44,
+    venda_status, tem_pdf} da venda mais recente. Util para exibir NF saida
+    na listagem com "Mostrar fora de estoque" marcado.
+    """
+    if not chassis:
+        return {}
+    from app.hora.models import HoraVenda, HoraVendaItem
+
+    chassis_norm = [c.strip().upper() for c in chassis]
+    # Pega o item de venda mais recente por chassi (venda_item.numero_chassi eh UNIQUE,
+    # entao so tem 1 — mas .order_by defensivo).
+    rows = (
+        db.session.query(
+            HoraVendaItem.numero_chassi,
+            HoraVenda.id.label('venda_id'),
+            HoraVenda.nf_saida_numero,
+            HoraVenda.nf_saida_chave_44,
+            HoraVenda.status.label('venda_status'),
+            HoraVenda.arquivo_pdf_s3_key,
+        )
+        .join(HoraVenda, HoraVenda.id == HoraVendaItem.venda_id)
+        .filter(HoraVendaItem.numero_chassi.in_(chassis_norm))
+        .all()
+    )
+    return {
+        r.numero_chassi: {
+            'venda_id': r.venda_id,
+            'nf_saida_numero': r.nf_saida_numero,
+            'nf_saida_chave_44': r.nf_saida_chave_44,
+            'venda_status': r.venda_status,
+            'tem_pdf': bool(r.arquivo_pdf_s3_key),
+        }
+        for r in rows
+    }
+
+
 def _pecas_abertas_por_chassi(chassis: List[str]) -> Dict[str, int]:
     """Count de pecas faltando ABERTA por chassi."""
     if not chassis:
@@ -147,6 +184,10 @@ def listar_estoque(
     incluir_faltando_peca: bool = True,
     incluir_fora_estoque: bool = False,
     lojas_permitidas_ids: Optional[List[int]] = None,
+    pedido_id: Optional[int] = None,
+    nf_entrada_id: Optional[int] = None,
+    venda_id: Optional[int] = None,
+    chassi: Optional[str] = None,
 ) -> List[dict]:
     """Lista motos chassi-a-chassi.
 
@@ -155,10 +196,19 @@ def listar_estoque(
     Quando `incluir_fora_estoque=True`: TODAS as motos cadastradas (inclusive
     VENDIDA, DEVOLVIDA, EM_TRANSITO), com o flag `moto_disponivel`.
 
+    Filtros por documento (pedido/NF entrada/venda):
+      - `pedido_id`: chassis presentes em HoraPedidoItem.pedido_id=X
+      - `nf_entrada_id`: chassis presentes em HoraNfEntradaItem.nf_id=X
+      - `venda_id`: chassis presentes em HoraVendaItem.venda_id=X
+    Filtro por chassi (substring, case-insensitive): `chassi='ABC123'`.
+
     Retorna dicts com: chassi, modelo_*, cor, loja_*, ultimo_evento, ...,
     nf_id, nf_numero, nf_serie, recebimento_id, avarias_abertas,
-    pecas_faltando_abertas, transferencias_em_transito, moto_disponivel.
+    pecas_faltando_abertas, transferencias_em_transito, moto_disponivel,
+    venda_id, nf_saida_numero.
     """
+    from app.hora.models import HoraNfEntradaItem, HoraPedidoItem, HoraVendaItem
+
     if incluir_fora_estoque:
         tipos = None  # sem filtro de tipo
     else:
@@ -191,6 +241,38 @@ def listar_estoque(
         q = q.filter(HoraMoto.modelo_id == modelo_id)
     if cor:
         q = q.filter(HoraMoto.cor == cor.strip().upper())
+
+    # Filtros por documento — cada um restringe aos chassis presentes no doc.
+    if pedido_id:
+        chassis_pedido = (
+            db.session.query(HoraPedidoItem.numero_chassi)
+            .filter(
+                HoraPedidoItem.pedido_id == pedido_id,
+                HoraPedidoItem.numero_chassi.isnot(None),
+            )
+            .subquery()
+        )
+        q = q.filter(HoraMoto.numero_chassi.in_(chassis_pedido))
+    if nf_entrada_id:
+        chassis_nf = (
+            db.session.query(HoraNfEntradaItem.numero_chassi)
+            .filter(HoraNfEntradaItem.nf_id == nf_entrada_id)
+            .subquery()
+        )
+        q = q.filter(HoraMoto.numero_chassi.in_(chassis_nf))
+    if venda_id:
+        chassis_venda = (
+            db.session.query(HoraVendaItem.numero_chassi)
+            .filter(HoraVendaItem.venda_id == venda_id)
+            .subquery()
+        )
+        q = q.filter(HoraMoto.numero_chassi.in_(chassis_venda))
+
+    # Filtro por chassi (substring case-insensitive).
+    if chassi:
+        chassi_norm = chassi.strip().upper()
+        if chassi_norm:
+            q = q.filter(HoraMoto.numero_chassi.ilike(f'%{chassi_norm}%'))
     if lojas_permitidas_ids is not None:
         if not lojas_permitidas_ids:
             return []
@@ -241,6 +323,9 @@ def listar_estoque(
     pecas_map = _pecas_abertas_por_chassi(chassis)
     # Transferencias em transito (nao confirmadas no destino)
     transf_map = _transferencias_em_transito_por_chassi(chassis)
+    # Venda / NF saida (so relevante p/ chassi fora de estoque, mas enriquece
+    # sempre — overhead e 1 query por listagem).
+    venda_map = _venda_nf_saida_por_chassi(chassis)
 
     for r in resultado:
         nf = nf_map.get(r['chassi']) or {}
@@ -251,6 +336,11 @@ def listar_estoque(
         r['avarias_abertas'] = avarias_map.get(r['chassi'], 0)
         r['pecas_faltando_abertas'] = pecas_map.get(r['chassi'], 0)
         r['transferencias_em_transito'] = transf_map.get(r['chassi'], 0)
+        venda = venda_map.get(r['chassi']) or {}
+        r['venda_id'] = venda.get('venda_id')
+        r['nf_saida_numero'] = venda.get('nf_saida_numero')
+        r['nf_saida_chave_44'] = venda.get('nf_saida_chave_44')
+        r['venda_status'] = venda.get('venda_status')
 
     return resultado
 
@@ -297,6 +387,198 @@ def opcoes_filtro_estoque(
     ]
     cores = sorted(cores_set)
     return {'modelos': modelos, 'cores': cores}
+
+
+def opcoes_documentos_filtro(
+    lojas_permitidas_ids: Optional[List[int]] = None,
+    limit: int = 200,
+) -> dict:
+    """Retorna listas de pedidos, NFs de entrada e vendas para popular os
+    SELECTs de filtro da tela de estoque.
+
+    Filtra pelo escopo de lojas permitidas (quando aplicavel), e limita a
+    `limit` por categoria — mais recentes primeiro. Ordena por data desc.
+
+    Returns:
+        {
+          'pedidos': [{'id', 'numero_pedido', 'loja_nome', 'data_pedido', 'status'}, ...],
+          'nfs_entrada': [{'id', 'numero_nf', 'nome_emitente', 'loja_nome', 'data_emissao'}, ...],
+          'vendas': [{'id', 'nf_saida_numero', 'nome_cliente', 'loja_nome', 'data_venda', 'status'}, ...],
+        }
+    """
+    from app.hora.models import HoraNfEntrada, HoraPedido, HoraVenda
+
+    permitidas_set = (
+        set(lojas_permitidas_ids) if lojas_permitidas_ids is not None else None
+    )
+    if permitidas_set is not None and not permitidas_set:
+        return {'pedidos': [], 'nfs_entrada': [], 'vendas': []}
+
+    # Pedidos
+    q_ped = HoraPedido.query.order_by(
+        HoraPedido.data_pedido.desc(), HoraPedido.id.desc()
+    )
+    if permitidas_set is not None:
+        q_ped = q_ped.filter(HoraPedido.loja_destino_id.in_(permitidas_set))
+    pedidos = [
+        {
+            'id': p.id,
+            'numero_pedido': p.numero_pedido,
+            'loja_nome': (
+                p.loja_destino.rotulo_display if p.loja_destino else None
+            ),
+            'data_pedido': p.data_pedido,
+            'status': p.status,
+        }
+        for p in q_ped.limit(limit).all()
+    ]
+
+    # NFs de entrada
+    q_nf = HoraNfEntrada.query.order_by(
+        HoraNfEntrada.data_emissao.desc(), HoraNfEntrada.id.desc()
+    )
+    if permitidas_set is not None:
+        q_nf = q_nf.filter(HoraNfEntrada.loja_destino_id.in_(permitidas_set))
+    nfs_entrada = [
+        {
+            'id': nf.id,
+            'numero_nf': nf.numero_nf,
+            'nome_emitente': nf.nome_emitente or nf.cnpj_emitente,
+            'loja_nome': (
+                nf.loja_destino.rotulo_display if nf.loja_destino else None
+            ),
+            'data_emissao': nf.data_emissao,
+        }
+        for nf in q_nf.limit(limit).all()
+    ]
+
+    # Vendas (NF saida)
+    q_v = HoraVenda.query.order_by(
+        HoraVenda.data_venda.desc(), HoraVenda.id.desc()
+    )
+    if permitidas_set is not None:
+        # Vendas com loja_id=NULL (CNPJ_DESCONHECIDO) so aparecem p/ admin.
+        q_v = q_v.filter(HoraVenda.loja_id.in_(permitidas_set))
+    vendas = [
+        {
+            'id': v.id,
+            'nf_saida_numero': v.nf_saida_numero,
+            'nome_cliente': v.nome_cliente,
+            'loja_nome': v.loja.rotulo_display if v.loja else None,
+            'data_venda': v.data_venda,
+            'status': v.status,
+        }
+        for v in q_v.limit(limit).all()
+    ]
+
+    return {
+        'pedidos': pedidos,
+        'nfs_entrada': nfs_entrada,
+        'vendas': vendas,
+    }
+
+
+def autocomplete_chassi(
+    q: str,
+    lojas_permitidas_ids: Optional[List[int]] = None,
+    limit: int = 20,
+) -> List[dict]:
+    """Busca parcial de chassis no universo das lojas permitidas.
+
+    Filtra para chassis que ja tiveram ao menos 1 evento em loja permitida
+    (mesmo criterio que estoque_chassi_detalhe usa para autorizacao).
+    """
+    q_norm = (q or '').strip().upper()
+    if not q_norm or len(q_norm) < 2:
+        return []
+
+    base = (
+        db.session.query(HoraMoto, HoraModelo)
+        .join(HoraModelo, HoraMoto.modelo_id == HoraModelo.id)
+        .filter(HoraMoto.numero_chassi.ilike(f'%{q_norm}%'))
+    )
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        chassis_permitidos = (
+            db.session.query(HoraMotoEvento.numero_chassi)
+            .filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
+            .distinct()
+            .subquery()
+        )
+        base = base.filter(HoraMoto.numero_chassi.in_(chassis_permitidos))
+
+    base = base.order_by(HoraMoto.numero_chassi).limit(limit)
+    return [
+        {
+            'chassi': m.numero_chassi,
+            'modelo': modelo.nome_modelo,
+            'cor': m.cor,
+        }
+        for m, modelo in base.all()
+    ]
+
+
+def autocomplete_modelo(
+    q: str,
+    lojas_permitidas_ids: Optional[List[int]] = None,
+    limit: int = 20,
+) -> List[dict]:
+    """Busca parcial de modelos que tem pelo menos 1 moto no universo permitido."""
+    q_norm = (q or '').strip().upper()
+    if not q_norm:
+        return []
+
+    base = (
+        db.session.query(HoraModelo)
+        .join(HoraMoto, HoraMoto.modelo_id == HoraModelo.id)
+        .filter(HoraModelo.nome_modelo.ilike(f'%{q_norm}%'))
+    )
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        chassis_permitidos = (
+            db.session.query(HoraMotoEvento.numero_chassi)
+            .filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
+            .distinct()
+            .subquery()
+        )
+        base = base.filter(HoraMoto.numero_chassi.in_(chassis_permitidos))
+
+    base = base.distinct().order_by(HoraModelo.nome_modelo).limit(limit)
+    return [
+        {'id': m.id, 'nome_modelo': m.nome_modelo}
+        for m in base.all()
+    ]
+
+
+def autocomplete_cor(
+    q: str,
+    lojas_permitidas_ids: Optional[List[int]] = None,
+    limit: int = 20,
+) -> List[str]:
+    """Busca parcial de cores que tem pelo menos 1 moto no universo permitido."""
+    q_norm = (q or '').strip().upper()
+    if not q_norm:
+        return []
+
+    base = (
+        db.session.query(HoraMoto.cor)
+        .filter(HoraMoto.cor.ilike(f'%{q_norm}%'))
+    )
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        chassis_permitidos = (
+            db.session.query(HoraMotoEvento.numero_chassi)
+            .filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
+            .distinct()
+            .subquery()
+        )
+        base = base.filter(HoraMoto.numero_chassi.in_(chassis_permitidos))
+
+    base = base.distinct().order_by(HoraMoto.cor).limit(limit)
+    return [row[0] for row in base.all() if row[0]]
 
 
 def kpis_estoque_por_loja(

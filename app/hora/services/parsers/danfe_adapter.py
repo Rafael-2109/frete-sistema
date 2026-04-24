@@ -45,6 +45,20 @@ def _sanitizar_cnpj(cnpj: Optional[str]) -> Optional[str]:
     return digitos[:20] or None
 
 
+def _sanitizar_cpf(documento: Optional[str]) -> Optional[str]:
+    """Formata documento como CPF (XXX.XXX.XXX-XX) quando tem 11 digitos.
+
+    Se ja tem pontuacao certa, preserva. Se e CNPJ (14 digitos), retorna None
+    (caller decide o que fazer).
+    """
+    if not documento:
+        return None
+    digitos = ''.join(c for c in documento if c.isdigit())
+    if len(digitos) != 11:
+        return None
+    return f'{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:]}'
+
+
 def parse_danfe_to_hora_payload(
     pdf_bytes: bytes,
     nome_arquivo_origem: Optional[str] = None,
@@ -167,6 +181,15 @@ def parse_danfe_to_hora_payload(
     if not itens:
         raise DanfeParseError("Após filtrar chassis inválidos, nenhum item restou")
 
+    # Destinatario: na NF de Entrada (Motochefe -> HORA) e B2B com CNPJ da
+    # matriz; na NF de Saida (HORA -> consumidor) e pessoa fisica com CPF.
+    # O parser CarVia ja suporta CPF via get_cnpj_destinatario (P5 fix).
+    # Aqui separamos em campos tipados para consumo pelo service HORA.
+    dest_digits = (
+        ''.join(c for c in (resultado.get('cnpj_destinatario') or '') if c.isdigit())
+    )
+    cpf_destinatario = _sanitizar_cpf(dest_digits) if len(dest_digits) == 11 else None
+
     return {
         'nf': {
             'chave_44': chave,
@@ -175,6 +198,9 @@ def parse_danfe_to_hora_payload(
             'cnpj_emitente': cnpj_emit,
             'nome_emitente': resultado.get('nome_emitente'),
             'cnpj_destinatario': cnpj_dest or '',
+            # Campos tipados para NF de saida (destinatario pessoa fisica):
+            'cpf_destinatario': cpf_destinatario,
+            'nome_destinatario': resultado.get('nome_destinatario'),
             'data_emissao': data_emissao,
             'valor_total': valor_total_dec,
             'parser_usado': 'danfe_pdf_parser_v1',
