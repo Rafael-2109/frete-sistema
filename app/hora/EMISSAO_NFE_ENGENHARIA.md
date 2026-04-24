@@ -105,8 +105,9 @@ scripts/migrations/
                                │ 4 async (minutos)
                                ▼
          ┌──────────────────────────────────────────────────────────┐
-         │  TagPlus envia POST webhook /hora/tagplus/webhook/<loja> │
-         │  body: {event_type: "nfe_aprovada", data: [{id: 7123}]}  │
+         │  TagPlus envia POST /hora/tagplus/webhook                │
+         │  body: {event_type: "nfe_aprovada", data: [{"id": "7123"}]} │
+         │  (id vem como STRING — converter para int no handler)    │
          └────────┬─────────────────────────────────────────────────┘
                   │ 5 WebhookHandler
                   ▼
@@ -325,21 +326,25 @@ Este é o núcleo crítico. A API TagPlus `POST /nfes` é descrita em `scripts/d
 
 ### 4.2 Estrutura de `itens[]`
 
+Schema real em `scripts/doc_tagplus.md:636-644`: `{produto, qtd, valor_unitario, valor_acrescimo, valor_desconto, detalhes}`. **Não existem** `inf_adicional`, `valor_total_item`, nem `numero_pedido_compra` por item. TagPlus calcula total = `qtd * valor_unitario - valor_desconto`.
+
 ```python
 # Para cada HoraVendaItem:
 {
-    "produto": tagplus_produto_id,        # de hora_tagplus_produto_map
+    "produto": tagplus_produto_id,        # int — de hora_tagplus_produto_map
     "qtd": 1,                             # sempre 1 (chassi é unitário)
-    "valor_unitario": float(preco_final), # HoraVendaItem.preco_final (sanitize_for_json!)
+    "valor_unitario": float(preco_tabela_referencia),  # sanitize_for_json!
+    "valor_acrescimo": 0,
     "valor_desconto": float(desconto_aplicado),
-    "valor_total_item": float(preco_final),
-    "inf_adicional": f"Chassi: {numero_chassi} / Motor: {numero_motor}",
-    # TagPlus permite inf_adicional por item (verificar no schema completo em doc_tagplus.md)
-    # -- se não existir, concatenar em nfe.inf_contribuinte no nível da nota.
+    # TagPlus calcula total automaticamente.
 
-    "numero_pedido_compra": str(venda_id),     # rastreabilidade inversa
+    "detalhes": f"Chassi: {numero_chassi} / Motor: {numero_motor or '-'}",
+    # Campo correto por item (não "inf_adicional"). Chassi e motor aparecem no DANFE
+    # na linha do item, essencial para rastreabilidade fiscal.
 }
 ```
+
+**Rastreabilidade venda_id**: vai em `numero_pedido` a nível da nota (ver §4.4), não no item.
 
 ### 4.3 Destinatário (cliente)
 
@@ -369,14 +374,17 @@ Este é o núcleo crítico. A API TagPlus `POST /nfes` é descrita em `scripts/d
 ```python
 {
     "tipo": "S",                       # Saída
-    "finalidade_emissao": 1,           # Normal
+    "finalidade_emissao": 9,           # Normal Consumidor Final (B2C)
+    # doc_tagplus.md:283 lista 1=Normal vs 9=Normal Consumidor Final.
+    # CONFIRMAR com contador/fiscal HORA antes de produção. Alguns regimes exigem 1.
     "consumidor_final": True,          # B2C
     "indicador_presenca": 1,           # Operação presencial (loja física HORA)
     "tipo_emissao": 1,                 # Normal (não contingência)
     "modalidade_frete": 9,             # Sem frete (cliente leva a moto)
     "data_emissao": agora_utc_naive().isoformat(),
     "data_entrada_saida": date.today().isoformat(),
-    "cfop": cfop_por_uf(cliente_uf, loja.uf),  # 5102 intra / 6102 inter
+    "cfop": cfop_por_uf(cliente_uf, loja.uf),  # "5.102" intra / "6.102" inter
+    # ATENÇÃO: máscara "9.999" com ponto (doc_tagplus.md:178). NUNCA "5102".
 
     "valor_desconto": sum(item.desconto_aplicado for item in venda.itens),
     "valor_nota": sum(item.preco_final for item in venda.itens),  # == venda.valor_total
@@ -405,18 +413,31 @@ Se a contabilidade exigir que o endereço físico da loja apareça no DANFE (mes
 
 ### 4.5 Forma de pagamento → `faturas[]`
 
-`HoraVenda.forma_pagamento` enum: `PIX, CARTAO_CREDITO, DINHEIRO, MISTO`.
+**Schema real** (`scripts/doc_tagplus.md:672-687`): `faturas[]` é array de objetos `{forma_pagamento: int, parcelas: [...]}`. O campo `forma_pagamento` é um **ID inteiro** referente a uma forma de pagamento cadastrada no TagPlus (não um código string como `"17"`). Cada ID varia por conta — obter via `GET /formas_pagamento` após OAuth configurado.
 
-O TagPlus tem `faturas` como array de objetos `Fatura Pagamento` (ver schema completo em `doc_tagplus.md`). Mapeamento sugerido:
+**Estrutura obrigatória do payload**:
 
-| HORA | TagPlus `forma_pagamento.codigo` |
+```python
+"faturas": [{
+    "forma_pagamento": forma_pag_id,  # int — ID no TagPlus (não string!)
+    "parcelas": [{
+        "documento": str(venda.id),          # identificador do documento
+        "valor_parcela": float(valor_total), # à vista = valor total em parcela única
+        "data_vencimento": data_venda.isoformat(),
+    }],
+}]
+```
+
+**Mapeamento HORA → TagPlus**: criar tabela `hora_tagplus_forma_pagamento_map` (adicionar em §3) com colunas `(forma_pagamento_hora, tagplus_forma_id)`. Configurável via UI.
+
+| `HoraVenda.forma_pagamento` | TagPlus lookup |
 |---|---|
-| `PIX` | `17` (PIX) |
-| `CARTAO_CREDITO` | `03` (Cartão de Crédito) |
-| `DINHEIRO` | `01` (Dinheiro) |
-| `MISTO` | requer campo extra (não tratar na v1; bloquear emissão com erro claro) |
+| `PIX` | ID TagPlus de "PIX" (tipicamente forma com `codigo_sefaz=17`) |
+| `CARTAO_CREDITO` | ID TagPlus de "Cartão de Crédito" (`codigo_sefaz=03`) |
+| `DINHEIRO` | ID TagPlus de "Dinheiro" (`codigo_sefaz=01`) |
+| `MISTO` | NÃO tratar na v1 — bloquear com erro `pagamento_misto_nao_suportado` |
 
-**Validação importante**: se `faturas[]` estiver vazia, TagPlus retorna `nota_sem_faturamento` (`scripts/guia.md:383`). Sempre preencher pelo menos uma fatura.
+**Validação obrigatória**: `faturas[]` vazio causa erro `nota_sem_faturamento` (`scripts/guia.md:383`). Parcelas vazias idem.
 
 ### 4.6 Sanitização obrigatória
 
@@ -463,9 +484,19 @@ class EmissorNfeHora:
 
         conta = HoraTagPlusConta.ativa()  # singleton — única conta ativa no sistema
 
+        # Bloqueio defensivo: venda já tem NF (fluxo (a) — venda criada a partir de DANFE
+        # importada). Nesse caso a NF já existe no TagPlus e não deve ser re-emitida.
+        if venda.nf_saida_chave_44:
+            raise ValueError(
+                f'Venda {venda_id} já tem NF emitida (chave {venda.nf_saida_chave_44}). '
+                f'Para re-emissão, cancelar a existente primeiro.'
+            )
+
         emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()
-        if emissao and emissao.status in ('APROVADA', 'EM_ENVIO'):
-            # idempotência: não re-enfileira se já aprovada ou em envio
+        # Idempotência: não re-enfileira se já aprovada, em envio ou aguardando SEFAZ.
+        # Incluir ENVIADA_SEFAZ é crítico — sem isso, clique duplo em "re-emitir"
+        # enquanto aguardamos webhook causa NF duplicada no TagPlus.
+        if emissao and emissao.status in ('APROVADA', 'EM_ENVIO', 'ENVIADA_SEFAZ'):
             return emissao.id
 
         if not emissao:
@@ -476,11 +507,11 @@ class EmissorNfeHora:
             )
             db.session.add(emissao)
         else:
-            # retry de emissão rejeitada
+            # retry de emissão rejeitada ou com erro de infra
             emissao.status = 'PENDENTE'
-            emissao.tentativas = (emissao.tentativas or 0) + 1
             emissao.error_code = None
             emissao.error_message = None
+            # NÃO incrementa tentativas aqui — só em processar().
 
         db.session.flush()
 
@@ -535,6 +566,8 @@ def processar(emissao_id: int):
 
     emissao.status = 'EM_ENVIO'
     emissao.enviado_em = agora_utc_naive()
+    emissao.tentativas = (emissao.tentativas or 0) + 1
+    # Incrementa aqui (não em enfileirar) para contar retries automáticos do RQ também.
     db.session.commit()
 
     try:
@@ -591,7 +624,10 @@ def processar(emissao_id: int):
 def tagplus_webhook():
     conta = HoraTagPlusConta.ativa()
 
-    # Valida X-Hub-Secret em tempo constante
+    if not conta.webhook_secret:
+        return jsonify({'error': 'webhook secret não configurado'}), 503
+
+    # Valida X-Hub-Secret em tempo constante (resistente a timing attacks)
     secret_recebido = request.headers.get('X-Hub-Secret', '')
     if not hmac.compare_digest(secret_recebido, conta.webhook_secret):
         return jsonify({'error': 'secret inválido'}), 401
@@ -609,6 +645,37 @@ def tagplus_webhook():
     return jsonify({'ok': True}), 200
 ```
 
+### 5.5.1 Job de reconciliação (recovery de webhook perdido)
+
+Webhooks do TagPlus podem ser perdidos (falha de rede, 5xx temporário do nosso lado sem retry do TagPlus, etc.). Sem reconciliação, uma emissão em `ENVIADA_SEFAZ` fica órfã.
+
+```python
+# app/hora/workers/reconciliacao_worker.py
+def reconciliar_enviadas():
+    """Roda periodicamente (RQ cron 30min). Reconsulta SEFAZ para emissões que
+    ficaram em ENVIADA_SEFAZ há mais de 10 min sem retorno de webhook."""
+    limite = agora_utc_naive() - timedelta(minutes=10)
+    pendentes = HoraTagPlusNfeEmissao.query.filter(
+        HoraTagPlusNfeEmissao.status == 'ENVIADA_SEFAZ',
+        HoraTagPlusNfeEmissao.enviado_em < limite,
+    ).limit(50).all()
+
+    conta = HoraTagPlusConta.ativa()
+    client = ApiClient(conta)
+
+    for emissao in pendentes:
+        detalhes = client.get(f'/nfes/{emissao.tagplus_nfe_id}').json()
+        status_api = detalhes.get('status')  # 'A' aprovada, 'S' cancelada, '2' denegada, etc.
+        if status_api == 'A':
+            # Processa como se fosse webhook nfe_aprovada
+            WebhookHandler.processar(conta.id, 'nfe_aprovada', [{'id': str(emissao.tagplus_nfe_id)}])
+        elif status_api in ('S', '2', '4'):
+            WebhookHandler.processar(conta.id, 'nfe_rejeitada', [{'id': str(emissao.tagplus_nfe_id)}])
+        # Se ainda 'N' (em digitação/processamento), aguarda próximo ciclo.
+```
+
+Agendar via RQ Scheduler ou crontab Render (referência: `~/.claude/CLAUDE.md` seção crons).
+
 ### 5.6 Handler do webhook
 
 ```python
@@ -620,22 +687,52 @@ class WebhookHandler:
         client = ApiClient(conta)
 
         for item in data:
-            tagplus_nfe_id = item.get('id')
-            # Match por tagplus_nfe_id é suficiente (é unique por conta na prática).
-            # conta_id não entra no filtro porque é singleton.
+            # CRÍTICO: id vem como STRING no webhook (ver scripts/webhook.md:32).
+            # Converter para int antes de comparar com coluna Integer.
+            raw_id = item.get('id')
+            if not raw_id:
+                continue
+            try:
+                tagplus_nfe_id = int(raw_id)
+            except (TypeError, ValueError):
+                logger.warning('Webhook TagPlus com id inválido: %r', raw_id)
+                continue
+
             emissao = HoraTagPlusNfeEmissao.query.filter_by(
                 tagplus_nfe_id=tagplus_nfe_id
             ).first()
+
             if not emissao:
-                continue  # webhook de nota que não originamos — ignorar
+                # Pode ser race: POST /nfes ainda não commitou localmente quando webhook
+                # chegou. Enfileirar retry com delay para dar tempo ao commit.
+                queue = Queue('hora_nfe', connection=redis_conn)
+                queue.enqueue_in(
+                    timedelta(seconds=10),
+                    'app.hora.workers.emissao_nfe_worker.processar_webhook',
+                    conta_id, event_type, [item],
+                )
+                continue
 
             if event_type == 'nfe_aprovada':
                 detalhes = client.get(f'/nfes/{tagplus_nfe_id}').json()
                 emissao.status = 'APROVADA'
-                emissao.chave_44 = detalhes.get('chave_nfe')
-                emissao.protocolo_aprovacao = detalhes.get('protocolo_aprovacao')
+                # ATENÇÃO: nome do campo na resposta REAL do GET /nfes/{id} precisa ser
+                # descoberto na primeira integração. doc_tagplus.md:1076+ sugere
+                # "chave_acesso" mas o payload completo não está 100% explicitado.
+                # Estratégia: persistir detalhes completo em response_webhook e fazer
+                # fallback em múltiplos nomes até ajustar no primeiro teste real.
+                emissao.chave_44 = (
+                    detalhes.get('chave_acesso')
+                    or detalhes.get('chave_nfe')
+                    or detalhes.get('chave')
+                )
+                emissao.protocolo_aprovacao = (
+                    detalhes.get('protocolo_aprovacao')
+                    or detalhes.get('protocolo_autorizacao')
+                    or (detalhes.get('protocolo') or {}).get('numero_protocolo')
+                )
                 emissao.aprovado_em = agora_utc_naive()
-                emissao.response_webhook = detalhes
+                emissao.response_webhook = detalhes  # sempre preservar bruto
 
                 # Atualiza a venda
                 venda = emissao.venda
@@ -657,7 +754,14 @@ class WebhookHandler:
             elif event_type == 'nfe_rejeitada':
                 detalhes = client.get(f'/nfes/{tagplus_nfe_id}').json()
                 emissao.status = 'REJEITADA_SEFAZ'
-                emissao.error_message = detalhes.get('motivo_rejeicao')
+                # Motivo de rejeição pode vir em vários campos — preservar bruto em
+                # response_webhook e tentar extrair no primeiro teste real.
+                emissao.error_message = (
+                    detalhes.get('motivo_rejeicao')
+                    or detalhes.get('motivo')
+                    or (detalhes.get('historico') or [{}])[-1].get('descricao')
+                    or 'Rejeição sem motivo identificável — ver response_webhook'
+                )
                 emissao.response_webhook = detalhes
 
             elif event_type == 'nfe_cancelada':
@@ -779,7 +883,19 @@ class OAuthClient:
         return self._do_refresh()
 
     def _do_refresh(self) -> HoraTagPlusToken:
-        token = self.conta.token
+        # Lock pessimista em HoraTagPlusToken para serializar refresh entre workers
+        # concorrentes (TagPlus invalida o refresh_token após uso — race causaria 401).
+        token = (
+            HoraTagPlusToken.query
+            .filter_by(conta_id=self.conta.id)
+            .with_for_update()
+            .first()
+        )
+        # Re-check após aquisição do lock: outro worker pode ter refreshed enquanto
+        # esperávamos; usar o token mais recente.
+        if token and token.expires_at > agora_utc_naive() + timedelta(minutes=5):
+            return token
+
         data = {
             'grant_type': 'refresh_token',
             'refresh_token': decrypt(token.refresh_token_encrypted),
@@ -892,8 +1008,8 @@ Antes da primeira emissão, configurar **uma única vez** no portal TagPlus:
    - CFOP padrão (5102/6102).
    - CST/CSOSN de ICMS conforme regime tributário da HORA (Simples? Real?).
    - Unidade: `UN`.
-5. **Aplicativo OAuth cadastrado** em `developers.tagplus.com.br` com `redirect_uri`:
-   `https://sistema-fretes.onrender.com/hora/tagplus/conta/callback`.
+5. **Aplicativo OAuth cadastrado** em `developers.tagplus.com.br`. A "URL de retorno" é configurada **uma única vez no portal** (não passada como parâmetro `redirect_uri` — a doc é explícita em `scripts/guia.md:181` que o parâmetro **não é aceito** na URL de autorização):
+   URL de retorno no portal = `https://sistema-fretes.onrender.com/hora/tagplus/conta/callback`.
 6. **Webhook cadastrado** no ERP apontando para:
    `https://sistema-fretes.onrender.com/hora/tagplus/webhook`
    com eventos: `nfe_aprovada`, `nfe_rejeitada`, `nfe_cancelada`.
@@ -986,7 +1102,18 @@ CREATE TABLE IF NOT EXISTS hora_tagplus_produto_map (
     modelo_id INTEGER NOT NULL UNIQUE REFERENCES hora_modelo(id),
     tagplus_produto_id INTEGER NOT NULL,
     tagplus_codigo VARCHAR(50),
-    cfop_default VARCHAR(4) NOT NULL DEFAULT '5102',
+    cfop_default VARCHAR(5) NOT NULL DEFAULT '5.102',
+    -- VARCHAR(5) para caber "5.102" ou "6.102" (máscara 9.999 — doc_tagplus.md:178).
+    criado_em TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'America/Sao_Paulo')
+);
+
+CREATE TABLE IF NOT EXISTS hora_tagplus_forma_pagamento_map (
+    id SERIAL PRIMARY KEY,
+    forma_pagamento_hora VARCHAR(20) NOT NULL UNIQUE,
+    -- PIX, CARTAO_CREDITO, DINHEIRO (enum de HoraVenda.forma_pagamento).
+    tagplus_forma_id INTEGER NOT NULL,
+    -- ID inteiro no TagPlus (resolvido via GET /formas_pagamento).
+    descricao VARCHAR(80),
     criado_em TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'America/Sao_Paulo')
 );
 
@@ -1051,7 +1178,11 @@ Queue RQ: `hora_nfe` (adicionar ao comando do worker do Render).
 
 9. **Fronteira HORA preservada**: nenhum import de `app/integracoes/tagplus/*`. Toda lógica vive em `app/hora/services/tagplus/`. Se no futuro quisermos consolidar, extrair para `app/integracoes/tagplus_core/` e os dois domínios importam — mas só quando houver **terceiro** consumidor.
 
-10. **Evento `NF_EMITIDA` no chassi**: respeita invariante 4 do módulo HORA (log de eventos, não UPDATE em `hora_moto`). Se algo falhar após inserir o evento, a venda tem a NF mas o evento pode estar inconsistente — envolver tudo em `db.session.begin_nested()`.
+10. **Evento `NF_EMITIDA` no chassi**: respeita invariante 4 do módulo HORA (log de eventos, não UPDATE em `hora_moto`). Se algo falhar após inserir o evento, a venda tem a NF mas o evento pode estar inconsistente — envolver tudo em `db.session.begin_nested()`. **Adicionar `NF_EMITIDA` e `NF_CANCELADA` à lista canônica de tipos de evento** em `app/hora/models/moto.py` (comentário de `HoraMotoEvento.tipo`) e em `app/hora/CLAUDE.md`.
+
+11. **Fluxo (a) — venda criada a partir de DANFE já existente**: a emissão é automática apenas para vendas criadas via fluxo (c) (venda primeiro, NF depois). Vendas com `nf_saida_chave_44` preenchido são bloqueadas em `enfileirar()` — vide §5.2. Para re-emitir uma NF cancelada, limpar os campos `nf_saida_*` da venda antes.
+
+12. **Race webhook x commit local**: se o webhook chegar antes do commit do worker, o handler em §5.6 enfileira retry com delay de 10s. Combinado com o job de reconciliação (§5.5.1), cobre o caso de webhook completamente perdido. Não existe caminho silencioso de perda.
 
 ---
 
