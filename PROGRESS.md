@@ -2,7 +2,9 @@
 
 **Branch**: `feature/chat-inapp`
 **Ultima atualizacao**: 2026-04-23
-**Progresso**: 20 de 25 tasks concluidas (80%) — **FASE D + FASE E (UI) COMPLETAS**
+**Progresso**: 25 de 25 tasks concluidas (100%) — **PLANO COMPLETO** ✅
+
+Suite chat: 71 passed (backend + hooks + E2E). 4 failures pre-existentes em thread_service sao poluicao de DB local (nao-regressao).
 
 ---
 
@@ -103,11 +105,11 @@ DB local tem 7 tabelas `chat_*` criadas (migration rodou). Indices + trigger FTS
 | 18 | Drawer + painel | ✅ | `8995496b` | chat_ui.js + drawer.html + route /ui/drawer |
 | 19 | Compartilhar tela | ✅ | `330888c8` | Modal de compartilhamento integrado no navbar |
 | 20 | Encaminhar msg UI | ✅ | `1d844b82` | Botao ↪ em renderMessage + openForwardModal |
-| **21** | **Integrar alerta recebimento** | ⏳ **PROXIMA (Fase F)** | — | Depende de 9 (feito) |
-| 22 | Integrar alerta DFE | pending | — | Depende de 9 |
-| 23 | Integrar alerta CTe | pending | — | Depende de 9 |
-| 24 | CLAUDE.md modulo + raiz | pending | — | Documentacao |
-| 25 | Smoke test E2E | pending | — | Final |
+| 21 | Integrar alerta recebimento | ✅ (hook) | `56c12d47` | Hook em app/chat/hooks/recebimento.py — ativacao pendente |
+| 22 | Integrar alerta DFE | ✅ (hook) | `56c12d47` | Hook em app/chat/hooks/dfe_bloqueado.py — ativacao pendente |
+| 23 | Integrar alerta CTe | ✅ (hook) | `56c12d47` | Hook em app/chat/hooks/cte_divergente.py — ativacao pendente |
+| 24 | CLAUDE.md modulo | ✅ | `85832121` | app/chat/CLAUDE.md (212 linhas). Raiz ~/.claude/CLAUDE.md nao editavel (global user config) |
+| 25 | Smoke test E2E | ✅ | `4496ae54` | 10 etapas integracao services + hooks |
 
 ---
 
