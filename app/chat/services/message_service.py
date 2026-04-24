@@ -6,6 +6,7 @@ from app import db
 from app.auth.models import Usuario
 from app.chat.models import ChatMessage, ChatMember, ChatMention, ChatThread, ChatAttachment
 from app.chat.markdown_parser import extract_mentions
+from app.chat.utils import url_safe
 from app.utils.timezone import agora_utc_naive
 
 
@@ -48,6 +49,11 @@ class MessageService:
 
         if len(content.encode('utf-8')) > MAX_CONTENT_BYTES:
             raise MessageError(f'Conteudo excede tamanho maximo ({MAX_CONTENT_BYTES} bytes)')
+
+        # deep_link e renderizado como <a href> no chat_ui.js; validar antes de persistir.
+        # url_safe: aceita http/https/path absoluto; rejeita javascript:, data:, //host, /\t/host.
+        if deep_link is not None and deep_link != '' and not url_safe(deep_link):
+            raise MessageError('deep_link invalido (scheme nao permitido)')
 
         thread = db.session.get(ChatThread, thread_id)
         if thread is None:
@@ -128,6 +134,11 @@ class MessageService:
             raise MessageError('Mensagem nao existe')
         if msg.sender_user_id != user.id:
             raise PermissionError('so o autor pode editar')
+        # Nao permitir edit de msg deletada — evita vazamento do novo content via SSE
+        # message_edit (publica new_content para membros) e ressuscita content oculto
+        # pelo _message_dict (R8). Janela de edit (15 min) e independente do delete.
+        if msg.deletado_em is not None:
+            raise MessageError('mensagem deletada nao pode ser editada')
         if agora_utc_naive() - msg.criado_em > timedelta(minutes=EDIT_WINDOW_MINUTES):
             raise MessageError('janela de edicao expirada (15 min)')
         if len(new_content.encode('utf-8')) > MAX_CONTENT_BYTES:
@@ -156,6 +167,17 @@ class MessageService:
         msg.deletado_em = agora_utc_naive()
         msg.deletado_por_id = user.id
         db.session.commit()
+
+        # Notificar membros em tempo real — sem isso, UI exibe mensagem deletada ate F5.
+        # Simetria com send() e edit(), que publicam eventos SSE apos commit.
+        from app.chat.realtime.publisher import publish
+        for m in db.session.query(ChatMember).filter(
+            ChatMember.thread_id == msg.thread_id,
+            ChatMember.removido_em.is_(None),
+        ).all():
+            publish(m.user_id, 'message_delete', {
+                'thread_id': msg.thread_id, 'message_id': msg.id,
+            })
 
     @staticmethod
     def list_for_thread(user, thread_id: int, limit: int = 50, before_id: Optional[int] = None):
