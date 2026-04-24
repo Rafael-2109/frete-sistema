@@ -268,8 +268,8 @@
             {% for p in pedidos %}
               <tr class="
                 {% if p.status_calculado == 'FATURADO' %}table-success
-                {% elif p.status_calculado in ['EMBARCADO', 'CARVIA_EMBARCADO'] %}table-primary
                 {% elif p.status_calculado in ['COTADO', 'CARVIA_COTADO'] %}table-warning
+                {% elif p.badge_embarcado %}table-primary
                 {% else %}table-light
                 {% endif %}
               ">
@@ -289,8 +289,6 @@
                       <i class="fas fa-undo"></i> NF no CD
                     {% elif p.status_calculado == 'FATURADO' %}
                       Faturado
-                    {% elif p.status_calculado in ['EMBARCADO', 'CARVIA_EMBARCADO'] %}
-                      <i class="fas fa-truck"></i> Embarcado
                     {% elif p.status_calculado in ['COTADO', 'CARVIA_COTADO'] %}
                       Cotado
                     {% elif p.status_calculado == 'CARVIA' %}
@@ -370,6 +368,17 @@
                             style="font-size: 0.7rem; padding: 2px 6px;">
                       <i class="fas fa-info-circle"></i> Info Separação
                     </button>
+                  {% endif %}
+                  {# Badge EMBARCADO separado (P12, 2026-04-24):
+                     aparece quando data_embarque preenchida E nao e NF no CD.
+                     Tamanho identico ao "Info Separação" (0.7rem / padding 2px 6px).
+                     Mascara: "Emb.{DD/MM} - {HH:MM}" (hora via ControlePortaria). #}
+                  {% if p.badge_embarcado %}
+                    <br><span class="badge bg-primary mt-1"
+                              style="font-size: 0.7rem; padding: 2px 6px;"
+                              title="Saida da portaria: {{ p.badge_embarcado.data|formatar_data('%d/%m/%Y') }}{% if p.badge_embarcado.hora %} {{ p.badge_embarcado.hora.strftime('%H:%M') }}{% endif %}">
+                      <i class="fas fa-truck"></i> {{ p.badge_embarcado.texto }}
+                    </span>
                   {% endif %}
                   {% if p.tags_pedido %}
                   <div class="mt-1">

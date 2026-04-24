@@ -786,6 +786,35 @@ def cancelar_artefatos_carvia_do_embarque(
         if not fretes:
             return resultado
 
+        # Fretes ORFAOS (sem operacao_id): cancelar diretamente sem cascata.
+        # Acontece quando CarviaFrete foi criado via hook portaria mas a
+        # CarviaOperacao nao foi emitida ainda, ou em dados legados. Sem esse
+        # bloco, embarque cancelado deixava CarviaFrete ativo. (P5, 2026-04-24)
+        from app.utils.timezone import agora_utc_naive as _agora_naive
+        _agora = _agora_naive()
+        for frete in fretes:
+            if getattr(frete, 'operacao_id', None) is not None:
+                continue
+            if frete.status == 'CANCELADO':
+                continue
+            if getattr(frete, 'status_conferencia', None) == 'CONFERIDO':
+                resultado['bloqueados'].append({
+                    'tipo': 'carvia_fretes',
+                    'id': frete.id,
+                    'motivo': 'CarviaFrete CONFERIDO — reabrir primeiro',
+                })
+                continue
+            frete.status = 'CANCELADO'
+            if hasattr(frete, 'cancelado_em'):
+                frete.cancelado_em = _agora
+            if hasattr(frete, 'cancelado_por'):
+                frete.cancelado_por = usuario
+            resultado['cancelados_total'] += 1
+            logger.info(
+                'CarviaFrete orfao %s cancelado (embarque %s, sem operacao_id)',
+                frete.id, embarque_id,
+            )
+
         operacoes_tocadas = set()
         for frete in fretes:
             op_id = getattr(frete, 'operacao_id', None)
@@ -862,6 +891,22 @@ def cancelar_artefatos_carvia_do_embarque(
                 )
                 resultado['erros'].append(f'op_{op_id}: {e_exec}')
 
+        # RESET de CarviaPedido.status (P1, 2026-04-24):
+        # Cancelar embarque NAO revertia `CarviaPedido.status='EMBARCADO'`,
+        # deixando pedidos travados na tela `lista_pedidos.html` sem permitir
+        # recotar/embarcar novamente. Aqui recalculamos `status` a partir do
+        # proprio `status_calculado` (que le EmbarqueItem.status='ativo').
+        # `embarques/routes.py:1011` ja marca todos os itens como 'cancelado'
+        # ANTES deste hook rodar, entao o recalculo pega o estado correto.
+        try:
+            _resetar_status_pedidos_carvia_do_embarque(embarque_id)
+        except Exception as e_reset:
+            logger.warning(
+                'Reset CarviaPedido.status embarque=%s falhou: %s',
+                embarque_id, e_reset,
+            )
+            resultado['erros'].append(f'reset_pedidos: {e_reset}')
+
         logger.info(
             'F5 propagacao Nacom→CarVia embarque=%s: %s cancelados, '
             '%s bloqueados, %s erros',
@@ -879,3 +924,353 @@ def cancelar_artefatos_carvia_do_embarque(
         )
         resultado['erros'].append(str(e))
         return resultado
+
+
+def atualizar_status_pedido_carvia_pelo_faturamento(numero_nf: str) -> int:
+    """Revalida status de CarviaPedidos afetados por uma NF.
+
+    Chamado apos:
+    - Importacao de CarviaNf (NF recem-ativa no CarVia)
+    - Anexar NF a CarviaPedidoItem (api_anexar_nf_pedido)
+
+    Fluxo CarVia (P7 revisado, 2026-04-24):
+        ABERTO -> COTADO -> FATURADO -> EMBARCADO
+        (90% dos pedidos CarVia sao cotados ja com NF. FATURADO acontece
+        ANTES de embarcar, via NF ativa em CarviaNf. EMBARCADO e o estado
+        final, aplicado pelo hook da portaria.)
+
+    Regra de transicao desta funcao:
+    - ABERTO/COTADO -> FATURADO: todos os itens do pedido tem numero_nf
+      preenchido E cada NF existe em CarviaNf ATIVA.
+    - EMBARCADO nao volta para FATURADO (idempotente — pedido ja progrediu).
+
+    Returns:
+        Quantidade de CarviaPedidos cujo status foi alterado. Nao commita.
+    """
+    from app.carvia.models import CarviaPedido, CarviaPedidoItem, CarviaNf
+
+    if not numero_nf:
+        return 0
+
+    # Pedidos candidatos: que tem item apontando para esta NF
+    ped_ids = {
+        pi.pedido_id for pi in CarviaPedidoItem.query.filter_by(
+            numero_nf=str(numero_nf)
+        ).all() if pi.pedido_id
+    }
+    if not ped_ids:
+        return 0
+
+    atualizados = 0
+    for pid in ped_ids:
+        pedido = db.session.get(CarviaPedido, pid)
+        if not pedido or pedido.status in (
+            'CANCELADO', 'FATURADO', 'EMBARCADO',
+        ):
+            continue
+
+        itens_pedido = pedido.itens.all()
+        if not itens_pedido:
+            continue
+
+        nfs_pedido = [it.numero_nf for it in itens_pedido]
+        todos_tem_nf = all(nf and str(nf).strip() for nf in nfs_pedido)
+        if not todos_tem_nf:
+            continue
+
+        nfs_existentes = CarviaNf.query.filter(
+            CarviaNf.numero_nf.in_([str(n) for n in nfs_pedido]),
+            CarviaNf.status == 'ATIVA',
+        ).all()
+        numeros_existentes = {str(nf.numero_nf) for nf in nfs_existentes}
+        todas_ativas = all(
+            str(nf) in numeros_existentes for nf in nfs_pedido
+        )
+        if not todas_ativas:
+            continue
+
+        # ABERTO ou COTADO -> FATURADO (NF ativa antes de embarcar)
+        logger.info(
+            'CarviaPedido %s %s -> FATURADO (NF %s ativa)',
+            pedido.numero_pedido, pedido.status, numero_nf,
+        )
+        pedido.status = 'FATURADO'
+        atualizados += 1
+
+    return atualizados
+
+
+def cancelar_pedido_carvia_por_lote(lote_id: str, usuario: str, motivo: str = '') -> Dict:
+    """Cancela CarviaPedido a partir de um lote (CARVIA-PED-* ou CARVIA-NF-*).
+
+    Uso publico: chamado por rotas admin Nacom (`excluir_pedido`,
+    `cancelar_separacao`) quando o lote e CarVia. Mantem integridade:
+    - marca `CarviaPedido.status='CANCELADO'`
+    - cancela EmbarqueItems ativos (CARVIA-PED-* e CARVIA-NF-* do pedido)
+    - bloqueia se ha CarviaFrete CONFERIDO/FATURADO ou vinculado a fatura
+
+    Args:
+        lote_id: separacao_lote_id (ex: CARVIA-PED-123 ou CARVIA-NF-456)
+        usuario: identificador do operador
+        motivo: texto livre
+
+    Returns:
+        dict {'sucesso': bool, 'mensagem': str, 'pedido_id': int | None}
+
+    Nao commita — caller e responsavel.
+    """
+    from app.embarques.models import EmbarqueItem
+    from app.carvia.models import (
+        CarviaPedido, CarviaPedidoItem, CarviaNf,
+    )
+    from app.carvia.models.frete import CarviaFrete
+
+    pedido = None
+
+    if lote_id.startswith('CARVIA-PED-'):
+        try:
+            pid = int(lote_id.replace('CARVIA-PED-', ''))
+            pedido = db.session.get(CarviaPedido, pid)
+        except (ValueError, TypeError):
+            pass
+    elif lote_id.startswith('CARVIA-NF-'):
+        try:
+            nf_id = int(lote_id.replace('CARVIA-NF-', ''))
+            nf = db.session.get(CarviaNf, nf_id)
+            if nf and nf.numero_nf:
+                pi = CarviaPedidoItem.query.filter_by(
+                    numero_nf=nf.numero_nf
+                ).first()
+                if pi and pi.pedido_id:
+                    pedido = db.session.get(CarviaPedido, pi.pedido_id)
+        except (ValueError, TypeError):
+            pass
+
+    if not pedido:
+        return {
+            'sucesso': False,
+            'mensagem': f'Pedido CarVia nao localizado para lote {lote_id}',
+            'pedido_id': None,
+        }
+
+    if pedido.status == 'CANCELADO':
+        return {
+            'sucesso': True,
+            'mensagem': f'Pedido {pedido.numero_pedido} ja estava CANCELADO',
+            'pedido_id': pedido.id,
+        }
+
+    # Bloqueio: CarviaFrete CONFERIDO/FATURADO para qualquer NF do pedido
+    nfs_do_pedido = [i.numero_nf for i in pedido.itens.all() if i.numero_nf]
+    if nfs_do_pedido:
+        conds_csv = [
+            CarviaFrete.numeros_nfs.ilike(f'%{nf}%')
+            for nf in nfs_do_pedido
+        ]
+        if conds_csv:
+            bloq = CarviaFrete.query.filter(
+                db.or_(*conds_csv),
+                db.or_(
+                    CarviaFrete.status == 'CONFERIDO',
+                    CarviaFrete.status == 'FATURADO',
+                    CarviaFrete.fatura_cliente_id.isnot(None),
+                ),
+            ).first()
+            if bloq:
+                return {
+                    'sucesso': False,
+                    'mensagem': (
+                        f'Bloqueado: CarviaFrete #{bloq.id} CONFERIDO/FATURADO/'
+                        f'vinculado a fatura. Desfaca no modulo CarVia primeiro.'
+                    ),
+                    'pedido_id': pedido.id,
+                }
+
+    # Cancelar EmbarqueItems ativos (CARVIA-PED-{id} + CARVIA-NF-{nf_id})
+    lotes_a_cancelar = [f'CARVIA-PED-{pedido.id}']
+    for nf_num in set(nfs_do_pedido):
+        nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
+        if nf_obj:
+            lotes_a_cancelar.append(f'CARVIA-NF-{nf_obj.id}')
+
+    if lotes_a_cancelar:
+        EmbarqueItem.query.filter(
+            EmbarqueItem.separacao_lote_id.in_(lotes_a_cancelar),
+            EmbarqueItem.status == 'ativo',
+        ).update({'status': 'cancelado'}, synchronize_session='fetch')
+
+    pedido.status = 'CANCELADO'
+    logger.info(
+        'CarviaPedido %s CANCELADO via lote (usuario=%s, motivo=%s)',
+        pedido.numero_pedido, usuario, motivo,
+    )
+
+    return {
+        'sucesso': True,
+        'mensagem': (
+            f'Pedido CarVia {pedido.numero_pedido} cancelado. '
+            f'EmbarqueItems ativos associados foram desativados.'
+        ),
+        'pedido_id': pedido.id,
+    }
+
+
+def resetar_status_pedidos_carvia_por_lotes(
+    lotes: list,
+    carvia_cotacao_id: int = None,
+) -> int:
+    """Recalcula `CarviaPedido.status` dado um conjunto de lotes.
+
+    Uso publico: chamado por rotas que cancelam/removem itens individuais
+    (cancelar_item_embarque, excluir_item_embarque, desvincular_pedido)
+    para resetar pedidos CarVia afetados.
+
+    Args:
+        lotes: lista de `separacao_lote_id` (CARVIA-PED-*, CARVIA-NF-*,
+            CARVIA-{cot_id}) dos itens removidos/cancelados.
+        carvia_cotacao_id: fallback quando o lote nao identifica diretamente
+            o pedido (ex: provisorio CARVIA-{cot_id}).
+
+    Returns:
+        Quantidade de CarviaPedidos cujo status foi alterado.
+
+    Nao commita — caller e responsavel. Faz flush antes de chamar
+    status_calculado para garantir visibilidade de mutacoes de EmbarqueItem.
+    """
+    from app.carvia.models import CarviaPedido, CarviaPedidoItem, CarviaNf
+
+    pedido_ids = set()
+    for lote in lotes or []:
+        lote = str(lote or '')
+        if lote.startswith('CARVIA-PED-'):
+            try:
+                pedido_ids.add(int(lote.replace('CARVIA-PED-', '')))
+            except (ValueError, TypeError):
+                pass
+        elif lote.startswith('CARVIA-NF-'):
+            try:
+                nf_id = int(lote.replace('CARVIA-NF-', ''))
+                nf = db.session.get(CarviaNf, nf_id)
+                if nf and nf.numero_nf:
+                    for pi in CarviaPedidoItem.query.filter_by(
+                        numero_nf=nf.numero_nf
+                    ).all():
+                        if pi.pedido_id:
+                            pedido_ids.add(pi.pedido_id)
+            except (ValueError, TypeError):
+                pass
+
+    # Fallback via carvia_cotacao_id (provisorio)
+    if carvia_cotacao_id:
+        for p in CarviaPedido.query.filter_by(
+            cotacao_id=carvia_cotacao_id
+        ).filter(CarviaPedido.status != 'CANCELADO').all():
+            pedido_ids.add(p.id)
+
+    if not pedido_ids:
+        return 0
+
+    # Flush obrigatorio: status_calculado re-consulta EmbarqueItem.
+    db.session.flush()
+
+    resetados = 0
+    for pid in pedido_ids:
+        pedido = db.session.get(CarviaPedido, pid)
+        if not pedido or pedido.status == 'CANCELADO':
+            continue
+        novo_status = pedido.status_calculado
+        if (
+            novo_status != pedido.status
+            and novo_status in ('ABERTO', 'COTADO', 'FATURADO')
+        ):
+            logger.info(
+                'CarviaPedido %s status %s -> %s (reset por lote)',
+                pedido.numero_pedido, pedido.status, novo_status,
+            )
+            pedido.status = novo_status
+            resetados += 1
+
+    return resetados
+
+
+def _resetar_status_pedidos_carvia_do_embarque(embarque_id: int) -> None:
+    """Recalcula `CarviaPedido.status` apos cancelamento de embarque.
+
+    Identifica todos os CarviaPedidos que tinham EmbarqueItems neste embarque
+    (via lotes CARVIA-PED-*, CARVIA-NF-* ou `carvia_cotacao_id`) e reseta
+    `status` para o valor derivado de `status_calculado` (que considera
+    EmbarqueItem.status='ativo').
+
+    Chamado apos o embarque ser marcado cancelado (item.status='cancelado'
+    ja aplicado em embarques/routes.py:1011), garantindo que os pedidos
+    voltem a ABERTO/COTADO e destravem a lista de pedidos para recotacao.
+    """
+    from app.embarques.models import EmbarqueItem
+    from app.carvia.models import CarviaPedido, CarviaPedidoItem, CarviaNf
+
+    # Itens do embarque (incluindo ja cancelados — precisamos dos lotes)
+    itens = EmbarqueItem.query.filter_by(embarque_id=embarque_id).all()
+    if not itens:
+        return
+
+    pedido_ids = set()
+    for item in itens:
+        lote = item.separacao_lote_id or ''
+
+        # CARVIA-PED-{id}: mapeamento direto
+        if lote.startswith('CARVIA-PED-'):
+            try:
+                pedido_ids.add(int(lote.replace('CARVIA-PED-', '')))
+            except (ValueError, TypeError):
+                pass
+
+        # CARVIA-NF-{nf_id}: via CarviaNf.numero_nf -> CarviaPedidoItem.pedido_id
+        elif lote.startswith('CARVIA-NF-'):
+            try:
+                nf_id = int(lote.replace('CARVIA-NF-', ''))
+                nf = db.session.get(CarviaNf, nf_id)
+                if nf and nf.numero_nf:
+                    for pi in CarviaPedidoItem.query.filter_by(
+                        numero_nf=nf.numero_nf
+                    ).all():
+                        if pi.pedido_id:
+                            pedido_ids.add(pi.pedido_id)
+            except (ValueError, TypeError):
+                pass
+
+        # Fallback: provisorio com carvia_cotacao_id — pega pedidos da cotacao
+        elif item.carvia_cotacao_id:
+            for p in CarviaPedido.query.filter_by(
+                cotacao_id=item.carvia_cotacao_id
+            ).filter(CarviaPedido.status != 'CANCELADO').all():
+                pedido_ids.add(p.id)
+
+    if not pedido_ids:
+        return
+
+    # Garante que cancelamentos de EmbarqueItem aplicados em routes.py:1011
+    # estejam visiveis ao `status_calculado` (que re-consulta EmbarqueItem).
+    # Sem o flush, a property pode ler identity map stale e retornar 'EMBARCADO'
+    # para um pedido cujo unico item acabou de ser marcado 'cancelado'.
+    db.session.flush()
+
+    resetados = 0
+    for pid in pedido_ids:
+        pedido = db.session.get(CarviaPedido, pid)
+        if not pedido or pedido.status == 'CANCELADO':
+            continue
+
+        novo_status = pedido.status_calculado  # property: reconstroi de EmbarqueItem
+        if novo_status != pedido.status and novo_status in ('ABERTO', 'COTADO', 'EMBARCADO'):
+            logger.info(
+                'CarviaPedido %s status %s -> %s (cancel embarque %s)',
+                pedido.numero_pedido, pedido.status, novo_status, embarque_id,
+            )
+            pedido.status = novo_status
+            resetados += 1
+
+    if resetados:
+        logger.info(
+            'Reset de status aplicado em %s CarviaPedido(s) apos cancel embarque %s',
+            resetados, embarque_id,
+        )

@@ -86,28 +86,39 @@ class Pedido(db.Model):
     @property
     def status_calculado(self):
         """
-        Calcula o status do pedido baseado no estado atual:
-        - CARVIA_EMBARCADO / CARVIA_COTADO: CarVia em embarque ativo (via ultimo_embarque injetado pela lista)
-        - CARVIA: Item CarVia aberto (nao vinculado a embarque ativo nem com status persistido)
-        - NF no CD: Flag nf_cd é True (NF voltou para o CD)
-        - FATURADO: Tem NF preenchida e não está no CD
-        - COTADO: Tem cotação_id mas não está embarcado
-        - ABERTO: Não tem cotação
+        Calcula o status do pedido baseado no estado atual.
+
+        Fluxo unificado Nacom + CarVia (P12, 2026-04-24):
+            ABERTO -> COTADO -> FATURADO
+            (+ NF no CD como estado especial para Nacom)
+
+        EMBARCADO deixou de ser status — virou badge visual independente via
+        `badge_embarcado` (data_embarque preenchida E NF nao voltou ao CD).
+        Isso reflete que EMBARCADO e um evento fisico ortogonal ao ciclo
+        fiscal do pedido (FATURADO = NF ativa; EMBARCADO = saiu da portaria).
+
+        Status retornados:
+        - NF no CD: Nacom com flag nf_cd=True
+        - FATURADO: NF preenchida e ativa
+        - COTADO: em embarque ativo (sem NF ainda)
+        - CANCELADO: explicitamente cancelado
+        - CARVIA_COTADO / CARVIA: fallbacks CarVia sem embarque/sem NF
+        - ABERTO: sem cotacao
         """
         # CarVia: detectado pelo prefixo CARVIA- no separacao_lote_id
         if self.eh_carvia:
             status_view = getattr(self, 'status', '') or ''
             if status_view in ('FATURADO',):
                 return 'FATURADO'
-            if status_view in ('EMBARCADO',):
-                return 'EMBARCADO'
+            if status_view in ('CANCELADO',):
+                return 'CANCELADO'
             # CarVia em embarque ativo — atributo injetado por
             # ListaPedidosService.enriquecer_pedidos (lista_service.py:691).
-            # Em telas que nao chamam enriquecer_pedidos, cai no fallback 'CARVIA'.
+            # EMBARCADO deixou de ser status: pedido com data_embarque ganha
+            # badge separado via `badge_embarcado`. Aqui so distingue "em
+            # embarque" (CARVIA_COTADO) de "sem embarque" (CARVIA).
             ultimo_embarque = getattr(self, 'ultimo_embarque', None)
             if ultimo_embarque is not None:
-                if getattr(ultimo_embarque, 'data_embarque', None):
-                    return 'CARVIA_EMBARCADO'
                 return 'CARVIA_COTADO'
             return 'CARVIA'
 
@@ -116,8 +127,12 @@ class Pedido(db.Model):
             return 'NF no CD'
         elif self.nf and self.nf.strip():
             return 'FATURADO'
-        # Status real persistido (ex: COTADO via embarque) tem prioridade sobre derivação
+        # Status real persistido (ex: COTADO via embarque) tem prioridade sobre derivação.
+        # EMBARCADO (se persistido em separacao.status) e convertido para COTADO
+        # — a informacao fisica do embarque vai para o badge_embarcado.
         status_real = getattr(self, 'status', '') or ''
+        if status_real == 'EMBARCADO':
+            return 'COTADO' if self.cotacao_id else 'ABERTO'
         if status_real not in ('', 'ABERTO'):
             return status_real
         # Fallback derivado
@@ -125,6 +140,44 @@ class Pedido(db.Model):
             return 'COTADO'
         else:
             return 'ABERTO'
+
+    @property
+    def badge_embarcado(self):
+        """Retorna data/hora do embarque quando o pedido esta embarcado.
+
+        Badge visual ORTOGONAL ao status_calculado (P12, 2026-04-24):
+        - Aparece quando `data_embarque` preenchida E `nf_cd=False`.
+        - Mascara: "Emb.{DD/MM} - {HH:MM}" (hora via ControlePortaria).
+
+        Fontes:
+        - Nacom: `Pedido.data_embarque` (VIEW via Separacao).
+        - CarVia: `data_embarque` NULL na VIEW; usa `ultimo_embarque`
+          (injetado por `enriquecer_pedidos`).
+        - Hora: `_hora_saida_portaria` injetado por `enriquecer_pedidos`
+          (batch-load de ControlePortaria). Fallback: None.
+
+        Returns:
+            dict | None: {'data': date, 'hora': time|None, 'texto': str}
+        """
+        if getattr(self, 'nf_cd', False):
+            return None
+
+        data_emb = getattr(self, 'data_embarque', None)
+        if not data_emb:
+            ult = getattr(self, 'ultimo_embarque', None)
+            if ult is not None:
+                data_emb = getattr(ult, 'data_embarque', None)
+
+        if not data_emb:
+            return None
+
+        # Hora injetada por enriquecer_pedidos (batch-load ControlePortaria)
+        hora = getattr(self, '_hora_saida_portaria', None)
+
+        texto = f"Emb.{data_emb.strftime('%d/%m')}"
+        if hora:
+            texto += f" - {hora.strftime('%H:%M')}"
+        return {'data': data_emb, 'hora': hora, 'texto': texto}
     
     def __repr__(self):
         return f'<Pedido {self.num_pedido} - Lote: {self.separacao_lote_id}>'

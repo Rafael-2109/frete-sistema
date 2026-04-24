@@ -1347,6 +1347,9 @@ class ImportacaoService:
                     from app.utils.sincronizar_entregas_carvia import (
                         sincronizar_entrega_carvia_por_nf,
                     )
+                    from app.carvia.services.documentos.embarque_carvia_service import (
+                        atualizar_status_pedido_carvia_pelo_faturamento,
+                    )
                     for nf_criada in nfs_criadas:
                         try:
                             sincronizar_entrega_carvia_por_nf(
@@ -1357,6 +1360,19 @@ class ImportacaoService:
                             logger.warning(
                                 "Sync monitoramento NF import %s falhou: %s",
                                 nf_criada.numero_nf, e_item,
+                            )
+                        # P7: transicao EMBARCADO -> FATURADO se a NF recem
+                        # ativa fecha ciclo de algum CarviaPedido.
+                        try:
+                            atualizados = atualizar_status_pedido_carvia_pelo_faturamento(
+                                nf_criada.numero_nf
+                            )
+                            if atualizados:
+                                db.session.commit()
+                        except Exception as e_fat:
+                            logger.warning(
+                                "Transicao FATURADO NF import %s falhou: %s",
+                                nf_criada.numero_nf, e_fat,
                             )
                 except Exception as e_sync:
                     logger.warning(

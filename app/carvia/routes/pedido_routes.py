@@ -333,6 +333,15 @@ def register_pedido_routes(bp):
             except Exception as e:
                 logger.warning("Erro ao limpar alerta saida-sem-nf: %s", e)
 
+            # 4. Transicao EMBARCADO -> FATURADO quando NF ativa no CarVia (P7)
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    atualizar_status_pedido_carvia_pelo_faturamento,
+                )
+                atualizar_status_pedido_carvia_pelo_faturamento(numero_nf)
+            except Exception as e:
+                logger.warning("Erro ao avaliar transicao FATURADO: %s", e)
+
             db.session.commit()
 
             resposta = {

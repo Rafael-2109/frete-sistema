@@ -251,7 +251,9 @@ class CarviaPedido(db.Model):
     """Pedido CarVia — vinculado a cotacao, split por filial SP/RJ"""
     __tablename__ = 'carvia_pedidos'
 
-    STATUSES = ['ABERTO', 'COTADO', 'EMBARCADO', 'CANCELADO']
+    STATUSES = ['ABERTO', 'COTADO', 'FATURADO', 'CANCELADO']
+    # EMBARCADO deixou de ser status (P12, 2026-04-24). O fato fisico do
+    # embarque e exposto pela property `Pedido.badge_embarcado` (ortogonal).
 
     id = db.Column(db.Integer, primary_key=True)
     numero_pedido = db.Column(db.String(20), nullable=False, index=True)
@@ -282,7 +284,7 @@ class CarviaPedido(db.Model):
 
     __table_args__ = (
         db.CheckConstraint(
-            "status IN ('ABERTO','COTADO','EMBARCADO','CANCELADO')",
+            "status IN ('ABERTO','COTADO','FATURADO','CANCELADO')",
             name='ck_carvia_pedido_status'
         ),
         db.CheckConstraint("filial IN ('SP', 'RJ')", name='ck_carvia_pedido_filial'),
@@ -321,23 +323,25 @@ class CarviaPedido(db.Model):
     def status_calculado(self):
         """Status derivado do estado real, sem dependencia de atualizacao manual.
 
-        Regras:
-          - Se pedido TEM NF propria (CarviaPedidoItem.numero_nf preenchido):
-            depende APENAS dos EmbarqueItems CARVIA-NF-{nf_id} dessas NFs.
-            Se nenhum existe ativo → ABERTO (mesmo que a cotacao tenha
-            provisorio ativo consumido por outros pedidos).
-          - Se pedido NAO tem NF: pode estar via padrao legado CARVIA-PED-{id}
-            ou via provisorio (provisorio=True) da cotacao.
+        Fluxo (P12 revisado, 2026-04-24):
+            ABERTO -> COTADO -> FATURADO
+            (EMBARCADO deixou de ser status. Saida da portaria e ortogonal
+            — exposta via `Pedido.badge_embarcado`.)
 
-        ABERTO: pedido nao esta em nenhum embarque
-        COTADO: em embarque sem saida (data_embarque=NULL)
-        EMBARCADO: em embarque com data_embarque preenchida
-        CANCELADO: coluna status=CANCELADO
+        Regras:
+          - FATURADO (nova semantica): pedido com coluna `status='FATURADO'`
+            persistido (via `_marcar_pedidos_embarcado` ou
+            `atualizar_status_pedido_carvia_pelo_faturamento`).
+          - COTADO: pedido esta em embarque ativo (com ou sem data_embarque).
+          - ABERTO: pedido sem embarque ativo.
+          - CANCELADO: coluna status=CANCELADO.
         """
         if self.status == 'CANCELADO':
             return 'CANCELADO'
+        if self.status == 'FATURADO':
+            return 'FATURADO'
 
-        from app.embarques.models import EmbarqueItem, Embarque
+        from app.embarques.models import EmbarqueItem
         from app.carvia.models.documentos import CarviaNf
 
         itens_lista = self.itens.all()
@@ -345,7 +349,6 @@ class CarviaPedido(db.Model):
 
         # Passo 1: pedido COM NF propria — decide exclusivamente via CARVIA-NF-{nf_id}
         if nf_nums:
-            em_embarque_via_nf = False
             for nf_num in nf_nums:
                 nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
                 if nf_obj:
@@ -354,14 +357,8 @@ class CarviaPedido(db.Model):
                         status='ativo',
                     ).first()
                     if ei:
-                        embarque = db.session.get(Embarque, ei.embarque_id)
-                        if embarque and embarque.data_embarque:
-                            return 'EMBARCADO'
-                        em_embarque_via_nf = True
-            if em_embarque_via_nf:
-                return 'COTADO'
+                        return 'COTADO'
             # Pedido tem NF mas NENHUM EmbarqueItem CARVIA-NF-* ativo → ABERTO
-            # (provisorio da cotacao pode ter sido consumido por outro pedido)
             return 'ABERTO'
 
         # Passo 2: pedido SEM NF — padrao legado CARVIA-PED-{id}
@@ -370,15 +367,9 @@ class CarviaPedido(db.Model):
             status='ativo',
         ).first()
         if em_legado:
-            embarque = db.session.get(Embarque, em_legado.embarque_id)
-            if embarque and embarque.data_embarque:
-                return 'EMBARCADO'
             return 'COTADO'
 
-        # Passo 3: pedido SEM NF — so conta se AINDA ha provisorio com SALDO ativo
-        # na cotacao. Exige `volumes > 0 OR peso > 0` para evitar exibir pedido
-        # como COTADO quando provisorio foi consumido por outro pedido expandido
-        # (provisorio pode permanecer com saldo zero apos expansao parcial).
+        # Passo 3: pedido SEM NF — provisorio ativo na cotacao
         ei_prov = EmbarqueItem.query.filter(
             EmbarqueItem.carvia_cotacao_id == self.cotacao_id,
             EmbarqueItem.provisorio == True,  # noqa: E712
@@ -389,9 +380,6 @@ class CarviaPedido(db.Model):
             ),
         ).first()
         if ei_prov:
-            embarque_prov = db.session.get(Embarque, ei_prov.embarque_id)
-            if embarque_prov and embarque_prov.data_embarque:
-                return 'EMBARCADO'
             return 'COTADO'
 
         return 'ABERTO'

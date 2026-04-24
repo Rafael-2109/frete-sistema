@@ -224,10 +224,26 @@ def sincronizar_entrega_carvia_por_nf(
         entrega.status_finalizacao = status_inicial
 
     # ------------------------------------------------------------------ #
+    # DESFLAG 'Aguardando Embarque' (P3, 2026-04-24):
+    # Se a entrega ja tinha status_finalizacao='Aguardando Embarque' (setado
+    # na importacao) e agora ganhou `frete` vinculado (CarviaFrete existe
+    # para esta NF), limpar o flag. Sem isso, o badge "Aguardando Embarque"
+    # persistia na tela de monitoramento mesmo apos NF preenchida tardiamente.
+    #
+    # NAO sobrescreve finalizacoes legitimas (Entregue, Devolvida, Cancelada,
+    # Sinistro, Troca de NF) — so limpa o status_inicial 'Aguardando Embarque'.
+    # ------------------------------------------------------------------ #
+    if (
+        entrega.status_finalizacao == 'Aguardando Embarque'
+        and frete
+    ):
+        entrega.status_finalizacao = None
+
+    # ------------------------------------------------------------------ #
     # Campos OPERACIONAIS protegidos (nao tocados neste fluxo):
     #   data_agenda (tratado acima com guarda), reagendar, motivo_reagendamento,
     #   observacao_operacional, canhoto_arquivo, entregue, data_hora_entrega_realizada,
-    #   status_finalizacao (exceto status_inicial em NF nova)
+    #   status_finalizacao (exceto status_inicial em NF nova e desflag acima)
     # Operador mantem controle via endpoints do proprio monitoramento.
     # ------------------------------------------------------------------ #
 

@@ -191,9 +191,35 @@ def register_edit_routes(bp):
         from app.embarques.models import Embarque, EmbarqueItem
         from app.faturamento.models import FaturamentoProduto
     
+        # CarVia (P11, 2026-04-24): reset via helper que usa status_calculado
+        # (derivado de EmbarqueItem). Separacao nao existe para lotes CARVIA-*.
+        if str(lote_id or '').startswith('CARVIA-'):
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    resetar_status_pedidos_carvia_por_lotes,
+                )
+                carvia_item = EmbarqueItem.query.filter_by(
+                    separacao_lote_id=lote_id
+                ).first()
+                cot_id = getattr(carvia_item, 'carvia_cotacao_id', None) if carvia_item else None
+                resetados = resetar_status_pedidos_carvia_por_lotes(
+                    [lote_id], carvia_cotacao_id=cot_id,
+                )
+                db.session.commit()
+                return jsonify({
+                    'success': True,
+                    'message': f'{resetados} pedido(s) CarVia resetado(s).',
+                })
+            except Exception as e:
+                db.session.rollback()
+                return jsonify({
+                    'success': False,
+                    'message': f'Erro ao resetar status CarVia: {e}',
+                }), 500
+
         try:
             pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first_or_404()
-        
+
             # Guarda status anterior para log
             status_anterior = pedido.status
             nf_anterior = pedido.nf
@@ -311,6 +337,36 @@ def register_edit_routes(bp):
                 'message': 'Acesso negado. Apenas administradores podem cancelar separações.'
             }), 403
 
+        # CarVia (P8, 2026-04-24): lote CARVIA-* nao tem linha em Separacao.
+        # Delega para helper do service CarVia que marca CarviaPedido.status
+        # = CANCELADO e desativa EmbarqueItems associados.
+        if str(lote_id or '').startswith('CARVIA-'):
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    cancelar_pedido_carvia_por_lote,
+                )
+                data = request.get_json() or {}
+                motivo_exclusao = (data.get('motivo_exclusao') or '').strip()
+                if not motivo_exclusao:
+                    return jsonify({
+                        'success': False,
+                        'message': 'O motivo da exclusão é obrigatório.'
+                    }), 400
+                res = cancelar_pedido_carvia_por_lote(
+                    lote_id, usuario=current_user.nome, motivo=motivo_exclusao,
+                )
+                if res['sucesso']:
+                    db.session.commit()
+                    return jsonify({'success': True, 'message': res['mensagem']})
+                db.session.rollback()
+                return jsonify({'success': False, 'message': res['mensagem']}), 400
+            except Exception as e:
+                db.session.rollback()
+                return jsonify({
+                    'success': False,
+                    'message': f'Erro ao cancelar CarVia: {e}'
+                }), 500
+
         try:
             # Buscar todos os itens da separação
             itens_separacao = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
@@ -384,9 +440,30 @@ def register_edit_routes(bp):
         Permite exclusão apenas de pedidos com status "ABERTO".
         Limpa automaticamente vínculos órfãos com embarques cancelados.
         """
+        # CarVia (P8, 2026-04-24): lote CARVIA-* — delega para helper CarVia
+        if str(lote_id or '').startswith('CARVIA-'):
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    cancelar_pedido_carvia_por_lote,
+                )
+                res = cancelar_pedido_carvia_por_lote(
+                    lote_id, usuario=getattr(current_user, 'nome', 'Sistema'),
+                    motivo='Exclusao via lista de pedidos',
+                )
+                if res['sucesso']:
+                    db.session.commit()
+                    flash(res['mensagem'], 'success')
+                else:
+                    db.session.rollback()
+                    flash(res['mensagem'], 'warning')
+            except Exception as e:
+                db.session.rollback()
+                flash(f"Erro ao excluir pedido CarVia: {e}", 'error')
+            return redirect(url_for('pedidos.lista_pedidos'))
+
         # Busca primeira separação do lote para validações
         primeira_separacao = Separacao.query.filter_by(separacao_lote_id=lote_id).first()
-    
+
         if not primeira_separacao:
             flash(f"Pedido com lote {lote_id} não encontrado.", "error")
             return redirect(url_for('pedidos.lista_pedidos'))

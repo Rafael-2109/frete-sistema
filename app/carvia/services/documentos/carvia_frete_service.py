@@ -662,34 +662,62 @@ class CarviaFreteService:
 
     @staticmethod
     def _marcar_pedidos_embarcado(itens_carvia: list, usuario: str):
-        """Marca pedidos CarVia como EMBARCADO apos frete gerado."""
-        from app.carvia.models import CarviaPedido, CarviaPedidoItem
+        """Promove pedidos CarVia para FATURADO apos frete gerado na portaria.
+
+        Fluxo CarVia (P12 revisado, 2026-04-24):
+            ABERTO -> COTADO -> FATURADO
+            (EMBARCADO deixou de ser status. O fato fisico da saida da
+            portaria aparece via property `badge_embarcado` derivada de
+            `Embarque.data_embarque` + `ControlePortaria.hora_saida` —
+            ortogonal ao ciclo fiscal do pedido.)
+
+        Este metodo e chamado pelo hook da portaria. Se o pedido ja nao
+        estiver FATURADO (ex: NF anexada apenas no momento da saida),
+        garante transicao ABERTO/COTADO -> FATURADO.
+        """
+        from app.carvia.models import CarviaPedido, CarviaPedidoItem, CarviaNf
 
         # Coletar NFs dos itens CarVia
         nfs = {item.nota_fiscal for item in itens_carvia if item.nota_fiscal}
         if not nfs:
             return
 
-        # Buscar pedidos com esses NFs (excluir ja embarcados e cancelados)
+        # Filtrar para NFs que EXISTEM em CarviaNf com status='ATIVA'.
+        # Sem isso (auto-revisao code-review 2026-04-24), poderiamos promover
+        # CarviaPedido para FATURADO usando numero_nf livre sem NF fiscal
+        # real no sistema, causando inconsistencia.
+        nfs_ativas_set = {
+            str(nf.numero_nf) for nf in CarviaNf.query.filter(
+                CarviaNf.numero_nf.in_([str(n) for n in nfs]),
+                CarviaNf.status == 'ATIVA',
+            ).all()
+        }
+        if not nfs_ativas_set:
+            return
+
+        # Buscar pedidos com NFs ATIVAS (excluir cancelados e ja FATURADO)
         pedidos_itens = CarviaPedidoItem.query.join(
             CarviaPedido,
             CarviaPedidoItem.pedido_id == CarviaPedido.id
         ).filter(
-            CarviaPedidoItem.numero_nf.in_(nfs),
-            CarviaPedido.status.notin_(['EMBARCADO', 'CANCELADO']),
+            CarviaPedidoItem.numero_nf.in_(nfs_ativas_set),
+            CarviaPedido.status.notin_(['FATURADO', 'CANCELADO']),
         ).all()
 
         pedidos_atualizados = set()
         for pi in pedidos_itens:
-            if pi.pedido_id not in pedidos_atualizados:
-                pedido = db.session.get(CarviaPedido, pi.pedido_id)
-                if pedido and pedido.status not in ('EMBARCADO', 'CANCELADO'):
-                    pedido.status = 'EMBARCADO'
-                    pedidos_atualizados.add(pi.pedido_id)
-                    logger.info(
-                        "CarviaPedido %s marcado como EMBARCADO",
-                        pedido.numero_pedido
-                    )
+            if pi.pedido_id in pedidos_atualizados:
+                continue
+            pedido = db.session.get(CarviaPedido, pi.pedido_id)
+            if not pedido or pedido.status in ('FATURADO', 'CANCELADO'):
+                continue
+
+            logger.info(
+                'CarviaPedido %s %s -> FATURADO (saida portaria, NF %s ATIVA)',
+                pedido.numero_pedido, pedido.status, pi.numero_nf,
+            )
+            pedido.status = 'FATURADO'
+            pedidos_atualizados.add(pi.pedido_id)
 
     @staticmethod
     def _resolver_cnpj_emitente(item) -> str:

@@ -1656,8 +1656,51 @@ def validar_nf_cliente(item_embarque):
     if not item_embarque.nota_fiscal:
         return True, None
 
-    # Itens CarVia: NFs validadas pelo modulo CarVia, nao pelo faturamento Nacom
-    if item_embarque.carvia_cotacao_id:
+    # Itens CarVia: NFs validadas pelo modulo CarVia (CarviaNf), nao pelo
+    # faturamento Nacom (RelatorioFaturamentoImportado). Detecta CarVia por
+    # carvia_cotacao_id OU por prefixo do separacao_lote_id (CARVIA-PED-*,
+    # CARVIA-NF-*, CARVIA-{cot_id}) — carvia_cotacao_id pode estar NULL em
+    # itens criados via fluxos legados. (P4, 2026-04-24)
+    lote_carvia = str(item_embarque.separacao_lote_id or '').startswith('CARVIA-')
+    if item_embarque.carvia_cotacao_id or lote_carvia:
+        from app.carvia.models import CarviaNf
+        from app.utils.cnpj_utils import normalizar_cnpj as _norm_cnpj
+
+        carvia_nf = CarviaNf.query.filter_by(
+            numero_nf=item_embarque.nota_fiscal,
+            status='ATIVA',
+        ).first()
+
+        if not carvia_nf:
+            # NF ainda nao importada no CarVia — mantem como pendente
+            item_embarque.erro_validacao = "NF_PENDENTE_FATURAMENTO"
+            return True, (
+                f"NF {item_embarque.nota_fiscal} ainda nao importada no CarVia "
+                f"(sera validada apos importacao)"
+            )
+
+        # Valida CNPJ do destinatario da NF CarVia vs CNPJ do item
+        if item_embarque.cnpj_cliente and carvia_nf.cnpj_destinatario:
+            cnpj_item = _norm_cnpj(item_embarque.cnpj_cliente)
+            cnpj_nf = _norm_cnpj(carvia_nf.cnpj_destinatario)
+            if cnpj_item != cnpj_nf:
+                nf_original = item_embarque.nota_fiscal
+                item_embarque.erro_validacao = (
+                    f"NF_DIVERGENTE: NF {nf_original} pertence ao CNPJ "
+                    f"{carvia_nf.cnpj_destinatario}, nao a {item_embarque.cnpj_cliente}"
+                )
+                item_embarque.nota_fiscal = None
+                return False, (
+                    f"BLOQUEADO: NF {nf_original} nao pertence ao cliente "
+                    f"{item_embarque.cnpj_cliente} (pertence a "
+                    f"{carvia_nf.cnpj_destinatario})"
+                )
+
+        # Atualiza peso/valor a partir da CarviaNf e limpa erro
+        if carvia_nf.peso_bruto is not None:
+            item_embarque.peso = float(carvia_nf.peso_bruto or 0)
+        if carvia_nf.valor_total is not None:
+            item_embarque.valor = float(carvia_nf.valor_total or 0)
         item_embarque.erro_validacao = None
         return True, None
 
@@ -2171,18 +2214,44 @@ def cancelar_item_embarque(item_id):
                 # O status será recalculado automaticamente pelo event listener para todas as linhas
         
         db.session.commit()
-        
+
+        # CarVia (P10, 2026-04-24): cancelar item CarVia individual deixa
+        # CarviaPedido.status travado em EMBARCADO/COTADO. Reset via
+        # status_calculado (ja considera EmbarqueItem.status='cancelado'
+        # aplicado acima).
+        lote_item = str(item.separacao_lote_id or '')
+        eh_carvia_item = (
+            getattr(item, 'carvia_cotacao_id', None) is not None
+            or lote_item.startswith('CARVIA-')
+        )
+        if eh_carvia_item:
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    resetar_status_pedidos_carvia_por_lotes,
+                )
+                resetados = resetar_status_pedidos_carvia_por_lotes(
+                    [lote_item], carvia_cotacao_id=item.carvia_cotacao_id,
+                )
+                if resetados:
+                    db.session.commit()
+                    flash(
+                        f'🔁 {resetados} pedido(s) CarVia resetado(s) apos cancelamento do item.',
+                        'info',
+                    )
+            except Exception as _e_reset:
+                print(f'[AVISO] Reset CarVia apos cancel item falhou: {_e_reset}')
+
         # ✅ USAR NOVA SINCRONIZAÇÃO COMPLETA
         sucesso, resultado = sincronizar_nf_embarque_pedido_completa(embarque.id)
         if sucesso:
             flash(f'✅ Pedido {item.pedido} removido do embarque com sucesso! {resultado}', 'success')
         else:
             flash(f'✅ Pedido {item.pedido} removido do embarque, mas houve erro na sincronização: {resultado}', 'warning')
-        
+
     except Exception as e:
         db.session.rollback()
         flash(f'❌ Erro ao remover pedido do embarque: {str(e)}', 'danger')
-    
+
     return redirect(url_for('embarques.visualizar_embarque', id=embarque.id))
 
 @embarques_bp.route('/<int:embarque_id>/alterar_cotacao')
@@ -2239,10 +2308,58 @@ def alterar_cotacao(embarque_id):
         
         # Buscar dados agregados de Separacao por lote
         # Criar estrutura similar à VIEW pedidos mas buscando direto de Separacao
+        # CarVia: lotes CARVIA-* NAO tem linha em `separacao` (CarVia cria
+        # apenas EmbarqueItem). Para esses, usamos a VIEW `pedidos` (Part 2A/2B
+        # do UNION ALL — ja agrega dados CarVia direto de carvia_cotacoes/
+        # carvia_pedidos). Sem isso, "Alterar Cotação" falhava com "Nenhum
+        # dado valido" para embarques CarVia. (P2, 2026-04-24)
+        from app.pedidos.models import Pedido
         pedidos_data = []
-        
+
         for lote_id in lotes_unicos:
-            # Buscar dados agregados do lote na tabela Separacao
+            lote_eh_carvia = str(lote_id or '').startswith('CARVIA-')
+
+            if lote_eh_carvia:
+                # CarVia: ler direto da VIEW `pedidos` (que ja agrega
+                # carvia_cotacoes / carvia_pedidos via UNION ALL).
+                pedido_view = Pedido.query.filter_by(
+                    separacao_lote_id=lote_id
+                ).first()
+                if pedido_view:
+                    # id sintetico: usa id da VIEW (unico, estavel) — nao
+                    # `hash(lote) % 1000000` que tinha risco de colisao.
+                    # Downstream usa separacao_lote_id como chave real.
+                    pedido_obj = type('PedidoTemp', (), {
+                        'id': pedido_view.id,
+                        'separacao_lote_id': pedido_view.separacao_lote_id,
+                        'num_pedido': pedido_view.num_pedido,
+                        'data_pedido': pedido_view.data_pedido,
+                        'cnpj_cpf': pedido_view.cnpj_cpf,
+                        'raz_social_red': pedido_view.raz_social_red,
+                        'nome_cidade': pedido_view.nome_cidade,
+                        'cod_uf': pedido_view.cod_uf,
+                        'cidade_normalizada': pedido_view.cidade_normalizada,
+                        'uf_normalizada': pedido_view.uf_normalizada,
+                        'codigo_ibge': pedido_view.codigo_ibge,
+                        'valor_saldo_total': float(pedido_view.valor_saldo_total or 0),
+                        'pallet_total': float(pedido_view.pallet_total or 0),
+                        'peso_total': float(pedido_view.peso_total or 0),
+                        'rota': pedido_view.rota,
+                        'sub_rota': pedido_view.sub_rota,
+                        'expedicao': pedido_view.expedicao,
+                        'agendamento': pedido_view.agendamento,
+                        'protocolo': pedido_view.protocolo,
+                    })()
+                    pedidos_data.append(pedido_obj)
+                else:
+                    flash(
+                        f'⚠️ Lote CarVia {lote_id} não encontrado na VIEW pedidos. '
+                        f'Verifique se a cotação/pedido CarVia existe e não está cancelado.',
+                        'warning'
+                    )
+                continue
+
+            # Nacom: agregar direto de Separacao
             agregacao = db.session.query(
                 Separacao.separacao_lote_id,
                 func.min(Separacao.num_pedido).label('num_pedido'),
@@ -2267,7 +2384,7 @@ def alterar_cotacao(embarque_id):
             ).group_by(
                 Separacao.separacao_lote_id
             ).first()
-            
+
             if agregacao:
                 # Criar um objeto similar ao Pedido para compatibilidade
                 pedido_obj = type('PedidoTemp', (), {
@@ -2358,11 +2475,44 @@ def desvincular_pedido(lote_id):
     if not hasattr(current_user, 'perfil') or current_user.perfil != 'administrador':
         flash("Acesso negado. Esta função é restrita a administradores.", "error")
         return redirect(url_for('pedidos.lista_pedidos'))
-    
+
+    # CarVia (P9, 2026-04-24): desvincular pedido com lote CARVIA-*.
+    # Remove EmbarqueItems ativos vinculados ao lote e reseta
+    # CarviaPedido.status via status_calculado. Nao mexe em Separacao
+    # (vazia para CarVia).
+    if str(lote_id or '').startswith('CARVIA-'):
+        try:
+            from app.carvia.services.documentos.embarque_carvia_service import (
+                resetar_status_pedidos_carvia_por_lotes,
+            )
+            itens = EmbarqueItem.query.filter_by(
+                separacao_lote_id=lote_id, status='ativo'
+            ).all()
+            carvia_cotacao_id = None
+            cancelados = 0
+            for it in itens:
+                if not carvia_cotacao_id and it.carvia_cotacao_id:
+                    carvia_cotacao_id = it.carvia_cotacao_id
+                it.status = 'cancelado'
+                cancelados += 1
+            resetados = resetar_status_pedidos_carvia_por_lotes(
+                [lote_id], carvia_cotacao_id=carvia_cotacao_id,
+            )
+            db.session.commit()
+            flash(
+                f"✅ Pedido CarVia {lote_id} desvinculado. "
+                f"{cancelados} item(ns) cancelado(s), {resetados} pedido(s) resetado(s).",
+                "success",
+            )
+        except Exception as e:
+            db.session.rollback()
+            flash(f"❌ Erro ao desvincular CarVia {lote_id}: {e}", "error")
+        return redirect(url_for('pedidos.lista_pedidos'))
+
     try:
         # Busca separações do lote
         separacoes = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
-        
+
         if not separacoes:
             flash(f"Pedido com lote {lote_id} não encontrado.", "error")
             return redirect(url_for('pedidos.lista_pedidos'))
@@ -2726,6 +2876,51 @@ def sincronizar_item_faturamento(item_id):
                 'success': False,
                 'message': 'Item não possui Nota Fiscal para sincronizar'
             }), 400
+
+        # CarVia (P6, 2026-04-24): itens CarVia usam CarviaNf (nao
+        # FaturamentoProduto). Sincronizar valor/peso a partir de CarviaNf.
+        # Pallets nao se aplicam a CarVia (motos = peso cubado individual).
+        lote_item = str(item.separacao_lote_id or '')
+        eh_carvia_item = (
+            getattr(item, 'carvia_cotacao_id', None) is not None
+            or lote_item.startswith('CARVIA-')
+        )
+        if eh_carvia_item:
+            from app.carvia.models import CarviaNf
+            carvia_nf = CarviaNf.query.filter_by(
+                numero_nf=item.nota_fiscal, status='ATIVA',
+            ).first()
+            if not carvia_nf:
+                return jsonify({
+                    'success': False,
+                    'message': (
+                        f'NF {item.nota_fiscal} nao encontrada em CarviaNf '
+                        f'(status ATIVA). Importe a NF CarVia primeiro.'
+                    ),
+                }), 404
+
+            valor_ant = float(item.valor or 0)
+            peso_ant = float(item.peso or 0)
+            novo_valor = float(carvia_nf.valor_total or 0)
+            novo_peso = float(carvia_nf.peso_bruto or 0)
+
+            item.valor = novo_valor
+            item.peso = novo_peso
+            item.erro_validacao = None
+            db.session.commit()
+
+            return jsonify({
+                'success': True,
+                'message': (
+                    f'Item CarVia sincronizado com CarviaNf {item.nota_fiscal}'
+                ),
+                'valor_anterior': valor_ant,
+                'valor_novo': novo_valor,
+                'peso_anterior': peso_ant,
+                'peso_novo': novo_peso,
+                'pallets_anterior': float(item.pallets or 0),
+                'pallets_novo': float(item.pallets or 0),
+            })
 
         # Buscar produtos da NF em FaturamentoProduto
         from app.faturamento.models import FaturamentoProduto

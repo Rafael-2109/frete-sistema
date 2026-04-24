@@ -459,11 +459,22 @@ class ListaPedidosService:
             )
             return db.or_(nacom, carvia)
         elif status_key == 'cotado':
-            # NACOM: tem cotacao_id, sem data_embarque, sem nf, nao e CarVia
+            # NACOM: cotado no novo fluxo P12 (2026-04-24) = pedido em
+            # embarque (com OU sem data_embarque) mas ainda SEM NF.
+            # EMBARCADO fisico (data_embarque preenchida, status='EMBARCADO'
+            # persistido) agora entra em 'cotado' tambem — antes sumia de
+            # todos os filtros nomeados.
             nacom = db.and_(
                 nao_carvia,
-                Pedido.cotacao_id.isnot(None),
-                Pedido.data_embarque.is_(None),
+                db.or_(
+                    # Caso A: em cotacao, ainda nao saiu
+                    db.and_(
+                        Pedido.cotacao_id.isnot(None),
+                        Pedido.data_embarque.is_(None),
+                    ),
+                    # Caso B: ja embarcou fisicamente mas NF nao foi emitida
+                    Pedido.status == 'EMBARCADO',
+                ),
                 (Pedido.nf.is_(None)) | (Pedido.nf == ""),
                 Pedido.nf_cd == False
             )
@@ -1005,6 +1016,39 @@ class ListaPedidosService:
         for pedido in pedidos:
             pedido.ultimo_embarque = embarques_por_lote.get(pedido.separacao_lote_id)
             pedido.contato_agendamento = contatos_por_cnpj.get(pedido.cnpj_cpf)
+
+        # --- Batch-load hora_saida da portaria (P12, 2026-04-24) ---
+        # Alimenta `_hora_saida_portaria` usado pela property `badge_embarcado`
+        # (mascara "Emb.{DD/MM} - {HH:MM}"). Uma unica query por pagina.
+        embarque_ids = {
+            emb.id for emb in embarques_por_lote.values()
+            if emb and getattr(emb, 'id', None)
+        }
+        hora_saida_por_embarque = {}
+        if embarque_ids:
+            try:
+                from app.portaria.models import ControlePortaria
+                regs = (
+                    ControlePortaria.query
+                    .filter(
+                        ControlePortaria.embarque_id.in_(list(embarque_ids)),
+                        ControlePortaria.hora_saida.isnot(None),
+                    )
+                    .order_by(ControlePortaria.data_saida.desc(), ControlePortaria.hora_saida.desc())
+                    .all()
+                )
+                for r in regs:
+                    if r.embarque_id and r.embarque_id not in hora_saida_por_embarque:
+                        hora_saida_por_embarque[r.embarque_id] = r.hora_saida
+            except Exception:
+                hora_saida_por_embarque = {}
+
+        for pedido in pedidos:
+            ult = getattr(pedido, 'ultimo_embarque', None)
+            if ult and getattr(ult, 'id', None) in hora_saida_por_embarque:
+                pedido._hora_saida_portaria = hora_saida_por_embarque[ult.id]
+            else:
+                pedido._hora_saida_portaria = None
 
         # --- Info separacao (falta item, pagamento, obs, impressao) ---
         info_separacao_por_lote = {}

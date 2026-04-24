@@ -232,27 +232,31 @@ class Embarque(db.Model):
         - 'NFs pendentes' - Caso algum pedido esteja sem NF
         - 'Pendente Import.' - Caso as NFs estejam preenchidas, porém tenha NF ainda não importada
         - 'NFs Lançadas' - Todas as NFs estão lançadas e validadas pelo faturamento
+
+        Itens CarVia: validacao via CarviaNf (nao RelatorioFaturamentoImportado).
+        `validar_nf_cliente` (embarques/routes.py) seta erro_validacao
+        corretamente para itens CarVia quando a NF existe em CarviaNf.
         """
         itens_ativos = [item for item in self.itens if item.status == 'ativo']
-        
+
         if not itens_ativos:
             return 'NFs pendentes'
-        
-        # Verifica se há itens sem NF
+
+        # Verifica se há itens sem NF (Nacom OU CarVia)
         itens_sem_nf = [item for item in itens_ativos if not item.nota_fiscal or item.nota_fiscal.strip() == '']
         if itens_sem_nf:
             return 'NFs pendentes'
-        
+
         # Verifica se há NFs pendentes de importação
         itens_pendentes = [item for item in itens_ativos if item.erro_validacao and 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao]
         if itens_pendentes:
             return 'Pendente Import.'
-        
+
         # Verifica se há NFs divergentes
         itens_divergentes = [item for item in itens_ativos if item.erro_validacao and ('NF_DIVERGENTE' in item.erro_validacao or 'CLIENTE_NAO_DEFINIDO' in item.erro_validacao)]
         if itens_divergentes:
             return 'NFs pendentes'
-        
+
         # Se chegou até aqui, todas as NFs estão validadas
         return 'NFs Lançadas'
 
@@ -263,24 +267,91 @@ class Embarque(db.Model):
         - 'Pendentes' - Significa que pelo menos 1 pedido está sem NF ou sem validação pelo faturamento
         - 'Emitido' - Significa que o/os fretes do embarque já foram emitidos
         - 'Lançado' - Significa que pelo menos 1 frete já foi vinculado CTe
+
+        Embarques CarVia (itens com prefixo 'CARVIA-' ou carvia_cotacao_id) usam
+        `CarviaFrete` em vez de `Frete` Nacom. O lookup foi ampliado para
+        considerar os dois universos. (P4, 2026-04-24)
         """
         from app.fretes.models import Frete
-        
+
         # Primeiro verifica se as NFs estão prontas
         if self.status_nfs != 'NFs Lançadas':
             return 'Pendentes'
-        
-        # Busca fretes deste embarque
-        fretes = Frete.query.filter_by(embarque_id=self.id).filter(Frete.status != 'CANCELADO').all()
-        
-        if not fretes:
+
+        itens_ativos = [item for item in self.itens if item.status == 'ativo']
+
+        def _eh_carvia(it):
+            return (
+                getattr(it, 'carvia_cotacao_id', None) is not None
+                or str(it.separacao_lote_id or '').startswith('CARVIA-')
+            )
+
+        def _eh_nacom(it):
+            # Nacom POSITIVO: lote nao-CARVIA preenchido e sem carvia_cotacao_id.
+            # Itens com lote NULL + carvia_cotacao_id NULL sao AMBIGUOS e nao
+            # entram em nenhum universo — evita forcar 'Pendentes' em embarque
+            # CarVia que tenha 1 item mal-formado.
+            lote = str(it.separacao_lote_id or '')
+            return (
+                getattr(it, 'carvia_cotacao_id', None) is None
+                and bool(lote)
+                and not lote.startswith('CARVIA-')
+            )
+
+        tem_carvia = any(_eh_carvia(item) for item in itens_ativos)
+        tem_nacom = any(_eh_nacom(item) for item in itens_ativos)
+
+        # Fretes Nacom
+        fretes_nacom = []
+        if tem_nacom:
+            fretes_nacom = (
+                Frete.query
+                .filter_by(embarque_id=self.id)
+                .filter(Frete.status != 'CANCELADO')
+                .all()
+            )
+
+        # Fretes CarVia (CarviaFrete)
+        fretes_carvia = []
+        if tem_carvia:
+            try:
+                from app.carvia.models.frete import CarviaFrete
+                fretes_carvia = (
+                    CarviaFrete.query
+                    .filter_by(embarque_id=self.id)
+                    .filter(CarviaFrete.status != 'CANCELADO')
+                    .all()
+                )
+            except Exception:
+                fretes_carvia = []
+
+        todos_fretes = list(fretes_nacom) + list(fretes_carvia)
+
+        # Regras de 'Pendentes': se tem Nacom mas sem Frete Nacom, OU tem CarVia mas sem CarviaFrete
+        if tem_nacom and not fretes_nacom:
             return 'Pendentes'
-        
-        # Verifica se há fretes com CTe lançado
-        fretes_com_cte = [frete for frete in fretes if frete.numero_cte and frete.numero_cte.strip() != '']
-        if fretes_com_cte:
+        if tem_carvia and not fretes_carvia:
+            return 'Pendentes'
+        if not todos_fretes:
+            return 'Pendentes'
+
+        # Verifica se há fretes com CTe lançado (Nacom: numero_cte; CarVia: cte_numero/ctrc_numero via operacao)
+        def _tem_cte(fr):
+            # Nacom Frete
+            nc = getattr(fr, 'numero_cte', None)
+            if nc and str(nc).strip():
+                return True
+            # CarVia Frete: numero_cte via CarviaOperacao vinculada
+            op = getattr(fr, 'operacao', None)
+            if op is not None:
+                nc_op = getattr(op, 'cte_numero', None) or getattr(op, 'ctrc_numero', None)
+                if nc_op and str(nc_op).strip():
+                    return True
+            return False
+
+        if any(_tem_cte(fr) for fr in todos_fretes):
             return 'Lançado'
-        
+
         # Se há fretes mas sem CTe, estão emitidos
         return 'Emitido'
 
