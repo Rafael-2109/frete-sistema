@@ -29,7 +29,8 @@ def test_alert_cria_thread_system_e_mensagem(mock_pub, db_session, user_factory)
     assert msg.sender_system_source == 'recebimento'
     assert msg.nivel == 'ATENCAO'
     assert msg.deep_link == '/recebimento/1'
-    assert mock_pub.called
+    assert msg.dados == {'id': 1}
+    assert mock_pub.call_count == 1
 
 
 @patch('app.chat.realtime.publisher.publish')

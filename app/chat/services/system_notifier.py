@@ -41,9 +41,17 @@ class SystemNotifier:
         body = f'**{titulo}**\n\n{content}'
         payload_dados = sanitize_for_json(dados or {})
 
+        # Pass 1: garantir que TODAS as threads existem antes de inserir msgs.
+        # ThreadService.get_or_create_system_dm faz commit interno ao criar —
+        # thread vazia e benigna se pass 2 falhar (proximo alert reutiliza).
+        threads_by_user = {u.id: ThreadService.get_or_create_system_dm(u) for u in users}
+
+        # Pass 2: inserir TODAS as mensagens em transacao unica (atomico).
+        # Se falhar no meio, rollback desfaz msgs nao-commitadas; threads do pass 1
+        # permanecem como caixas vazias reutilizaveis.
         msgs = []
         for u in users:
-            thread = ThreadService.get_or_create_system_dm(u)
+            thread = threads_by_user[u.id]
             msg = ChatMessage(
                 thread_id=thread.id,
                 sender_type='system',
