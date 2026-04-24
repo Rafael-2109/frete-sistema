@@ -296,6 +296,11 @@ def visualizar_entrega(id):
         except Exception as e_carvia:
             print(f"[AVISO] Lookup CarVia visualizar_entrega falhou: {e_carvia}")
 
+    # Enriquecer com metadados CarVia (tipo_material, emitente, destinatario, pedido, nome comercial)
+    # Uso o mesmo helper batch da listagem para garantir consistencia.
+    if entrega.origem == 'CARVIA':
+        _enriquecer_entregas_carvia_batch([entrega])
+
     return render_template(
         'monitoramento/visualizar_entrega.html',
         entrega=entrega,
@@ -798,6 +803,136 @@ def _enriquecer_entregas_batch(entregas):
             entrega.rastreamento_id = None
 
 
+def _enriquecer_entregas_carvia_batch(entregas):
+    """
+    Enriquece entregas com origem='CARVIA' adicionando atributos:
+        - _carvia_tipo_material: 'MOTO' | 'CARGA_GERAL' | None
+        - _carvia_cnpj_emitente, _carvia_nome_emitente
+        - _carvia_cnpj_destinatario, _carvia_nome_destinatario
+        - _carvia_pedido_numero (PED-{cotacao_id}-{seq})
+        - _carvia_nome_comercial (nome comercial do cliente CarVia)
+        - _carvia_nf_id (id da CarviaNf — usado pelo botao PDF/XML)
+
+    Resolucao on-the-fly via batch lookup (evita N+1). Entregas Nacom
+    permanecem inalteradas.
+
+    Fonte de cada campo:
+        - Emitente/Destinatario: CarviaNf (numero_nf == entrega.numero_nf, status='ATIVA')
+        - Pedido: CarviaPedidoItem.numero_nf -> CarviaPedido.numero_pedido
+        - Tipo material e cliente: CarviaPedido.cotacao_id -> CarviaCotacao
+        - Nome comercial: CarviaCotacao.cliente_id -> CarviaCliente.nome_comercial
+    """
+    if not entregas:
+        return
+
+    # Inicializar defaults para todas (NACOM e CARVIA — template usa
+    # getattr com fallback, mas inicializar evita AttributeError).
+    for entrega in entregas:
+        entrega._carvia_tipo_material = None
+        entrega._carvia_cnpj_emitente = None
+        entrega._carvia_nome_emitente = None
+        entrega._carvia_cnpj_destinatario = None
+        entrega._carvia_nome_destinatario = None
+        entrega._carvia_pedido_numero = None
+        entrega._carvia_nome_comercial = None
+        entrega._carvia_nf_id = None
+
+    nfs_carvia = [
+        e.numero_nf for e in entregas
+        if getattr(e, 'origem', None) == 'CARVIA' and e.numero_nf
+    ]
+    if not nfs_carvia:
+        return
+
+    try:
+        from app.carvia.models import CarviaNf
+        from app.carvia.models.cotacao import (
+            CarviaPedido, CarviaPedidoItem, CarviaCotacao,
+        )
+        from app.carvia.models.clientes import CarviaCliente
+
+        # Batch 1: CarviaNf — emitente/destinatario. CarviaNf.numero_nf NAO e
+        # UNIQUE (so index), entao podem existir 2 CarviaNfs ATIVAs com mesmo
+        # numero_nf (emitentes diferentes, coincidencia rara). Ordenamos por
+        # id DESC para determinismo (mais recente vence) e usamos first-wins
+        # (alinhado ao padrao do _enriquecer_entregas_batch).
+        nf_map = {}
+        for nf in CarviaNf.query.filter(
+            CarviaNf.numero_nf.in_(nfs_carvia),
+            CarviaNf.status == 'ATIVA',
+        ).order_by(CarviaNf.id.desc()).all():
+            if nf.numero_nf not in nf_map:
+                nf_map[nf.numero_nf] = nf
+
+        # Batch 2: CarviaPedidoItem -> CarviaPedido -> CarviaCotacao -> Cliente
+        # numero_nf no item e gravado pos-faturamento (R10). Filtramos
+        # CarviaPedido.status != 'CANCELADO' para nao exibir pedidos estornados;
+        # ordenamos DESC para pegar o pedido mais recente em caso de re-criacao.
+        pedido_item_map = {}  # numero_nf -> CarviaPedido
+        itens = (
+            db.session.query(CarviaPedidoItem, CarviaPedido)
+            .join(CarviaPedido, CarviaPedido.id == CarviaPedidoItem.pedido_id)
+            .filter(
+                CarviaPedidoItem.numero_nf.in_(nfs_carvia),
+                CarviaPedido.status != 'CANCELADO',
+            )
+            .order_by(CarviaPedidoItem.pedido_id.desc())
+            .all()
+        )
+        cotacao_ids = set()
+        for item, pedido in itens:
+            if item.numero_nf not in pedido_item_map:
+                pedido_item_map[item.numero_nf] = pedido
+                if pedido.cotacao_id:
+                    cotacao_ids.add(pedido.cotacao_id)
+
+        # Batch 3: CarviaCotacao — tipo_material + cliente_id
+        cotacao_map = {}
+        cliente_ids = set()
+        if cotacao_ids:
+            for c in CarviaCotacao.query.filter(
+                CarviaCotacao.id.in_(cotacao_ids)
+            ).all():
+                cotacao_map[c.id] = c
+                if c.cliente_id:
+                    cliente_ids.add(c.cliente_id)
+
+        # Batch 4: CarviaCliente — nome_comercial
+        cliente_map = {}
+        if cliente_ids:
+            for cli in CarviaCliente.query.filter(
+                CarviaCliente.id.in_(cliente_ids)
+            ).all():
+                cliente_map[cli.id] = cli
+
+        # Aplicar nas entregas
+        for entrega in entregas:
+            if getattr(entrega, 'origem', None) != 'CARVIA':
+                continue
+
+            nf = nf_map.get(entrega.numero_nf)
+            if nf:
+                entrega._carvia_nf_id = nf.id
+                entrega._carvia_cnpj_emitente = nf.cnpj_emitente
+                entrega._carvia_nome_emitente = nf.nome_emitente
+                entrega._carvia_cnpj_destinatario = nf.cnpj_destinatario
+                entrega._carvia_nome_destinatario = nf.nome_destinatario
+
+            pedido = pedido_item_map.get(entrega.numero_nf)
+            if pedido:
+                entrega._carvia_pedido_numero = pedido.numero_pedido
+                cotacao = cotacao_map.get(pedido.cotacao_id) if pedido.cotacao_id else None
+                if cotacao:
+                    entrega._carvia_tipo_material = cotacao.tipo_material
+                    cliente = cliente_map.get(cotacao.cliente_id) if cotacao.cliente_id else None
+                    if cliente:
+                        entrega._carvia_nome_comercial = cliente.nome_comercial
+    except Exception:
+        # Nao-bloqueante: se CarVia falhar, monitoramento principal
+        # (Nacom) continua funcionando.
+        logger.exception('Erro em _enriquecer_entregas_carvia_batch')
+
+
 @monitoramento_bp.route('/listar_entregas')
 @login_required
 @allow_vendedor_own_data()  # 🔒 VENDEDORES: Apenas dados próprios
@@ -1144,6 +1279,8 @@ def listar_entregas():
 
     # Batch pre-fetch: enriquecer entregas paginadas de uma vez
     _enriquecer_entregas_batch(paginacao.items)
+    # Enriquecer dados CarVia (tipo material, emitente/destinatario, pedido, nome comercial)
+    _enriquecer_entregas_carvia_batch(paginacao.items)
 
     # R18: batch — mapear NF venda (origem=CARVIA) -> NF transferencia
     # vinculada, para exibir "NF Transf: ####" na coluna Embarque.
@@ -2651,16 +2788,140 @@ def api_get_entrega_dados(entrega_id):
 # 📄 DOWNLOAD PDF/XML DE NF DO ODOO
 # ============================================================================
 
-@monitoramento_bp.route('/nf/<numero_nf>/pdf')
-@login_required
-def download_nf_pdf(numero_nf):
+def _serve_carvia_nf_arquivo(nf_id, tipo, numero_nf=None):
     """
-    Faz download do PDF (DANFE) da NF direto do Odoo.
-    Busca o account.move pelo número da NF e retorna o PDF em base64 decodificado.
-    Campo Odoo: l10n_br_pdf_aut_nfe (DANFE NF-e)
+    Serve o arquivo (PDF/XML) original da CarviaNf via storage (S3 ou local).
+    Retorna Flask response (send_file) ou None se nao encontrado.
+
+    Args:
+        nf_id: PK da CarviaNf (resolve ambiguidade numero_nf nao-unique).
+        tipo: 'pdf' | 'xml'.
+        numero_nf: usado apenas para nomear o arquivo baixado; opcional.
+    """
+    from io import BytesIO
+    try:
+        from app.carvia.models import CarviaNf
+    except Exception as e:
+        current_app.logger.error(f"Falha ao importar CarviaNf: {e}")
+        return None
+
+    nf = db.session.get(CarviaNf, nf_id)
+    if not nf or nf.status != 'ATIVA':
+        return None
+
+    path = nf.arquivo_pdf_path if tipo == 'pdf' else nf.arquivo_xml_path
+    if not path:
+        return None
+
+    try:
+        storage = get_file_storage()
+        file_bytes = storage.download_file(path)
+        if not file_bytes:
+            return None
+
+        label = numero_nf or nf.numero_nf or nf_id
+        if tipo == 'pdf':
+            mimetype = 'application/pdf'
+            filename = f'DANFE_NF_{label}.pdf'
+        else:
+            mimetype = 'application/xml'
+            filename = f'XML_NF_{label}.xml'
+
+        return send_file(
+            BytesIO(file_bytes),
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=filename,
+        )
+    except Exception as e:
+        current_app.logger.error(
+            f"Erro ao servir arquivo CarVia NF id={nf_id} ({tipo}): {e}"
+        )
+        return None
+
+
+def _resolve_carvia_nf_id(entrega):
+    """
+    Resolve o CarviaNf.id para uma EntregaMonitorada com origem='CARVIA'.
+    Prefere o atributo _carvia_nf_id ja pre-carregado pelo helper batch; caso
+    contrario faz lookup pontual (ordena por id DESC para determinismo).
+    """
+    nf_id = getattr(entrega, '_carvia_nf_id', None)
+    if nf_id:
+        return nf_id
+    try:
+        from app.carvia.models import CarviaNf
+        nf = (
+            CarviaNf.query
+            .filter_by(numero_nf=str(entrega.numero_nf), status='ATIVA')
+            .order_by(CarviaNf.id.desc())
+            .first()
+        )
+        return nf.id if nf else None
+    except Exception as e:
+        current_app.logger.error(
+            f"Erro ao resolver CarviaNf para entrega #{entrega.id}: {e}"
+        )
+        return None
+
+
+@monitoramento_bp.route('/entrega/<int:entrega_id>/nf/pdf')
+@monitoramento_bp.route('/nf/<numero_nf>/pdf')  # legado: compat com URL antiga
+@login_required
+def download_nf_pdf(entrega_id=None, numero_nf=None):
+    """
+    Faz download do PDF (DANFE) da NF.
+
+    Roteamento por origem da EntregaMonitorada:
+        - origem='CARVIA': arquivo original da CarviaNf no S3/local
+          (CarviaNf.arquivo_pdf_path). Requer current_user.sistema_carvia.
+        - origem='NACOM' (default): busca no Odoo via account.move
+          (campo l10n_br_pdf_aut_nfe).
+
+    A forma canonica e via `entrega_id` (int, unico). A variante `numero_nf`
+    fica como compatibilidade — resolve buscando a mais recente; se houver
+    colisao NACOM+CARVIA com mesmo numero_nf, prefere NACOM (comportamento
+    legado).
     """
     import base64
     from io import BytesIO
+
+    # Resolver entrega (forma nova vs legada)
+    if entrega_id is not None:
+        entrega = db.session.get(EntregaMonitorada, entrega_id)
+        if not entrega:
+            flash(f'Entrega #{entrega_id} nao encontrada', 'warning')
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+        numero_nf = entrega.numero_nf
+    else:
+        # Forma legada: numero_nf pode colidir entre NACOM/CARVIA.
+        # Preferimos NACOM para preservar comportamento anterior.
+        entrega = (
+            EntregaMonitorada.query
+            .filter_by(numero_nf=numero_nf)
+            .order_by(EntregaMonitorada.origem.asc())  # NACOM < CARVIA (alfabetico)
+            .first()
+        )
+
+    # Roteamento CarVia
+    if entrega and entrega.origem == 'CARVIA':
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash(
+                'Acesso negado: NF CarVia requer permissao sistema_carvia.',
+                'danger',
+            )
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+        nf_id = _resolve_carvia_nf_id(entrega)
+        if nf_id:
+            resp = _serve_carvia_nf_arquivo(nf_id, 'pdf', numero_nf=numero_nf)
+            if resp is not None:
+                return resp
+        flash(
+            f'PDF (DANFE) da NF CarVia {numero_nf} nao disponivel no storage',
+            'warning',
+        )
+        return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
 
     try:
         from app.odoo.utils.connection import get_odoo_connection
@@ -2711,16 +2972,59 @@ def download_nf_pdf(numero_nf):
         return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
 
 
-@monitoramento_bp.route('/nf/<numero_nf>/xml')
+@monitoramento_bp.route('/entrega/<int:entrega_id>/nf/xml')
+@monitoramento_bp.route('/nf/<numero_nf>/xml')  # legado: compat com URL antiga
 @login_required
-def download_nf_xml(numero_nf):
+def download_nf_xml(entrega_id=None, numero_nf=None):
     """
-    Faz download do XML da NF direto do Odoo.
-    Busca o account.move pelo número da NF e retorna o XML em base64 decodificado.
-    Campo Odoo: l10n_br_xml_aut_nfe (XML NF-e)
+    Faz download do XML da NF.
+
+    Roteamento por origem da EntregaMonitorada:
+        - origem='CARVIA': arquivo original da CarviaNf no S3/local
+          (CarviaNf.arquivo_xml_path). Requer current_user.sistema_carvia.
+        - origem='NACOM' (default): busca no Odoo via account.move
+          (campo l10n_br_xml_aut_nfe).
+
+    Mesmo esquema de resolucao do download_nf_pdf (entrega_id e canonico;
+    numero_nf e legado).
     """
     import base64
     from io import BytesIO
+
+    # Resolver entrega (forma nova vs legada)
+    if entrega_id is not None:
+        entrega = db.session.get(EntregaMonitorada, entrega_id)
+        if not entrega:
+            flash(f'Entrega #{entrega_id} nao encontrada', 'warning')
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+        numero_nf = entrega.numero_nf
+    else:
+        entrega = (
+            EntregaMonitorada.query
+            .filter_by(numero_nf=numero_nf)
+            .order_by(EntregaMonitorada.origem.asc())
+            .first()
+        )
+
+    # Roteamento CarVia
+    if entrega and entrega.origem == 'CARVIA':
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash(
+                'Acesso negado: NF CarVia requer permissao sistema_carvia.',
+                'danger',
+            )
+            return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
+
+        nf_id = _resolve_carvia_nf_id(entrega)
+        if nf_id:
+            resp = _serve_carvia_nf_arquivo(nf_id, 'xml', numero_nf=numero_nf)
+            if resp is not None:
+                return resp
+        flash(
+            f'XML da NF CarVia {numero_nf} nao disponivel no storage',
+            'warning',
+        )
+        return redirect(request.referrer or url_for('monitoramento.listar_entregas'))
 
     try:
         from app.odoo.utils.connection import get_odoo_connection

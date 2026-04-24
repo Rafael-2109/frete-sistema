@@ -3,16 +3,51 @@
 <div class="container mt-4 monitoramento-page">
   <div class="d-flex flex-column mb-3">
       <h2>
-        Entrega NF {{ entrega.numero_nf }} - {{ entrega.cliente }}
+        Entrega NF {{ entrega.numero_nf }} - {% if entrega.origem == 'CARVIA' and entrega._carvia_nome_destinatario %}{{ entrega._carvia_nome_destinatario }}{% else %}{{ entrega.cliente }}{% endif %}
         {% if entrega.origem == 'CARVIA' %}
           <span class="badge bg-warning text-dark ms-2"
                 title="NF gerenciada pelo subsistema CarVia (frete subcontratado)">
             <i class="fas fa-truck"></i> CarVia
           </span>
+          {% if entrega._carvia_tipo_material == 'MOTO' %}
+            <span class="badge bg-primary ms-1" title="NF de motos (carga por chassi)">
+              <i class="fas fa-motorcycle"></i> Moto
+            </span>
+          {% elif entrega._carvia_tipo_material == 'CARGA_GERAL' %}
+            <span class="badge bg-secondary ms-1" title="NF de carga geral">
+              <i class="fas fa-boxes"></i> Carga Geral
+            </span>
+          {% endif %}
         {% endif %}
       </h2>
-      <h6>Vendedor: {{ entrega.vendedor or '—' }}</h6>
-  
+
+      {% if entrega.origem == 'CARVIA' %}
+        {# Pedido CarVia (PED-##-#) acima do vendedor, se houver #}
+        {% if entrega._carvia_pedido_numero %}
+          <h6>Pedido CarVia: <strong>{{ entrega._carvia_pedido_numero }}</strong></h6>
+        {% endif %}
+
+        {# Emitente acima do Destinatario, com badges e CNPJ formatado #}
+        {% if entrega._carvia_cnpj_emitente or entrega._carvia_nome_emitente %}
+          <h6>
+            <span class="badge bg-info text-dark" title="Emitente (remetente da carga)">Emit.</span>
+            {{ entrega._carvia_cnpj_emitente | cnpj_br if entrega._carvia_cnpj_emitente else '—' }}
+            {% if entrega._carvia_nome_emitente %} &mdash; {{ entrega._carvia_nome_emitente }}{% endif %}
+          </h6>
+        {% endif %}
+        {% if entrega._carvia_cnpj_destinatario or entrega._carvia_nome_destinatario %}
+          <h6>
+            <span class="badge bg-success" title="Destinatario da carga">Dest.</span>
+            {{ entrega._carvia_cnpj_destinatario | cnpj_br if entrega._carvia_cnpj_destinatario else '—' }}
+            {% if entrega._carvia_nome_destinatario %} &mdash; {{ entrega._carvia_nome_destinatario }}{% endif %}
+          </h6>
+        {% endif %}
+
+        <h6>Vendedor: {{ entrega._carvia_nome_comercial or entrega.vendedor or '—' }}</h6>
+      {% else %}
+        <h6>Vendedor: {{ entrega.vendedor or '—' }}</h6>
+      {% endif %}
+
       {% if entrega.transportadora and entrega.transportadora != '-' %}
         <h6>
           Transportadora: {{ entrega.transportadora }}

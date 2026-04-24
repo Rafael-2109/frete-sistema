@@ -496,14 +496,32 @@
                 💬 {{ e.comentarios_pendentes(current_user.nome) }}
               </span>
             {% endif %}
-            <small class="text-muted" {% if e.observ_ped_1 %}title="{{ e.observ_ped_1 }}" style="cursor: help; text-decoration: underline dotted;"{% endif %}>{{ e.num_pedido or 'N/A' }}</small><br>
-            {{ e.numero_nf }}{% if e.origem == 'CARVIA' %} <span class="badge bg-warning text-dark" title="Frete subcontratado CarVia"><i class="fas fa-truck"></i></span>{% endif %}{% if e.nf_cancelada %} <span class="badge bg-dark ">Canc.</span>{% endif %}<br>
+            {% if e.origem == 'CARVIA' %}
+              <small class="text-muted" {% if e.observ_ped_1 %}title="{{ e.observ_ped_1 }}" style="cursor: help; text-decoration: underline dotted;"{% endif %}>{{ e._carvia_pedido_numero or e.num_pedido or 'N/A' }}</small><br>
+            {% else %}
+              <small class="text-muted" {% if e.observ_ped_1 %}title="{{ e.observ_ped_1 }}" style="cursor: help; text-decoration: underline dotted;"{% endif %}>{{ e.num_pedido or 'N/A' }}</small><br>
+            {% endif %}
+            {{ e.numero_nf }}{% if e.origem == 'CARVIA' %} <span class="badge bg-warning text-dark" title="Frete subcontratado CarVia"><i class="fas fa-truck"></i></span>{% if e._carvia_tipo_material == 'MOTO' %} <span class="badge bg-primary" title="NF de motos (carga por chassi)"><i class="fas fa-motorcycle"></i> Moto</span>{% elif e._carvia_tipo_material == 'CARGA_GERAL' %} <span class="badge bg-secondary" title="NF de carga geral"><i class="fas fa-boxes"></i> Carga Geral</span>{% endif %}{% endif %}{% if e.nf_cancelada %} <span class="badge bg-dark ">Canc.</span>{% endif %}<br>
             <small class="text-muted">{{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
           </td>
           <td class="sticky-col-2">
-            <small class="text-muted">{{ e.cnpj_cliente }}{% if e.pedido_cliente %} | PC:{{ e.pedido_cliente }}{% endif %}</small><br>
-            {{ e.cliente }}<br>
-            <small class="text-muted">👤 {{ e.vendedor or 'Não informado' }}</small>
+            {% if e.origem == 'CARVIA' and (e._carvia_cnpj_emitente or e._carvia_cnpj_destinatario) %}
+              <small class="text-muted">
+                <span class="badge bg-info text-dark" title="Emitente (remetente da carga)">Emit.</span>
+                {{ e._carvia_cnpj_emitente | cnpj_br if e._carvia_cnpj_emitente else '—' }}
+              </small><br>
+              <small class="text-muted">{{ e._carvia_nome_emitente or '—' }}</small><br>
+              <small class="text-muted">
+                <span class="badge bg-success" title="Destinatario da carga">Dest.</span>
+                {{ e._carvia_cnpj_destinatario | cnpj_br if e._carvia_cnpj_destinatario else '—' }}
+              </small><br>
+              <small class="text-muted">{{ e._carvia_nome_destinatario or e.cliente }}</small><br>
+              <small class="text-muted">👤 {{ e._carvia_nome_comercial or e.vendedor or 'Não informado' }}</small>
+            {% else %}
+              <small class="text-muted">{{ e.cnpj_cliente }}{% if e.pedido_cliente %} | PC:{{ e.pedido_cliente }}{% endif %}</small><br>
+              {{ e.cliente }}<br>
+              <small class="text-muted">👤 {{ e.vendedor or 'Não informado' }}</small>
+            {% endif %}
           </td>
           <td>
             {% if e.incoterm or e.modalidade %}
@@ -515,16 +533,23 @@
           <td>
             {{ e.data_faturamento | formatar_data_segura if e.data_faturamento else '-' }}
             <br>
+            {% set _pode_baixar_nf = (e.origem != 'CARVIA') or current_user.sistema_carvia %}
+            {% if _pode_baixar_nf %}
             <div class="btn-group btn-group-sm mt-1" role="group">
-              <a href="{{ url_for('monitoramento.download_nf_pdf', numero_nf=e.numero_nf) }}"
-                 class="btn btn-outline-danger" title="Baixar PDF da NF" target="_blank">
+              <a href="{{ url_for('monitoramento.download_nf_pdf', entrega_id=e.id) }}"
+                 class="btn btn-outline-danger"
+                 title="{% if e.origem == 'CARVIA' %}Baixar DANFE original (CarVia){% else %}Baixar PDF da NF (Odoo){% endif %}"
+                 target="_blank">
                 <i class="fas fa-file-pdf"></i>
               </a>
-              <a href="{{ url_for('monitoramento.download_nf_xml', numero_nf=e.numero_nf) }}"
-                 class="btn btn-outline-secondary" title="Baixar XML da NF" target="_blank">
+              <a href="{{ url_for('monitoramento.download_nf_xml', entrega_id=e.id) }}"
+                 class="btn btn-outline-secondary"
+                 title="{% if e.origem == 'CARVIA' %}Baixar XML original (CarVia){% else %}Baixar XML da NF (Odoo){% endif %}"
+                 target="_blank">
                 <i class="fas fa-file-code"></i>
               </a>
             </div>
+            {% endif %}
           </td>
           <td>
             {{ e.data_embarque | formatar_data_segura if e.data_embarque else '-' }}
