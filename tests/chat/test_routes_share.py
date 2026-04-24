@@ -3,9 +3,6 @@ from unittest.mock import patch
 
 import pytest
 
-from app.chat.services.thread_service import ThreadService
-from app.chat.models import ChatMessage
-
 _RUN = uuid.uuid4().hex[:8]
 
 
