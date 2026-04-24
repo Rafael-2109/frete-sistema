@@ -362,13 +362,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carteira_principal_data_pedido",
-      "columns": [
-        "data_pedido"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_carteira_cliente_vendedor",
       "columns": [
         "cnpj_cpf",
@@ -377,17 +370,9 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_cnpj_cpf",
+      "name": "ix_carteira_principal_cod_produto",
       "columns": [
-        "cnpj_cpf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_carteira_status_data",
-      "columns": [
-        "status_pedido",
-        "data_pedido"
+        "cod_produto"
       ],
       "unique": false
     },
@@ -399,10 +384,9 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_ativo_saldo",
+      "name": "ix_carteira_principal_vendedor",
       "columns": [
-        "num_pedido",
-        "cod_produto"
+        "vendedor"
       ],
       "unique": false
     },
@@ -421,16 +405,25 @@
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_vendedor",
+      "name": "idx_carteira_produto_saldo",
       "columns": [
-        "vendedor"
+        "cod_produto",
+        "qtd_saldo_produto_pedido"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_odoo_write_date",
+      "name": "idx_carteira_ativo_saldo",
       "columns": [
-        "odoo_write_date"
+        "num_pedido",
+        "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_cnpj_cpf",
+      "columns": [
+        "cnpj_cpf"
       ],
       "unique": false
     },
@@ -442,17 +435,24 @@
       "unique": false
     },
     {
-      "name": "idx_carteira_produto_saldo",
+      "name": "ix_carteira_principal_odoo_write_date",
       "columns": [
-        "cod_produto",
-        "qtd_saldo_produto_pedido"
+        "odoo_write_date"
       ],
       "unique": false
     },
     {
-      "name": "ix_carteira_principal_cod_produto",
+      "name": "idx_carteira_status_data",
       "columns": [
-        "cod_produto"
+        "status_pedido",
+        "data_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carteira_principal_data_pedido",
+      "columns": [
+        "data_pedido"
       ],
       "unique": false
     }
