@@ -40,7 +40,13 @@ def unread_counters():
             ChatMember.user_id == current_user.id,
             ChatMember.removido_em.is_(None),
             ChatMessage.deletado_em.is_(None),
-            ChatMessage.sender_user_id != current_user.id,  # nao conta msg propria
+            # Nao contar msg propria. NULL (sender_type='system' tem sender_user_id NULL)
+            # NAO deve ser filtrado — em SQL, NULL != X retorna NULL (excluido do resultado).
+            # Sem o `is_(None) OR`, mensagens de sistema jamais entrariam no contador.
+            or_(
+                ChatMessage.sender_user_id.is_(None),
+                ChatMessage.sender_user_id != current_user.id,
+            ),
             or_(
                 ChatMember.last_read_message_id.is_(None),
                 ChatMessage.id > ChatMember.last_read_message_id,
