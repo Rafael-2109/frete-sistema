@@ -1,12 +1,12 @@
 """Rotas de thread do chat in-app — Task 12."""
 from flask import jsonify, request
 from flask_login import login_required, current_user
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from app import db
 from app.chat import chat_bp
 from app.chat.services.thread_service import ThreadService
-from app.chat.services.permission_checker import pode_adicionar
+from app.chat.services.permission_checker import pode_adicionar, usuarios_elegiveis_query
 from app.chat.models import ChatThread, ChatMember
 from app.auth.models import Usuario
 
@@ -100,6 +100,42 @@ def add_member(thread_id):
     except PermissionError:
         return jsonify({'error': 'permissao negada'}), 403
     return jsonify({'ok': True}), 200
+
+
+@chat_bp.route('/users/eligible', methods=['GET'])
+@login_required
+def list_eligible_users():
+    """Lista usuarios que `current_user` pode iniciar DM / adicionar em grupo.
+
+    Query params:
+      q       — busca por nome/email (ILIKE %q%), opcional
+      limit   — maximo retornado (default 20, max 50)
+
+    Exclui:
+      - O proprio usuario (usuarios_elegiveis_query ja filtra)
+      - Usuarios com email @teams* (robos do Teams — nao sao pessoas reais)
+      - Usuarios com status != 'ativo'
+    """
+    q = (request.args.get('q') or '').strip()
+    limit = min(request.args.get('limit', 20, type=int), 50)
+
+    base = usuarios_elegiveis_query(current_user).filter(
+        Usuario.status == 'ativo',
+        ~Usuario.email.ilike('%@teams%'),
+    )
+    if q:
+        like = f'%{q}%'
+        base = base.filter(or_(
+            Usuario.nome.ilike(like),
+            Usuario.email.ilike(like),
+        ))
+    users = base.order_by(Usuario.nome.asc()).limit(limit).all()
+    return jsonify({
+        'users': [
+            {'id': u.id, 'nome': u.nome, 'email': u.email, 'perfil': u.perfil}
+            for u in users
+        ],
+    })
 
 
 @chat_bp.route('/entity/<entity_type>/<entity_id>/thread', methods=['GET'])
