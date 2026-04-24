@@ -12,16 +12,24 @@ from app.chat.services.message_service import MessageService, MessageError
 from app.auth.models import Usuario
 
 
-# Schemes permitidos para deep_link. Bloqueia javascript:, data:, file:, etc.
-# URL relativa (scheme vazio, e.g. `/carteira/pedido/VCD123`) eh aceita.
-_ALLOWED_URL_SCHEMES = {'', 'http', 'https'}
-
-
 def _url_safe(url: str) -> bool:
+    """Valida deep_link: aceita http, https e paths absolutos do proprio site.
+
+    REJEITA:
+    - `javascript:`, `data:`, `file:`, etc (XSS / exfiltracao)
+    - Protocol-relative (`//evil.com/x`) — browser resolve como https (open redirect)
+    - String vazia
+    """
+    if not url:
+        return False
     try:
-        return urlparse(url).scheme.lower() in _ALLOWED_URL_SCHEMES
+        scheme = urlparse(url).scheme.lower()
     except ValueError:
         return False
+    if scheme in ('http', 'https'):
+        return True
+    # Scheme vazio: so aceita path absoluto, NAO protocol-relative (`//host`)
+    return scheme == '' and url.startswith('/') and not url.startswith('//')
 
 
 @chat_bp.route('/share/screen', methods=['POST'])
