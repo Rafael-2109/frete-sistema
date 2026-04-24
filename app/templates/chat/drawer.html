@@ -6,8 +6,18 @@
 <div class="chat-drawer" id="chat-drawer" aria-hidden="true" role="dialog" aria-label="Chat">
   <div class="chat-drawer__header">
     <h3 class="chat-drawer__title mb-0">Chat</h3>
-    <button class="chat-drawer__close" id="chat-drawer-close"
-            type="button" aria-label="Fechar chat">&times;</button>
+    <div class="chat-drawer__actions">
+      <button class="chat-drawer__new-btn" id="chat-new-dm"
+              type="button" title="Nova conversa" aria-label="Nova conversa">
+        <i class="fas fa-user-plus"></i>
+      </button>
+      <button class="chat-drawer__new-btn" id="chat-new-group"
+              type="button" title="Novo grupo" aria-label="Criar grupo">
+        <i class="fas fa-users"></i>
+      </button>
+      <button class="chat-drawer__close" id="chat-drawer-close"
+              type="button" aria-label="Fechar chat">&times;</button>
+    </div>
   </div>
   <div class="chat-drawer__tabs" role="tablist">
     <button class="chat-drawer__tab active" type="button" data-tipo="" role="tab">Todos</button>
