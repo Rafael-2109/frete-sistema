@@ -8,6 +8,17 @@ from app import db
 from app.chat import chat_bp
 from app.chat.services.message_service import MessageService, MessageError
 from app.chat.models import ChatMessage, ChatReaction, ChatMember, ChatForward
+from app.utils.logging_config import logger
+
+
+def _is_active_member(user_id: int, thread_id: int) -> bool:
+    return db.session.execute(
+        select(ChatMember).where(
+            ChatMember.thread_id == thread_id,
+            ChatMember.user_id == user_id,
+            ChatMember.removido_em.is_(None),
+        )
+    ).scalar_one_or_none() is not None
 
 
 def _message_dict(m: ChatMessage) -> dict:
@@ -97,14 +108,7 @@ def add_reaction(message_id):
     msg = db.session.get(ChatMessage, message_id)
     if not msg:
         return jsonify({'error': 'mensagem nao encontrada'}), 404
-    is_member = db.session.execute(
-        select(ChatMember).where(
-            ChatMember.thread_id == msg.thread_id,
-            ChatMember.user_id == current_user.id,
-            ChatMember.removido_em.is_(None),
-        )
-    ).scalar_one_or_none()
-    if not is_member:
+    if not _is_active_member(current_user.id, msg.thread_id):
         return jsonify({'error': 'sem acesso'}), 403
     r = ChatReaction(message_id=message_id, user_id=current_user.id, emoji=emoji)
     db.session.add(r)
@@ -154,6 +158,19 @@ def forward_message(message_id):
     original = db.session.get(ChatMessage, message_id)
     if not original:
         return jsonify({'error': 'mensagem original nao encontrada'}), 404
+
+    # Membership na thread ORIGEM: forward implica leitura da msg original,
+    # entao o encaminhador tem que poder ver. Sem isso, qualquer user com
+    # message_id conhecido poderia exfiltrar content via forward.
+    if not _is_active_member(current_user.id, original.thread_id):
+        return jsonify({'error': 'sem acesso a mensagem original'}), 403
+
+    # Nao encaminhar mensagem soft-deletada — expor content deletado violaria
+    # a semantica do delete. _message_dict ja esconde content deletado; manter
+    # consistencia bloqueando aqui.
+    if original.deletado_em:
+        return jsonify({'error': 'nao e possivel encaminhar mensagem deletada'}), 400
+
     destino_thread_id = data.get('destino_thread_id')
     comentario = (data.get('comentario') or '').strip()
 
@@ -178,10 +195,23 @@ def forward_message(message_id):
     except MessageError as e:
         return jsonify({'error': str(e)}), 400
 
-    db.session.add(ChatForward(
-        original_message_id=original.id,
-        forwarded_message_id=new_msg.id,
-        forwarded_by_id=current_user.id,
-    ))
-    db.session.commit()
+    # LIMITACAO CONHECIDA: MessageService.send ja commita new_msg. O insert
+    # do ChatForward abaixo e um commit separado — se falhar (raro), new_msg
+    # persiste sem registro de auditoria. Logger.error permite reconciliacao
+    # offline. Fix definitivo exigiria mudar o contrato de send para flush-only
+    # (impacta todos os callers); aceitavel como debito para F2.
+    try:
+        db.session.add(ChatForward(
+            original_message_id=original.id,
+            forwarded_message_id=new_msg.id,
+            forwarded_by_id=current_user.id,
+        ))
+        db.session.commit()
+    except Exception as e:  # noqa: BLE001 — best-effort audit
+        db.session.rollback()
+        logger.error(
+            f'[CHAT] forward audit perdido: original={original.id} '
+            f'new={new_msg.id} user={current_user.id} erro={e}'
+        )
+
     return jsonify({'message': _message_dict(new_msg)}), 201
