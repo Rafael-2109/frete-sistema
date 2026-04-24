@@ -11,6 +11,7 @@
   let drawerEl = null;
   let currentTipo = '';  // '' = todos; 'dm' | 'group' | 'entity' | 'system_dm'
   let currentThreadId = null;
+  const threadCache = new Map();  // id -> thread dict (populado por refreshThreads)
 
   // ==========================================================================
   // Utilitarios
@@ -111,6 +112,8 @@
         list.innerHTML = '<div class="text-muted p-3">Nada aqui ainda.</div>';
         return;
       }
+      // Cache pra openPanel poder exibir titulo/tipo no header
+      data.threads.forEach((t) => threadCache.set(t.id, t));
       list.innerHTML = data.threads.map(renderThreadItem).join('');
       list.querySelectorAll('[data-thread-id]').forEach((el) => {
         el.addEventListener('click', () => openPanel(parseInt(el.dataset.threadId, 10)));
@@ -156,8 +159,28 @@
   function renderPanel(threadId, messages) {
     // messages vem em desc, invertemos pra renderizar cronologicamente
     const msgsHtml = messages.slice().reverse().map(renderMessage).join('');
+    const thread = threadCache.get(threadId);
+    const title = thread && thread.titulo
+      ? thread.titulo
+      : thread && thread.entity_type
+        ? `${thread.entity_type} ${thread.entity_id}`
+        : `Thread #${threadId}`;
+    // Botao "Adicionar membros" so para grupos e entity threads (nao em DM)
+    const canAddMembers = thread && (thread.tipo === 'group' || thread.tipo === 'entity');
+    const addMembersBtn = canAddMembers
+      ? `<button type="button" id="chat-panel-add-member-${threadId}"
+                 class="chat-share-btn" title="Adicionar membro ao grupo">
+           <i class="fas fa-user-plus"></i> Adicionar
+         </button>`
+      : '';
     return `
       <div class="chat-panel">
+        <div class="chat-panel__header">
+          <button type="button" class="chat-panel__back" id="chat-panel-back-${threadId}"
+                  aria-label="Voltar para lista">&larr;</button>
+          <div class="chat-panel__title">${escapeHtml(title)}</div>
+          ${addMembersBtn}
+        </div>
         <div class="chat-panel__messages" id="chat-panel-messages-${threadId}">${msgsHtml}</div>
         <form class="chat-panel__footer" id="chat-send-form-${threadId}">
           <textarea class="chat-panel__textarea" name="content" rows="2"
@@ -248,7 +271,10 @@
         </div>
       `).join('');
       results.querySelectorAll('[data-idx]').forEach((el) => {
-        el.addEventListener('click', () => {
+        // mousedown em vez de click: evita race com blur que esconderia
+        // o dropdown antes do click registrar em alguns browsers.
+        el.addEventListener('mousedown', (ev) => {
+          ev.preventDefault();  // previne blur do input
           const idx = parseInt(el.dataset.idx, 10);
           const u = items[idx];
           if (!u) return;
@@ -259,7 +285,12 @@
           } else {
             excludeIds.add(u.id);
             input.value = '';
-            results.innerHTML = '';
+            // Mantem dropdown aberto no modo multi — refiltra a lista sem
+            // o user recem-adicionado. Melhora UX de "adicionar varios".
+            items = items.filter((x) => x.id !== u.id);
+            activeIdx = -1;
+            renderResults();
+            input.focus();
           }
         });
       });
@@ -271,6 +302,26 @@
       debounceTimer = setTimeout(() => search(input.value.trim()), 200);
     });
     input.addEventListener('focus', () => search(input.value.trim()));
+
+    // Fecha apenas a lista (dropdown) ao clicar fora do picker — sem fechar o modal.
+    // Usa mousedown para disparar ANTES do click bubblar para o overlay.
+    function handleOutsideClick(ev) {
+      const container = input.closest('.chat-user-picker');
+      if (container && !container.contains(ev.target)) {
+        results.innerHTML = '';
+        activeIdx = -1;
+      }
+    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    // Cleanup quando input sai do DOM (modal fechado) — MutationObserver simples
+    const cleanupObserver = new MutationObserver(() => {
+      if (!document.contains(input)) {
+        document.removeEventListener('mousedown', handleOutsideClick);
+        cleanupObserver.disconnect();
+      }
+    });
+    cleanupObserver.observe(document.body, { childList: true, subtree: true });
+
     input.addEventListener('keydown', (e) => {
       if (!items.length) return;
       if (e.key === 'ArrowDown') {
@@ -288,12 +339,15 @@
           opts.onPick(u);
           if (!opts.multi) {
             input.value = u.nome;
+            results.innerHTML = '';
+            activeIdx = -1;
           } else {
             excludeIds.add(u.id);
             input.value = '';
+            items = items.filter((x) => x.id !== u.id);
+            activeIdx = -1;
+            renderResults();
           }
-          results.innerHTML = '';
-          activeIdx = -1;
         }
       } else if (e.key === 'Escape') {
         results.innerHTML = '';
@@ -334,7 +388,9 @@
     document.body.appendChild(modal);
     const close = () => modal.remove();
     modal.querySelector('#chat-newdm-cancel').addEventListener('click', close);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    // Click no overlay NAO fecha o modal — evita que o usuario perca o form
+    // enquanto navega no picker. Fechar: botao Cancelar ou Escape.
+    modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
     createUserPicker({
       inputId: 'chat-newdm-input',
@@ -381,12 +437,17 @@
                  placeholder="Ex: Operacao Atacadao">
         </div>
         <div style="margin-bottom:.5rem">
-          <label style="display:block;margin-bottom:.25rem">Membros:</label>
-          <div id="chat-group-chips" class="chat-chip-list"></div>
-          <div class="chat-user-picker">
+          <label id="chat-group-chips-label" style="display:block;margin-bottom:.5rem;font-size:.9rem;color:var(--text-muted)">Nenhum membro selecionado ainda</label>
+          <div id="chat-group-chips" class="chat-chip-list"
+               style="display:none;flex-wrap:wrap;gap:.35rem;margin-bottom:.75rem;padding:.5rem;border:1px dashed var(--border);border-radius:4px;min-height:2.5rem;"></div>
+          <div class="chat-user-picker" style="position:relative">
+            <label style="display:block;margin-bottom:.25rem">Buscar e adicionar:</label>
             <input id="chat-group-input" type="text" class="form-control"
-                   placeholder="Buscar e adicionar usuarios..." autocomplete="off">
+                   placeholder="Digite nome ou email..." autocomplete="off">
             <div id="chat-group-results" class="chat-user-picker__results"></div>
+          </div>
+          <div style="margin-top:.35rem;font-size:.8rem;color:var(--text-muted)">
+            Dica: clique em varios nomes para adicionar. Esc fecha a lista.
           </div>
         </div>
         <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
@@ -397,16 +458,27 @@
     document.body.appendChild(modal);
     const close = () => modal.remove();
     modal.querySelector('#chat-group-cancel').addEventListener('click', close);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    // Click no overlay NAO fecha o modal — evita que o usuario perca o form
+    // enquanto navega no picker. Fechar: botao Cancelar ou Escape.
+    modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
     const selectedMembers = new Map();  // id -> user
     const chipsContainer = modal.querySelector('#chat-group-chips');
+    const chipsLabel = modal.querySelector('#chat-group-chips-label');
 
     function renderChips() {
+      const n = selectedMembers.size;
+      chipsLabel.textContent = n === 0
+        ? 'Nenhum membro selecionado ainda'
+        : `${n} membro${n > 1 ? 's' : ''} selecionado${n > 1 ? 's' : ''}:`;
+      chipsContainer.style.display = n === 0 ? 'none' : 'flex';
       chipsContainer.innerHTML = [...selectedMembers.values()].map((u) => `
-        <span class="chat-chip" data-id="${u.id}">
+        <span class="chat-chip" data-id="${u.id}"
+              style="background:var(--accent,#3b82f6);color:#fff;padding:.15rem .5rem;border-radius:12px;font-size:.85rem;display:inline-flex;align-items:center;gap:.35rem;">
           ${escapeHtml(u.nome)}
-          <button class="chat-chip__remove" type="button" data-remove="${u.id}" aria-label="Remover">&times;</button>
+          <button class="chat-chip__remove" type="button" data-remove="${u.id}"
+                  aria-label="Remover ${escapeHtml(u.nome)}"
+                  style="background:none;border:0;color:#fff;cursor:pointer;font-weight:bold;padding:0 .2rem;font-size:1rem;line-height:1;">&times;</button>
         </span>
       `).join('');
       chipsContainer.querySelectorAll('[data-remove]').forEach((btn) => {
@@ -428,6 +500,7 @@
         renderChips();
       },
     });
+    renderChips();  // estado inicial ("Nenhum selecionado ainda")
 
     modal.querySelector('#chat-group-create').addEventListener('click', async () => {
       const titulo = modal.querySelector('#chat-group-titulo').value.trim();
@@ -506,6 +579,130 @@
         openForwardModal(parseInt(btn.dataset.fwd, 10));
       });
     });
+
+    // Botao voltar para lista
+    const backBtn = container.querySelector(`#chat-panel-back-${threadId}`);
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        currentThreadId = null;
+        container.style.display = 'none';
+        refreshThreads();
+      });
+    }
+
+    // Botao adicionar membros (grupos/entity)
+    const addBtn = container.querySelector(`#chat-panel-add-member-${threadId}`);
+    if (addBtn) {
+      addBtn.addEventListener('click', () => openAddMemberModal(threadId));
+    }
+  }
+
+  // ==========================================================================
+  // Modal: Adicionar membros a thread existente
+  // ==========================================================================
+  async function openAddMemberModal(threadId) {
+    const existing = document.getElementById('chat-add-member-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'chat-add-member-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:var(--bg);color:var(--text);padding:1.5rem;border-radius:8px;min-width:440px;max-width:90vw;border:1px solid var(--border);">
+        <h4 style="margin-top:0">Adicionar membros</h4>
+        <div style="margin-bottom:.5rem">
+          <label id="chat-addm-chips-label" style="display:block;margin-bottom:.5rem;font-size:.9rem;color:var(--text-muted)">Nenhum usuario selecionado ainda</label>
+          <div id="chat-addm-chips" class="chat-chip-list"
+               style="display:none;flex-wrap:wrap;gap:.35rem;margin-bottom:.75rem;padding:.5rem;border:1px dashed var(--border);border-radius:4px;min-height:2.5rem;"></div>
+          <div class="chat-user-picker" style="position:relative">
+            <label style="display:block;margin-bottom:.25rem">Buscar:</label>
+            <input id="chat-addm-input" type="text" class="form-control"
+                   placeholder="Digite nome ou email..." autocomplete="off">
+            <div id="chat-addm-results" class="chat-user-picker__results"></div>
+          </div>
+          <div style="margin-top:.35rem;font-size:.8rem;color:var(--text-muted)">
+            Dica: clique em varios nomes para adicionar. Esc fecha a lista.
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+          <button id="chat-addm-cancel" type="button" class="btn btn-secondary">Cancelar</button>
+          <button id="chat-addm-confirm" type="button" class="btn btn-primary" disabled>Adicionar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('#chat-addm-cancel').addEventListener('click', close);
+    // Click no overlay NAO fecha o modal — evita que o usuario perca o form
+    // enquanto navega no picker. Fechar: botao Cancelar ou Escape.
+    modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+    const selected = new Map();
+    const chipsContainer = modal.querySelector('#chat-addm-chips');
+    const chipsLabel = modal.querySelector('#chat-addm-chips-label');
+    const confirmBtn = modal.querySelector('#chat-addm-confirm');
+
+    function renderChips() {
+      const n = selected.size;
+      chipsLabel.textContent = n === 0
+        ? 'Nenhum usuario selecionado ainda'
+        : `${n} usuario${n > 1 ? 's' : ''} selecionado${n > 1 ? 's' : ''}:`;
+      chipsContainer.style.display = n === 0 ? 'none' : 'flex';
+      chipsContainer.innerHTML = [...selected.values()].map((u) => `
+        <span class="chat-chip" data-id="${u.id}"
+              style="background:var(--accent,#3b82f6);color:#fff;padding:.15rem .5rem;border-radius:12px;font-size:.85rem;display:inline-flex;align-items:center;gap:.35rem;">
+          ${escapeHtml(u.nome)}
+          <button class="chat-chip__remove" type="button" data-remove="${u.id}"
+                  aria-label="Remover ${escapeHtml(u.nome)}"
+                  style="background:none;border:0;color:#fff;cursor:pointer;font-weight:bold;padding:0 .2rem;font-size:1rem;line-height:1;">&times;</button>
+        </span>
+      `).join('');
+      chipsContainer.querySelectorAll('[data-remove]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = parseInt(btn.dataset.remove, 10);
+          selected.delete(id);
+          picker.removeExclude(id);
+          renderChips();
+        });
+      });
+      confirmBtn.disabled = n === 0;
+    }
+
+    const picker = createUserPicker({
+      inputId: 'chat-addm-input',
+      resultsId: 'chat-addm-results',
+      multi: true,
+      onPick: (user) => {
+        selected.set(user.id, user);
+        renderChips();
+      },
+    });
+    renderChips();
+
+    confirmBtn.addEventListener('click', async () => {
+      confirmBtn.disabled = true;
+      const errors = [];
+      // POST /threads/<id>/members aceita UM user por request — loop pelos selecionados
+      for (const u of selected.values()) {
+        try {
+          await fetchJSON(`/api/chat/threads/${threadId}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: u.id }),
+          });
+        } catch (e) {
+          errors.push(`${u.nome}: ${e.message}`);
+        }
+      }
+      close();
+      if (errors.length) {
+        alert(`Alguns erros:\n${errors.join('\n')}`);
+      } else if (window.toastr) {
+        window.toastr.success(`${selected.size} membro(s) adicionado(s)`);
+      }
+      // Re-abrir painel pra refletir estado
+      openPanel(threadId);
+    });
+    document.getElementById('chat-addm-input').focus();
   }
 
   // ==========================================================================
@@ -540,7 +737,9 @@
 
     const close = () => modal.remove();
     modal.querySelector('#chat-fwd-cancel').addEventListener('click', close);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    // Click no overlay NAO fecha o modal — evita que o usuario perca o form
+    // enquanto navega no picker. Fechar: botao Cancelar ou Escape.
+    modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
     modal.querySelector('#chat-fwd-send').addEventListener('click', async () => {
       const dstThread = parseInt(modal.querySelector('#chat-fwd-thread').value, 10);
@@ -616,7 +815,9 @@
 
     const close = () => modal.remove();
     modal.querySelector('#chat-share-cancel').addEventListener('click', close);
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    // Click no overlay NAO fecha o modal — evita que o usuario perca o form
+    // enquanto navega no picker. Fechar: botao Cancelar ou Escape.
+    modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
     createUserPicker({
       inputId: 'chat-share-input',
@@ -700,5 +901,6 @@
     openForwardModal,
     openNewDmModal,
     openNewGroupModal,
+    openAddMemberModal,
   };
 })();

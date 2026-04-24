@@ -177,6 +177,31 @@
   flex-direction: column;
   height: 100%;
 }
+.chat-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-light);
+}
+.chat-panel__back {
+  background: transparent;
+  border: 0;
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  line-height: 1;
+}
+.chat-panel__back:hover { color: var(--text); }
+.chat-panel__title {
+  flex: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .chat-panel__messages {
   flex: 1;
   overflow-y: auto;
