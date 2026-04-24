@@ -1,6 +1,8 @@
 from app import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm.attributes import flag_modified
 from app.utils.timezone import agora_utc_naive
 
 class Usuario(db.Model, UserMixin):
@@ -38,6 +40,14 @@ class Usuario(db.Model, UserMixin):
     aprovado_por = db.Column(db.String(120), nullable=True)  # Email do admin que aprovou
     ultimo_login = db.Column(db.DateTime, nullable=True)
     observacoes = db.Column(db.Text, nullable=True)  # Observações do admin
+
+    # Preferencias per-user (JSONB). Migration: 2026_04_23_add_usuarios_preferences.
+    # Chaves conhecidas:
+    #   - agent_thinking_display: 'summarized' | 'omitted' (default 'omitted')
+    #     Controla ThinkingConfig.display do Agent SDK (SDK 0.1.65+).
+    #     'summarized' gera resumo do raciocinio (tokens extras + latencia).
+    #     'omitted' pula a etapa de resumo (mesmo resultado, mais rapido, menos tokens).
+    preferences = db.Column(JSONB, nullable=False, default=dict, server_default='{}')
 
     def set_senha(self, senha_plana):
         self.senha_hash = generate_password_hash(senha_plana)
@@ -229,6 +239,26 @@ class Usuario(db.Model, UserMixin):
             cache = get_matriz(self.id)
             self._hora_perm_cache = cache
         return cache.get(modulo, {}).get(acao, False)
+
+    # ====== PREFERENCIAS (JSONB) ======
+
+    def get_preference(self, key: str, default=None):
+        """Le preferencia do JSONB `preferences`. Retorna `default` se ausente/corrompido."""
+        try:
+            prefs = self.preferences or {}
+            return prefs.get(key, default)
+        except Exception:
+            return default
+
+    def set_preference(self, key: str, value) -> None:
+        """Grava preferencia no JSONB. **Nao commita** — caller deve db.session.commit().
+
+        Usa flag_modified pois SQLAlchemy nao detecta mutacao in-place em JSONB.
+        """
+        if self.preferences is None:
+            self.preferences = {}
+        self.preferences[key] = value
+        flag_modified(self, 'preferences')
 
     def __repr__(self):
         return f'<Usuario {self.email}>'

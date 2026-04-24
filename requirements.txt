@@ -67,7 +67,7 @@ zxcvbn>=4.4.28              # Password strength estimation (seguranca module)
 # AI & CLAUDE INTEGRATION
 # ==========================================
 anthropic==0.84.0           # API direta Anthropic (Structured Outputs, top-level cache_control, MCP converters)
-claude-agent-sdk==0.1.64    # Claude Agent SDK oficial (0.1.64: SessionStore protocol [6 metodos: append/load/list_sessions/list_session_summaries/delete/list_subkeys] + transcript mirroring via --session-mirror + materialize_resume_session + 9 helpers async store-backed + conformance harness 13 contratos + CLI 2.1.116. 0.1.63: CLI 2.1.114. 0.1.62: top-level skills= param. 0.1.61: CLI 2.1.112. 0.1.60: list_subagents(), get_subagent_messages(), setting_sources=[] fix, TRACEPARENT propagation, CLI 2.1.111)
+claude-agent-sdk==0.1.66    # Claude Agent SDK oficial (0.1.66: CLI 2.1.119. 0.1.65: ThinkingConfig.display [--thinking-display] override para Opus 4.7 default "omitted" + ServerToolUseBlock/ServerToolResultBlock parser fix [antes: AssistantMessage(content=[]) silencioso] + fold_session_summary/import_session_to_store helpers + bounded retry mirror append + UUID idempotency + CLI 2.1.118. 0.1.64: SessionStore protocol [6 metodos: append/load/list_sessions/list_session_summaries/delete/list_subkeys] + transcript mirroring via --session-mirror + materialize_resume_session + 9 helpers async store-backed + conformance harness 13 contratos + CLI 2.1.116. 0.1.63: CLI 2.1.114. 0.1.62: top-level skills= param. 0.1.61: CLI 2.1.112. 0.1.60: list_subagents(), get_subagent_messages(), setting_sources=[] fix, TRACEPARENT propagation, CLI 2.1.111)
 asyncpg==0.30.0             # Driver async Postgres para SessionStore adapter (paralelo ao psycopg2/SQLAlchemy sync usado no resto do app). Pool separado, lazy per-worker, max_size=3.
 mcp>=1.26.0                 # Model Context Protocol (latest stable)
 pydantic==2.12.5           # Data validation
@@ -172,6 +172,12 @@ tesserocr==2.10.0          # OCR via Tesseract C API (requer tesseract-ocr no si
 # ==========================================
 voyageai>=0.3.0            # SDK Voyage AI (embeddings + reranking) — recomendado pela Anthropic
 pgvector>=0.3.0            # Python bindings para pgvector (busca vetorial no PostgreSQL)
+
+# ==========================================
+# CHAT IN-APP (markdown + sanitizacao HTML)
+# ==========================================
+markdown==3.10.2           # Renderizacao Markdown -> HTML para mensagens de chat
+bleach==6.3.0              # Sanitizacao HTML + linkify seguro (XSS prevention)
 
 # ==========================================
 # APPLICATION MONITORING (APM)

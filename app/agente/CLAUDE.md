@@ -601,6 +601,81 @@ Tabela `claude_session_store` substituiu `session_persistence.py` — SDK 0.1.64
 
 ---
 
+## SDK 0.1.66 (atualizado 2026-04-23) — Thinking display override
+
+**Versao**: `claude-agent-sdk==0.1.66`
+**CLI bundled**: 2.1.119
+
+### Feature adotada: `ThinkingConfig.display` (SDK 0.1.65)
+
+**MECANICA REAL**: `display` controla se o modelo gera texto SUMARIZADO do
+raciocinio. Thinking real (chain-of-thought interno) acontece identico nos dois
+casos; o que muda e o modelo gerar ou nao o resumo legivel:
+
+| Valor | Comportamento | Custo | Qualidade |
+|-------|---------------|-------|-----------|
+| `summarized` | Modelo gera resumo do raciocinio + resposta | Tokens extras + latencia | Mesma da resposta final |
+| `omitted` | Modelo pula o resumo, entrega so resposta | Mais rapido, mais barato | Identica |
+
+**Arquitetura adotada**: toggle per-user persistente.
+
+- **Default global**: `AGENT_THINKING_DISPLAY=omitted` (velocidade + economia).
+- **Override per-user**: `Usuario.preferences['agent_thinking_display']` (JSONB).
+  - Toggle no header do chat (icone cerebro): OFF=omitted, ON=summarized.
+  - Persistido via `POST /agente/api/user-preferences`; lido por `api_chat` e
+    propagado em `_stream_chat_response` -> `_async_stream_sdk_client` ->
+    `client.stream_response` -> `client._build_options`.
+  - Precedencia: user pref > env flag > skip.
+- **Teams bot**: sem toggle (Teams nao processa `StreamEvent('thinking')`).
+  Default `omitted` protege — zero impacto.
+- **Debug panel (admin)**: respeita a preference do proprio admin (opcao b).
+  Sem forcar `summarized` implicito.
+
+**Arquivos criados/modificados**:
+
+- `scripts/migrations/2026_04_23_add_usuarios_preferences.{py,sql}`: adiciona
+  coluna `usuarios.preferences` JSONB default `'{}'`.
+- `app/auth/models.py`: coluna + helpers `get_preference`/`set_preference` (usa
+  `flag_modified` para JSONB mutation).
+- `app/agente/routes/user_preferences.py`: rotas GET/POST com whitelist
+  `_VALID_PREFERENCES` (rejeita chave/valor desconhecido com 400).
+- `app/agente/sdk/client.py`: param `thinking_display` em `stream_response`,
+  `_stream_response_persistent`, `_build_options`. Lido em precedencia
+  user_pref > AGENT_THINKING_DISPLAY env.
+- `app/agente/routes/chat.py:api_chat`: le `current_user.get_preference`
+  e propaga em toda a cadeia de streaming.
+- `app/agente/templates/agente/chat.html`: toggle `#thinking-display-toggle`.
+- `app/static/agente/js/chat.js`: GET preference no DOMContentLoaded (localStorage
+  mirror para render instantaneo), POST on change (rollback UI se backend falhar).
+
+**Rollback**:
+- `AGENT_THINKING_DISPLAY=off` + redeploy: nao passa campo, SDK/CLI decidem default (comportamento pre-0.1.65).
+- User toggle: mudar para OFF, persiste omitted (ou limpar pref via SQL direto).
+
+**Teste local** (2026-04-23):
+- Migration executada (466 usuarios, preferences='{}' default, 0 NULL).
+- `get_preference`/`set_preference` + rollback de transacao validados.
+- Rotas GET/POST registradas em `/agente/api/user-preferences`.
+- 5 arquivos Python compilam sem erro.
+
+### Features 0.1.65 nao adotadas
+
+- **`list_session_summaries()` protocol method** + `fold_session_summary()` helper: sem consumidor. Rota `/api/sessions/summaries` (`routes/sessions.py:251`) usa `AgentSession.summary` do DB nativo (mais rapido que parse JSONL). Adapter `PostgresSessionStore` mantem nao-implementado (linha 265).
+- **`import_session_to_store()` helper**: migration local→store ja executada em Fase B (2026-04-21). Utilidade marginal.
+- **`AdvisorToolResultBlock`**: nao usamos advisor MCP tool.
+
+### Fix grátis via upgrade
+
+- **`ServerToolUseBlock` + `ServerToolResultBlock` parser fix** (#836): antes `AssistantMessage(content=[])` quando mensagem tinha só server-side tool call. `WebSearch`/`WebFetch` na whitelist `allowed_tools` (`settings.py:52-53`) beneficiam — fix automatico via SDK upgrade.
+- **Bounded retry em mirror append + UUID idempotency** (#857): esperamos menos `MirrorErrorMessage` no Sentry. Handler em `client.py:616` permanece como safety net.
+- **`--debug-to-stderr` detection removida do transport**: stderr piping agora depende só de callback registrado. Nossa pipeline (`client.py:1279`) sempre registra callback quando `stderr_queue is not None` → zero impacto. Ainda passamos `extra_args: {"debug-to-stderr": None}` (CLI 2.1.118/2.1.119 aceitam; removal CLI é futuro).
+
+### 0.1.66
+
+Apenas bump CLI 2.1.119 (sem mudancas de API Python).
+
+---
+
 ## Export critico: Teams
 
 `app/teams/` importa de **6 sub-modulos**: permissions, models, SDK client, flags, session_persistence, pending_questions.

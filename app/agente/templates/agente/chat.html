@@ -114,6 +114,21 @@
                     </div>
                 </div>
                 {% endif %}
+
+                <!-- Thinking Display Toggle (SDK 0.1.65+) -->
+                <!-- Default OFF (omitted) = velocidade + economia. Ligar expõe o raciocinio. -->
+                <div class="header-control has-tooltip">
+                    <label class="toggle-switch thinking" title="Mostrar raciocinio">
+                        <input type="checkbox" id="thinking-display-toggle">
+                        <span class="toggle-slider"></span>
+                        <i class="fas fa-brain toggle-icon"></i>
+                    </label>
+                    <div class="control-tooltip">
+                        <strong><i class="fas fa-brain"></i> Mostrar Raciocinio</strong>
+                        <p>Ligado: o agente gera um resumo do raciocinio (mais lento, custo extra em tokens).</p>
+                        <small>Desligado (padrao): raciocinio acontece internamente, resposta final identica, mais rapido.</small>
+                    </div>
+                </div>
             </div>
 
             <div class="chat-header-right">
