@@ -22,7 +22,7 @@ app/chat/
   routes/
     thread_routes.py           # GET/POST /threads + /dm + /group + /members + /entity/<t>/<id>/thread
     message_routes.py          # send / edit / delete / list / reactions / forward
-    stream_routes.py           # SSE /stream + /unread + /search FTS + /read + /ui/drawer
+    stream_routes.py           # /poll (realtime!) + /unread + /search FTS + /read + /ui/drawer + /stream (SSE legado)
     share_routes.py            # /share/screen + /entity/<t>/<id>/message
   services/
     permission_checker.py      # sistemas() + pode_adicionar() + pode_ver_thread()
@@ -60,10 +60,23 @@ scripts/migrations/
 `publisher.publish()` NAO lanca excecao se Redis down. Mensagem persiste
 no DB; client reconnecta e pega via catch-up (`Last-Event-ID` -> query DB).
 
-### R2: SSE usa padrao do agente
-`stream_with_context` + `mimetype='text/event-stream'` + headers
-`X-Accel-Buffering: no`, `Cache-Control: no-cache`, `Connection: keep-alive`.
-Heartbeat cada 25s (Render SSL drop 30-40s). Canal Redis: `chat_sse:{user_id}`.
+### R2: Realtime via POLLING (nao SSE)
+Desde 2026-04-24 (fix/chat-audit-p0), `chat_client.js` usa polling em
+`GET /api/chat/poll` a cada 4s (aba focada) / 15s (visivel sem foco) /
+pausado (document.hidden).
+
+Motivo: SSE mantinha 1 slot de worker gunicorn (`worker_class='gthread'`,
+4 workers × 2 threads = 8 slots) aberto por user permanentemente. Com
+agente web TAMBEM usando SSE, 4 users ativos = 8 slots consumidos =
+sistema trava para requests normais.
+
+Poll endpoint retorna `{new, edited, deleted, unread, last_id, server_ts}`.
+Client mantem `since_id` + `since_ts` para query incremental.
+
+**Rota `/stream` (SSE) permanece registrada** — codigo nao foi removido porque
+o padrao pode ser util se algum futuro endpoint precisar push real. Nenhum
+cliente consome hoje. Publisher Redis (`publisher.publish`) continua sendo
+chamado mas publica em canal sem subscribers (no-op efetivo).
 
 ### R3: PermissionChecker em TODA rota de escrita
 Revalidar mesmo que UI tenha filtrado. Admin bypass via
