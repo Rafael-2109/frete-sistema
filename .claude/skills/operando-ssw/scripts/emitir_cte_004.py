@@ -1044,65 +1044,98 @@ async def emitir_cte(args):
 
                 # ── 6d. RE-CONFIRMAR Frete informado ANTES de Gravar ──
                 #
-                # O SSW pode re-calcular o valor pela TABELA apos avisos
-                # (peso_real_invalido, GNRE, cliente_bloqueado) que
-                # disparam re-simulacoes. Essas re-simulacoes silenciosamente
-                # sobrescrevem o valor digitado em "Frete informado" com o
-                # valor da tabela interna. Para garantir que o frete fornecido
-                # pelo usuario prevalece, re-abrimos o painel "Frete informado"
-                # apos o loop de avisos e antes do GRAVAR, re-preenchendo o
-                # valor e re-confirmando via #lnk_frt_inf_env.
+                # SOMENTE executa se houve re-simulacao durante os avisos
+                # (peso_real_invalido, GNRE, cliente_desbloqueado). Essas
+                # re-simulacoes silenciosamente sobrescrevem o valor digitado
+                # em "Frete informado" com o valor da tabela interna —
+                # apenas nesses casos o re-confirm e necessario.
                 #
-                # Se o painel ja esta fechado (resumo pos-simular), o click em
-                # "Frete informado:" re-abre. Se algum passo falhar, seguimos
-                # com o fluxo original (logamos em avisos_tratados para debug).
-                try:
-                    await popup.get_by_role(
-                        "link", name="Frete informado:"
-                    ).click(timeout=5000)
-                    # Aguarda o painel AJAX renderizar (SSW pode levar 2-3s em
-                    # carga alta — 0.5s era insuficiente e jogava no fallback).
-                    await popup.locator('#id_frt_inf_frete_peso').wait_for(
-                        state='visible', timeout=8000
+                # IMPORTANTE: no fluxo simples (EMAIL_DISPENSADO → RESUMO),
+                # executar o re-confirm QUEBRA o fluxo porque:
+                #   - click nativo falha (link "Frete informado:" nao esta
+                #     mais visivel no resumo) → cai no fallback JS
+                #   - fallback JS encontra #id_frt_inf_frete_peso no DOM
+                #     (oculto) e clica em #lnk_frt_inf_env — isso muda o
+                #     state do SSW para pos-frete, nao-resumo
+                #   - ao clicar "Gravar" depois, o SSW nao retorna CTRC
+                #     (emissao fica "Inconclusiva. SEFAZ enviado")
+                #
+                # Bug historico: commit 7e7ceee7 (2026-04-22) introduziu este
+                # bloco SEM condicional — todas emissoes seguintes (NF 221,
+                # NF 240) falharam com CTRC=null. Fix: condicional + fallback
+                # JS so atua se campo estiver VISIVEL.
+                _precisa_reconfirmar = any(
+                    a in avisos_tratados for a in (
+                        "PESO_INVALIDO_OK",
+                        "GNRE_CONTINUAR",
+                        "CLIENTE_DESBLOQUEADO",
                     )
-                    await popup.locator('#id_frt_inf_frete_peso').fill(frete_peso)
-                    await asyncio.sleep(0.3)
-                    await popup.locator('#lnk_frt_inf_env').click()
-                    await asyncio.sleep(2)
-                    avisos_tratados.append(
-                        f"FRETE_REINFORMADO_PRE_GRAVAR:{frete_peso}"
-                    )
-                    await capturar_screenshot_local(
-                        popup, "07b_frete_reinformado"
-                    )
-                except Exception as e_reinf:
-                    # Fallback: tentar via JS se o click nativo falhou
-                    # (errorpanel interceptando, painel ja fechado, etc).
-                    # `frete_peso` e passado como ARGUMENTO ao evaluate
-                    # (nao interpolado em f-string) para evitar JS injection
-                    # caso o valor contenha aspas ou quebras de linha.
+                ) or any(
+                    isinstance(a, str) and a.startswith("RESIMULAR_")
+                    for a in avisos_tratados
+                )
+
+                if _precisa_reconfirmar:
                     try:
-                        reaplicou = await popup.evaluate(
-                            """(val) => {
-                                const el = document.getElementById('id_frt_inf_frete_peso');
-                                if (!el) return 'sem_campo';
-                                el.value = val;
-                                el.dispatchEvent(new Event('change', {bubbles: true}));
-                                el.dispatchEvent(new Event('blur', {bubbles: true}));
-                                const lnk = document.getElementById('lnk_frt_inf_env');
-                                if (lnk) { lnk.click(); return 'ok_js'; }
-                                return 'sem_lnk';
-                            }""",
-                            frete_peso,
+                        await popup.get_by_role(
+                            "link", name="Frete informado:"
+                        ).click(timeout=5000)
+                        # Aguarda o painel AJAX renderizar (SSW pode levar
+                        # 2-3s em carga alta — 0.5s era insuficiente).
+                        await popup.locator('#id_frt_inf_frete_peso').wait_for(
+                            state='visible', timeout=8000
                         )
+                        await popup.locator('#id_frt_inf_frete_peso').fill(frete_peso)
+                        await asyncio.sleep(0.3)
+                        await popup.locator('#lnk_frt_inf_env').click()
                         await asyncio.sleep(2)
                         avisos_tratados.append(
-                            f"FRETE_REINFORMADO_JS:{reaplicou}:{frete_peso}"
+                            f"FRETE_REINFORMADO_PRE_GRAVAR:{frete_peso}"
                         )
-                    except Exception as e_js:
-                        avisos_tratados.append(
-                            f"FRETE_REINFORMADO_ERRO: native={e_reinf}, js={e_js}"
+                        await capturar_screenshot_local(
+                            popup, "07b_frete_reinformado"
                         )
+                    except Exception as e_reinf:
+                        # Fallback via JS — SOMENTE se painel esta visivel.
+                        # `frete_peso` e passado como ARGUMENTO ao evaluate
+                        # (nao interpolado em f-string) para evitar injection.
+                        try:
+                            reaplicou = await popup.evaluate(
+                                """(val) => {
+                                    const el = document.getElementById('id_frt_inf_frete_peso');
+                                    if (!el) return 'sem_campo';
+                                    // Guard: so prossegue se campo REALMENTE visivel
+                                    // (rect nao-zero + nao oculto via CSS). Sem
+                                    // esse guard, o click em lnk_frt_inf_env com
+                                    // painel oculto muda o state do SSW e
+                                    // quebra o fluxo do resumo.
+                                    const rect = el.getBoundingClientRect();
+                                    const style = window.getComputedStyle(el);
+                                    const visible = rect.width > 0 && rect.height > 0
+                                        && style.display !== 'none'
+                                        && style.visibility !== 'hidden';
+                                    if (!visible) return 'oculto';
+                                    el.value = val;
+                                    el.dispatchEvent(new Event('change', {bubbles: true}));
+                                    el.dispatchEvent(new Event('blur', {bubbles: true}));
+                                    const lnk = document.getElementById('lnk_frt_inf_env');
+                                    if (lnk) { lnk.click(); return 'ok_js'; }
+                                    return 'sem_lnk';
+                                }""",
+                                frete_peso,
+                            )
+                            await asyncio.sleep(2)
+                            avisos_tratados.append(
+                                f"FRETE_REINFORMADO_JS:{reaplicou}:{frete_peso}"
+                            )
+                        except Exception as e_js:
+                            avisos_tratados.append(
+                                f"FRETE_REINFORMADO_ERRO: native={e_reinf}, js={e_js}"
+                            )
+                else:
+                    avisos_tratados.append(
+                        "FRETE_REINFORMADO_SKIPPED:sem_resimulacao"
+                    )
 
                 # ── 7. GRAVAR pre-CTRC (match flexivel + fallback JS) ──
                 await capturar_screenshot_local(popup, "08_pre_gravar")
