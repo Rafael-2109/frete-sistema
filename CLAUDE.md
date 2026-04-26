@@ -1,6 +1,6 @@
 # Sistema de Fretes — Referencia Compartilhada
 
-**Ultima Atualizacao**: 20/04/2026
+**Ultima Atualizacao**: 26/04/2026
 
 > Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
 > Conteudo dev-only (Quick Start, CSS, migrations) esta em `~/.claude/CLAUDE.md`.
@@ -114,12 +114,16 @@ Gotchas rapidos:
 
 | Modulo | Caminhos corretos |
 |--------|-------------------|
-| Carteira de Pedidos | `app/carteira/routes/`, `app/carteira/services/`, `app/carteira/utils/`, `app/templates/carteira/` |
-| Agente Web | `app/agente/` (Claude Agent SDK) — ver `app/agente/CLAUDE.md` |
+| Carteira de Pedidos | `app/carteira/routes/`, `app/carteira/services/`, `app/carteira/utils/`, `app/templates/carteira/` — ver `app/carteira/CLAUDE.md` |
+| Agente Web | `app/agente/` (Claude Agent SDK) — ver `app/agente/CLAUDE.md` (+ `app/agente/services/CLAUDE.md`) |
+| Agente Lojas HORA | `app/agente_lojas/` (Claude Agent SDK isolado, endpoint `/agente-lojas/*`) — ver `app/agente_lojas/CLAUDE.md` |
+| Chat in-app | `app/chat/routes/`, `app/chat/services/`, `app/templates/chat/` — ver `app/chat/CLAUDE.md` |
+| Lojas HORA (Motochefe) | `app/hora/routes/`, `app/hora/services/`, `app/hora/models/`, `app/templates/hora/` — ver `app/hora/CLAUDE.md` |
 | Financeiro | `app/financeiro/routes/`, `app/financeiro/services/`, `app/financeiro/workers/` — ver `app/financeiro/CLAUDE.md` |
 | Odoo | `app/odoo/services/`, `app/odoo/utils/`, `app/odoo/jobs/` — ver `app/odoo/CLAUDE.md` |
 | CarVia | `app/carvia/routes/`, `app/carvia/services/`, `app/templates/carvia/` — ver `app/carvia/CLAUDE.md` |
 | Seguranca | `app/seguranca/routes/`, `app/seguranca/services/`, `app/templates/seguranca/` — ver `app/seguranca/CLAUDE.md` |
+| Teams Bot | `app/teams/` — ver `app/teams/CLAUDE.md` |
 | Fretes | `app/fretes/routes.py`, `app/fretes/services/`, `app/templates/fretes/` |
 | Recebimento | `app/recebimento/routes/`, `app/recebimento/services/`, `app/recebimento/workers/` |
 | Devolucao | `app/devolucao/routes/`, `app/devolucao/services/` — ver `app/devolucao/CLAUDE.md` (dev) ou `app/devolucao/README.md` (narrativa) |
