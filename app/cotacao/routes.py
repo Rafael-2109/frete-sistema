@@ -3690,9 +3690,95 @@ def incluir_em_embarque():
         pedidos_nao_incluidos = []
         
         for pedido in pedidos:
+            eh_carvia = str(pedido.separacao_lote_id or '').startswith('CARVIA-')
+
+            if eh_carvia:
+                # --- CarVia: EmbarqueItem PROVISORIO/REAL ---
+                # CarVia nao tem Separacao; NF vem da VIEW pedidos.nf
+                # (string_agg de CarviaPedidoItem.numero_nf).
+                uf_cv = (pedido.cod_uf or '').strip()
+                cidade_cv = (pedido.nome_cidade or '').strip()
+
+                # Extrair carvia_cotacao_id do prefixo do lote
+                lote_id = str(pedido.separacao_lote_id or '')
+                carvia_cot_id = None
+                try:
+                    if lote_id.startswith('CARVIA-PED-'):
+                        ped_id = int(lote_id.replace('CARVIA-PED-', ''))
+                        from app.carvia.models import CarviaPedido as _CP
+                        _ped = db.session.get(_CP, ped_id)
+                        carvia_cot_id = _ped.cotacao_id if _ped else None
+                    elif lote_id.startswith('CARVIA-'):
+                        carvia_cot_id = int(lote_id.replace('CARVIA-', ''))
+                except (ValueError, TypeError):
+                    pass
+
+                # Calcular volumes e peso cubado das motos da cotacao
+                carvia_volumes = None
+                carvia_peso_cubado = None
+                if carvia_cot_id:
+                    try:
+                        from app.carvia.models import CarviaCotacaoMoto
+                        agg = db.session.query(
+                            db.func.coalesce(db.func.sum(CarviaCotacaoMoto.quantidade), 0),
+                            db.func.coalesce(db.func.sum(CarviaCotacaoMoto.peso_cubado_total), 0),
+                        ).filter_by(cotacao_id=carvia_cot_id).first()
+                        carvia_volumes = int(agg[0]) or None
+                        carvia_peso_cubado = float(agg[1]) or None
+                    except Exception:
+                        pass
+
+                # FIX CR3: Detectar multi-NF (string_agg "NF1, NF2" da VIEW)
+                _nf_raw = (pedido.nf or '').strip()
+                _eh_multi_nf = ',' in _nf_raw
+                _nota_fiscal_unica = _nf_raw if _nf_raw and not _eh_multi_nf else None
+
+                novo_item = EmbarqueItem(
+                    embarque_id=embarque.id,
+                    separacao_lote_id=pedido.separacao_lote_id,
+                    cnpj_cliente=pedido.cnpj_cpf,
+                    cliente=pedido.raz_social_red,
+                    pedido=pedido.num_pedido,
+                    nota_fiscal=_nota_fiscal_unica,
+                    protocolo_agendamento='',
+                    data_agenda=pedido.agendamento.strftime('%d/%m/%Y') if pedido.agendamento else '',
+                    peso=pedido.peso_total or 0,
+                    peso_cubado=carvia_peso_cubado,
+                    valor=pedido.valor_saldo_total or 0,
+                    pallets=0,
+                    uf_destino=uf_cv,
+                    cidade_destino=cidade_cv,
+                    volumes=carvia_volumes,
+                    status='ativo',
+                    provisorio=(_nota_fiscal_unica is None),
+                    carvia_cotacao_id=carvia_cot_id,
+                )
+
+                # CarVia nao usa tabela Nacom (cotacao propria via CarviaCotacao).
+                # Para FRACIONADA Nacom, dados da tabela vao no item; CarVia mantem
+                # campos vazio (DIRETA usa dados do embarque; FRACIONADA CarVia
+                # nao se aplica — CarVia opera com cotacao propria).
+                dados_vazio_cv = TabelaFreteManager.preparar_cotacao_vazia()
+                TabelaFreteManager.atribuir_campos_objeto(novo_item, dados_vazio_cv)
+                novo_item.icms_destino = None
+
+                db.session.add(novo_item)
+
+                if _eh_multi_nf:
+                    print(f"[DEBUG] ✅ CarVia MULTI-NF (incluir_em_embarque): {pedido.num_pedido} → {_nf_raw}")
+                elif _nota_fiscal_unica:
+                    print(f"[DEBUG] ✅ CarVia REAL (incluir_em_embarque): {pedido.num_pedido} NF={_nota_fiscal_unica}")
+                else:
+                    print(f"[DEBUG] ✅ CarVia PROVISORIO (incluir_em_embarque): {pedido.num_pedido}")
+
+                pedidos_adicionados += 1
+                continue
+
+            # --- Nacom: fluxo existente ---
+
             # ✅ Resolve cidade/UF real de entrega (corrige RED que gravava Guarulhos)
             cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
-            
+
             # ✅ CORREÇÃO: Formatar protocolo e data corretamente
             protocolo_formatado = formatar_protocolo(getattr(pedido, 'protocolo', None))
             data_formatada = formatar_data_brasileira(getattr(pedido, 'agendamento', None))
@@ -3727,32 +3813,32 @@ def incluir_em_embarque():
                 uf_destino=uf_correto,
                 cidade_destino=cidade_formatada
             )
-            
+
             # ✅ CORREÇÃO: Para carga fracionada, OBRIGATÓRIO usar dados da tabela DA COTAÇÃO da mesma transportadora
             dados_tabela_encontrados = False
-            
+
             if tipo_carga == 'FRACIONADA':
                 # Busca os dados da tabela calculados na cotação para o CNPJ ESPECÍFICO deste pedido
                 resultados = session.get('resultados', {})
-                
+
                 if 'fracionadas' in resultados and pedido.cnpj_cpf in resultados['fracionadas']:
                     opcoes_cnpj = resultados['fracionadas'][pedido.cnpj_cpf]
-                    
+
                     # ✅ CORREÇÃO: Busca a MELHOR OPÇÃO DA COTAÇÃO para este CNPJ específico da mesma transportadora
                     melhor_opcao_cnpj = None
                     melhor_valor_kg = float('inf')
-                    
+
                     # Encontra a melhor opção (mais barata) deste CNPJ para a transportadora do embarque
                     for opcao in opcoes_cnpj:
                         if opcao.get('transportadora_id') == embarque.transportadora_id:
                             # Calcula valor por kg para comparação
                             peso_total_cnpj = sum(p.peso_total or 0 for p in pedidos if p.cnpj_cpf == pedido.cnpj_cpf)
                             valor_kg = opcao.get('valor_liquido', 0) / peso_total_cnpj if peso_total_cnpj > 0 else float('inf')
-                            
+
                             if valor_kg < melhor_valor_kg:
                                 melhor_valor_kg = valor_kg
                                 melhor_opcao_cnpj = opcao
-                    
+
                     # Se encontrou a melhor opção deste CNPJ para a transportadora
                     if melhor_opcao_cnpj:
                         # Usa os dados da tabela específica da cotação deste CNPJ
@@ -3761,10 +3847,10 @@ def incluir_em_embarque():
                         TabelaFreteManager.atribuir_campos_objeto(novo_item, dados_tabela_temp)
                         # icms_destino é atribuído separadamente (vem de localidades)
                         novo_item.icms_destino = melhor_opcao_cnpj.get('icms_destino', 0)
-                        
+
                         dados_tabela_encontrados = True
                         print(f"[DEBUG] ✅ Usando tabela ESPECÍFICA da cotação para CNPJ {pedido.cnpj_cpf} (Pedido {pedido.num_pedido}): {melhor_opcao_cnpj.get('nome_tabela')} - R${melhor_valor_kg:.2f}/kg")
-                
+
                 # ❌ SE NÃO ENCONTROU DADOS DA COTAÇÃO PARA A MESMA TRANSPORTADORA, NÃO INCLUI O PEDIDO
                 if not dados_tabela_encontrados:
                     motivo = f"Sem dados de cotação para transportadora {embarque.transportadora.razao_social}"
@@ -3779,11 +3865,11 @@ def incluir_em_embarque():
             else:
                 # Para carga direta, sempre considera como encontrado (usa dados do embarque)
                 dados_tabela_encontrados = True
-            
+
             db.session.add(novo_item)
-            
-            # Atualizar Separacao — apenas Nacom (CarVia nao tem Separacao)
-            if pedido.separacao_lote_id and not str(pedido.separacao_lote_id).startswith('CARVIA-'):
+
+            # Atualizar Separacao (Nacom — CarVia ja tratado acima e ja deu continue)
+            if pedido.separacao_lote_id:
                 if embarque.cotacao_id:
                     Separacao.atualizar_cotacao(
                         separacao_lote_id=pedido.separacao_lote_id,
@@ -3795,9 +3881,9 @@ def incluir_em_embarque():
                         separacao_lote_id=pedido.separacao_lote_id,
                         nf_cd=False
                     )
-                
+
                 # O status será calculado automaticamente como COTADO pelo trigger
-            
+
             pedidos_adicionados += 1
 
         # Sinalizar que embarque precisa reimprimir (se ja foi impresso)
@@ -3805,6 +3891,18 @@ def incluir_em_embarque():
             embarque.marcar_alterado_apos_impressao()
 
         db.session.commit()
+
+        # FIX CR2: Auto-expandir provisorios CarVia cuja cotacao ja tem NFs anexadas.
+        # Necessario para que pedidos CarVia adicionados a embarque existente tambem
+        # ganhem itens reais CARVIA-NF-{nf_id} via expandir_provisorio (mesmo padrao
+        # de fechar_frete, fechar_frete_grupo e processar_cotacao_manual).
+        try:
+            from app.carvia.services.documentos.embarque_carvia_service import (
+                EmbarqueCarViaService,
+            )
+            EmbarqueCarViaService.auto_expandir_provisorios(embarque)
+        except Exception as e_cr2:
+            print(f"[DEBUG] ⚠️ CR2 auto-expand (incluir_em_embarque): {e_cr2}")
 
         # ✅ RECÁLCULO DA TABELA PARA CARGA DIRETA — "cidade mais cara"
         # Após incluir novos itens, verifica se alguma cidade nova é mais cara
