@@ -1,0 +1,105 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-key"></i> Conta TagPlus</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary">
+      <i class="fas fa-clipboard-check"></i> Checklist
+    </a>
+    {% if conta and conta.token %}
+      <a href="{{ url_for('hora.tagplus_emissoes_lista') }}" class="btn btn-outline-primary">
+        <i class="fas fa-list-check"></i> Fila de emissões
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+{% if conta %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title">Conta ativa #{{ conta.id }}</h5>
+      <dl class="row mb-0">
+        <dt class="col-sm-3">Client ID</dt><dd class="col-sm-9"><code>{{ conta.client_id }}</code></dd>
+        <dt class="col-sm-3">Ambiente</dt><dd class="col-sm-9">
+          {% if conta.ambiente == 'producao' %}
+            <span class="badge bg-success">Produção</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">Homologação (POST /nfes bloqueado)</span>
+          {% endif %}
+        </dd>
+        <dt class="col-sm-3">Scopes</dt><dd class="col-sm-9"><code>{{ conta.scope_contratado }}</code></dd>
+        <dt class="col-sm-3">Redirect URI</dt><dd class="col-sm-9"><code>{{ conta.redirect_uri or '— configurado no portal —' }}</code></dd>
+        <dt class="col-sm-3">Webhook Secret</dt><dd class="col-sm-9"><code>{{ conta.webhook_secret[:12] }}…{{ conta.webhook_secret[-6:] }}</code> <small class="text-muted">(usar em X-Hub-Secret no TagPlus)</small></dd>
+        <dt class="col-sm-3">Webhook URL</dt><dd class="col-sm-9"><code>{{ url_for('hora.tagplus_webhook', _external=True) }}</code></dd>
+        <dt class="col-sm-3">Token OAuth</dt><dd class="col-sm-9">
+          {% if conta.token %}
+            <span class="badge bg-success">Ativo</span>
+            <small class="text-muted">expira em {{ conta.token.expires_at }}</small>
+          {% else %}
+            <span class="badge bg-danger">Não autorizado</span>
+          {% endif %}
+        </dd>
+      </dl>
+    </div>
+    <div class="card-footer d-flex gap-2">
+      <a href="{{ url_for('hora.tagplus_oauth_iniciar') }}" class="btn btn-primary">
+        <i class="fas fa-sign-in-alt"></i>
+        {% if conta.token %}Re-autorizar OAuth{% else %}Autorizar OAuth{% endif %}
+      </a>
+      {% if conta.token %}
+        <form method="post" action="{{ url_for('hora.tagplus_oauth_refresh') }}" class="d-inline">
+          <button type="submit" class="btn btn-outline-secondary">
+            <i class="fas fa-sync"></i> Forçar refresh
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header">
+    <strong>{% if conta %}Atualizar credenciais{% else %}Configurar primeira conta{% endif %}</strong>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('hora.tagplus_conta_salvar') }}">
+      <div class="mb-3">
+        <label class="form-label">Client ID</label>
+        <input type="text" name="client_id" class="form-control" required
+               value="{{ conta.client_id if conta else '' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Client Secret
+          {% if conta %}<small class="text-muted">(em branco = mantém atual)</small>{% endif %}
+        </label>
+        <input type="password" name="client_secret" class="form-control" autocomplete="off"
+               {% if not conta %}required{% endif %}>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Redirect URI <small class="text-muted">(somente referência — configurado no portal TagPlus)</small></label>
+        <input type="url" name="redirect_uri" class="form-control"
+               value="{{ conta.redirect_uri if conta else (url_for('hora.tagplus_oauth_callback', _external=True)) }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Scopes</label>
+        <input type="text" name="scope_contratado" class="form-control"
+               value="{{ conta.scope_contratado if conta else 'write:nfes read:clientes write:clientes read:produtos' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Ambiente</label>
+        <select name="ambiente" class="form-select">
+          <option value="producao" {% if not conta or conta.ambiente == 'producao' %}selected{% endif %}>Produção</option>
+          <option value="homologacao" {% if conta and conta.ambiente == 'homologacao' %}selected{% endif %}>Homologação (bloqueia POST /nfes)</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-success">
+        <i class="fas fa-save"></i> Salvar
+      </button>
+      {% if conta %}
+        <a href="{{ url_for('hora.tagplus_emissoes_lista') }}" class="btn btn-link">Cancelar</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

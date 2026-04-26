@@ -1,0 +1,55 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-clipboard-check"></i> Checklist TagPlus</h2>
+  <a href="{{ url_for('hora.tagplus_conta') }}" class="btn btn-outline-secondary">
+    <i class="fas fa-key"></i> Conta
+  </a>
+</div>
+
+<div class="alert alert-info">
+  Diagnóstico em tempo real. Antes da primeira emissão, todos os itens devem estar verdes.
+  Detalhes do que precisa ser configurado no TagPlus: <code>app/hora/EMISSAO_NFE_ENGENHARIA.md §8</code>.
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr><th>Item</th><th>Status</th><th>Detalhe</th></tr>
+    </thead>
+    <tbody>
+      {% for c in checks %}
+        <tr>
+          <td><strong>{{ c.item }}</strong></td>
+          <td>
+            {% if c.status == 'ok' %}
+              <span class="badge bg-success">OK</span>
+            {% elif c.status == 'aviso' %}
+              <span class="badge bg-warning text-dark">Aviso</span>
+            {% else %}
+              <span class="badge bg-danger">Erro</span>
+            {% endif %}
+          </td>
+          <td><small class="text-muted">{{ c.mensagem }}</small></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if api_ok %}
+  <div class="alert alert-success mt-3">
+    <i class="fas fa-check"></i> API respondendo. Pode prosseguir com mapeamentos.
+  </div>
+{% endif %}
+
+<div class="mt-3">
+  <a href="{{ url_for('hora.tagplus_produto_map_lista') }}" class="btn btn-outline-primary">
+    <i class="fas fa-link"></i> Mapear produtos
+  </a>
+  <a href="{{ url_for('hora.tagplus_forma_map_lista') }}" class="btn btn-outline-primary">
+    <i class="fas fa-money-bill-wave"></i> Mapear formas de pagamento
+  </a>
+</div>
+{% endblock %}

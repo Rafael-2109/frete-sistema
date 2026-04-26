@@ -26,7 +26,11 @@ EVENTOS_EM_ESTOQUE = (
     'AVARIADA', 'FALTANDO_PECA',
 )
 # Eventos que tiram a moto do estoque
-EVENTOS_FORA_ESTOQUE = ('VENDIDA', 'DEVOLVIDA')
+# - VENDIDA, NF_EMITIDA: moto saiu por venda (com ou sem NFe TagPlus emitida).
+# - DEVOLVIDA: moto saiu por devolucao ao fornecedor.
+# - NF_CANCELADA: NFe foi cancelada na SEFAZ, mas a venda permanece (status
+#   da venda controla retorno ao estoque — cancelar NFe nao reverte venda).
+EVENTOS_FORA_ESTOQUE = ('VENDIDA', 'DEVOLVIDA', 'NF_EMITIDA', 'NF_CANCELADA')
 # Eventos "em limbo" — nao estao no estoque de nenhuma loja
 EVENTOS_EM_TRANSITO = ('EM_TRANSITO',)
 

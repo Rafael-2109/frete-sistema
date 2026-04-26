@@ -17,6 +17,13 @@
         <i class="fas fa-file-pdf"></i> Baixar PDF
       </a>
     {% endif %}
+    {% if current_user.tem_perm_hora('vendas', 'ver') %}
+      <a href="{{ url_for('hora.venda_nfe_status', venda_id=venda.id) }}"
+         class="btn btn-sm btn-outline-primary"
+         title="Emissao NFe via TagPlus">
+        <i class="fas fa-file-invoice-dollar"></i> NFe (TagPlus)
+      </a>
+    {% endif %}
     {% if venda.status == 'CONCLUIDA' %}
       <span class="badge bg-success">Concluida</span>
     {% elif venda.status == 'CANCELADA' %}

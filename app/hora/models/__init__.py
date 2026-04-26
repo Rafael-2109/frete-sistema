@@ -34,6 +34,23 @@ from app.hora.models.transferencia import (
     HoraTransferenciaAuditoria,
 )
 from app.hora.models.avaria import HoraAvaria, HoraAvariaFoto
+from app.hora.models.tagplus import (
+    HoraTagPlusConta,
+    HoraTagPlusToken,
+    HoraTagPlusProdutoMap,
+    HoraTagPlusFormaPagamentoMap,
+    HoraTagPlusNfeEmissao,
+    NFE_STATUS_PENDENTE,
+    NFE_STATUS_EM_ENVIO,
+    NFE_STATUS_ENVIADA_SEFAZ,
+    NFE_STATUS_APROVADA,
+    NFE_STATUS_REJEITADA_LOCAL,
+    NFE_STATUS_REJEITADA_SEFAZ,
+    NFE_STATUS_ERRO_INFRA,
+    NFE_STATUS_CANCELAMENTO_SOLICITADO,
+    NFE_STATUS_CANCELADA,
+    NFE_STATUS_VALIDOS,
+)
 
 __all__ = [
     'HoraLoja',
@@ -65,4 +82,19 @@ __all__ = [
     'HoraTransferenciaAuditoria',
     'HoraAvaria',
     'HoraAvariaFoto',
+    'HoraTagPlusConta',
+    'HoraTagPlusToken',
+    'HoraTagPlusProdutoMap',
+    'HoraTagPlusFormaPagamentoMap',
+    'HoraTagPlusNfeEmissao',
+    'NFE_STATUS_PENDENTE',
+    'NFE_STATUS_EM_ENVIO',
+    'NFE_STATUS_ENVIADA_SEFAZ',
+    'NFE_STATUS_APROVADA',
+    'NFE_STATUS_REJEITADA_LOCAL',
+    'NFE_STATUS_REJEITADA_SEFAZ',
+    'NFE_STATUS_ERRO_INFRA',
+    'NFE_STATUS_CANCELAMENTO_SOLICITADO',
+    'NFE_STATUS_CANCELADA',
+    'NFE_STATUS_VALIDOS',
 ]

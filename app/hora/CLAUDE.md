@@ -187,7 +187,33 @@ Segue o plano aprovado em 2026-04-18:
    - 36 testes em `tests/hora/` cobrindo regras de negócio.
    - Spec: `docs/superpowers/specs/2026-04-22-hora-transferencia-e-avaria-design.md`.
    - Plano: `docs/superpowers/plans/2026-04-22-hora-transferencia-e-avaria.md`.
-7. **Fase 2 futura**: financeiro (títulos a pagar/receber, conciliação, comissões). Todas as tabelas novas com `chassi` FK conforme invariante 2.
+7. **Emissão NFe via TagPlus** (2026-04-26). **Concluído** — fluxo (c) do desenho:
+   - 5 tabelas em `app/hora/models/tagplus.py` (migration `hora_18_tagplus.{py,sql}`):
+     `hora_tagplus_conta` (singleton), `hora_tagplus_token`, `hora_tagplus_produto_map`,
+     `hora_tagplus_forma_pagamento_map`, `hora_tagplus_nfe_emissao`.
+   - Services em `app/hora/services/tagplus/`: `crypto` (Fernet), `oauth_client` (DB-persistente
+     com lock pessimista), `api_client` (HTTP wrapper, refresh em 401), `payload_builder`
+     (HoraVenda → JSON TagPlus), `emissor_nfe` (enfileirar + processar com retry),
+     `webhook_handler` (nfe_aprovada/rejeitada/cancelada + race retry +10s),
+     `cancelador_nfe` (PATCH /nfes/cancelar com justificativa ≥15), `cce_service`
+     (POST /nfes/gerar_cce).
+   - Workers em `app/hora/workers/`: `emissao_nfe_worker` (RQ jobs `processar_emissao` e
+     `processar_webhook`), `reconciliacao_worker` (job 30min para webhooks perdidos).
+     Worker dedicado: `worker_hora_nfe.py` na raiz, queue `hora_nfe`.
+   - 18 rotas em `app/hora/routes/tagplus_routes.py`: configuração (conta + OAuth +
+     callback + refresh + checklist), mapeamentos (produtos, formas de pagamento),
+     webhook público, fila de emissões e operações por venda
+     (`/vendas/<id>/nfe/{emitir,cancelar,cce,danfe.pdf,xml}`).
+   - Templates em `app/templates/hora/tagplus/`: `conta_form`, `oauth_result`, `checklist`,
+     `produto_map`, `forma_pag_map`, `emissoes_lista`, `nfe_status`.
+   - Permissão: módulo `tagplus` adicionado em `MODULOS_HORA`.
+   - 2 novos tipos de evento `HoraMotoEvento.tipo`: `NF_EMITIDA`, `NF_CANCELADA`.
+   - Env var: `HORA_TAGPLUS_ENC_KEY` (Fernet), `REDIS_URL` (RQ).
+   - Spec: `app/hora/EMISSAO_NFE_ENGENHARIA.md`.
+   - Pendências v2 (não bloqueantes): NFC-e, contingência, séries por loja,
+     endereço de retirada por loja, MISTO como forma de pagamento.
+
+8. **Fase 2 futura**: financeiro (títulos a pagar/receber, conciliação, comissões). Todas as tabelas novas com `chassi` FK conforme invariante 2.
 
 ---
 

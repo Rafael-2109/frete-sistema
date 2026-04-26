@@ -26,6 +26,7 @@ from . import (  # noqa: E402, F401
     transferencias,
     avarias,
     vendas,
+    tagplus_routes,
 )
 
 

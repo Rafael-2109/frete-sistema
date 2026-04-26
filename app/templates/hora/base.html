@@ -58,6 +58,10 @@
       <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.avaria') %}active{% endif %}"
          href="{{ url_for('hora.avarias_lista') }}"><i class="fas fa-exclamation-triangle"></i> Avarias</a>
     {% endif %}
+    {% if current_user.tem_perm_hora('tagplus', 'ver') %}
+      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.tagplus') %}active{% endif %}"
+         href="{{ url_for('hora.tagplus_emissoes_lista') }}"><i class="fas fa-file-invoice-dollar"></i> NF-e (TagPlus)</a>
+    {% endif %}
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}

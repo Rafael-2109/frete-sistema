@@ -227,6 +227,25 @@
                     <i class="fas fa-puzzle-piece"></i> Peças faltando
                 </a></li>
                 {% endif %}
+                {% if current_user.tem_perm_hora('tagplus', 'ver') %}
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header"><i class="fas fa-file-invoice-dollar"></i> NF-e (TagPlus)</h6></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_emissoes_lista') }}">
+                    <i class="fas fa-list-check"></i> Fila de emissões
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_conta') }}">
+                    <i class="fas fa-key"></i> Conta TagPlus
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_checklist') }}">
+                    <i class="fas fa-clipboard-check"></i> Checklist de configuração
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_produto_map_lista') }}">
+                    <i class="fas fa-link"></i> Mapeamento de produtos
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_forma_map_lista') }}">
+                    <i class="fas fa-money-bill-wave"></i> Formas de pagamento
+                </a></li>
+                {% endif %}
             </ul>
           </li>
           {% endif %}

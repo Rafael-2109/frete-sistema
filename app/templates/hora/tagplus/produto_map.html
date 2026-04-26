@@ -1,0 +1,63 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-link"></i> Mapeamento Modelo HORA → Produto TagPlus</h2>
+  <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary">
+    <i class="fas fa-clipboard-check"></i> Checklist
+  </a>
+</div>
+
+<div class="alert alert-info">
+  Cada modelo de moto da HORA precisa apontar para o ID do produto correspondente no TagPlus.
+  O ID é o <code>tagplus_produto_id</code> retornado por <code>GET /produtos</code>.
+  CFOP padrão: <code>5.102</code> (intra) — o builder ajusta para <code>6.102</code> quando UF do
+  cliente difere da UF do emitente.
+</div>
+
+<form method="post" action="{{ url_for('hora.tagplus_produto_map_salvar') }}">
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th>Modelo HORA</th>
+          <th>tagplus_produto_id</th>
+          <th>tagplus_codigo (opcional)</th>
+          <th>CFOP padrão</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>
+              <strong>{{ r.modelo.nome_modelo }}</strong>
+              {% if not r.modelo.ativo %}<span class="badge bg-secondary ms-1">inativo</span>{% endif %}
+              <div class="small text-muted">id={{ r.modelo.id }}</div>
+            </td>
+            <td>
+              <input type="number" min="1" class="form-control form-control-sm"
+                     name="modelo_{{ r.modelo.id }}_tagplus_id"
+                     value="{{ r.map.tagplus_produto_id if r.map else '' }}">
+            </td>
+            <td>
+              <input type="text" class="form-control form-control-sm"
+                     name="modelo_{{ r.modelo.id }}_codigo"
+                     value="{{ r.map.tagplus_codigo if r.map else '' }}">
+            </td>
+            <td>
+              <input type="text" maxlength="5" class="form-control form-control-sm"
+                     name="modelo_{{ r.modelo.id }}_cfop" pattern="[0-9]\.[0-9]{3}"
+                     placeholder="5.102"
+                     value="{{ r.map.cfop_default if r.map else '5.102' }}">
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <button type="submit" class="btn btn-success">
+    <i class="fas fa-save"></i> Salvar mapeamentos
+  </button>
+  <small class="text-muted ms-2">Para remover um mapeamento, deixe o campo <code>tagplus_produto_id</code> vazio.</small>
+</form>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-money-bill-wave"></i> Forma de pagamento HORA → TagPlus</h2>
+  <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary">
+    <i class="fas fa-clipboard-check"></i> Checklist
+  </a>
+</div>
+
+<div class="alert alert-info">
+  O TagPlus identifica forma de pagamento pelo <strong>ID inteiro</strong> de cada forma cadastrada
+  no portal. Buscar via <code>GET /formas_pagamento</code> no TagPlus e preencher abaixo.
+  <strong>MISTO não é suportado na v1</strong> (bloqueado pelo PayloadBuilder).
+</div>
+
+<form method="post" action="{{ url_for('hora.tagplus_forma_map_salvar') }}">
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Forma HORA</th>
+          <th>ID TagPlus (int)</th>
+          <th>Descrição (opcional)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td><code>{{ r.forma }}</code></td>
+            <td>
+              <input type="number" min="1" class="form-control form-control-sm"
+                     name="{{ r.forma }}_tagplus_id"
+                     value="{{ r.map.tagplus_forma_id if r.map else '' }}">
+            </td>
+            <td>
+              <input type="text" class="form-control form-control-sm"
+                     name="{{ r.forma }}_descricao"
+                     value="{{ r.map.descricao if r.map else '' }}">
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <button type="submit" class="btn btn-success">
+    <i class="fas fa-save"></i> Salvar
+  </button>
+</form>
+{% endblock %}
