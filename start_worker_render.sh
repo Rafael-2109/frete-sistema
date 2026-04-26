@@ -205,7 +205,8 @@ echo "   Workers paralelos: $WORKER_COUNT"
 echo "   Timeout padrão: 30 minutos"
 echo "   Worker 1: todas as filas (impostos exclusivo)"
 echo "   Worker 2+: filas gerais (sem impostos)"
-echo "   Filas: atacadao, odoo_lancamento, impostos, recebimento, high, default"
+echo "   Filas (ordem = prioridade): high, hora_nfe, atacadao, odoo_lancamento, impostos, recebimento, default"
+echo "   ↑ hora_nfe alta prioridade: operador aguarda emissao NFe interativamente"
 echo ""
 
 # Iniciar worker
@@ -218,7 +219,7 @@ echo ""
 echo "⚡ Usando worker_render.py otimizado para evitar importações circulares"
 exec python worker_render.py \
     --workers $WORKER_COUNT \
-    --queues atacadao,odoo_lancamento,impostos,recebimento,high,default \
+    --queues high,hora_nfe,atacadao,odoo_lancamento,impostos,recebimento,default \
     --verbose
 
 
