@@ -1279,10 +1279,11 @@ def register_conciliacao_routes(bp):
     # Custo Fiscal — Criar CE a partir de linha fiscal (GNRE/SEFAZ)
     # ===================================================================
 
-    _TIPOS_CUSTO_VALIDOS = [
-        'DIARIA', 'REENTREGA', 'ARMAZENAGEM', 'DEVOLUCAO', 'AVARIA',
-        'PEDAGIO_EXTRA', 'TAXA_DESCARGA', 'OUTROS',
-    ]
+    # SOT: model `CarviaCustoEntrega.TIPOS_CUSTO` (inclui GNRE_ICMS).
+    # Lista local anterior estava fora de sync com o model — provocava 400
+    # ao usuario salvar GNRE_ICMS no modal de Custo Fiscal.
+    from app.carvia.models import CarviaCustoEntrega as _CCE_FOR_TIPOS
+    _TIPOS_CUSTO_VALIDOS = list(_CCE_FOR_TIPOS.TIPOS_CUSTO)
 
     @bp.route('/api/conciliacao/ctes-para-custo')  # type: ignore
     @login_required

@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
 
 TIPOS_CUSTO = [
     'DIARIA', 'REENTREGA', 'ARMAZENAGEM', 'DEVOLUCAO', 'AVARIA',
-    'PEDAGIO_EXTRA', 'TAXA_DESCARGA', 'OUTROS',
+    'PEDAGIO_EXTRA', 'TAXA_DESCARGA',
+    # 2026-04-26: alinhado com CarviaCustoEntrega.TIPOS_CUSTO (D9)
+    'GNRE_ICMS',
+    'OUTROS',
 ]
 STATUS_CUSTO = ['PENDENTE', 'VINCULADO_FT', 'PAGO', 'CANCELADO']
 
@@ -43,6 +46,9 @@ TIPO_CUSTO_MOTIVO_SSW = {
     'ARMAZENAGEM': 'R',
     'AVARIA': 'C',
     'PEDAGIO_EXTRA': 'C',
+    # GNRE_ICMS nao gera CTe complementar SSW (eh imposto pago pelo embarcador,
+    # nao reembolsavel). Mapeado como 'C' por seguranca caso fluxo seja chamado.
+    'GNRE_ICMS': 'C',
     'OUTROS': 'C',
 }
 

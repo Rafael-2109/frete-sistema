@@ -23,21 +23,19 @@
                     </div>
                 </div>
 
-                {# Campos do Custo Entrega #}
+                {# Campos do Custo Entrega — tipo eh sempre GNRE_ICMS neste modal
+                   (o botao que abre este modal so aparece em linhas detectadas
+                   como GNRE/SEFAZ/Secretaria — ver conciliacao.js btn-criar-custo-fiscal).
+                   2026-04-26: SELECT removido. Era incompativel com o backend
+                   (validacao recusava GNRE_ICMS) e oferecer outras opcoes
+                   contradizia o proposito do modal. #}
                 <div class="row g-2 mb-3">
                     <div class="col-md-4">
                         <label class="form-label small fw-semibold">Tipo de Custo</label>
-                        <select id="custoFiscalTipoCusto" class="form-select form-select-sm">
-                            <option value="GNRE_ICMS">GNRE / ICMS Antecipado</option>
-                            <option value="OUTROS" selected>OUTROS</option>
-                            <option value="DIARIA">DIARIA</option>
-                            <option value="REENTREGA">REENTREGA</option>
-                            <option value="ARMAZENAGEM">ARMAZENAGEM</option>
-                            <option value="DEVOLUCAO">DEVOLUCAO</option>
-                            <option value="AVARIA">AVARIA</option>
-                            <option value="PEDAGIO_EXTRA">PEDAGIO_EXTRA</option>
-                            <option value="TAXA_DESCARGA">TAXA_DESCARGA</option>
-                        </select>
+                        <div class="form-control form-control-sm bg-light text-muted">
+                            <i class="fas fa-landmark text-warning me-1"></i>
+                            GNRE / ICMS Antecipado
+                        </div>
                     </div>
                     <div class="col-md-8">
                         <label class="form-label small fw-semibold">Descricao</label>
@@ -143,17 +141,9 @@
         document.getElementById('custoFiscalLinhaDesc').textContent = params.descricao || '-';
         document.getElementById('custoFiscalLinhaValor').textContent = fmtBRL(params.valor);
 
-        // Pre-preencher campos
+        // Pre-preencher descricao. Tipo de custo e fixo em GNRE_ICMS (ver
+        // payload no submit) — modal so abre para linhas fiscais GNRE/SEFAZ.
         document.getElementById('custoFiscalDescricao').value = params.descricao || '';
-        // D9 (2026-04-19): pre-selecao automatica de GNRE_ICMS quando
-        // descricao menciona GNRE / SEFAZ / Secretaria de Fazenda.
-        const desc = (params.descricao || '').toUpperCase();
-        const padraoFiscal = /GNRE|SEFAZ|SEC\.?\s*FAZENDA|SECRETARIA|FAZENDA/i;
-        if (padraoFiscal.test(desc)) {
-            document.getElementById('custoFiscalTipoCusto').value = 'GNRE_ICMS';
-        } else {
-            document.getElementById('custoFiscalTipoCusto').value = 'OUTROS';
-        }
 
         // Reset estado
         document.getElementById('custoFiscalCteSelecionado').classList.add('d-none');
@@ -344,7 +334,8 @@
         const payload = {
             extrato_linha_id: linhaParams.linhaId,
             operacao_id: cteSelecionado.id,
-            tipo_custo: document.getElementById('custoFiscalTipoCusto').value,
+            // Tipo fixo: este modal e exclusivo para GNRE/ICMS Antecipado.
+            tipo_custo: 'GNRE_ICMS',
             descricao: document.getElementById('custoFiscalDescricao').value.trim(),
         };
 

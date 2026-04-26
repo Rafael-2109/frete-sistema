@@ -507,7 +507,7 @@
           <td class="sticky-col-2">
             {% if e.origem == 'CARVIA' and (e._carvia_cnpj_emitente or e._carvia_cnpj_destinatario) %}
               <small class="text-muted">
-                <span class="badge bg-info text-dark" title="Emitente (remetente da carga)">Emit.</span>
+                <span class="badge bg-info" title="Emitente (remetente da carga)">Emit.</span>
                 {{ e._carvia_cnpj_emitente | cnpj_br if e._carvia_cnpj_emitente else '—' }}
               </small><br>
               <small class="text-muted">{{ e._carvia_nome_emitente or '—' }}</small><br>
@@ -527,7 +527,7 @@
             {% if e.incoterm or e.modalidade %}
               <small class="text-muted">{{ e.incoterm or '' }}{% if e.incoterm and e.modalidade %} - {% endif %}{{ e.modalidade or '' }}</small><br>
             {% endif %}
-            {{ e.transportadora }}<br>
+            <span title="{{ e.transportadora }}">{{ e.transportadora|truncate(50, True) if e.transportadora else '' }}</span><br>
             <small class="text-muted">{{ e.uf }} - {{ e.municipio }}</small>
           </td>
           <td>

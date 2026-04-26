@@ -62,8 +62,11 @@ no DB; client reconnecta e pega via catch-up (`Last-Event-ID` -> query DB).
 
 ### R2: Realtime via POLLING (nao SSE)
 Desde 2026-04-24 (fix/chat-audit-p0), `chat_client.js` usa polling em
-`GET /api/chat/poll` a cada 4s (aba focada) / 15s (visivel sem foco) /
-pausado (document.hidden).
+`GET /api/chat/poll` a cada 12s (aba focada) / 45s (visivel sem foco) /
+pausado (document.hidden). Cadencia original 4s/15s gerava percepcao de
+travamento em telas pesadas (relatado 2026-04-26) — relaxada para 12s/45s
+e cada pulse executa dentro de `requestIdleCallback` (timeout 2s) para
+nao competir com paint/scroll.
 
 Motivo: SSE mantinha 1 slot de worker gunicorn (`worker_class='gthread'`,
 4 workers × 2 threads = 8 slots) aberto por user permanentemente. Com

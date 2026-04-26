@@ -6,8 +6,11 @@
  * gunicorn aberto por user permanentemente (C5 auditoria P0). Com polling,
  * slot e liberado entre pulses (~50ms ocupado a cada 4s).
  *
- * Pulse: 4s quando aba focada; 30s quando visivel sem foco; pausado quando
- * document.hidden (nao consome nem slot nem bateria em background).
+ * Pulse: 12s quando aba focada; 45s quando visivel sem foco; pausado quando
+ * document.hidden. Pulse e agendado dentro de requestIdleCallback (timeout 2s)
+ * para nao competir com paint/scroll em paginas pesadas (monitoramento etc).
+ * Cadencia anterior (4s/15s) gerava percepcao de travamento — relaxado em
+ * 2026-04-26.
  *
  * API publica (contrato mantido — chat_ui.js nao muda):
  *   window.ChatClient.onEvent(cb)   -- registra callback (eventType, data)
@@ -18,9 +21,17 @@
 (function () {
   'use strict';
 
-  const POLL_INTERVAL_FOCUSED_MS = 4000;   // aba com foco: 4s
-  const POLL_INTERVAL_VISIBLE_MS = 15000;  // aba visivel sem foco: 15s
+  // 2026-04-26: cadencia relaxada + requestIdleCallback (feedback do usuario:
+  // pulse anterior de 4s travava UI). Pulse agora roda em janela de idle do
+  // browser, nao competindo com paint/scroll.
+  const POLL_INTERVAL_FOCUSED_MS = 12000;  // aba com foco: 12s
+  const POLL_INTERVAL_VISIBLE_MS = 45000;  // aba visivel sem foco: 45s
   // document.hidden = pausa total.
+
+  // Fallback para browsers sem requestIdleCallback (Safari < 16.4).
+  const ric = window.requestIdleCallback
+    ? (cb) => window.requestIdleCallback(cb, { timeout: 2000 })
+    : (cb) => setTimeout(cb, 0);
 
   const BADGES = {
     system: document.getElementById('chat-badge-system'),
@@ -100,9 +111,14 @@
     if (State.timer) { clearTimeout(State.timer); State.timer = null; }
     if (document.hidden) return;
     const interval = document.hasFocus() ? POLL_INTERVAL_FOCUSED_MS : POLL_INTERVAL_VISIBLE_MS;
-    State.timer = setTimeout(async () => {
-      await pollOnce();
-      scheduleNext();
+    State.timer = setTimeout(() => {
+      // Espera o browser estar ocioso para nao competir com paint/scroll.
+      // Timeout 2s em ric: garante que nao trave indefinidamente em paginas
+      // CPU-bound (ex.: tabelas grandes do monitoramento).
+      ric(async () => {
+        await pollOnce();
+        scheduleNext();
+      });
     }, interval);
   }
 
