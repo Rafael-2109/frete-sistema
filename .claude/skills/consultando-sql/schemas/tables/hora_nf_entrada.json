@@ -94,6 +94,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_nf_entrada_pedido_id",
+      "columns": [
+        "pedido_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_nf_entrada_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
@@ -104,13 +111,6 @@
       "name": "ix_hora_nf_entrada_loja_destino_id",
       "columns": [
         "loja_destino_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_nf_entrada_pedido_id",
-      "columns": [
-        "pedido_id"
       ],
       "unique": false
     },

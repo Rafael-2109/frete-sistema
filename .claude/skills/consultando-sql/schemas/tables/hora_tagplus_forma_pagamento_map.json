@@ -1,0 +1,36 @@
+{
+  "name": "hora_tagplus_forma_pagamento_map",
+  "description": "Tabela hora_tagplus_forma_pagamento_map",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "forma_pagamento_hora",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "tagplus_forma_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ]
+}

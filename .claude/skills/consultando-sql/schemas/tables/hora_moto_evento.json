@@ -56,16 +56,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_moto_evento_timestamp",
+      "name": "ix_hora_moto_evento_chassi_timestamp",
       "columns": [
+        "numero_chassi",
         "timestamp"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_moto_evento_chassi_timestamp",
+      "name": "ix_hora_moto_evento_timestamp",
       "columns": [
-        "numero_chassi",
         "timestamp"
       ],
       "unique": false

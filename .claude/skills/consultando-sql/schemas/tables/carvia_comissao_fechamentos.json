@@ -106,18 +106,18 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_comissao_fechamentos_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_comissao_fechamentos_despesa_id",
       "columns": [
         "despesa_id"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_carvia_comissao_fechamentos_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
     }
   ]
 }

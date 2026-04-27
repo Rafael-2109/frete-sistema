@@ -93,6 +93,14 @@
   ],
   "indices": [
     {
+      "name": "idx_chat_messages_thread_time",
+      "columns": [
+        "thread_id",
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_chat_messages_content_tsv",
       "columns": [
         "content_tsv"
@@ -103,14 +111,6 @@
       "name": "idx_chat_messages_sender_time",
       "columns": [
         "sender_user_id",
-        "criado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_chat_messages_thread_time",
-      "columns": [
-        "thread_id",
         "criado_em"
       ],
       "unique": false

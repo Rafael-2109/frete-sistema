@@ -155,16 +155,38 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
+      "name": "ix_pallet_nf_solucoes_odoo_status",
       "columns": [
-        "numero_nf_solucao"
+        "odoo_status"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
+      "name": "ix_pallet_nf_solucoes_chave_nfe_solucao",
       "columns": [
-        "odoo_picking_id"
+        "chave_nfe_solucao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_solucao_tipo_vinculacao",
+      "columns": [
+        "tipo",
+        "vinculacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_numero_nf_solucao",
+      "columns": [
+        "numero_nf_solucao"
       ],
       "unique": false
     },
@@ -176,9 +198,16 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_odoo_status",
+      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
       "columns": [
-        "odoo_status"
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
+      "columns": [
+        "odoo_picking_id"
       ],
       "unique": false
     },
@@ -195,35 +224,6 @@
       "columns": [
         "cnpj_emitente",
         "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_chave_nfe_solucao",
-      "columns": [
-        "chave_nfe_solucao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nf_solucao_tipo_vinculacao",
-      "columns": [
-        "tipo",
-        "vinculacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_tipo",
-      "columns": [
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pallet_nf_solucoes_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
       ],
       "unique": false
     }

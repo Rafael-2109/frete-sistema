@@ -10,8 +10,7 @@
     {
       "name": "loja_id",
       "type": "integer",
-      "description": "FK → hora_loja.id",
-      "nullable": false
+      "description": "FK → hora_loja.id"
     },
     {
       "name": "cpf_cliente",
@@ -39,7 +38,8 @@
     {
       "name": "forma_pagamento",
       "type": "varchar(20)",
-      "nullable": false
+      "nullable": false,
+      "default": "NAO_INFORMADO"
     },
     {
       "name": "valor_total",
@@ -57,6 +57,22 @@
     {
       "name": "nf_saida_emitida_em",
       "type": "timestamp"
+    },
+    {
+      "name": "arquivo_pdf_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "parser_usado",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "parseada_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cnpj_emitente",
+      "type": "varchar(20)"
     },
     {
       "name": "status",
@@ -92,9 +108,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_nf_saida_numero",
+      "name": "ix_hora_venda_cnpj_emitente",
       "columns": [
-        "nf_saida_numero"
+        "cnpj_emitente"
       ],
       "unique": false
     },
@@ -102,6 +118,13 @@
       "name": "ix_hora_venda_loja_id",
       "columns": [
         "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -120,9 +143,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_status",
+      "name": "ix_hora_venda_nf_saida_numero",
       "columns": [
-        "status"
+        "nf_saida_numero"
       ],
       "unique": false
     }

@@ -1,6 +1,6 @@
 {
-  "name": "hora_tabela_preco",
-  "description": "Tabela hora_tabela_preco",
+  "name": "hora_tagplus_produto_map",
+  "description": "Tabela hora_tagplus_produto_map",
   "fields": [
     {
       "name": "id",
@@ -14,31 +14,30 @@
       "nullable": false
     },
     {
-      "name": "preco_tabela",
-      "type": "numeric(15,2)",
+      "name": "tagplus_produto_id",
+      "type": "integer",
       "nullable": false
     },
     {
-      "name": "vigencia_inicio",
-      "type": "date",
-      "nullable": false
+      "name": "tagplus_codigo",
+      "type": "varchar(50)"
     },
     {
-      "name": "vigencia_fim",
-      "type": "date"
-    },
-    {
-      "name": "ativo",
-      "type": "boolean",
-      "description": "True = registro ativo",
+      "name": "cfop_default",
+      "type": "varchar(5)",
       "nullable": false,
-      "default": true
+      "default": "5.102"
     },
     {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
       "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
     }
   ],
   "foreign_keys": [
@@ -49,19 +48,11 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_tabela_preco_modelo_id",
+      "name": "ix_hora_tagplus_produto_map_modelo_id",
       "columns": [
         "modelo_id"
       ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_tabela_preco_vigencia",
-      "columns": [
-        "modelo_id",
-        "vigencia_inicio"
-      ],
-      "unique": false
+      "unique": true
     }
   ]
 }

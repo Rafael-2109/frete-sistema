@@ -1,0 +1,64 @@
+{
+  "name": "hora_tagplus_conta",
+  "description": "Tabela hora_tagplus_conta",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "client_id",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "client_secret_encrypted",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "webhook_secret",
+      "type": "varchar(64)",
+      "nullable": false
+    },
+    {
+      "name": "oauth_state_last",
+      "type": "varchar(64)"
+    },
+    {
+      "name": "scope_contratado",
+      "type": "varchar(255)",
+      "nullable": false,
+      "default": "write:nfes read:clientes write:clientes read:produtos"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "ambiente",
+      "type": "varchar(15)",
+      "nullable": false,
+      "default": "producao"
+    },
+    {
+      "name": "redirect_uri",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ]
+}

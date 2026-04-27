@@ -1,0 +1,150 @@
+{
+  "name": "hora_tagplus_nfe_emissao",
+  "description": "Tabela hora_tagplus_nfe_emissao",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "venda_id",
+      "type": "integer",
+      "description": "FK → hora_venda.id",
+      "nullable": false
+    },
+    {
+      "name": "conta_id",
+      "type": "integer",
+      "description": "FK → hora_tagplus_conta.id",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "tagplus_nfe_id",
+      "type": "integer"
+    },
+    {
+      "name": "numero_nfe",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "serie_nfe",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "chave_44",
+      "type": "varchar(44)"
+    },
+    {
+      "name": "protocolo_aprovacao",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "payload_enviado",
+      "type": "json"
+    },
+    {
+      "name": "response_inicial",
+      "type": "json"
+    },
+    {
+      "name": "response_webhook",
+      "type": "json"
+    },
+    {
+      "name": "error_code",
+      "type": "varchar(60)"
+    },
+    {
+      "name": "error_message",
+      "type": "text"
+    },
+    {
+      "name": "tentativas",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "enviado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelamento_justificativa",
+      "type": "text"
+    },
+    {
+      "name": "cancelamento_solicitado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cancelamento_solicitado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "venda_id",
+      "references": "hora_venda.id"
+    },
+    {
+      "column": "conta_id",
+      "references": "hora_tagplus_conta.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_tagplus_nfe_emissao_venda_id",
+      "columns": [
+        "venda_id"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_hora_tagplus_nfe_emissao_tagplus_nfe_id",
+      "columns": [
+        "tagplus_nfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_nfe_emissao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_nfe_emissao_conta_id",
+      "columns": [
+        "conta_id"
+      ],
+      "unique": false
+    }
+  ]
+}

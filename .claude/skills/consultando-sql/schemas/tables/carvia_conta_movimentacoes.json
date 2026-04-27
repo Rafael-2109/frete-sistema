@@ -45,19 +45,19 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_mov_criado_em",
-      "columns": [
-        "criado_em"
-      ],
-      "unique": false
-    },
-    {
       "name": "uq_carvia_mov_tipo_doc_parcial",
       "columns": [
         "tipo_doc",
         "doc_id"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_carvia_mov_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
     }
   ]
 }

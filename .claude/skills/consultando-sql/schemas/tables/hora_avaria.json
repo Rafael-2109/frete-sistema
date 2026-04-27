@@ -65,16 +65,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_avaria_status",
+      "name": "ix_hora_avaria_criado_em",
       "columns": [
-        "status"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_numero_chassi",
+      "name": "ix_hora_avaria_status",
       "columns": [
-        "numero_chassi"
+        "status"
       ],
       "unique": false
     },
@@ -86,9 +86,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_criado_em",
+      "name": "ix_hora_avaria_numero_chassi",
       "columns": [
-        "criado_em"
+        "numero_chassi"
       ],
       "unique": false
     }
