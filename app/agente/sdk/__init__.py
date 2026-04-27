@@ -20,6 +20,11 @@ from .client_pool import (
     shutdown_pool,
     PooledClient,
 )
+from .shutdown_state import (
+    is_interpreter_shutting_down,
+    is_shutdown_error,
+    register_shutdown_handler,
+)
 
 __all__ = [
     'AgentClient',
@@ -34,4 +39,8 @@ __all__ = [
     'get_pool_status',
     'shutdown_pool',
     'PooledClient',
+    # Shutdown state — suprime Sentry capture durante atexit (PP/PN/PM)
+    'is_interpreter_shutting_down',
+    'is_shutdown_error',
+    'register_shutdown_handler',
 ]

@@ -620,6 +620,24 @@ Nunca invente informações."""
                 (_key.get('session_id') or '?')[:12] + '...'
                 if _key else '?'
             )
+
+            # FIX 2026-04-27 (PP/PN): suprime Sentry capture quando o erro
+            # vem da race de shutdown do ThreadPoolExecutor. Esses erros sao
+            # inerentes ao SIGTERM do worker Teams e nao indicam bug acionavel —
+            # ja foram triados como "fora de escopo" 4 ciclos seguidos.
+            from .shutdown_state import is_interpreter_shutting_down, is_shutdown_error
+            _is_shutdown_race = (
+                is_interpreter_shutting_down() or is_shutdown_error(_error_msg)
+            )
+
+            if _is_shutdown_race:
+                # Shutdown race — log warning local, NAO capturar Sentry
+                logger.warning(
+                    f"[SESSION_STORE] mirror_error durante shutdown (suprimido Sentry): "
+                    f"session_id={_sid} error={_error_msg}"
+                )
+                return events
+
             logger.error(
                 f"[SESSION_STORE] mirror_error — batch perdido "
                 f"(disco local OK, store inconsistente): "

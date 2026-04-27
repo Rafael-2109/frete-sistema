@@ -129,6 +129,23 @@ class FileStorage:
             else:
                 return self._save_locally(file, file_path)
         except Exception as e:
+            # FIX 2026-04-27 (PYTHON-FLASK-PM): suprime log ERROR (Sentry)
+            # quando o erro vem da race de shutdown do ThreadPoolExecutor
+            # (boto3/asyncio). Sao inerentes ao SIGTERM do worker — nao bug.
+            try:
+                from app.agente.sdk.shutdown_state import (
+                    is_interpreter_shutting_down,
+                    is_shutdown_error,
+                )
+                if is_interpreter_shutting_down() or is_shutdown_error(e):
+                    current_app.logger.warning(
+                        f"Erro ao salvar arquivo {file_path} durante shutdown "
+                        f"(suprimido Sentry): {str(e)}"
+                    )
+                    return None
+            except ImportError:
+                # app.agente nao disponivel (ex: script standalone) — comportamento original
+                pass
             current_app.logger.error(f"Erro ao salvar arquivo {file_path}: {str(e)}")
             return None
     

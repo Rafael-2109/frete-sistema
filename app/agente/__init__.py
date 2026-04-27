@@ -26,6 +26,11 @@ def init_app(app):
     # Registra blueprint
     app.register_blueprint(agente_bp)
 
+    # Atexit hook — suprime Sentry capture durante shutdown do interpretador
+    # (resolve PYTHON-FLASK-PP/PN/PM: race "cannot schedule new futures after shutdown")
+    from .sdk import register_shutdown_handler
+    register_shutdown_handler()
+
     # Log de inicialização
     app.logger.info(
         f"[AGENTE] Módulo inicializado | "
