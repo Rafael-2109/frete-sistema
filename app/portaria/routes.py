@@ -621,9 +621,11 @@ def api_embarques():
     )
     
     if termo:
+        # Embarque.numero e Integer; cast para text antes do LIKE para evitar
+        # "operator does not exist: integer ~~ unknown" (PYTHON-FLASK-PF).
         query = query.filter(
             db.or_(
-                Embarque.numero.like(f'%{termo}%'),
+                db.cast(Embarque.numero, db.String).ilike(f'%{termo}%'),
                 Embarque.transportadora.has(razao_social=f'%{termo}%')
             )
         )

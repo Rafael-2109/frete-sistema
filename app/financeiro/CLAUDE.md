@@ -1,6 +1,6 @@
 # Financeiro — Guia de Desenvolvimento
 
-**77 arquivos** | **~45.1K LOC** | **Atualizado**: 20/04/2026
+**77 arquivos** | **~45.1K LOC** | **Atualizado**: 27/04/2026
 
 Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
 
@@ -15,7 +15,7 @@ Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprova
 app/financeiro/
   ├── routes/       # 18 arquivos de rotas + __init__.py (financeiro_bp + cnab400_bp)
   ├── services/     # 27 services root + subpacote remessa_vortx/ (5 services)
-  ├── workers/      # 9 RQ jobs + utils.py (batch processing via Redis)
+  ├── workers/      # 8 RQ job files + utils.py (batch processing via Redis)
   ├── parsers/      # 4 parsers (dispatcher, pix_sicoob, models)
   ├── models.py     # 40+ models (~2.8K linhas — MAIOR models.py do projeto)
   ├── models_comprovante.py        # ~300 linhas — comprovantes de pagamento

@@ -1,6 +1,6 @@
 # Best Practices Anthropic 2026 — Plano de Otimizacao (SDK features)
 
-**Atualizado**: 20/04/2026
+**Atualizado**: 27/04/2026
 
 > **Escopo deste doc**: SDK features (prompt caching, structured outputs, pgvector, MCP servers, versoes).
 > Para **prompt engineering conceitual Claude 4.6** (overtriggering, adaptive thinking, prefill deprecation, XML tags, pre-mortem, red team) ver [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md) + [ROADMAP_PROMPT_ENGINEERING_2026.md](ROADMAP_PROMPT_ENGINEERING_2026.md).
@@ -12,7 +12,7 @@
 | Componente | Versao | Notas |
 |-----------|--------|-------|
 | `anthropic` SDK | **0.84.0** | Atualizado de 0.79.0. count_tokens, batches, cache_control disponiveis |
-| `claude-agent-sdk` | **0.1.63** | CLI 2.1.114. 0.1.60: `list_subagents()`, `get_subagent_messages()`, `setting_sources=[]` fix, TRACEPARENT propagation. 0.1.62: top-level `skills=` param em ClaudeAgentOptions. 0.1.63: atual |
+| `claude-agent-sdk` | **0.1.66** | CLI 2.1.119. 0.1.60: `list_subagents()`, `get_subagent_messages()`, `setting_sources=[]` fix, TRACEPARENT propagation. 0.1.62: top-level `skills=` param em ClaudeAgentOptions. 0.1.64: SessionStore protocol (6 metodos) + transcript mirroring via `--session-mirror` + `materialize_resume_session` + 9 helpers async store-backed + conformance harness 13 contratos + CLI 2.1.116. 0.1.65: `ThinkingConfig.display` (`--thinking-display`) override para Opus 4.7 default "omitted" + `ServerToolUseBlock`/`ServerToolResultBlock` parser fix + `fold_session_summary`/`import_session_to_store` helpers + bounded retry mirror append + UUID idempotency + CLI 2.1.118. 0.1.66: atual |
 | `mcp` | 1.26.0+ | 7 servers, 35 tools |
 | pgvector | **0.8.1** (confirmado prod) | iterative_scan SUPORTADO, halfvec disponivel |
 

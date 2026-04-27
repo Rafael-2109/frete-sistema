@@ -1,6 +1,6 @@
 # Sistema de Fretes — Referencia Compartilhada
 
-**Ultima Atualizacao**: 26/04/2026
+**Ultima Atualizacao**: 27/04/2026
 
 > Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
 > Conteudo dev-only (Quick Start, CSS, migrations) esta em `~/.claude/CLAUDE.md`.

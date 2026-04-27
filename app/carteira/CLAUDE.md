@@ -1,6 +1,6 @@
 # Carteira — Guia de Desenvolvimento
 
-**LOC**: ~18.1K | **Arquivos**: 50 | **22 JS** | **Atualizado**: 20/04/2026
+**LOC**: ~18.1K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 27/04/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -19,14 +19,14 @@ app/carteira/
   │   └── programacao_em_lote/   # 4 arquivos (Atacadao/Sendas)
   ├── services/                  # 4 services (agrupamento, mapa, importacao, atualizacao)
   ├── utils/                     # 3 helpers (separacao, workspace, formatters)
-  ├── models.py                  # 7 models (703 linhas)
+  ├── models.py                  # 7 models (657 linhas)
   ├── models_alertas.py          # AlertaSeparacaoCotada
   ├── models_adapter_presep.py   # Adapter PreSeparacaoItem -> Separacao
   └── main_routes.py             # Apenas dashboard index() — NAO adicionar novas rotas
 ```
 
-**Templates**: 13 HTML em `app/templates/carteira/`
-**JavaScript**: 22 arquivos em `app/templates/carteira/js/` + 1 em `app/static/carteira/js/` (modal-relatorios)
+**Templates**: 13 HTML em `app/templates/carteira/` (10 root + 3 em `partials/`)
+**JavaScript**: 21 arquivos em `app/templates/carteira/js/` + 1 em `app/static/carteira/js/` (modal-relatorios)
 **CSS**: `app/static/css/modules/_carteira.css` + `carteira/carteira-simples.css`
 
 ---

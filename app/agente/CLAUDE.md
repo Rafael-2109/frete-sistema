@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~33.3K | **Arquivos**: 67 | **Atualizado**: 26/04/2026
+**LOC**: ~35.3K | **Arquivos**: 71 | **Atualizado**: 27/04/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -11,18 +11,21 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 ## Estrutura
 
 ```
-app/agente/                          # Root ��� 4 arquivos
+app/agente/                          # Root — 6 arquivos
 ├── __init__.py                      # Blueprint import de routes/ + init_app()
 ├── CLAUDE.md                        # Este arquivo (guia dev)
+├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.1.66 (features, breaking, fixes)
+├── ROLLBACK_SESSION_STORE.md        # Procedimento rollback PostgresSessionStore (Fase B)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
-├── routes/                          # Flask routes modularizadas — 17 arquivos
+├── routes/                          # Flask routes modularizadas — 18 arquivos
 │   ├── __init__.py                  # agente_bp + imports sub-modulos + re-exports Teams
 │   ├── _constants.py                # Constantes (timeouts, thresholds, upload)
 │   ├── _helpers.py                  # Helpers compartilhados (Teams + cross-module)
 │   ├── chat.py                      # Core SSE: api_chat, streaming, interrupt, user_answer
 │   ├── sessions.py                  # CRUD sessoes: list, messages, delete, rename, summaries
 │   ├── admin_learning.py            # Admin: session messages, generate/save correction
+│   ├── admin_session_store.py       # Admin: PostgresSessionStore introspection (Fase B)
 │   ├── admin_subagents.py           # Admin forense: list/messages + smoketest (SDK 0.1.60 fase 2)
 │   ├── subagents.py                 # API UI-inline: summary/messages lazy-fetch
 │   ├── files.py                     # Upload/download/list/delete + helpers arquivo
@@ -33,7 +36,7 @@ app/agente/                          # Root ��� 4 arquivos
 │   ├── improvement_dialogue.py      # D8 cron bridge + admin, csrf.exempt
 │   ├── memories.py                  # CRUD memorias + users + review
 │   ├── briefing.py                  # api_get_briefing
-│   └── _deprecated.py              # Scaffolding async migration (quarentena)
+│   └── user_preferences.py          # Preferences API (thinking display, etc.)
 ├── config/                          # Configuracao e controle de acesso — 6 arquivos
 │   ├── __init__.py
 │   ├── agent_loader.py              # Carregamento dinamico do agente
@@ -48,7 +51,7 @@ app/agente/                          # Root ��� 4 arquivos
 │   ├── __init__.py
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
-├── sdk/                             # Integracao com Claude Agent SDK — 14 arquivos
+├── sdk/                             # Integracao com Claude Agent SDK — 16 arquivos
 │   ├── __init__.py
 │   ├── _sanitization.py             # Helpers de sanitizacao PII cross-modulo
 │   ├── client.py                    # Client principal (streaming, build_options, parse)
@@ -57,10 +60,12 @@ app/agente/                          # Root ��� 4 arquivos
 │   ├── hooks.py                     # 8 SDK hook closures (build_hooks() factory)
 │   ├── memory_injection.py          # Pipeline multi-tier de injecao de memorias
 │   ├── memory_injection_rules.py    # Regras declarativas de injecao (paths + filtros)
+│   ├── model_router.py              # Routing de modelo per-request (per-user/preset)
 │   ├── pending_questions.py         # AskUserQuestion (dual event: sync + async)
 │   ├── pricing.py                   # Tabela precos por modelo (input/output/cache_creation/cache_read)
 │   ├── session_archive.py           # Archive tar.gz S3 de sessoes expiradas
 │   ├── session_persistence.py       # Persistencia JSONL de sessoes SDK
+│   ├── session_store_adapter.py     # Adapter PostgresSessionStore (Fase B cutover)
 │   ├── stream_parser.py             # Dataclasses + classificacao de erros de tool
 │   └── subagent_reader.py           # Wrapper list_subagents + get_subagent_messages (SDK 0.1.60)
 ├── services/                        # Servicos de inteligencia — 14 arquivos (ver services/CLAUDE.md)
@@ -79,10 +84,11 @@ app/agente/                          # Root ��� 4 arquivos
 │   ├── session_summarizer.py        # Resumo automatico de sessoes
 │   ├── suggestion_generator.py      # Gerador de sugestoes proativas
 │   └── tool_skill_mapper.py         # Mapeamento tool → skill
-├── templates/agente/                # Templates Jinja2 — 2 arquivos
+├── templates/agente/                # Templates Jinja2 — 3 arquivos
+│   ├── admin_session_store.html     # Dashboard admin SessionStore (R6 observability)
 │   ├── chat.html                    # Interface de chat web
 │   └── insights.html                # Dashboard de insights
-├── tools/                           # MCP tools (NAO callables) — 9 arquivos
+├── tools/                           # MCP tools (NAO callables) — 10 arquivos
 │   ├── __init__.py
 │   ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
 │   ├── memory_mcp_tool.py           # 12 operacoes de memoria (Enhanced v2.1.0)
@@ -91,6 +97,7 @@ app/agente/                          # Root ��� 4 arquivos
 │   ├── routes_search_tool.py        # Busca em rotas Flask
 │   ├── schema_mcp_tool.py           # Consulta schemas de tabelas
 │   ├── session_search_tool.py       # 4 operacoes de busca em sessoes (Enhanced v4.0.0)
+│   ├── teams_card_tool.py           # Adaptive Cards para Teams (rich responses)
 │   └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
 ├── utils/                           # Helpers de modulo — 2 arquivos
 │   └── pii_masker.py                # Mascaramento regex CPF/CNPJ/email (SDK 0.1.60 fase 2)

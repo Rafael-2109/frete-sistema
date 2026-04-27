@@ -1261,7 +1261,9 @@ def _resetar_status_pedidos_carvia_do_embarque(embarque_id: int) -> None:
             continue
 
         novo_status = pedido.status_calculado  # property: reconstroi de EmbarqueItem
-        if novo_status != pedido.status and novo_status in ('ABERTO', 'COTADO', 'EMBARCADO'):
+        # P12 (2026-04-24): EMBARCADO removido do dominio de status. Whitelist
+        # alinhada com `ck_carvia_pedido_status` (ABERTO, COTADO, FATURADO, CANCELADO).
+        if novo_status != pedido.status and novo_status in ('ABERTO', 'COTADO', 'FATURADO'):
             logger.info(
                 'CarviaPedido %s status %s -> %s (cancel embarque %s)',
                 pedido.numero_pedido, pedido.status, novo_status, embarque_id,
