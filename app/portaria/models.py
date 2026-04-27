@@ -208,9 +208,11 @@ class ControlePortaria(db.Model):
             query = query.filter(ControlePortaria.data_chegada <= data_fim)
 
         # Filtro por número do embarque
+        # Embarque.numero e Integer; cast para text antes do LIKE para evitar
+        # "operator does not exist: integer ~~ unknown" (PYTHON-FLASK-PF).
         if embarque_numero:
             query = query.join(Embarque).filter(
-                Embarque.numero.like(f'%{embarque_numero}%')
+                db.cast(Embarque.numero, db.String).ilike(f'%{embarque_numero}%')
             )
 
         # Filtro por presença de embarque
