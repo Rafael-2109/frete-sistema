@@ -92,9 +92,84 @@ Ver `references/ARMADILHAS.md` — 8 armadilhas ja cometidas pelo agente em sess
    b. Monta Excel openpyxl seguindo FORMATO_ABAS.md.
    c. Salva em /tmp/ e retorna URL de download.
 5. Validar 5 checkpoints antes de responder (ver Checkpoints).
-6. Entregar URL ao usuario.
+6. POS-EXECUCAO OBRIGATORIA (ver "Apresentacao Pos-Geracao Obrigatoria" abaixo).
 7. Se usuario pedir variacao: RECUSAR e pedir autorizacao explicita.
 ```
+
+## Pre-Execucao Obrigatoria
+
+ANTES de invocar `gerar_baseline.py`, o agente DEVE consultar a memoria persistente para
+garantir consistencia com o formato/historico ja acordado com o usuario:
+
+| # | Acao | Tool / Path | Por que |
+|---|------|-------------|---------|
+| 1 | Ler preferencia de formato do Marcus | `view_memories(path="/memories/preferences.xml")` (user_id=18) — secao `<preference name="baseline_conciliacoes">` | Confirma 4 abas canonicas, colunas, ordenacao, rodapes; evita gerar layout divergente |
+| 2 | Ler heuristica empresa nivel 5 | `view_memories(path="/memories/empresa/heuristicas/financeiro/baseline-de-extratos-formato-fixo.xml")` | Reforca regras anti-alucinacao (sinal do amount, NAO usar tabela local, etc.) |
+| 3 | Ler historico acumulado de evolucao | Tabela `## Historico de baseline` no fim deste SKILL.md + secao "Evolucao Baseline" do ultimo Excel | Garante que a nova linha de evolucao (`<data> | <total> | delta=<delta>`) seja appendada ao historico cumulativo, NAO substitua |
+| 4 | Verificar preferencias de apresentacao | `view_memories(path="/memories/preferences.xml")` — campos `apresentacao_chat`, `formato_combinado` se existirem | Captura ajustes recentes (ex.: ordem das tabelas, colunas adicionais) feitos em sessoes anteriores |
+
+**REGRA**: Se a memoria (1) ou (2) NAO existir ou estiver incompleta, REPORTAR ao usuario
+antes de gerar — NAO seguir adiante com defaults. Memorias quebradas indicam desalinhamento
+de contrato.
+
+**SINAL DE FRICCAO**: Se o usuario disser "atualizar com base no formato que haviamos
+combinado" ou "verificar a solicitacao anterior" APOS o baseline ja ter sido entregue, isso
+indica que esta secao foi pulada — registrar como pitfall via `log_system_pitfall`.
+
+## Apresentacao Pos-Geracao Obrigatoria
+
+APOS gerar o Excel e ANTES de encerrar a resposta, o agente DEVE apresentar AUTOMATICAMENTE
+no chat (sem aguardar segunda solicitacao do usuario):
+
+### Tabela 1 — Pendentes Mes x Journal (resumo da Aba 1)
+
+Markdown table com as colunas: `Mes | Journal | Linhas | PGTOS | RECEB.` para todas as
+combinacoes mes+journal (mesma fonte que alimenta a Aba 1 do Excel). Linha TOTAL no fim.
+
+```
+| Mes      | Journal         | Linhas | PGTOS | RECEB. |
+|----------|-----------------|--------|-------|--------|
+| 04/2026  | SICOOB          | 200    | 150   | 50     |
+| ...      | ...             | ...    | ...   | ...    |
+| **TOTAL**|                 | 6.350  | 4.800 | 1.550  |
+```
+
+### Tabela 2 — Conciliacoes D-1 por usuario (resumo da Aba 3)
+
+Markdown table com as colunas: `Usuario | Linhas | Pgtos | Rec` ordenado por linhas DESC.
+Linha TOTAL no fim. Se nenhuma conciliacao em D-1, exibir explicitamente: "Nenhuma
+conciliacao registrada em <data>".
+
+```
+| Usuario          | Linhas | Pgtos | Rec |
+|------------------|--------|-------|-----|
+| Marcus Lima      | 80     | 60    | 20  |
+| Joao Silva       | 30     | 25    | 5   |
+| **TOTAL**        | 134    | 100   | 34  |
+```
+
+### Mensagem-template para o chat
+
+```
+Baseline canonico gerado: <URL_DOWNLOAD_EXCEL>
+Total de extratos pendentes: <N> (delta vs baseline anterior: <DELTA>)
+
+Pendentes por Mes x Journal:
+<TABELA_1_MARKDOWN>
+
+Conciliacoes em D-1 (<DATA_REFERENCIA - 1>) por usuario:
+<TABELA_2_MARKDOWN>
+
+Arquivo Excel completo (4 abas) disponivel para download no link acima.
+```
+
+**REGRA**: NUNCA entregar APENAS o link do Excel sem essas duas tabelas inline. O usuario
+ja sinalizou (sessao `feda2aa9-5623-4977-9a19-fa070bbaab2c`, 26/04/2026) que omitir as
+tabelas forca uma segunda rodada de pergunta — fluxo redundante deve ser eliminado.
+
+**SINAL DE FRICCAO**: Se o usuario perguntar "e as tabelas?" ou "verificar a solicitacao
+anterior" apos o link do Excel ter sido enviado, isso indica que esta secao foi pulada —
+registrar como pitfall via `log_system_pitfall`.
 
 ## 5 Checkpoints de validacao
 
