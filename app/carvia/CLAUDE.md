@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**99 arquivos** | **~60.3K LOC** | **103 templates** | **Atualizado**: 2026-04-20
+**102 arquivos** | **~62.7K LOC** | **103 templates** | **Atualizado**: 2026-04-27
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -21,6 +21,8 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 | [AUDIT_ADMIN_SERVICE.md](AUDIT_ADMIN_SERVICE.md) | Hard delete, bypass de guards, gaps de auditoria |
 | [INTEGRACAO_EMBARQUE.md](INTEGRACAO_EMBARQUE.md) | Fluxo embarque legado, decisoes, progresso (historico) |
 | [REVISAO_GAPS.md](REVISAO_GAPS.md) | 37 gaps mapeados com fluxogramas (12/14 corrigidos) |
+| [FLUXOGRAMA_COMPLETO.md](FLUXOGRAMA_COMPLETO.md) | Mermaid completo do processo E2E (atualizado) |
+| [MIGRATIONS.md](MIGRATIONS.md) | Historico de migrations especificas do CarVia |
 | [fluxograma_refatoracao.md](fluxograma_refatoracao.md) | Mermaid do processo E2E (historico) |
 
 > Campos de tabelas: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`
@@ -31,26 +33,29 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 
 ```
 app/carvia/
-  routes/          # 28 sub-rotas (dashboard, importacao, nf, operacao, subcontrato,
-                   #   fatura, despesa, fluxo_caixa, conciliacao, cte_complementar,
+  routes/          # 29 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
+                   #   subcontrato, fatura, despesa, fluxo_caixa, conciliacao, cte_complementar,
                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
                    #   scanner, simulador, tabela_carvia, importacao_config, api)
-  services/        # 46 services em 6 sub-pacotes:
+  services/        # 39 services em 6 sub-pacotes + 1 root:
                    #   admin/ (admin_service)
                    #   clientes/ (cliente_service)
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
-                   #                linking, matching, operacao_cancel,
-                   #                ssw_emissao, aprovacao_frete)
+                   #                linking, matching, nf_transferencia, operacao_cancel,
+                   #                ssw_emissao, aprovacao_frete) — 9
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
-                   #                sugestao, comissao, conta_corrente, custo_entrega*,
-                   #                fluxo_caixa, gerencial, previnculo, rateio_helper)
-                   #   parsers/ (importacao, cte_xml, danfe_pdf, dacte_pdf, fatura_pdf, nfe_xml)
-                   #   pricing/ (cotacao, cotacao_v2, margem, moto_recognition, tabela, config)
+                   #                sugestao, comissao, conta_corrente, custo_entrega_cobertura,
+                   #                custo_entrega_fatura, fluxo_caixa, gerencial, previnculo,
+                   #                rateio_conciliacao_helper) — 14
+                   #   parsers/ (importacao, importacao_config, cte_xml, danfe_pdf,
+                   #            dacte_pdf, fatura_pdf, nfe_xml) — 7
+                   #   pricing/ (cotacao, cotacao_v2, margem, moto_recognition,
+                   #            carvia_tabela, config) — 6
                    # + cte_complementar_persistencia.py (root)
   workers/         # 4 workers RQ com SSL-drop resilience (R15):
                    #   _ssw_helpers, ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs
-  utils/           # tomador.py, upload_policies.py
+  utils/           # tomador.py, upload_policies.py, excel_export_helper.py, papeis_frete.py
   models/          # Pacote 13 modulos: admin, aprovacao, clientes, comissao, config_moto,
                    #   conta_corrente, cotacao, cte_custos, documentos, faturas, financeiro,
                    #   frete, tabelas
