@@ -20,9 +20,9 @@ O projeto ja tinha 14 docs core sobre prompt engineering e agent design (~125K t
 4. Recomendacoes acionaveis priorizadas por risco/esforco
 
 **Contexto do projeto Nacom Goya**:
-- System prompt atual: `app/agente/prompts/system_prompt.md` v4.2.0 (2026-03-28)
-- Modelos: Opus 4.6 (decisoes criticas), Sonnet 4.6 (analises), Haiku 4.5 (exploracao)
-- SDK: `claude-agent-sdk==0.1.55` + `anthropic==0.84.0`
+- System prompt atual: `app/agente/prompts/system_prompt.md` v4.3.2 (atualizado em 2026-04-14 — historicamente v4.2.0 em 2026-03-28; findings deste estudo aplicados em 2026-04-12 elevaram para v4.3.0; v4.3.2 vigente apos refinamentos subsequentes)
+- Modelos: Opus 4.7 (decisoes criticas, default), Sonnet 4.6 (analises), Haiku 4.5 (exploracao)
+- SDK: `claude-agent-sdk==0.1.66` + `anthropic==0.84.0`
 - 12 subagents, 18+ skills, 7 MCP servers (35 tools)
 - Docs core ja existentes: BEST_PRACTICES_2026.md (SDK features), AGENT_DESIGN_GUIDE.md, AGENT_TEMPLATES.md, SUBAGENT_RELIABILITY.md, DOC-1/DOC-2 (5-layer architecture)
 

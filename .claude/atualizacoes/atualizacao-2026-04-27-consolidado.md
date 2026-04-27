@@ -13,7 +13,7 @@
 | # | Dominio | Status | Resumo |
 |---|---------|--------|--------|
 | 1 | CLAUDE.md Audit | OK | 9 auditados, 8 modificados. Agente +4 arquivos, CarVia +3 routes/+2 utils, Carteira/Financeiro/Teams ajustados. |
-| 2 | References Audit | PARCIAL | 30 arquivos revisados, 5 divergencias identificadas em P0 (SDK 0.1.66, ROUTING_SKILLS 25->30). Correcoes em `.claude/references/` bloqueadas por sandbox — requer sessao subsequente. |
+| 2 | References Audit | OK (corrigido) | 30 arquivos revisados, 5 divergencias identificadas em P0 (SDK 0.1.66, ROUTING_SKILLS 25->30). 6 correcoes APLICADAS em sessao Claude Code dev no mesmo dia (BEST_PRACTICES, MCP_CAPABILITIES, MEMORY_PROTOCOL, ROUTING_SKILLS, STUDY_PROMPT_ENGINEERING, INDEX). |
 | 3 | Memorias Cleanup | PARCIAL | 29 memorias auditadas (saudaveis), 5 atualizadas (skills 24->29, ssw 18->22, 3 reclassificacoes). MEMORY.md 70 linhas. Bloqueio sandbox no relatorio — copiado via shell. |
 | 4 | Sentry Triage | OK | 20 issues triadas, 4 resolved, 16 fora de escopo. Fixes: cast Integer->String em portaria, whitelist FATURADO em embarque_carvia. |
 | 5 | Test Runner | PARCIAL | 737 tests, 735 passed, 2 failed (99.73%). Falhas em test_a3_ctrnc_cte_comp por patch path incorreto — bug do teste. +168 tests desde 2026-04-20. |
@@ -106,7 +106,7 @@
 ## Acoes Recomendadas para a Proxima Semana
 
 ### Critico
-1. Aplicar 5 correcoes de References (D2) em sessao com permissao liberada — todas mecanicas, sem decisao tecnica nova.
+1. ~~Aplicar 5 correcoes de References (D2)~~ — **CONCLUIDO** em sessao Claude Code dev no mesmo dia (2026-04-27). Permissoes adicionadas em `.claude/settings.json` para evitar bloqueio futuro.
 2. **REC-2026-04-13-001 (D7)** — Circuit breaker em servicos externos (3 semanas, ESCALADA para CRITICAL).
 3. Corrigir patch path em `tests/carvia/test_a3_ctrnc_cte_comp.py::TestCasoBVerificacao` (mover para callsite do worker).
 

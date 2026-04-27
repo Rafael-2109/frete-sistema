@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 20/04/2026
+**Ultima Atualizacao**: 27/04/2026
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -126,9 +126,10 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (25 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (30 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
+`SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
 
 ### MCP Custom Tools (agente web, in-process)
 `mcp__sql__consultar_sql`, `mcp__memory__*` (6 tools), `mcp__schema__*` (2 tools),
@@ -159,5 +160,12 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `exportando-arquivos`, `lendo-arquivos`, `lendo-documentos`, `consultando-sql`,
 `cotando-frete`, `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`,
 `monitorando-entregas`, `diagnosticando-banco`
+
+### Skills Lojas HORA (5) — APENAS no Agente Lojas HORA (escopo isolado por `<loja_context>`)
+`acompanhando-pedido` (pedidos HORA->Motochefe pendentes/faturados),
+`conferindo-recebimento` (status conferencia em andamento/concluida),
+`consultando-estoque-loja` (motos disponiveis por loja/modelo/chassi),
+`consultando-pecas-faltando` (pecas faltando registradas + chassi doador),
+`rastreando-chassi` (historico completo de UM chassi: pedido->NF->recebimento->venda)
 
 > Skills dev (`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`, `integracao-odoo`) NAO existem em `.claude/skills/` — sao invocaveis apenas via Claude Code global (fora do escopo deste inventario).
