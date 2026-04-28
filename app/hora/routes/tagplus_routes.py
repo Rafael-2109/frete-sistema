@@ -296,10 +296,14 @@ def tagplus_produto_map_lista():
 @hora_bp.route('/tagplus/conta/mapeamento/listar-produtos', methods=['GET'])
 @require_hora_perm('tagplus', 'ver')
 def tagplus_produto_map_listar_api():
-    """Proxy GET /produtos no TagPlus.
+    """Proxy GET /produtos no TagPlus com paginacao automatica.
 
-    Retorna lista paginada (per_page=100) com id/codigo/nome para o operador
-    ver os produtos disponiveis ao preencher o mapeamento.
+    Por default: itera page=1..N agregando ate uma pagina retornar <100
+    (ultima). Cap em 20 paginas (=2000 produtos) para defesa.
+
+    Query params:
+      - q: filtro de busca livre (LIKE no TagPlus)
+      - page: pagina especifica (apenas se quiser modo single-page; default agrega todas)
     """
     conta = HoraTagPlusConta.query.filter_by(ativo=True).first()
     if not conta:
@@ -307,27 +311,41 @@ def tagplus_produto_map_listar_api():
     if not conta.token:
         return jsonify({'ok': False, 'error': 'Sem token OAuth — autorizar em /hora/tagplus/conta.'}), 400
 
-    page = max(1, int(request.args.get('page', 1)))
     q = (request.args.get('q') or '').strip()
-    params = {'per_page': 100, 'page': page}
-    if q:
-        params['q'] = q
+    page_param = request.args.get('page')
+    paginas_a_buscar = (
+        [max(1, int(page_param))] if page_param else list(range(1, 21))
+    )
 
     client = ApiClient(conta)
-    r = client.get('/produtos', params=params)
-    if r.status_code != 200:
-        return jsonify({
-            'ok': False,
-            'http_status': r.status_code,
-            'error': r.text[:300],
-        }), 502
-
-    try:
-        body = r.json()
-    except ValueError:
-        body = []
-    if isinstance(body, dict):
-        body = body.get('data') or body.get('produtos') or body.get('results') or []
+    body: list = []
+    paginas_lidas = 0
+    for p in paginas_a_buscar:
+        params = {'per_page': 100, 'page': p}
+        if q:
+            params['q'] = q
+        r = client.get('/produtos', params=params)
+        if r.status_code != 200:
+            if not body:
+                return jsonify({
+                    'ok': False,
+                    'http_status': r.status_code,
+                    'error': r.text[:300],
+                }), 502
+            # Ja tinhamos paginas anteriores OK: retorna parcial com aviso.
+            break
+        try:
+            chunk = r.json()
+        except ValueError:
+            chunk = []
+        if isinstance(chunk, dict):
+            chunk = chunk.get('data') or chunk.get('produtos') or chunk.get('results') or []
+        if not isinstance(chunk, list) or not chunk:
+            break
+        body.extend(chunk)
+        paginas_lidas += 1
+        if len(chunk) < 100:
+            break  # ultima pagina
 
     # Normaliza: pega so campos uteis para a UI.
     produtos = []
@@ -344,7 +362,8 @@ def tagplus_produto_map_listar_api():
 
     return jsonify({
         'ok': True,
-        'page': page,
+        'paginas_lidas': paginas_lidas,
+        'modo': 'pagina_unica' if page_param else 'agregado',
         'count': len(produtos),
         'produtos': produtos,
     })
