@@ -326,12 +326,14 @@ Este é o núcleo crítico. A API TagPlus `POST /nfes` é descrita em `scripts/d
 
 ### 4.2 Estrutura de `itens[]`
 
-Schema real em `scripts/doc_tagplus.md:636-644`: `{produto, qtd, valor_unitario, valor_acrescimo, valor_desconto, detalhes}`. **Não existem** `inf_adicional`, `valor_total_item`, nem `numero_pedido_compra` por item. TagPlus calcula total = `qtd * valor_unitario - valor_desconto`.
+Schema real em `scripts/doc_tagplus.md:636-644`: `{produto_servico, qtd, valor_unitario, valor_acrescimo, valor_desconto, detalhes}`. **Não existem** `inf_adicional`, `valor_total_item`, nem `numero_pedido_compra` por item. TagPlus calcula total = `qtd * valor_unitario - valor_desconto`.
+
+> ⚠️ **DIVERGÊNCIA da doc TagPlus**: o sample em `doc_tagplus.md:638` mostra `produto` (sem sufixo). A **API real exige `produto_servico`** — confirmado pelo erro 422 da venda #2 em 2026-04-28 (`Campo obrigatório não encontrado: 'produto_servico'` + `Campo adicional não é permitido: 'produto'`). A doc local está desatualizada nesse ponto.
 
 ```python
 # Para cada HoraVendaItem:
 {
-    "produto": tagplus_produto_id,        # string — de hora_tagplus_produto_map
+    "produto_servico": tagplus_produto_id,  # string — de hora_tagplus_produto_map
     "qtd": 1,                             # sempre 1 (chassi é unitário)
     "valor_unitario": float(preco_tabela_referencia),  # sanitize_for_json!
     "valor_acrescimo": 0,

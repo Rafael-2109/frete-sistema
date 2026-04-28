@@ -389,7 +389,11 @@ class PayloadBuilder:
             chassi = vi.numero_chassi or '-'
             motor = (vi.moto.numero_motor if vi.moto else None) or '-'
             itens.append({
-                'produto': str(map_.tagplus_produto_id),  # codigo string do produto no TagPlus
+                # API exige `produto_servico` (422 confirma em 2026-04-28 venda #2).
+                # doc_tagplus.md:638 mostra `produto` no sample mas a doc esta
+                # desatualizada — a API real rejeita `produto` como
+                # additionalProperty e exige `produto_servico` como required.
+                'produto_servico': str(map_.tagplus_produto_id),
                 'qtd': 1,
                 'valor_unitario': self._round2_float(vi.preco_tabela_referencia),
                 'valor_acrescimo': 0,
