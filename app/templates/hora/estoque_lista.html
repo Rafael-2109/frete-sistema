@@ -363,6 +363,19 @@
                title="NF de saída (HORA → consumidor) — Pedido #{{ m.venda_id }} ({{ m.venda_status }})">
               <i class="fas fa-arrow-up"></i> {{ m.nf_saida_numero }}
             </a>
+            {% if m.tem_nfe_tagplus %}
+              <a href="{{ url_for('hora.venda_nfe_danfe_pdf', venda_id=m.venda_id) }}"
+                 class="btn btn-sm btn-outline-secondary py-0 mt-1" target="_blank"
+                 title="Baixar DANFE (NFe TagPlus)">
+                <i class="fas fa-file-pdf"></i>
+              </a>
+            {% elif m.tem_pdf_legado %}
+              <a href="{{ url_for('hora.vendas_download_pdf', venda_id=m.venda_id) }}"
+                 class="btn btn-sm btn-outline-secondary py-0 mt-1" target="_blank"
+                 title="Baixar DANFE (PDF importado)">
+                <i class="fas fa-file-pdf"></i>
+              </a>
+            {% endif %}
           {% elif m.nf_saida_numero %}
             <br><small class="text-success"><i class="fas fa-arrow-up"></i> {{ m.nf_saida_numero }}</small>
           {% endif %}

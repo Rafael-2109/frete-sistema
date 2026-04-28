@@ -906,10 +906,11 @@ def tagplus_emissoes_lista():
 @hora_bp.route('/tagplus/esboco')
 @require_hora_perm('tagplus', 'ver')
 def tagplus_esboco_lista():
-    """Lista vendas elegíveis para teste de payload TagPlus.
+    """Lista de pedidos prontos para emitir NFe (tela "Conferir antes de emitir").
 
-    Mostra HoraVendas que ainda não emitiram NFe (status sem `APROVADA`).
-    Operador escolhe uma e vê o JSON que seria enviado ao TagPlus.
+    URL `/tagplus/esboco` mantida para nao quebrar links externos; UI exibe
+    como "Conferir antes de emitir NFe". Mostra ate 50 vendas mais recentes;
+    o template filtra por padrao para esconder pedidos ja faturados/cancelados.
     """
     # Vendas com itens, sem emissao ou em estado retomavel.
     q = (
@@ -1069,7 +1070,7 @@ def tagplus_esboco_preview(venda_id: int):
 @hora_bp.route('/tagplus/esboco/<int:venda_id>/emitir', methods=['POST'])
 @require_hora_perm('vendas', 'criar')
 def tagplus_esboco_emitir(venda_id: int):
-    """Emite NFe REAL pelo esboço (mesmo enfileiramento que /vendas/<id>/nfe/emitir).
+    """Emite NFe a partir da tela de conferencia (mesmo fluxo de /vendas/<id>/nfe/emitir).
 
     Reusa EmissorNfeHora.enfileirar — POST /nfes com headers X-Enviar-Nota=true e
     X-Calculo-Trib-Automatico=true (envia para SEFAZ direto, status 202 esperado).
@@ -1077,8 +1078,7 @@ def tagplus_esboco_emitir(venda_id: int):
     try:
         emissao_id = EmissorNfeHora.enfileirar(venda_id)
         flash(
-            f'Emissão enfileirada (id={emissao_id}). Acompanhe na tela da venda '
-            f'ou em "Fila de emissões".',
+            f'NFe enviada para emissao (id={emissao_id}). Acompanhe o status abaixo.',
             'success',
         )
         return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
@@ -1169,7 +1169,7 @@ def tagplus_pedido_venda_criar():
 
     flash(
         f'Pedido de venda #{venda.id} criado para {venda.nome_cliente}. '
-        f'Confira o esboco abaixo antes de emitir a NFe.',
+        f'Confira os dados abaixo e clique em "Emitir NFe".',
         'success',
     )
     return redirect(url_for('hora.tagplus_esboco_preview', venda_id=venda.id))
@@ -1294,6 +1294,7 @@ def venda_nfe_cce(venda_id: int):
 @hora_bp.route('/vendas/<int:venda_id>/nfe/danfe.pdf')
 @require_hora_perm('vendas', 'ver')
 def venda_nfe_danfe_pdf(venda_id: int):
+    """Proxy on-the-fly do DANFE PDF via TagPlus (`/nfes/pdf/recibo_a4/{id}`)."""
     emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()
     if not emissao or not emissao.tagplus_nfe_id:
         abort(404)

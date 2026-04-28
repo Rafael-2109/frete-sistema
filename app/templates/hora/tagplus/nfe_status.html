@@ -1,175 +1,324 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
+{% set badge = {
+    'PENDENTE': 'secondary',
+    'EM_ENVIO': 'info',
+    'ENVIADA_SEFAZ': 'primary',
+    'APROVADA': 'success',
+    'REJEITADA_LOCAL': 'danger',
+    'REJEITADA_SEFAZ': 'danger',
+    'ERRO_INFRA': 'warning',
+    'CANCELAMENTO_SOLICITADO': 'warning',
+    'CANCELADA': 'dark'
+} %}
+{% set label = {
+    'PENDENTE': 'Aguardando envio',
+    'EM_ENVIO': 'Enviando para o TagPlus',
+    'ENVIADA_SEFAZ': 'Aguardando SEFAZ',
+    'APROVADA': 'Aprovada pela SEFAZ',
+    'REJEITADA_LOCAL': 'Rejeitada (validacao local)',
+    'REJEITADA_SEFAZ': 'Rejeitada pela SEFAZ',
+    'ERRO_INFRA': 'Erro de envio',
+    'CANCELAMENTO_SOLICITADO': 'Cancelamento solicitado',
+    'CANCELADA': 'Cancelada na SEFAZ'
+} %}
+
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-  <h2><i class="fas fa-file-invoice-dollar"></i> NFe da venda #{{ venda.id }}</h2>
+  <div>
+    <h2 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> NFe do pedido #{{ venda.id }}</h2>
+    <small class="text-muted">{{ venda.nome_cliente or '—' }} · CPF {{ venda.cpf_cliente or '—' }}</small>
+  </div>
   <a href="{{ url_for('hora.vendas_detalhe', venda_id=venda.id) }}" class="btn btn-outline-secondary">
-    <i class="fas fa-arrow-left"></i> Voltar para venda
+    <i class="fas fa-arrow-left"></i> Voltar para o pedido
   </a>
 </div>
 
-<div class="row g-3">
-  <div class="col-md-6">
-    <div class="card">
-      <div class="card-header"><strong>Dados da venda</strong></div>
-      <div class="card-body">
-        <dl class="row mb-0">
-          <dt class="col-sm-4">Cliente</dt><dd class="col-sm-8">{{ venda.nome_cliente }}<br><small>CPF {{ venda.cpf_cliente }}</small></dd>
-          <dt class="col-sm-4">Loja</dt><dd class="col-sm-8">{{ venda.loja.rotulo_display if venda.loja else '— sem loja —' }}</dd>
-          <dt class="col-sm-4">Forma pagamento</dt><dd class="col-sm-8">{{ venda.forma_pagamento }}</dd>
-          <dt class="col-sm-4">Valor total</dt><dd class="col-sm-8">R$ {{ '%.2f'|format(venda.valor_total) }}</dd>
-          <dt class="col-sm-4">Status venda</dt><dd class="col-sm-8">{{ venda.status }}</dd>
-          <dt class="col-sm-4">Itens (chassis)</dt><dd class="col-sm-8">
-            {% for vi in venda.itens %}
-              <div><code>{{ vi.numero_chassi }}</code></div>
-            {% endfor %}
-          </dd>
-        </dl>
+{# ================================================================
+   Estado da emissao (banner principal)
+   ================================================================ #}
+{% if not emissao %}
+  <div class="card mb-3 border-secondary">
+    <div class="card-body">
+      <h4 class="mb-3"><i class="fas fa-paper-plane"></i> NFe ainda nao emitida</h4>
+      {% if venda.status == 'CONFIRMADO' and not venda.nf_saida_chave_44 %}
+        <p class="text-muted">O pedido esta CONFIRMADO e pronto para emitir a NFe.</p>
+        <a href="{{ url_for('hora.tagplus_esboco_preview', venda_id=venda.id) }}"
+           class="btn btn-primary">
+          <i class="fas fa-clipboard-check"></i> Conferir e emitir NFe
+        </a>
+      {% elif venda.nf_saida_chave_44 %}
+        <p class="text-muted mb-0">
+          Este pedido ja tem NF emitida fora do TagPlus
+          (chave <code class="small">{{ venda.nf_saida_chave_44 }}</code>) — nao pode ser
+          emitida novamente. Para reemissao, registre uma devolucao primeiro.
+        </p>
+      {% elif venda.status == 'COTACAO' %}
+        <p class="text-muted mb-0">
+          Pedido em <strong>COTACAO</strong>. Confirme primeiro o pedido na tela
+          <a href="{{ url_for('hora.vendas_detalhe', venda_id=venda.id) }}">detalhe do pedido</a>.
+        </p>
+      {% else %}
+        <p class="text-muted mb-0">
+          Pedido em status <strong>{{ venda.status }}</strong> — nao e possivel emitir NFe.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+{% else %}
+  {% set status = emissao.status %}
+  <div class="card mb-3 border-{{ badge.get(status, 'secondary') }}">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <span class="badge bg-{{ badge.get(status, 'secondary') }} fs-5">
+            {{ label.get(status, status) }}
+          </span>
+          {% if emissao.numero_nfe %}
+            <strong class="ms-2">NF {{ emissao.numero_nfe }}{% if emissao.serie_nfe %} / serie {{ emissao.serie_nfe }}{% endif %}</strong>
+          {% endif %}
+        </div>
+        {% if status == 'APROVADA' and emissao.tagplus_nfe_id %}
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('hora.venda_nfe_danfe_pdf', venda_id=venda.id) }}"
+               class="btn btn-primary" target="_blank">
+              <i class="fas fa-file-pdf"></i> Baixar DANFE (PDF)
+            </a>
+            <a href="{{ url_for('hora.venda_nfe_xml', venda_id=venda.id) }}" class="btn btn-outline-secondary">
+              <i class="fas fa-file-code"></i> XML
+            </a>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if status in ('PENDENTE', 'EM_ENVIO') %}
+        <p class="mt-3 mb-0 text-muted">
+          <i class="fas fa-spinner fa-spin"></i>
+          Enviando para o TagPlus. Esta tela atualiza ao recarregar.
+        </p>
+      {% elif status == 'ENVIADA_SEFAZ' %}
+        <p class="mt-3 mb-0 text-muted">
+          <i class="fas fa-clock"></i>
+          NFe enviada — aguardando confirmacao da SEFAZ. Pode levar alguns segundos.
+          Recarregue a pagina para atualizar o status.
+        </p>
+      {% elif status == 'APROVADA' %}
+        <p class="mt-3 mb-0 text-success">
+          <i class="fas fa-check-circle"></i>
+          NFe autorizada pela SEFAZ
+          {% if emissao.aprovado_em %}em {{ emissao.aprovado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}.
+        </p>
+      {% elif status == 'CANCELAMENTO_SOLICITADO' %}
+        <p class="mt-3 mb-0 text-warning">
+          <i class="fas fa-hourglass-half"></i>
+          Cancelamento solicitado em
+          {% if emissao.cancelamento_solicitado_em %}{{ emissao.cancelamento_solicitado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+          — aguardando confirmacao SEFAZ.
+        </p>
+      {% elif status == 'CANCELADA' %}
+        <p class="mt-3 mb-0 text-muted">
+          <i class="fas fa-ban"></i>
+          NFe cancelada na SEFAZ
+          {% if emissao.cancelado_em %}em {{ emissao.cancelado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}.
+        </p>
+      {% endif %}
+
+      {% if emissao.error_message %}
+        <div class="alert alert-danger mt-3 mb-0">
+          <strong>{{ emissao.error_code or 'Erro' }}:</strong> {{ emissao.error_message }}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ================================================================
+     Acoes (re-emitir / cancelar / CC-e)
+     ================================================================ #}
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header"><strong>Detalhes da NFe</strong></div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4">Numero / Serie</dt>
+            <dd class="col-sm-8">
+              {% if emissao.numero_nfe %}{{ emissao.numero_nfe }}{% if emissao.serie_nfe %} / {{ emissao.serie_nfe }}{% endif %}{% else %}—{% endif %}
+            </dd>
+            <dt class="col-sm-4">Chave de acesso</dt>
+            <dd class="col-sm-8 chassi-mono small">{{ emissao.chave_44 or '—' }}</dd>
+            <dt class="col-sm-4">Protocolo</dt>
+            <dd class="col-sm-8">{{ emissao.protocolo_aprovacao or '—' }}</dd>
+            <dt class="col-sm-4">Tentativas</dt>
+            <dd class="col-sm-8">{{ emissao.tentativas }}</dd>
+            <dt class="col-sm-4">Enviado</dt>
+            <dd class="col-sm-8">{{ emissao.enviado_em.strftime('%d/%m/%Y %H:%M') if emissao.enviado_em else '—' }}</dd>
+            <dt class="col-sm-4">Aprovado</dt>
+            <dd class="col-sm-8">{{ emissao.aprovado_em.strftime('%d/%m/%Y %H:%M') if emissao.aprovado_em else '—' }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header"><strong>Dados do pedido</strong></div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4">Cliente</dt>
+            <dd class="col-sm-8">{{ venda.nome_cliente }}<br><small>CPF {{ venda.cpf_cliente }}</small></dd>
+            <dt class="col-sm-4">Loja</dt>
+            <dd class="col-sm-8">{{ venda.loja.rotulo_display if venda.loja else '— sem loja —' }}</dd>
+            <dt class="col-sm-4">Forma pagamento</dt>
+            <dd class="col-sm-8">{{ venda.forma_pagamento }}</dd>
+            <dt class="col-sm-4">Valor total</dt>
+            <dd class="col-sm-8"><strong>{{ venda.valor_total|valor_br }}</strong></dd>
+            <dt class="col-sm-4">Itens</dt>
+            <dd class="col-sm-8">
+              {% for vi in venda.itens %}
+                <div><code>{{ vi.numero_chassi }}</code></div>
+              {% endfor %}
+            </dd>
+          </dl>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="col-md-6">
-    <div class="card">
-      <div class="card-header"><strong>Estado da emissão</strong></div>
+  {# ================================================================
+     Re-emitir (quando rejeitada/erro infra)
+     ================================================================ #}
+  {% if status in ('REJEITADA_LOCAL', 'REJEITADA_SEFAZ', 'ERRO_INFRA') %}
+    <div class="card mt-3 border-warning">
       <div class="card-body">
-        {% if not emissao %}
-          <p class="text-muted">Nenhuma emissão ainda.</p>
-          {% if venda.status == 'CONCLUIDA' and not venda.nf_saida_chave_44 %}
-            <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}">
-              <button type="submit" class="btn btn-primary">
-                <i class="fas fa-paper-plane"></i> Emitir NFe agora
-              </button>
-            </form>
+        <h5 class="card-title"><i class="fas fa-redo"></i> Tentar emitir novamente</h5>
+        <p class="text-muted mb-3">
+          A emissao anterior falhou. Voce pode corrigir o problema (se houver) e
+          tentar emitir novamente.
+        </p>
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('hora.tagplus_esboco_preview', venda_id=venda.id) }}"
+             class="btn btn-outline-secondary">
+            <i class="fas fa-clipboard-check"></i> Conferir dados primeiro
+          </a>
+          <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
+                onsubmit="return confirm('Confirma nova tentativa de emissao da NFe?');"
+                class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-warning">
+              <i class="fas fa-paper-plane"></i> Re-emitir agora
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {# ================================================================
+     Cancelamento (apenas quando APROVADA, dentro de 24h)
+     ================================================================ #}
+  {% if status == 'APROVADA' %}
+    {% set janela_horas = 24 %}
+    {% set decorrido_horas = None %}
+    {% set restante_horas = None %}
+    {% if emissao.aprovado_em and now_utc %}
+      {% set delta = now_utc - emissao.aprovado_em %}
+      {% set decorrido_horas = (delta.total_seconds() / 3600.0) %}
+      {% set restante_horas = janela_horas - decorrido_horas %}
+    {% endif %}
+    {% set dentro_janela = restante_horas is not none and restante_horas > 0 %}
+
+    <div class="card mt-3 {% if dentro_janela %}border-danger{% else %}border-secondary{% endif %}">
+      <div class="card-body">
+        <h5 class="card-title">
+          <i class="fas fa-ban"></i> Cancelar NFe
+          {% if dentro_janela %}
+            <span class="badge bg-warning text-dark ms-2">
+              <i class="fas fa-clock"></i> {{ '%.1f'|format(restante_horas) }}h restantes
+            </span>
           {% else %}
-            <small class="text-muted">Não é possível emitir (venda já tem NF ou status ≠ CONCLUIDA).</small>
+            <span class="badge bg-secondary ms-2">Janela 24h encerrada</span>
           {% endif %}
-        {% else %}
-          {% set badge = {
-              'PENDENTE': 'secondary',
-              'EM_ENVIO': 'info',
-              'ENVIADA_SEFAZ': 'primary',
-              'APROVADA': 'success',
-              'REJEITADA_LOCAL': 'danger',
-              'REJEITADA_SEFAZ': 'danger',
-              'ERRO_INFRA': 'warning',
-              'CANCELAMENTO_SOLICITADO': 'warning',
-              'CANCELADA': 'dark'
-            }.get(emissao.status, 'secondary') %}
-          <h5><span class="badge bg-{{ badge }}">{{ emissao.status }}</span></h5>
-          <dl class="row mb-2">
-            <dt class="col-sm-5">Tagplus ID</dt><dd class="col-sm-7"><code>{{ emissao.tagplus_nfe_id or '—' }}</code></dd>
-            <dt class="col-sm-5">Número/Série</dt><dd class="col-sm-7">{{ emissao.numero_nfe or '—' }}{% if emissao.serie_nfe %} / {{ emissao.serie_nfe }}{% endif %}</dd>
-            <dt class="col-sm-5">Chave de acesso</dt><dd class="col-sm-7"><code class="small">{{ emissao.chave_44 or '—' }}</code></dd>
-            <dt class="col-sm-5">Protocolo</dt><dd class="col-sm-7">{{ emissao.protocolo_aprovacao or '—' }}</dd>
-            <dt class="col-sm-5">Tentativas</dt><dd class="col-sm-7">{{ emissao.tentativas }}</dd>
-            <dt class="col-sm-5">Enviado em</dt><dd class="col-sm-7"><small>{{ emissao.enviado_em or '—' }}</small></dd>
-            <dt class="col-sm-5">Aprovado em</dt><dd class="col-sm-7"><small>{{ emissao.aprovado_em or '—' }}</small></dd>
-          </dl>
-          {% if emissao.error_message %}
-            <div class="alert alert-danger small">
-              <strong>{{ emissao.error_code or 'Erro' }}:</strong>
-              {{ emissao.error_message }}
+        </h5>
+
+        {% if dentro_janela %}
+          <p class="text-muted mb-3">
+            A SEFAZ permite cancelar a NFe ate <strong>24h</strong> apos a aprovacao.
+            Justificativa minima de 15 caracteres (exigencia legal).
+          </p>
+          <form method="post" action="{{ url_for('hora.venda_nfe_cancelar', venda_id=venda.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2">
+              <label class="form-label small">Motivo do cancelamento <span class="text-danger">*</span></label>
+              <textarea name="justificativa" class="form-control" rows="2" minlength="15" required
+                        placeholder="Por que esta cancelando? (minimo 15 caracteres) — ex.: nota emitida em duplicidade, dados do cliente errados, ..."></textarea>
             </div>
-          {% endif %}
-
-          <div class="d-flex flex-wrap gap-2 mt-3">
-            {% if emissao.status == 'APROVADA' and emissao.tagplus_nfe_id %}
-              <a href="{{ url_for('hora.venda_nfe_danfe_pdf', venda_id=venda.id) }}" class="btn btn-outline-primary" target="_blank">
-                <i class="fas fa-file-pdf"></i> DANFE PDF
-              </a>
-              <a href="{{ url_for('hora.venda_nfe_xml', venda_id=venda.id) }}" class="btn btn-outline-secondary">
-                <i class="fas fa-file-code"></i> XML
-              </a>
-            {% endif %}
-
-            {% if emissao.status in ('REJEITADA_LOCAL', 'REJEITADA_SEFAZ', 'ERRO_INFRA') %}
-              <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}" class="d-inline">
-                <button type="submit" class="btn btn-warning">
-                  <i class="fas fa-redo"></i> Re-tentar
-                </button>
-              </form>
-            {% endif %}
-          </div>
-
-          {% if emissao.status == 'APROVADA' %}
-            <hr>
-            {# ---- Janela de 24h SEFAZ ---- #}
-            {% set janela_horas = 24 %}
-            {% set decorrido_horas = None %}
-            {% set restante_horas = None %}
-            {% if emissao.aprovado_em %}
-              {% set delta = (now_utc - emissao.aprovado_em) if now_utc else None %}
-              {% set decorrido_horas = (delta.total_seconds() / 3600.0) if delta else 0 %}
-              {% set restante_horas = janela_horas - decorrido_horas %}
-            {% endif %}
-            {% set dentro_janela = restante_horas is not none and restante_horas > 0 %}
-
-            <h6 class="mt-3">
+            <button type="submit" class="btn btn-danger"
+                    onclick="return confirm('Confirma o cancelamento da NFe? Esta acao envia o pedido de cancelamento para a SEFAZ.');">
               <i class="fas fa-ban"></i> Cancelar NFe
-              {% if emissao.aprovado_em %}
-                {% if dentro_janela %}
-                  <span class="badge bg-info text-dark ms-1">
-                    {{ '%.1f'|format(restante_horas) }}h restantes
-                  </span>
-                {% else %}
-                  <span class="badge bg-danger ms-1">Janela 24h SEFAZ encerrada</span>
-                {% endif %}
-              {% endif %}
-            </h6>
-
-            {% if dentro_janela %}
-              <form method="post" action="{{ url_for('hora.venda_nfe_cancelar', venda_id=venda.id) }}">
-                <div class="mb-2">
-                  <textarea name="justificativa" class="form-control" rows="2" minlength="15"
-                            placeholder="Justificativa (mín. 15 caracteres)" required></textarea>
-                </div>
-                <button type="submit" class="btn btn-danger btn-sm"
-                        onclick="return confirm('Confirma cancelamento da NFe? Esta ação solicita cancelamento à SEFAZ.');">
-                  <i class="fas fa-ban"></i> Solicitar cancelamento
-                </button>
-              </form>
-            {% else %}
-              <div class="alert alert-warning small mb-2">
-                Janela SEFAZ de {{ janela_horas }}h encerrada
-                ({% if decorrido_horas %}{{ '%.1f'|format(decorrido_horas) }}h{% else %}—{% endif %}
-                desde a aprovacao). NFe nao pode mais ser cancelada — registre como
-                <a href="{{ url_for('hora.devolucoes_lista') }}">devolucao</a>.
-              </div>
-            {% endif %}
-
-            <h6 class="mt-3"><i class="fas fa-edit"></i> Carta de Correção (CC-e)</h6>
-            <form method="post" action="{{ url_for('hora.venda_nfe_cce', venda_id=venda.id) }}">
-              <div class="mb-2">
-                <textarea name="texto_correcao" class="form-control" rows="2" minlength="15"
-                          placeholder="Texto da correção (mín. 15 caracteres, sem alterar valor/destinatário)" required></textarea>
-              </div>
-              <button type="submit" class="btn btn-outline-primary btn-sm">
-                <i class="fas fa-edit"></i> Emitir CC-e
-              </button>
-            </form>
-          {% endif %}
+            </button>
+          </form>
+        {% else %}
+          <div class="alert alert-warning mb-0">
+            Nao e mais possivel cancelar — janela SEFAZ de {{ janela_horas }}h encerrada
+            ({% if decorrido_horas %}{{ '%.1f'|format(decorrido_horas) }}h{% else %}—{% endif %}
+            desde a aprovacao).
+            <br>
+            Para reverter a venda, registre uma
+            <a href="{{ url_for('hora.devolucoes_lista') }}" class="alert-link">devolucao</a>.
+          </div>
         {% endif %}
       </div>
     </div>
-  </div>
-</div>
 
-{% if emissao and (emissao.payload_enviado or emissao.response_inicial or emissao.response_webhook) %}
-<details class="mt-4">
-  <summary><strong>Auditoria (payload + respostas)</strong></summary>
-  {% if emissao.payload_enviado %}
-    <h6 class="mt-3">Payload enviado</h6>
-    <pre class="small bg-body-tertiary p-2 rounded">{{ emissao.payload_enviado | tojson(indent=2) }}</pre>
+    {# ================================================================
+       Carta de Correcao (CC-e)
+       ================================================================ #}
+    <div class="card mt-3">
+      <div class="card-body">
+        <h5 class="card-title"><i class="fas fa-edit"></i> Carta de Correcao (CC-e)</h5>
+        <p class="text-muted small mb-3">
+          Use a CC-e para corrigir pequenos erros (descricoes, dados sem efeito fiscal).
+          Nao use para alterar valor, destinatario ou data — nesses casos, cancele e re-emita.
+        </p>
+        <form method="post" action="{{ url_for('hora.venda_nfe_cce', venda_id=venda.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-2">
+            <label class="form-label small">Texto da correcao <span class="text-danger">*</span></label>
+            <textarea name="texto_correcao" class="form-control" rows="2" minlength="15" required
+                      placeholder="Descreva a correcao (minimo 15 caracteres). Nao alterar valor/destinatario."></textarea>
+          </div>
+          <button type="submit" class="btn btn-outline-primary">
+            <i class="fas fa-edit"></i> Emitir CC-e
+          </button>
+        </form>
+      </div>
+    </div>
   {% endif %}
-  {% if emissao.response_inicial %}
-    <h6 class="mt-3">Resposta inicial (POST /nfes)</h6>
-    <pre class="small bg-body-tertiary p-2 rounded">{{ emissao.response_inicial | tojson(indent=2) }}</pre>
+
+  {# ================================================================
+     Auditoria tecnica (collapse)
+     ================================================================ #}
+  {% if emissao.payload_enviado or emissao.response_inicial or emissao.response_webhook %}
+    <details class="mt-4">
+      <summary class="text-muted">
+        <i class="fas fa-code"></i> <strong>Detalhes tecnicos</strong>
+        (payload + respostas TagPlus)
+      </summary>
+      <div class="mt-3">
+        {% if emissao.payload_enviado %}
+          <h6>Payload enviado</h6>
+          <pre class="small bg-body-tertiary p-2 rounded">{{ emissao.payload_enviado | tojson(indent=2) }}</pre>
+        {% endif %}
+        {% if emissao.response_inicial %}
+          <h6 class="mt-3">Resposta inicial (POST /nfes)</h6>
+          <pre class="small bg-body-tertiary p-2 rounded">{{ emissao.response_inicial | tojson(indent=2) }}</pre>
+        {% endif %}
+        {% if emissao.response_webhook %}
+          <h6 class="mt-3">Resposta do webhook (GET /nfes/&lt;id&gt;)</h6>
+          <pre class="small bg-body-tertiary p-2 rounded">{{ emissao.response_webhook | tojson(indent=2) }}</pre>
+        {% endif %}
+      </div>
+    </details>
   {% endif %}
-  {% if emissao.response_webhook %}
-    <h6 class="mt-3">Resposta webhook (GET /nfes/&lt;id&gt;)</h6>
-    <pre class="small bg-body-tertiary p-2 rounded">{{ emissao.response_webhook | tojson(indent=2) }}</pre>
-  {% endif %}
-</details>
 {% endif %}
 {% endblock %}

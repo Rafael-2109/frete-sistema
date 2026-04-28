@@ -97,7 +97,13 @@ def _nf_recebimento_por_chassi(chassis: List[str]) -> Dict[str, dict]:
 
 def _venda_nf_saida_por_chassi(chassis: List[str]) -> Dict[str, dict]:
     """Para cada chassi, retorna {venda_id, nf_saida_numero, nf_saida_chave_44,
-    venda_status, tem_pdf} da venda ATIVA mais recente.
+    venda_status, tem_pdf, tem_nfe_tagplus, nfe_status} da venda ATIVA.
+
+    - `tem_pdf`: HoraVenda.arquivo_pdf_s3_key (DANFE legado importado via PDF)
+    - `tem_nfe_tagplus`: existe HoraTagPlusNfeEmissao APROVADA com tagplus_nfe_id
+      (NFe emitida pelo TagPlus — DANFE servido on-the-fly por
+      `hora.venda_nfe_danfe_pdf` via proxy `/nfes/pdf/recibo_a4/{id}`)
+    - `nfe_status`: status atual da emissao TagPlus (None se sem emissao)
 
     Inclui pedidos em qualquer status (COTACAO, CONFIRMADO, FATURADO, CANCELADO)
     para que a UI possa exibir badge apropriado. UI deve filtrar por status para
@@ -106,6 +112,7 @@ def _venda_nf_saida_por_chassi(chassis: List[str]) -> Dict[str, dict]:
     if not chassis:
         return {}
     from app.hora.models import HoraVenda, HoraVendaItem
+    from app.hora.models.tagplus import HoraTagPlusNfeEmissao
 
     chassis_norm = [c.strip().upper() for c in chassis]
     rows = (
@@ -116,8 +123,14 @@ def _venda_nf_saida_por_chassi(chassis: List[str]) -> Dict[str, dict]:
             HoraVenda.nf_saida_chave_44,
             HoraVenda.status.label('venda_status'),
             HoraVenda.arquivo_pdf_s3_key,
+            HoraTagPlusNfeEmissao.status.label('nfe_status'),
+            HoraTagPlusNfeEmissao.tagplus_nfe_id,
         )
         .join(HoraVenda, HoraVenda.id == HoraVendaItem.venda_id)
+        .outerjoin(
+            HoraTagPlusNfeEmissao,
+            HoraTagPlusNfeEmissao.venda_id == HoraVenda.id,
+        )
         .filter(HoraVendaItem.numero_chassi.in_(chassis_norm))
         .all()
     )
@@ -135,6 +148,8 @@ def _venda_nf_saida_por_chassi(chassis: List[str]) -> Dict[str, dict]:
             'nf_saida_chave_44': r.nf_saida_chave_44,
             'venda_status': r.venda_status,
             'tem_pdf': bool(r.arquivo_pdf_s3_key),
+            'tem_nfe_tagplus': bool(r.tagplus_nfe_id and r.nfe_status == 'APROVADA'),
+            'nfe_status': r.nfe_status,
         }
         for r in rows
     }
@@ -377,6 +392,9 @@ def listar_estoque(
         r['nf_saida_numero'] = venda.get('nf_saida_numero')
         r['nf_saida_chave_44'] = venda.get('nf_saida_chave_44')
         r['venda_status'] = venda.get('venda_status')
+        r['tem_pdf_legado'] = venda.get('tem_pdf', False)
+        r['tem_nfe_tagplus'] = venda.get('tem_nfe_tagplus', False)
+        r['nfe_status'] = venda.get('nfe_status')
 
     return resultado
 

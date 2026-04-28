@@ -2,72 +2,159 @@
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-  <h2><i class="fas fa-flask"></i> Esboço de Emissão NFe</h2>
-  <a href="{{ url_for('hora.tagplus_emissoes_lista') }}" class="btn btn-outline-secondary">
-    <i class="fas fa-list-check"></i> Fila de emissões
-  </a>
+  <h2><i class="fas fa-clipboard-check"></i> Conferir antes de emitir NFe</h2>
+  <div class="d-flex gap-2">
+    {% if current_user.tem_perm_hora('vendas', 'criar') %}
+      <a href="{{ url_for('hora.tagplus_pedido_venda_novo') }}" class="btn btn-primary">
+        <i class="fas fa-plus-circle"></i> Novo pedido de venda
+      </a>
+    {% endif %}
+    <a href="{{ url_for('hora.tagplus_emissoes_lista') }}" class="btn btn-outline-secondary">
+      <i class="fas fa-list-check"></i> Fila de emissões
+    </a>
+  </div>
 </div>
 
-<div class="alert alert-info">
-  <strong>Modo preview:</strong> escolha uma venda existente para ver o JSON que seria enviado
-  ao TagPlus na emissão. <strong>Não emite NFe real</strong> — útil para validar mapeamentos
-  (modelo→produto, forma de pagamento, CFOP, CPF do cliente) antes do go-live.
-  <br>
-  Para emitir de verdade, use o botão <strong>Emitir NFe</strong> na tela de detalhe da venda
-  (<code>/hora/vendas/&lt;id&gt;/nfe</code>).
+<div class="alert alert-secondary">
+  Lista de pedidos prontos para emitir NFe pelo TagPlus. Clique em
+  <strong>Conferir e emitir</strong> para revisar os dados (cliente, item, forma de pagamento)
+  e confirmar a emissão. Depois de emitida, acompanhe o status em
+  <a href="{{ url_for('hora.tagplus_emissoes_lista') }}">Fila de emissões</a>.
 </div>
+
+{% set mostrar_todas = request.args.get('todas') == '1' %}
+
+<form method="get" class="mb-3">
+  <div class="form-check form-switch d-inline-block">
+    <input class="form-check-input" type="checkbox" id="chk-todas" name="todas" value="1"
+           {% if mostrar_todas %}checked{% endif %}
+           onchange="this.form.submit()">
+    <label class="form-check-label" for="chk-todas">
+      Mostrar tambem pedidos ja faturados/cancelados
+    </label>
+  </div>
+</form>
 
 {% if not rows %}
-  <div class="alert alert-warning">Nenhuma venda cadastrada ainda.</div>
+  <div class="alert alert-warning">Nenhum pedido cadastrado ainda.</div>
 {% else %}
 <div class="table-responsive">
   <table class="table table-hover align-middle">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Loja</th>
+        <th>Pedido</th>
         <th>Cliente</th>
-        <th>Forma pgto</th>
-        <th>Status venda</th>
-        <th>Status emissão</th>
-        <th>Itens</th>
+        <th>Loja</th>
+        <th>Pagamento</th>
+        <th>Status do pedido</th>
+        <th>Status NFe</th>
         <th class="text-end">Ação</th>
       </tr>
     </thead>
     <tbody>
+      {% set pedido_badge = {
+          'COTACAO': 'secondary',
+          'CONFIRMADO': 'primary',
+          'FATURADO': 'success',
+          'CANCELADO': 'danger',
+      } %}
+      {% set nfe_badge = {
+          'PENDENTE': 'secondary',
+          'EM_ENVIO': 'info',
+          'ENVIADA_SEFAZ': 'primary',
+          'APROVADA': 'success',
+          'REJEITADA_LOCAL': 'danger',
+          'REJEITADA_SEFAZ': 'danger',
+          'ERRO_INFRA': 'warning',
+          'CANCELAMENTO_SOLICITADO': 'warning',
+          'CANCELADA': 'dark'
+      } %}
+      {% set nfe_label = {
+          'PENDENTE': 'Aguardando envio',
+          'EM_ENVIO': 'Enviando',
+          'ENVIADA_SEFAZ': 'Aguardando SEFAZ',
+          'APROVADA': 'Aprovada',
+          'REJEITADA_LOCAL': 'Rejeitada (validacao)',
+          'REJEITADA_SEFAZ': 'Rejeitada (SEFAZ)',
+          'ERRO_INFRA': 'Erro de envio',
+          'CANCELAMENTO_SOLICITADO': 'Cancelamento solicitado',
+          'CANCELADA': 'Cancelada'
+      } %}
+      {% set linhas_renderizadas = [] %}
       {% for r in rows %}
         {% set v = r.venda %}
         {% set e = r.emissao %}
+        {% set ja_emitida = e and e.status == 'APROVADA' %}
+        {% set cancelada = v.status == 'CANCELADO' or (e and e.status == 'CANCELADA') %}
+        {% set deve_mostrar = mostrar_todas or (not ja_emitida and not cancelada) %}
+        {% if deve_mostrar %}
+        {% set _ = linhas_renderizadas.append(1) %}
         <tr>
-          <td><strong>{{ v.id }}</strong></td>
-          <td>{{ v.loja.nome if v.loja else '—' }}</td>
+          <td>
+            <strong>#{{ v.id }}</strong>
+            <div class="small text-muted">{{ v.criado_em.strftime('%d/%m/%Y') }}</div>
+          </td>
           <td>
             <div>{{ v.nome_cliente or '—' }}</div>
             <small class="text-muted">{{ v.cpf_cliente or '' }}</small>
           </td>
+          <td>{{ v.loja.nome if v.loja else '—' }}</td>
           <td>
-            <code>{{ v.forma_pagamento or 'NAO_INFORMADO' }}</code>
-          </td>
-          <td><span class="badge bg-secondary">{{ v.status or '—' }}</span></td>
-          <td>
-            {% if e %}
-              <span class="badge bg-info text-dark">{{ e.status }}</span>
+            {% if v.forma_pagamento and v.forma_pagamento != 'NAO_INFORMADO' %}
+              {{ v.forma_pagamento }}
             {% else %}
-              <span class="text-muted">— sem emissão —</span>
+              <span class="text-warning">Nao informado</span>
             {% endif %}
           </td>
-          <td>{{ v.itens|length }}</td>
+          <td>
+            <span class="badge bg-{{ pedido_badge.get(v.status, 'secondary') }}">{{ v.status or '—' }}</span>
+          </td>
+          <td>
+            {% if e %}
+              <span class="badge bg-{{ nfe_badge.get(e.status, 'secondary') }}">
+                {{ nfe_label.get(e.status, e.status) }}
+              </span>
+              {% if e.numero_nfe %}<div class="small text-muted">NF {{ e.numero_nfe }}</div>{% endif %}
+            {% else %}
+              <span class="text-muted">— sem NFe —</span>
+            {% endif %}
+          </td>
           <td class="text-end">
-            <a href="{{ url_for('hora.tagplus_esboco_preview', venda_id=v.id) }}"
-               class="btn btn-sm btn-primary">
-              <i class="fas fa-eye"></i> Ver payload
-            </a>
+            {% if ja_emitida %}
+              <a href="{{ url_for('hora.venda_nfe_status', venda_id=v.id) }}"
+                 class="btn btn-sm btn-outline-success">
+                <i class="fas fa-eye"></i> Ver NFe
+              </a>
+            {% elif cancelada %}
+              <a href="{{ url_for('hora.vendas_detalhe', venda_id=v.id) }}"
+                 class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-eye"></i> Ver pedido
+              </a>
+            {% else %}
+              <a href="{{ url_for('hora.tagplus_esboco_preview', venda_id=v.id) }}"
+                 class="btn btn-sm btn-primary">
+                <i class="fas fa-clipboard-check"></i> Conferir e emitir
+              </a>
+            {% endif %}
           </td>
         </tr>
+        {% endif %}
       {% endfor %}
+      {% if linhas_renderizadas | length == 0 %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">
+            {% if mostrar_todas %}
+              Nenhum pedido nas ultimas 50 vendas.
+            {% else %}
+              Nenhum pedido pendente de emissao. Marque <em>Mostrar tambem pedidos
+              ja faturados/cancelados</em> para ver os outros.
+            {% endif %}
+          </td>
+        </tr>
+      {% endif %}
     </tbody>
   </table>
 </div>
-<small class="text-muted">Mostrando últimas 50 vendas (ordem decrescente).</small>
+<small class="text-muted">Mostrando ultimas 50 vendas (ordem decrescente por data de criacao).</small>
 {% endif %}
 {% endblock %}

@@ -339,8 +339,10 @@
       </div>
     </div>
     {% if rastreio.venda.nf_saida_numero %}
+      {% set emissao_tp = rastreio.venda.emissao_nfe %}
+      {% set tem_nfe_tagplus = emissao_tp and emissao_tp.status == 'APROVADA' and emissao_tp.tagplus_nfe_id %}
       <hr class="my-2">
-      <div class="d-flex align-items-center gap-2">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
         <small class="text-muted">NF saída:</small>
         {% if current_user.tem_perm_hora('vendas', 'ver') %}
           <a href="{{ url_for('hora.vendas_detalhe', venda_id=rastreio.venda.id) }}"
@@ -356,12 +358,33 @@
             emitida em {{ rastreio.venda.nf_saida_emitida_em.strftime('%d/%m/%Y %H:%M') }}
           </small>
         {% endif %}
-        {% if rastreio.venda.arquivo_pdf_s3_key and current_user.tem_perm_hora('vendas', 'ver') %}
+        {% if tem_nfe_tagplus and current_user.tem_perm_hora('vendas', 'ver') %}
+          <a href="{{ url_for('hora.venda_nfe_danfe_pdf', venda_id=rastreio.venda.id) }}"
+             class="btn btn-sm btn-outline-secondary py-0" target="_blank"
+             title="Baixar DANFE (NFe TagPlus)">
+            <i class="fas fa-file-pdf"></i> DANFE
+          </a>
+          <a href="{{ url_for('hora.venda_nfe_xml', venda_id=rastreio.venda.id) }}"
+             class="btn btn-sm btn-outline-secondary py-0"
+             title="Baixar XML (NFe TagPlus)">
+            <i class="fas fa-file-code"></i> XML
+          </a>
+          <a href="{{ url_for('hora.venda_nfe_status', venda_id=rastreio.venda.id) }}"
+             class="btn btn-sm btn-outline-success py-0"
+             title="Ver status detalhado da NFe">
+            <i class="fas fa-eye"></i> Status NFe
+          </a>
+        {% elif rastreio.venda.arquivo_pdf_s3_key and current_user.tem_perm_hora('vendas', 'ver') %}
           <a href="{{ url_for('hora.vendas_download_pdf', venda_id=rastreio.venda.id) }}"
              class="btn btn-sm btn-outline-secondary py-0" target="_blank"
-             title="Baixar DANFE (PDF)">
-            <i class="fas fa-file-pdf"></i>
+             title="Baixar DANFE (PDF importado)">
+            <i class="fas fa-file-pdf"></i> DANFE
           </a>
+        {% endif %}
+        {% if emissao_tp and emissao_tp.status not in ('APROVADA', 'CANCELADA') %}
+          <span class="badge bg-info text-dark" title="Status da emissao TagPlus">
+            NFe: {{ emissao_tp.status }}
+          </span>
         {% endif %}
       </div>
     {% endif %}

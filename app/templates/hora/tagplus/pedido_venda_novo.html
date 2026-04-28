@@ -8,15 +8,14 @@
       <i class="fas fa-list-check"></i> Fila de emissões
     </a>
     <a href="{{ url_for('hora.tagplus_esboco_lista') }}" class="btn btn-sm btn-outline-secondary">
-      <i class="fas fa-flask"></i> Esboço
+      <i class="fas fa-clipboard-check"></i> Conferir antes de emitir
     </a>
   </div>
 </div>
 
 <div class="alert alert-info">
-  Cria uma <strong>HoraVenda</strong> manual com todos os campos exigidos pelo
-  TagPlus. Após salvar, você é redirecionado para o esboço onde pode revisar o
-  payload e emitir a NFe.
+  Preencha os dados do pedido de venda. Apos salvar, voce vai para a tela de
+  <strong>conferencia</strong> onde pode revisar e emitir a NFe.
 </div>
 
 {% if not modelos %}
@@ -174,7 +173,7 @@
 
   <div class="d-flex gap-2">
     <button type="submit" class="btn btn-success" id="btn-salvar">
-      <i class="fas fa-save"></i> Salvar e ver esboço NFe
+      <i class="fas fa-save"></i> Salvar e conferir NFe
     </button>
     <a href="{{ url_for('hora.tagplus_esboco_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
