@@ -139,13 +139,13 @@ class PayloadBuilder:
             )
 
         # 1) Localizar via busca livre + match local exato.
-        # Doc (guia.md:118-124): `?q=<termo>` faz LIKE %termo% nos campos
-        # principais (nome, cpf, razao_social, etc.). E o unico mecanismo de
-        # busca documentado que esta garantido pela API.
-        # NAO usar `?cpf_cnpj=` — nao e filtro valido, TagPlus ignora e devolve
-        # a colecao paginada toda, causando falso positivo de "ambiguidade".
-        # `fields=*` garante que TODOS os campos voltem (cpf pode ter nome
-        # diferente em cada conta — `cpf` ou `cpf_cnpj`).
+        # NF #727 (venda #2, 2026-04-28) confirmou via response do POST /nfes que:
+        #   - Em GET /clientes, cada objeto tem `id` (id_cliente) E `id_entidade`.
+        #   - O campo `destinatario` do POST /nfes espera `id_entidade` (e NAO id_cliente).
+        #     Comprovacao: response da NFe mostra "destinatario.id" = id_entidade do
+        #     cliente, e "cliente.id"=654 vs "cliente.id_entidade"=674.
+        #   - O matching anterior pegou um cliente com CPF DIFERENTE — bug de
+        #     filtro local. Agora validamos CPF byte-a-byte pos-match.
         r = self.api.get(
             '/clientes',
             params={'q': cpf, 'fields': '*', 'per_page': 30},
@@ -155,6 +155,14 @@ class PayloadBuilder:
                 resultados = r.json()
             except ValueError:
                 resultados = []
+            # Log do payload cru — fundamental para auditar matchings duvidosos.
+            logger.info(
+                'TagPlus GET /clientes?q=%s status=%s body_type=%s '
+                'count_raw=%s',
+                cpf, r.status_code, type(resultados).__name__,
+                len(resultados) if isinstance(resultados, list) else
+                (len(resultados.keys()) if isinstance(resultados, dict) else 0),
+            )
             if isinstance(resultados, dict):
                 resultados = (
                     resultados.get('data')
@@ -179,49 +187,70 @@ class PayloadBuilder:
                     if self._so_digitos(raw) == cpf:
                         matches.append(item)
 
-            # Logging defensivo: alguns objetos TagPlus expoem `id` E `id_entidade`
-            # (vendedor/endereco/etc). Para Cliente, o ID que vai em `destinatario`
-            # do POST /nfes deve ser o ID INTERNO DO CLIENTE — distinto de
-            # `id_entidade` (entidade subjacente, usada em /enderecos_entidades).
-            # Este log permite auditar quando o match estiver pegando o ID errado.
-            for m in matches:
-                logger.info(
-                    'TagPlus _resolver_destinatario match: cpf=%s id=%r '
-                    'id_cliente=%r id_entidade=%r tipo=%r razao_social=%r '
-                    'codigo=%r ativo=%r keys=%s',
-                    cpf,
-                    m.get('id'),
-                    m.get('id_cliente'),
-                    m.get('id_entidade'),
-                    m.get('tipo'),
-                    m.get('razao_social') or m.get('nome'),
-                    m.get('codigo'),
-                    m.get('ativo'),
-                    sorted(m.keys()) if isinstance(m, dict) else '?',
-                )
+            # Log de cada candidato bruto retornado pelo TagPlus (nao apenas matches).
+            # Critico para investigar quando o match pega cliente de CPF diferente.
+            for raw_item in (resultados if isinstance(resultados, list) else []):
+                if isinstance(raw_item, dict):
+                    logger.info(
+                        'TagPlus /clientes?q=%s candidato: id=%r id_entidade=%r '
+                        'cpf=%r cpf_cnpj=%r razao_social=%r codigo=%r tipo=%r',
+                        cpf,
+                        raw_item.get('id'),
+                        raw_item.get('id_entidade'),
+                        raw_item.get('cpf'),
+                        raw_item.get('cpf_cnpj'),
+                        raw_item.get('razao_social') or raw_item.get('nome'),
+                        raw_item.get('codigo'),
+                        raw_item.get('tipo'),
+                    )
 
             if len(matches) == 1:
-                # Preferir `id_cliente` se TagPlus expor esse campo (em alguns
-                # endpoints o `id` raiz e generico/entidade); fallback para `id`.
-                escolhido = matches[0].get('id_cliente') or matches[0].get('id')
+                m = matches[0]
+                # Defesa-em-profundidade: revalidar CPF byte-a-byte. Apos NF #727
+                # ter sido emitida para Dercio (CPF 500.685.551-72) quando o CPF
+                # da venda era 393.754.958-76, NAO confiamos somente no filtro
+                # acima — re-checamos antes de retornar o ID.
+                cpf_match = self._so_digitos(
+                    m.get('cpf') or m.get('cpf_cnpj') or m.get('cnpj') or ''
+                )
+                if cpf_match != cpf:
+                    logger.error(
+                        'TagPlus _resolver_destinatario MATCH INVALIDO: '
+                        'CPF venda=%s != CPF retornado=%s. Match=%r',
+                        cpf, cpf_match, m,
+                    )
+                    raise PayloadBuilderError(
+                        'cliente_match_invalido',
+                        f'GET /clientes?q={cpf} retornou cliente com CPF '
+                        f'{cpf_match!r} (esperado {cpf!r}). '
+                        f'Match candidato: id={m.get("id")} '
+                        f'id_entidade={m.get("id_entidade")} '
+                        f'razao_social={m.get("razao_social") or m.get("nome")!r}. '
+                        f'Investigar duplicidade/colisao no TagPlus.',
+                    )
+
+                # `destinatario` do POST /nfes espera o id_entidade (confirmado
+                # pela resposta da NFe: destinatario.id = cliente.id_entidade).
+                escolhido = m.get('id_entidade') or m.get('id')
                 if escolhido is None:
                     raise PayloadBuilderError(
                         'destinatario_sem_id',
-                        f'Match para CPF {cpf} nao tem id nem id_cliente: '
-                        f'{matches[0]!r}',
+                        f'Match para CPF {cpf} nao tem id nem id_entidade: {m!r}',
                     )
                 logger.info(
-                    'TagPlus _resolver_destinatario escolhido=%s (cpf=%s, '
-                    'fonte=%s)',
+                    'TagPlus _resolver_destinatario escolhido=%s '
+                    '(cpf=%s, fonte=%s, id_cliente=%s, razao_social=%r)',
                     escolhido, cpf,
-                    'id_cliente' if matches[0].get('id_cliente') else 'id',
+                    'id_entidade' if m.get('id_entidade') else 'id',
+                    m.get('id'),
+                    m.get('razao_social') or m.get('nome'),
                 )
                 return int(escolhido)
             if len(matches) > 1:
                 raise PayloadBuilderError(
                     'destinatario_ambiguo',
                     f'CPF {cpf} encontrado em {len(matches)} clientes no TagPlus '
-                    f'(IDs: {[(m.get("id"), m.get("id_cliente"), m.get("id_entidade")) for m in matches]}). '
+                    f'(IDs: {[(m.get("id"), m.get("id_entidade")) for m in matches]}). '
                     f'Resolver manualmente no portal antes de emitir.',
                 )
             # 0 matches -> nao existe ainda, criar via POST abaixo.
@@ -254,12 +283,24 @@ class PayloadBuilder:
                 created = r2.json()
             except ValueError:
                 created = {}
-            cid = created.get('id') if isinstance(created, dict) else None
+            # POST /clientes pode retornar `id` (id_cliente) E `id_entidade`.
+            # `destinatario` do POST /nfes espera id_entidade — preferir esse.
+            cid = None
+            if isinstance(created, dict):
+                cid = created.get('id_entidade') or created.get('id')
+                logger.info(
+                    'TagPlus POST /clientes criou: id=%r id_entidade=%r '
+                    'razao_social=%r — destinatario=%s',
+                    created.get('id'),
+                    created.get('id_entidade'),
+                    created.get('razao_social') or created.get('nome'),
+                    cid,
+                )
             if cid:
                 return int(cid)
             raise PayloadBuilderError(
                 'cliente_criado_sem_id',
-                f'POST /clientes status {r2.status_code} sem id na resposta: {r2.text[:200]}',
+                f'POST /clientes status {r2.status_code} sem id/id_entidade na resposta: {r2.text[:200]}',
             )
         raise PayloadBuilderError(
             'falha_criar_cliente',
