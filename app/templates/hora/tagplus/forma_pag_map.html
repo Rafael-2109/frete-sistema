@@ -10,8 +10,15 @@
 
 <div class="alert alert-info">
   O TagPlus identifica forma de pagamento pelo <strong>ID inteiro</strong> de cada forma cadastrada
-  no portal. Buscar via <code>GET /formas_pagamento</code> no TagPlus e preencher abaixo.
+  no portal. O portal não tem botão de exportar — use o botão abaixo para puxar via API.
   <strong>MISTO não é suportado na v1</strong> (bloqueado pelo PayloadBuilder).
+</div>
+
+<div class="mb-3">
+  <button type="button" class="btn btn-outline-primary" id="btn-listar-formas">
+    <i class="fas fa-cloud-download-alt"></i> Listar do TagPlus (via API)
+  </button>
+  <div id="formas-result" class="mt-3" style="display: none;"></div>
 </div>
 
 <form method="post" action="{{ url_for('hora.tagplus_forma_map_salvar') }}">
@@ -47,4 +54,54 @@
     <i class="fas fa-save"></i> Salvar
   </button>
 </form>
+
+<script>
+(function () {
+  const btn = document.getElementById('btn-listar-formas');
+  const out = document.getElementById('formas-result');
+  if (!btn || !out) return;
+
+  btn.addEventListener('click', async function () {
+    btn.disabled = true;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando TagPlus...';
+    out.style.display = 'block';
+    out.innerHTML = '';
+
+    try {
+      const url = '{{ url_for("hora.tagplus_forma_map_listar_api") }}';
+      const r = await fetch(url, {headers: {'Accept': 'application/json'}});
+      const body = await r.json();
+
+      if (body.ok) {
+        const linhas = (body.formas || []).map(function (f) {
+          const id = f.id ?? f.codigo ?? '?';
+          const nome = f.nome ?? f.descricao ?? f.tipo ?? JSON.stringify(f).slice(0, 80);
+          return '<tr><td><code>' + id + '</code></td><td>' + nome + '</td></tr>';
+        }).join('');
+        out.innerHTML =
+          '<div class="alert alert-success">Endpoint <code>' + body.endpoint + '</code> retornou ' +
+          body.count + ' forma(s):</div>' +
+          '<table class="table table-sm table-bordered"><thead><tr><th>ID TagPlus</th><th>Descrição</th></tr></thead>' +
+          '<tbody>' + linhas + '</tbody></table>';
+      } else {
+        out.innerHTML =
+          '<div class="alert alert-warning"><strong>API não retornou a lista.</strong><br>' +
+          'Erro: ' + (body.error || 'desconhecido') + '<br>' +
+          (body.ultima_resposta
+            ? '<small>Última tentativa: <code>' + body.ultima_resposta.endpoint + '</code> → HTTP ' +
+              body.ultima_resposta.http_status + '</small><br>'
+            : '') +
+          (body.fallback ? '<hr><small>' + body.fallback + '</small>' : '') +
+          '</div>';
+      }
+    } catch (err) {
+      out.innerHTML = '<div class="alert alert-danger">Erro de rede: ' + err + '</div>';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  });
+})();
+</script>
 {% endblock %}

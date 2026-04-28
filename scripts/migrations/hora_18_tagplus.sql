@@ -44,10 +44,12 @@ CREATE INDEX IF NOT EXISTS ix_hora_tagplus_token_expires_at ON hora_tagplus_toke
 CREATE TABLE IF NOT EXISTS hora_tagplus_produto_map (
     id SERIAL PRIMARY KEY,
     modelo_id INTEGER NOT NULL UNIQUE REFERENCES hora_modelo(id),
-    tagplus_produto_id INTEGER NOT NULL,
+    tagplus_produto_id VARCHAR(50) NOT NULL,
+    -- API TagPlus aceita string no `produto` do POST /nfes (ver hora_19).
     tagplus_codigo VARCHAR(50),
-    cfop_default VARCHAR(5) NOT NULL DEFAULT '5.102',
-    -- VARCHAR(5) cabe "5.102" / "6.102" (mascara 9.999 doc_tagplus.md:178).
+    cfop_default VARCHAR(5) NOT NULL DEFAULT '5.403',
+    -- VARCHAR(5) cabe "5.403" / "6.403" (mascara 9.999 doc_tagplus.md:178).
+    -- 5.403/6.403 = venda de mercadoria com ST (contribuinte substituido).
     criado_em TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'America/Sao_Paulo'),
     atualizado_em TIMESTAMP
 );

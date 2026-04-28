@@ -30,7 +30,17 @@
         </dd>
         <dt class="col-sm-3">Scopes</dt><dd class="col-sm-9"><code>{{ conta.scope_contratado }}</code></dd>
         <dt class="col-sm-3">Redirect URI</dt><dd class="col-sm-9"><code>{{ conta.redirect_uri or '— configurado no portal —' }}</code></dd>
-        <dt class="col-sm-3">Webhook Secret</dt><dd class="col-sm-9"><code>{{ conta.webhook_secret[:12] }}…{{ conta.webhook_secret[-6:] }}</code> <small class="text-muted">(usar em X-Hub-Secret no TagPlus)</small></dd>
+        <dt class="col-sm-3">Webhook Secret</dt><dd class="col-sm-9">
+          <div class="input-group input-group-sm" style="max-width: 560px;">
+            <input type="password" id="webhook-secret-input" class="form-control font-monospace"
+                   value="{{ conta.webhook_secret }}" readonly aria-label="Webhook Secret">
+            <button type="button" class="btn btn-outline-secondary" id="btn-toggle-secret"
+                    title="Mostrar/ocultar"><i class="fas fa-eye"></i></button>
+            <button type="button" class="btn btn-outline-secondary" id="btn-copy-secret"
+                    title="Copiar"><i class="fas fa-copy"></i></button>
+          </div>
+          <small class="text-muted">Usar em X-Hub-Secret no TagPlus.</small>
+        </dd>
         <dt class="col-sm-3">Webhook URL</dt><dd class="col-sm-9"><code>{{ url_for('hora.tagplus_webhook', _external=True) }}</code></dd>
         <dt class="col-sm-3">Token OAuth</dt><dd class="col-sm-9">
           {% if conta.token %}
@@ -102,4 +112,47 @@
     </form>
   </div>
 </div>
+
+{% if conta %}
+<script>
+(function () {
+  const input = document.getElementById('webhook-secret-input');
+  const btnToggle = document.getElementById('btn-toggle-secret');
+  const btnCopy = document.getElementById('btn-copy-secret');
+  if (!input || !btnToggle || !btnCopy) return;
+
+  btnToggle.addEventListener('click', function () {
+    const showing = input.type === 'text';
+    input.type = showing ? 'password' : 'text';
+    btnToggle.querySelector('i').className = showing ? 'fas fa-eye' : 'fas fa-eye-slash';
+  });
+
+  btnCopy.addEventListener('click', async function () {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(input.value);
+      } else {
+        const wasPassword = input.type === 'password';
+        if (wasPassword) input.type = 'text';
+        input.select();
+        input.setSelectionRange(0, input.value.length);
+        document.execCommand('copy');
+        if (wasPassword) input.type = 'password';
+      }
+      const original = btnCopy.innerHTML;
+      btnCopy.innerHTML = '<i class="fas fa-check"></i>';
+      btnCopy.classList.add('btn-success');
+      btnCopy.classList.remove('btn-outline-secondary');
+      setTimeout(function () {
+        btnCopy.innerHTML = original;
+        btnCopy.classList.remove('btn-success');
+        btnCopy.classList.add('btn-outline-secondary');
+      }, 1500);
+    } catch (err) {
+      alert('Falha ao copiar: ' + err);
+    }
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

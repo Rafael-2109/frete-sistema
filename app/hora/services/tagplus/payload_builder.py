@@ -7,7 +7,8 @@ Responsabilidades:
 1. Resolver destinatario (GET /clientes ou POST /clientes).
 2. Montar itens[] com chassi/motor em "detalhes" do item (linha do DANFE).
 3. Montar faturas[] via HoraTagPlusFormaPagamentoMap.
-4. CFOP por UF (5.102 intra / 6.102 inter — mascara obrigatoria 9.999).
+4. CFOP por UF (5.403 intra / 6.403 inter — venda de mercadoria com ST,
+   contribuinte substituido. Mascara obrigatoria 9.999).
 5. Sanitizar (Decimal -> float, arredondar para 2 casas).
 """
 from __future__ import annotations
@@ -214,7 +215,7 @@ class PayloadBuilder:
             chassi = vi.numero_chassi or '-'
             motor = (vi.moto.numero_motor if vi.moto else None) or '-'
             itens.append({
-                'produto': int(map_.tagplus_produto_id),
+                'produto': str(map_.tagplus_produto_id),  # codigo string do produto no TagPlus
                 'qtd': 1,
                 'valor_unitario': self._round2_float(vi.preco_tabela_referencia),
                 'valor_acrescimo': 0,
@@ -268,14 +269,14 @@ class PayloadBuilder:
             map_ = HoraTagPlusProdutoMap.query.filter_by(
                 modelo_id=primeiro_item.moto.modelo_id,
             ).first()
-        cfop_default = map_.cfop_default if map_ else '5.102'
+        cfop_default = map_.cfop_default if map_ else '5.403'
 
         if not cliente_uf or not emitente_uf:
             return cfop_default
 
         if cliente_uf == emitente_uf:
-            return '5.102'
-        return '6.102'
+            return '5.403'
+        return '6.403'
 
     def _uf_emitente(self, venda: 'HoraVenda') -> str | None:
         if venda.loja and getattr(venda.loja, 'uf', None):

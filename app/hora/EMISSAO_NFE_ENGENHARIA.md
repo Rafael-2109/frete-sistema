@@ -57,7 +57,7 @@ app/hora/
 │       ├── api_client.py            # wrapper HTTP autenticado (GET/POST/PATCH com retry e refresh)
 │       ├── emissor_nfe.py           # monta payload + dispara POST /nfes
 │       ├── payload_builder.py       # traduz HoraVenda → JSON TagPlus
-│       ├── webhook_handler.py       # processa callback nfe_aprovada / nfe_rejeitada
+│       ├── webhook_handler.py       # processa callback nfe_aprovada / nfe_denegada / nfe_cancelada
 │       ├── cancelador_nfe.py        # PATCH /nfes/cancelar/{id}
 │       └── cce_service.py           # POST /nfes/gerar_cce/{id}
 ├── workers/
@@ -125,7 +125,7 @@ scripts/migrations/
 ```
 PENDENTE ──enqueue──> EM_ENVIO ──POST 201/202──> ENVIADA_SEFAZ ──webhook──> APROVADA
                           │                            │                       │
-                          │ POST 4xx/5xx               │ webhook nfe_rejeitada │
+                          │ POST 4xx/5xx               │ webhook nfe_denegada  │
                           ▼                            ▼                       │
                     REJEITADA_LOCAL              REJEITADA_SEFAZ               │
                           │                            │                       │
@@ -145,7 +145,7 @@ Máquina de estados:
 | `EM_ENVIO` | `REJEITADA_LOCAL` | POST /nfes retorna 4xx (falta tributação, campo inválido, etc.) |
 | `EM_ENVIO` | `ERRO_INFRA` | POST /nfes retorna 5xx ou timeout → retry com backoff |
 | `ENVIADA_SEFAZ` | `APROVADA` | webhook `nfe_aprovada` |
-| `ENVIADA_SEFAZ` | `REJEITADA_SEFAZ` | webhook `nfe_rejeitada` |
+| `ENVIADA_SEFAZ` | `REJEITADA_SEFAZ` | webhook `nfe_denegada` (TagPlus nao expoe `nfe_rejeitada`; status interno mantem `REJEITADA_SEFAZ`) |
 | `APROVADA` | `CANCELADA` | PATCH /nfes/cancelar/{id} confirmado via webhook `nfe_cancelada` |
 
 ---
@@ -234,7 +234,7 @@ class HoraTagPlusProdutoMap(db.Model):
                           nullable=False, unique=True, index=True)
     # unique: 1 mapeamento por modelo. Para trocar o produto TagPlus, atualiza a linha.
 
-    tagplus_produto_id = db.Column(db.Integer, nullable=False)
+    tagplus_produto_id = db.Column(db.String(50), nullable=False)  # codigo string
     # ID do produto no TagPlus (endpoint /produtos/{id}). Obrigatório pois POST /nfes
     # referencia item.produto como inteiro (ver doc_tagplus.md:638).
 
@@ -331,7 +331,7 @@ Schema real em `scripts/doc_tagplus.md:636-644`: `{produto, qtd, valor_unitario,
 ```python
 # Para cada HoraVendaItem:
 {
-    "produto": tagplus_produto_id,        # int — de hora_tagplus_produto_map
+    "produto": tagplus_produto_id,        # string — de hora_tagplus_produto_map
     "qtd": 1,                             # sempre 1 (chassi é unitário)
     "valor_unitario": float(preco_tabela_referencia),  # sanitize_for_json!
     "valor_acrescimo": 0,
@@ -383,7 +383,7 @@ Schema real em `scripts/doc_tagplus.md:636-644`: `{produto, qtd, valor_unitario,
     "modalidade_frete": 9,             # Sem frete (cliente leva a moto)
     "data_emissao": agora_utc_naive().isoformat(),
     "data_entrada_saida": date.today().isoformat(),
-    "cfop": cfop_por_uf(cliente_uf, loja.uf),  # "5.102" intra / "6.102" inter
+    "cfop": cfop_por_uf(cliente_uf, loja.uf),  # "5.403" intra / "6.403" inter (venda c/ ST)
     # ATENÇÃO: máscara "9.999" com ponto (doc_tagplus.md:178). NUNCA "5102".
 
     "valor_desconto": sum(item.desconto_aplicado for item in venda.itens),
@@ -670,7 +670,8 @@ def reconciliar_enviadas():
             # Processa como se fosse webhook nfe_aprovada
             WebhookHandler.processar(conta.id, 'nfe_aprovada', [{'id': str(emissao.tagplus_nfe_id)}])
         elif status_api in ('S', '2', '4'):
-            WebhookHandler.processar(conta.id, 'nfe_rejeitada', [{'id': str(emissao.tagplus_nfe_id)}])
+            # TagPlus emite `nfe_denegada` (nao `nfe_rejeitada`); engloba codes SEFAZ 2/4.
+            WebhookHandler.processar(conta.id, 'nfe_denegada', [{'id': str(emissao.tagplus_nfe_id)}])
         # Se ainda 'N' (em digitação/processamento), aguarda próximo ciclo.
 ```
 
@@ -751,16 +752,17 @@ class WebhookHandler:
                         detalhe=f'NF {emissao.numero_nfe} chave {emissao.chave_44}',
                     ))
 
-            elif event_type == 'nfe_rejeitada':
+            elif event_type == 'nfe_denegada':
                 detalhes = client.get(f'/nfes/{tagplus_nfe_id}').json()
-                emissao.status = 'REJEITADA_SEFAZ'
-                # Motivo de rejeição pode vir em vários campos — preservar bruto em
+                emissao.status = 'REJEITADA_SEFAZ'  # status interno mantido; cobre denegacao SEFAZ
+                # Motivo pode vir em vários campos — preservar bruto em
                 # response_webhook e tentar extrair no primeiro teste real.
                 emissao.error_message = (
-                    detalhes.get('motivo_rejeicao')
+                    detalhes.get('motivo_denegacao')
+                    or detalhes.get('motivo_rejeicao')
                     or detalhes.get('motivo')
                     or (detalhes.get('historico') or [{}])[-1].get('descricao')
-                    or 'Rejeição sem motivo identificável — ver response_webhook'
+                    or 'Denegação sem motivo identificável — ver response_webhook'
                 )
                 emissao.response_webhook = detalhes
 
@@ -1012,7 +1014,9 @@ Antes da primeira emissão, configurar **uma única vez** no portal TagPlus:
    URL de retorno no portal = `https://sistema-fretes.onrender.com/hora/tagplus/conta/callback`.
 6. **Webhook cadastrado** no ERP apontando para:
    `https://sistema-fretes.onrender.com/hora/tagplus/webhook`
-   com eventos: `nfe_aprovada`, `nfe_rejeitada`, `nfe_cancelada`.
+   com eventos: `nfe_aprovada`, `nfe_denegada`, `nfe_cancelada`.
+   (TagPlus nao expoe `nfe_rejeitada` na lista publica — `nfe_denegada` e o
+   evento real disparado pelo ERP em rejeicoes/denegacoes SEFAZ.)
 
 **Tela de onboarding**: `/hora/tagplus/conta/checklist` valida via API:
 - `GET /usuario_atual` — valida token e escopos concedidos.
@@ -1100,10 +1104,11 @@ CREATE INDEX IF NOT EXISTS ix_hora_tagplus_token_expires_at ON hora_tagplus_toke
 CREATE TABLE IF NOT EXISTS hora_tagplus_produto_map (
     id SERIAL PRIMARY KEY,
     modelo_id INTEGER NOT NULL UNIQUE REFERENCES hora_modelo(id),
-    tagplus_produto_id INTEGER NOT NULL,
+    tagplus_produto_id VARCHAR(50) NOT NULL,  -- codigo string (API aceita texto)
     tagplus_codigo VARCHAR(50),
-    cfop_default VARCHAR(5) NOT NULL DEFAULT '5.102',
-    -- VARCHAR(5) para caber "5.102" ou "6.102" (máscara 9.999 — doc_tagplus.md:178).
+    cfop_default VARCHAR(5) NOT NULL DEFAULT '5.403',
+    -- VARCHAR(5) para caber "5.403" ou "6.403" (máscara 9.999 — doc_tagplus.md:178).
+    -- 5.403/6.403 = venda de mercadoria com ST (contribuinte substituído).
     criado_em TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'America/Sao_Paulo')
 );
 

@@ -214,14 +214,24 @@ def tagplus_checklist():
             })
             try:
                 client = ApiClient(conta)
-                r = client.get('/usuario_atual')
+                # Probe leve dentro do scope `read:produtos` — `/usuario_atual` nao existe
+                # na API TagPlus (ver scripts/doc_tagplus.md). `?per_page=1` reduz payload.
+                r = client.get('/produtos', params={'per_page': 1})
                 if r.status_code == 200:
                     api_ok = True
-                    checks.append({'item': 'GET /usuario_atual', 'status': 'ok', 'mensagem': str(r.json())[:200]})
+                    body = r.json() if r.content else []
+                    qtd = len(body) if isinstance(body, list) else 'n/a'
+                    checks.append({
+                        'item': 'GET /produtos (probe)', 'status': 'ok',
+                        'mensagem': f'API OK (retornou {qtd} item).',
+                    })
                 else:
-                    checks.append({'item': 'GET /usuario_atual', 'status': 'erro', 'mensagem': f'HTTP {r.status_code}: {r.text[:200]}'})
+                    checks.append({
+                        'item': 'GET /produtos (probe)', 'status': 'erro',
+                        'mensagem': f'HTTP {r.status_code}: {r.text[:200]}',
+                    })
             except Exception as exc:
-                checks.append({'item': 'GET /usuario_atual', 'status': 'erro', 'mensagem': str(exc)})
+                checks.append({'item': 'GET /produtos (probe)', 'status': 'erro', 'mensagem': str(exc)})
 
     # Mapeamentos.
     qtd_modelos = HoraModelo.query.filter_by(ativo=True).count()
@@ -266,7 +276,7 @@ def tagplus_produto_map_salvar():
         prefix = f'modelo_{modelo.id}_'
         tagplus_id = (request.form.get(prefix + 'tagplus_id') or '').strip()
         codigo = (request.form.get(prefix + 'codigo') or '').strip() or None
-        cfop = (request.form.get(prefix + 'cfop') or '5.102').strip() or '5.102'
+        cfop = (request.form.get(prefix + 'cfop') or '5.403').strip() or '5.403'
 
         existente = HoraTagPlusProdutoMap.query.filter_by(modelo_id=modelo.id).first()
 
@@ -276,20 +286,18 @@ def tagplus_produto_map_salvar():
                 db.session.delete(existente)
             continue
 
-        try:
-            tagplus_id_int = int(tagplus_id)
-        except ValueError:
-            flash(f'tagplus_id invalido para modelo {modelo.nome_modelo}: {tagplus_id}', 'danger')
+        if len(tagplus_id) > 50:
+            flash(f'tagplus_id invalido para modelo {modelo.nome_modelo} (>50 chars): {tagplus_id}', 'danger')
             continue
 
         if existente:
-            existente.tagplus_produto_id = tagplus_id_int
+            existente.tagplus_produto_id = tagplus_id
             existente.tagplus_codigo = codigo
             existente.cfop_default = cfop
         else:
             db.session.add(HoraTagPlusProdutoMap(
                 modelo_id=modelo.id,
-                tagplus_produto_id=tagplus_id_int,
+                tagplus_produto_id=tagplus_id,
                 tagplus_codigo=codigo,
                 cfop_default=cfop,
             ))
@@ -306,6 +314,60 @@ def tagplus_forma_map_lista():
     maps = {m.forma_pagamento_hora: m for m in HoraTagPlusFormaPagamentoMap.query.all()}
     rows = [{'forma': f, 'map': maps.get(f)} for f in formas_hora]
     return render_template('hora/tagplus/forma_pag_map.html', rows=rows)
+
+
+@hora_bp.route('/tagplus/conta/formas-pagamento/listar', methods=['GET'])
+@require_hora_perm('tagplus', 'ver')
+def tagplus_forma_map_listar_api():
+    """Proxy que chama GET /formas_pagamento na API TagPlus.
+
+    O portal TagPlus nao tem botao de exportar formas de pagamento; este
+    endpoint puxa a lista via API para o operador copiar os IDs.
+    """
+    conta = HoraTagPlusConta.query.filter_by(ativo=True).first()
+    if not conta:
+        return jsonify({'ok': False, 'error': 'Conta nao configurada.'}), 404
+    if not conta.token:
+        return jsonify({'ok': False, 'error': 'Sem token OAuth — autorizar em /hora/tagplus/conta.'}), 400
+
+    client = ApiClient(conta)
+    # Tenta endpoints possiveis. A doc nao explicita o path canonico
+    # (scripts/doc_tagplus.md menciona forma_pagamento como ID inteiro mas
+    # nao expoe o endpoint GET). Convencao TagPlus: recursos sempre no plural.
+    candidatos = ['/formas_pagamento', '/formas_pgto', '/forma_pagamento']
+    ultima_resposta = None
+    for path in candidatos:
+        r = client.get(path, params={'per_page': 100})
+        ultima_resposta = (path, r.status_code, r.text[:300])
+        if r.status_code == 200:
+            try:
+                body = r.json()
+            except ValueError:
+                body = []
+            if isinstance(body, dict):
+                body = body.get('data') or body.get('results') or body.get('formas_pagamento') or []
+            return jsonify({
+                'ok': True,
+                'endpoint': path,
+                'count': len(body) if isinstance(body, list) else 0,
+                'formas': body,
+            })
+
+    return jsonify({
+        'ok': False,
+        'error': 'Endpoint de formas de pagamento nao encontrado.',
+        'tentativas': candidatos,
+        'ultima_resposta': {
+            'endpoint': ultima_resposta[0] if ultima_resposta else None,
+            'http_status': ultima_resposta[1] if ultima_resposta else None,
+            'body': ultima_resposta[2] if ultima_resposta else None,
+        },
+        'fallback': (
+            'Como fallback: emitir uma NFe de teste no portal TagPlus com cada forma '
+            '(PIX, CARTAO_CREDITO, DINHEIRO) e depois consultar GET /nfes/{id} — o campo '
+            'faturas[].id_forma_pagamento traz o ID inteiro a usar.'
+        ),
+    }), 502
 
 
 @hora_bp.route('/tagplus/conta/formas-pagamento', methods=['POST'])

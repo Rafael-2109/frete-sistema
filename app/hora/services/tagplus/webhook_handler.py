@@ -1,8 +1,12 @@
-"""Processa webhooks do TagPlus (nfe_aprovada, nfe_rejeitada, nfe_cancelada).
+"""Processa webhooks do TagPlus (nfe_aprovada, nfe_denegada, nfe_cancelada).
 
 Race-safe: se o webhook chegar antes do commit local do worker que fez o POST,
 o handler enfileira retry com 10s de delay (combina com job de reconciliacao
 periodica para webhooks completamente perdidos).
+
+Nota: TagPlus dispara `nfe_denegada` (nao `nfe_rejeitada`) — ver
+`scripts/webhook.md` (commit db212bab). Internamente mapeamos para
+status `REJEITADA_SEFAZ` (rejeicao generica de SEFAZ).
 """
 from __future__ import annotations
 
@@ -26,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 EVENT_NFE_APROVADA = 'nfe_aprovada'
-EVENT_NFE_REJEITADA = 'nfe_rejeitada'
+EVENT_NFE_DENEGADA = 'nfe_denegada'
 EVENT_NFE_CANCELADA = 'nfe_cancelada'
 
 
@@ -66,8 +70,8 @@ class WebhookHandler:
             try:
                 if event_type == EVENT_NFE_APROVADA:
                     WebhookHandler._handle_aprovada(emissao, client, tagplus_nfe_id)
-                elif event_type == EVENT_NFE_REJEITADA:
-                    WebhookHandler._handle_rejeitada(emissao, client, tagplus_nfe_id)
+                elif event_type == EVENT_NFE_DENEGADA:
+                    WebhookHandler._handle_denegada(emissao, client, tagplus_nfe_id)
                 elif event_type == EVENT_NFE_CANCELADA:
                     WebhookHandler._handle_cancelada(emissao, client, tagplus_nfe_id)
                 else:
@@ -166,10 +170,11 @@ class WebhookHandler:
         )
 
     # ----------------------------------------------------------
-    # Rejeitada
+    # Denegada (TagPlus emite `nfe_denegada` — internamente mapeia
+    # para status REJEITADA_SEFAZ por compatibilidade com banco).
     # ----------------------------------------------------------
     @staticmethod
-    def _handle_rejeitada(
+    def _handle_denegada(
         emissao: HoraTagPlusNfeEmissao,
         client: ApiClient,
         tagplus_nfe_id: int,
@@ -179,9 +184,9 @@ class WebhookHandler:
         detalhes = WebhookHandler._buscar_detalhes(client, tagplus_nfe_id)
         emissao.status = NFE_STATUS_REJEITADA_SEFAZ
         emissao.response_webhook = sanitize_for_json(detalhes)
-        emissao.error_message = WebhookHandler._extrair_motivo_rejeicao(detalhes)
+        emissao.error_message = WebhookHandler._extrair_motivo_denegacao(detalhes)
         logger.warning(
-            'NFe rejeitada emissao=%s motivo=%s',
+            'NFe denegada emissao=%s motivo=%s',
             emissao.id, emissao.error_message,
         )
 
@@ -261,10 +266,11 @@ class WebhookHandler:
             return None
 
     @staticmethod
-    def _extrair_motivo_rejeicao(detalhes: dict) -> str:
+    def _extrair_motivo_denegacao(detalhes: dict) -> str:
         if not isinstance(detalhes, dict):
-            return 'Rejeicao sem detalhes — ver response_webhook.'
+            return 'Denegacao sem detalhes — ver response_webhook.'
         candidatos = [
+            detalhes.get('motivo_denegacao'),
             detalhes.get('motivo_rejeicao'),
             detalhes.get('motivo'),
             detalhes.get('mensagem_sefaz'),
@@ -279,4 +285,4 @@ class WebhookHandler:
         for c in candidatos:
             if c:
                 return str(c)[:1000]
-        return 'Rejeicao sem motivo identificavel — ver response_webhook.'
+        return 'Denegacao sem motivo identificavel — ver response_webhook.'

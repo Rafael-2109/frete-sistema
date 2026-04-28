@@ -9,10 +9,11 @@
 </div>
 
 <div class="alert alert-info">
-  Cada modelo de moto da HORA precisa apontar para o ID do produto correspondente no TagPlus.
-  O ID é o <code>tagplus_produto_id</code> retornado por <code>GET /produtos</code>.
-  CFOP padrão: <code>5.102</code> (intra) — o builder ajusta para <code>6.102</code> quando UF do
-  cliente difere da UF do emitente.
+  Cada modelo de moto da HORA precisa apontar para o <strong>código do produto</strong> (string)
+  cadastrado no TagPlus. O código é retornado por <code>GET /produtos</code> no campo
+  <code>codigo</code>/<code>cod_secundario</code>.
+  CFOP padrão: <code>5.403</code> (intra, venda de mercadoria com ST — contribuinte substituído)
+  — o builder ajusta para <code>6.403</code> quando UF do cliente difere da UF do emitente.
 </div>
 
 <form method="post" action="{{ url_for('hora.tagplus_produto_map_salvar') }}">
@@ -21,8 +22,8 @@
       <thead>
         <tr>
           <th>Modelo HORA</th>
-          <th>tagplus_produto_id</th>
-          <th>tagplus_codigo (opcional)</th>
+          <th>código do produto no TagPlus</th>
+          <th>tagplus_codigo (alternativo, opcional)</th>
           <th>CFOP padrão</th>
         </tr>
       </thead>
@@ -35,8 +36,9 @@
               <div class="small text-muted">id={{ r.modelo.id }}</div>
             </td>
             <td>
-              <input type="number" min="1" class="form-control form-control-sm"
+              <input type="text" maxlength="50" class="form-control form-control-sm"
                      name="modelo_{{ r.modelo.id }}_tagplus_id"
+                     placeholder="ex: PROD-001"
                      value="{{ r.map.tagplus_produto_id if r.map else '' }}">
             </td>
             <td>
@@ -47,8 +49,8 @@
             <td>
               <input type="text" maxlength="5" class="form-control form-control-sm"
                      name="modelo_{{ r.modelo.id }}_cfop" pattern="[0-9]\.[0-9]{3}"
-                     placeholder="5.102"
-                     value="{{ r.map.cfop_default if r.map else '5.102' }}">
+                     placeholder="5.403"
+                     value="{{ r.map.cfop_default if r.map else '5.403' }}">
             </td>
           </tr>
         {% endfor %}

@@ -21,7 +21,7 @@ from app.hora.services.tagplus.webhook_handler import (
     WebhookHandler,
     EVENT_NFE_APROVADA,
     EVENT_NFE_CANCELADA,
-    EVENT_NFE_REJEITADA,
+    EVENT_NFE_DENEGADA,
 )
 from app.utils.timezone import agora_utc_naive
 
@@ -96,7 +96,8 @@ def reconciliar_enviadas(limit: int = 100) -> dict:
                     WebhookHandler.processar(conta_id, EVENT_NFE_CANCELADA, evento_simulado)
                     stats['canceladas'] += 1
                 elif status_api in _STATUS_REJEITADO:
-                    WebhookHandler.processar(conta_id, EVENT_NFE_REJEITADA, evento_simulado)
+                    # TagPlus emite `nfe_denegada`; engloba SEFAZ codes 2 (denegada) e 4 (rejeitada).
+                    WebhookHandler.processar(conta_id, EVENT_NFE_DENEGADA, evento_simulado)
                     stats['rejeitadas'] += 1
                 # Status em-andamento: aguarda proximo ciclo.
 

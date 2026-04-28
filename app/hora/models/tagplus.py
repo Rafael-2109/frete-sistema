@@ -111,14 +111,16 @@ class HoraTagPlusProdutoMap(db.Model):
         db.ForeignKey('hora_modelo.id'),
         nullable=False, unique=True, index=True,
     )
-    tagplus_produto_id = db.Column(db.Integer, nullable=False)
-    # POST /nfes referencia item.produto como inteiro (doc_tagplus.md:638).
+    tagplus_produto_id = db.Column(db.String(50), nullable=False)
+    # POST /nfes aceita string no campo `produto` (codigo do produto no TagPlus).
+    # Doc mostra exemplo `"produto": 1` (linha 638), mas o ERP aceita codigo string.
 
     tagplus_codigo = db.Column(db.String(50), nullable=True)
     # Opcional, exibicao/debug.
 
-    cfop_default = db.Column(db.String(5), nullable=False, default='5.102')
-    # 5.102 intra / 6.102 inter. PayloadBuilder ajusta por UF do cliente.
+    cfop_default = db.Column(db.String(5), nullable=False, default='5.403')
+    # 5.403 intra / 6.403 inter (venda de mercadoria com ST — contribuinte substituido).
+    # PayloadBuilder ajusta por UF do cliente.
 
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
