@@ -67,7 +67,7 @@
       <ul class="dropdown-menu">
         {% if current_user.tem_perm_hora('pedidos', 'ver') %}
           <li><a class="dropdown-item" href="{{ url_for('hora.pedidos_lista') }}">
-            <i class="fas fa-clipboard-list fa-fw"></i> Pedidos
+            <i class="fas fa-clipboard-list fa-fw"></i> Pedido de Compras
           </a></li>
         {% endif %}
         {% if current_user.tem_perm_hora('nfs', 'ver') %}
@@ -132,29 +132,40 @@
     {% endif %}
 
     {# ---------------- 4. Faturamento (TagPlus) ---------------- #}
-    {% if current_user.tem_perm_hora('tagplus', 'ver') %}
+    {% set show_fat =
+        current_user.tem_perm_hora('tagplus', 'ver') or
+        current_user.tem_perm_hora('vendas', 'criar') %}
+    {% if show_fat %}
     <div class="nav-item dropdown">
       <a class="nav-link dropdown-toggle {% if request.endpoint and request.endpoint.startswith('hora.tagplus') %}active{% endif %}"
          href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
         <i class="fas fa-file-invoice-dollar"></i> Faturamento
       </a>
       <ul class="dropdown-menu">
-        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_emissoes_lista') }}">
-          <i class="fas fa-list-check fa-fw"></i> Fila de emissões
-        </a></li>
-        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_esboco_lista') }}">
-          <i class="fas fa-flask fa-fw"></i> Esboço (preview/teste)
-        </a></li>
-        <li><hr class="dropdown-divider"></li>
-        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_conta') }}">
-          <i class="fas fa-key fa-fw"></i> Conta TagPlus / OAuth
-        </a></li>
-        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_checklist') }}">
-          <i class="fas fa-clipboard-check fa-fw"></i> Checklist
-        </a></li>
-        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_produto_map_lista') }}">
-          <i class="fas fa-link fa-fw"></i> Mapeamento de produtos
-        </a></li>
+        {% if current_user.tem_perm_hora('vendas', 'criar') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_pedido_venda_novo') }}">
+            <i class="fas fa-plus-circle fa-fw"></i> Novo Pedido de Venda
+          </a></li>
+          <li><hr class="dropdown-divider"></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('tagplus', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_emissoes_lista') }}">
+            <i class="fas fa-list-check fa-fw"></i> Fila de emissões
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_esboco_lista') }}">
+            <i class="fas fa-flask fa-fw"></i> Esboço (preview/teste)
+          </a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_conta') }}">
+            <i class="fas fa-key fa-fw"></i> Conta TagPlus / OAuth
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_checklist') }}">
+            <i class="fas fa-clipboard-check fa-fw"></i> Checklist
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_produto_map_lista') }}">
+            <i class="fas fa-link fa-fw"></i> Mapeamento de produtos
+          </a></li>
+        {% endif %}
       </ul>
     </div>
     {% endif %}

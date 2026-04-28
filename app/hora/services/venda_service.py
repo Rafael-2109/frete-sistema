@@ -584,6 +584,193 @@ def resolver_divergencia(
 # Listagem
 # --------------------------------------------------------------------------
 
+def criar_venda_manual(
+    cpf_cliente: str,
+    nome_cliente: str,
+    cep: Optional[str],
+    endereco_logradouro: Optional[str],
+    endereco_numero: Optional[str],
+    endereco_complemento: Optional[str],
+    endereco_bairro: Optional[str],
+    endereco_cidade: Optional[str],
+    endereco_uf: Optional[str],
+    numero_chassi: str,
+    valor_final: Decimal,
+    forma_pagamento: str,
+    telefone_cliente: Optional[str] = None,
+    email_cliente: Optional[str] = None,
+    vendedor: Optional[str] = None,
+    observacoes: Optional[str] = None,
+    criado_por: Optional[str] = None,
+) -> HoraVenda:
+    """Cria HoraVenda manual (fluxo "Novo Pedido de Venda" no menu Faturamento).
+
+    Diferente de `importar_nf_saida_pdf`, NAO ha NF previa: o operador preenche
+    todos os campos via formulario web. O fluxo:
+      1. Valida CPF (11 digitos) e nome.
+      2. Valida chassi: existe em hora_moto + ultimo evento em EVENTOS_EM_ESTOQUE.
+      3. Resolve loja_id pelo ultimo evento do chassi (sempre tem para in-stock).
+      4. Resolve preco_tabela_referencia + desconto (preco_tabela_vigente OU
+         preco_final como fallback).
+      5. Cria HoraVenda + HoraVendaItem + emite evento VENDIDA.
+      6. NAO cria NF; venda fica pronta para emissao de NFe via TagPlus.
+
+    Validacoes que NAO sao feitas aqui (sao do PayloadBuilder na hora de emitir):
+      - forma_pagamento mapeada em HoraTagPlusFormaPagamentoMap
+      - modelo mapeado em HoraTagPlusProdutoMap
+      O esboco (`/hora/tagplus/esboco/<id>`) ja exibe esses problemas de forma
+      amigavel, e a emissao bloqueia se faltar mapeamento.
+
+    Args:
+        cpf_cliente: CPF (11 digitos, com ou sem mascara).
+        nome_cliente: Nome completo do consumidor final.
+        cep, endereco_*: Endereco (campos podem ser NULL para vendas sem
+            endereco — mas TagPlus rejeita destinatario sem endereco).
+        numero_chassi: Chassi da moto (deve estar em estoque).
+        valor_final: Preco final (apos desconto). Deve ser > 0.
+        forma_pagamento: PIX | CARTAO_CREDITO | CARTAO_DEBITO | DINHEIRO etc.
+            Validado contra HoraTagPlusFormaPagamentoMap so na emissao.
+        telefone_cliente, email_cliente, vendedor, observacoes: opcionais.
+        criado_por: Operador (current_user.nome) — registrado em HoraMotoEvento.
+
+    Returns:
+        HoraVenda criada (com 1 item e evento VENDIDA emitido).
+
+    Raises:
+        ValueError: dados invalidos (CPF, nome, chassi indisponivel, valor <=0).
+    """
+    # ----- 1. Validacao de cabecalho -----
+    cpf_norm = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
+    if len(cpf_norm) != 11:
+        raise ValueError(f'CPF invalido: {cpf_cliente!r} (esperado 11 digitos)')
+
+    nome_norm = (nome_cliente or '').strip()
+    if not nome_norm:
+        raise ValueError('Nome do cliente obrigatorio')
+
+    if valor_final is None or Decimal(valor_final) <= 0:
+        raise ValueError('Valor final deve ser maior que zero')
+
+    forma_norm = (forma_pagamento or '').strip().upper()
+    if not forma_norm or forma_norm == 'NAO_INFORMADO':
+        raise ValueError('Forma de pagamento obrigatoria')
+
+    # ----- 2. Validacao do chassi -----
+    chassi_norm = (numero_chassi or '').strip().upper()
+    if not chassi_norm:
+        raise ValueError('Chassi obrigatorio')
+
+    moto = HoraMoto.query.get(chassi_norm)
+    if not moto:
+        raise ValueError(f'Chassi {chassi_norm} nao cadastrado')
+
+    ult = _ultimo_evento(chassi_norm)
+    from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
+    if ult is None or ult.tipo not in EVENTOS_EM_ESTOQUE:
+        ult_tipo = ult.tipo if ult else 'sem eventos'
+        raise ValueError(
+            f'Chassi {chassi_norm} nao esta disponivel para venda '
+            f'(ultimo evento: {ult_tipo})'
+        )
+
+    loja_id = ult.loja_id
+    if not loja_id:
+        raise ValueError(
+            f'Chassi {chassi_norm} sem loja definida no ultimo evento — '
+            f'investigar inconsistencia em hora_moto_evento.'
+        )
+
+    # ----- 3. Endereco (sanitizacao basica) -----
+    cep_norm = ''.join(c for c in (cep or '') if c.isdigit()) or None
+    if cep_norm and len(cep_norm) != 8:
+        raise ValueError(f'CEP invalido: {cep!r} (esperado 8 digitos)')
+    cep_formatado = (
+        f'{cep_norm[:5]}-{cep_norm[5:]}' if cep_norm else None
+    )
+    uf_norm = (endereco_uf or '').strip().upper() or None
+    if uf_norm and len(uf_norm) != 2:
+        raise ValueError(f'UF invalido: {endereco_uf!r} (esperado 2 letras)')
+
+    # ----- 4. Resolver preco tabela vigente -----
+    valor_final_dec = Decimal(str(valor_final))
+    data_venda = date.today()
+    tabela_preco = _buscar_preco_vigente(moto.modelo_id, data_venda)
+    if tabela_preco:
+        preco_tabela_ref = Decimal(str(tabela_preco.preco_tabela))
+        desconto = preco_tabela_ref - valor_final_dec
+        if desconto < 0:
+            # Vendeu acima da tabela: gravar sem desconto negativo (mesmo
+            # comportamento de importar_nf_saida_pdf — invariante de venda).
+            preco_tabela_ref = valor_final_dec
+            desconto = Decimal('0.00')
+            tabela_preco_id = None
+        else:
+            tabela_preco_id = tabela_preco.id
+    else:
+        preco_tabela_ref = valor_final_dec
+        desconto = Decimal('0.00')
+        tabela_preco_id = None
+
+    # ----- 5. Persistir HoraVenda + Item + Evento -----
+    venda = HoraVenda(
+        loja_id=loja_id,
+        cpf_cliente=cpf_norm,
+        nome_cliente=nome_norm[:200],
+        telefone_cliente=(telefone_cliente or '').strip()[:20] or None,
+        email_cliente=(email_cliente or '').strip()[:120] or None,
+        data_venda=data_venda,
+        forma_pagamento=forma_norm[:20],
+        valor_total=valor_final_dec,
+        nf_saida_numero=None,
+        nf_saida_chave_44=None,
+        nf_saida_emitida_em=None,
+        arquivo_pdf_s3_key=None,
+        parser_usado=None,
+        parseada_em=None,
+        cnpj_emitente=None,
+        status='CONCLUIDA',
+        vendedor=(vendedor or '').strip()[:100] or None,
+        observacoes=(observacoes or '').strip() or None,
+        cep=cep_formatado,
+        endereco_logradouro=(endereco_logradouro or '').strip()[:255] or None,
+        endereco_numero=(endereco_numero or '').strip()[:20] or None,
+        endereco_complemento=(endereco_complemento or '').strip()[:100] or None,
+        endereco_bairro=(endereco_bairro or '').strip()[:100] or None,
+        endereco_cidade=(endereco_cidade or '').strip()[:100] or None,
+        endereco_uf=uf_norm,
+        origem_criacao='MANUAL',
+    )
+    db.session.add(venda)
+    db.session.flush()
+
+    venda_item = HoraVendaItem(
+        venda_id=venda.id,
+        numero_chassi=chassi_norm,
+        tabela_preco_id=tabela_preco_id,
+        preco_tabela_referencia=preco_tabela_ref,
+        desconto_aplicado=desconto,
+        preco_final=valor_final_dec,
+    )
+    db.session.add(venda_item)
+    db.session.flush()
+
+    registrar_evento(
+        numero_chassi=chassi_norm,
+        tipo='VENDIDA',
+        origem_tabela='hora_venda_item',
+        origem_id=venda_item.id,
+        loja_id=loja_id,
+        operador=criado_por,
+        detalhe=(
+            f'Venda manual #{venda.id} para {nome_norm} '
+            f'(CPF {cpf_norm}) - sem NF (TagPlus pendente)'
+        ),
+    )
+
+    db.session.commit()
+    return venda
+
+
 def listar_vendas(
     limit: int = 200,
     lojas_permitidas_ids: Optional[Iterable[int]] = None,

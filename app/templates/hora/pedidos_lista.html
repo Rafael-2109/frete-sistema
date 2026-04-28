@@ -2,13 +2,13 @@
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
-  <h2>Pedidos (HORA → Motochefe)</h2>
+  <h2>Pedidos de Compras (HORA → Motochefe)</h2>
   <div class="d-flex gap-2">
     <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-outline-primary">
       <i class="fas fa-file-import"></i> Importar XLSX
     </a>
     <a href="{{ url_for('hora.pedidos_novo') }}" class="btn btn-primary">
-      <i class="fas fa-plus"></i> Novo pedido
+      <i class="fas fa-plus"></i> Novo pedido de compra
     </a>
   </div>
 </div>

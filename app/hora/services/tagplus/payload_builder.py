@@ -158,6 +158,13 @@ class PayloadBuilder:
         if venda.email_cliente:
             body['email'] = venda.email_cliente
 
+        # Endereco do destinatario — exigido pela SEFAZ na emissao.
+        # Vendas DANFE legacy nao tem endereco (parser nao extrai). Vendas
+        # criadas via /tagplus/pedido-venda/novo trazem todos os campos.
+        endereco = self._montar_endereco_principal(venda)
+        if endereco:
+            body['enderecos'] = [endereco]
+
         r2 = self.api.post('/clientes', json=body)
         if r2.status_code in (200, 201):
             try:
@@ -175,6 +182,41 @@ class PayloadBuilder:
             'falha_criar_cliente',
             f'POST /clientes status {r2.status_code}: {r2.text[:300]}',
         )
+
+    @staticmethod
+    def _montar_endereco_principal(venda: 'HoraVenda') -> dict | None:
+        """Monta dict de endereco para POST /clientes a partir da HoraVenda.
+
+        Retorna None se nao houver dados minimos (CEP + logradouro + cidade +
+        UF). Quando ha dados, retorna dict com schema {principal, cep,
+        logradouro, numero, complemento, bairro, informacoes_adicionais} —
+        compativel com a documentacao TagPlus (ver scripts/doc_tagplus.md).
+        """
+        cep = (venda.cep or '').strip()
+        logradouro = (venda.endereco_logradouro or '').strip()
+        cidade = (venda.endereco_cidade or '').strip()
+        uf = (venda.endereco_uf or '').strip().upper()
+        if not (cep and logradouro and cidade and uf):
+            return None
+
+        # CEP: TagPlus aceita formato livre, mas idiomatico com mascara.
+        cep_digits = ''.join(c for c in cep if c.isdigit())
+        cep_formatado = (
+            f'{cep_digits[:5]}-{cep_digits[5:]}' if len(cep_digits) == 8 else cep
+        )
+
+        endereco: dict = {
+            'principal': True,
+            'cep': cep_formatado,
+            'logradouro': logradouro,
+            'numero': (venda.endereco_numero or '').strip() or 'S/N',
+            'complemento': (venda.endereco_complemento or '').strip() or None,
+            'bairro': (venda.endereco_bairro or '').strip() or None,
+            # informacoes_adicionais reproduz cidade/UF para TagPlus que ainda
+            # exibe alguns enderecos via texto livre (campo opcional na doc).
+            'informacoes_adicionais': f'{cidade}/{uf}',
+        }
+        return {k: v for k, v in endereco.items() if v is not None}
 
     def _consultar_uf_cliente(self, cliente_id: int) -> str | None:
         try:

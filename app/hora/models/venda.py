@@ -59,6 +59,25 @@ class HoraVenda(db.Model):
     # Preenchido manualmente na tela de detalhe pos-import.
     observacoes = db.Column(db.Text, nullable=True)
 
+    # --------------------------------------------------------------
+    # Endereco do destinatario (cliente)
+    # --------------------------------------------------------------
+    # Preenchido no fluxo manual (tela "Novo Pedido de Venda" no menu
+    # Faturamento). NULL para vendas legacy importadas via DANFE — o parser
+    # CarVia nao extrai endereco do destinatario do PDF. Quando preenchidos,
+    # o PayloadBuilder usa estes campos para criar o cliente no TagPlus
+    # (POST /clientes com enderecos[]).
+    cep = db.Column(db.String(9), nullable=True)
+    endereco_logradouro = db.Column(db.String(255), nullable=True)
+    endereco_numero = db.Column(db.String(20), nullable=True)
+    endereco_complemento = db.Column(db.String(100), nullable=True)
+    endereco_bairro = db.Column(db.String(100), nullable=True)
+    endereco_cidade = db.Column(db.String(100), nullable=True)
+    endereco_uf = db.Column(db.String(2), nullable=True)
+
+    # Discriminador da fonte: 'DANFE' (import legacy) | 'MANUAL' (novo fluxo).
+    origem_criacao = db.Column(db.String(20), nullable=True, default='DANFE', index=True)
+
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
 

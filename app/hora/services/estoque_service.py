@@ -585,6 +585,139 @@ def autocomplete_cor(
     return [row[0] for row in base.all() if row[0]]
 
 
+def cores_disponiveis_por_modelo(
+    modelo_id: int,
+    lojas_permitidas_ids: Optional[List[int]] = None,
+) -> List[str]:
+    """Lista cores distintas com pelo menos 1 chassi em EVENTOS_EM_ESTOQUE
+    para o modelo informado.
+
+    Usado pelo SELECT cascateado da tela "Novo Pedido de Venda" (Faturamento):
+    operador escolhe modelo -> aparecem cores -> aparecem chassis. Filtra por
+    lojas permitidas ao usuario quando `lojas_permitidas_ids` nao e None.
+    """
+    if not modelo_id:
+        return []
+
+    sub = _subquery_ultimo_evento_id()
+    q = (
+        db.session.query(HoraMoto.cor)
+        .join(sub, HoraMoto.numero_chassi == sub.c.chassi)
+        .join(HoraMotoEvento, HoraMotoEvento.id == sub.c.max_id)
+        .filter(
+            HoraMoto.modelo_id == modelo_id,
+            HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE),
+            HoraMoto.cor.isnot(None),
+        )
+    )
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        q = q.filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
+
+    cores = sorted({row[0] for row in q.distinct().all() if row[0]})
+    return cores
+
+
+def chassis_disponiveis_para_venda(
+    modelo_id: int,
+    cor: Optional[str] = None,
+    lojas_permitidas_ids: Optional[List[int]] = None,
+) -> List[dict]:
+    """Lista chassis disponiveis para venda manual (tela Faturamento ->
+    Novo Pedido de Venda).
+
+    Considera "disponivel" = ultimo evento em EVENTOS_EM_ESTOQUE. Inclui
+    AVARIADA e FALTANDO_PECA com flag para o operador decidir; UI deve
+    mostrar badge.
+
+    Retorna lista de dicts ordenada por chassi:
+        [{chassi, modelo_id, modelo_nome, cor, motor, ano_modelo,
+          loja_id, loja_nome, ultimo_evento, avarias_abertas,
+          pecas_faltando_abertas, preco_tabela_sugerido}, ...]
+    `preco_tabela_sugerido` e o preco da tabela vigente HOJE para o modelo
+    (None se nao houver tabela vigente).
+    """
+    from datetime import date
+
+    if not modelo_id:
+        return []
+
+    sub = _subquery_ultimo_evento_id()
+    q = (
+        db.session.query(HoraMotoEvento, HoraMoto, HoraModelo, HoraLoja)
+        .join(
+            sub,
+            and_(
+                HoraMotoEvento.numero_chassi == sub.c.chassi,
+                HoraMotoEvento.id == sub.c.max_id,
+            ),
+        )
+        .join(HoraMoto, HoraMotoEvento.numero_chassi == HoraMoto.numero_chassi)
+        .join(HoraModelo, HoraMoto.modelo_id == HoraModelo.id)
+        .outerjoin(HoraLoja, HoraMotoEvento.loja_id == HoraLoja.id)
+        .filter(
+            HoraMoto.modelo_id == modelo_id,
+            HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE),
+        )
+    )
+    if cor:
+        q = q.filter(HoraMoto.cor == cor.strip().upper())
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        q = q.filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
+
+    q = q.order_by(HoraMoto.numero_chassi)
+    rows = q.all()
+    if not rows:
+        return []
+
+    # Enriquecimento.
+    chassis = [moto.numero_chassi for _, moto, _, _ in rows]
+    from app.hora.services.avaria_service import avarias_abertas_por_chassi
+    avarias_map = avarias_abertas_por_chassi(chassis)
+    pecas_map = _pecas_abertas_por_chassi(chassis)
+
+    # Preco tabela vigente hoje para o modelo (1 query).
+    from sqlalchemy import or_
+    from app.hora.models import HoraTabelaPreco
+    hoje = date.today()
+    tabela = (
+        HoraTabelaPreco.query
+        .filter(
+            HoraTabelaPreco.modelo_id == modelo_id,
+            HoraTabelaPreco.ativo.is_(True),
+            HoraTabelaPreco.vigencia_inicio <= hoje,
+            or_(
+                HoraTabelaPreco.vigencia_fim.is_(None),
+                HoraTabelaPreco.vigencia_fim >= hoje,
+            ),
+        )
+        .order_by(HoraTabelaPreco.vigencia_inicio.desc())
+        .first()
+    )
+    preco_sugerido = float(tabela.preco_tabela) if tabela else None
+
+    resultado = []
+    for ev, moto, modelo, loja in rows:
+        resultado.append({
+            'chassi': moto.numero_chassi,
+            'modelo_id': modelo.id,
+            'modelo_nome': modelo.nome_modelo,
+            'cor': moto.cor,
+            'motor': moto.numero_motor,
+            'ano_modelo': moto.ano_modelo,
+            'loja_id': loja.id if loja else None,
+            'loja_nome': loja.rotulo_display if loja else None,
+            'ultimo_evento': ev.tipo,
+            'avarias_abertas': avarias_map.get(moto.numero_chassi, 0),
+            'pecas_faltando_abertas': pecas_map.get(moto.numero_chassi, 0),
+            'preco_tabela_sugerido': preco_sugerido,
+        })
+    return resultado
+
+
 def kpis_estoque_por_loja(
     lojas_permitidas_ids: Optional[List[int]] = None,
 ) -> List[dict]:

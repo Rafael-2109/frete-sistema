@@ -38,6 +38,7 @@ from app.hora.models.tagplus import (
     HoraTagPlusProdutoMap,
     NFE_STATUS_VALIDOS,
 )
+from app.hora.services.auth_helper import lojas_permitidas_ids
 from app.hora.routes import hora_bp
 from app.hora.services.tagplus.api_client import ApiClient
 from app.hora.services.tagplus.cancelador_nfe import (
@@ -827,6 +828,136 @@ def tagplus_esboco_emitir(venda_id: int):
     except RuntimeError as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.tagplus_esboco_preview', venda_id=venda_id))
+
+
+# ============================================================
+# 4.6) Pedido de Venda — formulario manual para emissao TagPlus
+# ============================================================
+
+@hora_bp.route('/tagplus/pedido-venda/novo', methods=['GET'])
+@require_hora_perm('vendas', 'criar')
+def tagplus_pedido_venda_novo():
+    """Formulario para criar HoraVenda manualmente (sem upload de DANFE).
+
+    Operador preenche cliente + endereco + escolhe modelo/cor/chassi e forma de
+    pagamento. Submissao cria venda + redireciona para o esboco TagPlus para o
+    operador conferir o payload e emitir.
+
+    Filtros do SELECT respeitam o escopo de loja (`lojas_permitidas_ids`).
+    """
+    permitidas = lojas_permitidas_ids()
+
+    # Modelos com pelo menos 1 chassi em estoque (mesmo escopo do estoque).
+    from app.hora.services.estoque_service import opcoes_filtro_estoque
+    opcoes = opcoes_filtro_estoque(lojas_permitidas_ids=permitidas)
+    modelos = opcoes['modelos']
+
+    # Formas de pagamento mapeadas no TagPlus.
+    formas_pagamento = (
+        HoraTagPlusFormaPagamentoMap.query
+        .order_by(HoraTagPlusFormaPagamentoMap.forma_pagamento_hora)
+        .all()
+    )
+
+    return render_template(
+        'hora/tagplus/pedido_venda_novo.html',
+        modelos=modelos,
+        formas_pagamento=formas_pagamento,
+    )
+
+
+@hora_bp.route('/tagplus/pedido-venda', methods=['POST'])
+@require_hora_perm('vendas', 'criar')
+def tagplus_pedido_venda_criar():
+    """Cria HoraVenda manual e redireciona para o esboco TagPlus."""
+    from decimal import Decimal, InvalidOperation
+    from app.hora.services import venda_service
+
+    def _g(name: str, max_len: int = 255) -> str:
+        return (request.form.get(name) or '').strip()[:max_len]
+
+    valor_raw = _g('valor', 30)
+    try:
+        valor_dec = Decimal(valor_raw.replace('.', '').replace(',', '.')) \
+            if ',' in valor_raw else Decimal(valor_raw)
+    except (InvalidOperation, ValueError):
+        flash(f'Valor invalido: {valor_raw!r}', 'danger')
+        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+
+    try:
+        venda = venda_service.criar_venda_manual(
+            cpf_cliente=_g('cpf', 14),
+            nome_cliente=_g('nome', 200),
+            cep=_g('cep', 9),
+            endereco_logradouro=_g('logradouro', 255),
+            endereco_numero=_g('numero_endereco', 20),
+            endereco_complemento=_g('complemento', 100),
+            endereco_bairro=_g('bairro', 100),
+            endereco_cidade=_g('cidade', 100),
+            endereco_uf=_g('uf', 2),
+            numero_chassi=_g('chassi', 30),
+            valor_final=valor_dec,
+            forma_pagamento=_g('forma_pagamento', 20),
+            telefone_cliente=_g('telefone', 20) or None,
+            email_cliente=_g('email', 120) or None,
+            vendedor=_g('vendedor', 100) or None,
+            observacoes=_g('observacoes', 500) or None,
+            criado_por=_operador(),
+        )
+    except ValueError as exc:
+        flash(f'Erro ao criar pedido de venda: {exc}', 'danger')
+        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+
+    flash(
+        f'Pedido de venda #{venda.id} criado para {venda.nome_cliente}. '
+        f'Confira o esboco abaixo antes de emitir a NFe.',
+        'success',
+    )
+    return redirect(url_for('hora.tagplus_esboco_preview', venda_id=venda.id))
+
+
+@hora_bp.route('/tagplus/pedido-venda/api/cores')
+@require_hora_perm('vendas', 'criar')
+def tagplus_pedido_venda_api_cores():
+    """JSON com cores que tem chassi disponivel para o modelo informado."""
+    from app.hora.services.estoque_service import cores_disponiveis_por_modelo
+
+    try:
+        modelo_id = int(request.args.get('modelo_id', '0'))
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'modelo_id invalido'}), 400
+    if not modelo_id:
+        return jsonify({'ok': True, 'cores': []})
+
+    permitidas = lojas_permitidas_ids()
+    cores = cores_disponiveis_por_modelo(
+        modelo_id=modelo_id,
+        lojas_permitidas_ids=permitidas,
+    )
+    return jsonify({'ok': True, 'cores': cores})
+
+
+@hora_bp.route('/tagplus/pedido-venda/api/chassis')
+@require_hora_perm('vendas', 'criar')
+def tagplus_pedido_venda_api_chassis():
+    """JSON com chassis disponiveis filtrados por modelo + cor."""
+    from app.hora.services.estoque_service import chassis_disponiveis_para_venda
+
+    try:
+        modelo_id = int(request.args.get('modelo_id', '0'))
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'modelo_id invalido'}), 400
+    cor = (request.args.get('cor') or '').strip().upper() or None
+    if not modelo_id:
+        return jsonify({'ok': True, 'chassis': []})
+
+    permitidas = lojas_permitidas_ids()
+    chassis = chassis_disponiveis_para_venda(
+        modelo_id=modelo_id,
+        cor=cor,
+        lojas_permitidas_ids=permitidas,
+    )
+    return jsonify({'ok': True, 'chassis': chassis})
 
 
 # ============================================================
