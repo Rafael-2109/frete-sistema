@@ -182,14 +182,26 @@
 
         <div class="mb-2">
           <label class="form-label small mb-1">Forma de pagamento</label>
+          {% set atual = venda.forma_pagamento or 'NAO_INFORMADO' %}
+          {% set nomes_mapeados = formas_pagamento|map(attribute='forma_pagamento_hora')|list %}
           <select name="forma_pagamento" class="form-select form-select-sm">
-            {% set atual = venda.forma_pagamento or 'NAO_INFORMADO' %}
             <option value="NAO_INFORMADO" {% if atual == 'NAO_INFORMADO' %}selected{% endif %}>Nao informado</option>
-            <option value="PIX" {% if atual == 'PIX' %}selected{% endif %}>PIX</option>
-            <option value="CARTAO_CREDITO" {% if atual == 'CARTAO_CREDITO' %}selected{% endif %}>Cartao credito</option>
-            <option value="DINHEIRO" {% if atual == 'DINHEIRO' %}selected{% endif %}>Dinheiro</option>
-            <option value="MISTO" {% if atual == 'MISTO' %}selected{% endif %}>Misto</option>
+            {% for f in formas_pagamento %}
+              <option value="{{ f.forma_pagamento_hora }}" {% if atual == f.forma_pagamento_hora %}selected{% endif %}>
+                {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
+              </option>
+            {% endfor %}
+            {# Preserva valor atual se nao estiver mapeado (ex: forma removida posteriormente). #}
+            {% if atual != 'NAO_INFORMADO' and atual not in nomes_mapeados %}
+              <option value="{{ atual }}" selected>{{ atual }} · (nao mapeada)</option>
+            {% endif %}
           </select>
+          {% if not formas_pagamento %}
+            <small class="text-muted">
+              Nenhuma forma mapeada — cadastre em
+              <a href="{{ url_for('hora.tagplus_forma_map_lista') }}">Cadastros &rarr; Formas de pagamento</a>.
+            </small>
+          {% endif %}
         </div>
 
         <div class="mb-2">

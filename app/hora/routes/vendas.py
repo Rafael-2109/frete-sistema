@@ -8,6 +8,7 @@ from flask_login import current_user
 
 from app.hora.decorators import require_hora_perm
 from app.hora.models import HoraLoja, HoraVenda, HoraVendaDivergencia
+from app.hora.models.tagplus import HoraTagPlusFormaPagamentoMap
 from app.hora.routes import hora_bp
 from app.hora.services import venda_service
 from app.hora.services.auth_helper import (
@@ -119,10 +120,21 @@ def vendas_detalhe(venda_id: int):
 
     lojas_ativas = _lojas_ativas_permitidas() if not venda.loja_id else []
 
+    # Formas de pagamento dinamicas: mapeamentos cadastrados em
+    # HoraTagPlusFormaPagamentoMap (mesma fonte usada no formulario de pedido
+    # de venda manual). 'NAO_INFORMADO' eh sentinela (default da coluna) e
+    # sempre aparece como primeira opcao.
+    formas_pagamento = (
+        HoraTagPlusFormaPagamentoMap.query
+        .order_by(HoraTagPlusFormaPagamentoMap.forma_pagamento_hora)
+        .all()
+    )
+
     return render_template(
         'hora/venda_detalhe.html',
         venda=venda,
         lojas_ativas=lojas_ativas,
+        formas_pagamento=formas_pagamento,
     )
 
 
