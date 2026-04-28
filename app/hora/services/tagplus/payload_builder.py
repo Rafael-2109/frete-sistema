@@ -86,6 +86,24 @@ class PayloadBuilder:
             Decimal('0'),
         )
 
+        # ----------------------------------------------------------
+        # INVARIANTE: faturamento SEMPRE pela MATRIZ HORA.
+        # ----------------------------------------------------------
+        # Regra de negocio (2026-04-27): toda NFe da Lojas HORA sai com o CNPJ
+        # da MATRIZ, mesmo que a venda fisica tenha sido feita em uma filial.
+        # `loja_label` no `inf_contribuinte` apenas RASTREIA a loja fisica para
+        # fins gerenciais; o emitente fiscal e a matriz.
+        #
+        # Implementacao: NAO incluir o campo `emitente` no payload. Conforme
+        # `scripts/doc_tagplus.md`, o TagPlus usa automaticamente o emitente
+        # padrao configurado na conta OAuth (singleton `HoraTagPlusConta`).
+        # Como existe apenas 1 conta ativa no sistema, esse emitente padrao =
+        # CNPJ da matriz cadastrado no portal TagPlus.
+        #
+        # NAO ADICIONAR `'emitente': ...` ou `'endereco_emitente': ...` aqui
+        # ou em qualquer outro callsite. Multi-emitente NAO E SUPORTADO por
+        # design — qualquer mudanca neste comportamento exige aprovacao
+        # explicita do dono fiscal da HORA.
         payload = {
             'tipo': 'S',
             'finalidade_emissao': 1,            # Normal (CONFIRMAR fiscal HORA — ver §15.1).
@@ -120,10 +138,17 @@ class PayloadBuilder:
                 f'CPF invalido na venda {venda.id}: {venda.cpf_cliente!r}',
             )
 
-        # 1) Tenta localizar.
+        # 1) Localizar via busca livre + match local exato.
+        # Doc (guia.md:118-124): `?q=<termo>` faz LIKE %termo% nos campos
+        # principais (nome, cpf, razao_social, etc.). E o unico mecanismo de
+        # busca documentado que esta garantido pela API.
+        # NAO usar `?cpf_cnpj=` — nao e filtro valido, TagPlus ignora e devolve
+        # a colecao paginada toda, causando falso positivo de "ambiguidade".
+        # `fields=*` garante que TODOS os campos voltem (cpf pode ter nome
+        # diferente em cada conta — `cpf` ou `cpf_cnpj`).
         r = self.api.get(
             '/clientes',
-            params={'cpf_cnpj': cpf, 'fields': 'id'},
+            params={'q': cpf, 'fields': '*', 'per_page': 30},
         )
         if r.status_code == 200:
             try:
@@ -131,21 +156,39 @@ class PayloadBuilder:
             except ValueError:
                 resultados = []
             if isinstance(resultados, dict):
-                # Algumas APIs retornam {data: [...]} ou {clientes: [...]}.
                 resultados = (
                     resultados.get('data')
                     or resultados.get('clientes')
                     or resultados.get('results')
                     or []
                 )
-            if isinstance(resultados, list) and len(resultados) == 1:
-                return int(resultados[0]['id'])
-            if isinstance(resultados, list) and len(resultados) > 1:
+
+            # Match LOCAL exato pelo CPF (sanitizado para digitos), defesa contra
+            # LIKE pegar match parcial em telefone/RG/codigo.
+            matches: list[dict] = []
+            if isinstance(resultados, list):
+                for item in resultados:
+                    if not isinstance(item, dict):
+                        continue
+                    raw = (
+                        item.get('cpf')
+                        or item.get('cpf_cnpj')
+                        or item.get('cnpj')
+                        or ''
+                    )
+                    if self._so_digitos(raw) == cpf:
+                        matches.append(item)
+
+            if len(matches) == 1:
+                return int(matches[0]['id'])
+            if len(matches) > 1:
                 raise PayloadBuilderError(
                     'destinatario_ambiguo',
-                    f'CPF {cpf} retornou {len(resultados)} clientes no TagPlus. '
+                    f'CPF {cpf} encontrado em {len(matches)} clientes no TagPlus '
+                    f'(IDs: {[m.get("id") for m in matches]}). '
                     f'Resolver manualmente no portal antes de emitir.',
                 )
+            # 0 matches -> nao existe ainda, criar via POST abaixo.
 
         # 2) Cria.
         body = {

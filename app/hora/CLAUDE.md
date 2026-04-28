@@ -187,7 +187,23 @@ Segue o plano aprovado em 2026-04-18:
    - 36 testes em `tests/hora/` cobrindo regras de negócio.
    - Spec: `docs/superpowers/specs/2026-04-22-hora-transferencia-e-avaria-design.md`.
    - Plano: `docs/superpowers/plans/2026-04-22-hora-transferencia-e-avaria.md`.
-7. **Emissão NFe via TagPlus** (2026-04-26). **Concluído** — fluxo (c) do desenho:
+7. **Invariante de Faturamento (REGRA FISCAL)** (2026-04-27):
+
+   **Toda NFe da Lojas HORA sai com o CNPJ da MATRIZ.** Mesmo que a venda física
+   ocorra em filial, o emitente fiscal é sempre a matriz HORA cadastrada na conta
+   TagPlus (singleton `HoraTagPlusConta`).
+
+   - **Implementação**: `PayloadBuilder.build()` **não inclui** o campo `emitente`
+     no JSON do POST /nfes. TagPlus aplica automaticamente o emitente padrão da
+     conta OAuth — que é a matriz.
+   - **Multi-emitente NÃO é suportado por design.** Não adicionar campo
+     `tagplus_emitente_id` em `HoraLoja`, não criar lookup, não passar `emitente:`
+     ou `endereco_emitente:` no payload.
+   - A loja física é apenas **rastreada gerencialmente** em `inf_contribuinte`
+     ("Loja: <nome>") — sem efeito fiscal.
+   - Mudança nesta regra exige aprovação explícita do dono fiscal HORA.
+
+8. **Emissão NFe via TagPlus** (2026-04-26). **Concluído** — fluxo (c) do desenho:
    - 5 tabelas em `app/hora/models/tagplus.py` (migration `hora_18_tagplus.{py,sql}`):
      `hora_tagplus_conta` (singleton), `hora_tagplus_token`, `hora_tagplus_produto_map`,
      `hora_tagplus_forma_pagamento_map`, `hora_tagplus_nfe_emissao`.
