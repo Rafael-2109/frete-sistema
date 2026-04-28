@@ -49,7 +49,7 @@
         <tr>
           <td><code>{{ e.id }}</code></td>
           <td>
-            <a href="{{ url_for('hora.venda_detalhe', venda_id=e.venda_id) }}">#{{ e.venda_id }}</a>
+            <a href="{{ url_for('hora.vendas_detalhe', venda_id=e.venda_id) }}">#{{ e.venda_id }}</a>
             {% if e.venda %}<br><small class="text-muted">{{ e.venda.nome_cliente }}</small>{% endif %}
           </td>
           <td>

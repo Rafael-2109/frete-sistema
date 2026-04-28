@@ -3,7 +3,7 @@
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h2><i class="fas fa-file-invoice-dollar"></i> NFe da venda #{{ venda.id }}</h2>
-  <a href="{{ url_for('hora.venda_detalhe', venda_id=venda.id) }}" class="btn btn-outline-secondary">
+  <a href="{{ url_for('hora.vendas_detalhe', venda_id=venda.id) }}" class="btn btn-outline-secondary">
     <i class="fas fa-arrow-left"></i> Voltar para venda
   </a>
 </div>
