@@ -179,13 +179,49 @@ class PayloadBuilder:
                     if self._so_digitos(raw) == cpf:
                         matches.append(item)
 
+            # Logging defensivo: alguns objetos TagPlus expoem `id` E `id_entidade`
+            # (vendedor/endereco/etc). Para Cliente, o ID que vai em `destinatario`
+            # do POST /nfes deve ser o ID INTERNO DO CLIENTE — distinto de
+            # `id_entidade` (entidade subjacente, usada em /enderecos_entidades).
+            # Este log permite auditar quando o match estiver pegando o ID errado.
+            for m in matches:
+                logger.info(
+                    'TagPlus _resolver_destinatario match: cpf=%s id=%r '
+                    'id_cliente=%r id_entidade=%r tipo=%r razao_social=%r '
+                    'codigo=%r ativo=%r keys=%s',
+                    cpf,
+                    m.get('id'),
+                    m.get('id_cliente'),
+                    m.get('id_entidade'),
+                    m.get('tipo'),
+                    m.get('razao_social') or m.get('nome'),
+                    m.get('codigo'),
+                    m.get('ativo'),
+                    sorted(m.keys()) if isinstance(m, dict) else '?',
+                )
+
             if len(matches) == 1:
-                return int(matches[0]['id'])
+                # Preferir `id_cliente` se TagPlus expor esse campo (em alguns
+                # endpoints o `id` raiz e generico/entidade); fallback para `id`.
+                escolhido = matches[0].get('id_cliente') or matches[0].get('id')
+                if escolhido is None:
+                    raise PayloadBuilderError(
+                        'destinatario_sem_id',
+                        f'Match para CPF {cpf} nao tem id nem id_cliente: '
+                        f'{matches[0]!r}',
+                    )
+                logger.info(
+                    'TagPlus _resolver_destinatario escolhido=%s (cpf=%s, '
+                    'fonte=%s)',
+                    escolhido, cpf,
+                    'id_cliente' if matches[0].get('id_cliente') else 'id',
+                )
+                return int(escolhido)
             if len(matches) > 1:
                 raise PayloadBuilderError(
                     'destinatario_ambiguo',
                     f'CPF {cpf} encontrado em {len(matches)} clientes no TagPlus '
-                    f'(IDs: {[m.get("id") for m in matches]}). '
+                    f'(IDs: {[(m.get("id"), m.get("id_cliente"), m.get("id_entidade")) for m in matches]}). '
                     f'Resolver manualmente no portal antes de emitir.',
                 )
             # 0 matches -> nao existe ainda, criar via POST abaixo.
