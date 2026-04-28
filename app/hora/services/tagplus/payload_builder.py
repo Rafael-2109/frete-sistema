@@ -229,23 +229,30 @@ class PayloadBuilder:
                         f'Investigar duplicidade/colisao no TagPlus.',
                     )
 
-                # `destinatario` do POST /nfes espera o id_entidade (confirmado
-                # pela resposta da NFe: destinatario.id = cliente.id_entidade).
-                escolhido = m.get('id_entidade') or m.get('id')
-                if escolhido is None:
+                # `destinatario` do POST /nfes espera SEMPRE o id_entidade.
+                # id_cliente e id_entidade sao ID-spaces SEPARADOS no TagPlus —
+                # confundi-los gera emissao para pessoa errada (NF #727 emitida
+                # para Dercio quando destinatario era Rafael).
+                #
+                # Se o objeto retornado em GET /clientes nao expoe id_entidade,
+                # fazemos follow-up GET /clientes/{id_cliente} para resolver.
+                id_entidade = m.get('id_entidade')
+                if not id_entidade and m.get('id'):
+                    id_entidade = self._resolver_id_entidade(int(m['id']))
+                if not id_entidade:
                     raise PayloadBuilderError(
-                        'destinatario_sem_id',
-                        f'Match para CPF {cpf} nao tem id nem id_entidade: {m!r}',
+                        'cliente_sem_id_entidade',
+                        f'Cliente CPF={cpf} id_cliente={m.get("id")} sem '
+                        f'id_entidade nem direto nem em GET /clientes/{{id}}. '
+                        f'Match: {m!r}',
                     )
                 logger.info(
-                    'TagPlus _resolver_destinatario escolhido=%s '
-                    '(cpf=%s, fonte=%s, id_cliente=%s, razao_social=%r)',
-                    escolhido, cpf,
-                    'id_entidade' if m.get('id_entidade') else 'id',
-                    m.get('id'),
+                    'TagPlus _resolver_destinatario: cpf=%s id_cliente=%s '
+                    'id_entidade=%s (destinatario) razao_social=%r',
+                    cpf, m.get('id'), id_entidade,
                     m.get('razao_social') or m.get('nome'),
                 )
-                return int(escolhido)
+                return int(id_entidade)
             if len(matches) > 1:
                 raise PayloadBuilderError(
                     'destinatario_ambiguo',
@@ -283,24 +290,36 @@ class PayloadBuilder:
                 created = r2.json()
             except ValueError:
                 created = {}
-            # POST /clientes pode retornar `id` (id_cliente) E `id_entidade`.
-            # `destinatario` do POST /nfes espera id_entidade — preferir esse.
-            cid = None
+
+            id_cliente = None
+            id_entidade = None
             if isinstance(created, dict):
-                cid = created.get('id_entidade') or created.get('id')
+                id_cliente = created.get('id')
+                id_entidade = created.get('id_entidade')
                 logger.info(
                     'TagPlus POST /clientes criou: id=%r id_entidade=%r '
-                    'razao_social=%r — destinatario=%s',
-                    created.get('id'),
-                    created.get('id_entidade'),
+                    'razao_social=%r cpf=%r',
+                    id_cliente, id_entidade,
                     created.get('razao_social') or created.get('nome'),
-                    cid,
+                    created.get('cpf') or created.get('cpf_cnpj'),
                 )
-            if cid:
-                return int(cid)
+
+            if not id_entidade and id_cliente:
+                id_entidade = self._resolver_id_entidade(int(id_cliente))
+
+            if id_entidade:
+                logger.info(
+                    'TagPlus cliente novo cpf=%s id_cliente=%s id_entidade=%s '
+                    '(destinatario)',
+                    cpf, id_cliente, id_entidade,
+                )
+                return int(id_entidade)
+
             raise PayloadBuilderError(
-                'cliente_criado_sem_id',
-                f'POST /clientes status {r2.status_code} sem id/id_entidade na resposta: {r2.text[:200]}',
+                'cliente_criado_sem_id_entidade',
+                f'POST /clientes status {r2.status_code} criou id_cliente={id_cliente} '
+                f'mas nao retornou id_entidade nem direto nem via GET. '
+                f'Body: {r2.text[:200]}',
             )
         raise PayloadBuilderError(
             'falha_criar_cliente',
@@ -426,6 +445,43 @@ class PayloadBuilder:
 
         self._cache_id_cidade[chave] = None
         return None
+
+    def _resolver_id_entidade(self, id_cliente: int) -> int | None:
+        """Faz GET /clientes/{id_cliente} para extrair id_entidade.
+
+        TagPlus tem ID-spaces separados: id_cliente (path REST) e id_entidade
+        (referencia em NFe.destinatario, vendedor.id_entidade, etc.). O search
+        em GET /clientes pode nao expor id_entidade no objeto resumido — entao
+        fazemos um GET completo do recurso para resolver.
+        """
+        try:
+            r = self.api.get(f'/clientes/{id_cliente}')
+        except Exception as exc:
+            logger.warning(
+                'GET /clientes/%s falhou: %s', id_cliente, exc,
+            )
+            return None
+        if r.status_code != 200:
+            logger.warning(
+                'GET /clientes/%s status=%s body=%s',
+                id_cliente, r.status_code, r.text[:200],
+            )
+            return None
+        try:
+            data = r.json() or {}
+        except ValueError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        id_ent = data.get('id_entidade')
+        logger.info(
+            'TagPlus _resolver_id_entidade: id_cliente=%s -> id_entidade=%r '
+            '(razao_social=%r cpf=%r)',
+            id_cliente, id_ent,
+            data.get('razao_social') or data.get('nome'),
+            data.get('cpf') or data.get('cpf_cnpj'),
+        )
+        return int(id_ent) if id_ent else None
 
     def _consultar_uf_cliente(self, cliente_id: int) -> str | None:
         try:
