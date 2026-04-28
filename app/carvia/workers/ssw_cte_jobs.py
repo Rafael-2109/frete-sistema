@@ -202,7 +202,9 @@ def emitir_cte_ssw_job(emissao_id: int) -> dict:
                     erro_ssw=erro_msg,
                     resultado_json=_sanitize_resultado(resultado_cte),
                 )
-                logger.error("Emissao %s falhou: %s", emissao_id, erro_msg)
+                # FIX PYTHON-FLASK-DJ: Falha SSW na emissao eh tratada (ERRO commitado),
+                # rebaixar para warning. Operador retenta. Nao eh bug — eh erro de SSW.
+                logger.warning("Emissao %s falhou: %s", emissao_id, erro_msg)
                 return {'status': 'ERRO', 'erro': erro_msg}
 
             # Commit pos-Playwright com reconnect + retry (evita SSL drop)

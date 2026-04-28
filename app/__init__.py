@@ -59,6 +59,11 @@ if _sentry_dsn:
             Filtra "Task was destroyed but it is pending!" do logger asyncio
             em environment=development — sao falsos-positivos de teardown
             do pytest (pool persistente nao tem shutdown limpo em testes).
+
+            Filtra eventos environment=development de scripts ad-hoc (sys.argv:
+            "-c", "-", "<string>"), pytest, migrations e excepthook — sao
+            ruidosos e nao representam bugs em producao
+            (PYTHON-FLASK-PA/PT/D2/P4/P9/PD/PC/PB/PH/PS).
             """
             # Filtro: asyncio warnings em dev (pytest teardown)
             if _sentry_env == "development":
@@ -70,6 +75,22 @@ if _sentry_dsn:
                     message = message or logentry.get("message", "") or logentry.get("formatted", "")
                 if logger_name == "asyncio" and "Task was destroyed but it is pending" in message:
                     return None
+
+                # FIX 2026-04-28: descartar erros de scripts ad-hoc em dev
+                # (REPL, python -c, python -, pytest, migrations rodadas localmente).
+                # Producao usa gunicorn/worker_render — sys.argv nunca tem esses padroes.
+                extra = event.get("extra") or {}
+                argv = extra.get("sys.argv") or []
+                if isinstance(argv, list) and argv:
+                    first = str(argv[0]).lower() if argv[0] else ""
+                    is_adhoc = (
+                        first in ("-c", "-", "")
+                        or "pytest" in first
+                        or "scripts/migrations/" in first
+                        or first.endswith(".py") and "scripts/" in first
+                    )
+                    if is_adhoc:
+                        return None
 
             tags = event.get("tags", {})
             if tags.get("agent.active") == "true":

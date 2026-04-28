@@ -511,9 +511,15 @@ class OdooPoService:
             }
 
         except Exception as e:
-            logger.error(f"Erro ao simular consolidacao {validacao_id}: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            # FIX PYTHON-FLASK-1Q: Validacao 1046 (PO modificada) na simulacao
+            # eh comportamento esperado de concorrencia — rebaixar para warning.
+            error_str = str(e)
+            if 'Validacao 1046' in error_str or 'PO foi modificada após validação' in error_str:
+                logger.warning(f"Simulacao {validacao_id} bloqueada por concorrencia: {e}")
+            else:
+                logger.error(f"Erro ao simular consolidacao {validacao_id}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
             return {
                 'sucesso': False,
                 'erro': str(e),
@@ -675,9 +681,16 @@ class OdooPoService:
 
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao executar SPLIT/CONSOLIDACAO: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            # FIX PYTHON-FLASK-E1: Validacao 1046 (PO modificada) eh comportamento
+            # esperado de concorrencia (duas NFs disputando mesma PO) — rebaixar
+            # para warning. Operador revalida e segue. Nao eh bug.
+            error_str = str(e)
+            if 'Validacao 1046' in error_str or 'PO foi modificada após validação' in error_str:
+                logger.warning(f"SPLIT/CONSOLIDACAO bloqueado por concorrencia: {e}")
+            else:
+                logger.error(f"Erro ao executar SPLIT/CONSOLIDACAO: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
 
             # Atualizar validacao com erro
             try:

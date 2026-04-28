@@ -174,6 +174,25 @@ class AgentLojasClient:
                     async for event in _parse_message(msg):
                         yield event
 
+        except GeneratorExit:
+            # Cliente desconectou o SSE (mobile, refresh, navegacao).
+            # Re-raise eh obrigatorio para encerrar o async generator.
+            # Nao logar como erro — eh fluxo normal.
+            logger.info("[AGENTE_LOJAS] stream encerrado (cliente desconectou)")
+            raise
+        except RuntimeError as e:
+            # FIX PYTHON-FLASK-PY: "Event loop is closed" no __aexit__ do
+            # ClaudeSDKClient quando o cliente desconecta antes do fim do stream.
+            # Eh consequencia do GeneratorExit — nao eh bug real.
+            if "Event loop is closed" in str(e):
+                logger.info("[AGENTE_LOJAS] stream encerrado (event loop closed)")
+                return
+            logger.exception("[AGENTE_LOJAS] Erro no stream: %s", e)
+            yield {
+                'type': 'error',
+                'content': str(e),
+                'metadata': {'exception_type': type(e).__name__},
+            }
         except Exception as e:
             logger.exception("[AGENTE_LOJAS] Erro no stream: %s", e)
             yield {

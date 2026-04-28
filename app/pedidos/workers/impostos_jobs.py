@@ -245,6 +245,22 @@ def calcular_impostos_odoo(order_id: int, order_name: str = None):
 
     except Exception as e:
         tempo_total = (datetime.now() - inicio).total_seconds()
+        # FIX PYTHON-FLASK-DG: sale.order deletado no Odoo nao eh bug —
+        # rebaixar para warning. Tipico Fault 2: 'Record does not exist or has been deleted'
+        error_str = str(e).lower()
+        if 'record does not exist' in error_str or 'has been deleted' in error_str:
+            logger.warning(
+                f"[Job Impostos] {pedido_ref} — sale.order foi deletado no Odoo "
+                f"(skip): {e}"
+            )
+            return {
+                'success': False,
+                'order_id': order_id,
+                'order_name': order_name,
+                'message': 'sale.order deletado no Odoo',
+                'error': 'RECORD_DELETED',
+                'tempo_segundos': tempo_total
+            }
         logger.error(f"[Job Impostos] Erro ao calcular {pedido_ref}: {e}")
         return {
             'success': False,

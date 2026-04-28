@@ -1,8 +1,9 @@
+import logging
 import os
 import uuid
 from datetime import datetime
 from werkzeug.utils import secure_filename
-from flask import current_app, url_for
+from flask import current_app, url_for, has_app_context
 import mimetypes
 from app.utils.timezone import agora_utc_naive
 
@@ -14,6 +15,26 @@ try:
     S3_AVAILABLE = True
 except ImportError:
     S3_AVAILABLE = False
+
+# Logger fallback para uso fora de app_context (scripts, agente sem ctx)
+_module_logger = logging.getLogger(__name__)
+
+
+def _safe_log_error(msg: str):
+    """Loga erro usando current_app.logger se disponivel; senao logger do modulo.
+    Evita RuntimeError 'Working outside of application context' (PYTHON-FLASK-PV).
+    """
+    if has_app_context():
+        current_app.logger.error(msg)
+    else:
+        _module_logger.error(msg)
+
+
+def _safe_log_warning(msg: str):
+    if has_app_context():
+        current_app.logger.warning(msg)
+    else:
+        _module_logger.warning(msg)
 
 class FileStorage:
     """
@@ -138,7 +159,7 @@ class FileStorage:
                     is_shutdown_error,
                 )
                 if is_interpreter_shutting_down() or is_shutdown_error(e):
-                    current_app.logger.warning(
+                    _safe_log_warning(
                         f"Erro ao salvar arquivo {file_path} durante shutdown "
                         f"(suprimido Sentry): {str(e)}"
                     )
@@ -146,7 +167,9 @@ class FileStorage:
             except ImportError:
                 # app.agente nao disponivel (ex: script standalone) — comportamento original
                 pass
-            current_app.logger.error(f"Erro ao salvar arquivo {file_path}: {str(e)}")
+            # FIX PYTHON-FLASK-PV: usar logger fallback fora de app_context
+            # (scripts standalone, agente em /tmp sem app ctx).
+            _safe_log_error(f"Erro ao salvar arquivo {file_path}: {str(e)}")
             return None
     
     def _save_to_s3(self, file, file_path):
@@ -175,7 +198,7 @@ class FileStorage:
             return file_path
 
         except ClientError as e:
-            current_app.logger.error(f"Erro S3: {str(e)}")
+            _safe_log_error(f"Erro S3: {str(e)}")
             raise
     
     def _save_locally(self, file, file_path):
