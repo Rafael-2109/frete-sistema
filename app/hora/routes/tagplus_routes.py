@@ -234,14 +234,38 @@ def tagplus_checklist():
             except Exception as exc:
                 checks.append({'item': 'GET /produtos (probe)', 'status': 'erro', 'mensagem': str(exc)})
 
-    # Mapeamentos.
+    # Mapeamentos — produtos: valida quantidade E formato do ID (deve ser inteiro
+    # numerico, nao codigo string como MT-JET — TagPlus rejeita com 400).
     qtd_modelos = HoraModelo.query.filter_by(ativo=True).count()
-    qtd_modelos_mapeados = HoraTagPlusProdutoMap.query.count()
-    checks.append({
-        'item': 'Mapeamento de produtos',
-        'status': 'ok' if qtd_modelos_mapeados >= qtd_modelos and qtd_modelos > 0 else 'aviso',
-        'mensagem': f'{qtd_modelos_mapeados}/{qtd_modelos} modelos mapeados.',
-    })
+    todos_maps = HoraTagPlusProdutoMap.query.all()
+    qtd_modelos_mapeados = len(todos_maps)
+    ids_invalidos = [
+        m for m in todos_maps
+        if not (m.tagplus_produto_id or '').strip().isdigit()
+    ]
+    if ids_invalidos:
+        nomes = ', '.join(
+            f'modelo_id={m.modelo_id}({m.tagplus_produto_id!r})'
+            for m in ids_invalidos[:5]
+        )
+        sufixo = f' [+{len(ids_invalidos) - 5} mais]' if len(ids_invalidos) > 5 else ''
+        checks.append({
+            'item': 'Mapeamento de produtos',
+            'status': 'erro',
+            'mensagem': (
+                f'{qtd_modelos_mapeados}/{qtd_modelos} mapeados, mas '
+                f'{len(ids_invalidos)} com ID nao-numerico (TagPlus rejeita 400). '
+                f'Exemplos: {nomes}{sufixo}. Use o botao "Listar do TagPlus" '
+                f'para obter os IDs inteiros corretos.'
+            ),
+        })
+    else:
+        checks.append({
+            'item': 'Mapeamento de produtos',
+            'status': 'ok' if qtd_modelos_mapeados >= qtd_modelos and qtd_modelos > 0 else 'aviso',
+            'mensagem': f'{qtd_modelos_mapeados}/{qtd_modelos} modelos mapeados (IDs validos).',
+        })
+
     qtd_formas = HoraTagPlusFormaPagamentoMap.query.count()
     checks.append({
         'item': 'Mapeamento de formas de pagamento',
@@ -348,6 +372,17 @@ def tagplus_produto_map_salvar():
             flash(f'tagplus_id invalido para modelo {modelo.nome_modelo} (>50 chars): {tagplus_id}', 'danger')
             continue
 
+        # TagPlus exige ID inteiro (numerico). Strings como `MT-JET` sao rejeitadas
+        # com HTTP 400 ("IDs nao existem na base de dados"). Bloqueamos no save.
+        if not tagplus_id.isdigit():
+            flash(
+                f'tagplus_id deve ser numerico para {modelo.nome_modelo}: '
+                f'{tagplus_id!r}. Use o botao "Listar do TagPlus" para obter o ID inteiro. '
+                f'Codigos string vao no campo `tagplus_codigo` (debug).',
+                'danger',
+            )
+            continue
+
         if existente:
             existente.tagplus_produto_id = tagplus_id
             existente.tagplus_codigo = codigo
@@ -363,6 +398,63 @@ def tagplus_produto_map_salvar():
     db.session.commit()
     flash('Mapeamentos salvos.', 'success')
     return redirect(url_for('hora.tagplus_produto_map_lista'))
+
+
+@hora_bp.route('/tagplus/conta/mapeamento/listar-produtos.xlsx', methods=['GET'])
+@require_hora_perm('tagplus', 'ver')
+def tagplus_produto_map_listar_excel():
+    """Exporta lista de produtos do TagPlus em Excel.
+
+    Pagina automaticamente GET /produtos ate esgotar (per_page=100, max=20 paginas).
+    Util para o operador conferir IDs/codigos em massa antes de mapear.
+    """
+    conta = HoraTagPlusConta.query.filter_by(ativo=True).first()
+    if not conta:
+        flash('Conta TagPlus nao configurada.', 'danger')
+        return redirect(url_for('hora.tagplus_produto_map_lista'))
+    if not conta.token:
+        flash('Sem token OAuth — autorizar em /hora/tagplus/conta.', 'danger')
+        return redirect(url_for('hora.tagplus_produto_map_lista'))
+
+    client = ApiClient(conta)
+    produtos: list[dict] = []
+    for page in range(1, 21):  # cap em 20*100 = 2000 produtos
+        r = client.get('/produtos', params={'per_page': 100, 'page': page})
+        if r.status_code != 200:
+            flash(
+                f'GET /produtos page={page} retornou HTTP {r.status_code}. '
+                f'Exportacao parcial com {len(produtos)} produto(s).',
+                'warning',
+            )
+            break
+        try:
+            body = r.json()
+        except ValueError:
+            break
+        if isinstance(body, dict):
+            body = body.get('data') or body.get('produtos') or body.get('results') or []
+        if not isinstance(body, list) or not body:
+            break
+        for p in body:
+            if isinstance(p, dict):
+                produtos.append({
+                    'id': p.get('id'),
+                    'codigo': p.get('codigo') or p.get('cod_secundario'),
+                    'descricao': (
+                        p.get('descricao_produto') or p.get('descricao') or p.get('nome')
+                    ),
+                    'ativo': p.get('ativo'),
+                    'preco_venda': p.get('preco_venda') or p.get('valor_venda'),
+                })
+        if len(body) < 100:
+            break  # ultima pagina
+
+    return _gerar_xlsx_resposta(
+        nome_base='tagplus_produtos',
+        cabecalho=['id', 'codigo', 'descricao', 'ativo', 'preco_venda'],
+        linhas=produtos,
+        titulo_aba='Produtos TagPlus',
+    )
 
 
 @hora_bp.route('/tagplus/conta/formas-pagamento', methods=['GET'])
@@ -501,6 +593,154 @@ def tagplus_forma_map_listar_api():
             '— scope e enviado em ?scope= na URL /authorize, nao configurado no portal.'
         ),
     }), 502
+
+
+@hora_bp.route('/tagplus/conta/formas-pagamento/listar.xlsx', methods=['GET'])
+@require_hora_perm('tagplus', 'ver')
+def tagplus_forma_map_listar_excel():
+    """Exporta formas de pagamento do TagPlus em Excel.
+
+    Reusa estrategia 2-passos do listar (endpoint direto -> fallback NFes).
+    """
+    conta = HoraTagPlusConta.query.filter_by(ativo=True).first()
+    if not conta:
+        flash('Conta TagPlus nao configurada.', 'danger')
+        return redirect(url_for('hora.tagplus_forma_map_lista'))
+    if not conta.token:
+        flash('Sem token OAuth — autorizar em /hora/tagplus/conta.', 'danger')
+        return redirect(url_for('hora.tagplus_forma_map_lista'))
+
+    client = ApiClient(conta)
+    linhas: list[dict] = []
+    fonte = 'desconhecida'
+
+    # Passo 1: endpoints diretos
+    for path in ('/formas_pagamento', '/formas_pgto', '/forma_pagamento'):
+        r = client.get(path, params={'per_page': 100})
+        if r.status_code == 200:
+            try:
+                body = r.json()
+            except ValueError:
+                body = []
+            if isinstance(body, dict):
+                body = (
+                    body.get('data')
+                    or body.get('results')
+                    or body.get('formas_pagamento')
+                    or []
+                )
+            if isinstance(body, list):
+                for f in body:
+                    if isinstance(f, dict):
+                        linhas.append({
+                            'id': f.get('id') or f.get('codigo'),
+                            'descricao': f.get('descricao') or f.get('nome') or f.get('tipo'),
+                            'origem_nfe_id': '',
+                        })
+                fonte = f'endpoint_direto: {path}'
+                break
+
+    # Passo 2: fallback via NFes
+    if not linhas:
+        r_nfes = client.get('/nfes', params={'per_page': 50, 'fields': 'id,faturas,status'})
+        if r_nfes.status_code == 200:
+            try:
+                nfes = r_nfes.json() or []
+            except ValueError:
+                nfes = []
+            if isinstance(nfes, dict):
+                nfes = nfes.get('data') or nfes.get('nfes') or nfes.get('results') or []
+            formas_por_id: dict = {}
+            for nf in nfes if isinstance(nfes, list) else []:
+                faturas = nf.get('faturas') if isinstance(nf, dict) else None
+                if not isinstance(faturas, list):
+                    continue
+                for f in faturas:
+                    if not isinstance(f, dict):
+                        continue
+                    fid = f.get('id_forma_pagamento') or f.get('forma_pagamento')
+                    if isinstance(fid, dict):
+                        obj_id = fid.get('id')
+                        if obj_id is None:
+                            continue
+                        formas_por_id.setdefault(obj_id, {
+                            'id': obj_id,
+                            'descricao': fid.get('descricao') or fid.get('nome') or '',
+                            'origem_nfe_id': nf.get('id'),
+                        })
+                    elif isinstance(fid, int):
+                        formas_por_id.setdefault(fid, {
+                            'id': fid,
+                            'descricao': '(extraida de NFe)',
+                            'origem_nfe_id': nf.get('id'),
+                        })
+            linhas = sorted(formas_por_id.values(), key=lambda x: x.get('id') or 0)
+            fonte = 'nfes_existentes'
+
+    if not linhas:
+        flash('Nao foi possivel obter formas (endpoint direto e fallback NFes falharam).', 'warning')
+        return redirect(url_for('hora.tagplus_forma_map_lista'))
+
+    return _gerar_xlsx_resposta(
+        nome_base='tagplus_formas_pagamento',
+        cabecalho=['id', 'descricao', 'origem_nfe_id'],
+        linhas=linhas,
+        titulo_aba=f'Formas ({fonte})',
+    )
+
+
+def _gerar_xlsx_resposta(
+    nome_base: str,
+    cabecalho: list[str],
+    linhas: list[dict],
+    titulo_aba: str,
+):
+    """Helper: monta XLSX em memoria e devolve Response com download.
+
+    `linhas` e lista de dicts onde cada chave deve estar em `cabecalho`.
+    """
+    from io import BytesIO
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+    except ImportError:
+        flash('openpyxl nao instalado no servidor.', 'danger')
+        return redirect(url_for('hora.tagplus_checklist'))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = (titulo_aba or 'Dados')[:31]
+
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='4F81BD', end_color='4F81BD', fill_type='solid')
+    for col_idx, campo in enumerate(cabecalho, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=campo)
+        cell.font = header_font
+        cell.fill = header_fill
+
+    for row_idx, item in enumerate(linhas, start=2):
+        for col_idx, campo in enumerate(cabecalho, start=1):
+            ws.cell(row=row_idx, column=col_idx, value=item.get(campo))
+
+    # Auto-width best-effort
+    for col_idx, campo in enumerate(cabecalho, start=1):
+        max_len = max(
+            [len(str(item.get(campo) or '')) for item in linhas] + [len(campo)]
+        )
+        ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 2, 50)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    from app.utils.timezone import agora_utc_naive
+    ts = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
+    filename = f'{nome_base}_{ts}.xlsx'
+    return Response(
+        buf.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 @hora_bp.route('/tagplus/conta/formas-pagamento', methods=['POST'])

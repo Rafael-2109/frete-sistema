@@ -9,12 +9,24 @@
 </div>
 
 <div class="alert alert-info">
-  Cada modelo de moto da HORA precisa apontar para o <strong>código do produto</strong> (string)
-  cadastrado no TagPlus. O código é retornado por <code>GET /produtos</code> no campo
-  <code>codigo</code>/<code>cod_secundario</code>.
-  CFOP padrão: <code>5.403</code> (intra, venda de mercadoria com ST — contribuinte substituído)
+  Cada modelo de moto da HORA precisa apontar para o <strong>ID inteiro do produto</strong>
+  cadastrado no TagPlus (campo <code>id</code> em <code>GET /produtos</code>).
+  O TagPlus rejeita códigos string (ex: <code>MT-JET</code>) com erro 400 — use o
+  ID numérico retornado pela API.
+  <br>CFOP padrão: <code>5.403</code> (intra, venda de mercadoria com ST — contribuinte substituído)
   — o builder ajusta para <code>6.403</code> quando UF do cliente difere da UF do emitente.
 </div>
+
+<div class="mb-3 d-flex gap-2 flex-wrap">
+  <button type="button" class="btn btn-outline-primary" id="btn-listar-produtos">
+    <i class="fas fa-cloud-download-alt"></i> Listar do TagPlus (via API)
+  </button>
+  <a href="{{ url_for('hora.tagplus_produto_map_listar_excel') }}"
+     class="btn btn-outline-success">
+    <i class="fas fa-file-excel"></i> Exportar Excel
+  </a>
+</div>
+<div id="produtos-result" class="mb-3" style="display: none;"></div>
 
 <form method="post" action="{{ url_for('hora.tagplus_produto_map_salvar') }}">
   <div class="table-responsive">
@@ -22,7 +34,7 @@
       <thead>
         <tr>
           <th>Modelo HORA</th>
-          <th>código do produto no TagPlus</th>
+          <th>ID TagPlus (inteiro)</th>
           <th>tagplus_codigo (alternativo, opcional)</th>
           <th>CFOP padrão</th>
         </tr>
@@ -38,12 +50,13 @@
             <td>
               <input type="text" maxlength="50" class="form-control form-control-sm"
                      name="modelo_{{ r.modelo.id }}_tagplus_id"
-                     placeholder="ex: PROD-001"
+                     placeholder="ex: 1234"
                      value="{{ r.map.tagplus_produto_id if r.map else '' }}">
             </td>
             <td>
               <input type="text" class="form-control form-control-sm"
                      name="modelo_{{ r.modelo.id }}_codigo"
+                     placeholder="ex: MT-JET"
                      value="{{ r.map.tagplus_codigo if r.map else '' }}">
             </td>
             <td>
@@ -60,6 +73,62 @@
   <button type="submit" class="btn btn-success">
     <i class="fas fa-save"></i> Salvar mapeamentos
   </button>
-  <small class="text-muted ms-2">Para remover um mapeamento, deixe o campo <code>tagplus_produto_id</code> vazio.</small>
+  <small class="text-muted ms-2">Para remover um mapeamento, deixe o campo <code>ID TagPlus</code> vazio.</small>
 </form>
+
+<script>
+(function () {
+  const btn = document.getElementById('btn-listar-produtos');
+  const out = document.getElementById('produtos-result');
+  if (!btn || !out) return;
+
+  btn.addEventListener('click', async function () {
+    btn.disabled = true;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando TagPlus...';
+    out.style.display = 'block';
+    out.innerHTML = '';
+
+    try {
+      const url = '{{ url_for("hora.tagplus_produto_map_listar_api") }}';
+      const r = await fetch(url, {headers: {'Accept': 'application/json'}});
+      const body = await r.json();
+
+      if (body.ok) {
+        const linhas = (body.produtos || []).map(function (p) {
+          const id = p.id ?? '?';
+          const codigo = p.codigo ?? '';
+          const nome = p.nome ?? '';
+          const ativo = p.ativo === false
+            ? '<span class="badge bg-secondary">inativo</span>'
+            : '<span class="badge bg-success">ativo</span>';
+          return '<tr><td><code>' + id + '</code></td><td>' + codigo +
+                 '</td><td>' + nome + '</td><td>' + ativo + '</td></tr>';
+        }).join('');
+        out.innerHTML =
+          '<div class="alert alert-info">' +
+          '<strong>' + body.count + '</strong> produto(s) na página ' + body.page + '.' +
+          ' <a href="{{ url_for("hora.tagplus_produto_map_listar_excel") }}" ' +
+          'class="btn btn-sm btn-outline-success ms-2">' +
+          '<i class="fas fa-file-excel"></i> Baixar lista completa (Excel)</a>' +
+          '</div>' +
+          '<table class="table table-sm table-bordered">' +
+          '<thead><tr><th style="width:120px;">ID TagPlus</th><th>Código</th>' +
+          '<th>Descrição</th><th>Status</th></tr></thead>' +
+          '<tbody>' + linhas + '</tbody></table>';
+      } else {
+        out.innerHTML =
+          '<div class="alert alert-warning"><strong>API não retornou a lista.</strong><br>' +
+          'HTTP ' + (body.http_status || '?') + ' — Erro: ' + (body.error || 'desconhecido') +
+          '</div>';
+      }
+    } catch (err) {
+      out.innerHTML = '<div class="alert alert-danger">Erro de rede: ' + err + '</div>';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  });
+})();
+</script>
 {% endblock %}
