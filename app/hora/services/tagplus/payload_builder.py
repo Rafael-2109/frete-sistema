@@ -191,15 +191,19 @@ class PayloadBuilder:
             # 0 matches -> nao existe ainda, criar via POST abaixo.
 
         # 2) Cria.
-        body = {
+        # Schema TagPlus Cliente PF (doc_tagplus.md:506-525, 716-744): apenas
+        # campos confirmados sao enviados (TagPlus retorna 422 com "Campo
+        # adicional nao permitido" se enviar campos fora do schema).
+        # Campos do schema: tipo, razao_social, cpf, cnpj, ativo, codigo,
+        # exterior, enderecos[].
+        # NAO ENVIAR: nome (use razao_social), email/telefone (nao confirmados
+        # no schema de Cliente embutido na resposta da NFe — sao campos de
+        # Funcionario/Vendedor, nao Cliente).
+        body: dict = {
             'tipo': 'F',
-            'nome': venda.nome_cliente,
+            'razao_social': (venda.nome_cliente or '').strip(),
             'cpf': cpf,
         }
-        if venda.telefone_cliente:
-            body['telefone_celular'] = self._so_digitos(venda.telefone_cliente)
-        if venda.email_cliente:
-            body['email'] = venda.email_cliente
 
         # Endereco do destinatario — exigido pela SEFAZ na emissao.
         # Vendas DANFE legacy nao tem endereco (parser nao extrai). Vendas
@@ -226,14 +230,22 @@ class PayloadBuilder:
             f'POST /clientes status {r2.status_code}: {r2.text[:300]}',
         )
 
-    @staticmethod
-    def _montar_endereco_principal(venda: 'HoraVenda') -> dict | None:
-        """Monta dict de endereco para POST /clientes a partir da HoraVenda.
+    def _montar_endereco_principal(self, venda: 'HoraVenda') -> dict | None:
+        """Monta dict de endereco para POST /clientes conforme schema TagPlus.
 
-        Retorna None se nao houver dados minimos (CEP + logradouro + cidade +
-        UF). Quando ha dados, retorna dict com schema {principal, cep,
-        logradouro, numero, complemento, bairro, informacoes_adicionais} —
-        compativel com a documentacao TagPlus (ver scripts/doc_tagplus.md).
+        Schema confirmado em doc_tagplus.md:984-1000 (object endereco):
+            principal, exterior, cep, logradouro, numero, complemento,
+            bairro, id_cidade (integer), pais, informacoes_adicionais,
+            tipo_cadastro, id_entidade, id_endereco_entidade.
+
+        `id_cidade` (integer) e o campo correto para localidade — TagPlus NAO
+        aceita strings cidade/UF diretas. Resolvemos via lookup `/cidades?q=`
+        com match local por nome+UF e cache de sessao.
+
+        Retorna None se faltar dados minimos (CEP + logradouro + cidade + UF).
+        Se lookup de id_cidade falhar, ainda retorna o endereco (TagPlus pode
+        deduzir pelo CEP em alguns casos) com a cidade/UF em
+        `informacoes_adicionais` como fallback.
         """
         cep = (venda.cep or '').strip()
         logradouro = (venda.endereco_logradouro or '').strip()
@@ -255,11 +267,88 @@ class PayloadBuilder:
             'numero': (venda.endereco_numero or '').strip() or 'S/N',
             'complemento': (venda.endereco_complemento or '').strip() or None,
             'bairro': (venda.endereco_bairro or '').strip() or None,
-            # informacoes_adicionais reproduz cidade/UF para TagPlus que ainda
-            # exibe alguns enderecos via texto livre (campo opcional na doc).
-            'informacoes_adicionais': f'{cidade}/{uf}',
         }
+
+        # Resolver id_cidade via /cidades. Sem id_cidade o endereco fica
+        # incompleto (campo do schema), entao e tentativa best-effort.
+        id_cidade = self._resolver_id_cidade(cidade, uf)
+        if id_cidade:
+            endereco['id_cidade'] = id_cidade
+        else:
+            # Fallback: cidade/UF em texto livre (TagPlus pode deduzir pelo CEP).
+            endereco['informacoes_adicionais'] = f'{cidade}/{uf}'
+            logger.warning(
+                'Endereco sem id_cidade resolvido (cidade=%r uf=%s) — '
+                'enviando informacoes_adicionais como fallback',
+                cidade, uf,
+            )
+
         return {k: v for k, v in endereco.items() if v is not None}
+
+    # Cache de sessao para lookups de cidade (evita N+1 em batch).
+    _cache_id_cidade: dict[tuple[str, str], int | None] = {}
+
+    def _resolver_id_cidade(self, cidade: str, uf: str) -> int | None:
+        """Lookup `GET /cidades?q=<cidade>` com match local por nome+UF.
+
+        Retorna `id` do TagPlus para o par (cidade, UF) ou None se nao achar.
+        Cacheia por instancia para evitar lookups repetidos no mesmo build.
+        """
+        chave = (cidade.strip().upper(), uf.strip().upper())
+        if chave in self._cache_id_cidade:
+            return self._cache_id_cidade[chave]
+
+        try:
+            r = self.api.get('/cidades', params={'q': cidade, 'per_page': 50})
+        except Exception as exc:
+            logger.warning('Falha em GET /cidades?q=%r: %s', cidade, exc)
+            self._cache_id_cidade[chave] = None
+            return None
+
+        if r.status_code != 200:
+            logger.warning(
+                'GET /cidades?q=%r status=%s body=%s',
+                cidade, r.status_code, r.text[:200],
+            )
+            self._cache_id_cidade[chave] = None
+            return None
+
+        try:
+            resultados = r.json()
+        except ValueError:
+            resultados = []
+        if isinstance(resultados, dict):
+            resultados = (
+                resultados.get('data')
+                or resultados.get('cidades')
+                or resultados.get('results')
+                or []
+            )
+
+        # Match local: nome igual + UF igual. Tenta varios nomes de campo
+        # para UF (uf, sigla_uf, estado.sigla) por defesa.
+        cidade_norm = cidade.strip().upper()
+        uf_norm = uf.strip().upper()
+        for item in resultados if isinstance(resultados, list) else []:
+            if not isinstance(item, dict):
+                continue
+            nome_item = (item.get('nome') or item.get('descricao') or '').strip().upper()
+            uf_item = (
+                item.get('uf')
+                or item.get('sigla_uf')
+                or (item.get('estado') or {}).get('sigla')
+                or (item.get('estado') or {}).get('uf')
+                or ''
+            )
+            uf_item = (uf_item or '').strip().upper()
+            if nome_item == cidade_norm and uf_item == uf_norm:
+                cid = item.get('id')
+                if cid is not None:
+                    self._cache_id_cidade[chave] = int(cid)
+                    return int(cid)
+
+        self._cache_id_cidade[chave] = None
+        return None
 
     def _consultar_uf_cliente(self, cliente_id: int) -> str | None:
         try:
