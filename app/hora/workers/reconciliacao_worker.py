@@ -117,3 +117,77 @@ def reconciliar_emissoes_job() -> dict:
     app = create_app()
     with app.app_context():
         return reconciliar_enviadas()
+
+
+def reconciliar_uma_emissao(emissao_id: int) -> dict:
+    """Forca reconciliacao de UMA emissao especifica (botao "Sincronizar agora").
+
+    Sem filtro de tempo — usado quando o operador quer puxar status do TagPlus
+    imediatamente (ex.: NFe foi aprovada no portal mas webhook nao chegou no
+    sistema). Retorna dict com {acao_aplicada, status_api, ok, mensagem}.
+    """
+    emissao = HoraTagPlusNfeEmissao.query.get(emissao_id)
+    if not emissao:
+        return {'ok': False, 'mensagem': f'Emissao {emissao_id} nao encontrada.'}
+    if not emissao.tagplus_nfe_id:
+        return {
+            'ok': False,
+            'mensagem': (
+                f'Emissao {emissao_id} sem tagplus_nfe_id — '
+                f'a NFe nem foi enviada ao TagPlus ainda.'
+            ),
+        }
+    conta = emissao.conta
+    if not conta:
+        return {'ok': False, 'mensagem': 'Conta TagPlus da emissao nao existe mais.'}
+
+    client = ApiClient(conta)
+    try:
+        r = client.get(f'/nfes/{emissao.tagplus_nfe_id}')
+    except Exception as exc:
+        return {
+            'ok': False,
+            'mensagem': f'Falha ao consultar TagPlus: {exc}',
+        }
+    if r.status_code != 200:
+        return {
+            'ok': False,
+            'mensagem': (
+                f'TagPlus retornou HTTP {r.status_code} para '
+                f'/nfes/{emissao.tagplus_nfe_id}: {r.text[:200]}'
+            ),
+        }
+    try:
+        detalhes = r.json() or {}
+    except ValueError:
+        return {'ok': False, 'mensagem': 'TagPlus retornou body nao-JSON.'}
+
+    status_api = (detalhes.get('status') or detalhes.get('situacao') or '').strip()
+    evento_simulado = [{'id': str(emissao.tagplus_nfe_id)}]
+
+    if status_api in _STATUS_APROVADO:
+        WebhookHandler.processar(conta.id, EVENT_NFE_APROVADA, evento_simulado)
+        return {
+            'ok': True, 'status_api': status_api, 'acao_aplicada': 'APROVADA',
+            'mensagem': 'NFe aprovada — status sincronizado.',
+        }
+    if status_api in _STATUS_CANCELADO:
+        WebhookHandler.processar(conta.id, EVENT_NFE_CANCELADA, evento_simulado)
+        return {
+            'ok': True, 'status_api': status_api, 'acao_aplicada': 'CANCELADA',
+            'mensagem': 'NFe cancelada na SEFAZ — status sincronizado.',
+        }
+    if status_api in _STATUS_REJEITADO:
+        WebhookHandler.processar(conta.id, EVENT_NFE_DENEGADA, evento_simulado)
+        return {
+            'ok': True, 'status_api': status_api, 'acao_aplicada': 'REJEITADA',
+            'mensagem': 'NFe rejeitada/denegada SEFAZ — status sincronizado.',
+        }
+
+    return {
+        'ok': True, 'status_api': status_api, 'acao_aplicada': None,
+        'mensagem': (
+            f'TagPlus reporta status {status_api!r} (em processamento) — '
+            f'aguarde alguns segundos e sincronize novamente.'
+        ),
+    }

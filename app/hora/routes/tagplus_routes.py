@@ -960,11 +960,13 @@ def _auditar_payload_required(payload: dict) -> list[dict]:
     })
     if itens_ok:
         for idx, it in enumerate(itens):
-            prod = it.get('produto') if isinstance(it, dict) else None
+            # API real exige `produto_servico` (doc TagPlus desatualizada
+            # mostra `produto` no sample mas API rejeita com 422).
+            prod = it.get('produto_servico') if isinstance(it, dict) else None
             qtd = it.get('qtd') if isinstance(it, dict) else None
             vu = it.get('valor_unitario') if isinstance(it, dict) else None
             checks.append({
-                'campo': f'itens[{idx}].produto',
+                'campo': f'itens[{idx}].produto_servico',
                 'ok': bool(prod) and (isinstance(prod, (int, str))),
                 'required': False,
                 'detalhe': f'tipo={type(prod).__name__} valor={prod!r}',
@@ -1169,10 +1171,10 @@ def tagplus_pedido_venda_criar():
 
     flash(
         f'Pedido de venda #{venda.id} criado para {venda.nome_cliente}. '
-        f'Confira os dados abaixo e clique em "Emitir NFe".',
+        f'Confirme o pedido e emita a NFe.',
         'success',
     )
-    return redirect(url_for('hora.tagplus_esboco_preview', venda_id=venda.id))
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
 
 
 @hora_bp.route('/tagplus/pedido-venda/api/cores')
@@ -1266,6 +1268,33 @@ def venda_nfe_cancelar(venda_id: int):
         flash(f'Bloqueado: {exc}', 'warning')
     except Exception as exc:
         flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
+
+
+@hora_bp.route('/vendas/<int:venda_id>/nfe/sincronizar', methods=['POST'])
+@require_hora_perm('vendas', 'ver')
+def venda_nfe_sincronizar(venda_id: int):
+    """Forca reconciliacao da emissao com o TagPlus (puxa status atual).
+
+    Util quando webhook nfe_aprovada/cancelada nao chegou no sistema mas o
+    portal TagPlus mostra a NFe ja resolvida. Faz GET /nfes/{id} e aplica
+    o handler do evento correspondente.
+    """
+    from app.hora.workers.reconciliacao_worker import reconciliar_uma_emissao
+
+    emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()
+    if not emissao:
+        flash('Sem emissao para esta venda.', 'warning')
+        return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
+
+    resultado = reconciliar_uma_emissao(emissao.id)
+    if resultado.get('ok'):
+        if resultado.get('acao_aplicada'):
+            flash(resultado['mensagem'], 'success')
+        else:
+            flash(resultado['mensagem'], 'info')
+    else:
+        flash(resultado.get('mensagem') or 'Falha ao sincronizar.', 'danger')
     return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
 
 

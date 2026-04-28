@@ -43,10 +43,14 @@
       <h4 class="mb-3"><i class="fas fa-paper-plane"></i> NFe ainda nao emitida</h4>
       {% if venda.status == 'CONFIRMADO' and not venda.nf_saida_chave_44 %}
         <p class="text-muted">O pedido esta CONFIRMADO e pronto para emitir a NFe.</p>
-        <a href="{{ url_for('hora.tagplus_esboco_preview', venda_id=venda.id) }}"
-           class="btn btn-primary">
-          <i class="fas fa-clipboard-check"></i> Conferir e emitir NFe
-        </a>
+        <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
+              onsubmit="return confirm('Confirma emissao da NFe para o pedido #{{ venda.id }}? A NFe sera enviada para a SEFAZ.');"
+              class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-paper-plane"></i> Emitir NFe agora
+          </button>
+        </form>
       {% elif venda.nf_saida_chave_44 %}
         <p class="text-muted mb-0">
           Este pedido ja tem NF emitida fora do TagPlus
@@ -97,11 +101,21 @@
           Enviando para o TagPlus. Esta tela atualiza ao recarregar.
         </p>
       {% elif status == 'ENVIADA_SEFAZ' %}
-        <p class="mt-3 mb-0 text-muted">
-          <i class="fas fa-clock"></i>
-          NFe enviada — aguardando confirmacao da SEFAZ. Pode levar alguns segundos.
-          Recarregue a pagina para atualizar o status.
-        </p>
+        <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <p class="text-muted mb-0">
+            <i class="fas fa-clock"></i>
+            NFe enviada — aguardando confirmacao da SEFAZ. Se ja foi aprovada
+            no portal TagPlus, clique em <strong>Sincronizar</strong> para
+            puxar o status agora.
+          </p>
+          <form method="post" action="{{ url_for('hora.venda_nfe_sincronizar', venda_id=venda.id) }}"
+                class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-primary">
+              <i class="fas fa-sync"></i> Sincronizar com TagPlus
+            </button>
+          </form>
+        </div>
       {% elif status == 'APROVADA' %}
         <p class="mt-3 mb-0 text-success">
           <i class="fas fa-check-circle"></i>
@@ -109,12 +123,21 @@
           {% if emissao.aprovado_em %}em {{ emissao.aprovado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}.
         </p>
       {% elif status == 'CANCELAMENTO_SOLICITADO' %}
-        <p class="mt-3 mb-0 text-warning">
-          <i class="fas fa-hourglass-half"></i>
-          Cancelamento solicitado em
-          {% if emissao.cancelamento_solicitado_em %}{{ emissao.cancelamento_solicitado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
-          — aguardando confirmacao SEFAZ.
-        </p>
+        <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <p class="text-warning mb-0">
+            <i class="fas fa-hourglass-half"></i>
+            Cancelamento solicitado em
+            {% if emissao.cancelamento_solicitado_em %}{{ emissao.cancelamento_solicitado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+            — aguardando confirmacao SEFAZ.
+          </p>
+          <form method="post" action="{{ url_for('hora.venda_nfe_sincronizar', venda_id=venda.id) }}"
+                class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-primary">
+              <i class="fas fa-sync"></i> Sincronizar com TagPlus
+            </button>
+          </form>
+        </div>
       {% elif status == 'CANCELADA' %}
         <p class="mt-3 mb-0 text-muted">
           <i class="fas fa-ban"></i>
@@ -196,9 +219,9 @@
           tentar emitir novamente.
         </p>
         <div class="d-flex gap-2">
-          <a href="{{ url_for('hora.tagplus_esboco_preview', venda_id=venda.id) }}"
+          <a href="{{ url_for('hora.vendas_detalhe', venda_id=venda.id) }}"
              class="btn btn-outline-secondary">
-            <i class="fas fa-clipboard-check"></i> Conferir dados primeiro
+            <i class="fas fa-edit"></i> Editar pedido primeiro
           </a>
           <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
                 onsubmit="return confirm('Confirma nova tentativa de emissao da NFe?');"

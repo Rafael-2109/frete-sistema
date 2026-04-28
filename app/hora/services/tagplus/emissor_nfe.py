@@ -242,8 +242,12 @@ class EmissorNfeHora:
                 emissao.serie_nfe = (
                     str(body.get('serie')) if body.get('serie') is not None else None
                 )
-                # chave_44 e protocolo virao via webhook nfe_aprovada (GET /nfes/{id}).
+                # chave_44 e protocolo virao via webhook nfe_aprovada (GET /nfes/{id})
+                # OU via job de polling (fallback se webhook nao chegar).
             emissao.response_inicial = sanitize_for_json(body)
+            # Inicia polling agressivo (10s, backoff ate 1h). Idempotente com
+            # webhook — se webhook chegar antes, polling so confirma e desiste.
+            cls._enqueue_polling(emissao_id, delay=10)
         elif 400 <= response.status_code < 500:
             emissao.status = NFE_STATUS_REJEITADA_LOCAL
             emissao.error_code = (
@@ -298,6 +302,41 @@ class EmissorNfeHora:
             )
         except Exception as exc:  # pragma: no cover
             logger.exception('Falha ao enfileirar emissao %s: %s', emissao_id, exc)
+
+    @classmethod
+    def _enqueue_polling(cls, emissao_id: int, delay: int = 10) -> None:
+        """Enfileira polling de status (job auto-reagenda com backoff).
+
+        Chamado apos envio bem-sucedido (ENVIADA_SEFAZ) e apos solicitacao de
+        cancelamento (CANCELAMENTO_SOLICITADO). Reduz dependencia do webhook —
+        TagPlus pode falhar em entregar o evento mas a NFe ja esta resolvida no
+        portal.
+        """
+        try:
+            from rq import Queue
+            from redis import Redis
+        except ImportError:  # pragma: no cover
+            return
+        redis_url = os.environ.get('REDIS_URL')
+        if not redis_url:
+            logger.warning(
+                'REDIS_URL ausente — polling de emissao %s NAO enfileirado.',
+                emissao_id,
+            )
+            return
+        try:
+            redis_conn = Redis.from_url(redis_url)
+            queue = Queue(cls.QUEUE_NAME, connection=redis_conn)
+            queue.enqueue_in(
+                timedelta(seconds=delay),
+                'app.hora.workers.emissao_nfe_worker.polling_emissao',
+                emissao_id,
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                'Falha ao enfileirar polling emissao=%s: %s',
+                emissao_id, exc,
+            )
 
     @classmethod
     def _enqueue_webhook(cls, conta_id: int, event_type: str, item: dict, delay: int = 0) -> None:

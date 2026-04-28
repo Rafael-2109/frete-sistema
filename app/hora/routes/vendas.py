@@ -246,6 +246,30 @@ def vendas_confirmar(venda_id: int):
 
 
 # ------------------------------------------------------------------------
+# Voltar para cotacao (CONFIRMADO -> COTACAO, para reabrir edicao)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/vendas/<int:venda_id>/voltar-cotacao', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def vendas_voltar_cotacao(venda_id: int):
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    try:
+        venda_service.voltar_para_cotacao(
+            venda_id=venda.id, usuario=_operador_atual(),
+        )
+        flash(
+            f'Pedido #{venda.id} voltou para COTACAO. Edite e confirme novamente.',
+            'success',
+        )
+    except (ValueError, venda_service.TransicaoInvalidaError) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+# ------------------------------------------------------------------------
 # Edicao de itens (apenas em COTACAO)
 # ------------------------------------------------------------------------
 

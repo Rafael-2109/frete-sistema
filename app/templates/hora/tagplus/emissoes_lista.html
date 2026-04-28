@@ -2,92 +2,163 @@
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-  <h2><i class="fas fa-list-check"></i> Fila de emissões NFe</h2>
+  <h2><i class="fas fa-list-check"></i> NFes emitidas / em emissao</h2>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('hora.tagplus_conta') }}" class="btn btn-outline-secondary">
-      <i class="fas fa-key"></i> Conta
-    </a>
-    <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary">
-      <i class="fas fa-clipboard-check"></i> Checklist
-    </a>
+    {% if current_user.tem_perm_hora('vendas', 'criar') %}
+      <a href="{{ url_for('hora.tagplus_pedido_venda_novo') }}" class="btn btn-primary">
+        <i class="fas fa-plus-circle"></i> Novo pedido de venda
+      </a>
+    {% endif %}
   </div>
 </div>
 
-<form method="get" class="mb-3">
-  <div class="d-flex gap-2 align-items-center">
-    <label class="form-label mb-0">Status:</label>
-    <select name="status" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
-      <option value="">Todos</option>
-      {% for s in status_validos %}
-        <option value="{{ s }}" {% if status_filtro == s %}selected{% endif %}>{{ s }}</option>
-      {% endfor %}
-    </select>
+{% set nfe_badge = {
+    'PENDENTE': 'secondary',
+    'EM_ENVIO': 'info',
+    'ENVIADA_SEFAZ': 'primary',
+    'APROVADA': 'success',
+    'REJEITADA_LOCAL': 'danger',
+    'REJEITADA_SEFAZ': 'danger',
+    'ERRO_INFRA': 'warning',
+    'CANCELAMENTO_SOLICITADO': 'warning',
+    'CANCELADA': 'dark'
+} %}
+{% set nfe_label = {
+    'PENDENTE': 'Aguardando envio',
+    'EM_ENVIO': 'Enviando',
+    'ENVIADA_SEFAZ': 'Aguardando SEFAZ',
+    'APROVADA': 'Aprovada',
+    'REJEITADA_LOCAL': 'Rejeitada (validacao)',
+    'REJEITADA_SEFAZ': 'Rejeitada (SEFAZ)',
+    'ERRO_INFRA': 'Erro de envio',
+    'CANCELAMENTO_SOLICITADO': 'Cancelamento solicitado',
+    'CANCELADA': 'Cancelada'
+} %}
+
+{# ---- Atalhos por status ---- #}
+<div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+  <small class="text-muted me-1">Filtrar:</small>
+  <a href="{{ url_for('hora.tagplus_emissoes_lista') }}"
+     class="btn btn-sm btn-{% if not status_filtro %}primary{% else %}outline-primary{% endif %}">
+    Todos
+  </a>
+  {% for s in ('APROVADA', 'ENVIADA_SEFAZ', 'EM_ENVIO', 'PENDENTE',
+               'REJEITADA_LOCAL', 'REJEITADA_SEFAZ', 'ERRO_INFRA',
+               'CANCELAMENTO_SOLICITADO', 'CANCELADA') %}
+    <a href="{{ url_for('hora.tagplus_emissoes_lista', status=s) }}"
+       class="btn btn-sm btn-{% if status_filtro == s %}{{ nfe_badge.get(s, 'secondary') }}{% else %}outline-{{ nfe_badge.get(s, 'secondary') }}{% endif %}">
+      {{ nfe_label.get(s, s) }}
+    </a>
+  {% endfor %}
+</div>
+
+{% if not emissoes %}
+  <div class="alert alert-secondary">
     {% if status_filtro %}
-      <a href="{{ url_for('hora.tagplus_emissoes_lista') }}" class="btn btn-link btn-sm">Limpar</a>
+      Nenhuma NFe com status <strong>{{ nfe_label.get(status_filtro, status_filtro) }}</strong>.
+    {% else %}
+      Nenhuma NFe emitida ainda.
     {% endif %}
   </div>
-</form>
-
+{% else %}
 <div class="table-responsive">
   <table class="table table-sm table-hover align-middle">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Venda</th>
-        <th>Status</th>
         <th>NF</th>
-        <th>Chave</th>
-        <th>Tentativas</th>
+        <th>Status</th>
+        <th>Pedido / Cliente</th>
+        <th>Chave de acesso</th>
         <th>Enviado</th>
         <th>Aprovado</th>
         <th>Erro</th>
-        <th></th>
+        <th class="text-end">Acoes</th>
       </tr>
     </thead>
     <tbody>
       {% for e in emissoes %}
         <tr>
-          <td><code>{{ e.id }}</code></td>
           <td>
-            <a href="{{ url_for('hora.vendas_detalhe', venda_id=e.venda_id) }}">#{{ e.venda_id }}</a>
-            {% if e.venda %}<br><small class="text-muted">{{ e.venda.nome_cliente }}</small>{% endif %}
+            {% if e.numero_nfe %}
+              <strong>{{ e.numero_nfe }}</strong>
+              {% if e.serie_nfe %}<small class="text-muted">/{{ e.serie_nfe }}</small>{% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+            <div class="small text-muted">id #{{ e.id }}</div>
           </td>
           <td>
-            {% set badge = {
-              'PENDENTE': 'secondary',
-              'EM_ENVIO': 'info',
-              'ENVIADA_SEFAZ': 'primary',
-              'APROVADA': 'success',
-              'REJEITADA_LOCAL': 'danger',
-              'REJEITADA_SEFAZ': 'danger',
-              'ERRO_INFRA': 'warning',
-              'CANCELAMENTO_SOLICITADO': 'warning',
-              'CANCELADA': 'dark'
-            }.get(e.status, 'secondary') %}
-            <span class="badge bg-{{ badge }}">{{ e.status }}</span>
-          </td>
-          <td>
-            {% if e.numero_nfe %}<strong>{{ e.numero_nfe }}</strong>{% if e.serie_nfe %}/{{ e.serie_nfe }}{% endif %}{% else %}—{% endif %}
-          </td>
-          <td><small class="text-muted">{{ (e.chave_44 or '')[:12] }}{% if e.chave_44 %}…{% endif %}</small></td>
-          <td>{{ e.tentativas }}</td>
-          <td><small>{{ e.enviado_em or '—' }}</small></td>
-          <td><small>{{ e.aprovado_em or '—' }}</small></td>
-          <td>
-            {% if e.error_message %}
-              <small class="text-danger" title="{{ e.error_code or '' }}">{{ e.error_message[:80] }}</small>
+            <span class="badge bg-{{ nfe_badge.get(e.status, 'secondary') }}">
+              {{ nfe_label.get(e.status, e.status) }}
+            </span>
+            {% if e.tentativas and e.tentativas > 1 %}
+              <div class="small text-muted">{{ e.tentativas }} tentativa(s)</div>
             {% endif %}
           </td>
           <td>
-            <a href="{{ url_for('hora.venda_nfe_status', venda_id=e.venda_id) }}" class="btn btn-sm btn-outline-primary">
-              <i class="fas fa-eye"></i>
+            <a href="{{ url_for('hora.vendas_detalhe', venda_id=e.venda_id) }}">
+              Pedido #{{ e.venda_id }}
             </a>
+            {% if e.venda %}
+              <div class="small text-muted">{{ e.venda.nome_cliente }}</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if e.chave_44 %}
+              <code class="small">{{ e.chave_44[:20] }}…</code>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e.enviado_em %}
+              <small>{{ e.enviado_em.strftime('%d/%m %H:%M') }}</small>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e.aprovado_em %}
+              <small>{{ e.aprovado_em.strftime('%d/%m %H:%M') }}</small>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e.error_message %}
+              <small class="text-danger" title="{{ e.error_code or '' }}: {{ e.error_message }}">
+                {{ e.error_message[:60] }}{% if e.error_message|length > 60 %}…{% endif %}
+              </small>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <div class="d-flex gap-1 justify-content-end">
+              {% if e.status == 'APROVADA' and e.tagplus_nfe_id %}
+                <a href="{{ url_for('hora.venda_nfe_danfe_pdf', venda_id=e.venda_id) }}"
+                   class="btn btn-sm btn-outline-primary py-0" target="_blank"
+                   title="Baixar DANFE PDF">
+                  <i class="fas fa-file-pdf"></i>
+                </a>
+                <a href="{{ url_for('hora.venda_nfe_xml', venda_id=e.venda_id) }}"
+                   class="btn btn-sm btn-outline-secondary py-0"
+                   title="Baixar XML">
+                  <i class="fas fa-file-code"></i>
+                </a>
+              {% endif %}
+              <a href="{{ url_for('hora.venda_nfe_status', venda_id=e.venda_id) }}"
+                 class="btn btn-sm btn-outline-success py-0"
+                 title="Gerenciar NFe (status, cancelar, CC-e)">
+                <i class="fas fa-eye"></i> NFe
+              </a>
+            </div>
           </td>
         </tr>
-      {% else %}
-        <tr><td colspan="10" class="text-center text-muted">Nenhuma emissão.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+<small class="text-muted">Mostrando ate 300 emissoes mais recentes.</small>
+{% endif %}
 {% endblock %}

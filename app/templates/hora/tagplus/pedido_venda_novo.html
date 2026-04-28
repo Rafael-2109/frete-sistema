@@ -7,15 +7,11 @@
     <a href="{{ url_for('hora.tagplus_emissoes_lista') }}" class="btn btn-sm btn-outline-secondary">
       <i class="fas fa-list-check"></i> Fila de emissões
     </a>
-    <a href="{{ url_for('hora.tagplus_esboco_lista') }}" class="btn btn-sm btn-outline-secondary">
-      <i class="fas fa-clipboard-check"></i> Conferir antes de emitir
-    </a>
   </div>
 </div>
 
 <div class="alert alert-info">
-  Preencha os dados do pedido de venda. Apos salvar, voce vai para a tela de
-  <strong>conferencia</strong> onde pode revisar e emitir a NFe.
+  Preencha os dados do pedido. Apos salvar, voce confirma o pedido e emite a NFe.
 </div>
 
 {% if not modelos %}
@@ -175,7 +171,7 @@
     <button type="submit" class="btn btn-success" id="btn-salvar">
       <i class="fas fa-save"></i> Salvar e conferir NFe
     </button>
-    <a href="{{ url_for('hora.tagplus_esboco_lista') }}" class="btn btn-secondary">Cancelar</a>
+    <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
 

@@ -150,10 +150,7 @@
         {% endif %}
         {% if current_user.tem_perm_hora('tagplus', 'ver') %}
           <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_emissoes_lista') }}">
-            <i class="fas fa-list-check fa-fw"></i> Fila de emissões
-          </a></li>
-          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_esboco_lista') }}">
-            <i class="fas fa-clipboard-check fa-fw"></i> Conferir antes de emitir
+            <i class="fas fa-list-check fa-fw"></i> NFes emitidas / em emissão
           </a></li>
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_conta') }}">

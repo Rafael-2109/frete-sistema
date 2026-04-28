@@ -130,6 +130,9 @@ class CanceladorNfe:
                 'Cancelamento solicitado emissao=%s tagplus_id=%s usuario=%s',
                 emissao.id, emissao.tagplus_nfe_id, usuario,
             )
+            # Polling para puxar nfe_cancelada se webhook nao chegar.
+            from app.hora.services.tagplus.emissor_nfe import EmissorNfeHora
+            EmissorNfeHora._enqueue_polling(emissao.id, delay=10)  # noqa: SLF001
             return emissao
 
         logger.error(

@@ -88,8 +88,28 @@
       </form>
     {% endif %}
     {% if is_confirmado and pode_criar %}
-      <a href="{{ url_for('hora.venda_nfe_status', venda_id=venda.id) }}" class="btn btn-success">
-        <i class="fas fa-paper-plane"></i> Emitir NFe
+      <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
+            onsubmit="return confirm('Confirma emissao da NFe para o pedido #{{ venda.id }}? A NFe sera enviada para a SEFAZ.');"
+            class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success">
+          <i class="fas fa-paper-plane"></i> Emitir NFe
+        </button>
+      </form>
+    {% endif %}
+    {% if is_confirmado and pode_editar %}
+      <form method="post" action="{{ url_for('hora.vendas_voltar_cotacao', venda_id=venda.id) }}"
+            onsubmit="return confirm('Voltar pedido #{{ venda.id }} para COTACAO? Voce podera editar itens e cliente.');"
+            class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-secondary">
+          <i class="fas fa-undo"></i> Voltar para cotacao
+        </button>
+      </form>
+    {% endif %}
+    {% if is_faturado and tem_emissao and pode_criar %}
+      <a href="{{ url_for('hora.venda_nfe_status', venda_id=venda.id) }}" class="btn btn-outline-primary">
+        <i class="fas fa-file-invoice-dollar"></i> Gerenciar NFe
       </a>
     {% endif %}
     {% if not is_cancelado and pode_apagar %}

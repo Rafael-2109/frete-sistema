@@ -417,6 +417,47 @@ def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
     return venda
 
 
+def voltar_para_cotacao(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
+    """Reverte CONFIRMADO -> COTACAO para permitir edicao de itens.
+
+    Bloqueado se houver emissao TagPlus em estado em-voo ou aprovada — nesses
+    casos cancele a NFe primeiro. Registra auditoria.
+    """
+    from app.hora.models.tagplus import HoraTagPlusNfeEmissao
+
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    if venda.status != VENDA_STATUS_CONFIRMADO:
+        raise TransicaoInvalidaError(
+            f'Pedido {venda_id} esta em {venda.status}; so CONFIRMADO pode voltar para COTACAO.'
+        )
+
+    emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda.id).first()
+    estados_bloqueio = (
+        'EM_ENVIO', 'ENVIADA_SEFAZ', 'APROVADA',
+        'CANCELAMENTO_SOLICITADO',
+    )
+    if emissao and emissao.status in estados_bloqueio:
+        raise TransicaoInvalidaError(
+            f'Pedido tem emissao NFe em status {emissao.status}; '
+            f'cancele a NFe na SEFAZ antes de voltar para cotacao.'
+        )
+
+    venda.status = VENDA_STATUS_COTACAO
+    venda.confirmado_em = None
+    venda.confirmado_por = None
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='VOLTOU_PARA_COTACAO',
+        detalhe='Pedido revertido CONFIRMADO -> COTACAO para edicao.',
+    )
+
+    db.session.commit()
+    return venda
+
+
 # --------------------------------------------------------------------------
 # Edicao do header (vendedor, contato, endereco, observacoes, forma_pagamento)
 # --------------------------------------------------------------------------
