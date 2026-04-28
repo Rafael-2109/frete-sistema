@@ -1,0 +1,73 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-flask"></i> Esboço de Emissão NFe</h2>
+  <a href="{{ url_for('hora.tagplus_emissoes_lista') }}" class="btn btn-outline-secondary">
+    <i class="fas fa-list-check"></i> Fila de emissões
+  </a>
+</div>
+
+<div class="alert alert-info">
+  <strong>Modo preview:</strong> escolha uma venda existente para ver o JSON que seria enviado
+  ao TagPlus na emissão. <strong>Não emite NFe real</strong> — útil para validar mapeamentos
+  (modelo→produto, forma de pagamento, CFOP, CPF do cliente) antes do go-live.
+  <br>
+  Para emitir de verdade, use o botão <strong>Emitir NFe</strong> na tela de detalhe da venda
+  (<code>/hora/vendas/&lt;id&gt;/nfe</code>).
+</div>
+
+{% if not rows %}
+  <div class="alert alert-warning">Nenhuma venda cadastrada ainda.</div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Loja</th>
+        <th>Cliente</th>
+        <th>Forma pgto</th>
+        <th>Status venda</th>
+        <th>Status emissão</th>
+        <th>Itens</th>
+        <th class="text-end">Ação</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+        {% set v = r.venda %}
+        {% set e = r.emissao %}
+        <tr>
+          <td><strong>{{ v.id }}</strong></td>
+          <td>{{ v.loja.nome if v.loja else '—' }}</td>
+          <td>
+            <div>{{ v.nome_cliente or '—' }}</div>
+            <small class="text-muted">{{ v.cpf_cliente or '' }}</small>
+          </td>
+          <td>
+            <code>{{ v.forma_pagamento or 'NAO_INFORMADO' }}</code>
+          </td>
+          <td><span class="badge bg-secondary">{{ v.status or '—' }}</span></td>
+          <td>
+            {% if e %}
+              <span class="badge bg-info text-dark">{{ e.status }}</span>
+            {% else %}
+              <span class="text-muted">— sem emissão —</span>
+            {% endif %}
+          </td>
+          <td>{{ v.itens|length }}</td>
+          <td class="text-end">
+            <a href="{{ url_for('hora.tagplus_esboco_preview', venda_id=v.id) }}"
+               class="btn btn-sm btn-primary">
+              <i class="fas fa-eye"></i> Ver payload
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<small class="text-muted">Mostrando últimas 50 vendas (ordem decrescente).</small>
+{% endif %}
+{% endblock %}

@@ -4,63 +4,159 @@
 <div class="container-fluid hora-module">
   <div class="hora-topbar d-flex align-items-center gap-2 flex-wrap">
     <strong class="me-2"><i class="fas fa-store"></i> Lojas HORA</strong>
-    {% if current_user.tem_perm_hora('usuarios', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.permissoes') %}active{% endif %}"
-         href="{{ url_for('hora.permissoes_lista') }}">
-         <i class="fas fa-user-shield"></i> Usuários
-      </a>
-    {% endif %}
+
+    {# ---------------- Dashboard (sempre primeiro, fora de categoria) ---------------- #}
     {% if current_user.tem_perm_hora('dashboard', 'ver') %}
       <a class="nav-link {% if request.endpoint == 'hora.dashboard' %}active{% endif %}"
-         href="{{ url_for('hora.dashboard') }}">Dashboard</a>
+         href="{{ url_for('hora.dashboard') }}">
+         <i class="fas fa-chart-line"></i> Dashboard
+      </a>
     {% endif %}
-    {% if current_user.tem_perm_hora('lojas', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.lojas') %}active{% endif %}"
-         href="{{ url_for('hora.lojas_lista') }}">Lojas</a>
+
+    {# ---------------- 1. Cadastros ---------------- #}
+    {% set show_cadastros =
+        current_user.tem_perm_hora('modelos', 'ver') or
+        current_user.tem_perm_hora('lojas', 'ver') or
+        current_user.tem_perm_hora('usuarios', 'ver') or
+        current_user.tem_perm_hora('tagplus', 'ver') %}
+    {% if show_cadastros %}
+    <div class="nav-item dropdown">
+      <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.modelos') or request.endpoint.startswith('hora.lojas') or request.endpoint.startswith('hora.permissoes') or 'forma_map' in (request.endpoint or '')) %}active{% endif %}"
+         href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-folder-open"></i> Cadastros
+      </a>
+      <ul class="dropdown-menu">
+        {% if current_user.tem_perm_hora('modelos', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.modelos_lista') }}">
+            <i class="fas fa-motorcycle fa-fw"></i> Modelos
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('lojas', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.lojas_lista') }}">
+            <i class="fas fa-store-alt fa-fw"></i> Lojas
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('usuarios', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.permissoes_lista') }}">
+            <i class="fas fa-user-shield fa-fw"></i> Usuários
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('tagplus', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_forma_map_lista') }}">
+            <i class="fas fa-money-bill-wave fa-fw"></i> Formas de pagamento
+          </a></li>
+        {% endif %}
+      </ul>
+    </div>
     {% endif %}
-    {% if current_user.tem_perm_hora('modelos', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.modelos') %}active{% endif %}"
-         href="{{ url_for('hora.modelos_lista') }}">Modelos</a>
+
+    {# ---------------- 2. Movimentação ---------------- #}
+    {% set show_mov =
+        current_user.tem_perm_hora('pedidos', 'ver') or
+        current_user.tem_perm_hora('nfs', 'ver') or
+        current_user.tem_perm_hora('recebimentos', 'ver') or
+        current_user.tem_perm_hora('vendas', 'ver') or
+        current_user.tem_perm_hora('transferencias', 'ver') or
+        current_user.tem_perm_hora('estoque', 'ver') %}
+    {% if show_mov %}
+    <div class="nav-item dropdown">
+      <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pedidos') or request.endpoint.startswith('hora.nfs') or request.endpoint.startswith('hora.recebimentos') or request.endpoint.startswith('hora.vendas') or request.endpoint.startswith('hora.transferencia') or request.endpoint.startswith('hora.estoque')) %}active{% endif %}"
+         href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-truck-moving"></i> Movimentação
+      </a>
+      <ul class="dropdown-menu">
+        {% if current_user.tem_perm_hora('pedidos', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.pedidos_lista') }}">
+            <i class="fas fa-clipboard-list fa-fw"></i> Pedidos
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('nfs', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.nfs_lista') }}">
+            <i class="fas fa-file-invoice fa-fw"></i> NFs de Entrada
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('recebimentos', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.recebimentos_lista') }}">
+            <i class="fas fa-box-open fa-fw"></i> Recebimento
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('vendas', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.vendas_lista') }}">
+            <i class="fas fa-cash-register fa-fw"></i> Vendas (NF saída)
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('transferencias', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.transferencias_lista') }}">
+            <i class="fas fa-exchange-alt fa-fw"></i> Transferências
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('estoque', 'ver') %}
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{{ url_for('hora.estoque_lista') }}">
+            <i class="fas fa-warehouse fa-fw"></i> Estoque
+          </a></li>
+        {% endif %}
+      </ul>
+    </div>
     {% endif %}
-    {% if current_user.tem_perm_hora('pedidos', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.pedidos') %}active{% endif %}"
-         href="{{ url_for('hora.pedidos_lista') }}">Pedidos</a>
+
+    {# ---------------- 3. Ocorrências ---------------- #}
+    {% set show_oco =
+        current_user.tem_perm_hora('pecas', 'ver') or
+        current_user.tem_perm_hora('devolucoes', 'ver') or
+        current_user.tem_perm_hora('avarias', 'ver') %}
+    {% if show_oco %}
+    <div class="nav-item dropdown">
+      <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pecas') or request.endpoint.startswith('hora.devolucoes') or request.endpoint.startswith('hora.avaria')) %}active{% endif %}"
+         href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-exclamation-triangle"></i> Ocorrências
+      </a>
+      <ul class="dropdown-menu">
+        {% if current_user.tem_perm_hora('pecas', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.pecas_lista') }}">
+            <i class="fas fa-puzzle-piece fa-fw"></i> Peças faltando
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('devolucoes', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.devolucoes_lista') }}">
+            <i class="fas fa-undo fa-fw"></i> Devoluções
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('avarias', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.avarias_lista') }}">
+            <i class="fas fa-tools fa-fw"></i> Avarias
+          </a></li>
+        {% endif %}
+      </ul>
+    </div>
     {% endif %}
-    {% if current_user.tem_perm_hora('nfs', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.nfs') %}active{% endif %}"
-         href="{{ url_for('hora.nfs_lista') }}">NFs de Entrada</a>
-    {% endif %}
-    {% if current_user.tem_perm_hora('recebimentos', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.recebimentos') %}active{% endif %}"
-         href="{{ url_for('hora.recebimentos_lista') }}">Recebimentos</a>
-    {% endif %}
-    {% if current_user.tem_perm_hora('estoque', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.estoque') %}active{% endif %}"
-         href="{{ url_for('hora.estoque_lista') }}">Estoque</a>
-    {% endif %}
-    {% if current_user.tem_perm_hora('vendas', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.vendas') %}active{% endif %}"
-         href="{{ url_for('hora.vendas_lista') }}">Vendas (NF saida)</a>
-    {% endif %}
-    {% if current_user.tem_perm_hora('devolucoes', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.devolucoes') %}active{% endif %}"
-         href="{{ url_for('hora.devolucoes_lista') }}">Devoluções</a>
-    {% endif %}
-    {% if current_user.tem_perm_hora('pecas', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.pecas') %}active{% endif %}"
-         href="{{ url_for('hora.pecas_lista') }}">Peças faltando</a>
-    {% endif %}
-    {% if current_user.tem_perm_hora('transferencias', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.transferencia') %}active{% endif %}"
-         href="{{ url_for('hora.transferencias_lista') }}"><i class="fas fa-exchange-alt"></i> Transferências</a>
-    {% endif %}
-    {% if current_user.tem_perm_hora('avarias', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.avaria') %}active{% endif %}"
-         href="{{ url_for('hora.avarias_lista') }}"><i class="fas fa-exclamation-triangle"></i> Avarias</a>
-    {% endif %}
+
+    {# ---------------- 4. Faturamento (TagPlus) ---------------- #}
     {% if current_user.tem_perm_hora('tagplus', 'ver') %}
-      <a class="nav-link {% if request.endpoint and request.endpoint.startswith('hora.tagplus') %}active{% endif %}"
-         href="{{ url_for('hora.tagplus_emissoes_lista') }}"><i class="fas fa-file-invoice-dollar"></i> NF-e (TagPlus)</a>
+    <div class="nav-item dropdown">
+      <a class="nav-link dropdown-toggle {% if request.endpoint and request.endpoint.startswith('hora.tagplus') %}active{% endif %}"
+         href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-file-invoice-dollar"></i> Faturamento
+      </a>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_emissoes_lista') }}">
+          <i class="fas fa-list-check fa-fw"></i> Fila de emissões
+        </a></li>
+        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_esboco_lista') }}">
+          <i class="fas fa-flask fa-fw"></i> Esboço (preview/teste)
+        </a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_conta') }}">
+          <i class="fas fa-key fa-fw"></i> Conta TagPlus / OAuth
+        </a></li>
+        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_checklist') }}">
+          <i class="fas fa-clipboard-check fa-fw"></i> Checklist
+        </a></li>
+        <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_produto_map_lista') }}">
+          <i class="fas fa-link fa-fw"></i> Mapeamento de produtos
+        </a></li>
+      </ul>
+    </div>
     {% endif %}
   </div>
 

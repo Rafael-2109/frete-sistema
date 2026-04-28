@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import os
 
-from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user
 from app.hora.decorators import require_hora_perm
 
 from app import db
@@ -239,8 +240,12 @@ def lojas_consultar_cnpj():
 @hora_bp.route('/modelos')
 @require_hora_perm('modelos', 'ver')
 def modelos_lista():
+    from app.hora.models.tagplus import HoraTagPlusProdutoMap
     modelos = cadastro_service.listar_modelos(apenas_ativos=False)
-    return render_template('hora/modelos_lista.html', modelos=modelos)
+    # Enriquece com mapeamento TagPlus em uma query (evita N+1).
+    maps = {m.modelo_id: m for m in HoraTagPlusProdutoMap.query.all()}
+    rows = [{'modelo': m, 'tagplus_map': maps.get(m.id)} for m in modelos]
+    return render_template('hora/modelos_lista.html', rows=rows)
 
 
 @hora_bp.route('/modelos/novo', methods=['GET', 'POST'])
@@ -265,7 +270,12 @@ def modelos_novo():
 @require_hora_perm('modelos', 'editar')
 def modelos_editar(modelo_id: int):
     from app.hora.models import HoraModelo
+    from app.hora.models.tagplus import HoraTagPlusProdutoMap
+    from app import db
+
     modelo = HoraModelo.query.get_or_404(modelo_id)
+    tagplus_map = HoraTagPlusProdutoMap.query.filter_by(modelo_id=modelo.id).first()
+    pode_editar_tagplus = current_user.tem_perm_hora('tagplus', 'editar')
 
     if request.method == 'POST':
         try:
@@ -275,12 +285,38 @@ def modelos_editar(modelo_id: int):
                 potencia_motor=request.form.get('potencia_motor') or None,
                 descricao=request.form.get('descricao') or None,
             )
+            # Atualiza mapeamento TagPlus se o usuario tem permissao.
+            if pode_editar_tagplus:
+                tagplus_id = (request.form.get('tagplus_produto_id') or '').strip()
+                cfop = (request.form.get('cfop_default') or '5.403').strip() or '5.403'
+                if tagplus_id:
+                    if len(tagplus_id) > 50:
+                        flash('tagplus_produto_id excede 50 caracteres.', 'danger')
+                    else:
+                        if tagplus_map:
+                            tagplus_map.tagplus_produto_id = tagplus_id
+                            tagplus_map.cfop_default = cfop
+                        else:
+                            db.session.add(HoraTagPlusProdutoMap(
+                                modelo_id=modelo.id,
+                                tagplus_produto_id=tagplus_id,
+                                cfop_default=cfop,
+                            ))
+                        db.session.commit()
+                elif tagplus_map:
+                    db.session.delete(tagplus_map)
+                    db.session.commit()
             flash('Modelo atualizado com sucesso.', 'success')
             return redirect(url_for('hora.modelos_lista'))
         except ValueError as exc:
             flash(f'Erro: {exc}', 'danger')
 
-    return render_template('hora/modelos_editar.html', modelo=modelo)
+    return render_template(
+        'hora/modelos_editar.html',
+        modelo=modelo,
+        tagplus_map=tagplus_map,
+        pode_editar_tagplus=pode_editar_tagplus,
+    )
 
 
 @hora_bp.route('/modelos/<int:modelo_id>/toggle-ativo', methods=['POST'])

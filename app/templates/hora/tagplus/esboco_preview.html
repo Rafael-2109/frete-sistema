@@ -1,0 +1,216 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-flask"></i> Esboço — Venda #{{ venda.id }}</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('hora.tagplus_esboco_lista') }}" class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>Modo preview:</strong> JSON exato que seria enviado em <code>POST /nfes</code> ao TagPlus.
+  Headers usados pelo emissor: <code>X-Enviar-Nota: true</code> + <code>X-Calculo-Trib-Automatico: true</code>
+  (envia para SEFAZ direto, espera HTTP 202).
+  {% if ambiente != 'producao' %}
+  <br><span class="badge bg-warning text-dark">Ambiente: {{ ambiente }}</span> — POST /nfes está bloqueado pelo emissor neste ambiente.
+  {% endif %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>Venda</strong></div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Loja</dt><dd class="col-sm-8">{{ venda.loja.nome if venda.loja else '—' }}</dd>
+          <dt class="col-sm-4">Cliente</dt><dd class="col-sm-8">{{ venda.nome_cliente or '—' }}</dd>
+          <dt class="col-sm-4">CPF</dt><dd class="col-sm-8"><code>{{ venda.cpf_cliente or '—' }}</code></dd>
+          <dt class="col-sm-4">Forma pgto</dt><dd class="col-sm-8"><code>{{ venda.forma_pagamento }}</code></dd>
+          <dt class="col-sm-4">Status venda</dt><dd class="col-sm-8">{{ venda.status }}</dd>
+          <dt class="col-sm-4">Itens</dt><dd class="col-sm-8">{{ venda.itens|length }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>Itens da venda</strong></div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Chassi</th><th>Modelo</th><th class="text-end">Preço</th></tr></thead>
+          <tbody>
+            {% for it in venda.itens %}
+              <tr>
+                <td><code>{{ it.numero_chassi }}</code></td>
+                <td>{{ it.moto.modelo.nome_modelo if it.moto and it.moto.modelo else '—' }}</td>
+                <td class="text-end">{{ it.preco_final|valor_br if it.preco_final else '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if emissao_existente %}
+  <div class="alert alert-warning">
+    <strong><i class="fas fa-info-circle"></i> Já existe emissão para esta venda</strong>
+    (id={{ emissao_existente.id }}, status <code>{{ emissao_existente.status }}</code>).
+    Re-emissão só é permitida em estados retomáveis (REJEITADA_LOCAL/REJEITADA_SEFAZ/ERRO_INFRA).
+    <a href="{{ url_for('hora.venda_nfe_status', venda_id=venda.id) }}" class="ms-2">Ver detalhe →</a>
+  </div>
+{% endif %}
+
+{% if erro %}
+  <div class="alert alert-danger">
+    <h5 class="alert-heading"><i class="fas fa-times-circle"></i> Não foi possível montar o payload</h5>
+    <p class="mb-1"><strong>Código:</strong> <code>{{ erro.code }}</code></p>
+    <p class="mb-0">{{ erro.message }}</p>
+    <hr>
+    <small class="mb-0">
+      Corrija o problema (mapeamento ausente, forma de pagamento, CPF, etc.) e tente de novo.
+      Os itens A1-D2 do <a href="{{ url_for('hora.tagplus_checklist') }}">checklist</a> ajudam a diagnosticar.
+    </small>
+  </div>
+{% else %}
+  {# ---------------- Auditoria de campos required ---------------- #}
+  {% if auditoria %}
+    {% set total_required = auditoria | selectattr('required') | list | length %}
+    {% set ok_required = auditoria | selectattr('required') | selectattr('ok') | list | length %}
+    {% set total_ok = auditoria | selectattr('ok') | list | length %}
+    {% set total = auditoria | length %}
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <strong><i class="fas fa-clipboard-check"></i> Auditoria de campos</strong>
+        <div>
+          <span class="badge bg-{{ 'success' if ok_required == total_required else 'danger' }}">
+            Required: {{ ok_required }}/{{ total_required }}
+          </span>
+          <span class="badge bg-secondary">Total: {{ total_ok }}/{{ total }}</span>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr>
+            <th style="width: 50px;">OK?</th>
+            <th>Campo</th>
+            <th>Detalhe</th>
+            <th style="width: 80px;">Tipo</th>
+          </tr></thead>
+          <tbody>
+            {% for c in auditoria %}
+              <tr class="{% if not c.ok and c.required %}table-danger{% elif not c.ok %}table-warning{% endif %}">
+                <td class="text-center">
+                  {% if c.ok %}<i class="fas fa-check text-success"></i>
+                  {% else %}<i class="fas fa-times text-danger"></i>{% endif %}
+                </td>
+                <td><code>{{ c.campo }}</code></td>
+                <td><small>{{ c.detalhe }}</small></td>
+                <td>
+                  {% if c.required %}
+                    <span class="badge bg-danger">required</span>
+                  {% else %}
+                    <span class="badge bg-secondary">opt</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% set pode_emitir = (ok_required == total_required) and not emissao_existente and ambiente == 'producao' %}
+  {% endif %}
+
+  {# ---------------- Payload JSON ---------------- #}
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <strong><i class="fas fa-code"></i> Payload TagPlus (POST /nfes)</strong>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-copy-json">
+        <i class="fas fa-copy"></i> Copiar JSON
+      </button>
+    </div>
+    <div class="card-body p-0">
+<pre id="payload-json" class="mb-0 p-3" style="max-height: 600px; overflow: auto; background: var(--bs-body-bg);"><code>{{ payload_json }}</code></pre>
+    </div>
+  </div>
+
+  {# ---------------- Botão emitir ---------------- #}
+  <div class="card border-warning mb-3">
+    <div class="card-header bg-warning bg-opacity-25">
+      <strong><i class="fas fa-paper-plane"></i> Emitir NFe agora (real)</strong>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        Clicar abaixo enfileira a emissão real ao TagPlus.
+        O worker <code>hora_nfe</code> chama <code>POST /nfes</code> com os headers
+        <code>X-Enviar-Nota=true</code> + <code>X-Calculo-Trib-Automatico=true</code> →
+        TagPlus envia direto para SEFAZ (resposta 202 esperada). Status final virá via webhook
+        <code>nfe_aprovada</code> ou <code>nfe_denegada</code>.
+      </p>
+      {% if current_user.tem_perm_hora('vendas', 'criar') and pode_emitir %}
+        <form method="post" action="{{ url_for('hora.tagplus_esboco_emitir', venda_id=venda.id) }}"
+              onsubmit="return confirm('ATENÇÃO: isto vai emitir uma NFe REAL no TagPlus para a venda #{{ venda.id }}. Confirma?');"
+              class="d-inline">
+          <button type="submit" class="btn btn-danger">
+            <i class="fas fa-paper-plane"></i> Emitir NFe REAL agora
+          </button>
+        </form>
+        <a href="{{ url_for('hora.venda_nfe_status', venda_id=venda.id) }}" class="btn btn-outline-secondary ms-2">
+          <i class="fas fa-eye"></i> Ver status detalhado
+        </a>
+      {% else %}
+        <button type="button" class="btn btn-danger" disabled
+                title="{% if not current_user.tem_perm_hora('vendas', 'criar') %}Sem permissão vendas.criar{% elif emissao_existente %}Já existe emissão{% elif ambiente != 'producao' %}Ambiente não-produção{% else %}Required pendente{% endif %}">
+          <i class="fas fa-ban"></i> Emissão bloqueada
+        </button>
+        <small class="text-muted ms-2">
+          {% if not current_user.tem_perm_hora('vendas', 'criar') %}Sem permissão <code>vendas.criar</code>.
+          {% elif emissao_existente %}Já existe emissão (ver detalhe acima).
+          {% elif ambiente != 'producao' %}Conta em ambiente <code>{{ ambiente }}</code> — emissor bloqueado.
+          {% else %}Existem campos <span class="badge bg-danger">required</span> não preenchidos — corrija antes de emitir.{% endif %}
+        </small>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
+<script>
+(function () {
+  const btn = document.getElementById('btn-copy-json');
+  const pre = document.getElementById('payload-json');
+  if (!btn || !pre) return;
+  btn.addEventListener('click', async function () {
+    const txt = pre.innerText;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(txt);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      const html = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-check"></i> Copiado';
+      btn.classList.add('btn-success');
+      btn.classList.remove('btn-outline-secondary');
+      setTimeout(function () {
+        btn.innerHTML = html;
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-outline-secondary');
+      }, 1500);
+    } catch (err) {
+      alert('Falha ao copiar: ' + err);
+    }
+  });
+})();
+</script>
+{% endblock %}

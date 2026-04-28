@@ -10,8 +10,13 @@
 
 <div class="alert alert-info">
   O TagPlus identifica forma de pagamento pelo <strong>ID inteiro</strong> de cada forma cadastrada
-  no portal. O portal não tem botão de exportar — use o botão abaixo para puxar via API.
-  <strong>MISTO não é suportado na v1</strong> (bloqueado pelo PayloadBuilder).
+  no portal. O portal não tem botão de exportar.
+  Use o botão abaixo: tenta endpoint direto e, se falhar (geralmente 403 por scope insuficiente),
+  faz <strong>fallback automático extraindo IDs de NFes existentes</strong>.
+  <br><strong>Sem NFes ainda?</strong> Emita 1 NFe de teste no portal TagPlus com cada forma e clique novamente.
+  <br><strong>Para listar diretamente</strong>: ampliar scope em <code>/hora/tagplus/conta</code>
+  (adicionar <code>read:formas_pagamento</code>) e re-autorizar OAuth.
+  <br><strong>MISTO não é suportado na v1</strong> (bloqueado pelo PayloadBuilder).
 </div>
 
 <div class="mb-3">
@@ -23,36 +28,60 @@
 
 <form method="post" action="{{ url_for('hora.tagplus_forma_map_salvar') }}">
   <div class="table-responsive">
-    <table class="table align-middle">
+    <table class="table align-middle" id="tabela-formas">
       <thead>
         <tr>
-          <th>Forma HORA</th>
-          <th>ID TagPlus (int)</th>
+          <th style="width: 28%;">Forma HORA</th>
+          <th style="width: 22%;">ID TagPlus (int)</th>
           <th>Descrição (opcional)</th>
+          <th style="width: 8%;"></th>
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
           <tr>
-            <td><code>{{ r.forma }}</code></td>
+            <td>
+              <input type="text" maxlength="20" class="form-control form-control-sm text-uppercase"
+                     name="forma[]"
+                     value="{{ r.forma }}"
+                     placeholder="ex: CARTAO_DEBITO"
+                     {% if r.map %}readonly{% endif %}
+                     pattern="[A-Z0-9_]+">
+            </td>
             <td>
               <input type="number" min="1" class="form-control form-control-sm"
-                     name="{{ r.forma }}_tagplus_id"
+                     name="tagplus_id[]"
                      value="{{ r.map.tagplus_forma_id if r.map else '' }}">
             </td>
             <td>
               <input type="text" class="form-control form-control-sm"
-                     name="{{ r.forma }}_descricao"
+                     name="descricao[]"
                      value="{{ r.map.descricao if r.map else '' }}">
+            </td>
+            <td class="text-end">
+              <button type="button" class="btn btn-sm btn-outline-danger btn-remove-row"
+                      title="Remover linha (vazio = remove ao salvar)">
+                <i class="fas fa-times"></i>
+              </button>
             </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <button type="submit" class="btn btn-success">
-    <i class="fas fa-save"></i> Salvar
-  </button>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-primary" id="btn-add-row">
+      <i class="fas fa-plus"></i> Adicionar nova forma
+    </button>
+    <button type="submit" class="btn btn-success">
+      <i class="fas fa-save"></i> Salvar
+    </button>
+  </div>
+  <small class="text-muted d-block mt-2">
+    Linhas com ID TagPlus vazio serão removidas ao salvar. Nome aceita apenas letras
+    maiúsculas, números e <code>_</code>. Após salvar, o nome fica somente leitura
+    (para evitar quebra de mapeamento em vendas existentes).
+  </small>
 </form>
 
 <script>
@@ -60,6 +89,39 @@
   const btn = document.getElementById('btn-listar-formas');
   const out = document.getElementById('formas-result');
   if (!btn || !out) return;
+
+  // ---------- Adicionar/remover linhas dinamicamente ----------
+  const tbody = document.querySelector('#tabela-formas tbody');
+  const btnAdd = document.getElementById('btn-add-row');
+  if (btnAdd && tbody) {
+    btnAdd.addEventListener('click', function () {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><input type="text" maxlength="20" class="form-control form-control-sm text-uppercase" ' +
+        'name="forma[]" placeholder="ex: CARTAO_DEBITO" pattern="[A-Z0-9_]+"></td>' +
+        '<td><input type="number" min="1" class="form-control form-control-sm" name="tagplus_id[]"></td>' +
+        '<td><input type="text" class="form-control form-control-sm" name="descricao[]"></td>' +
+        '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">' +
+        '<i class="fas fa-times"></i></button></td>';
+      tbody.appendChild(tr);
+      tr.querySelector('input[name="forma[]"]').focus();
+    });
+  }
+  document.addEventListener('click', function (e) {
+    const btnRm = e.target.closest('.btn-remove-row');
+    if (!btnRm) return;
+    const tr = btnRm.closest('tr');
+    if (!tr) return;
+    const formaInput = tr.querySelector('input[name="forma[]"]');
+    if (formaInput && formaInput.readOnly) {
+      // Linha existente: limpa o ID (vazio = remove no save), mantém row visível.
+      const idInput = tr.querySelector('input[name="tagplus_id[]"]');
+      if (idInput) idInput.value = '';
+      tr.style.opacity = '0.5';
+    } else {
+      tr.remove();
+    }
+  });
 
   btn.addEventListener('click', async function () {
     btn.disabled = true;
@@ -77,22 +139,31 @@
         const linhas = (body.formas || []).map(function (f) {
           const id = f.id ?? f.codigo ?? '?';
           const nome = f.nome ?? f.descricao ?? f.tipo ?? JSON.stringify(f).slice(0, 80);
-          return '<tr><td><code>' + id + '</code></td><td>' + nome + '</td></tr>';
+          const origem = f.origem_nfe_id ? '<small class="text-muted ms-2">(via NFe ' + f.origem_nfe_id + ')</small>' : '';
+          return '<tr><td><code>' + id + '</code></td><td>' + nome + origem + '</td></tr>';
         }).join('');
+        const fonteLabel = body.fonte === 'nfes_existentes'
+          ? '<span class="badge bg-warning text-dark">extraído de NFes existentes</span>'
+          : '<span class="badge bg-success">endpoint direto: <code>' + (body.endpoint || '?') + '</code></span>';
         out.innerHTML =
-          '<div class="alert alert-success">Endpoint <code>' + body.endpoint + '</code> retornou ' +
-          body.count + ' forma(s):</div>' +
-          '<table class="table table-sm table-bordered"><thead><tr><th>ID TagPlus</th><th>Descrição</th></tr></thead>' +
+          '<div class="alert alert-info">' + fonteLabel +
+          ' — <strong>' + body.count + '</strong> forma(s) encontrada(s).' +
+          (body.aviso ? '<hr><small>' + body.aviso + '</small>' : '') +
+          '</div>' +
+          '<table class="table table-sm table-bordered"><thead><tr><th style="width:120px;">ID TagPlus</th><th>Descrição</th></tr></thead>' +
           '<tbody>' + linhas + '</tbody></table>';
       } else {
         out.innerHTML =
           '<div class="alert alert-warning"><strong>API não retornou a lista.</strong><br>' +
           'Erro: ' + (body.error || 'desconhecido') + '<br>' +
-          (body.ultima_resposta
-            ? '<small>Última tentativa: <code>' + body.ultima_resposta.endpoint + '</code> → HTTP ' +
-              body.ultima_resposta.http_status + '</small><br>'
+          (body.ultima_resposta_direta
+            ? '<small>Endpoint direto: <code>' + body.ultima_resposta_direta.endpoint + '</code> → HTTP ' +
+              body.ultima_resposta_direta.http_status + '</small><br>'
             : '') +
-          (body.fallback ? '<hr><small>' + body.fallback + '</small>' : '') +
+          (body.fallback_nfes
+            ? '<small>Fallback NFes: HTTP ' + body.fallback_nfes.http_status + ' (' + body.fallback_nfes.count + ' NFes)</small><br>'
+            : '') +
+          (body.instrucoes ? '<hr><small>' + body.instrucoes + '</small>' : '') +
           '</div>';
       }
     } catch (err) {

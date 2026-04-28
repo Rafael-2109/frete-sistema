@@ -268,6 +268,63 @@ def tagplus_produto_map_lista():
     return render_template('hora/tagplus/produto_map.html', rows=rows)
 
 
+@hora_bp.route('/tagplus/conta/mapeamento/listar-produtos', methods=['GET'])
+@require_hora_perm('tagplus', 'ver')
+def tagplus_produto_map_listar_api():
+    """Proxy GET /produtos no TagPlus.
+
+    Retorna lista paginada (per_page=100) com id/codigo/nome para o operador
+    ver os produtos disponiveis ao preencher o mapeamento.
+    """
+    conta = HoraTagPlusConta.query.filter_by(ativo=True).first()
+    if not conta:
+        return jsonify({'ok': False, 'error': 'Conta nao configurada.'}), 404
+    if not conta.token:
+        return jsonify({'ok': False, 'error': 'Sem token OAuth — autorizar em /hora/tagplus/conta.'}), 400
+
+    page = max(1, int(request.args.get('page', 1)))
+    q = (request.args.get('q') or '').strip()
+    params = {'per_page': 100, 'page': page}
+    if q:
+        params['q'] = q
+
+    client = ApiClient(conta)
+    r = client.get('/produtos', params=params)
+    if r.status_code != 200:
+        return jsonify({
+            'ok': False,
+            'http_status': r.status_code,
+            'error': r.text[:300],
+        }), 502
+
+    try:
+        body = r.json()
+    except ValueError:
+        body = []
+    if isinstance(body, dict):
+        body = body.get('data') or body.get('produtos') or body.get('results') or []
+
+    # Normaliza: pega so campos uteis para a UI.
+    produtos = []
+    if isinstance(body, list):
+        for p in body:
+            if not isinstance(p, dict):
+                continue
+            produtos.append({
+                'id': p.get('id'),
+                'codigo': p.get('codigo') or p.get('cod_secundario'),
+                'nome': p.get('descricao_produto') or p.get('descricao') or p.get('nome'),
+                'ativo': p.get('ativo'),
+            })
+
+    return jsonify({
+        'ok': True,
+        'page': page,
+        'count': len(produtos),
+        'produtos': produtos,
+    })
+
+
 @hora_bp.route('/tagplus/conta/mapeamento', methods=['POST'])
 @require_hora_perm('tagplus', 'editar')
 def tagplus_produto_map_salvar():
@@ -310,19 +367,34 @@ def tagplus_produto_map_salvar():
 @hora_bp.route('/tagplus/conta/formas-pagamento', methods=['GET'])
 @require_hora_perm('tagplus', 'ver')
 def tagplus_forma_map_lista():
-    formas_hora = ('PIX', 'CARTAO_CREDITO', 'DINHEIRO')
-    maps = {m.forma_pagamento_hora: m for m in HoraTagPlusFormaPagamentoMap.query.all()}
-    rows = [{'forma': f, 'map': maps.get(f)} for f in formas_hora]
+    """Lista todas as formas mapeadas. Operador pode adicionar livremente
+    (sugestoes iniciais: PIX, CARTAO_CREDITO, DINHEIRO).
+    """
+    sugestoes = ('PIX', 'CARTAO_CREDITO', 'DINHEIRO', 'CARTAO_DEBITO', 'BOLETO', 'TRANSFERENCIA')
+    todas = HoraTagPlusFormaPagamentoMap.query.order_by(
+        HoraTagPlusFormaPagamentoMap.forma_pagamento_hora
+    ).all()
+    nomes_existentes = {m.forma_pagamento_hora for m in todas}
+    rows = [{'forma': m.forma_pagamento_hora, 'map': m} for m in todas]
+    # Linhas vazias para sugestoes ainda nao cadastradas (facilita primeiro setup).
+    for s in sugestoes:
+        if s not in nomes_existentes:
+            rows.append({'forma': s, 'map': None})
     return render_template('hora/tagplus/forma_pag_map.html', rows=rows)
 
 
 @hora_bp.route('/tagplus/conta/formas-pagamento/listar', methods=['GET'])
 @require_hora_perm('tagplus', 'ver')
 def tagplus_forma_map_listar_api():
-    """Proxy que chama GET /formas_pagamento na API TagPlus.
+    """Lista formas de pagamento do TagPlus.
 
-    O portal TagPlus nao tem botao de exportar formas de pagamento; este
-    endpoint puxa a lista via API para o operador copiar os IDs.
+    Estrategia em 2 passos:
+      1. Tenta endpoints diretos: /formas_pagamento, /formas_pgto, /forma_pagamento.
+         (No scope atual `write:nfes read:clientes write:clientes read:produtos`,
+         estes retornam 403 — o endpoint existe mas falta scope).
+
+      2. Fallback automatico: extrai IDs unicos de `faturas[].id_forma_pagamento`
+         das NFes recentes (scope `write:nfes` cobre o read implicito).
     """
     conta = HoraTagPlusConta.query.filter_by(ativo=True).first()
     if not conta:
@@ -331,9 +403,8 @@ def tagplus_forma_map_listar_api():
         return jsonify({'ok': False, 'error': 'Sem token OAuth — autorizar em /hora/tagplus/conta.'}), 400
 
     client = ApiClient(conta)
-    # Tenta endpoints possiveis. A doc nao explicita o path canonico
-    # (scripts/doc_tagplus.md menciona forma_pagamento como ID inteiro mas
-    # nao expoe o endpoint GET). Convencao TagPlus: recursos sempre no plural.
+
+    # ---- Passo 1: endpoints diretos ----
     candidatos = ['/formas_pagamento', '/formas_pgto', '/forma_pagamento']
     ultima_resposta = None
     for path in candidatos:
@@ -348,24 +419,85 @@ def tagplus_forma_map_listar_api():
                 body = body.get('data') or body.get('results') or body.get('formas_pagamento') or []
             return jsonify({
                 'ok': True,
+                'fonte': 'endpoint_direto',
                 'endpoint': path,
                 'count': len(body) if isinstance(body, list) else 0,
                 'formas': body,
             })
 
+    # ---- Passo 2: fallback via NFes recentes ----
+    # Tenta /nfes (scope write:nfes contratado garante read).
+    r_nfes = client.get('/nfes', params={'per_page': 50, 'fields': 'id,faturas,status'})
+    if r_nfes.status_code == 200:
+        try:
+            nfes = r_nfes.json() or []
+        except ValueError:
+            nfes = []
+        if isinstance(nfes, dict):
+            nfes = nfes.get('data') or nfes.get('nfes') or nfes.get('results') or []
+
+        # Extrai IDs unicos (id -> primeiro objeto encontrado).
+        formas_por_id: dict = {}
+        for nf in nfes if isinstance(nfes, list) else []:
+            faturas = nf.get('faturas') if isinstance(nf, dict) else None
+            if not isinstance(faturas, list):
+                continue
+            for f in faturas:
+                if not isinstance(f, dict):
+                    continue
+                # Schema observado em doc: faturas[].id_forma_pagamento OR faturas[].forma_pagamento (int).
+                fid = f.get('id_forma_pagamento') or f.get('forma_pagamento')
+                if isinstance(fid, dict):
+                    obj_id = fid.get('id')
+                    if obj_id is None:
+                        continue
+                    formas_por_id.setdefault(obj_id, {
+                        'id': obj_id,
+                        'descricao': fid.get('descricao') or fid.get('nome') or f'forma {obj_id}',
+                        'origem_nfe_id': nf.get('id'),
+                    })
+                elif isinstance(fid, int):
+                    formas_por_id.setdefault(fid, {
+                        'id': fid,
+                        'descricao': f'forma {fid} (sem descricao — extraida de NFe {nf.get("id")})',
+                        'origem_nfe_id': nf.get('id'),
+                    })
+
+        if formas_por_id:
+            return jsonify({
+                'ok': True,
+                'fonte': 'nfes_existentes',
+                'count': len(formas_por_id),
+                'formas': sorted(formas_por_id.values(), key=lambda x: x['id']),
+                'aviso': (
+                    f'Endpoint direto retornou 403 (provavel falta de scope). '
+                    f'IDs extraidos de {len(nfes) if isinstance(nfes, list) else 0} NFes '
+                    f'recentes. Para descricoes completas, ampliar scope OAuth ou '
+                    f'consultar GET /nfes/{{id}} individualmente.'
+                ),
+            })
+
+    # ---- Falha total ----
     return jsonify({
         'ok': False,
-        'error': 'Endpoint de formas de pagamento nao encontrado.',
-        'tentativas': candidatos,
-        'ultima_resposta': {
+        'error': 'Endpoint direto retornou 403 e nao ha NFes para extrair IDs.',
+        'tentativas_diretas': candidatos,
+        'ultima_resposta_direta': {
             'endpoint': ultima_resposta[0] if ultima_resposta else None,
             'http_status': ultima_resposta[1] if ultima_resposta else None,
             'body': ultima_resposta[2] if ultima_resposta else None,
         },
-        'fallback': (
-            'Como fallback: emitir uma NFe de teste no portal TagPlus com cada forma '
-            '(PIX, CARTAO_CREDITO, DINHEIRO) e depois consultar GET /nfes/{id} — o campo '
-            'faturas[].id_forma_pagamento traz o ID inteiro a usar.'
+        'fallback_nfes': {
+            'http_status': r_nfes.status_code,
+            'count': 0,
+        },
+        'instrucoes': (
+            'Opcoes: (a) emitir 1 NFe de teste no portal TagPlus com cada forma '
+            '(PIX, CARTAO_CREDITO, DINHEIRO) e clicar de novo neste botao para '
+            'extrair os IDs automaticamente das NFes; (b) ampliar o scope no '
+            'campo "Scopes" em /hora/tagplus/conta (adicionar `read:formas_pagamento` '
+            'ou variante como `read:formas_pgto`), salvar e clicar "Re-autorizar OAuth" '
+            '— scope e enviado em ?scope= na URL /authorize, nao configurado no portal.'
         ),
     }), 502
 
@@ -373,14 +505,36 @@ def tagplus_forma_map_listar_api():
 @hora_bp.route('/tagplus/conta/formas-pagamento', methods=['POST'])
 @require_hora_perm('tagplus', 'editar')
 def tagplus_forma_map_salvar():
-    formas_hora = ('PIX', 'CARTAO_CREDITO', 'DINHEIRO')
-    for forma in formas_hora:
-        tagplus_id = (request.form.get(f'{forma}_tagplus_id') or '').strip()
-        descricao = (request.form.get(f'{forma}_descricao') or '').strip() or None
+    """Processa dinamicamente todas as linhas no form (form-array indexed).
 
-        existente = HoraTagPlusFormaPagamentoMap.query.filter_by(forma_pagamento_hora=forma).first()
+    Form fields esperados (idx = 0..N):
+      forma[idx]            -> nome HORA (ex: PIX, CARTAO_DEBITO, etc.)
+      tagplus_id[idx]       -> ID inteiro no TagPlus (vazio = remover)
+      descricao[idx]        -> texto livre (opcional)
+    """
+    formas_form = request.form.getlist('forma[]')
+    ids_form = request.form.getlist('tagplus_id[]')
+    descs_form = request.form.getlist('descricao[]')
+
+    nomes_processados = set()
+    for forma_raw, id_raw, desc_raw in zip(formas_form, ids_form, descs_form):
+        forma = (forma_raw or '').strip().upper()[:20]
+        tagplus_id = (id_raw or '').strip()
+        descricao = (desc_raw or '').strip() or None
+
+        if not forma:
+            continue
+        if forma in nomes_processados:
+            flash(f'Forma duplicada no form: {forma}', 'warning')
+            continue
+        nomes_processados.add(forma)
+
+        existente = HoraTagPlusFormaPagamentoMap.query.filter_by(
+            forma_pagamento_hora=forma,
+        ).first()
 
         if not tagplus_id:
+            # Vazio = remover (se existir).
             if existente:
                 db.session.delete(existente)
             continue
@@ -401,7 +555,7 @@ def tagplus_forma_map_salvar():
                 descricao=descricao,
             ))
     db.session.commit()
-    flash('Mapeamentos de forma de pagamento salvos.', 'success')
+    flash(f'Mapeamentos salvos ({len(nomes_processados)} formas processadas).', 'success')
     return redirect(url_for('hora.tagplus_forma_map_lista'))
 
 
@@ -483,6 +637,196 @@ def tagplus_emissoes_lista():
         status_filtro=status_filtro,
         status_validos=NFE_STATUS_VALIDOS,
     )
+
+
+# ============================================================
+# 4.5) Esboco — preview do payload sem emitir
+# ============================================================
+
+@hora_bp.route('/tagplus/esboco')
+@require_hora_perm('tagplus', 'ver')
+def tagplus_esboco_lista():
+    """Lista vendas elegíveis para teste de payload TagPlus.
+
+    Mostra HoraVendas que ainda não emitiram NFe (status sem `APROVADA`).
+    Operador escolhe uma e vê o JSON que seria enviado ao TagPlus.
+    """
+    # Vendas com itens, sem emissao ou em estado retomavel.
+    q = (
+        HoraVenda.query
+        .order_by(HoraVenda.id.desc())
+        .limit(50)
+    )
+    vendas = q.all()
+    # Marcar status de emissao por venda.
+    emissoes_por_venda = {
+        e.venda_id: e for e in HoraTagPlusNfeEmissao.query.filter(
+            HoraTagPlusNfeEmissao.venda_id.in_([v.id for v in vendas])
+        ).all()
+    } if vendas else {}
+    rows = [{'venda': v, 'emissao': emissoes_por_venda.get(v.id)} for v in vendas]
+    return render_template('hora/tagplus/esboco_lista.html', rows=rows)
+
+
+def _auditar_payload_required(payload: dict) -> list[dict]:
+    """Audita o payload contra os 3 campos required do POST /nfes (doc_tagplus.md:163-178).
+
+    required: destinatario (integer), itens (Array), cfop (string mascara 9.999).
+    Tambem valida campos relevantes do `Item de Venda` e `Fatura Pagamento`.
+
+    Retorna lista de checks: [{campo, ok, detalhe}].
+    """
+    import re
+    checks = []
+
+    # destinatario: required integer
+    dest = payload.get('destinatario')
+    checks.append({
+        'campo': 'destinatario',
+        'ok': isinstance(dest, int) and dest > 0,
+        'required': True,
+        'detalhe': f'integer={dest}' if isinstance(dest, int) else f'tipo={type(dest).__name__} valor={dest!r}',
+    })
+
+    # itens: required Array (>= 1)
+    itens = payload.get('itens')
+    itens_ok = isinstance(itens, list) and len(itens) > 0
+    checks.append({
+        'campo': 'itens',
+        'ok': itens_ok,
+        'required': True,
+        'detalhe': f'{len(itens) if isinstance(itens, list) else "—"} item(ns)',
+    })
+    if itens_ok:
+        for idx, it in enumerate(itens):
+            prod = it.get('produto') if isinstance(it, dict) else None
+            qtd = it.get('qtd') if isinstance(it, dict) else None
+            vu = it.get('valor_unitario') if isinstance(it, dict) else None
+            checks.append({
+                'campo': f'itens[{idx}].produto',
+                'ok': bool(prod) and (isinstance(prod, (int, str))),
+                'required': False,
+                'detalhe': f'tipo={type(prod).__name__} valor={prod!r}',
+            })
+            checks.append({
+                'campo': f'itens[{idx}].qtd',
+                'ok': isinstance(qtd, (int, float)) and qtd > 0,
+                'required': False,
+                'detalhe': f'{qtd}',
+            })
+            checks.append({
+                'campo': f'itens[{idx}].valor_unitario',
+                'ok': isinstance(vu, (int, float)) and vu >= 0,
+                'required': False,
+                'detalhe': f'{vu}',
+            })
+
+    # cfop: required string mascara 9.999
+    cfop = payload.get('cfop')
+    checks.append({
+        'campo': 'cfop',
+        'ok': isinstance(cfop, str) and bool(re.match(r'^\d\.\d{3}$', cfop)),
+        'required': True,
+        'detalhe': f'{cfop!r} (mascara 9.999)',
+    })
+
+    # faturas (nao required pela doc, mas necessario na pratica para emissao com pagamento)
+    faturas = payload.get('faturas')
+    checks.append({
+        'campo': 'faturas',
+        'ok': isinstance(faturas, list) and len(faturas) > 0,
+        'required': False,
+        'detalhe': f'{len(faturas) if isinstance(faturas, list) else "—"} fatura(s)',
+    })
+    if isinstance(faturas, list):
+        for idx, fat in enumerate(faturas):
+            fp = fat.get('forma_pagamento') if isinstance(fat, dict) else None
+            parcs = fat.get('parcelas') if isinstance(fat, dict) else None
+            checks.append({
+                'campo': f'faturas[{idx}].forma_pagamento',
+                'ok': isinstance(fp, int) and fp > 0,
+                'required': False,
+                'detalhe': f'tipo={type(fp).__name__} valor={fp!r}',
+            })
+            checks.append({
+                'campo': f'faturas[{idx}].parcelas',
+                'ok': isinstance(parcs, list) and len(parcs) > 0,
+                'required': False,
+                'detalhe': f'{len(parcs) if isinstance(parcs, list) else "—"} parcela(s)',
+            })
+
+    return checks
+
+
+@hora_bp.route('/tagplus/esboco/<int:venda_id>')
+@require_hora_perm('tagplus', 'ver')
+def tagplus_esboco_preview(venda_id: int):
+    """Monta payload via PayloadBuilder SEM enviar ao TagPlus.
+
+    Retorna JSON renderizado + auditoria dos campos required (doc_tagplus.md:163-178).
+    Erros de pré-condição (forma_pagamento ausente, modelo não mapeado, CPF inválido)
+    são exibidos de forma amigável para o operador corrigir antes de emitir.
+    """
+    from app.hora.services.tagplus.payload_builder import PayloadBuilder, PayloadBuilderError
+
+    venda = HoraVenda.query.get_or_404(venda_id)
+    conta = HoraTagPlusConta.query.filter_by(ativo=True).first()
+    if not conta:
+        flash('Conta TagPlus não configurada.', 'danger')
+        return redirect(url_for('hora.tagplus_esboco_lista'))
+
+    payload = None
+    erro = None
+    auditoria = None
+    try:
+        builder = PayloadBuilder(conta)
+        payload = builder.build(venda)
+        auditoria = _auditar_payload_required(payload)
+    except PayloadBuilderError as exc:
+        erro = {'code': exc.code, 'message': exc.message}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception('Falha gerando esboco para venda %s', venda_id)
+        erro = {'code': 'erro_inesperado', 'message': str(exc)}
+
+    import json
+    payload_json = json.dumps(payload, indent=2, ensure_ascii=False) if payload else None
+
+    # Verifica se ja existe emissao para esta venda (evita re-emissao acidental).
+    emissao_existente = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda.id).first()
+
+    return render_template(
+        'hora/tagplus/esboco_preview.html',
+        venda=venda,
+        payload=payload,
+        payload_json=payload_json,
+        auditoria=auditoria,
+        erro=erro,
+        emissao_existente=emissao_existente,
+        ambiente=conta.ambiente,
+    )
+
+
+@hora_bp.route('/tagplus/esboco/<int:venda_id>/emitir', methods=['POST'])
+@require_hora_perm('vendas', 'criar')
+def tagplus_esboco_emitir(venda_id: int):
+    """Emite NFe REAL pelo esboço (mesmo enfileiramento que /vendas/<id>/nfe/emitir).
+
+    Reusa EmissorNfeHora.enfileirar — POST /nfes com headers X-Enviar-Nota=true e
+    X-Calculo-Trib-Automatico=true (envia para SEFAZ direto, status 202 esperado).
+    """
+    try:
+        emissao_id = EmissorNfeHora.enfileirar(venda_id)
+        flash(
+            f'Emissão enfileirada (id={emissao_id}). Acompanhe na tela da venda '
+            f'ou em "Fila de emissões".',
+            'success',
+        )
+        return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
+    except EmissaoBloqueadaError as exc:
+        flash(f'Emissão bloqueada: {exc}', 'warning')
+    except RuntimeError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.tagplus_esboco_preview', venda_id=venda_id))
 
 
 # ============================================================

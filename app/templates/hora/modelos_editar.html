@@ -21,6 +21,32 @@
     <textarea name="descricao" class="form-control" rows="3">{{ modelo.descricao or '' }}</textarea>
   </div>
 
+  {% if pode_editar_tagplus %}
+  <hr>
+  <h5 class="mb-3"><i class="fas fa-link"></i> Mapeamento TagPlus (emissão NFe)</h5>
+  <div class="mb-3">
+    <label class="form-label">Código do produto no TagPlus</label>
+    <input type="text" name="tagplus_produto_id" class="form-control" maxlength="50"
+           placeholder="ex.: PROD-001 (deixe vazio para remover mapeamento)"
+           value="{{ tagplus_map.tagplus_produto_id if tagplus_map else '' }}">
+    <small class="text-muted">
+      Código string do produto cadastrado no TagPlus (campo <code>codigo</code>/<code>cod_secundario</code>).
+      Sem isso a emissão de NFe deste modelo será bloqueada.
+    </small>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">CFOP padrão</label>
+    <input type="text" name="cfop_default" class="form-control" maxlength="5"
+           pattern="[0-9]\.[0-9]{3}"
+           placeholder="5.403"
+           value="{{ tagplus_map.cfop_default if tagplus_map else '5.403' }}">
+    <small class="text-muted">
+      Padrão <code>5.403</code> (intra). Builder ajusta para <code>6.403</code> automaticamente
+      quando UF do cliente difere da UF da loja emitente.
+    </small>
+  </div>
+  {% endif %}
+
   <div class="d-flex gap-2">
     <button type="submit" class="btn btn-primary">Salvar alterações</button>
     <a href="{{ url_for('hora.modelos_lista') }}" class="btn btn-secondary">Cancelar</a>

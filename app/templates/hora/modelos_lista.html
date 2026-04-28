@@ -1,13 +1,21 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h2>Modelos</h2>
-  {% if current_user.tem_perm_hora('modelos', 'criar') %}
-  <a href="{{ url_for('hora.modelos_novo') }}" class="btn btn-primary">
-    <i class="fas fa-plus"></i> Novo modelo
-  </a>
-  {% endif %}
+  <div class="d-flex gap-2">
+    {% if current_user.tem_perm_hora('tagplus', 'editar') %}
+    <a href="{{ url_for('hora.tagplus_produto_map_lista') }}" class="btn btn-outline-secondary"
+       title="Mapear códigos TagPlus de todos os modelos de uma vez">
+      <i class="fas fa-link"></i> Mapear TagPlus em massa
+    </a>
+    {% endif %}
+    {% if current_user.tem_perm_hora('modelos', 'criar') %}
+    <a href="{{ url_for('hora.modelos_novo') }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Novo modelo
+    </a>
+    {% endif %}
+  </div>
 </div>
 
 <div class="table-responsive">
@@ -17,10 +25,13 @@
       <th>Potência</th>
       <th>Descrição</th>
       <th>Status</th>
+      <th title="Código do produto no TagPlus (usado na emissão de NFe)">Produto TagPlus</th>
       <th class="text-end">Ações</th>
     </tr></thead>
     <tbody>
-      {% for m in modelos %}
+      {% for r in rows %}
+        {% set m = r.modelo %}
+        {% set tm = r.tagplus_map %}
         <tr>
           <td><strong>{{ m.nome_modelo }}</strong></td>
           <td>{{ m.potencia_motor or '—' }}</td>
@@ -28,6 +39,16 @@
           <td>
             {% if m.ativo %}<span class="badge bg-success">Ativo</span>
             {% else %}<span class="badge bg-secondary">Inativo</span>{% endif %}
+          </td>
+          <td>
+            {% if tm %}
+              <code>{{ tm.tagplus_produto_id }}</code>
+              {% if tm.cfop_default %}
+                <span class="badge bg-light text-dark ms-1" title="CFOP padrão">CFOP {{ tm.cfop_default }}</span>
+              {% endif %}
+            {% else %}
+              <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> não mapeado</span>
+            {% endif %}
           </td>
           <td class="text-end">
             <div class="btn-group btn-group-sm" role="group">
@@ -58,7 +79,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="5" class="text-center text-muted">Nenhum modelo cadastrado.</td></tr>
+        <tr><td colspan="6" class="text-center text-muted">Nenhum modelo cadastrado.</td></tr>
       {% endfor %}
     </tbody>
   </table>

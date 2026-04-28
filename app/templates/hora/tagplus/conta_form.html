@@ -93,8 +93,13 @@
       </div>
       <div class="mb-3">
         <label class="form-label">Scopes</label>
-        <input type="text" name="scope_contratado" class="form-control"
+        <input type="text" name="scope_contratado" class="form-control font-monospace"
                value="{{ conta.scope_contratado if conta else 'write:nfes read:clientes write:clientes read:produtos' }}">
+        <small class="text-muted">
+          Scopes são enviados como <code>?scope=</code> em <code>/authorize</code> — não configurados no portal TagPlus.
+          Ampliar aqui e clicar <strong>Re-autorizar OAuth</strong> para que o novo token cubra recursos extras
+          (ex.: adicionar <code>read:formas_pagamento</code> para destravar o botão "Listar do TagPlus" das formas).
+        </small>
       </div>
       <div class="mb-3">
         <label class="form-label">Ambiente</label>
