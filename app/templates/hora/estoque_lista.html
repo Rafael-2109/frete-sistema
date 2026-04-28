@@ -360,11 +360,28 @@
             <br>
             <a href="{{ url_for('hora.vendas_detalhe', venda_id=m.venda_id) }}"
                class="btn btn-sm btn-outline-success py-0 mt-1"
-               title="NF de saída (HORA → consumidor) — Venda #{{ m.venda_id }}">
+               title="NF de saída (HORA → consumidor) — Pedido #{{ m.venda_id }} ({{ m.venda_status }})">
               <i class="fas fa-arrow-up"></i> {{ m.nf_saida_numero }}
             </a>
           {% elif m.nf_saida_numero %}
             <br><small class="text-success"><i class="fas fa-arrow-up"></i> {{ m.nf_saida_numero }}</small>
+          {% endif %}
+          {# Reserva em pedido (chassi com RESERVADA — pedido COTACAO ou CONFIRMADO sem NF). #}
+          {% if m.venda_id and not m.nf_saida_numero and m.venda_status in ('COTACAO','CONFIRMADO') %}
+            {% set ped_badge = 'secondary' if m.venda_status == 'COTACAO' else 'primary' %}
+            <br>
+            {% if current_user.tem_perm_hora('vendas', 'ver') %}
+              <a href="{{ url_for('hora.vendas_detalhe', venda_id=m.venda_id) }}"
+                 class="btn btn-sm btn-outline-{{ ped_badge }} py-0 mt-1"
+                 title="Reservado em Pedido #{{ m.venda_id }}">
+                <i class="fas fa-bookmark"></i> Pedido #{{ m.venda_id }}
+                <span class="badge bg-{{ ped_badge }} ms-1">{{ m.venda_status }}</span>
+              </a>
+            {% else %}
+              <small class="text-{{ ped_badge }}">
+                <i class="fas fa-bookmark"></i> Reservado em Pedido #{{ m.venda_id }} ({{ m.venda_status }})
+              </small>
+            {% endif %}
           {% endif %}
         </td>
         <td>

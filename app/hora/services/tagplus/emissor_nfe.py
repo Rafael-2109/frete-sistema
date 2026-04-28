@@ -35,7 +35,12 @@ from app.hora.models.tagplus import (
     NFE_STATUS_REJEITADA_LOCAL,
     NFE_STATUS_REJEITADA_SEFAZ,
 )
-from app.hora.models.venda import HoraVenda
+from app.hora.models.venda import (
+    HoraVenda,
+    VENDA_STATUS_CONFIRMADO,
+    VENDA_STATUS_FATURADO,
+)
+from app.hora.services import venda_audit
 from app.hora.services.tagplus.api_client import ApiClient
 from app.hora.services.tagplus.payload_builder import PayloadBuilder, PayloadBuilderError
 from app.utils.json_helpers import sanitize_for_json
@@ -77,16 +82,18 @@ class EmissorNfeHora:
         if not venda:
             raise EmissaoBloqueadaError(f'Venda {venda_id} nao encontrada.')
 
-        # Bloqueio defensivo: venda criada via fluxo (a) (DANFE importada) ja tem NF.
+        # Bloqueio defensivo: pedido importado de DANFE legado ja nasce FATURADO
+        # com chave_44 — nao deve emitir NFe pelo TagPlus.
         if venda.nf_saida_chave_44:
             raise EmissaoBloqueadaError(
-                f'Venda {venda_id} ja tem NF emitida (chave {venda.nf_saida_chave_44}). '
+                f'Pedido {venda_id} ja tem NF (chave {venda.nf_saida_chave_44}). '
                 f'Para re-emissao, cancelar a existente primeiro.'
             )
 
-        if venda.status != 'CONCLUIDA':
+        if venda.status not in (VENDA_STATUS_CONFIRMADO, VENDA_STATUS_FATURADO):
             raise EmissaoBloqueadaError(
-                f'Venda {venda_id} esta em status {venda.status}; so CONCLUIDA emite NFe.'
+                f'Pedido {venda_id} em status {venda.status}; '
+                f'so CONFIRMADO emite NFe (FATURADO ja tem NF).'
             )
 
         conta = HoraTagPlusConta.ativa()
@@ -123,6 +130,12 @@ class EmissorNfeHora:
             emissao.serie_nfe = None
             emissao.chave_44 = None
             emissao.protocolo_aprovacao = None
+
+        venda_audit.registrar_auditoria(
+            venda_id=venda_id, usuario='sistema',
+            acao='EMITIU_NFE',
+            detalhe=f'Emissao enfileirada (id={emissao.id} conta={conta.id}).',
+        )
 
         # Commit ANTES de enfileirar — evita race com worker em outro processo.
         db.session.commit()

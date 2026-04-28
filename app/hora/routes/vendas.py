@@ -1,13 +1,23 @@
-"""Rotas de Venda (NF de saida HORA -> consumidor final): upload, listagem,
-detalhe, edicao, definicao de loja, cancelamento e resolucao de divergencias.
+"""Rotas de Pedido de Venda (HORA -> consumidor final).
+
+Inclui: upload DANFE legado, criacao manual via TagPlus, listagem, detalhe,
+edicao de header e itens, transicoes (confirmar, cancelar), definicao de loja,
+resolucao de divergencias.
 """
 from __future__ import annotations
+
+from decimal import Decimal, InvalidOperation
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app.hora.decorators import require_hora_perm
-from app.hora.models import HoraLoja, HoraVenda, HoraVendaDivergencia
+from app.hora.models import (
+    HoraLoja,
+    HoraVenda,
+    HoraVendaDivergencia,
+    VENDA_STATUS_COTACAO,
+)
 from app.hora.models.tagplus import HoraTagPlusFormaPagamentoMap
 from app.hora.routes import hora_bp
 from app.hora.services import venda_service
@@ -168,12 +178,18 @@ def vendas_download_pdf(venda_id: int):
 @hora_bp.route('/vendas/<int:venda_id>/editar', methods=['POST'])
 @require_hora_perm('vendas', 'editar')
 def vendas_editar(venda_id: int):
+    """Edita campos do header. Conjunto de campos permitidos varia por status:
+    - COTACAO: tudo (incluindo cliente/endereco)
+    - CONFIRMADO: contato/endereco/operacionais
+    - FATURADO: so observacoes
+    - CANCELADO: nada
+    """
     venda = HoraVenda.query.get_or_404(venda_id)
     if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
         flash('Acesso negado.', 'danger')
         return redirect(url_for('hora.vendas_lista'))
     if not venda.loja_id and lojas_permitidas_ids() is not None:
-        flash('Venda sem loja definida — apenas admin edita.', 'warning')
+        flash('Pedido sem loja definida — apenas admin edita.', 'warning')
         return redirect(url_for('hora.vendas_lista'))
 
     try:
@@ -184,9 +200,139 @@ def vendas_editar(venda_id: int):
             telefone_cliente=request.form.get('telefone_cliente'),
             email_cliente=request.form.get('email_cliente'),
             observacoes=request.form.get('observacoes'),
+            nome_cliente=request.form.get('nome_cliente'),
+            cpf_cliente=request.form.get('cpf_cliente'),
+            cep=request.form.get('cep'),
+            endereco_logradouro=request.form.get('endereco_logradouro'),
+            endereco_numero=request.form.get('endereco_numero'),
+            endereco_complemento=request.form.get('endereco_complemento'),
+            endereco_bairro=request.form.get('endereco_bairro'),
+            endereco_cidade=request.form.get('endereco_cidade'),
+            endereco_uf=request.form.get('endereco_uf'),
+            usuario=_operador_atual(),
         )
-        flash('Venda atualizada.', 'success')
-    except ValueError as exc:
+        flash('Pedido atualizado.', 'success')
+    except (ValueError, venda_service.TransicaoInvalidaError) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+# ------------------------------------------------------------------------
+# Confirmar pedido (COTACAO -> CONFIRMADO)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/vendas/<int:venda_id>/confirmar', methods=['POST'])
+@require_hora_perm('vendas', 'aprovar')
+def vendas_confirmar(venda_id: int):
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    if not venda.loja_id and lojas_permitidas_ids() is not None:
+        flash('Pedido sem loja definida — apenas admin confirma.', 'warning')
+        return redirect(url_for('hora.vendas_lista'))
+
+    try:
+        venda_service.confirmar_venda(
+            venda_id=venda.id, usuario=_operador_atual(),
+        )
+        flash(
+            f'Pedido #{venda.id} confirmado. Pronto para emissao de NFe.',
+            'success',
+        )
+    except (ValueError, venda_service.TransicaoInvalidaError) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+# ------------------------------------------------------------------------
+# Edicao de itens (apenas em COTACAO)
+# ------------------------------------------------------------------------
+
+def _parse_decimal_form(valor_raw: str) -> Decimal:
+    valor_raw = (valor_raw or '').strip()
+    try:
+        return (
+            Decimal(valor_raw.replace('.', '').replace(',', '.'))
+            if ',' in valor_raw else Decimal(valor_raw)
+        )
+    except (InvalidOperation, ValueError):
+        raise ValueError(f'Valor invalido: {valor_raw!r}')
+
+
+@hora_bp.route('/vendas/<int:venda_id>/itens/adicionar', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def vendas_item_adicionar(venda_id: int):
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    if venda.status != VENDA_STATUS_COTACAO:
+        flash('Itens so podem ser adicionados em pedidos COTACAO.', 'warning')
+        return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+    chassi = (request.form.get('numero_chassi') or '').strip()
+    valor_raw = request.form.get('valor_final', '')
+    try:
+        valor = _parse_decimal_form(valor_raw)
+        venda_service.adicionar_item_pedido(
+            venda_id=venda.id,
+            numero_chassi=chassi,
+            valor_final=valor,
+            usuario=_operador_atual(),
+        )
+        flash(f'Item adicionado ao pedido #{venda.id}.', 'success')
+    except (ValueError, venda_service.ChassiIndisponivelError,
+            venda_service.TransicaoInvalidaError) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+@hora_bp.route('/vendas/<int:venda_id>/itens/<int:item_id>/remover', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def vendas_item_remover(venda_id: int, item_id: int):
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    try:
+        venda_service.remover_item_pedido(
+            venda_id=venda.id, item_id=item_id,
+            usuario=_operador_atual(),
+        )
+        flash('Item removido.', 'success')
+    except (ValueError, venda_service.TransicaoInvalidaError) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+@hora_bp.route('/vendas/<int:venda_id>/itens/<int:item_id>/editar', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def vendas_item_editar(venda_id: int, item_id: int):
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+
+    novo_chassi = (request.form.get('novo_chassi') or '').strip() or None
+    valor_raw = (request.form.get('valor_final') or '').strip()
+    novo_valor = None
+    if valor_raw:
+        try:
+            novo_valor = _parse_decimal_form(valor_raw)
+        except ValueError as exc:
+            flash(f'Erro: {exc}', 'danger')
+            return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+    try:
+        venda_service.editar_item_pedido(
+            venda_id=venda.id, item_id=item_id,
+            novo_chassi=novo_chassi, novo_valor=novo_valor,
+            usuario=_operador_atual(),
+        )
+        flash('Item atualizado.', 'success')
+    except (ValueError, venda_service.ChassiIndisponivelError,
+            venda_service.TransicaoInvalidaError) as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
 
@@ -247,8 +393,11 @@ def vendas_cancelar(venda_id: int):
             motivo=motivo,
             usuario=_operador_atual(),
         )
-        flash('Venda cancelada. Chassis marcados como DEVOLVIDA.', 'success')
-    except ValueError as exc:
+        flash(
+            f'Pedido #{venda.id} cancelado. Chassis devolvidos ao estoque.',
+            'success',
+        )
+    except (ValueError, venda_service.TransicaoInvalidaError) as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
 

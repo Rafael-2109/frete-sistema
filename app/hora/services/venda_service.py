@@ -1,20 +1,21 @@
-"""Service de HoraVenda: importa DANFE de saida, cria venda + itens + evento VENDIDA.
+"""Service de HoraVenda — pedido de venda ao consumidor final.
 
-Fluxo de import (atualmente unico; fluxo TagPlus sera adicionado em sessao futura):
-  1. Parseia PDF via danfe_adapter (parser CarVia reusado).
-  2. Valida chave_44 nao duplicada (UNIQUE em HoraVenda.nf_saida_chave_44).
-  3. Resolve loja emitente por CNPJ -> HoraLoja ativa; se nao bate, loja_id=NULL
-     e registra divergencia CNPJ_DESCONHECIDO para correcao manual.
-  4. Resolve preco_tabela vigente por modelo+data; se nao existe, usa preco_final
-     como preco_tabela_referencia + desconto=0 e registra TABELA_PRECO_AUSENTE.
-  5. Para cada chassi:
-     - get_or_create_moto (cria se nao existe + divergencia CHASSI_NAO_CADASTRADO).
-     - Valida ultimo evento em EVENTOS_EM_ESTOQUE (divergencia se nao).
-     - Valida loja do ultimo evento == loja emitente (divergencia se nao).
-     - Cria HoraVendaItem + evento VENDIDA.
-  6. Persiste PDF no S3 (folder='hora/vendas/'). Falha de storage nao aborta.
+Maquina de estado (status):
+    COTACAO    -> CONFIRMADO  (confirmar_venda)
+    CONFIRMADO -> FATURADO    (webhook TagPlus nfe_aprovada)
+    *          -> CANCELADO   (cancelar_venda; FATURADO so apos NFe cancelada)
+    DANFE legado -> FATURADO direto (importar_nf_saida_pdf).
 
-Fluxo permissivo: problemas geram divergencia, nao rejeitam. Decidido com usuario.
+Estoque:
+    COTACAO/CONFIRMADO/FATURADO reservam o chassi (saem do estoque disponivel).
+    CANCELADO devolve via evento DEVOLVIDA.
+
+Lock pessimista:
+    criar_venda_manual + editar_item_pedido + adicionar_item_pedido fazem
+    SELECT FOR UPDATE no chassi para impedir reserva concorrente.
+
+Auditoria:
+    Toda transicao registra HoraVendaAuditoria via venda_audit.registrar_auditoria.
 """
 from __future__ import annotations
 
@@ -34,7 +35,19 @@ from app.hora.models import (
     HoraVenda,
     HoraVendaDivergencia,
     HoraVendaItem,
+    VENDA_STATUS_CANCELADO,
+    VENDA_STATUS_CONFIRMADO,
+    VENDA_STATUS_COTACAO,
+    VENDA_STATUS_FATURADO,
 )
+from app.hora.models.tagplus import (
+    HoraTagPlusNfeEmissao,
+    NFE_STATUS_APROVADA,
+    NFE_STATUS_CANCELAMENTO_SOLICITADO,
+    NFE_STATUS_EM_ENVIO,
+    NFE_STATUS_ENVIADA_SEFAZ,
+)
+from app.hora.services import venda_audit
 from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
 from app.hora.services.moto_service import get_or_create_moto, registrar_evento
 from app.hora.services.parsers import parse_danfe_to_hora_payload
@@ -54,12 +67,11 @@ TIPOS_DIVERGENCIA_VENDA = (
     'PRECO_ACIMA_TABELA',
 )
 
+# Estados de NFe que bloqueiam edicao/cancelamento livre da venda.
+_NFE_EM_VOO = (NFE_STATUS_EM_ENVIO, NFE_STATUS_ENVIADA_SEFAZ, NFE_STATUS_CANCELAMENTO_SOLICITADO)
+
 
 def _para_datetime(valor) -> Optional[datetime]:
-    """Converte date em datetime (meia-noite); preserva datetime; retorna None
-    se for None. Usado para persistir `nf_saida_emitida_em` (DateTime) a partir
-    do `data_emissao` (que pode vir como date pelo parser).
-    """
     if valor is None:
         return None
     if isinstance(valor, datetime):
@@ -73,6 +85,14 @@ class NfSaidaJaImportada(Exception):
     """NF com mesma chave_44 já existe em HoraVenda."""
 
 
+class ChassiIndisponivelError(ValueError):
+    """Chassi nao esta disponivel para reserva (ja reservado / vendido / fora de estoque)."""
+
+
+class TransicaoInvalidaError(ValueError):
+    """Transicao de status nao permitida."""
+
+
 # --------------------------------------------------------------------------
 # Helpers internos
 # --------------------------------------------------------------------------
@@ -80,10 +100,6 @@ class NfSaidaJaImportada(Exception):
 def _salvar_pdf_storage(
     pdf_bytes: bytes, chave_44: str, nome_arquivo_origem: Optional[str]
 ) -> Optional[str]:
-    """Persiste bytes do DANFE em hora/vendas/ e retorna s3_key salvo (ou None).
-
-    Falha de storage nao aborta o import — loga e continua (venda ja importou).
-    """
     try:
         buf = io.BytesIO(pdf_bytes)
         buf.name = (nome_arquivo_origem or f'venda_{chave_44}.pdf')
@@ -107,7 +123,6 @@ def _registrar_divergencia(
     valor_esperado: Optional[str] = None,
     valor_conferido: Optional[str] = None,
 ) -> HoraVendaDivergencia:
-    """Cria divergencia (idempotente via UNIQUE venda+tipo+chassi)."""
     if tipo not in TIPOS_DIVERGENCIA_VENDA:
         raise ValueError(f'tipo de divergencia invalido: {tipo}')
     div = HoraVendaDivergencia(
@@ -133,10 +148,6 @@ def _ultimo_evento(chassi: str) -> Optional[HoraMotoEvento]:
 
 
 def _buscar_preco_vigente(modelo_id: int, na_data) -> Optional[HoraTabelaPreco]:
-    """Mesma regra de cadastro_service.buscar_preco_vigente, mas inline p/ evitar
-    import circular (cadastro_service nao depende de venda_service; venda_service
-    depende de cadastro_service — OK, mas inline mantem boundary limpo).
-    """
     from sqlalchemy import or_
     return (
         HoraTabelaPreco.query
@@ -155,7 +166,6 @@ def _buscar_preco_vigente(modelo_id: int, na_data) -> Optional[HoraTabelaPreco]:
 
 
 def _resolver_loja_por_cnpj(cnpj_emitente: Optional[str]) -> Optional[HoraLoja]:
-    """Busca HoraLoja ativa por CNPJ. Normaliza dois lados (so digitos)."""
     if not cnpj_emitente:
         return None
     digitos = ''.join(c for c in cnpj_emitente if c.isdigit())
@@ -164,424 +174,59 @@ def _resolver_loja_por_cnpj(cnpj_emitente: Optional[str]) -> Optional[HoraLoja]:
     return HoraLoja.query.filter_by(cnpj=digitos, ativa=True).first()
 
 
-# --------------------------------------------------------------------------
-# Fluxo principal: import DANFE -> HoraVenda
-# --------------------------------------------------------------------------
+def _lock_chassi_e_validar_disponivel(chassi: str) -> tuple[HoraMoto, HoraMotoEvento]:
+    """SELECT ... FOR UPDATE no HoraMoto + valida disponibilidade.
 
-def importar_nf_saida_pdf(
-    pdf_bytes: bytes,
-    nome_arquivo_origem: Optional[str] = None,
-    criado_por: Optional[str] = None,
-) -> HoraVenda:
-    """Parseia PDF e cria HoraVenda + itens + eventos VENDIDA + divergencias.
-
-    Args:
-        pdf_bytes: bytes do DANFE da NF de saida.
-        nome_arquivo_origem: nome original do arquivo (para log e storage).
-        criado_por: usuario que subiu a NF (nao vira vendedor — campo e preenchido
-                    manualmente depois; ver decisao do usuario em 2026-04-24).
-
-    Returns:
-        HoraVenda criada (com itens, divergencias e eventos VENDIDA emitidos).
-
-    Raises:
-        NfSaidaJaImportada: se chave_44 ja existe.
-        DanfeParseError: se parser falhar.
-        ValueError: se dados obrigatorios (CPF cliente, nome) nao puderem ser
-                    extraidos da NF.
+    Retorna (moto, ultimo_evento). Levanta ChassiIndisponivelError se nao
+    estiver em EVENTOS_EM_ESTOQUE.
     """
-    payload = parse_danfe_to_hora_payload(
-        pdf_bytes=pdf_bytes,
-        nome_arquivo_origem=nome_arquivo_origem,
-    )
-    nf_data = payload['nf']
-    itens_data = payload['itens']
+    chassi_norm = (chassi or '').strip().upper()
+    if not chassi_norm:
+        raise ValueError('Chassi obrigatorio')
 
-    chave_44 = nf_data['chave_44']
-
-    # 1. Dedupe por chave_44 (UNIQUE em hora_venda).
-    existente = HoraVenda.query.filter_by(nf_saida_chave_44=chave_44).first()
-    if existente:
-        raise NfSaidaJaImportada(
-            f'NF de saida com chave {chave_44} ja importada (venda_id={existente.id})'
-        )
-
-    # 2. Cliente: extrair CPF + nome do destinatario.
-    cpf_cliente = nf_data.get('cpf_destinatario')
-    nome_cliente = nf_data.get('nome_destinatario')
-    if not cpf_cliente:
-        raise ValueError(
-            'NF de saida sem CPF do destinatario (parser extraiu documento nao-CPF). '
-            'Confira se o DANFE e de venda ao consumidor final.'
-        )
-    if not nome_cliente:
-        raise ValueError(
-            'NF de saida sem nome do destinatario. Parser falhou em extrair.'
-        )
-
-    # 3. Resolver loja por CNPJ emitente (permissivo: NULL + divergencia se nao bate).
-    cnpj_emitente = nf_data.get('cnpj_emitente')
-    loja_emitente = _resolver_loja_por_cnpj(cnpj_emitente)
-
-    # 4. Persistir PDF (falha nao aborta).
-    s3_key = _salvar_pdf_storage(
-        pdf_bytes=pdf_bytes,
-        chave_44=chave_44,
-        nome_arquivo_origem=nome_arquivo_origem,
-    )
-
-    # 5. Criar HoraVenda (flush para obter id; itens/divergencias vao logo em seguida).
-    data_emissao = nf_data['data_emissao']
-    valor_total_nf = Decimal(str(nf_data['valor_total']))
-    venda = HoraVenda(
-        loja_id=loja_emitente.id if loja_emitente else None,
-        cpf_cliente=cpf_cliente[:14],
-        nome_cliente=nome_cliente[:200],
-        data_venda=data_emissao,
-        forma_pagamento='NAO_INFORMADO',
-        valor_total=valor_total_nf,
-        nf_saida_numero=nf_data['numero_nf'][:20],
-        nf_saida_chave_44=chave_44,
-        # nf_saida_emitida_em deve refletir a data de emissao da NF fiscal
-        # (vinda do DANFE), nao o momento do import (C1 do code review).
-        nf_saida_emitida_em=_para_datetime(data_emissao),
-        arquivo_pdf_s3_key=s3_key,
-        parser_usado=nf_data.get('parser_usado', 'danfe_pdf_parser_v1'),
-        parseada_em=agora_utc_naive(),
-        cnpj_emitente=cnpj_emitente,
-        status='CONCLUIDA',
-        vendedor=None,  # preenchido manualmente pos-import
-    )
-    db.session.add(venda)
-    db.session.flush()
-
-    # 5b. Divergencia header: CNPJ emitente nao bate.
-    if not loja_emitente:
-        _registrar_divergencia(
-            venda_id=venda.id,
-            tipo='CNPJ_DESCONHECIDO',
-            detalhe=(
-                'CNPJ emitente da NF nao bate com nenhuma HoraLoja ativa. '
-                'Defina a loja manualmente na tela de detalhe.'
-            ),
-            valor_conferido=cnpj_emitente,
-        )
-
-    # 6. Itens + eventos + divergencias por chassi.
-    _criar_itens_e_eventos(
-        venda=venda,
-        itens_data=itens_data,
-        loja_emitente_id=loja_emitente.id if loja_emitente else None,
-        data_venda=data_emissao,
-        operador=criado_por,
-    )
-
-    db.session.commit()
-    return venda
-
-
-def _criar_itens_e_eventos(
-    venda: HoraVenda,
-    itens_data: List[dict],
-    loja_emitente_id: Optional[int],
-    data_venda,
-    operador: Optional[str],
-) -> None:
-    """Cria HoraVendaItem + HoraMotoEvento(VENDIDA) + divergencias por chassi."""
-    for item in itens_data:
-        chassi = item['numero_chassi']
-        preco_final = Decimal(str(item['preco_real']))
-
-        # 6a. get_or_create_moto (pode criar nova HoraMoto).
-        moto_existia = HoraMoto.query.get(chassi) is not None
-        moto = get_or_create_moto(
-            numero_chassi=chassi,
-            modelo_nome=item.get('modelo_texto_original'),
-            cor=item.get('cor_texto_original') or 'NAO_INFORMADA',
-            numero_motor=item.get('numero_motor'),
-            ano_modelo=item.get('ano_modelo'),
-            criado_por=operador,
-        )
-        if not moto_existia:
-            _registrar_divergencia(
-                venda_id=venda.id,
-                tipo='CHASSI_NAO_CADASTRADO',
-                numero_chassi=chassi,
-                detalhe=(
-                    'Chassi nao existia em hora_moto (criado a partir da NF). '
-                    'Indica que a moto nunca passou pelo fluxo de entrada/recebimento.'
-                ),
-            )
-
-        # 6b. Valida ultimo evento e loja.
-        ult = _ultimo_evento(chassi)
-        if ult is None:
-            # Chassi recem-criado ou nunca movimentado — registramos como indisponivel
-            # apenas se a moto JA existia antes do import (ai era esperada alguma
-            # movimentacao). Chassi novo criado no proprio import: sem evento antes.
-            if moto_existia:
-                _registrar_divergencia(
-                    venda_id=venda.id,
-                    tipo='CHASSI_INDISPONIVEL',
-                    numero_chassi=chassi,
-                    detalhe='Chassi existia em hora_moto mas sem nenhum evento.',
-                )
-        else:
-            if ult.tipo not in EVENTOS_EM_ESTOQUE:
-                _registrar_divergencia(
-                    venda_id=venda.id,
-                    tipo='CHASSI_INDISPONIVEL',
-                    numero_chassi=chassi,
-                    detalhe=(
-                        f'Ultimo evento do chassi era {ult.tipo} '
-                        f'(em {ult.timestamp.strftime("%d/%m/%Y %H:%M")})'
-                    ),
-                    valor_conferido=ult.tipo,
-                )
-            if (
-                loja_emitente_id is not None
-                and ult.loja_id is not None
-                and ult.loja_id != loja_emitente_id
-            ):
-                _registrar_divergencia(
-                    venda_id=venda.id,
-                    tipo='LOJA_DIVERGENTE',
-                    numero_chassi=chassi,
-                    detalhe=(
-                        f'Chassi estava na loja_id={ult.loja_id} '
-                        f'mas NF foi emitida pela loja_id={loja_emitente_id}.'
-                    ),
-                    valor_esperado=str(loja_emitente_id),
-                    valor_conferido=str(ult.loja_id),
-                )
-
-        # 6c. Resolver preco de tabela vigente; fallback: preco_final.
-        tabela_preco = _buscar_preco_vigente(moto.modelo_id, data_venda)
-        if tabela_preco:
-            preco_tabela_ref = Decimal(str(tabela_preco.preco_tabela))
-            desconto = preco_tabela_ref - preco_final
-            if desconto < 0:
-                # Vendeu acima da tabela (promo negativa = acrescimo). Para nao
-                # violar a invariante preco_final = tabela - desconto (desconto>=0),
-                # registramos com preco_tabela_ref=preco_final e desconto=0 e
-                # emitimos divergencia especifica PRECO_ACIMA_TABELA (distinta
-                # de TABELA_PRECO_AUSENTE) para o operador revisar.
-                _registrar_divergencia(
-                    venda_id=venda.id,
-                    tipo='PRECO_ACIMA_TABELA',
-                    numero_chassi=chassi,
-                    detalhe=(
-                        f'Preco final (R${preco_final}) > preco tabela '
-                        f'(R${preco_tabela_ref}). Item gravado sem desconto '
-                        'negativo; revise se houve acrescimo ou tabela desatualizada.'
-                    ),
-                    valor_esperado=str(preco_tabela_ref),
-                    valor_conferido=str(preco_final),
-                )
-                preco_tabela_ref = preco_final
-                desconto = Decimal('0.00')
-                tabela_preco_id = None
-            else:
-                tabela_preco_id = tabela_preco.id
-        else:
-            _registrar_divergencia(
-                venda_id=venda.id,
-                tipo='TABELA_PRECO_AUSENTE',
-                numero_chassi=chassi,
-                detalhe=(
-                    f'Sem HoraTabelaPreco vigente para modelo {moto.modelo_id} '
-                    f'na data {data_venda}. Usado preco final como referencia.'
-                ),
-                valor_conferido=str(preco_final),
-            )
-            preco_tabela_ref = preco_final
-            desconto = Decimal('0.00')
-            tabela_preco_id = None
-
-        # 6d. Cria HoraVendaItem.
-        venda_item = HoraVendaItem(
-            venda_id=venda.id,
-            numero_chassi=chassi,
-            tabela_preco_id=tabela_preco_id,
-            preco_tabela_referencia=preco_tabela_ref,
-            desconto_aplicado=desconto,
-            preco_final=preco_final,
-        )
-        db.session.add(venda_item)
-        db.session.flush()
-
-        # 6e. Evento VENDIDA (invariante 4 do HORA: estado via evento).
-        registrar_evento(
-            numero_chassi=chassi,
-            tipo='VENDIDA',
-            origem_tabela='hora_venda_item',
-            origem_id=venda_item.id,
-            loja_id=loja_emitente_id,
-            operador=operador,
-            detalhe=(
-                f'Venda #{venda.id} NF {venda.nf_saida_numero} '
-                f'para {venda.nome_cliente}'
-            ),
-        )
-
-
-# --------------------------------------------------------------------------
-# Manutencao pos-import
-# --------------------------------------------------------------------------
-
-def editar_venda(
-    venda_id: int,
-    vendedor: Optional[str] = None,
-    forma_pagamento: Optional[str] = None,
-    telefone_cliente: Optional[str] = None,
-    email_cliente: Optional[str] = None,
-    observacoes: Optional[str] = None,
-) -> HoraVenda:
-    """Edita campos da venda editaveis pos-import.
-
-    Os demais campos (CPF/nome/valor/chave_44/itens) vem da NF e sao imutaveis.
-    """
-    venda = HoraVenda.query.get(venda_id)
-    if not venda:
-        raise ValueError(f'Venda {venda_id} nao encontrada')
-    if venda.status == 'CANCELADA':
-        raise ValueError('Venda cancelada nao pode ser editada')
-
-    if vendedor is not None:
-        venda.vendedor = vendedor.strip()[:100] or None
-    if forma_pagamento is not None:
-        fp_norm = (forma_pagamento or '').strip().upper() or 'NAO_INFORMADO'
-        venda.forma_pagamento = fp_norm[:20]
-    if telefone_cliente is not None:
-        venda.telefone_cliente = telefone_cliente.strip()[:20] or None
-    if email_cliente is not None:
-        venda.email_cliente = email_cliente.strip()[:120] or None
-    if observacoes is not None:
-        venda.observacoes = observacoes.strip() or None
-
-    db.session.commit()
-    return venda
-
-
-def definir_loja_venda(
-    venda_id: int,
-    loja_id: int,
-    usuario: Optional[str] = None,
-) -> HoraVenda:
-    """Preenche loja_id em venda importada com CNPJ emitente desconhecido.
-
-    Resolve a divergencia CNPJ_DESCONHECIDO. Para cada chassi da venda, emite
-    um NOVO evento VENDIDA com loja_id corrigida (respeitando a invariante 4
-    do HORA — eventos sao append-only, nunca UPDATE). O evento VENDIDA original
-    com loja_id=NULL e preservado no historico. O "ultimo evento" do chassi
-    passa a apontar para a nova loja automaticamente (calculo por MAX(id)).
-    """
-    venda = HoraVenda.query.get(venda_id)
-    if not venda:
-        raise ValueError(f'Venda {venda_id} nao encontrada')
-    if venda.loja_id:
-        raise ValueError(f'Venda {venda_id} ja tem loja {venda.loja_id} definida.')
-
-    loja = HoraLoja.query.get(loja_id)
-    if not loja:
-        raise ValueError(f'Loja {loja_id} nao encontrada')
-
-    venda.loja_id = loja_id
-
-    # Emite um novo evento VENDIDA por chassi apontando a loja corrigida.
-    # Invariante 4: eventos append-only — nao mutamos o evento antigo.
-    for item in venda.itens:
-        registrar_evento(
-            numero_chassi=item.numero_chassi,
-            tipo='VENDIDA',
-            origem_tabela='hora_venda_item',
-            origem_id=item.id,
-            loja_id=loja_id,
-            operador=usuario,
-            detalhe=(
-                f'Loja definida retroativamente na venda #{venda.id} '
-                f'(evento anterior emitido com loja_id=NULL por CNPJ_DESCONHECIDO).'
-            ),
-        )
-
-    # Resolve divergencia CNPJ_DESCONHECIDO (se havia).
-    div = (
-        HoraVendaDivergencia.query
-        .filter_by(venda_id=venda.id, tipo='CNPJ_DESCONHECIDO')
+    moto = (
+        db.session.query(HoraMoto)
+        .filter(HoraMoto.numero_chassi == chassi_norm)
+        .with_for_update()
         .first()
     )
-    if div and div.resolvida_em is None:
-        div.resolvida_em = agora_utc_naive()
-        div.resolvida_por = usuario
+    if not moto:
+        raise ChassiIndisponivelError(f'Chassi {chassi_norm} nao cadastrado')
 
-    db.session.commit()
-    return venda
-
-
-def cancelar_venda(
-    venda_id: int,
-    motivo: str,
-    usuario: Optional[str] = None,
-) -> HoraVenda:
-    """Cancela venda: marca status=CANCELADA e emite evento DEVOLVIDA nos chassis.
-
-    Reversao do fluxo: evento DEVOLVIDA volta o chassi para EVENTOS_FORA_ESTOQUE
-    (nao em estoque). Se operador quer voltar ao estoque, precisa criar nova
-    NF de entrada (simetria com fluxo de devolucao ja existente).
-
-    O registro da venda e PRESERVADO (append-only audit trail); apenas muda status.
-    """
-    motivo_limpo = (motivo or '').strip()
-    if len(motivo_limpo) < 3:
-        raise ValueError('Motivo obrigatorio (min 3 chars)')
-
-    venda = HoraVenda.query.get(venda_id)
-    if not venda:
-        raise ValueError(f'Venda {venda_id} nao encontrada')
-    if venda.status == 'CANCELADA':
-        return venda  # idempotente
-
-    venda.status = 'CANCELADA'
-    venda.observacoes = (
-        (venda.observacoes or '') + f'\n[CANCELADA em {agora_utc_naive()} por {usuario}: {motivo_limpo}]'
-    ).strip()
-
-    for item in venda.itens:
-        registrar_evento(
-            numero_chassi=item.numero_chassi,
-            tipo='DEVOLVIDA',
-            origem_tabela='hora_venda',
-            origem_id=venda.id,
-            loja_id=venda.loja_id,
-            operador=usuario,
-            detalhe=f'Venda #{venda.id} cancelada: {motivo_limpo[:180]}',
+    ult = _ultimo_evento(chassi_norm)
+    if ult is None or ult.tipo not in EVENTOS_EM_ESTOQUE:
+        ult_tipo = ult.tipo if ult else 'sem eventos'
+        raise ChassiIndisponivelError(
+            f'Chassi {chassi_norm} nao esta disponivel para reserva '
+            f'(ultimo evento: {ult_tipo})'
         )
-
-    db.session.commit()
-    return venda
+    return moto, ult
 
 
-def resolver_divergencia(
-    divergencia_id: int,
-    usuario: Optional[str] = None,
-) -> HoraVendaDivergencia:
-    """Marca divergencia como resolvida (acao tomada pelo operador fora do sistema).
+def _emissao_nfe(venda_id: int) -> Optional[HoraTagPlusNfeEmissao]:
+    return HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()
 
-    Nao altera a venda — e so auditoria de "revisei e aceitei/tratei".
+
+def _resolver_preco_tabela(
+    modelo_id: int, na_data, valor_final: Decimal,
+) -> tuple[Decimal, Decimal, Optional[int], Optional[str]]:
+    """Retorna (preco_tabela_ref, desconto, tabela_preco_id, divergencia_tipo).
+
+    `divergencia_tipo` (se preenchido) deve ser registrado pelo chamador com
+    detalhe apropriado (vence aqui o calculo, nao o registro).
     """
-    div = HoraVendaDivergencia.query.get(divergencia_id)
-    if not div:
-        raise ValueError(f'Divergencia {divergencia_id} nao encontrada')
-    if div.resolvida_em is not None:
-        return div  # idempotente
-    div.resolvida_em = agora_utc_naive()
-    div.resolvida_por = usuario
-    db.session.commit()
-    return div
+    tabela = _buscar_preco_vigente(modelo_id, na_data)
+    if tabela:
+        preco_ref = Decimal(str(tabela.preco_tabela))
+        desconto = preco_ref - valor_final
+        if desconto < 0:
+            return valor_final, Decimal('0.00'), None, 'PRECO_ACIMA_TABELA'
+        return preco_ref, desconto, tabela.id, None
+    return valor_final, Decimal('0.00'), None, 'TABELA_PRECO_AUSENTE'
 
 
 # --------------------------------------------------------------------------
-# Listagem
+# Fluxo de criacao manual: COTACAO + lock pessimista + evento RESERVADA
 # --------------------------------------------------------------------------
 
 def criar_venda_manual(
@@ -603,43 +248,16 @@ def criar_venda_manual(
     observacoes: Optional[str] = None,
     criado_por: Optional[str] = None,
 ) -> HoraVenda:
-    """Cria HoraVenda manual (fluxo "Novo Pedido de Venda" no menu Faturamento).
+    """Cria pedido de venda manual em status COTACAO.
 
-    Diferente de `importar_nf_saida_pdf`, NAO ha NF previa: o operador preenche
-    todos os campos via formulario web. O fluxo:
-      1. Valida CPF (11 digitos) e nome.
-      2. Valida chassi: existe em hora_moto + ultimo evento em EVENTOS_EM_ESTOQUE.
-      3. Resolve loja_id pelo ultimo evento do chassi (sempre tem para in-stock).
-      4. Resolve preco_tabela_referencia + desconto (preco_tabela_vigente OU
-         preco_final como fallback).
-      5. Cria HoraVenda + HoraVendaItem + emite evento VENDIDA.
-      6. NAO cria NF; venda fica pronta para emissao de NFe via TagPlus.
-
-    Validacoes que NAO sao feitas aqui (sao do PayloadBuilder na hora de emitir):
-      - forma_pagamento mapeada em HoraTagPlusFormaPagamentoMap
-      - modelo mapeado em HoraTagPlusProdutoMap
-      O esboco (`/hora/tagplus/esboco/<id>`) ja exibe esses problemas de forma
-      amigavel, e a emissao bloqueia se faltar mapeamento.
-
-    Args:
-        cpf_cliente: CPF (11 digitos, com ou sem mascara).
-        nome_cliente: Nome completo do consumidor final.
-        cep, endereco_*: Endereco (campos podem ser NULL para vendas sem
-            endereco — mas TagPlus rejeita destinatario sem endereco).
-        numero_chassi: Chassi da moto (deve estar em estoque).
-        valor_final: Preco final (apos desconto). Deve ser > 0.
-        forma_pagamento: PIX | CARTAO_CREDITO | CARTAO_DEBITO | DINHEIRO etc.
-            Validado contra HoraTagPlusFormaPagamentoMap so na emissao.
-        telefone_cliente, email_cliente, vendedor, observacoes: opcionais.
-        criado_por: Operador (current_user.nome) — registrado em HoraMotoEvento.
-
-    Returns:
-        HoraVenda criada (com 1 item e evento VENDIDA emitido).
-
-    Raises:
-        ValueError: dados invalidos (CPF, nome, chassi indisponivel, valor <=0).
+    1. Valida CPF, nome, valor, forma_pagamento, chassi.
+    2. SELECT FOR UPDATE no chassi (impede 2 operadores reservarem o mesmo).
+    3. Resolve loja_id pelo ultimo evento.
+    4. Resolve preco tabela vigente.
+    5. Cria HoraVenda(status=COTACAO) + HoraVendaItem.
+    6. Emite evento RESERVADA (saida do estoque disponivel).
+    7. Auditoria: CRIOU.
     """
-    # ----- 1. Validacao de cabecalho -----
     cpf_norm = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
     if len(cpf_norm) != 11:
         raise ValueError(f'CPF invalido: {cpf_cliente!r} (esperado 11 digitos)')
@@ -655,24 +273,8 @@ def criar_venda_manual(
     if not forma_norm or forma_norm == 'NAO_INFORMADO':
         raise ValueError('Forma de pagamento obrigatoria')
 
-    # ----- 2. Validacao do chassi -----
-    chassi_norm = (numero_chassi or '').strip().upper()
-    if not chassi_norm:
-        raise ValueError('Chassi obrigatorio')
-
-    moto = HoraMoto.query.get(chassi_norm)
-    if not moto:
-        raise ValueError(f'Chassi {chassi_norm} nao cadastrado')
-
-    ult = _ultimo_evento(chassi_norm)
-    from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
-    if ult is None or ult.tipo not in EVENTOS_EM_ESTOQUE:
-        ult_tipo = ult.tipo if ult else 'sem eventos'
-        raise ValueError(
-            f'Chassi {chassi_norm} nao esta disponivel para venda '
-            f'(ultimo evento: {ult_tipo})'
-        )
-
+    moto, ult = _lock_chassi_e_validar_disponivel(numero_chassi)
+    chassi_norm = moto.numero_chassi
     loja_id = ult.loja_id
     if not loja_id:
         raise ValueError(
@@ -680,38 +282,20 @@ def criar_venda_manual(
             f'investigar inconsistencia em hora_moto_evento.'
         )
 
-    # ----- 3. Endereco (sanitizacao basica) -----
     cep_norm = ''.join(c for c in (cep or '') if c.isdigit()) or None
     if cep_norm and len(cep_norm) != 8:
         raise ValueError(f'CEP invalido: {cep!r} (esperado 8 digitos)')
-    cep_formatado = (
-        f'{cep_norm[:5]}-{cep_norm[5:]}' if cep_norm else None
-    )
+    cep_formatado = f'{cep_norm[:5]}-{cep_norm[5:]}' if cep_norm else None
     uf_norm = (endereco_uf or '').strip().upper() or None
     if uf_norm and len(uf_norm) != 2:
         raise ValueError(f'UF invalido: {endereco_uf!r} (esperado 2 letras)')
 
-    # ----- 4. Resolver preco tabela vigente -----
     valor_final_dec = Decimal(str(valor_final))
     data_venda = date.today()
-    tabela_preco = _buscar_preco_vigente(moto.modelo_id, data_venda)
-    if tabela_preco:
-        preco_tabela_ref = Decimal(str(tabela_preco.preco_tabela))
-        desconto = preco_tabela_ref - valor_final_dec
-        if desconto < 0:
-            # Vendeu acima da tabela: gravar sem desconto negativo (mesmo
-            # comportamento de importar_nf_saida_pdf — invariante de venda).
-            preco_tabela_ref = valor_final_dec
-            desconto = Decimal('0.00')
-            tabela_preco_id = None
-        else:
-            tabela_preco_id = tabela_preco.id
-    else:
-        preco_tabela_ref = valor_final_dec
-        desconto = Decimal('0.00')
-        tabela_preco_id = None
+    preco_tabela_ref, desconto, tabela_preco_id, divergencia_tipo = _resolver_preco_tabela(
+        moto.modelo_id, data_venda, valor_final_dec,
+    )
 
-    # ----- 5. Persistir HoraVenda + Item + Evento -----
     venda = HoraVenda(
         loja_id=loja_id,
         cpf_cliente=cpf_norm,
@@ -728,7 +312,7 @@ def criar_venda_manual(
         parser_usado=None,
         parseada_em=None,
         cnpj_emitente=None,
-        status='CONCLUIDA',
+        status=VENDA_STATUS_COTACAO,
         vendedor=(vendedor or '').strip()[:100] or None,
         observacoes=(observacoes or '').strip() or None,
         cep=cep_formatado,
@@ -754,16 +338,42 @@ def criar_venda_manual(
     db.session.add(venda_item)
     db.session.flush()
 
+    if divergencia_tipo:
+        if divergencia_tipo == 'PRECO_ACIMA_TABELA':
+            _registrar_divergencia(
+                venda_id=venda.id, tipo=divergencia_tipo,
+                numero_chassi=chassi_norm,
+                detalhe=(
+                    f'Preco final R${valor_final_dec} > tabela vigente. '
+                    'Item gravado sem desconto negativo.'
+                ),
+                valor_conferido=str(valor_final_dec),
+            )
+        else:
+            _registrar_divergencia(
+                venda_id=venda.id, tipo=divergencia_tipo,
+                numero_chassi=chassi_norm,
+                detalhe=f'Sem HoraTabelaPreco vigente para modelo {moto.modelo_id}.',
+                valor_conferido=str(valor_final_dec),
+            )
+
+    # Evento RESERVADA: tira chassi do estoque disponivel.
     registrar_evento(
         numero_chassi=chassi_norm,
-        tipo='VENDIDA',
+        tipo='RESERVADA',
         origem_tabela='hora_venda_item',
         origem_id=venda_item.id,
         loja_id=loja_id,
         operador=criado_por,
+        detalhe=f'Pedido #{venda.id} (COTACAO) para {nome_norm} CPF {cpf_norm}',
+    )
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=criado_por or '',
+        acao='CRIOU',
         detalhe=(
-            f'Venda manual #{venda.id} para {nome_norm} '
-            f'(CPF {cpf_norm}) - sem NF (TagPlus pendente)'
+            f'Pedido manual (COTACAO) chassi={chassi_norm} '
+            f'cliente={nome_norm} valor={valor_final_dec}'
         ),
     )
 
@@ -771,18 +381,747 @@ def criar_venda_manual(
     return venda
 
 
+# --------------------------------------------------------------------------
+# Confirmacao: COTACAO -> CONFIRMADO
+# --------------------------------------------------------------------------
+
+def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
+    """Transiciona pedido de COTACAO para CONFIRMADO.
+
+    Mantem evento RESERVADA (chassi continua reservado). Registra auditoria.
+    """
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    if venda.status != VENDA_STATUS_COTACAO:
+        raise TransicaoInvalidaError(
+            f'Pedido {venda_id} esta em {venda.status}; so COTACAO pode ser confirmado.'
+        )
+    if venda.tem_divergencia_aberta:
+        # Politica: divergencias podem ser confirmadas, mas operador deve ter
+        # marcado-as como resolvidas antes (sao avisos, nao bloqueios).
+        # Nao bloqueamos aqui — alinhado com fluxo permissivo do import DANFE.
+        pass
+
+    venda.status = VENDA_STATUS_CONFIRMADO
+    venda.confirmado_em = agora_utc_naive()
+    venda.confirmado_por = usuario or 'desconhecido'
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='CONFIRMOU',
+        detalhe=f'Pedido confirmado ({len(venda.itens)} chassi(s)).',
+    )
+
+    db.session.commit()
+    return venda
+
+
+# --------------------------------------------------------------------------
+# Edicao do header (vendedor, contato, endereco, observacoes, forma_pagamento)
+# --------------------------------------------------------------------------
+
+# Campos editaveis em cada status. FATURADO so permite observacoes.
+_CAMPOS_EDITAVEIS_HEADER = {
+    VENDA_STATUS_COTACAO: {
+        'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
+        'observacoes', 'nome_cliente', 'cpf_cliente',
+        'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
+        'endereco_bairro', 'endereco_cidade', 'endereco_uf',
+    },
+    VENDA_STATUS_CONFIRMADO: {
+        'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
+        'observacoes',
+        'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
+        'endereco_bairro', 'endereco_cidade', 'endereco_uf',
+    },
+    VENDA_STATUS_FATURADO: {'observacoes'},
+    VENDA_STATUS_CANCELADO: set(),
+}
+
+
+def _validar_campo_editavel(venda: HoraVenda, campo: str) -> None:
+    permitidos = _CAMPOS_EDITAVEIS_HEADER.get(venda.status, set())
+    if campo not in permitidos:
+        raise TransicaoInvalidaError(
+            f'Campo {campo!r} nao pode ser editado em pedido {venda.status}. '
+            f'Campos permitidos: {sorted(permitidos) or "(nenhum)"}'
+        )
+    # Defesa adicional: se ha NFe em-voo, bloqueia edicao livre.
+    emissao = _emissao_nfe(venda.id)
+    if emissao and emissao.status in _NFE_EM_VOO and campo != 'observacoes':
+        raise TransicaoInvalidaError(
+            f'NFe em estado {emissao.status} — apenas observacoes editaveis.'
+        )
+
+
+def editar_venda(
+    venda_id: int,
+    vendedor: Optional[str] = None,
+    forma_pagamento: Optional[str] = None,
+    telefone_cliente: Optional[str] = None,
+    email_cliente: Optional[str] = None,
+    observacoes: Optional[str] = None,
+    nome_cliente: Optional[str] = None,
+    cpf_cliente: Optional[str] = None,
+    cep: Optional[str] = None,
+    endereco_logradouro: Optional[str] = None,
+    endereco_numero: Optional[str] = None,
+    endereco_complemento: Optional[str] = None,
+    endereco_bairro: Optional[str] = None,
+    endereco_cidade: Optional[str] = None,
+    endereco_uf: Optional[str] = None,
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    """Edita campos do header conforme regra por status.
+
+    - COTACAO: tudo (incluindo cliente/endereco).
+    - CONFIRMADO: contato/endereco/operacionais (sem mexer em CPF/nome — sao
+      do payload TagPlus).
+    - FATURADO: so observacoes.
+    - CANCELADO: nada (raise).
+    """
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    if venda.status == VENDA_STATUS_CANCELADO:
+        raise TransicaoInvalidaError('Pedido cancelado nao pode ser editado.')
+
+    def _atualizar(campo: str, novo_valor):
+        antes = getattr(venda, campo)
+        if novo_valor == antes:
+            return
+        _validar_campo_editavel(venda, campo)
+        setattr(venda, campo, novo_valor)
+        venda_audit.registrar_auditoria(
+            venda_id=venda.id, usuario=usuario or '',
+            acao='EDITOU_HEADER',
+            campo_alterado=campo,
+            valor_antes=antes,
+            valor_depois=novo_valor,
+        )
+
+    if vendedor is not None:
+        _atualizar('vendedor', (vendedor.strip()[:100] or None))
+    if forma_pagamento is not None:
+        fp_norm = (forma_pagamento or '').strip().upper() or 'NAO_INFORMADO'
+        _atualizar('forma_pagamento', fp_norm[:20])
+    if telefone_cliente is not None:
+        _atualizar('telefone_cliente', telefone_cliente.strip()[:20] or None)
+    if email_cliente is not None:
+        _atualizar('email_cliente', email_cliente.strip()[:120] or None)
+    if observacoes is not None:
+        _atualizar('observacoes', observacoes.strip() or None)
+    if nome_cliente is not None:
+        _atualizar('nome_cliente', nome_cliente.strip()[:200] or venda.nome_cliente)
+    if cpf_cliente is not None:
+        cpf_norm = ''.join(c for c in cpf_cliente if c.isdigit())
+        if cpf_norm and len(cpf_norm) != 11:
+            raise ValueError(f'CPF invalido: {cpf_cliente!r}')
+        _atualizar('cpf_cliente', cpf_norm or venda.cpf_cliente)
+    if cep is not None:
+        cep_norm = ''.join(c for c in cep if c.isdigit()) or None
+        if cep_norm and len(cep_norm) != 8:
+            raise ValueError(f'CEP invalido: {cep!r}')
+        _atualizar('cep', f'{cep_norm[:5]}-{cep_norm[5:]}' if cep_norm else None)
+    if endereco_logradouro is not None:
+        _atualizar('endereco_logradouro', endereco_logradouro.strip()[:255] or None)
+    if endereco_numero is not None:
+        _atualizar('endereco_numero', endereco_numero.strip()[:20] or None)
+    if endereco_complemento is not None:
+        _atualizar('endereco_complemento', endereco_complemento.strip()[:100] or None)
+    if endereco_bairro is not None:
+        _atualizar('endereco_bairro', endereco_bairro.strip()[:100] or None)
+    if endereco_cidade is not None:
+        _atualizar('endereco_cidade', endereco_cidade.strip()[:100] or None)
+    if endereco_uf is not None:
+        uf_norm = endereco_uf.strip().upper() or None
+        if uf_norm and len(uf_norm) != 2:
+            raise ValueError(f'UF invalido: {endereco_uf!r}')
+        _atualizar('endereco_uf', uf_norm)
+
+    db.session.commit()
+    return venda
+
+
+# --------------------------------------------------------------------------
+# Edicao de itens — so em COTACAO
+# --------------------------------------------------------------------------
+
+def _exigir_cotacao(venda: HoraVenda, acao: str) -> None:
+    if venda.status != VENDA_STATUS_COTACAO:
+        raise TransicaoInvalidaError(
+            f'{acao} so e permitido em pedido COTACAO (atual: {venda.status}).'
+        )
+
+
+def adicionar_item_pedido(
+    venda_id: int,
+    numero_chassi: str,
+    valor_final: Decimal,
+    usuario: Optional[str] = None,
+) -> HoraVendaItem:
+    """Adiciona item ao pedido em COTACAO. Lock pessimista no chassi."""
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    _exigir_cotacao(venda, 'Adicionar item')
+
+    if valor_final is None or Decimal(valor_final) <= 0:
+        raise ValueError('Valor final deve ser maior que zero')
+
+    moto, ult = _lock_chassi_e_validar_disponivel(numero_chassi)
+    chassi_norm = moto.numero_chassi
+    if ult.loja_id and venda.loja_id and ult.loja_id != venda.loja_id:
+        raise ValueError(
+            f'Chassi {chassi_norm} esta na loja {ult.loja_id}, mas pedido e da '
+            f'loja {venda.loja_id} — adicione um chassi da mesma loja.'
+        )
+
+    valor_final_dec = Decimal(str(valor_final))
+    preco_ref, desconto, tabela_id, _ = _resolver_preco_tabela(
+        moto.modelo_id, venda.data_venda, valor_final_dec,
+    )
+
+    item = HoraVendaItem(
+        venda_id=venda.id,
+        numero_chassi=chassi_norm,
+        tabela_preco_id=tabela_id,
+        preco_tabela_referencia=preco_ref,
+        desconto_aplicado=desconto,
+        preco_final=valor_final_dec,
+    )
+    db.session.add(item)
+    db.session.flush()
+
+    registrar_evento(
+        numero_chassi=chassi_norm,
+        tipo='RESERVADA',
+        origem_tabela='hora_venda_item',
+        origem_id=item.id,
+        loja_id=venda.loja_id or ult.loja_id,
+        operador=usuario,
+        detalhe=f'Pedido #{venda.id} item adicionado',
+    )
+
+    # Atualiza valor_total (header).
+    venda.valor_total = Decimal(str(venda.valor_total)) + valor_final_dec
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='ADICIONOU_ITEM', item_id=item.id,
+        detalhe=f'chassi={chassi_norm} valor={valor_final_dec}',
+    )
+
+    db.session.commit()
+    return item
+
+
+def remover_item_pedido(
+    venda_id: int,
+    item_id: int,
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    """Remove item do pedido em COTACAO. Emite evento DEVOLVIDA no chassi."""
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    _exigir_cotacao(venda, 'Remover item')
+
+    item = HoraVendaItem.query.get(item_id)
+    if not item or item.venda_id != venda.id:
+        raise ValueError(f'Item {item_id} nao pertence ao pedido {venda_id}')
+
+    if len(venda.itens) <= 1:
+        raise ValueError('Pedido deve ter ao menos 1 item — cancele o pedido em vez de remover o ultimo item.')
+
+    chassi = item.numero_chassi
+    valor_removido = Decimal(str(item.preco_final))
+
+    # Devolve chassi ao estoque (evento DEVOLVIDA).
+    registrar_evento(
+        numero_chassi=chassi,
+        tipo='DEVOLVIDA',
+        origem_tabela='hora_venda_item',
+        origem_id=item.id,
+        loja_id=venda.loja_id,
+        operador=usuario,
+        detalhe=f'Item removido do pedido #{venda.id} (COTACAO)',
+    )
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='REMOVEU_ITEM', item_id=item.id,
+        detalhe=f'chassi={chassi} valor={valor_removido}',
+    )
+
+    db.session.delete(item)
+    venda.valor_total = Decimal(str(venda.valor_total)) - valor_removido
+
+    db.session.commit()
+    return venda
+
+
+def editar_item_pedido(
+    venda_id: int,
+    item_id: int,
+    novo_chassi: Optional[str] = None,
+    novo_valor: Optional[Decimal] = None,
+    usuario: Optional[str] = None,
+) -> HoraVendaItem:
+    """Edita item: troca chassi e/ou ajusta preco. So em COTACAO.
+
+    Trocar chassi: emite DEVOLVIDA no antigo + RESERVADA no novo (com lock).
+    """
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    _exigir_cotacao(venda, 'Editar item')
+
+    item = HoraVendaItem.query.get(item_id)
+    if not item or item.venda_id != venda.id:
+        raise ValueError(f'Item {item_id} nao pertence ao pedido {venda_id}')
+
+    chassi_atual = item.numero_chassi
+    valor_atual = Decimal(str(item.preco_final))
+
+    chassi_alvo = (novo_chassi or '').strip().upper() or None
+    valor_alvo = Decimal(str(novo_valor)) if novo_valor is not None else None
+
+    if not chassi_alvo and valor_alvo is None:
+        return item  # nada a fazer
+
+    if valor_alvo is not None and valor_alvo <= 0:
+        raise ValueError('Valor final deve ser maior que zero')
+
+    # Troca de chassi.
+    if chassi_alvo and chassi_alvo != chassi_atual:
+        moto, ult = _lock_chassi_e_validar_disponivel(chassi_alvo)
+        if ult.loja_id and venda.loja_id and ult.loja_id != venda.loja_id:
+            raise ValueError(
+                f'Chassi {chassi_alvo} esta na loja {ult.loja_id}; pedido e da '
+                f'loja {venda.loja_id}.'
+            )
+        # Devolve antigo.
+        registrar_evento(
+            numero_chassi=chassi_atual,
+            tipo='DEVOLVIDA',
+            origem_tabela='hora_venda_item',
+            origem_id=item.id,
+            loja_id=venda.loja_id,
+            operador=usuario,
+            detalhe=f'Substituido por {chassi_alvo} no pedido #{venda.id}',
+        )
+        # Reserva novo.
+        registrar_evento(
+            numero_chassi=chassi_alvo,
+            tipo='RESERVADA',
+            origem_tabela='hora_venda_item',
+            origem_id=item.id,
+            loja_id=venda.loja_id or ult.loja_id,
+            operador=usuario,
+            detalhe=f'Substituido a partir de {chassi_atual} no pedido #{venda.id}',
+        )
+        venda_audit.registrar_auditoria(
+            venda_id=venda.id, usuario=usuario or '',
+            acao='EDITOU_ITEM', item_id=item.id,
+            campo_alterado='numero_chassi',
+            valor_antes=chassi_atual, valor_depois=chassi_alvo,
+        )
+        item.numero_chassi = chassi_alvo
+        # Re-resolve preco_tabela com modelo do novo chassi.
+        preco_ref, desconto, tabela_id, _ = _resolver_preco_tabela(
+            moto.modelo_id, venda.data_venda, valor_alvo or valor_atual,
+        )
+        item.tabela_preco_id = tabela_id
+        item.preco_tabela_referencia = preco_ref
+        item.desconto_aplicado = desconto
+
+    # Mudanca de valor.
+    if valor_alvo is not None and valor_alvo != valor_atual:
+        # Re-resolve preco_tabela apenas para ajustar desconto (mesmo modelo).
+        moto = HoraMoto.query.get(item.numero_chassi)
+        if moto:
+            preco_ref, desconto, tabela_id, _ = _resolver_preco_tabela(
+                moto.modelo_id, venda.data_venda, valor_alvo,
+            )
+            item.tabela_preco_id = tabela_id
+            item.preco_tabela_referencia = preco_ref
+            item.desconto_aplicado = desconto
+        item.preco_final = valor_alvo
+        venda.valor_total = Decimal(str(venda.valor_total)) - valor_atual + valor_alvo
+        venda_audit.registrar_auditoria(
+            venda_id=venda.id, usuario=usuario or '',
+            acao='EDITOU_ITEM', item_id=item.id,
+            campo_alterado='preco_final',
+            valor_antes=valor_atual, valor_depois=valor_alvo,
+        )
+
+    db.session.commit()
+    return item
+
+
+# --------------------------------------------------------------------------
+# Cancelamento de pedido
+# --------------------------------------------------------------------------
+
+def cancelar_venda(
+    venda_id: int,
+    motivo: str,
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    """Cancela pedido. Reage ao status atual e ao estado da NFe.
+
+    Regras de bloqueio:
+      - Se NFe em estado em-voo (EM_ENVIO / ENVIADA_SEFAZ /
+        CANCELAMENTO_SOLICITADO): aguardar resolucao, nao aceita.
+      - Se NFe APROVADA: exige que ja tenha sido cancelada na SEFAZ
+        (status CANCELADA). Operador deve cancelar a NFe primeiro
+        (rota /vendas/<id>/nfe/cancelar), aguardar webhook nfe_cancelada,
+        e so depois cancelar o pedido.
+      - Se status ja CANCELADO: idempotente.
+
+    Efeito:
+      - status -> CANCELADO, marcadores cancelado_em/por/motivo preenchidos.
+      - Para cada chassi do pedido: emite DEVOLVIDA (devolve ao estoque
+        disponivel).
+      - Auditoria: CANCELOU.
+    """
+    motivo_limpo = (motivo or '').strip()
+    if len(motivo_limpo) < 3:
+        raise ValueError('Motivo obrigatorio (min 3 chars)')
+
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    if venda.status == VENDA_STATUS_CANCELADO:
+        return venda
+
+    emissao = _emissao_nfe(venda.id)
+    if emissao:
+        if emissao.status in _NFE_EM_VOO:
+            raise TransicaoInvalidaError(
+                f'NFe em estado {emissao.status} — aguarde resolucao SEFAZ '
+                'antes de cancelar o pedido.'
+            )
+        if emissao.status == NFE_STATUS_APROVADA:
+            raise TransicaoInvalidaError(
+                'NFe esta APROVADA — cancele a NFe primeiro (janela 24h SEFAZ) '
+                'e aguarde a confirmacao SEFAZ antes de cancelar o pedido.'
+            )
+        # NFe em REJEITADA_LOCAL/SEFAZ/ERRO_INFRA/CANCELADA: pode cancelar pedido livre.
+
+    venda.status = VENDA_STATUS_CANCELADO
+    venda.cancelado_em = agora_utc_naive()
+    venda.cancelado_por = usuario or 'desconhecido'
+    venda.cancelamento_motivo = motivo_limpo[:500]
+
+    for item in venda.itens:
+        registrar_evento(
+            numero_chassi=item.numero_chassi,
+            tipo='DEVOLVIDA',
+            origem_tabela='hora_venda',
+            origem_id=venda.id,
+            loja_id=venda.loja_id,
+            operador=usuario,
+            detalhe=f'Pedido #{venda.id} cancelado: {motivo_limpo[:180]}',
+        )
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='CANCELOU',
+        detalhe=motivo_limpo[:500],
+    )
+
+    db.session.commit()
+    return venda
+
+
+# --------------------------------------------------------------------------
+# Definir loja (CNPJ_DESCONHECIDO)
+# --------------------------------------------------------------------------
+
+def definir_loja_venda(
+    venda_id: int,
+    loja_id: int,
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    if venda.loja_id:
+        raise ValueError(f'Venda {venda_id} ja tem loja {venda.loja_id} definida.')
+
+    loja = HoraLoja.query.get(loja_id)
+    if not loja:
+        raise ValueError(f'Loja {loja_id} nao encontrada')
+
+    venda.loja_id = loja_id
+
+    for item in venda.itens:
+        registrar_evento(
+            numero_chassi=item.numero_chassi,
+            tipo='VENDIDA',
+            origem_tabela='hora_venda_item',
+            origem_id=item.id,
+            loja_id=loja_id,
+            operador=usuario,
+            detalhe=(
+                f'Loja definida retroativamente no pedido #{venda.id} '
+                '(evento anterior emitido com loja_id=NULL por CNPJ_DESCONHECIDO).'
+            ),
+        )
+
+    div = (
+        HoraVendaDivergencia.query
+        .filter_by(venda_id=venda.id, tipo='CNPJ_DESCONHECIDO')
+        .first()
+    )
+    if div and div.resolvida_em is None:
+        div.resolvida_em = agora_utc_naive()
+        div.resolvida_por = usuario
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='DEFINIU_LOJA',
+        valor_depois=str(loja_id),
+        detalhe=f'Loja definida: {loja.rotulo_display}',
+    )
+
+    db.session.commit()
+    return venda
+
+
+def resolver_divergencia(
+    divergencia_id: int,
+    usuario: Optional[str] = None,
+) -> HoraVendaDivergencia:
+    div = HoraVendaDivergencia.query.get(divergencia_id)
+    if not div:
+        raise ValueError(f'Divergencia {divergencia_id} nao encontrada')
+    if div.resolvida_em is not None:
+        return div
+    div.resolvida_em = agora_utc_naive()
+    div.resolvida_por = usuario
+
+    venda_audit.registrar_auditoria(
+        venda_id=div.venda_id, usuario=usuario or '',
+        acao='RESOLVEU_DIVERGENCIA',
+        detalhe=f'tipo={div.tipo} chassi={div.numero_chassi or "-"}',
+    )
+    db.session.commit()
+    return div
+
+
+# --------------------------------------------------------------------------
+# Import DANFE legado: nasce em FATURADO direto
+# --------------------------------------------------------------------------
+
+def importar_nf_saida_pdf(
+    pdf_bytes: bytes,
+    nome_arquivo_origem: Optional[str] = None,
+    criado_por: Optional[str] = None,
+) -> HoraVenda:
+    """Parseia DANFE de saida e cria pedido FATURADO (NF ja existe)."""
+    payload = parse_danfe_to_hora_payload(
+        pdf_bytes=pdf_bytes,
+        nome_arquivo_origem=nome_arquivo_origem,
+    )
+    nf_data = payload['nf']
+    itens_data = payload['itens']
+
+    chave_44 = nf_data['chave_44']
+
+    existente = HoraVenda.query.filter_by(nf_saida_chave_44=chave_44).first()
+    if existente:
+        raise NfSaidaJaImportada(
+            f'NF de saida com chave {chave_44} ja importada (venda_id={existente.id})'
+        )
+
+    cpf_cliente = nf_data.get('cpf_destinatario')
+    nome_cliente = nf_data.get('nome_destinatario')
+    if not cpf_cliente:
+        raise ValueError('NF de saida sem CPF do destinatario.')
+    if not nome_cliente:
+        raise ValueError('NF de saida sem nome do destinatario.')
+
+    cnpj_emitente = nf_data.get('cnpj_emitente')
+    loja_emitente = _resolver_loja_por_cnpj(cnpj_emitente)
+
+    s3_key = _salvar_pdf_storage(
+        pdf_bytes=pdf_bytes, chave_44=chave_44,
+        nome_arquivo_origem=nome_arquivo_origem,
+    )
+
+    data_emissao = nf_data['data_emissao']
+    valor_total_nf = Decimal(str(nf_data['valor_total']))
+    venda = HoraVenda(
+        loja_id=loja_emitente.id if loja_emitente else None,
+        cpf_cliente=cpf_cliente[:14],
+        nome_cliente=nome_cliente[:200],
+        data_venda=data_emissao,
+        forma_pagamento='NAO_INFORMADO',
+        valor_total=valor_total_nf,
+        nf_saida_numero=nf_data['numero_nf'][:20],
+        nf_saida_chave_44=chave_44,
+        nf_saida_emitida_em=_para_datetime(data_emissao),
+        arquivo_pdf_s3_key=s3_key,
+        parser_usado=nf_data.get('parser_usado', 'danfe_pdf_parser_v1'),
+        parseada_em=agora_utc_naive(),
+        cnpj_emitente=cnpj_emitente,
+        status=VENDA_STATUS_FATURADO,
+        faturado_em=_para_datetime(data_emissao) or agora_utc_naive(),
+        vendedor=None,
+        origem_criacao='DANFE',
+    )
+    db.session.add(venda)
+    db.session.flush()
+
+    if not loja_emitente:
+        _registrar_divergencia(
+            venda_id=venda.id, tipo='CNPJ_DESCONHECIDO',
+            detalhe=(
+                'CNPJ emitente da NF nao bate com nenhuma HoraLoja ativa. '
+                'Defina a loja manualmente na tela de detalhe.'
+            ),
+            valor_conferido=cnpj_emitente,
+        )
+
+    _criar_itens_e_eventos(
+        venda=venda,
+        itens_data=itens_data,
+        loja_emitente_id=loja_emitente.id if loja_emitente else None,
+        data_venda=data_emissao,
+        operador=criado_por,
+    )
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=criado_por or '',
+        acao='CRIOU',
+        detalhe=(
+            f'Import DANFE legado (FATURADO direto) NF {venda.nf_saida_numero} '
+            f'chave {chave_44}'
+        ),
+    )
+
+    db.session.commit()
+    return venda
+
+
+def _criar_itens_e_eventos(
+    venda: HoraVenda,
+    itens_data: List[dict],
+    loja_emitente_id: Optional[int],
+    data_venda,
+    operador: Optional[str],
+) -> None:
+    """Cria HoraVendaItem + evento VENDIDA + divergencias por chassi (DANFE legado)."""
+    for item in itens_data:
+        chassi = item['numero_chassi']
+        preco_final = Decimal(str(item['preco_real']))
+
+        moto_existia = HoraMoto.query.get(chassi) is not None
+        moto = get_or_create_moto(
+            numero_chassi=chassi,
+            modelo_nome=item.get('modelo_texto_original'),
+            cor=item.get('cor_texto_original') or 'NAO_INFORMADA',
+            numero_motor=item.get('numero_motor'),
+            ano_modelo=item.get('ano_modelo'),
+            criado_por=operador,
+        )
+        if not moto_existia:
+            _registrar_divergencia(
+                venda_id=venda.id, tipo='CHASSI_NAO_CADASTRADO',
+                numero_chassi=chassi,
+                detalhe='Chassi nao existia em hora_moto (criado a partir da NF).',
+            )
+
+        ult = _ultimo_evento(chassi)
+        if ult is None:
+            if moto_existia:
+                _registrar_divergencia(
+                    venda_id=venda.id, tipo='CHASSI_INDISPONIVEL',
+                    numero_chassi=chassi,
+                    detalhe='Chassi existia em hora_moto mas sem nenhum evento.',
+                )
+        else:
+            if ult.tipo not in EVENTOS_EM_ESTOQUE:
+                _registrar_divergencia(
+                    venda_id=venda.id, tipo='CHASSI_INDISPONIVEL',
+                    numero_chassi=chassi,
+                    detalhe=(
+                        f'Ultimo evento do chassi era {ult.tipo} '
+                        f'(em {ult.timestamp.strftime("%d/%m/%Y %H:%M")})'
+                    ),
+                    valor_conferido=ult.tipo,
+                )
+            if (
+                loja_emitente_id is not None
+                and ult.loja_id is not None
+                and ult.loja_id != loja_emitente_id
+            ):
+                _registrar_divergencia(
+                    venda_id=venda.id, tipo='LOJA_DIVERGENTE',
+                    numero_chassi=chassi,
+                    detalhe=(
+                        f'Chassi estava na loja_id={ult.loja_id} '
+                        f'mas NF foi emitida pela loja_id={loja_emitente_id}.'
+                    ),
+                    valor_esperado=str(loja_emitente_id),
+                    valor_conferido=str(ult.loja_id),
+                )
+
+        preco_ref, desconto, tabela_id, divergencia_tipo = _resolver_preco_tabela(
+            moto.modelo_id, data_venda, preco_final,
+        )
+        if divergencia_tipo:
+            _registrar_divergencia(
+                venda_id=venda.id, tipo=divergencia_tipo,
+                numero_chassi=chassi,
+                detalhe=(
+                    f'Sem tabela vigente OU preco acima da tabela. '
+                    f'preco_final=R${preco_final}'
+                ),
+                valor_esperado=str(preco_ref),
+                valor_conferido=str(preco_final),
+            )
+
+        venda_item = HoraVendaItem(
+            venda_id=venda.id,
+            numero_chassi=chassi,
+            tabela_preco_id=tabela_id,
+            preco_tabela_referencia=preco_ref,
+            desconto_aplicado=desconto,
+            preco_final=preco_final,
+        )
+        db.session.add(venda_item)
+        db.session.flush()
+
+        # DANFE legado: vai direto para VENDIDA + NF_EMITIDA (faturado).
+        registrar_evento(
+            numero_chassi=chassi,
+            tipo='VENDIDA',
+            origem_tabela='hora_venda_item',
+            origem_id=venda_item.id,
+            loja_id=loja_emitente_id,
+            operador=operador,
+            detalhe=(
+                f'Pedido FATURADO (DANFE legado) #{venda.id} '
+                f'NF {venda.nf_saida_numero} para {venda.nome_cliente}'
+            ),
+        )
+
+
+# --------------------------------------------------------------------------
+# Listagem
+# --------------------------------------------------------------------------
+
 def listar_vendas(
     limit: int = 200,
     lojas_permitidas_ids: Optional[Iterable[int]] = None,
     status: Optional[str] = None,
 ) -> List[HoraVenda]:
-    """Lista vendas com filtro por lojas permitidas e status.
-
-    lojas_permitidas_ids=None -> sem filtro de loja (admin).
-    lojas_permitidas_ids=[]   -> usuario sem lojas -> retorna [].
-
-    Vendas com loja_id=NULL (CNPJ_DESCONHECIDO) so aparecem para admin.
-    """
+    """Lista pedidos com filtro por lojas permitidas e status."""
     query = HoraVenda.query.order_by(
         HoraVenda.data_venda.desc(), HoraVenda.id.desc()
     )
@@ -793,7 +1132,24 @@ def listar_vendas(
         ids_list = list(lojas_permitidas_ids)
         if not ids_list:
             return []
-        # Usuario restrito NAO ve vendas com loja_id=NULL (evita vazamento).
         query = query.filter(HoraVenda.loja_id.in_(ids_list))
 
     return query.limit(limit).all()
+
+
+__all__ = [
+    'NfSaidaJaImportada',
+    'ChassiIndisponivelError',
+    'TransicaoInvalidaError',
+    'criar_venda_manual',
+    'confirmar_venda',
+    'editar_venda',
+    'adicionar_item_pedido',
+    'remover_item_pedido',
+    'editar_item_pedido',
+    'cancelar_venda',
+    'definir_loja_venda',
+    'resolver_divergencia',
+    'importar_nf_saida_pdf',
+    'listar_vendas',
+]

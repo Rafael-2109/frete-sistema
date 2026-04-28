@@ -229,7 +229,60 @@ Segue o plano aprovado em 2026-04-18:
    - Pendências v2 (não bloqueantes): NFC-e, contingência, séries por loja,
      endereço de retirada por loja, MISTO como forma de pagamento.
 
-8. **Fase 2 futura**: financeiro (títulos a pagar/receber, conciliação, comissões). Todas as tabelas novas com `chassi` FK conforme invariante 2.
+9. **Workflow de Pedido de Venda** (2026-04-28). **Concluído** — máquina de estado completa com auditoria estruturada:
+
+   **Status (`HoraVenda.status`)**: `COTACAO` → `CONFIRMADO` → `FATURADO` → `CANCELADO`.
+   Constantes em `app/hora/models/venda.py`: `VENDA_STATUS_*` + `VENDA_STATUS_VALIDOS` + `VENDA_STATUS_RESERVA_CHASSI`.
+
+   **Transições**:
+   - **(novo) → COTACAO**: `criar_venda_manual` (pedido manual via TagPlus) — emite evento `RESERVADA` com lock `SELECT FOR UPDATE` no `hora_moto`.
+   - **COTACAO → CONFIRMADO**: `confirmar_venda` (rota `POST /vendas/<id>/confirmar`, perm `vendas/aprovar`).
+   - **CONFIRMADO → FATURADO**: webhook `nfe_aprovada` do TagPlus (em `webhook_handler._handle_aprovada`).
+   - **FATURADO → CONFIRMADO**: webhook `nfe_cancelada` (NFe cancelada SEFAZ; pedido volta a confirmado, decisão de re-emitir ou cancelar fica com operador).
+   - **\* → CANCELADO**: `cancelar_venda` — bloqueia se NFe em-voo; FATURADO exige NFe já cancelada SEFAZ. Emite `DEVOLVIDA` em todos os chassis.
+   - **DANFE legado → FATURADO direto**: `importar_nf_saida_pdf` (NF emitida em ERP externo, sem passar por COTACAO/CONFIRMADO).
+
+   **Estoque** (`EVENTOS_FORA_ESTOQUE` em `estoque_service`):
+   - `RESERVADA`, `VENDIDA`, `NF_EMITIDA`, `NF_CANCELADA`, `DEVOLVIDA` — saem do estoque disponível.
+   - Pedido em qualquer status ativo (COTACAO/CONFIRMADO/FATURADO) reserva o chassi; CANCELADO devolve via `DEVOLVIDA`.
+
+   **Lock pessimista** (`venda_service._lock_chassi_e_validar_disponivel`):
+   - `SELECT FOR UPDATE` no `hora_moto` em `criar_venda_manual`, `adicionar_item_pedido` e `editar_item_pedido` (troca de chassi).
+   - Impede 2 operadores reservarem o mesmo chassi simultaneamente.
+   - `hora_venda_item` NÃO tem mais UNIQUE em `numero_chassi` — pedido cancelado libera chassi para nova venda.
+
+   **Edição** (matriz por status em `_CAMPOS_EDITAVEIS_HEADER`):
+   - `COTACAO`: tudo (cliente, endereço, operacional, observações, itens).
+   - `CONFIRMADO`: contato, endereço, operacional, observações (sem mexer em CPF/nome — payload TagPlus).
+   - `FATURADO`: só observações.
+   - `CANCELADO`: nada (raise `TransicaoInvalidaError`).
+   - Defesa adicional: NFe em estado em-voo (`EM_ENVIO`/`ENVIADA_SEFAZ`/`CANCELAMENTO_SOLICITADO`) bloqueia tudo exceto observações.
+
+   **Edição de itens** (só em COTACAO):
+   - `adicionar_item_pedido` (novo chassi → evento `RESERVADA`).
+   - `remover_item_pedido` (chassi antigo → evento `DEVOLVIDA`; impede remover último item).
+   - `editar_item_pedido` (troca de chassi e/ou novo valor; troca emite `DEVOLVIDA`+`RESERVADA`).
+
+   **Janela de cancelamento NFe**: 24h em `cancelador_nfe._validar_janela` (defesa em profundidade — TagPlus também valida na SEFAZ). Constante `JANELA_CANCELAMENTO_HORAS=24`. Tela `nfe_status.html` mostra countdown e desabilita botão após janela.
+
+   **Auditoria**: nova tabela `hora_venda_auditoria` (espelho de `hora_transferencia_auditoria`). Service `app/hora/services/venda_audit.py` com 14 ações:
+   `CRIOU`, `EDITOU_HEADER`, `EDITOU_ITEM`, `ADICIONOU_ITEM`, `REMOVEU_ITEM`, `CONFIRMOU`, `EMITIU_NFE`, `FATURADO`, `CANCELOU_NFE`, `NFE_CANCELADA_SEFAZ`, `EMITIU_CCE`, `CANCELOU`, `RESOLVEU_DIVERGENCIA`, `DEFINIU_LOJA`.
+   FK `item_id` com `ON DELETE SET NULL` (preserva auditoria de itens deletados).
+
+   **Migration**: `scripts/migrations/hora_20_pedido_workflow.{py,sql}` — converte legados (`CONCLUIDA`+chave→`FATURADO`, `CONCLUIDA` sem chave→`CONFIRMADO`, `DEVOLVIDA`→`CANCELADO`) + DROP UNIQUE chassi + CREATE auditoria.
+
+   **UI**:
+   - Menu: "Vendas (NF saída)" → "Pedidos de Venda".
+   - `venda_detalhe.html` reescrito: timeline de status, botões de transição (Confirmar / Emitir NFe / Cancelar pedido), edição de header com matriz por status, edição/adição/remoção de itens em COTACAO, histórico de auditoria.
+   - `vendas_lista.html`: badges coloridos por status (4 cores).
+   - `nfe_status.html`: countdown 24h e bloqueio do botão de cancelamento após janela.
+   - `estoque_lista.html` + `estoque_chassi_detalhe.html`: badge "Reservado em Pedido #X (status)".
+
+   **Permissão `aprovar` em `vendas`**: já estava em `MODULOS_HORA × ACOES_HORA`; agora consumida via `require_hora_perm('vendas', 'aprovar')` em `vendas_confirmar`.
+
+   **Testes**: `tests/hora/test_pedido_workflow.py` — 15 testes cobrindo criação, confirmação, cancelamento, edição (matriz por status), adicionar/remover/editar itens, lock pessimista (chassi indisponível bloqueia 2ª reserva), auditoria.
+
+10. **Fase 2 futura**: financeiro (títulos a pagar/receber, conciliação, comissões). Todas as tabelas novas com `chassi` FK conforme invariante 2.
 
 ---
 

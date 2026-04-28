@@ -16,7 +16,18 @@ from app.hora.models.recebimento import (
     HoraConferenciaDivergencia,
     HoraConferenciaAuditoria,
 )
-from app.hora.models.venda import HoraVenda, HoraVendaItem, HoraVendaDivergencia
+from app.hora.models.venda import (
+    HoraVenda,
+    HoraVendaItem,
+    HoraVendaDivergencia,
+    HoraVendaAuditoria,
+    VENDA_STATUS_COTACAO,
+    VENDA_STATUS_CONFIRMADO,
+    VENDA_STATUS_FATURADO,
+    VENDA_STATUS_CANCELADO,
+    VENDA_STATUS_VALIDOS,
+    VENDA_STATUS_RESERVA_CHASSI,
+)
 from app.hora.models.devolucao import (
     HoraDevolucaoFornecedor,
     HoraDevolucaoFornecedorItem,
@@ -69,6 +80,13 @@ __all__ = [
     'HoraVenda',
     'HoraVendaItem',
     'HoraVendaDivergencia',
+    'HoraVendaAuditoria',
+    'VENDA_STATUS_COTACAO',
+    'VENDA_STATUS_CONFIRMADO',
+    'VENDA_STATUS_FATURADO',
+    'VENDA_STATUS_CANCELADO',
+    'VENDA_STATUS_VALIDOS',
+    'VENDA_STATUS_RESERVA_CHASSI',
     'HoraDevolucaoFornecedor',
     'HoraDevolucaoFornecedorItem',
     'HoraPecaFaltando',

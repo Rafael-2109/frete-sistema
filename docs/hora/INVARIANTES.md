@@ -14,7 +14,7 @@ A modelagem deste módulo **não é intuitiva a partir de padrões de ERP de var
 
 ---
 
-## Os 4 invariantes
+## Os 5 invariantes
 
 ### 1. `hora_moto.chassi` é a chave de rastreamento universal do módulo.
 
@@ -53,6 +53,27 @@ LIMIT 1;
 Para performance em telas de listagem, pode-se manter uma VIEW materializada `hora_moto_status_atual` refreshada por trigger ao inserir em `hora_moto_evento`. A VIEW é derivada; a fonte da verdade é a tabela de eventos.
 
 Consequência: não existe "perder histórico por UPDATE". Toda transição (RECEBIDA, TRANSFERIDA, RESERVADA, VENDIDA, DEVOLVIDA, AVARIADA) é permanente e ordenada.
+
+### 5. `HoraVenda.status` é uma máquina de estado fechada com transições registradas em auditoria.
+
+Estados válidos (constantes em `app/hora/models/venda.py`):
+```
+COTACAO    → CONFIRMADO  (confirmar_venda; perm 'vendas/aprovar')
+CONFIRMADO → FATURADO    (webhook nfe_aprovada do TagPlus)
+FATURADO   → CONFIRMADO  (webhook nfe_cancelada — NFe cancelada SEFAZ)
+*          → CANCELADO   (cancelar_venda; FATURADO só após NFe cancelada SEFAZ)
+DANFE legado → FATURADO direto (importar_nf_saida_pdf)
+```
+
+**Reserva de chassi**: COTACAO, CONFIRMADO e FATURADO reservam o chassi (sai do estoque disponível). CANCELADO devolve via evento `DEVOLVIDA`. Implementação via eventos em `hora_moto_evento` (RESERVADA / VENDIDA / NF_EMITIDA / DEVOLVIDA), não via flag.
+
+**Lock pessimista**: `criar_venda_manual`, `adicionar_item_pedido` e troca de chassi em `editar_item_pedido` fazem `SELECT FOR UPDATE` em `hora_moto` para impedir reserva concorrente.
+
+**Auditoria obrigatória**: toda transição (CRIOU, CONFIRMOU, EMITIU_NFE, FATURADO, CANCELOU_NFE, NFE_CANCELADA_SEFAZ, EMITIU_CCE, CANCELOU) registra entrada em `hora_venda_auditoria` (append-only).
+
+**Janela de cancelamento NFe**: 24h validadas localmente em `cancelador_nfe._validar_janela` — defesa em profundidade (TagPlus também valida na SEFAZ).
+
+Detalhes do workflow: `app/hora/CLAUDE.md` seção 9.
 
 ---
 

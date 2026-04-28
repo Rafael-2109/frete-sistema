@@ -22,6 +22,11 @@ from app.hora.models.tagplus import (
     NFE_STATUS_CANCELADA,
     NFE_STATUS_REJEITADA_SEFAZ,
 )
+from app.hora.models.venda import (
+    VENDA_STATUS_CONFIRMADO,
+    VENDA_STATUS_FATURADO,
+)
+from app.hora.services import venda_audit
 from app.hora.services.tagplus.api_client import ApiClient
 from app.utils.json_helpers import sanitize_for_json
 from app.utils.timezone import agora_utc_naive
@@ -139,6 +144,18 @@ class WebhookHandler:
             if emissao.chave_44:
                 venda.nf_saida_chave_44 = emissao.chave_44
             venda.nf_saida_emitida_em = emissao.aprovado_em
+            # Transicao de status: CONFIRMADO -> FATURADO (NFe aprovada).
+            if venda.status == VENDA_STATUS_CONFIRMADO:
+                venda.status = VENDA_STATUS_FATURADO
+                venda.faturado_em = emissao.aprovado_em
+                venda_audit.registrar_auditoria(
+                    venda_id=venda.id, usuario='sistema',
+                    acao='FATURADO',
+                    detalhe=(
+                        f'NFe aprovada SEFAZ — chave {emissao.chave_44 or "?"} '
+                        f'numero {emissao.numero_nfe or "?"}'
+                    ),
+                )
 
             # Idempotencia: nao duplica evento se ja registrado para esta emissao.
             chassis_existentes = {
@@ -212,10 +229,28 @@ class WebhookHandler:
         emissao.cancelado_em = agora_utc_naive()
         emissao.response_webhook = sanitize_for_json(detalhes)
 
-        # Evento por chassi (idempotente). Cancelar NFe NAO reverte a venda;
-        # operador deve cancelar a venda separadamente via HoraVenda.
+        # Evento por chassi (idempotente). Cancelar NFe NAO cancela o pedido —
+        # operador decide separadamente (re-emitir nova NFe ou cancelar pedido).
+        # Transicao do pedido: FATURADO -> CONFIRMADO (NFe foi cancelada SEFAZ;
+        # chassi continua reservado pelo pedido).
         venda = emissao.venda
         if venda:
+            if venda.status == VENDA_STATUS_FATURADO:
+                venda.status = VENDA_STATUS_CONFIRMADO
+                venda.nf_saida_chave_44 = None
+                venda.nf_saida_numero = None
+                venda.nf_saida_emitida_em = None
+                venda.faturado_em = None
+                venda_audit.registrar_auditoria(
+                    venda_id=venda.id, usuario='sistema',
+                    acao='NFE_CANCELADA_SEFAZ',
+                    detalhe=(
+                        f'Pedido voltou para CONFIRMADO. '
+                        f'NF cancelada: {emissao.numero_nfe or "?"} '
+                        f'chave {emissao.chave_44 or "?"}'
+                    ),
+                )
+
             chassis_existentes = {
                 e.numero_chassi for e in HoraMotoEvento.query.filter_by(
                     origem_tabela='hora_tagplus_nfe_emissao',

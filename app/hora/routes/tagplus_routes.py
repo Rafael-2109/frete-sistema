@@ -967,11 +967,13 @@ def tagplus_pedido_venda_api_chassis():
 @hora_bp.route('/vendas/<int:venda_id>/nfe')
 @require_hora_perm('vendas', 'ver')
 def venda_nfe_status(venda_id: int):
+    from app.utils.timezone import agora_utc_naive
     venda = HoraVenda.query.get_or_404(venda_id)
     emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()
     return render_template(
         'hora/tagplus/nfe_status.html',
         venda=venda, emissao=emissao,
+        now_utc=agora_utc_naive(),
     )
 
 

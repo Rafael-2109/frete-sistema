@@ -26,11 +26,12 @@ EVENTOS_EM_ESTOQUE = (
     'AVARIADA', 'FALTANDO_PECA',
 )
 # Eventos que tiram a moto do estoque
-# - VENDIDA, NF_EMITIDA: moto saiu por venda (com ou sem NFe TagPlus emitida).
-# - DEVOLVIDA: moto saiu por devolucao ao fornecedor.
-# - NF_CANCELADA: NFe foi cancelada na SEFAZ, mas a venda permanece (status
-#   da venda controla retorno ao estoque — cancelar NFe nao reverte venda).
-EVENTOS_FORA_ESTOQUE = ('VENDIDA', 'DEVOLVIDA', 'NF_EMITIDA', 'NF_CANCELADA')
+# - RESERVADA: pedido de venda em COTACAO/CONFIRMADO. Reservada por hora_venda.
+# - VENDIDA, NF_EMITIDA: pedido FATURADO (NFe emitida via TagPlus ou DANFE legado).
+# - DEVOLVIDA: moto saiu por devolucao ao fornecedor OU pedido cancelado.
+# - NF_CANCELADA: NFe foi cancelada na SEFAZ; pedido pode estar em CONFIRMADO
+#   (apos webhook nfe_cancelada). Estado de retorno depende do status do pedido.
+EVENTOS_FORA_ESTOQUE = ('RESERVADA', 'VENDIDA', 'DEVOLVIDA', 'NF_EMITIDA', 'NF_CANCELADA')
 # Eventos "em limbo" — nao estao no estoque de nenhuma loja
 EVENTOS_EM_TRANSITO = ('EM_TRANSITO',)
 
@@ -96,16 +97,17 @@ def _nf_recebimento_por_chassi(chassis: List[str]) -> Dict[str, dict]:
 
 def _venda_nf_saida_por_chassi(chassis: List[str]) -> Dict[str, dict]:
     """Para cada chassi, retorna {venda_id, nf_saida_numero, nf_saida_chave_44,
-    venda_status, tem_pdf} da venda mais recente. Util para exibir NF saida
-    na listagem com "Mostrar fora de estoque" marcado.
+    venda_status, tem_pdf} da venda ATIVA mais recente.
+
+    Inclui pedidos em qualquer status (COTACAO, CONFIRMADO, FATURADO, CANCELADO)
+    para que a UI possa exibir badge apropriado. UI deve filtrar por status para
+    decidir como exibir (ex.: "Reservado em pedido #X COTACAO" vs "Vendido na NF").
     """
     if not chassis:
         return {}
     from app.hora.models import HoraVenda, HoraVendaItem
 
     chassis_norm = [c.strip().upper() for c in chassis]
-    # Pega o item de venda mais recente por chassi (venda_item.numero_chassi eh UNIQUE,
-    # entao so tem 1 — mas .order_by defensivo).
     rows = (
         db.session.query(
             HoraVendaItem.numero_chassi,
@@ -119,6 +121,13 @@ def _venda_nf_saida_por_chassi(chassis: List[str]) -> Dict[str, dict]:
         .filter(HoraVendaItem.numero_chassi.in_(chassis_norm))
         .all()
     )
+    # Em caso de multiplas vendas (chassi reservado, cancelado, re-reservado),
+    # priorizar a ATIVA (nao-CANCELADO) sobre CANCELADO. Como UNIQUE em
+    # numero_chassi e em hora_venda_item, na pratica so havera 1 — mas se uma
+    # venda for cancelada via cancelar_venda, o chassi volta ao estoque e pode
+    # ser reservado de novo, criando um novo item com mesmo chassi (a UNIQUE
+    # em hora_venda_item.numero_chassi REJEITA isso). Workaround: hoje o item
+    # antigo permanece com a venda CANCELADA. Aceitar 1 por chassi.
     return {
         r.numero_chassi: {
             'venda_id': r.venda_id,
@@ -129,6 +138,29 @@ def _venda_nf_saida_por_chassi(chassis: List[str]) -> Dict[str, dict]:
         }
         for r in rows
     }
+
+
+def chassis_reservados_em_pedido(venda_id: int) -> List[str]:
+    """Lista chassis atualmente reservados (ultimo evento RESERVADA) para o pedido."""
+    from app.hora.models import HoraVendaItem
+    sub = _subquery_ultimo_evento_id()
+    rows = (
+        db.session.query(HoraVendaItem.numero_chassi)
+        .join(
+            HoraMotoEvento,
+            and_(
+                HoraMotoEvento.numero_chassi == HoraVendaItem.numero_chassi,
+                HoraMotoEvento.id == sub.c.max_id,
+            ),
+        )
+        .join(sub, HoraVendaItem.numero_chassi == sub.c.chassi)
+        .filter(
+            HoraVendaItem.venda_id == venda_id,
+            HoraMotoEvento.tipo == 'RESERVADA',
+        )
+        .all()
+    )
+    return [r[0] for r in rows]
 
 
 def _pecas_abertas_por_chassi(chassis: List[str]) -> Dict[str, int]:

@@ -1,16 +1,44 @@
-"""Fluxo de saída: venda ao consumidor final (pessoa física)."""
+"""Fluxo de saída: pedido de venda ao consumidor final (pessoa física).
+
+Maquina de estado (status):
+  COTACAO    -> CONFIRMADO  (confirmar_venda; criada por criar_venda_manual)
+  CONFIRMADO -> FATURADO    (webhook nfe_aprovada do TagPlus)
+  *          -> CANCELADO   (cancelar_venda; FATURADO so apos cancelar NFe ate 24h)
+  upload DANFE legado -> FATURADO direto (importar_nf_saida_pdf).
+
+Estoque:
+  - Status ativos (COTACAO, CONFIRMADO, FATURADO) reservam o chassi (saem
+    de EVENTOS_EM_ESTOQUE via evento RESERVADA / VENDIDA / NF_EMITIDA).
+  - CANCELADO devolve ao estoque via evento DEVOLVIDA.
+"""
 from app import db
 from app.utils.timezone import agora_utc_naive
 
 
+# --------------------------------------------------------------------------
+# Status validos (manter sincronizado com hora_20_pedido_workflow.sql).
+# --------------------------------------------------------------------------
+VENDA_STATUS_COTACAO = 'COTACAO'
+VENDA_STATUS_CONFIRMADO = 'CONFIRMADO'
+VENDA_STATUS_FATURADO = 'FATURADO'
+VENDA_STATUS_CANCELADO = 'CANCELADO'
+
+VENDA_STATUS_VALIDOS = (
+    VENDA_STATUS_COTACAO, VENDA_STATUS_CONFIRMADO,
+    VENDA_STATUS_FATURADO, VENDA_STATUS_CANCELADO,
+)
+# Status que reservam chassi (saem do estoque disponivel).
+VENDA_STATUS_RESERVA_CHASSI = (
+    VENDA_STATUS_COTACAO, VENDA_STATUS_CONFIRMADO, VENDA_STATUS_FATURADO,
+)
+
+
 class HoraVenda(db.Model):
-    """Venda ao consumidor final. Header permite multi-item (casal, presente, revenda).
+    """Pedido de venda ao consumidor final. Header permite multi-item.
 
     Pode ser criada via:
-      - Upload de DANFE de saida (fluxo `importar_nf_saida_pdf`): parser
-        extrai CPF/nome destinatario + valor_total + chassis. Chassis que nao
-        estao em estoque geram `HoraVendaDivergencia` em vez de bloquear.
-      - Fluxo futuro (TagPlus): operador cria venda primeiro e NF depois.
+      - Pedido manual (criar_venda_manual) -> nasce em COTACAO.
+      - Upload de DANFE legado (importar_nf_saida_pdf) -> nasce em FATURADO.
     """
     __tablename__ = 'hora_venda'
 
@@ -52,8 +80,20 @@ class HoraVenda(db.Model):
     cnpj_emitente = db.Column(db.String(20), nullable=True, index=True)
     # CNPJ impresso na NF (para corrigir loja_id quando o import falha em casar).
 
-    status = db.Column(db.String(20), nullable=False, default='CONCLUIDA', index=True)
-    # Valores: CONCLUIDA, CANCELADA, DEVOLVIDA
+    status = db.Column(db.String(20), nullable=False, default=VENDA_STATUS_COTACAO, index=True)
+    # Valores: COTACAO (default), CONFIRMADO, FATURADO, CANCELADO.
+    # Migration hora_20_pedido_workflow.sql converteu legados:
+    #   CONCLUIDA + nf_saida_chave_44 -> FATURADO
+    #   CONCLUIDA sem chave           -> CONFIRMADO
+    #   DEVOLVIDA                     -> CANCELADO
+
+    # ---- Marcos de transicao (timestamp + autor) ----
+    confirmado_em = db.Column(db.DateTime, nullable=True)
+    confirmado_por = db.Column(db.String(100), nullable=True)
+    faturado_em = db.Column(db.DateTime, nullable=True)
+    cancelado_em = db.Column(db.DateTime, nullable=True)
+    cancelado_por = db.Column(db.String(100), nullable=True)
+    cancelamento_motivo = db.Column(db.String(500), nullable=True)
 
     vendedor = db.Column(db.String(100), nullable=True)
     # Preenchido manualmente na tela de detalhe pos-import.
@@ -125,10 +165,13 @@ class HoraVendaItem(db.Model):
         db.String(30),
         db.ForeignKey('hora_moto.numero_chassi'),
         nullable=False,
-        unique=True,
         index=True,
     )
-    # UNIQUE: impede vender o mesmo chassi duas vezes.
+    # NAO ha UNIQUE em numero_chassi: pedido cancelado devolve o chassi ao
+    # estoque, permitindo nova venda. Defesa contra double-sell:
+    #   1) SELECT FOR UPDATE no hora_moto em criar_venda_manual /
+    #      adicionar_item_pedido / editar_item_pedido (venda_service.py).
+    #   2) Validacao de ultimo evento em EVENTOS_EM_ESTOQUE (estoque_service.py).
 
     tabela_preco_id = db.Column(
         db.Integer,
@@ -209,4 +252,47 @@ class HoraVendaDivergencia(db.Model):
         return (
             f'<HoraVendaDivergencia venda={self.venda_id} tipo={self.tipo} '
             f'chassi={self.numero_chassi} {estado}>'
+        )
+
+
+class HoraVendaAuditoria(db.Model):
+    """Auditoria append-only de transicoes e edicoes em HoraVenda.
+
+    Padrao identico a hora_transferencia_auditoria e hora_recebimento_auditoria.
+    Acoes registradas: ver `app/hora/services/venda_audit.py`.
+    """
+    __tablename__ = 'hora_venda_auditoria'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+    venda_id = db.Column(
+        db.Integer,
+        db.ForeignKey('hora_venda.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    item_id = db.Column(
+        db.Integer, db.ForeignKey('hora_venda_item.id'),
+        nullable=True, index=True,
+    )
+    usuario = db.Column(db.String(100), nullable=False)
+    acao = db.Column(db.String(40), nullable=False, index=True)
+    campo_alterado = db.Column(db.String(60), nullable=True)
+    valor_antes = db.Column(db.Text, nullable=True)
+    valor_depois = db.Column(db.Text, nullable=True)
+    detalhe = db.Column(db.Text, nullable=True)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    venda = db.relationship(
+        'HoraVenda',
+        backref=db.backref(
+            'auditoria',
+            cascade='all, delete-orphan',
+            lazy='selectin',
+            order_by='HoraVendaAuditoria.criado_em.desc()',
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<HoraVendaAuditoria venda={self.venda_id} acao={self.acao} '
+            f'usuario={self.usuario}>'
         )

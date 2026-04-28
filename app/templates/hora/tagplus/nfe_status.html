@@ -94,17 +94,49 @@
 
           {% if emissao.status == 'APROVADA' %}
             <hr>
-            <h6 class="mt-3"><i class="fas fa-ban"></i> Cancelar NFe (24h SEFAZ)</h6>
-            <form method="post" action="{{ url_for('hora.venda_nfe_cancelar', venda_id=venda.id) }}">
-              <div class="mb-2">
-                <textarea name="justificativa" class="form-control" rows="2" minlength="15"
-                          placeholder="Justificativa (mín. 15 caracteres)" required></textarea>
+            {# ---- Janela de 24h SEFAZ ---- #}
+            {% set janela_horas = 24 %}
+            {% set decorrido_horas = None %}
+            {% set restante_horas = None %}
+            {% if emissao.aprovado_em %}
+              {% set delta = (now_utc - emissao.aprovado_em) if now_utc else None %}
+              {% set decorrido_horas = (delta.total_seconds() / 3600.0) if delta else 0 %}
+              {% set restante_horas = janela_horas - decorrido_horas %}
+            {% endif %}
+            {% set dentro_janela = restante_horas is not none and restante_horas > 0 %}
+
+            <h6 class="mt-3">
+              <i class="fas fa-ban"></i> Cancelar NFe
+              {% if emissao.aprovado_em %}
+                {% if dentro_janela %}
+                  <span class="badge bg-info text-dark ms-1">
+                    {{ '%.1f'|format(restante_horas) }}h restantes
+                  </span>
+                {% else %}
+                  <span class="badge bg-danger ms-1">Janela 24h SEFAZ encerrada</span>
+                {% endif %}
+              {% endif %}
+            </h6>
+
+            {% if dentro_janela %}
+              <form method="post" action="{{ url_for('hora.venda_nfe_cancelar', venda_id=venda.id) }}">
+                <div class="mb-2">
+                  <textarea name="justificativa" class="form-control" rows="2" minlength="15"
+                            placeholder="Justificativa (mín. 15 caracteres)" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-danger btn-sm"
+                        onclick="return confirm('Confirma cancelamento da NFe? Esta ação solicita cancelamento à SEFAZ.');">
+                  <i class="fas fa-ban"></i> Solicitar cancelamento
+                </button>
+              </form>
+            {% else %}
+              <div class="alert alert-warning small mb-2">
+                Janela SEFAZ de {{ janela_horas }}h encerrada
+                ({% if decorrido_horas %}{{ '%.1f'|format(decorrido_horas) }}h{% else %}—{% endif %}
+                desde a aprovacao). NFe nao pode mais ser cancelada — registre como
+                <a href="{{ url_for('hora.devolucoes_lista') }}">devolucao</a>.
               </div>
-              <button type="submit" class="btn btn-danger btn-sm"
-                      onclick="return confirm('Confirma cancelamento da NFe? Esta ação solicita cancelamento à SEFAZ.');">
-                <i class="fas fa-ban"></i> Solicitar cancelamento
-              </button>
-            </form>
+            {% endif %}
 
             <h6 class="mt-3"><i class="fas fa-edit"></i> Carta de Correção (CC-e)</h6>
             <form method="post" action="{{ url_for('hora.venda_nfe_cce', venda_id=venda.id) }}">

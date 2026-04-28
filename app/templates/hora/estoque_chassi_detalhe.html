@@ -295,18 +295,25 @@
   {% endif %}
 </div>
 
-{# ========== 7. VENDA ========== #}
-<h4><i class="fas fa-dollar-sign text-success"></i> Venda</h4>
+{# ========== 7. PEDIDO DE VENDA ========== #}
+<h4><i class="fas fa-dollar-sign text-success"></i> Pedido de Venda</h4>
 <div class="card p-3 mb-3">
   {% if rastreio.venda %}
+    {% set _ped_badge = {
+        'COTACAO': 'secondary',
+        'CONFIRMADO': 'primary',
+        'FATURADO': 'success',
+        'CANCELADO': 'danger',
+    }.get(rastreio.venda.status, 'secondary') %}
     <div class="row">
-      <div class="col-md-2"><small class="text-muted">Venda</small><br>
+      <div class="col-md-2"><small class="text-muted">Pedido</small><br>
         {% if current_user.tem_perm_hora('vendas', 'ver') %}
           <a href="{{ url_for('hora.vendas_detalhe', venda_id=rastreio.venda.id) }}"
              class="btn btn-sm btn-outline-success py-0">#{{ rastreio.venda.id }}</a>
         {% else %}
           <span class="badge bg-success">#{{ rastreio.venda.id }}</span>
         {% endif %}
+        <br><span class="badge bg-{{ _ped_badge }} mt-1">{{ rastreio.venda.status }}</span>
       </div>
       <div class="col-md-2"><small class="text-muted">Data</small><br>
         {{ rastreio.venda.data_venda.strftime('%d/%m/%Y') if rastreio.venda.data_venda else '—' }}
@@ -359,7 +366,7 @@
       </div>
     {% endif %}
   {% else %}
-    <p class="text-muted mb-0">Moto não vendida.</p>
+    <p class="text-muted mb-0">Moto sem pedido de venda.</p>
   {% endif %}
 </div>
 
