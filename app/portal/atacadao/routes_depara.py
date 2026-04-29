@@ -7,7 +7,6 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import pandas as pd
 import os
-from datetime import datetime
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.portal.atacadao.models import ProdutoDeParaAtacadao
@@ -540,7 +539,6 @@ def exportar():
         output.seek(0)
 
         # Nome do arquivo com data
-        from datetime import datetime
         filename = f"depara_atacadao_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return send_file(
