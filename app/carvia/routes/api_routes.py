@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 def register_api_routes(bp):
 
-    @bp.route('/api/cadastrar-transportadora', methods=['POST'])
+    @bp.route('/api/cadastrar-transportadora', methods=['POST']) # type: ignore
     @login_required
-    def api_cadastrar_transportadora():
+    def api_cadastrar_transportadora(): # type: ignore
         """Cadastro rapido de transportadora durante importacao."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -95,9 +95,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao cadastrar transportadora: {e}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/calcular-cubagem', methods=['POST'])
+    @bp.route('/api/calcular-cubagem', methods=['POST']) # type: ignore
     @login_required
-    def api_calcular_cubagem():
+    def api_calcular_cubagem(): # type: ignore
         """Calcula peso cubado a partir das dimensoes"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -126,9 +126,9 @@ def register_api_routes(bp):
         except (ValueError, TypeError) as e:
             return jsonify({'erro': f'Valores invalidos: {e}'}), 400
 
-    @bp.route('/api/cotar-standalone', methods=['POST'])
+    @bp.route('/api/cotar-standalone', methods=['POST']) # type: ignore
     @login_required
-    def api_cotar_standalone():
+    def api_cotar_standalone(): # type: ignore
         """Cota frete standalone (NF ou CTe).
 
         Roteamento:
@@ -190,9 +190,9 @@ def register_api_routes(bp):
             logger.error(f"Erro na cotacao standalone: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/calcular-cotacao', methods=['POST'])
+    @bp.route('/api/calcular-cotacao', methods=['POST']) # type: ignore
     @login_required
-    def api_calcular_cotacao():
+    def api_calcular_cotacao(): # type: ignore
         """Calcula cotacao de frete para um subcontrato"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -219,9 +219,9 @@ def register_api_routes(bp):
             logger.error(f"Erro na cotacao: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/opcoes-transportadora')
+    @bp.route('/api/opcoes-transportadora') # type: ignore
     @login_required
-    def api_opcoes_transportadora():
+    def api_opcoes_transportadora(): # type: ignore
         """Lista transportadoras disponiveis para subcontratacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -314,9 +314,9 @@ def register_api_routes(bp):
     # Download de arquivos originais (S3 / local)
     # ------------------------------------------------------------------
 
-    @bp.route('/api/nf/<int:nf_id>/arquivo/<tipo>')
+    @bp.route('/api/nf/<int:nf_id>/arquivo/<tipo>') # type: ignore
     @login_required
-    def api_download_nf_arquivo(nf_id, tipo):
+    def api_download_nf_arquivo(nf_id, tipo): # type: ignore
         """Gera URL presigned para download do XML ou PDF original de uma NF."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -354,9 +354,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao gerar URL para NF {nf_id} ({tipo}): {e}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/operacao/<int:operacao_id>/xml')
+    @bp.route('/api/operacao/<int:operacao_id>/xml') # type: ignore
     @login_required
-    def api_download_operacao_xml(operacao_id):
+    def api_download_operacao_xml(operacao_id): # type: ignore
         """Gera URL presigned para download do CTe XML original de uma operacao."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -390,9 +390,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao gerar URL para operacao {operacao_id} XML: {e}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/fatura-cliente/<int:fatura_id>/pdf')
+    @bp.route('/api/fatura-cliente/<int:fatura_id>/pdf') # type: ignore
     @login_required
-    def api_download_fatura_cliente_pdf(fatura_id):
+    def api_download_fatura_cliente_pdf(fatura_id): # type: ignore
         """Gera URL presigned para download do PDF original de uma fatura cliente."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -426,9 +426,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao gerar URL para fatura cliente {fatura_id}: {e}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/fatura-transportadora/<int:fatura_id>/pdf')
+    @bp.route('/api/fatura-transportadora/<int:fatura_id>/pdf') # type: ignore
     @login_required
-    def api_download_fatura_transportadora_pdf(fatura_id):
+    def api_download_fatura_transportadora_pdf(fatura_id): # type: ignore
         """Gera URL presigned para download do PDF original de uma fatura transportadora."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -466,9 +466,9 @@ def register_api_routes(bp):
     # Wizard "Criar CTe Manual" — APIs de selecao
     # ------------------------------------------------------------------
 
-    @bp.route('/api/clientes-nf')
+    @bp.route('/api/clientes-nf') # type: ignore
     @login_required
-    def api_clientes_nf():
+    def api_clientes_nf(): # type: ignore
         """Lista clientes distintos (cnpj_emitente + nome_emitente) com contagem de NFs.
 
         Emitente = cliente pois em importacao_service cnpj_cliente vem do remetente.
@@ -505,9 +505,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao buscar clientes NF: {e}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/nfs-para-cte')
+    @bp.route('/api/nfs-para-cte') # type: ignore
     @login_required
-    def api_nfs_para_cte():
+    def api_nfs_para_cte(): # type: ignore
         """Lista NFs de um cliente com flag tem_cte (se aparece em carvia_operacao_nfs).
 
         Query params:
@@ -581,9 +581,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao buscar NFs para CTe: {e}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/transportadoras-modalidade')
+    @bp.route('/api/transportadoras-modalidade') # type: ignore
     @login_required
-    def api_transportadoras_modalidade():
+    def api_transportadoras_modalidade(): # type: ignore    
         """Lista transportadoras ativas com tabelas de frete para o UF, agrupando modalidades.
 
         Query params:
@@ -672,9 +672,9 @@ def register_api_routes(bp):
     # Download PDF Original (CTe importado de PDF)
     # ------------------------------------------------------------------
 
-    @bp.route('/api/subcontrato/<int:subcontrato_id>/pdf-original')
+    @bp.route('/api/subcontrato/<int:subcontrato_id>/pdf-original') # type: ignore
     @login_required
-    def api_download_subcontrato_pdf_original(subcontrato_id):
+    def api_download_subcontrato_pdf_original(subcontrato_id): # type: ignore
         """Retorna o PDF original importado de um CarviaSubcontrato."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -715,9 +715,9 @@ def register_api_routes(bp):
 
         return jsonify({'erro': 'Arquivo nao encontrado'}), 404
 
-    @bp.route('/api/operacao/<int:operacao_id>/pdf-original')
+    @bp.route('/api/operacao/<int:operacao_id>/pdf-original') # type: ignore
     @login_required
-    def api_download_operacao_pdf_original(operacao_id):
+    def api_download_operacao_pdf_original(operacao_id): # type: ignore
         """Retorna o PDF original de uma CarviaOperacao.
 
         Suporta modo JSON (`?check=1`) usado pelo botao PDF SSW:
@@ -839,9 +839,9 @@ def register_api_routes(bp):
     # SSW — Re-buscar CTRC e re-baixar DACTE para CarviaOperacao
     # ------------------------------------------------------------------
 
-    @bp.route('/api/operacao/<int:operacao_id>/atualizar-ctrc', methods=['POST'])
+    @bp.route('/api/operacao/<int:operacao_id>/atualizar-ctrc', methods=['POST']) # type: ignore
     @login_required
-    def api_atualizar_ctrc_operacao(operacao_id):
+    def api_atualizar_ctrc_operacao(operacao_id): # type: ignore
         """Enfileira job RQ para re-consultar CTRC via SSW opcao 101.
 
         Usa o worker `verificar_ctrc_operacao_job` que ja existe — roda
@@ -885,9 +885,9 @@ def register_api_routes(bp):
             logger.error(f'Erro ao enfileirar atualizar-ctrc op={operacao_id}: {e}')
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/operacao/<int:operacao_id>/baixar-pdf-ssw', methods=['POST'])
+    @bp.route('/api/operacao/<int:operacao_id>/baixar-pdf-ssw', methods=['POST']) # type: ignore
     @login_required
-    def api_baixar_pdf_ssw_operacao(operacao_id):
+    def api_baixar_pdf_ssw_operacao(operacao_id): # type: ignore
         """Enfileira job RQ para re-baixar DACTE PDF via SSW opcao 101.
 
         Usa o worker `baixar_pdf_ssw_operacao_job` — roda
@@ -937,11 +937,11 @@ def register_api_routes(bp):
     # ------------------------------------------------------------------
 
     @bp.route(
-        '/api/cte-complementar/<int:cte_comp_id>/atualizar-ctrc',
+        '/api/cte-complementar/<int:cte_comp_id>/atualizar-ctrc', # type: ignore
         methods=['POST'],
     )
     @login_required
-    def api_atualizar_ctrc_cte_complementar(cte_comp_id):
+    def api_atualizar_ctrc_cte_complementar(cte_comp_id): # type: ignore
         """Enfileira job RQ para consultar/verificar CTRC do CTe Complementar
         via SSW opcao 101.
 
@@ -1004,9 +1004,9 @@ def register_api_routes(bp):
     # verificar_ctrc_cte_comp, etc).
     # ------------------------------------------------------------------
 
-    @bp.route('/api/ssw-jobs/<job_id>/status', methods=['GET'])
+    @bp.route('/api/ssw-jobs/<job_id>/status', methods=['GET']) # type: ignore
     @login_required
-    def api_ssw_job_status(job_id):
+    def api_ssw_job_status(job_id): # type: ignore
         """Retorna status de um job RQ generico.
 
         Usado pelo cliente JS SswProgress.start({statusType: 'rq_job'})
@@ -1072,9 +1072,9 @@ def register_api_routes(bp):
     # Conferencia de CTe Subcontratado
     # ------------------------------------------------------------------
 
-    @bp.route('/api/conferencia-subcontrato/<int:sub_id>/calcular', methods=['POST'])
+    @bp.route('/api/conferencia-subcontrato/<int:sub_id>/calcular', methods=['POST']) # type: ignore
     @login_required
-    def api_calcular_conferencia(sub_id):
+    def api_calcular_conferencia(sub_id): # type: ignore
         """Calcula todas as opcoes de frete para conferencia de um subcontrato."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1093,9 +1093,9 @@ def register_api_routes(bp):
     # Nova tela /conferir itera fretes diretamente — estas rotas sao a
     # interface canonica daqui para frente.
     # ------------------------------------------------------------------
-    @bp.route('/api/conferencia-frete/<int:frete_id>/calcular', methods=['POST'])
+    @bp.route('/api/conferencia-frete/<int:frete_id>/calcular', methods=['POST']) # type: ignore
     @login_required
-    def api_calcular_conferencia_frete(frete_id):
+    def api_calcular_conferencia_frete(frete_id): # type: ignore
         """Calcula opcoes de frete para conferencia de um CarviaFrete."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1140,9 +1140,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao calcular conferencia frete {frete_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/conferencia-frete/<int:frete_id>/registrar', methods=['POST'])
+    @bp.route('/api/conferencia-frete/<int:frete_id>/registrar', methods=['POST']) # type: ignore
     @login_required
-    def api_registrar_conferencia_frete(frete_id):
+    def api_registrar_conferencia_frete(frete_id): # type: ignore
         """Registra conferencia de um CarviaFrete (APROVADO/DIVERGENTE).
 
         Opera direto em Frete (paridade Nacom). Se DIVERGENTE acima da
@@ -1189,9 +1189,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao registrar conferencia frete {frete_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/conferencia-subcontrato/<int:sub_id>/registrar', methods=['POST'])
+    @bp.route('/api/conferencia-subcontrato/<int:sub_id>/registrar', methods=['POST']) # type: ignore
     @login_required
-    def api_registrar_conferencia(sub_id):
+    def api_registrar_conferencia(sub_id): # type: ignore
         """Registra conferencia de um subcontrato (APROVADO/DIVERGENTE)."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1242,9 +1242,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao registrar conferencia sub {sub_id}: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/atualizar-cubagem', methods=['POST'])
+    @bp.route('/api/atualizar-cubagem', methods=['POST']) # type: ignore
     @login_required
-    def api_atualizar_cubagem():
+    def api_atualizar_cubagem(): # type: ignore
         """Atualiza cubagem de uma operacao e recalcula peso_utilizado"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1316,9 +1316,9 @@ def register_api_routes(bp):
     # Registrar cotacao via modal unificado
     # ------------------------------------------------------------------
 
-    @bp.route('/api/subcontrato/<int:sub_id>/registrar-cotacao', methods=['POST'])
+    @bp.route('/api/subcontrato/<int:sub_id>/registrar-cotacao', methods=['POST']) # type: ignore
     @login_required
-    def api_registrar_cotacao(sub_id):
+    def api_registrar_cotacao(sub_id): # type: ignore
         """Registra valor cotado no subcontrato via modal unificado.
 
         Aceita:
@@ -1389,9 +1389,9 @@ def register_api_routes(bp):
     # Modelos de moto (JSON para selects)
     # ==================================================================
 
-    @bp.route('/api/modelos-moto', methods=['GET'])
+    @bp.route('/api/modelos-moto', methods=['GET']) # type: ignore
     @login_required
-    def api_listar_modelos_moto():
+    def api_listar_modelos_moto(): # type: ignore
         """Lista modelos de moto ativos para selects (JSON)."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1416,9 +1416,9 @@ def register_api_routes(bp):
     # Emissao automatica CTe SSW
     # ==================================================================
 
-    @bp.route('/api/nfs/<int:nf_id>/emitir-cte-ssw', methods=['POST'])
+    @bp.route('/api/nfs/<int:nf_id>/emitir-cte-ssw', methods=['POST']) # type: ignore
     @login_required
-    def api_emitir_cte_ssw(nf_id):
+    def api_emitir_cte_ssw(nf_id): # type: ignore
         """Dispara emissao assincrona de CTe no SSW para uma NF.
 
         Body JSON:
@@ -1487,9 +1487,9 @@ def register_api_routes(bp):
             logger.error(f"Erro ao enfileirar emissao CTe NF {nf_id}: {e}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/api/emissao-cte/<int:emissao_id>/status', methods=['GET'])
+    @bp.route('/api/emissao-cte/<int:emissao_id>/status', methods=['GET']) # type: ignore
     @login_required
-    def api_status_emissao_cte(emissao_id):
+    def api_status_emissao_cte(emissao_id): # type: ignore
         """Polling: retorna status da emissao SSW."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado'}), 403
@@ -1512,9 +1512,9 @@ def register_api_routes(bp):
             'atualizado_em': emissao.atualizado_em.isoformat() if emissao.atualizado_em else None,
         })
 
-    @bp.route('/api/nfs/<int:nf_id>/emissao-status', methods=['GET'])
+    @bp.route('/api/nfs/<int:nf_id>/emissao-status', methods=['GET']) # type: ignore
     @login_required
-    def api_nf_emissao_status(nf_id):
+    def api_nf_emissao_status(nf_id): # type: ignore
         """Retorna a emissao mais recente de uma NF (para observabilidade on-load).
 
         Returns 200:
@@ -1544,9 +1544,9 @@ def register_api_routes(bp):
             'atualizado_em': emissao.atualizado_em.isoformat() if emissao.atualizado_em else None,
         }})
 
-    @bp.route('/api/emitir-cte-ssw/lote', methods=['POST'])
+    @bp.route('/api/emitir-cte-ssw/lote', methods=['POST']) # type: ignore
     @login_required
-    def api_emitir_cte_ssw_lote():
+    def api_emitir_cte_ssw_lote(): # type: ignore
         """Dispara emissao de CTe SSW para multiplas NFs.
 
         Body JSON:
@@ -1612,9 +1612,9 @@ def register_api_routes(bp):
     # Backfill Frete — Cotacao + Recalculo
     # ------------------------------------------------------------------
 
-    @bp.route('/api/fretes/cotar-backfill', methods=['POST'])
+    @bp.route('/api/fretes/cotar-backfill', methods=['POST']) # type: ignore
     @login_required
-    def api_cotar_backfill():
+    def api_cotar_backfill(): # type: ignore
         """Cotacao para backfill — busca melhor tabela e retorna parametros editaveis.
 
         NAO usa ICMS da cidade — apenas icms_proprio da tabela (regra CarVia).
@@ -1773,9 +1773,9 @@ def register_api_routes(bp):
             logger.error("Erro cotacao backfill: %s", e, exc_info=True)
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/api/fretes/recalcular', methods=['POST'])
+    @bp.route('/api/fretes/recalcular', methods=['POST']) # type: ignore
     @login_required
-    def api_recalcular_frete():
+    def api_recalcular_frete(): # type: ignore
         """Recalcula frete com parametros customizados (editados pelo usuario).
 
         Aceita todos os parametros da tabela + peso/valor e retorna
