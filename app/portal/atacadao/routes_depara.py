@@ -57,18 +57,18 @@ def novo():
     """Criar novo mapeamento De-Para"""
     if request.method == 'POST':
         try:
-            # Buscar descrição do nosso produto
             codigo_nosso = request.form.get('codigo_nosso', '').strip()
-            descricao_nosso = ''
-            
-            # Buscar em CadastroPalletizacao
-            produto = CadastroPalletizacao.query.filter_by(cod_produto=codigo_nosso).first()
-            if produto:
-                descricao_nosso = produto.nome_produto
-            
+            descricao_nosso = request.form.get('descricao_nosso', '').strip()
+
+            # Se usuário não preencheu manualmente nem via busca JS, tentar resolver pelo cadastro
+            if not descricao_nosso:
+                produto = CadastroPalletizacao.query.filter_by(cod_produto=codigo_nosso).first()
+                if produto:
+                    descricao_nosso = produto.nome_produto
+
             mapeamento = ProdutoDeParaAtacadao(
                 codigo_nosso=codigo_nosso,
-                descricao_nosso=descricao_nosso or request.form.get('descricao_nosso', ''),
+                descricao_nosso=descricao_nosso,
                 codigo_atacadao=request.form.get('codigo_atacadao', '').strip(),
                 descricao_atacadao=request.form.get('descricao_atacadao', '').strip(),
                 cnpj_cliente=request.form.get('cnpj_cliente', '').strip(),
@@ -101,13 +101,20 @@ def editar(id):
     
     if request.method == 'POST':
         try:
-            # Buscar descrição atualizada se mudou código
             codigo_nosso = request.form.get('codigo_nosso', '').strip()
-            if codigo_nosso != mapeamento.codigo_nosso:
+            descricao_nosso_form = request.form.get('descricao_nosso', '').strip()
+
+            # Persistir SEMPRE a descrição vinda do form (manual ou via busca JS).
+            # Fallback: se vier vazia E o código mudou, tentar preencher pelo cadastro.
+            if descricao_nosso_form:
+                mapeamento.descricao_nosso = descricao_nosso_form
+            elif codigo_nosso != mapeamento.codigo_nosso:
                 produto = CadastroPalletizacao.query.filter_by(cod_produto=codigo_nosso).first()
                 if produto:
                     mapeamento.descricao_nosso = produto.nome_produto
-            
+                else:
+                    mapeamento.descricao_nosso = ''
+
             mapeamento.codigo_nosso = codigo_nosso
             mapeamento.codigo_atacadao = request.form.get('codigo_atacadao', '').strip()
             mapeamento.descricao_atacadao = request.form.get('descricao_atacadao', '').strip()

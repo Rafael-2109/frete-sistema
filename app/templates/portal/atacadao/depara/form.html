@@ -42,13 +42,12 @@
                                 
                                 <div class="form-group">
                                     <label for="descricao_nosso">Descrição</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           id="descricao_nosso" 
+                                    <input type="text"
+                                           class="form-control"
+                                           id="descricao_nosso"
                                            name="descricao_nosso"
-                                           value="{{ mapeamento.descricao_nosso if mapeamento else '' }}"
-                                           readonly>
-                                    <small class="text-muted">Preenchido automaticamente ao buscar o código</small>
+                                           value="{{ mapeamento.descricao_nosso if mapeamento else '' }}">
+                                    <small class="text-muted">Preenchida automaticamente pela busca, ou edite manualmente</small>
                                 </div>
                             </div>
                             
@@ -167,12 +166,13 @@
 
 <script>
 $(document).ready(function() {
-    // Buscar produto nosso
+    // Buscar produto nosso (preenche apenas se encontrar; nao apaga digitacao manual)
     $('#buscar_produto, #codigo_nosso').on('click blur', function(e) {
         if (e.type === 'blur' && e.target.id !== 'codigo_nosso') return;
-        
+
         const codigo = $('#codigo_nosso').val().trim();
-        
+        const isClickBuscar = e.type === 'click' && e.currentTarget.id === 'buscar_produto';
+
         if (codigo) {
             $.ajax({
                 url: `/portal/atacadao/depara/buscar_produto_nosso/${codigo}`,
@@ -180,13 +180,15 @@ $(document).ready(function() {
                 success: function(response) {
                     if (response.success) {
                         $('#descricao_nosso').val(response.descricao);
-                    } else {
-                        $('#descricao_nosso').val('');
-                        console.log('Produto não encontrado em CadastroPalletizacao');
+                    } else if (isClickBuscar) {
+                        // Aviso explicito apenas no click do botao; nao apaga o que o usuario digitou
+                        console.log('Produto não encontrado em CadastroPalletizacao — preencha manualmente');
                     }
                 },
                 error: function() {
-                    $('#descricao_nosso').val('');
+                    if (isClickBuscar) {
+                        console.log('Erro ao buscar produto — preencha manualmente');
+                    }
                 }
             });
         }
