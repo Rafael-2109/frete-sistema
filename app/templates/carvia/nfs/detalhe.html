@@ -137,6 +137,62 @@
     {# Banner de status da emissao CTe SSW (carregado via JS on-load) #}
     <div id="bannerEmissao" class="d-none mb-4"></div>
 
+    {# Cotacao Comercial vinculada (via CarviaPedidoItem.numero_nf) #}
+    {% if cotacao_obj %}
+    <div class="card mb-4 border-info">
+        <div class="card-header bg-info-subtle d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Cotacao Comercial</h5>
+            <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cotacao_obj.id) }}" class="btn btn-info btn-sm">
+                <i class="fas fa-external-link-alt"></i> Abrir Cotacao
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <small class="text-muted">Numero</small>
+                    <div class="fw-bold">{{ cotacao_obj.numero_cotacao }}</div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Cliente</small>
+                    <div>{{ cotacao_obj.cliente.nome_comercial if cotacao_obj.cliente else '-' }}</div>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted">Status</small>
+                    <div><span class="badge bg-secondary">{{ cotacao_obj.status }}</span></div>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted">Valor Final</small>
+                    <div class="fw-bold text-success">
+                        {{ cotacao_obj.valor_final_aprovado|valor_br if cotacao_obj.valor_final_aprovado else (cotacao_obj.valor_tabela|valor_br if cotacao_obj.valor_tabela else '-') }}
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted">Pagamento</small>
+                    <div class="small">
+                        {% if cotacao_obj.condicao_pagamento == 'A_VISTA' %}A Vista
+                        {% elif cotacao_obj.condicao_pagamento == 'PRAZO' %}Prazo {{ cotacao_obj.prazo_dias or '?' }}d
+                        {% else %}-{% endif %}
+                    </div>
+                </div>
+            </div>
+            {% if pedidos_da_nf %}
+            <hr class="my-3">
+            <div>
+                <small class="text-muted">Pedido(s) que vinculam esta NF:</small>
+                <div class="mt-1">
+                    {% for ped in pedidos_da_nf %}
+                    <a href="{{ url_for('carvia.detalhe_pedido_carvia', pedido_id=ped.id) }}" class="badge bg-primary text-decoration-none me-1">
+                        <i class="fas fa-motorcycle"></i> {{ ped.numero_pedido }}
+                        <span class="badge bg-light text-dark ms-1">{{ ped.status_calculado }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row g-4">
         <!-- Dados da NF -->
         <div class="col-md-6">

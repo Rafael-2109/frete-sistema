@@ -97,6 +97,62 @@
     {% set carvia_active = 'operacoes' %}
     {% include 'carvia/_quick_nav.html' %}
 
+    {# Cotacao(oes) Comercial(is) vinculadas via NFs do CTe #}
+    {% if cotacoes_da_operacao %}
+    <div class="card mb-4 border-info">
+        <div class="card-header bg-info-subtle">
+            <h5 class="mb-0">
+                <i class="fas fa-file-invoice-dollar"></i>
+                Cotacao(oes) Comercial(is) ({{ cotacoes_da_operacao|length }})
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Numero</th>
+                        <th>Cliente</th>
+                        <th>Status</th>
+                        <th class="text-end">Valor Final</th>
+                        <th>Pagamento</th>
+                        <th>Pedido(s)</th>
+                        <th class="text-center">Acao</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cot in cotacoes_da_operacao %}
+                    <tr>
+                        <td><strong>{{ cot.numero_cotacao }}</strong></td>
+                        <td>{{ cot.cliente.nome_comercial if cot.cliente else '-' }}</td>
+                        <td><span class="badge bg-secondary">{{ cot.status }}</span></td>
+                        <td class="text-end fw-bold text-success">
+                            {{ cot.valor_final_aprovado|valor_br if cot.valor_final_aprovado else (cot.valor_tabela|valor_br if cot.valor_tabela else '-') }}
+                        </td>
+                        <td class="small">
+                            {% if cot.condicao_pagamento == 'A_VISTA' %}A Vista
+                            {% elif cot.condicao_pagamento == 'PRAZO' %}Prazo {{ cot.prazo_dias or '?' }}d
+                            {% else %}-{% endif %}
+                        </td>
+                        <td class="small">
+                            {% for ped in pedidos_da_operacao if ped.cotacao_id == cot.id %}
+                            <a href="{{ url_for('carvia.detalhe_pedido_carvia', pedido_id=ped.id) }}" class="badge bg-primary text-decoration-none me-1">
+                                {{ ped.numero_pedido }}
+                            </a>
+                            {% endfor %}
+                        </td>
+                        <td class="text-center">
+                            <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cot.id) }}" class="btn btn-outline-info btn-sm" title="Abrir cotacao">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row g-4">
         <!-- Info Principal -->
         <div class="col-md-6">

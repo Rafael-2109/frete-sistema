@@ -926,6 +926,169 @@ def cancelar_artefatos_carvia_do_embarque(
         return resultado
 
 
+def coletar_documentos_pedidos(pedido_ids):
+    """Retorna {pedido_id: {'ctes': [CarviaOperacao], 'faturas': [CarviaFaturaCliente]}}.
+
+    Batch query — sem N+1. Usado para popular listagens (pedidos, cotacoes)
+    com badges de CTe e Fatura sem performance ruim.
+
+    Chave de junção:
+        pedido -> CarviaPedidoItem.numero_nf
+        -> CarviaNf
+        -> CarviaOperacaoNf -> CarviaOperacao (CTes ativos)
+        -> CarviaOperacao.fatura_cliente_id -> CarviaFaturaCliente
+    """
+    from app.carvia.models import (
+        CarviaPedido, CarviaPedidoItem, CarviaNf,
+        CarviaOperacao, CarviaOperacaoNf,
+    )
+    from app.carvia.models.faturas import CarviaFaturaCliente
+
+    resultado = {pid: {'ctes': [], 'faturas': []} for pid in pedido_ids}
+    if not pedido_ids:
+        return resultado
+
+    # Mapa pedido_id -> conjunto de numeros_nf
+    pedido_nfs = {}
+    rows = (
+        db.session.query(CarviaPedidoItem.pedido_id, CarviaPedidoItem.numero_nf)
+        .filter(
+            CarviaPedidoItem.pedido_id.in_(pedido_ids),
+            CarviaPedidoItem.numero_nf.isnot(None),
+            CarviaPedidoItem.numero_nf != '',
+        )
+        .all()
+    )
+    for pid, nf_num in rows:
+        pedido_nfs.setdefault(pid, set()).add(str(nf_num))
+
+    if not pedido_nfs:
+        return resultado
+
+    # Universo de numeros_nf para 1 query
+    todos_nfs = set()
+    for nfs in pedido_nfs.values():
+        todos_nfs.update(nfs)
+
+    # Mapa numero_nf -> nf_id (mesmos numero podem aparecer N vezes — pega o ATIVO mais recente)
+    nfs = (
+        CarviaNf.query
+        .filter(CarviaNf.numero_nf.in_(list(todos_nfs)))
+        .order_by(CarviaNf.id.desc())
+        .all()
+    )
+    nf_num_to_id = {}
+    nf_id_to_obj = {}
+    for nf in nfs:
+        if str(nf.numero_nf) not in nf_num_to_id:
+            nf_num_to_id[str(nf.numero_nf)] = nf.id
+        nf_id_to_obj[nf.id] = nf
+
+    if not nf_num_to_id:
+        return resultado
+
+    # Mapa nf_id -> [operacao_id]
+    junctions = (
+        db.session.query(CarviaOperacaoNf.nf_id, CarviaOperacaoNf.operacao_id)
+        .filter(CarviaOperacaoNf.nf_id.in_(list(nf_num_to_id.values())))
+        .all()
+    )
+    nf_id_to_op_ids = {}
+    todos_op_ids = set()
+    for nf_id, op_id in junctions:
+        nf_id_to_op_ids.setdefault(nf_id, []).append(op_id)
+        todos_op_ids.add(op_id)
+
+    if not todos_op_ids:
+        return resultado
+
+    # Mapa operacao_id -> CarviaOperacao (ativa)
+    ops = (
+        CarviaOperacao.query
+        .filter(
+            CarviaOperacao.id.in_(list(todos_op_ids)),
+            CarviaOperacao.status != 'CANCELADO',
+        )
+        .all()
+    )
+    op_id_to_obj = {op.id: op for op in ops}
+
+    # Mapa fatura_id -> CarviaFaturaCliente
+    fat_ids = {op.fatura_cliente_id for op in ops if op.fatura_cliente_id}
+    fat_id_to_obj = {}
+    if fat_ids:
+        faturas = CarviaFaturaCliente.query.filter(
+            CarviaFaturaCliente.id.in_(list(fat_ids))
+        ).all()
+        fat_id_to_obj = {f.id: f for f in faturas}
+
+    # Montar resultado por pedido
+    for pid, nfs_set in pedido_nfs.items():
+        ctes_seen = set()
+        faturas_seen = set()
+        for nf_num in nfs_set:
+            nf_id = nf_num_to_id.get(nf_num)
+            if not nf_id:
+                continue
+            for op_id in nf_id_to_op_ids.get(nf_id, []):
+                op_obj = op_id_to_obj.get(op_id)
+                if op_obj and op_obj.id not in ctes_seen:
+                    ctes_seen.add(op_obj.id)
+                    resultado[pid]['ctes'].append(op_obj)
+                    if op_obj.fatura_cliente_id and op_obj.fatura_cliente_id not in faturas_seen:
+                        fat = fat_id_to_obj.get(op_obj.fatura_cliente_id)
+                        if fat:
+                            faturas_seen.add(fat.id)
+                            resultado[pid]['faturas'].append(fat)
+
+    return resultado
+
+
+def coletar_documentos_cotacoes(cotacao_ids):
+    """Retorna {cotacao_id: {'ctes': [...], 'faturas': [...]}}.
+
+    Mesma logica que `coletar_documentos_pedidos` mas agregando por cotacao
+    via todos os pedidos nao-cancelados de cada cotacao.
+    """
+    from app.carvia.models import CarviaPedido
+
+    resultado = {cid: {'ctes': [], 'faturas': []} for cid in cotacao_ids}
+    if not cotacao_ids:
+        return resultado
+
+    pedidos = (
+        CarviaPedido.query
+        .filter(
+            CarviaPedido.cotacao_id.in_(list(cotacao_ids)),
+            CarviaPedido.status != 'CANCELADO',
+        )
+        .all()
+    )
+    pid_to_cot = {p.id: p.cotacao_id for p in pedidos}
+    pid_list = list(pid_to_cot.keys())
+    if not pid_list:
+        return resultado
+
+    docs_por_pedido = coletar_documentos_pedidos(pid_list)
+
+    for pid, docs in docs_por_pedido.items():
+        cot_id = pid_to_cot.get(pid)
+        if not cot_id:
+            continue
+        ctes_seen = {c.id for c in resultado[cot_id]['ctes']}
+        faturas_seen = {f.id for f in resultado[cot_id]['faturas']}
+        for cte in docs['ctes']:
+            if cte.id not in ctes_seen:
+                ctes_seen.add(cte.id)
+                resultado[cot_id]['ctes'].append(cte)
+        for fat in docs['faturas']:
+            if fat.id not in faturas_seen:
+                faturas_seen.add(fat.id)
+                resultado[cot_id]['faturas'].append(fat)
+
+    return resultado
+
+
 def atualizar_status_pedido_carvia_pelo_faturamento(numero_nf: str) -> int:
     """Revalida status de CarviaPedidos afetados por uma NF.
 

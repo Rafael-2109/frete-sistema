@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 def register_pedido_routes(bp):
 
-    @bp.route('/pedidos-carvia')
+    @bp.route('/pedidos-carvia') # type: ignore
     @login_required
-    def listar_pedidos_carvia():
+    def listar_pedidos_carvia(): # type: ignore
         """Lista pedidos CarVia
 
         Filtra pedidos cujas cotacoes estao em status "em edicao" ou finalizados:
@@ -56,9 +56,11 @@ def register_pedido_routes(bp):
         else:
             pedidos = todos
 
-        # Pre-build NFs, embarque, peso/valor/qtd, emitente/destino por pedido
+        # Pre-build NFs, embarque, peso/valor/qtd, emitente/destino, ctes, faturas
         from app.carvia.models import CarviaNf, CarviaPedidoItem
-        from app.embarques.models import EmbarqueItem, Embarque
+        from app.carvia.services.documentos.embarque_carvia_service import (
+            coletar_documentos_pedidos,
+        )
         from sqlalchemy import func as sqlfunc
 
         nfs_por_pedido = {}
@@ -83,6 +85,9 @@ def register_pedido_routes(bp):
             for pid, qtd, valor in rows:
                 qtd_por_pedido[pid] = int(qtd or 0)
                 valor_por_pedido[pid] = float(valor or 0)
+
+        # Batch: documentos fiscais (CTe + Fatura) por pedido
+        docs_por_pedido = coletar_documentos_pedidos(ped_ids)
 
         # NF Triangular: pegar numeros_nf que sao transferencia efetiva
         # para filtra-los da listagem de pedidos
@@ -114,19 +119,8 @@ def register_pedido_routes(bp):
             else:
                 peso_por_pedido[ped.id] = 0.0
 
-            # Embarque: primeiro CARVIA-NF-{nf_id} ativo dessas NFs
-            for nf_num in nf_nums:
-                nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
-                if nf_obj:
-                    em = EmbarqueItem.query.filter_by(
-                        separacao_lote_id=f'CARVIA-NF-{nf_obj.id}',
-                        status='ativo',
-                    ).first()
-                    if em:
-                        embarques_por_pedido[ped.id] = db.session.get(
-                            Embarque, em.embarque_id
-                        )
-                        break
+            # Embarque: usar property robusta (cobre 3 padroes de lote)
+            embarques_por_pedido[ped.id] = ped.embarque_ativo
 
             # Emitente/Destinatario: cotacao.endereco_origem/destino
             cot = ped.cotacao
@@ -146,11 +140,12 @@ def register_pedido_routes(bp):
             qtd_por_pedido=qtd_por_pedido,
             emitente_por_pedido=emitente_por_pedido,
             destino_por_pedido=destino_por_pedido,
+            docs_por_pedido=docs_por_pedido,
         )
 
-    @bp.route('/pedidos-carvia/<int:pedido_id>')
+    @bp.route('/pedidos-carvia/<int:pedido_id>') # type: ignore
     @login_required
-    def detalhe_pedido_carvia(pedido_id):
+    def detalhe_pedido_carvia(pedido_id): # type: ignore
         """Detalhe do pedido com itens"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -165,15 +160,23 @@ def register_pedido_routes(bp):
 
         itens = pedido.itens.all()
 
+        # Documentos fiscais via properties (CTes ativos + Faturas cliente)
+        ctes = pedido.operacoes_ctes
+        faturas = pedido.faturas_cliente
+        embarque = pedido.embarque_ativo
+
         return render_template(
             'carvia/pedidos/detalhe.html',
             pedido=pedido,
             itens=itens,
+            ctes=ctes,
+            faturas=faturas,
+            embarque=embarque,
         )
 
-    @bp.route('/api/cotacoes/<int:cotacao_id>/pedidos', methods=['POST'])
+    @bp.route('/api/cotacoes/<int:cotacao_id>/pedidos', methods=['POST']) # type: ignore
     @login_required
-    def api_criar_pedido(cotacao_id):
+    def api_criar_pedido(cotacao_id): # type: ignore
         """Cria pedido vinculado a cotacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -260,9 +263,9 @@ def register_pedido_routes(bp):
             logger.error("Erro ao criar pedido: %s", e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
-    @bp.route('/api/pedidos-carvia/<int:pedido_id>/nf', methods=['PUT'])
+    @bp.route('/api/pedidos-carvia/<int:pedido_id>/nf', methods=['PUT']) # type: ignore
     @login_required
-    def api_anexar_nf_pedido(pedido_id):
+    def api_anexar_nf_pedido(pedido_id): # type: ignore
         """Anexa numero de NF ao pedido CarVia e expande provisorio no embarque.
 
         Body JSON: { "numero_nf": "123456" }
@@ -362,9 +365,9 @@ def register_pedido_routes(bp):
 
     # ==================== FILIAL EDITAVEL ====================
 
-    @bp.route('/api/pedidos-carvia/<int:pedido_id>/filial', methods=['PATCH'])
+    @bp.route('/api/pedidos-carvia/<int:pedido_id>/filial', methods=['PATCH']) # type: ignore
     @login_required
-    def api_editar_filial_pedido(pedido_id):
+    def api_editar_filial_pedido(pedido_id): # type: ignore
         """Edita filial (SP/RJ) de um pedido CarVia."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403
@@ -389,9 +392,9 @@ def register_pedido_routes(bp):
 
     # ==================== DESANEXAR NF ====================
 
-    @bp.route('/api/pedidos-carvia/<int:pedido_id>/desanexar-nf', methods=['POST'])
+    @bp.route('/api/pedidos-carvia/<int:pedido_id>/desanexar-nf', methods=['POST']) # type: ignore
     @login_required
-    def api_desanexar_nf_pedido(pedido_id):
+    def api_desanexar_nf_pedido(pedido_id): # type: ignore
         """Desanexa NF do pedido (limpa numero_nf, reverte status para ABERTO).
 
         Remove EmbarqueItem CARVIA-NF-* vinculado e devolve saldo ao provisorio.
@@ -553,9 +556,9 @@ def register_pedido_routes(bp):
 
     # ==================== EXCLUIR PEDIDO ====================
 
-    @bp.route('/api/pedidos-carvia/<int:pedido_id>', methods=['DELETE'])
+    @bp.route('/api/pedidos-carvia/<int:pedido_id>', methods=['DELETE']) # type: ignore
     @login_required
-    def api_excluir_pedido(pedido_id):
+    def api_excluir_pedido(pedido_id): # type: ignore
         """Exclui pedido CarVia, seus itens e EmbarqueItem vinculado."""
         if not getattr(current_user, 'sistema_carvia', False):
             return jsonify({'erro': 'Acesso negado.'}), 403

@@ -128,6 +128,13 @@ def register_cotacao_v2_routes(bp):
             alerta_saida_sem_nf=True
         ).count()
 
+        # Documentos fiscais (CTe + Fatura) por cotacao — batch
+        from app.carvia.services.documentos.embarque_carvia_service import (
+            coletar_documentos_cotacoes,
+        )
+        cot_ids = [c.id for c in cotacoes]
+        docs_por_cotacao = coletar_documentos_cotacoes(cot_ids)
+
         return render_template(
             'carvia/cotacoes/listar.html',
             cotacoes=cotacoes,
@@ -136,6 +143,7 @@ def register_cotacao_v2_routes(bp):
             alerta_filtro=alerta,
             contadores=contadores,
             contadores_alerta=contadores_alerta,
+            docs_por_cotacao=docs_por_cotacao,
         )
 
     # ==================== PARSEAR NF PARA PRE-PREENCHIMENTO ====================
@@ -1428,6 +1436,14 @@ def register_cotacao_v2_routes(bp):
             CarviaPreVinculoExtratoCotacao.criado_em.desc()
         ).all()
 
+        # Documentos fiscais (CTe + Fatura) via pedidos da cotacao
+        from app.carvia.services.documentos.embarque_carvia_service import (
+            coletar_documentos_cotacoes,
+        )
+        docs_cotacao = coletar_documentos_cotacoes([cotacao_id]).get(
+            cotacao_id, {'ctes': [], 'faturas': []}
+        )
+
         return render_template(
             'carvia/cotacoes/detalhe.html',
             cotacao=cotacao,
@@ -1442,6 +1458,8 @@ def register_cotacao_v2_routes(bp):
             veiculos_direta=veiculos_direta,
             tem_cte_existente=tem_cte_existente,
             previnculos=previnculos,
+            ctes_cotacao=docs_cotacao['ctes'],
+            faturas_cotacao=docs_cotacao['faturas'],
         )
 
     # ==================== API: ATUALIZAR COTACAO ====================

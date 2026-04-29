@@ -321,47 +321,65 @@ class CarviaPedido(db.Model):
 
     @property
     def status_calculado(self):
-        """Status derivado do estado real, sem dependencia de atualizacao manual.
+        """Status derivado do estado real, sem dependencia de coluna `status`.
 
-        Fluxo (P12 revisado, 2026-04-24):
-            ABERTO -> COTADO -> FATURADO
-            (EMBARCADO deixou de ser status. Saida da portaria e ortogonal
-            — exposta via `Pedido.badge_embarcado`.)
+        Fonte de verdade (2026-04-29 — refator robustez):
+            - CANCELADO: coluna `status='CANCELADO'`.
+            - FATURADO: TODOS itens com `numero_nf` E TODAS NFs em
+              `CarviaNf` com `status='ATIVA'`. Decide independente de
+              EmbarqueItem ou coluna `status`. Cobre casos de NF anexada
+              antes/depois do embarque (recibo de impressao, importacao
+              tardia, anexar manual).
+            - COTADO: pedido em embarque ativo (`CARVIA-NF-{nf_id}`,
+              `CARVIA-PED-{id}` legado, ou provisorio `CARVIA-COT-{cot}`).
+            - ABERTO: nenhum dos anteriores.
 
-        Regras:
-          - FATURADO (nova semantica): pedido com coluna `status='FATURADO'`
-            persistido (via `_marcar_pedidos_embarcado` ou
-            `atualizar_status_pedido_carvia_pelo_faturamento`).
-          - COTADO: pedido esta em embarque ativo (com ou sem data_embarque).
-          - ABERTO: pedido sem embarque ativo.
-          - CANCELADO: coluna status=CANCELADO.
+        A coluna `status` continua sendo gravada para auditoria por
+        `atualizar_status_pedido_carvia_pelo_faturamento` e por hooks
+        de embarque, mas a UI sempre exibe esta property.
         """
         if self.status == 'CANCELADO':
             return 'CANCELADO'
-        if self.status == 'FATURADO':
-            return 'FATURADO'
 
         from app.embarques.models import EmbarqueItem
         from app.carvia.models.documentos import CarviaNf
 
         itens_lista = self.itens.all()
+
+        # Sem itens -> coluna status manda (fallback para pedidos zumbis)
+        if not itens_lista:
+            return self.status if self.status in ('ABERTO', 'COTADO', 'FATURADO') else 'ABERTO'
+
         nf_nums = {i.numero_nf for i in itens_lista if i.numero_nf}
 
-        # Passo 1: pedido COM NF propria — decide exclusivamente via CARVIA-NF-{nf_id}
-        if nf_nums:
-            for nf_num in nf_nums:
-                nf_obj = CarviaNf.query.filter_by(numero_nf=str(nf_num)).first()
-                if nf_obj:
-                    ei = EmbarqueItem.query.filter_by(
-                        separacao_lote_id=f'CARVIA-NF-{nf_obj.id}',
-                        status='ativo',
-                    ).first()
-                    if ei:
-                        return 'COTADO'
-            # Pedido tem NF mas NENHUM EmbarqueItem CARVIA-NF-* ativo → ABERTO
-            return 'ABERTO'
+        # === Passo 1: FATURADO se TODOS itens tem NF e todas estao ATIVAS ===
+        todos_com_nf = all(i.numero_nf and str(i.numero_nf).strip() for i in itens_lista)
+        if todos_com_nf and nf_nums:
+            nfs_ativas = CarviaNf.query.filter(
+                CarviaNf.numero_nf.in_([str(n) for n in nf_nums]),
+                CarviaNf.status == 'ATIVA',
+            ).all()
+            numeros_ativos = {str(nf.numero_nf) for nf in nfs_ativas}
+            if all(str(n) in numeros_ativos for n in nf_nums):
+                return 'FATURADO'
 
-        # Passo 2: pedido SEM NF — padrao legado CARVIA-PED-{id}
+        # === Passo 2: COTADO se ha EmbarqueItem ativo (qualquer padrao) ===
+        # 2a. Pedido com NF -> CARVIA-NF-{nf_id}
+        if nf_nums:
+            nfs_objs = CarviaNf.query.filter(
+                CarviaNf.numero_nf.in_([str(n) for n in nf_nums])
+            ).all()
+            nf_ids = [nf.id for nf in nfs_objs]
+            if nf_ids:
+                lotes_nf = [f'CARVIA-NF-{nid}' for nid in nf_ids]
+                ei_nf = EmbarqueItem.query.filter(
+                    EmbarqueItem.separacao_lote_id.in_(lotes_nf),
+                    EmbarqueItem.status == 'ativo',
+                ).first()
+                if ei_nf:
+                    return 'COTADO'
+
+        # 2b. Padrao legado CARVIA-PED-{id}
         em_legado = EmbarqueItem.query.filter_by(
             separacao_lote_id=f'CARVIA-PED-{self.id}',
             status='ativo',
@@ -369,7 +387,7 @@ class CarviaPedido(db.Model):
         if em_legado:
             return 'COTADO'
 
-        # Passo 3: pedido SEM NF — provisorio ativo na cotacao
+        # 2c. Provisorio ativo na cotacao (CARVIA-COT-{id} ou via FK)
         ei_prov = EmbarqueItem.query.filter(
             EmbarqueItem.carvia_cotacao_id == self.cotacao_id,
             EmbarqueItem.provisorio == True,  # noqa: E712
@@ -382,7 +400,103 @@ class CarviaPedido(db.Model):
         if ei_prov:
             return 'COTADO'
 
+        # === Passo 3: nada -> ABERTO ===
         return 'ABERTO'
+
+    @property
+    def embarque_ativo(self):
+        """Retorna o objeto Embarque ativo associado a este pedido, ou None.
+
+        Cobre 3 padroes de lote (na ordem de prioridade):
+        1. CARVIA-NF-{nf_id} -> NFs do pedido (item real ja expandido)
+        2. CARVIA-PED-{id} -> legado (compat backward)
+        3. provisorio ativo via FK `carvia_cotacao_id` + `provisorio=True`
+
+        Retorna o primeiro Embarque encontrado (consistencia com o
+        fluxo: 1 cotacao -> 1 embarque por vez).
+        """
+        from app.embarques.models import EmbarqueItem, Embarque
+        from app.carvia.models.documentos import CarviaNf
+
+        itens_lista = self.itens.all()
+        nf_nums = {i.numero_nf for i in itens_lista if i.numero_nf}
+
+        # 1. Via NFs do pedido (CARVIA-NF-*)
+        if nf_nums:
+            nfs_objs = CarviaNf.query.filter(
+                CarviaNf.numero_nf.in_([str(n) for n in nf_nums])
+            ).all()
+            if nfs_objs:
+                lotes_nf = [f'CARVIA-NF-{nf.id}' for nf in nfs_objs]
+                ei = EmbarqueItem.query.filter(
+                    EmbarqueItem.separacao_lote_id.in_(lotes_nf),
+                    EmbarqueItem.status == 'ativo',
+                ).first()
+                if ei:
+                    return db.session.get(Embarque, ei.embarque_id)
+
+        # 2. Legado CARVIA-PED-{id}
+        ei_legado = EmbarqueItem.query.filter_by(
+            separacao_lote_id=f'CARVIA-PED-{self.id}',
+            status='ativo',
+        ).first()
+        if ei_legado:
+            return db.session.get(Embarque, ei_legado.embarque_id)
+
+        # 3. Provisorio via FK
+        ei_prov = EmbarqueItem.query.filter(
+            EmbarqueItem.carvia_cotacao_id == self.cotacao_id,
+            EmbarqueItem.provisorio == True,  # noqa: E712
+            EmbarqueItem.status == 'ativo',
+        ).first()
+        if ei_prov:
+            return db.session.get(Embarque, ei_prov.embarque_id)
+
+        return None
+
+    @property
+    def operacoes_ctes(self):
+        """Lista de CarviaOperacao (CTes) vinculadas via NFs deste pedido.
+
+        Retorna [] se nao ha NFs ou nenhuma NF tem CTe (operacao) ativa.
+        """
+        from app.carvia.models.documentos import (
+            CarviaNf, CarviaOperacao, CarviaOperacaoNf,
+        )
+
+        itens_lista = self.itens.all()
+        nf_nums = {i.numero_nf for i in itens_lista if i.numero_nf}
+        if not nf_nums:
+            return []
+
+        operacoes = (
+            db.session.query(CarviaOperacao)
+            .join(CarviaOperacaoNf, CarviaOperacaoNf.operacao_id == CarviaOperacao.id)
+            .join(CarviaNf, CarviaOperacaoNf.nf_id == CarviaNf.id)
+            .filter(
+                CarviaNf.numero_nf.in_([str(n) for n in nf_nums]),
+                CarviaOperacao.status != 'CANCELADO',
+            )
+            .distinct()
+            .all()
+        )
+        return operacoes
+
+    @property
+    def faturas_cliente(self):
+        """Lista de CarviaFaturaCliente vinculadas via CTes deste pedido."""
+        ops = self.operacoes_ctes
+        if not ops:
+            return []
+        fat_ids = {op.fatura_cliente_id for op in ops if op.fatura_cliente_id}
+        if not fat_ids:
+            return []
+        from app.carvia.models.faturas import CarviaFaturaCliente
+        return (
+            CarviaFaturaCliente.query
+            .filter(CarviaFaturaCliente.id.in_(fat_ids))
+            .all()
+        )
 
     def __repr__(self):
         return f'<CarviaPedido {self.numero_pedido} ({self.status}) filial={self.filial}>'

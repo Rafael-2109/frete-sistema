@@ -50,6 +50,7 @@
                             <th class="text-end">Valor</th>
                             <th class="text-center">Pagamento</th>
                             <th class="text-center">Status</th>
+                            <th class="text-center">Documentos</th>
                             <th class="text-center" title="Pre-vinculo com linha do extrato (frete pre-pago)">Extrato</th>
                             <th class="text-center">Data</th>
                         </tr>
@@ -143,6 +144,43 @@
                                     <i class="fas fa-exclamation-triangle"></i> Sem NF
                                 </span>
                                 {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% set docs = docs_por_cotacao.get(cot.id, {'ctes': [], 'faturas': []}) %}
+                                {% if docs.ctes or docs.faturas %}
+                                <div class="d-flex flex-column gap-1 align-items-center">
+                                    {% for cte in docs.ctes %}
+                                    <span class="d-inline-flex gap-1 align-items-center">
+                                        <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=cte.id) }}"
+                                           class="badge bg-primary text-decoration-none"
+                                           title="CTe {{ cte.cte_numero or cte.id }}">
+                                            <i class="fas fa-file-alt"></i> {{ cte.cte_numero or '#'~cte.id }}
+                                        </a>
+                                        {% if cte.cte_pdf_path %}
+                                        <a href="{{ url_for('carvia.api_download_operacao_pdf_original', operacao_id=cte.id) }}"
+                                           target="_blank" class="text-danger small" title="PDF do CTe">
+                                            <i class="fas fa-file-pdf"></i>
+                                        </a>
+                                        {% endif %}
+                                    </span>
+                                    {% endfor %}
+                                    {% for fat in docs.faturas %}
+                                    <span class="d-inline-flex gap-1 align-items-center">
+                                        <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fat.id) }}"
+                                           class="badge bg-success text-decoration-none"
+                                           title="Fatura {{ fat.numero_fatura }}">
+                                            <i class="fas fa-file-invoice-dollar"></i> {{ fat.numero_fatura }}
+                                        </a>
+                                        {% if fat.arquivo_pdf_path %}
+                                        <a href="{{ url_for('carvia.api_download_fatura_cliente_pdf', fatura_id=fat.id) }}"
+                                           target="_blank" class="text-danger small" title="PDF da Fatura">
+                                            <i class="fas fa-file-pdf"></i>
+                                        </a>
+                                        {% endif %}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                                {% else %}<span class="text-muted small">&mdash;</span>{% endif %}
                             </td>
                             <td class="text-center">
                                 {% set prev_ativos = cot.previnculos_extrato.filter_by(status='ATIVO').count() %}

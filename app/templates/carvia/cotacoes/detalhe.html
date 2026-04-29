@@ -467,6 +467,60 @@
                 </div>
             </div>
             {% endif %}
+
+            {# Documentos Fiscais (CTe + Fatura agregados via pedidos da cotacao) #}
+            {% if ctes_cotacao or faturas_cotacao %}
+            <div class="card mb-3">
+                <div class="card-header"><strong><i class="fas fa-file-invoice"></i> Documentos Fiscais</strong></div>
+                <div class="card-body">
+                    {% if ctes_cotacao %}
+                    <h6 class="text-muted small mb-2">CTes ({{ ctes_cotacao|length }})</h6>
+                    <ul class="list-unstyled mb-3">
+                        {% for cte in ctes_cotacao %}
+                        <li class="mb-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=cte.id) }}" class="badge bg-primary text-decoration-none">
+                                    <i class="fas fa-file-alt"></i> {{ cte.cte_numero or '#'~cte.id }}
+                                </a>
+                                {% if cte.ctrc_numero %}<small class="text-muted ms-1">{{ cte.ctrc_numero }}</small>{% endif %}
+                                {% if cte.cte_valor %}<br><small class="text-muted">{{ cte.cte_valor|valor_br }}</small>{% endif %}
+                            </div>
+                            {% if cte.cte_pdf_path %}
+                            <a href="{{ url_for('carvia.api_download_operacao_pdf_original', operacao_id=cte.id) }}"
+                               target="_blank" class="btn btn-outline-danger btn-sm" title="Baixar PDF do CTe">
+                                <i class="fas fa-file-pdf"></i>
+                            </a>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    {% if faturas_cotacao %}
+                    <h6 class="text-muted small mb-2">Faturas Cliente ({{ faturas_cotacao|length }})</h6>
+                    <ul class="list-unstyled mb-0">
+                        {% for fat in faturas_cotacao %}
+                        <li class="mb-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fat.id) }}" class="badge bg-success text-decoration-none">
+                                    <i class="fas fa-file-invoice-dollar"></i> {{ fat.numero_fatura }}
+                                </a>
+                                <br><small class="text-muted">{{ fat.status }} - {{ fat.valor_total|valor_br }}</small>
+                            </div>
+                            {% if fat.arquivo_pdf_path %}
+                            <a href="{{ url_for('carvia.api_download_fatura_cliente_pdf', fatura_id=fat.id) }}"
+                               target="_blank" class="btn btn-outline-danger btn-sm" title="Baixar PDF da Fatura">
+                                <i class="fas fa-file-pdf"></i>
+                            </a>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             <div class="card mb-3">
                 <div class="card-header"><strong>Pricing</strong></div>
                 <div class="card-body">

@@ -545,17 +545,25 @@ def register_nf_routes(bp):
 
         # Indicador: cotacao vinculada? (com ID para link no header)
         from app.carvia.models.cotacao import CarviaPedidoItem, CarviaPedido
+        from app.carvia.models import CarviaCotacao
         cotacao_id_nf = None
+        cotacao_obj = None
+        pedidos_da_nf = []
         if nf.numero_nf:
-            row_cot = db.session.query(CarviaPedido.cotacao_id).join(
-                CarviaPedidoItem, CarviaPedidoItem.pedido_id == CarviaPedido.id
-            ).filter(
-                CarviaPedidoItem.numero_nf == nf.numero_nf,
-                CarviaPedido.status != 'CANCELADO',
-                CarviaPedido.cotacao_id.isnot(None),
-            ).first()
-            if row_cot:
-                cotacao_id_nf = row_cot[0]
+            # Pedidos vinculados a esta NF
+            pedidos_da_nf = (
+                CarviaPedido.query
+                .join(CarviaPedidoItem, CarviaPedidoItem.pedido_id == CarviaPedido.id)
+                .filter(
+                    CarviaPedidoItem.numero_nf == nf.numero_nf,
+                    CarviaPedido.status != 'CANCELADO',
+                )
+                .distinct()
+                .all()
+            )
+            if pedidos_da_nf:
+                cotacao_id_nf = pedidos_da_nf[0].cotacao_id
+                cotacao_obj = db.session.get(CarviaCotacao, cotacao_id_nf) if cotacao_id_nf else None
 
         # Indicador: fatura cliente paga?
         fat_cliente_paga = any(f.status == 'PAGA' for f in faturas_cliente)
@@ -611,6 +619,8 @@ def register_nf_routes(bp):
             ctes_complementares=ctes_complementares,
             cliente_destino=cliente_destino,
             cotacao_id_nf=cotacao_id_nf,
+            cotacao_obj=cotacao_obj,
+            pedidos_da_nf=pedidos_da_nf,
             fat_cliente_paga=fat_cliente_paga,
             tomador_label=tomador_label_val,
             cte_por_frete=cte_por_frete,

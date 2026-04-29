@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 
 def register_operacao_routes(bp):
 
-    @bp.route('/operacoes')
+    @bp.route('/operacoes') # type: ignore
     @login_required
-    def listar_operacoes():
+    def listar_operacoes(): # type: ignore
         """Lista operacoes com filtros e paginacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -278,9 +278,9 @@ def register_operacao_routes(bp):
             incluir_transferencias=incluir_transferencias,
         )
 
-    @bp.route('/operacoes/<int:operacao_id>')
+    @bp.route('/operacoes/<int:operacao_id>') # type: ignore
     @login_required
-    def detalhe_operacao(operacao_id):
+    def detalhe_operacao(operacao_id): # type: ignore
         """Detalhe de uma operacao com NFs e subcontratos"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -349,6 +349,33 @@ def register_operacao_routes(bp):
                 'tomador': resolver_tomador(operacao.cte_tomador),
             }
 
+        # Cotacoes comerciais vinculadas (via NFs do CTe)
+        from app.carvia.models import (
+            CarviaCotacao, CarviaPedido, CarviaPedidoItem,
+        )
+        cotacoes_da_operacao = []
+        pedidos_da_operacao = []
+        if nfs:
+            nf_nums = {str(nf.numero_nf) for nf in nfs if nf.numero_nf}
+            if nf_nums:
+                pedidos_da_operacao = (
+                    CarviaPedido.query
+                    .join(CarviaPedidoItem, CarviaPedidoItem.pedido_id == CarviaPedido.id)
+                    .filter(
+                        CarviaPedidoItem.numero_nf.in_(list(nf_nums)),
+                        CarviaPedido.status != 'CANCELADO',
+                    )
+                    .distinct()
+                    .all()
+                )
+                cot_ids = {p.cotacao_id for p in pedidos_da_operacao if p.cotacao_id}
+                if cot_ids:
+                    cotacoes_da_operacao = (
+                        CarviaCotacao.query
+                        .filter(CarviaCotacao.id.in_(list(cot_ids)))
+                        .all()
+                    )
+
         # A4.2 (2026-04-18): Historico de correcoes de endereco (CC-e / manual).
         # Lista ordenada desc por criado_em (usa indice criado na migration).
         from app.carvia.models import CarviaEnderecoCorrecao
@@ -371,13 +398,15 @@ def register_operacao_routes(bp):
             cliente_comercial=cliente_comercial,
             papeis=papeis,
             correcoes_endereco=correcoes_endereco,
+            cotacoes_da_operacao=cotacoes_da_operacao,
+            pedidos_da_operacao=pedidos_da_operacao,
         )
 
     # ==================== CRIAR OPERACAO MANUAL ====================
 
-    @bp.route('/operacoes/criar', methods=['GET', 'POST'])
+    @bp.route('/operacoes/criar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def criar_operacao_manual():
+    def criar_operacao_manual(): # type: ignore
         """Cria operacao manual — wizard com selecao de NFs ou fluxo freteiro.
 
         Fluxo wizard (MANUAL_SEM_CTE):
@@ -612,17 +641,17 @@ def register_operacao_routes(bp):
             flash(f'Erro ao criar operacao: {e}', 'danger')
             return render_template('carvia/criar_manual.html', form_data=form_data)
 
-    @bp.route('/operacoes/criar-freteiro', methods=['GET', 'POST'])
+    @bp.route('/operacoes/criar-freteiro', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def criar_operacao_freteiro():
+    def criar_operacao_freteiro(): # type: ignore
         """Redireciona para criar_operacao_manual com tipo freteiro pre-selecionado"""
         return redirect(url_for('carvia.criar_operacao_manual', tipo='MANUAL_FRETEIRO'))
 
     # ==================== EDITAR OPERACAO ====================
 
-    @bp.route('/operacoes/<int:operacao_id>/editar', methods=['GET', 'POST'])
+    @bp.route('/operacoes/<int:operacao_id>/editar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def editar_operacao(operacao_id):
+    def editar_operacao(operacao_id): # type: ignore
         """Edita dados de uma operacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -731,12 +760,12 @@ def register_operacao_routes(bp):
 
     # ==================== CANCELAMENTO EM CASCATA (B3 2026-04-18) ====================
 
-    @bp.route(
+    @bp.route( # type: ignore
         '/operacoes/<int:operacao_id>/cascade/dependencias',
         methods=['GET'],
     )
     @login_required
-    def api_cascade_dependencias(operacao_id):
+    def api_cascade_dependencias(operacao_id): # type: ignore
         """B3: retorna JSON com dependencias ativas da operacao
         (sub/CTeComp/CE/CarviaFrete) — usado pelo modal de cancelamento."""
         if not getattr(current_user, 'sistema_carvia', False):
@@ -752,12 +781,12 @@ def register_operacao_routes(bp):
             return jsonify({'erro': 'Operacao nao encontrada'}), 404
         return jsonify(dados), 200
 
-    @bp.route(
+    @bp.route( # type: ignore
         '/operacoes/<int:operacao_id>/cascade/cancelar',
         methods=['POST'],
     )
     @login_required
-    def api_cascade_cancelar(operacao_id):
+    def api_cascade_cancelar(operacao_id): # type: ignore
         """B3: cancela lista de dependencias + operacao em uma transacao.
 
         Body JSON:
@@ -810,9 +839,9 @@ def register_operacao_routes(bp):
 
     # ==================== CANCELAR OPERACAO ====================
 
-    @bp.route('/operacoes/<int:operacao_id>/cancelar', methods=['POST'])
+    @bp.route('/operacoes/<int:operacao_id>/cancelar', methods=['POST']) # type: ignore
     @login_required
-    def cancelar_operacao(operacao_id):
+    def cancelar_operacao(operacao_id): # type: ignore
         """Cancela uma operacao.
 
         W6 (Sprint 1): NAO cascadeia mais o cancelamento de subcontratos.
@@ -863,9 +892,9 @@ def register_operacao_routes(bp):
 
     # ==================== CUBAGEM ====================
 
-    @bp.route('/operacoes/<int:operacao_id>/cubagem', methods=['GET', 'POST'])
+    @bp.route('/operacoes/<int:operacao_id>/cubagem', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def atualizar_cubagem(operacao_id):
+    def atualizar_cubagem(operacao_id): # type: ignore
         """Atualiza cubagem da operacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -912,9 +941,9 @@ def register_operacao_routes(bp):
 
     # ==================== SUBCONTRATOS ====================
 
-    @bp.route('/operacoes/<int:operacao_id>/subcontrato/adicionar', methods=['GET', 'POST'])
+    @bp.route('/operacoes/<int:operacao_id>/subcontrato/adicionar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def adicionar_subcontrato(operacao_id):
+    def adicionar_subcontrato(operacao_id): # type: ignore
         """Adiciona subcontrato (transportadora) a uma operacao"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -1013,9 +1042,9 @@ def register_operacao_routes(bp):
             is_freteiro=is_freteiro,
         )
 
-    @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/confirmar', methods=['POST'])
+    @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/confirmar', methods=['POST']) # type: ignore
     @login_required
-    def confirmar_subcontrato(operacao_id, sub_id):
+    def confirmar_subcontrato(operacao_id, sub_id): # type: ignore
         """Confirma um subcontrato (COTADO -> CONFIRMADO)"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -1051,9 +1080,9 @@ def register_operacao_routes(bp):
 
         return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
-    @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/cancelar', methods=['POST'])
+    @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/cancelar', methods=['POST']) # type: ignore
     @login_required
-    def cancelar_subcontrato(operacao_id, sub_id):
+    def cancelar_subcontrato(operacao_id, sub_id): # type: ignore
         """Cancela um subcontrato"""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
@@ -1123,9 +1152,9 @@ def register_operacao_routes(bp):
 
         return redirect(url_for('carvia.detalhe_operacao', operacao_id=operacao_id))
 
-    @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/valor', methods=['POST'])
+    @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/valor', methods=['POST']) # type: ignore
     @login_required
-    def atualizar_valor_subcontrato(operacao_id, sub_id):
+    def atualizar_valor_subcontrato(operacao_id, sub_id): # type: ignore
         """Atualiza valor_acertado de um subcontrato.
 
         W4 (Sprint 2): quando o sub ja tem fatura transportadora vinculada,
@@ -1184,9 +1213,9 @@ def register_operacao_routes(bp):
 
     # ==================== DESVINCULAR FATURA ====================
 
-    @bp.route('/operacoes/<int:operacao_id>/desvincular-fatura', methods=['POST'])
+    @bp.route('/operacoes/<int:operacao_id>/desvincular-fatura', methods=['POST']) # type: ignore
     @login_required
-    def desvincular_fatura(operacao_id):
+    def desvincular_fatura(operacao_id): # type: ignore
         """GAP-23: Desvincula fatura cliente de uma operacao FATURADO.
 
         Reverte operacao para CONFIRMADO, remove fatura_cliente_id.
@@ -1249,9 +1278,9 @@ def register_operacao_routes(bp):
 
     # ==================== EDITAR VALOR CTe ====================
 
-    @bp.route('/operacoes/<int:operacao_id>/editar-cte-valor', methods=['POST'])
+    @bp.route('/operacoes/<int:operacao_id>/editar-cte-valor', methods=['POST']) # type: ignore
     @login_required
-    def editar_cte_valor(operacao_id):
+    def editar_cte_valor(operacao_id): # type: ignore
         """Edita cte_valor.
 
         W1 (Sprint 1): guard via operacao.pode_editar_valor() — bloqueia
@@ -1309,9 +1338,9 @@ def register_operacao_routes(bp):
 
     # ==================== VINCULAR/DESVINCULAR NFs ====================
 
-    @bp.route('/api/operacao/<int:operacao_id>/vincular-nf', methods=['POST'])
+    @bp.route('/api/operacao/<int:operacao_id>/vincular-nf', methods=['POST']) # type: ignore
     @login_required
-    def api_vincular_nf_operacao(operacao_id):
+    def api_vincular_nf_operacao(operacao_id): # type: ignore
         """Vincula NF a operacao via junction carvia_operacao_nfs."""
         if not getattr(current_user, 'sistema_carvia', False):
             return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
@@ -1370,9 +1399,9 @@ def register_operacao_routes(bp):
             logger.error(f"Erro ao vincular NF #{nf_id} a operacao #{operacao_id}: {e}")
             return {'sucesso': False, 'erro': str(e)}, 500
 
-    @bp.route('/api/operacao/<int:operacao_id>/desvincular-nf/<int:nf_id>', methods=['POST'])
+    @bp.route('/api/operacao/<int:operacao_id>/desvincular-nf/<int:nf_id>', methods=['POST']) # type: ignore
     @login_required
-    def api_desvincular_nf_operacao(operacao_id, nf_id):
+    def api_desvincular_nf_operacao(operacao_id, nf_id): # type: ignore
         """Remove vinculo NF<->Operacao.
 
         W2 (Sprint 2): bloqueia se operacao FATURADA ou se NF esta em
@@ -1424,9 +1453,9 @@ def register_operacao_routes(bp):
             logger.error(f"Erro ao desvincular NF #{nf_id} de operacao #{operacao_id}: {e}")
             return {'sucesso': False, 'erro': str(e)}, 500
 
-    @bp.route('/api/operacao/<int:operacao_id>/nfs-disponiveis')
+    @bp.route('/api/operacao/<int:operacao_id>/nfs-disponiveis') # type: ignore
     @login_required
-    def api_nfs_disponiveis(operacao_id):
+    def api_nfs_disponiveis(operacao_id): # type: ignore
         """Lista NFs disponiveis para vinculacao (sem operacao ou do mesmo cliente)."""
         if not getattr(current_user, 'sistema_carvia', False):
             return {'sucesso': False, 'erro': 'Acesso negado.'}, 403
@@ -1469,9 +1498,9 @@ def register_operacao_routes(bp):
             } for nf in nfs],
         }
 
-    @bp.route('/api/operacao/<int:operacao_id>/subcontrato/<int:sub_id>/simular-recotacao')
+    @bp.route('/api/operacao/<int:operacao_id>/subcontrato/<int:sub_id>/simular-recotacao') # type: ignore
     @login_required
-    def simular_recotacao(operacao_id, sub_id):
+    def simular_recotacao(operacao_id, sub_id): # type: ignore
         """Retorna descritivo enriquecido da recotacao (AJAX GET)"""
         if not getattr(current_user, 'sistema_carvia', False):
             from flask import jsonify
@@ -1496,9 +1525,9 @@ def register_operacao_routes(bp):
             logger.error(f"Erro ao simular recotacao: {e}")
             return jsonify({'erro': str(e)}), 500
 
-    @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/recotar', methods=['POST'])
+    @bp.route('/operacoes/<int:operacao_id>/subcontrato/<int:sub_id>/recotar', methods=['POST']) # type: ignore
     @login_required
-    def recotar_subcontrato_from_operacao(operacao_id, sub_id):
+    def recotar_subcontrato_from_operacao(operacao_id, sub_id): # type: ignore
         """Recalcula cotacao de um subcontrato. Aceita valor_override opcional."""
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
