@@ -1031,18 +1031,52 @@ function abrirModalEmissaoSsw(modo) {
                     Chave: <code>{{ nf.chave_acesso_nf[:20] }}...{{ nf.chave_acesso_nf[-8:] }}</code>
                 </p>
 
+                {# Banner de ultima tentativa (informativo) #}
+                {% if ultima_emissao_ssw and ultima_emissao_ssw.status == 'ERRO' %}
+                <div class="alert alert-danger py-2 mb-3 small">
+                    <div class="fw-bold mb-1">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Ultima tentativa falhou
+                        <span class="text-muted fw-normal">
+                            (#{{ ultima_emissao_ssw.id }},
+                            {{ ultima_emissao_ssw.atualizado_em.strftime('%d/%m %H:%M') if ultima_emissao_ssw.atualizado_em else '' }})
+                        </span>
+                    </div>
+                    <div>
+                        <strong>Filial:</strong> {{ ultima_emissao_ssw.filial_ssw or '?' }}
+                        {% if ultima_emissao_ssw.etapa %}
+                        | <strong>Etapa:</strong> {{ ultima_emissao_ssw.etapa }}
+                        {% endif %}
+                    </div>
+                    {% if ultima_emissao_ssw.erro_ssw %}
+                    <div class="mt-1">
+                        <strong>Erro:</strong> {{ ultima_emissao_ssw.erro_ssw }}
+                    </div>
+                    {% endif %}
+                </div>
+                {% elif ultima_emissao_ssw and ultima_emissao_ssw.status in ('PENDENTE', 'EM_PROCESSAMENTO') %}
+                <div class="alert alert-warning py-2 mb-3 small">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Ja existe emissao em andamento (#{{ ultima_emissao_ssw.id }},
+                    {{ ultima_emissao_ssw.etapa or 'iniciando' }}).
+                    Aguarde ela concluir antes de nova tentativa.
+                </div>
+                {% endif %}
+
                 <div class="mb-3">
-                    <label class="form-label">UF Origem <span class="text-danger">*</span></label>
-                    <select name="uf_origem" class="form-select" id="ufOrigemCte" required>
-                        <option value="">Selecione...</option>
-                        <option value="SP" {% if nf.uf_emitente == 'SP' %}selected{% endif %}>SP — Filial CAR</option>
-                        <option value="RJ" {% if nf.uf_emitente == 'RJ' %}selected{% endif %}>RJ — Filial GIG</option>
+                    <label class="form-label">Filial SSW <span class="text-danger">*</span></label>
+                    <select name="filial_ssw" class="form-select" id="filialSswCte" required>
+                        <option value="CAR" {% if nf.uf_emitente == 'SP' %}selected{% endif %}>CAR — Cariacica/SP</option>
+                        <option value="GIG" {% if nf.uf_emitente == 'RJ' %}selected{% endif %}>GIG — Galeao/RJ</option>
                     </select>
                     <div class="form-text">
-                        Define a filial SSW para emissao.
+                        Filial SSW que vai emitir o CTe. Pre-selecionada pela UF emitente
+                        ({{ nf.uf_emitente or '?' }}); ajuste se a rota destino estiver
+                        cadastrada apenas em outra filial.
                         {% if nf.uf_emitente and nf.uf_emitente not in ('SP', 'RJ') %}
-                        <span class="text-danger fw-bold">
-                            UF emitente {{ nf.uf_emitente }} nao mapeada — contate suporte.
+                        <br><span class="text-warning fw-bold">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            UF emitente {{ nf.uf_emitente }} sem filial padrao — escolha manualmente.
                         </span>
                         {% endif %}
                     </div>
@@ -1225,7 +1259,7 @@ function abrirModalEmissaoSsw(modo) {
         statusEtapa.textContent = '';
 
         const payload = {
-            uf_origem: form.uf_origem.value || null,
+            filial_ssw: form.filial_ssw.value || null,
             placa: form.placa.value || 'ARMAZEM',
             frete_valor: parseFloat(form.frete_valor.value) || 0,
         };

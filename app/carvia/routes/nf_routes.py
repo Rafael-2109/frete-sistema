@@ -579,6 +579,17 @@ def register_nf_routes(bp):
                 if tomador_label_val:
                     break
 
+        # Ultima tentativa de emissao SSW (para banner de erro no modal)
+        # Mostra status, etapa, erro_amigavel e filial usada na ultima rodada,
+        # permitindo o operador entender o que deu errado antes de re-tentar.
+        from app.carvia.models import CarviaEmissaoCte
+        ultima_emissao_ssw = (
+            CarviaEmissaoCte.query
+            .filter_by(nf_id=nf.id)
+            .order_by(CarviaEmissaoCte.id.desc())
+            .first()
+        )
+
         return render_template(
             'carvia/nfs/detalhe.html',
             nf=nf,
@@ -608,6 +619,7 @@ def register_nf_routes(bp):
             eh_transf_efetiva=eh_transf_efetiva,
             eh_candidata_transf=eh_candidata_transf,
             vinculo_transf_obj=vinculo_transf_obj,
+            ultima_emissao_ssw=ultima_emissao_ssw,
         )
 
     # ==================== CRIAR CTE VIA NF ====================

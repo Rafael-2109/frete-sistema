@@ -139,7 +139,8 @@
                 '<div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" ' +
                     'role="progressbar" data-role="bar" style="width:5%"></div>' +
               '</div>' +
-              '<div class="small text-danger mt-1 d-none" data-role="erro"></div>' +
+              '<div class="small text-danger mt-1 d-none" data-role="erro" ' +
+                'style="word-break:break-word;white-space:normal;line-height:1.3;"></div>' +
               '<div class="small text-success mt-1 d-none" data-role="sucesso"></div>' +
             '</div>'
         );
@@ -203,7 +204,13 @@
             card.classList.remove('border-warning');
             card.classList.add('border-danger');
             erroEl.classList.remove('d-none');
-            erroEl.textContent = dados.erro || dados.mensagemErro || 'Erro na operação.';
+            // Prefixo "Falha SSW:" + texto amigavel do parser (ROTA_NAO_CADASTRADA,
+            // TIMEOUT_FORMULARIO, etc) que ja inclui instrucao de fix.
+            var msgErro = dados.erro || dados.mensagemErro || 'Erro na operação.';
+            erroEl.innerHTML = (
+                '<i class="fas fa-exclamation-triangle"></i> ' +
+                '<strong>Falha SSW:</strong> ' + escapeHtml(msgErro)
+            );
             closeBtn.classList.remove('d-none');
         }
     }

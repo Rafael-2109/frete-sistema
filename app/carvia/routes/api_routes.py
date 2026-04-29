@@ -1427,6 +1427,8 @@ def register_api_routes(bp):
             frete_valor: float (R$ frete peso)
             data_vencimento: str (YYYY-MM-DD)
             uf_origem: str (UF 2 letras: SP, RJ. Auto-detecta da NF se omitido)
+            filial_ssw: str (CAR ou GIG). Override manual da filial — tem
+                prioridade sobre uf_origem/uf_emitente.
             medidas: list[{modelo_id: int, qtd: int}]
 
         Returns 202:
@@ -1471,6 +1473,7 @@ def register_api_routes(bp):
                 medidas_motos=medidas,
                 usuario=current_user.email,
                 uf_origem=data.get('uf_origem'),
+                filial_ssw=data.get('filial_ssw'),
             )
             resultado['status_url'] = (
                 f'/carvia/api/emissao-cte/{resultado["emissao_id"]}/status'
@@ -1596,6 +1599,7 @@ def register_api_routes(bp):
                 medidas_motos=data.get('medidas'),
                 usuario=current_user.email,
                 uf_origem=data.get('uf_origem'),
+                filial_ssw=data.get('filial_ssw'),
             )
             return jsonify({'emissoes': resultados}), 202
 

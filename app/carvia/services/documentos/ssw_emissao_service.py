@@ -19,14 +19,55 @@ logger = logging.getLogger(__name__)
 
 
 # Padroes de erro SSW capturados do DOM/dialogs
+# Formato real do aviso de rota:
+#   "Rota com origem na unidade GIG e destino a unidade FEI nao cadastrada. (Opcao 403)"
+# Por isso o regex usa .{0,200} entre "rota" e "nao cadastrada".
 ERROS_SSW = {
-    r'rota\s+n[aã]o\s+cadastrada': 'ROTA_NAO_CADASTRADA',
+    r'rota\b.{0,200}?n[aã]o\s+cadastrada|op[cç][aã]o\s+403': 'ROTA_NAO_CADASTRADA',
     r'bloqueado|inadimplente|falta\s+de\s+pagamento': 'CLIENTE_BLOQUEADO',
     r'GNRE|guia\s+GNRE': 'GNRE_OBRIGATORIA',
     r'rejeit': 'SEFAZ_REJEITADO',
     r'n[aã]o\s+autorizado': 'SEFAZ_NAO_AUTORIZADO',
     r'n[aã]o\s+encontrad': 'NAO_ENCONTRADO',
     r'chave.*inv[aá]lid|inv[aá]lid.*chave': 'CHAVE_INVALIDA',
+    r'frete.*n[aã]o.*calcul|sem\s+cota[cç][aã]o': 'FRETE_NAO_CALCULADO',
+}
+
+
+# Mensagens amigaveis exibidas ao operador (com instrucao de fix)
+ERROS_SSW_MENSAGENS = {
+    'ROTA_NAO_CADASTRADA': (
+        'Rota nao cadastrada no SSW. Cadastre na opcao 403 (Rotas) e tente novamente.'
+    ),
+    'CLIENTE_BLOQUEADO': (
+        'Cliente bloqueado no SSW (inadimplencia/cadastro). Verifique status do cliente.'
+    ),
+    'GNRE_OBRIGATORIA': (
+        'GNRE obrigatoria para esta UF de destino. Gere a guia antes de emitir o CTe.'
+    ),
+    'SEFAZ_REJEITADO': (
+        'CTe rejeitado pelo SEFAZ. Verifique mensagem de rejeicao no SSW (opcao 101).'
+    ),
+    'SEFAZ_NAO_AUTORIZADO': (
+        'CTe nao autorizado pelo SEFAZ. Verifique status no SSW (opcao 101).'
+    ),
+    'NAO_ENCONTRADO': (
+        'Recurso nao encontrado no SSW. Verifique se a NF/chave existe e tente novamente.'
+    ),
+    'CHAVE_INVALIDA': (
+        'Chave de acesso da NF invalida ou nao reconhecida pelo SSW.'
+    ),
+    'FRETE_NAO_CALCULADO': (
+        'SSW nao conseguiu calcular o frete. Verifique tabela/rota e medidas das motos.'
+    ),
+    'TIMEOUT_FORMULARIO': (
+        'Formulario CTe travou no SSW (provavelmente bloqueado por aviso). '
+        'Verifique se ha rota nao cadastrada (opcao 403) ou aviso pendente.'
+    ),
+    'ERRO_GRAVACAO_SSW': (
+        'Erro ao gravar CTe no SSW (campos nao preenchidos pelo sistema). '
+        'Provavel causa: aviso bloqueando o formulario ou campo obrigatorio faltando.'
+    ),
 }
 
 
@@ -35,6 +76,13 @@ UF_FILIAL_MAP = {
     'SP': 'CAR',
     'RJ': 'GIG',
 }
+
+# Mapeamento inverso: filial SSW → UF (para registrar uf_origem ao escolher
+# filial diretamente). Usado quando o operador faz override manual da filial.
+FILIAL_UF_MAP = {v: k for k, v in UF_FILIAL_MAP.items()}
+
+# Filiais validas para override manual (usado em validacoes de input)
+FILIAIS_VALIDAS = sorted(FILIAL_UF_MAP.keys())
 
 
 class SswEmissaoService:
@@ -70,7 +118,7 @@ class SswEmissaoService:
     @staticmethod
     def preparar_emissao(nf_id, placa, cnpj_tomador, frete_valor,
                          data_vencimento, medidas_motos, usuario,
-                         uf_origem=None):
+                         uf_origem=None, filial_ssw=None):
         """Valida inputs, cria CarviaEmissaoCte, enfileira job RQ.
 
         Args:
@@ -82,6 +130,9 @@ class SswEmissaoService:
             medidas_motos: Lista de [{modelo_id, qtd}] ou None
             usuario: Username do usuario autenticado
             uf_origem: UF de origem (SP, RJ). Se None, usa uf_emitente da NF.
+            filial_ssw: Filial SSW (CAR, GIG). Override manual — tem
+                prioridade sobre uf_origem/uf_emitente. UF e derivada
+                automaticamente via FILIAL_UF_MAP para registro.
 
         Returns:
             dict com {emissao_id, job_id, status}
@@ -91,7 +142,17 @@ class SswEmissaoService:
         """
         from app.carvia.models import CarviaNf, CarviaEmissaoCte
 
-        # 1. Validar NF
+        # 1. Validacao pura (sem banco) — falha cedo em inputs invalidos
+        if filial_ssw:
+            filial_norm = filial_ssw.upper().strip()
+            if filial_norm not in FILIAL_UF_MAP:
+                raise ValueError(
+                    f"Filial SSW '{filial_ssw}' invalida. "
+                    f"Filiais disponiveis: {', '.join(FILIAIS_VALIDAS)}."
+                )
+            filial_ssw = filial_norm
+
+        # 2. Validar NF (existencia + status + chave)
         nf = db.session.get(CarviaNf, nf_id)
         if not nf:
             raise ValueError(f"NF {nf_id} nao encontrada")
@@ -103,9 +164,12 @@ class SswEmissaoService:
                 f"(tem {len(nf.chave_acesso_nf or '')} digitos, precisa 44)"
             )
 
-        # 1b. Resolver UF → filial SSW
-        uf = (uf_origem or nf.uf_emitente or '').upper().strip()
-        filial_ssw = SswEmissaoService.resolver_filial(uf)
+        # 3. Resolver filial SSW final + UF para registro
+        if filial_ssw:
+            uf = FILIAL_UF_MAP[filial_ssw]
+        else:
+            uf = (uf_origem or nf.uf_emitente or '').upper().strip()
+            filial_ssw = SswEmissaoService.resolver_filial(uf)
 
         # 2. Verificar mutex (emissao em andamento para esta NF)
         em_andamento = CarviaEmissaoCte.query.filter(
@@ -185,7 +249,7 @@ class SswEmissaoService:
     @staticmethod
     def preparar_emissao_lote(nf_ids, placa, cnpj_tomador, frete_valor,
                               data_vencimento, medidas_motos, usuario,
-                              uf_origem=None):
+                              uf_origem=None, filial_ssw=None):
         """Cria N emissoes individuais na fila RQ (uma por NF).
 
         Returns:
@@ -215,6 +279,7 @@ class SswEmissaoService:
                     medidas_motos=medidas_motos,
                     usuario=usuario,
                     uf_origem=uf_origem,
+                    filial_ssw=filial_ssw,
                 )
                 resultado['nf_id'] = nf_id
                 resultado['numero_nf'] = numero_nf
@@ -323,21 +388,33 @@ class SswEmissaoService:
     def detectar_erro_ssw(resultado):
         """Analisa resultado do script para detectar erros SSW conhecidos.
 
-        Verifica em: dialogs[*]['msg'], body do resultado, body da 101.
+        Varre dialogs, bodies de consulta/SEFAZ, erro explicito,
+        avisos_tratados (NAO_RECONHECIDO/GRAVAR_CLICK_ERRO/etc) e
+        campos_preenchidos.frete_erro (timeout fill). Retorna mensagem
+        amigavel + instrucao de fix quando reconhece o erro.
 
         Args:
             resultado: dict retornado por emitir_cte() ou gerar_fatura()
 
         Returns:
-            String descritiva do erro ou None se nenhum detectado
+            String descritiva amigavel do erro ou None se nada detectado
         """
         textos_para_verificar = []
 
-        # Coletar dialogs
+        # Coletar dialogs (raiz e resultado.dialogs)
         for dialog in resultado.get('dialogs', []):
             textos_para_verificar.append(dialog.get('msg', ''))
-        for dialog in resultado.get('resultado', {}).get('dialogs', []):
+
+        sub_resultado = resultado.get('resultado', {}) or {}
+        for dialog in sub_resultado.get('dialogs', []):
             textos_para_verificar.append(dialog.get('msg', ''))
+
+        # Avisos tratados pelo script (NAO_RECONHECIDO, GRAVAR_CLICK_ERRO, etc)
+        # Ex aviso "Rota com origem GIG ... destino FEI nao cadastrada (Opcao 403)"
+        # vem aqui como item da lista, prefixado por NAO_RECONHECIDO:.
+        for aviso in sub_resultado.get('avisos_tratados', []) or []:
+            if isinstance(aviso, str):
+                textos_para_verificar.append(aviso)
 
         # Body da consulta 101
         consulta = resultado.get('consulta_101', {})
@@ -353,18 +430,69 @@ class SswEmissaoService:
         if resultado.get('erro'):
             textos_para_verificar.append(str(resultado['erro']))
 
-        # Verificar contra padroes conhecidos
-        texto_completo = ' '.join(textos_para_verificar).lower()
+        # campos_preenchidos.frete_erro (Locator.fill timeout em
+        # #id_frt_inf_frete_peso quando aviso bloqueia o popup)
+        campos = (resultado.get('campos_preenchidos')
+                  or sub_resultado.get('campos_preenchidos') or {})
+        frete_erro = campos.get('frete_erro') if isinstance(campos, dict) else None
+        if frete_erro:
+            textos_para_verificar.append(str(frete_erro))
+
+        texto_completo = ' '.join(t for t in textos_para_verificar if t)
+
+        # 1. Tentar match contra padroes conhecidos (ROTA, GNRE, REJEITADO, etc)
         for padrao, codigo in ERROS_SSW.items():
             if re.search(padrao, texto_completo, re.IGNORECASE):
-                # Extrair contexto (ate 200 chars ao redor do match)
-                m = re.search(padrao, texto_completo, re.IGNORECASE)
-                start = max(0, m.start() - 50)
-                end = min(len(texto_completo), m.end() + 150)
-                contexto = texto_completo[start:end].strip()
-                return f"{codigo}: {contexto}"
+                return SswEmissaoService._formatar_msg_erro(
+                    codigo, texto_completo
+                )
+
+        # 2. Heuristicas para erros sem padrao textual (Playwright timeouts)
+        # 2a. Timeout no fill do frete = aviso bloqueando popup
+        if frete_erro and 'timeout' in str(frete_erro).lower():
+            return SswEmissaoService._formatar_msg_erro(
+                'TIMEOUT_FORMULARIO', texto_completo
+            )
+
+        # 2b. Erro de gravacao com TypeError = formulario incompleto
+        # (ex.: Cannot set properties of null em doDis/concluindo)
+        if 'GRAVAR_CLICK_ERRO' in texto_completo and 'TypeError' in texto_completo:
+            return SswEmissaoService._formatar_msg_erro(
+                'ERRO_GRAVACAO_SSW', texto_completo
+            )
 
         return None
+
+    @staticmethod
+    def _formatar_msg_erro(codigo, texto_completo):
+        """Monta mensagem amigavel com instrucao de fix.
+
+        Para ROTA_NAO_CADASTRADA, extrai filiais origem/destino do contexto
+        SSW (ex.: 'unidade GIG e destino a unidade FEI') para mensagem precisa.
+        """
+        msg_base = ERROS_SSW_MENSAGENS.get(
+            codigo, f'Erro SSW: {codigo}'
+        )
+
+        if codigo == 'ROTA_NAO_CADASTRADA':
+            # SSW: "Rota com origem na unidade GIG e destino a unidade FEI nao cadastrada"
+            m_rota = re.search(
+                r'origem\s+na\s+unidade\s+([A-Z]{2,5})\s+e\s+destino\s+'
+                r'(?:a\s+|à\s+)?unidade\s+([A-Z]{2,5})',
+                texto_completo,
+                re.IGNORECASE,
+            )
+            if m_rota:
+                origem = m_rota.group(1).upper()
+                destino = m_rota.group(2).upper()
+                return (
+                    f'Rota {origem} -> {destino} nao cadastrada no SSW. '
+                    f'Cadastre na opcao 403 (Rotas) e tente novamente.'
+                )
+            return msg_base
+
+        # Default: mensagem fixa (sem precisar do contexto)
+        return msg_base
 
     @staticmethod
     def importar_resultado_cte(emissao, resultado_cte):
