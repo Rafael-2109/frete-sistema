@@ -36,6 +36,7 @@ from app.hora.models.tagplus import (
     HoraTagPlusFormaPagamentoMap,
     HoraTagPlusNfeEmissao,
     HoraTagPlusProdutoMap,
+    NFE_STATUS_CANCELADA,
     NFE_STATUS_VALIDOS,
 )
 from app.hora.services.auth_helper import lojas_permitidas_ids
@@ -1294,7 +1295,10 @@ def venda_nfe_sincronizar(venda_id: int):
         else:
             flash(resultado['mensagem'], 'info')
     else:
-        flash(resultado.get('mensagem') or 'Falha ao sincronizar.', 'danger')
+        # 5xx do TagPlus = warning (transitorio), nao erro fatal.
+        status_http = resultado.get('status_http') or 0
+        cat = 'warning' if 500 <= status_http < 600 else 'danger'
+        flash(resultado.get('mensagem') or 'Falha ao sincronizar.', cat)
     return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
 
 
@@ -1371,6 +1375,50 @@ def venda_nfe_xml(venda_id: int):
         }), 502
 
     filename = f'nfe_{emissao.numero_nfe or emissao.tagplus_nfe_id}.xml'
+    return Response(
+        r.content,
+        mimetype='application/xml',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+@hora_bp.route('/vendas/<int:venda_id>/nfe/xml-cancelamento')
+@require_hora_perm('vendas', 'ver')
+def venda_nfe_xml_cancelamento(venda_id: int):
+    """Proxy do XML do EVENTO de cancelamento (protocolo SEFAZ).
+
+    Diferente do XML da NFe original (`venda_nfe_xml`): aqui retornamos o XML
+    do evento de cancelamento, que o contador precisa para escrita fiscal/SPED.
+
+    Endpoint TagPlus (`scripts/doc_tagplus.md:2625-2636`):
+      GET /nfes/gerar_xml_sem_assinatura/{id}?cancelada=true
+    """
+    emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()
+    if not emissao or not emissao.tagplus_nfe_id:
+        abort(404)
+    if emissao.status != NFE_STATUS_CANCELADA:
+        return jsonify({
+            'ok': False,
+            'detalhe': (
+                f'Emissao em status {emissao.status} — XML de cancelamento '
+                f'so existe quando NFe esta CANCELADA.'
+            ),
+        }), 409
+
+    client = ApiClient(emissao.conta)
+    r = client.get(
+        f'/nfes/gerar_xml_sem_assinatura/{emissao.tagplus_nfe_id}',
+        params={'cancelada': 'true'},
+    )
+    if r.status_code != 200:
+        return jsonify({
+            'ok': False, 'http_status': r.status_code,
+            'detalhe': r.text[:500],
+        }), 502
+
+    filename = (
+        f'cancelamento_{emissao.numero_nfe or emissao.tagplus_nfe_id}.xml'
+    )
     return Response(
         r.content,
         mimetype='application/xml',

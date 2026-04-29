@@ -20,6 +20,7 @@ from app.hora.models.tagplus import (
     HoraTagPlusNfeEmissao,
     NFE_STATUS_APROVADA,
     NFE_STATUS_CANCELADA,
+    NFE_STATUS_CANCELAMENTO_SOLICITADO,
     NFE_STATUS_REJEITADA_SEFAZ,
 )
 from app.hora.models.venda import (
@@ -100,6 +101,20 @@ class WebhookHandler:
         client: ApiClient,
         tagplus_nfe_id: int,
     ) -> None:
+        # Defesa contra regressao: nao voltar de CANCELAMENTO_SOLICITADO/CANCELADA
+        # para APROVADA. Esses estados sao downstream de APROVADA — receber
+        # nfe_aprovada (ou GET /nfes que ainda retorna 'A' porque o cancelamento
+        # esta em fila no TagPlus) NAO deve regredir o estado local.
+        # Antes deste guard, polling/sincronizar logo apos cancelar fazia a NFe
+        # voltar para APROVADA e perdia o estado de cancelamento (bug 2026-04-29).
+        if emissao.status in (NFE_STATUS_CANCELAMENTO_SOLICITADO, NFE_STATUS_CANCELADA):
+            logger.warning(
+                'nfe_aprovada ignorado para emissao %s em status %s — '
+                'cancelamento em andamento, NAO regredir.',
+                emissao.id, emissao.status,
+            )
+            return
+
         # Idempotencia: se ja aprovada, nao re-processar (evita evento duplicado).
         if emissao.status == NFE_STATUS_APROVADA:
             logger.info(
@@ -196,6 +211,14 @@ class WebhookHandler:
         client: ApiClient,
         tagplus_nfe_id: int,
     ) -> None:
+        # Defesa contra regressao: nao voltar de CANCELAMENTO_SOLICITADO/CANCELADA.
+        if emissao.status in (NFE_STATUS_CANCELAMENTO_SOLICITADO, NFE_STATUS_CANCELADA):
+            logger.warning(
+                'nfe_denegada ignorado para emissao %s em status %s — '
+                'cancelamento em andamento, NAO regredir.',
+                emissao.id, emissao.status,
+            )
+            return
         if emissao.status == NFE_STATUS_REJEITADA_SEFAZ:
             return  # idempotente
         detalhes = WebhookHandler._buscar_detalhes(client, tagplus_nfe_id)
@@ -233,6 +256,8 @@ class WebhookHandler:
         # operador decide separadamente (re-emitir nova NFe ou cancelar pedido).
         # Transicao do pedido: FATURADO -> CONFIRMADO (NFe foi cancelada SEFAZ;
         # chassi continua reservado pelo pedido).
+        # Limpa marca de cancelamento_solicitado_em apenas no fluxo feliz —
+        # essa coluna fica preenchida mesmo apos CANCELADA para auditoria.
         venda = emissao.venda
         if venda:
             if venda.status == VENDA_STATUS_FATURADO:

@@ -13,6 +13,7 @@ from datetime import timedelta
 from app.hora.models.tagplus import (
     HoraTagPlusConta,
     HoraTagPlusNfeEmissao,
+    NFE_STATUS_APROVADA,
     NFE_STATUS_ENVIADA_SEFAZ,
     NFE_STATUS_CANCELAMENTO_SOLICITADO,
 )
@@ -39,6 +40,89 @@ _STATUS_CANCELADO = {'S', 'cancelada', 'CANCELADA'}
 _STATUS_REJEITADO = {'2', '4', 'rejeitada', 'REJEITADA', 'denegada', 'DENEGADA'}
 
 
+def _tem_xml_cancelamento(detalhes: dict) -> bool:
+    """Detecta cancelamento via campo `xml_cancelamento` do GET /nfes/{id}.
+
+    TagPlus pode retornar status='A' por horas mesmo apos cancelamento solicitado
+    (ex.: Emissor Online TagPlus offline durante a janela). Mas quando a SEFAZ
+    aprova o cancelamento, o XML do protocolo aparece em `xml_cancelamento`.
+    Isso e sinal definitivo de cancelamento, mesmo quando `status` ainda nao
+    transicionou.
+
+    Vazio considerado: None, '', '[]' (TagPlus retorna `[]` antes do protocolo).
+    """
+    xml = detalhes.get('xml_cancelamento') if isinstance(detalhes, dict) else None
+    if not xml:
+        return False
+    if isinstance(xml, str):
+        s = xml.strip()
+        return bool(s) and s != '[]'
+    if isinstance(xml, list):
+        return len(xml) > 0
+    return True
+
+
+def _is_cancelado(status_api: str, detalhes: dict) -> bool:
+    """Cancelamento detectado por status='S' OU xml_cancelamento nao vazio."""
+    if status_api in _STATUS_CANCELADO:
+        return True
+    return _tem_xml_cancelamento(detalhes)
+
+
+def _decidir_acao_reconciliacao(
+    emissao: HoraTagPlusNfeEmissao,
+    detalhes: dict,
+) -> tuple[str | None, str]:
+    """Decide qual evento simular com base no estado local + resposta TagPlus.
+
+    Retorna (event_type, descricao_acao):
+      - ('nfe_cancelada', 'CANCELADA') quando ha sinal de cancelamento.
+      - ('nfe_aprovada',  'APROVADA')  quando aprovada e local nao esta em
+        CANCELAMENTO_SOLICITADO.
+      - ('nfe_denegada',  'REJEITADA') quando denegada/rejeitada.
+      - (None, '<motivo>') quando ainda em processamento ou aguardando.
+
+    Regra crucial (bug 2026-04-29): se o estado local e CANCELAMENTO_SOLICITADO
+    OU APROVADA com cancelamento_solicitado_em preenchido, NAO regredir para
+    APROVADA so porque o TagPlus retornou status='A' — significa que o
+    cancelamento ainda esta na fila do Emissor Online TagPlus. Continuar
+    aguardando ate vir 'S' OU xml_cancelamento ser preenchido.
+    """
+    status_api = (
+        (detalhes.get('status') or detalhes.get('situacao') or '').strip()
+    )
+    aguardando_cancelamento = (
+        emissao.status == NFE_STATUS_CANCELAMENTO_SOLICITADO
+        or (
+            emissao.status == NFE_STATUS_APROVADA
+            and emissao.cancelamento_solicitado_em is not None
+            and emissao.cancelado_em is None
+        )
+    )
+
+    # Sinal forte de cancelamento (status='S' OU xml_cancelamento preenchido).
+    if _is_cancelado(status_api, detalhes):
+        return EVENT_NFE_CANCELADA, 'CANCELADA'
+
+    # Aguardando cancelamento mas TagPlus ainda nao processou:
+    # NAO simular nfe_aprovada (regrediria) — apenas reportar pendencia.
+    if aguardando_cancelamento:
+        return None, (
+            f'Cancelamento aguardando processamento na TagPlus '
+            f'(status atual="{status_api or "?"}"). Tente sincronizar de novo '
+            f'em alguns minutos.'
+        )
+
+    if status_api in _STATUS_APROVADO:
+        return EVENT_NFE_APROVADA, 'APROVADA'
+    if status_api in _STATUS_REJEITADO:
+        return EVENT_NFE_DENEGADA, 'REJEITADA'
+
+    return None, (
+        f'TagPlus reporta status "{status_api or "?"}" (em processamento).'
+    )
+
+
 def reconciliar_enviadas(limit: int = 100) -> dict:
     """Roda 1 ciclo de reconciliacao. Retorna stats."""
     limite_envio = agora_utc_naive() - timedelta(minutes=10)
@@ -61,7 +145,21 @@ def reconciliar_enviadas(limit: int = 100) -> dict:
         .all()
     )
 
-    pendentes = pendentes_envio + pendentes_cancelamento
+    # Emissoes que regrediram para APROVADA com cancelamento_solicitado_em
+    # preenchido — bug 2026-04-29 onde `_handle_aprovada` regredia o estado.
+    # Apos o fix, _handle_aprovada nao regride mais, mas linhas existentes
+    # precisam ser reconciliadas.
+    pendentes_bagunca = (
+        HoraTagPlusNfeEmissao.query
+        .filter(HoraTagPlusNfeEmissao.status == NFE_STATUS_APROVADA)
+        .filter(HoraTagPlusNfeEmissao.cancelamento_solicitado_em.isnot(None))
+        .filter(HoraTagPlusNfeEmissao.cancelado_em.is_(None))
+        .filter(HoraTagPlusNfeEmissao.tagplus_nfe_id.isnot(None))
+        .limit(limit)
+        .all()
+    )
+
+    pendentes = pendentes_envio + pendentes_cancelamento + pendentes_bagunca
     if not pendentes:
         logger.info('Reconciliacao: nenhuma emissao pendente.')
         return {'reconciliadas': 0, 'aprovadas': 0, 'rejeitadas': 0, 'canceladas': 0}
@@ -84,22 +182,20 @@ def reconciliar_enviadas(limit: int = 100) -> dict:
                 if r.status_code != 200:
                     continue
                 detalhes = r.json() or {}
-                status_api = (detalhes.get('status') or detalhes.get('situacao') or '')
                 stats['reconciliadas'] += 1
 
-                evento_simulado = [{'id': str(emissao.tagplus_nfe_id)}]
+                event_type, acao = _decidir_acao_reconciliacao(emissao, detalhes)
+                if not event_type:
+                    continue  # em-processamento, aguarda proximo ciclo
 
-                if status_api in _STATUS_APROVADO:
-                    WebhookHandler.processar(conta_id, EVENT_NFE_APROVADA, evento_simulado)
+                evento_simulado = [{'id': str(emissao.tagplus_nfe_id)}]
+                WebhookHandler.processar(conta_id, event_type, evento_simulado)
+                if acao == 'APROVADA':
                     stats['aprovadas'] += 1
-                elif status_api in _STATUS_CANCELADO:
-                    WebhookHandler.processar(conta_id, EVENT_NFE_CANCELADA, evento_simulado)
+                elif acao == 'CANCELADA':
                     stats['canceladas'] += 1
-                elif status_api in _STATUS_REJEITADO:
-                    # TagPlus emite `nfe_denegada`; engloba SEFAZ codes 2 (denegada) e 4 (rejeitada).
-                    WebhookHandler.processar(conta_id, EVENT_NFE_DENEGADA, evento_simulado)
+                elif acao == 'REJEITADA':
                     stats['rejeitadas'] += 1
-                # Status em-andamento: aguarda proximo ciclo.
 
             except Exception as exc:
                 logger.exception(
@@ -150,8 +246,20 @@ def reconciliar_uma_emissao(emissao_id: int) -> dict:
             'mensagem': f'Falha ao consultar TagPlus: {exc}',
         }
     if r.status_code != 200:
+        # 5xx do TagPlus e comum quando o Emissor Online esta reiniciando
+        # (visto em 2026-04-29). Mensagem amigavel + nao tratar como erro fatal.
+        if 500 <= r.status_code < 600:
+            return {
+                'ok': False,
+                'status_http': r.status_code,
+                'mensagem': (
+                    f'TagPlus instavel agora (HTTP {r.status_code}). Pode ser '
+                    f'reinicio do Emissor Online — tente novamente em 1-2 min.'
+                ),
+            }
         return {
             'ok': False,
+            'status_http': r.status_code,
             'mensagem': (
                 f'TagPlus retornou HTTP {r.status_code} para '
                 f'/nfes/{emissao.tagplus_nfe_id}: {r.text[:200]}'
@@ -163,31 +271,24 @@ def reconciliar_uma_emissao(emissao_id: int) -> dict:
         return {'ok': False, 'mensagem': 'TagPlus retornou body nao-JSON.'}
 
     status_api = (detalhes.get('status') or detalhes.get('situacao') or '').strip()
+    event_type, acao = _decidir_acao_reconciliacao(emissao, detalhes)
+
+    if event_type is None:
+        # Em-processamento ou aguardando cancelamento. acao traz a mensagem.
+        return {
+            'ok': True, 'status_api': status_api, 'acao_aplicada': None,
+            'mensagem': acao,
+        }
+
     evento_simulado = [{'id': str(emissao.tagplus_nfe_id)}]
+    WebhookHandler.processar(conta.id, event_type, evento_simulado)
 
-    if status_api in _STATUS_APROVADO:
-        WebhookHandler.processar(conta.id, EVENT_NFE_APROVADA, evento_simulado)
-        return {
-            'ok': True, 'status_api': status_api, 'acao_aplicada': 'APROVADA',
-            'mensagem': 'NFe aprovada — status sincronizado.',
-        }
-    if status_api in _STATUS_CANCELADO:
-        WebhookHandler.processar(conta.id, EVENT_NFE_CANCELADA, evento_simulado)
-        return {
-            'ok': True, 'status_api': status_api, 'acao_aplicada': 'CANCELADA',
-            'mensagem': 'NFe cancelada na SEFAZ — status sincronizado.',
-        }
-    if status_api in _STATUS_REJEITADO:
-        WebhookHandler.processar(conta.id, EVENT_NFE_DENEGADA, evento_simulado)
-        return {
-            'ok': True, 'status_api': status_api, 'acao_aplicada': 'REJEITADA',
-            'mensagem': 'NFe rejeitada/denegada SEFAZ — status sincronizado.',
-        }
-
+    mensagens = {
+        'APROVADA': 'NFe aprovada — status sincronizado.',
+        'CANCELADA': 'NFe cancelada na SEFAZ — status sincronizado.',
+        'REJEITADA': 'NFe rejeitada/denegada SEFAZ — status sincronizado.',
+    }
     return {
-        'ok': True, 'status_api': status_api, 'acao_aplicada': None,
-        'mensagem': (
-            f'TagPlus reporta status {status_api!r} (em processamento) — '
-            f'aguarde alguns segundos e sincronize novamente.'
-        ),
+        'ok': True, 'status_api': status_api, 'acao_aplicada': acao,
+        'mensagem': mensagens.get(acao, f'Acao aplicada: {acao}'),
     }

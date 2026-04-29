@@ -81,6 +81,7 @@ def polling_emissao(emissao_id: int) -> None:
     try:
         from app.hora.models.tagplus import (
             HoraTagPlusNfeEmissao,
+            NFE_STATUS_APROVADA,
             NFE_STATUS_ENVIADA_SEFAZ,
             NFE_STATUS_CANCELAMENTO_SOLICITADO,
         )
@@ -92,18 +93,31 @@ def polling_emissao(emissao_id: int) -> None:
         if not emissao:
             return
 
-        # Status final ou intermediario que nao polla
+        # Estados que pollam:
+        #  - ENVIADA_SEFAZ: aguardando aprovacao webhook nfe_aprovada
+        #  - CANCELAMENTO_SOLICITADO: aguardando confirmacao webhook nfe_cancelada
+        #  - APROVADA com cancelamento_solicitado_em e sem cancelado_em: estado
+        #    bagunçado pelo bug 2026-04-29 (regressao). Apos fix, polling pode
+        #    retomar e finalizar quando TagPlus confirmar 'S'.
+        aguardando_cancelamento_bagunca = (
+            emissao.status == NFE_STATUS_APROVADA
+            and emissao.cancelamento_solicitado_em is not None
+            and emissao.cancelado_em is None
+        )
         if emissao.status not in (
             NFE_STATUS_ENVIADA_SEFAZ, NFE_STATUS_CANCELAMENTO_SOLICITADO,
-        ):
+        ) and not aguardando_cancelamento_bagunca:
             return
         if not emissao.tagplus_nfe_id:
             return
 
-        # Marco temporal: para envio normal usa enviado_em; para
-        # CANCELAMENTO_SOLICITADO usa cancelamento_solicitado_em.
+        # Marco temporal: para envio normal usa enviado_em; para qualquer
+        # variante de cancelamento usa cancelamento_solicitado_em.
         marco = emissao.enviado_em
-        if emissao.status == NFE_STATUS_CANCELAMENTO_SOLICITADO:
+        if (
+            emissao.status == NFE_STATUS_CANCELAMENTO_SOLICITADO
+            or aguardando_cancelamento_bagunca
+        ):
             marco = emissao.cancelamento_solicitado_em or marco
         if not marco:
             marco = emissao.criado_em
