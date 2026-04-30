@@ -2,13 +2,14 @@
 
 Inclui: upload DANFE legado, criacao manual via TagPlus, listagem, detalhe,
 edicao de header e itens, transicoes (confirmar, cancelar), definicao de loja,
-resolucao de divergencias.
+resolucao de divergencias, exportacao em Excel.
 """
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+from io import BytesIO
 
-from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask import Response, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app.hora.decorators import require_hora_perm
@@ -26,6 +27,7 @@ from app.hora.services.auth_helper import (
     usuario_tem_acesso_a_loja,
 )
 from app.hora.services.parsers.danfe_adapter import DanfeParseError
+from app.utils.timezone import agora_utc_naive
 
 
 def _lojas_ativas_permitidas():
@@ -554,3 +556,245 @@ def vendas_resolver_divergencia(venda_id: int, div_id: int):
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+# ------------------------------------------------------------------------
+# Exportar pedidos de venda + motos + NF (Excel, 2 abas)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/vendas/exportar.xlsx')
+@require_hora_perm('vendas', 'ver')
+def vendas_exportar_xlsx():
+    """Exporta pedidos de venda em Excel com 2 abas:
+
+    - **Pedidos**: 1 linha por HoraVenda com header completo (cliente,
+      endereço, NF, forma de pagamento, modalidade frete, parcelas, valor).
+    - **Motos**: 1 linha por HoraVendaItem (chassi) com modelo, cor,
+      motor, ano, preços e referencia da venda/NF.
+
+    Respeita filtros da query string (mesmo padrao da listagem):
+      ?status=COTACAO|CONFIRMADO|FATURADO|CANCELADO  (opcional)
+      ?since=YYYY-MM-DD                              (data_venda inclusivo)
+      ?until=YYYY-MM-DD                              (data_venda inclusivo)
+      ?origem=TAGPLUS_API|DANFE|MANUAL|TAGPLUS       (opcional)
+
+    Escopo: usuario nao-admin so exporta vendas das lojas permitidas.
+    """
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+    except ImportError:
+        flash('openpyxl nao disponivel no servidor.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+
+    from datetime import date as _date
+
+    # ---- Filtros ----
+    status_filtro = (request.args.get('status') or '').strip().upper() or None
+    if status_filtro and status_filtro not in (
+        'COTACAO', 'CONFIRMADO', 'FATURADO', 'CANCELADO',
+    ):
+        status_filtro = None
+
+    origem_filtro = (request.args.get('origem') or '').strip().upper() or None
+
+    def _parse_data(name: str):
+        v = (request.args.get(name) or '').strip()
+        if not v:
+            return None
+        try:
+            return _date.fromisoformat(v)
+        except ValueError:
+            return None
+
+    since = _parse_data('since')
+    until = _parse_data('until')
+
+    # ---- Query base com escopo ----
+    permitidas = lojas_permitidas_ids()
+    query = HoraVenda.query.order_by(
+        HoraVenda.data_venda.desc(), HoraVenda.id.desc(),
+    )
+    if permitidas is not None:
+        if not permitidas:
+            flash('Sem lojas permitidas — nada a exportar.', 'warning')
+            return redirect(url_for('hora.vendas_lista'))
+        query = query.filter(HoraVenda.loja_id.in_(permitidas))
+    if status_filtro:
+        query = query.filter(HoraVenda.status == status_filtro)
+    if origem_filtro:
+        query = query.filter(HoraVenda.origem_criacao == origem_filtro)
+    if since:
+        query = query.filter(HoraVenda.data_venda >= since)
+    if until:
+        query = query.filter(HoraVenda.data_venda <= until)
+
+    vendas = query.all()
+    if not vendas:
+        flash('Nenhum pedido encontrado para os filtros aplicados.', 'warning')
+        return redirect(url_for('hora.vendas_lista'))
+
+    # ---- Helpers ----
+    def _dec(v):
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    def _dt(v):
+        if not v:
+            return None
+        try:
+            return v.strftime('%d/%m/%Y %H:%M')
+        except AttributeError:
+            return str(v)
+
+    def _data(v):
+        if not v:
+            return None
+        try:
+            return v.strftime('%d/%m/%Y')
+        except AttributeError:
+            return str(v)
+
+    # ---- Aba 1: Pedidos ----
+    cab_pedidos = [
+        'venda_id', 'status', 'origem',
+        'nf_numero', 'nf_chave_44', 'nf_emitida_em',
+        'loja', 'cnpj_emitente',
+        'data_venda',
+        'cliente_nome', 'cliente_cpf', 'cliente_telefone', 'cliente_email',
+        'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf',
+        'forma_pagamento', 'numero_parcelas', 'intervalo_parcelas_dias',
+        'modalidade_frete',
+        'valor_total', 'qtd_itens',
+        'vendedor', 'observacoes',
+        'qtd_divergencias_abertas',
+        'criado_em', 'cancelado_em', 'cancelado_por',
+    ]
+
+    linhas_pedidos = []
+    for v in vendas:
+        loja_lbl = v.loja.rotulo_display if v.loja else None
+        linhas_pedidos.append({
+            'venda_id': v.id,
+            'status': v.status,
+            'origem': v.origem_criacao,
+            'nf_numero': v.nf_saida_numero,
+            'nf_chave_44': v.nf_saida_chave_44,
+            'nf_emitida_em': _dt(v.nf_saida_emitida_em),
+            'loja': loja_lbl,
+            'cnpj_emitente': v.cnpj_emitente,
+            'data_venda': _data(v.data_venda),
+            'cliente_nome': v.nome_cliente,
+            'cliente_cpf': v.cpf_cliente,
+            'cliente_telefone': v.telefone_cliente,
+            'cliente_email': v.email_cliente,
+            'cep': v.cep,
+            'logradouro': v.endereco_logradouro,
+            'numero': v.endereco_numero,
+            'complemento': v.endereco_complemento,
+            'bairro': v.endereco_bairro,
+            'cidade': v.endereco_cidade,
+            'uf': v.endereco_uf,
+            'forma_pagamento': v.forma_pagamento,
+            'numero_parcelas': v.numero_parcelas,
+            'intervalo_parcelas_dias': v.intervalo_parcelas_dias,
+            'modalidade_frete': v.modalidade_frete,
+            'valor_total': _dec(v.valor_total),
+            'qtd_itens': len(v.itens),
+            'vendedor': v.vendedor,
+            'observacoes': v.observacoes,
+            'qtd_divergencias_abertas': len(v.divergencias_abertas),
+            'criado_em': _dt(v.criado_em),
+            'cancelado_em': _dt(v.cancelado_em),
+            'cancelado_por': v.cancelado_por,
+        })
+
+    # ---- Aba 2: Motos (1 linha por chassi) ----
+    cab_motos = [
+        'venda_id', 'nf_numero', 'data_venda', 'status',
+        'loja', 'cliente_nome', 'cliente_cpf',
+        'numero_chassi', 'modelo', 'cor', 'numero_motor', 'ano_modelo',
+        'preco_tabela_referencia', 'desconto_aplicado', 'preco_final',
+    ]
+
+    linhas_motos = []
+    for v in vendas:
+        loja_lbl = v.loja.rotulo_display if v.loja else None
+        for it in v.itens:
+            moto = it.moto
+            modelo_nome = (
+                moto.modelo.nome_modelo
+                if (moto and moto.modelo) else None
+            )
+            linhas_motos.append({
+                'venda_id': v.id,
+                'nf_numero': v.nf_saida_numero,
+                'data_venda': _data(v.data_venda),
+                'status': v.status,
+                'loja': loja_lbl,
+                'cliente_nome': v.nome_cliente,
+                'cliente_cpf': v.cpf_cliente,
+                'numero_chassi': it.numero_chassi,
+                'modelo': modelo_nome,
+                'cor': moto.cor if moto else None,
+                'numero_motor': moto.numero_motor if moto else None,
+                'ano_modelo': moto.ano_modelo if moto else None,
+                'preco_tabela_referencia': _dec(it.preco_tabela_referencia),
+                'desconto_aplicado': _dec(it.desconto_aplicado),
+                'preco_final': _dec(it.preco_final),
+            })
+
+    # ---- Monta workbook ----
+    wb = openpyxl.Workbook()
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='4F81BD', end_color='4F81BD', fill_type='solid')
+
+    def _escrever_aba(ws, titulo: str, cabecalho: list, linhas: list):
+        ws.title = titulo[:31]
+        for col_idx, campo in enumerate(cabecalho, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=campo)
+            cell.font = header_font
+            cell.fill = header_fill
+        for row_idx, item in enumerate(linhas, start=2):
+            for col_idx, campo in enumerate(cabecalho, start=1):
+                ws.cell(row=row_idx, column=col_idx, value=item.get(campo))
+        # Auto-width best-effort.
+        for col_idx, campo in enumerate(cabecalho, start=1):
+            max_len = max(
+                [len(str(item.get(campo) or '')) for item in linhas] + [len(campo)]
+            )
+            ws.column_dimensions[
+                ws.cell(row=1, column=col_idx).column_letter
+            ].width = min(max_len + 2, 60)
+
+    ws_pedidos = wb.active
+    _escrever_aba(ws_pedidos, 'Pedidos', cab_pedidos, linhas_pedidos)
+    ws_motos = wb.create_sheet('Motos')
+    _escrever_aba(ws_motos, 'Motos', cab_motos, linhas_motos)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    ts = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
+    sufixo = []
+    if status_filtro:
+        sufixo.append(status_filtro.lower())
+    if origem_filtro:
+        sufixo.append(origem_filtro.lower())
+    if since:
+        sufixo.append(f'desde-{since.isoformat()}')
+    if until:
+        sufixo.append(f'ate-{until.isoformat()}')
+    sufixo_str = ('_' + '_'.join(sufixo)) if sufixo else ''
+    filename = f'pedidos_venda{sufixo_str}_{ts}.xlsx'
+
+    return Response(
+        buf.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
