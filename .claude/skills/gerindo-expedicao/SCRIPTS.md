@@ -74,6 +74,16 @@ python .claude/skills/gerindo-expedicao/scripts/consultando_situacao_pedidos.py 
 - `--cliente "45.543.915"` → Busca por CNPJ
 - `--co-passageiros-embarque 1234` → Quem embarcou junto no embarque 1234
 
+**Modo `--status` (consulta de UM pedido) retorna:**
+- `pedido.peso_total_kg` — peso bruto total (kg)
+- `pedido.volume_total_m3` — volume cubico total (m3, calculado de altura*largura*comprimento)
+- `pedido.pallets_total` — qtd total de pallets (qtd / palletizacao)
+- `pedido.cliente`, `cnpj`, `cidade`, `uf`, `cep`, `data_entrega_pedido`
+- `detalhes.status_descricao`, `valor_total_pedido`, `percentual_separado`
+- `detalhes.em_separacao`, `pendente_separar`, `faturado` (com itens e valores)
+- `pedido.lotes_separacao` — detalhamento dos lotes existentes
+- `pedido.incoterm`, `eh_fob`, `eh_bonificacao` — flags de regra de negocio
+
 ---
 
 ## 3. consultando_produtos_estoque.py

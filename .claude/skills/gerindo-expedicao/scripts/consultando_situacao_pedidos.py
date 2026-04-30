@@ -900,9 +900,10 @@ def consultar_status_pedido(args):
                 'valor_pendente': valor_item_pendente
             })
 
-    # 5. Calcular peso/pallet do pedido
+    # 5. Calcular peso/pallet/volume do pedido
     peso_total = 0.0
     pallet_total = 0.0
+    volume_total_m3 = 0.0
     palletizacao_cache = {}
 
     # Buscar palletizacao uma vez
@@ -914,15 +915,17 @@ def consultar_status_pedido(args):
             if pallet_info:
                 palletizacao_cache[cp.cod_produto] = {
                     'peso_bruto': float(pallet_info.peso_bruto or 0),
-                    'palletizacao': float(pallet_info.palletizacao or 100)
+                    'palletizacao': float(pallet_info.palletizacao or 100),
+                    'volume_m3': float(pallet_info.volume_m3 or 0)
                 }
             else:
-                palletizacao_cache[cp.cod_produto] = {'peso_bruto': 1.0, 'palletizacao': 100}
+                palletizacao_cache[cp.cod_produto] = {'peso_bruto': 1.0, 'palletizacao': 100, 'volume_m3': 0.0}
 
         qtd = float(cp.qtd_saldo_produto_pedido or 0)
         info = palletizacao_cache[cp.cod_produto]
         peso_total += qtd * info['peso_bruto']
         pallet_total += qtd / info['palletizacao'] if info['palletizacao'] > 0 else 0
+        volume_total_m3 += qtd * info['volume_m3']
 
     # 6. Determinar status
     # Usar valor_total_pedido como base (carteira eh a referencia)
@@ -1020,6 +1023,7 @@ def consultar_status_pedido(args):
         'observ_ped_1': observacao,
         'peso_total_kg': round(peso_total, 2),
         'pallets_total': round(pallet_total, 2),
+        'volume_total_m3': round(volume_total_m3, 4),
         # Campos CRITICOS para regras de negocio
         'incoterm': incoterm,
         'forma_pgto': forma_pgto,

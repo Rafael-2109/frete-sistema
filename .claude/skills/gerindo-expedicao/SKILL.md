@@ -70,6 +70,21 @@ Para QUALQUER acao que modifica dados (criar separacao):
 3. AGUARDAR confirmacao explicita
 4. So entao executar COM --executar
 
+### 6. ITEM LIMITANTE — CONFIRMACAO DUPLA OBRIGATORIA
+Se a simulacao de `criando_separacao_pedidos.py` retornar `alertas_estoque` NAO-VAZIO:
+- **PROIBIDO** executar `--executar` direto, mesmo com confirmacao previa generica do usuario
+  (ex: "criar separacao na data Y" NAO autoriza executar com item em falta).
+- **OBRIGATORIO** apresentar ao usuario **as opcoes** explicitamente:
+  - **A)** Separacao COMPLETA com item em falta (usuario aceita risco de inconsistencia
+    operacional na expedicao — separacao tera item incompleto vs estoque)
+  - **B)** Separacao PARCIAL `--apenas-estoque` ou excluindo o item limitante
+    (`--excluir-produtos '["COD"]'`), expedindo apenas o disponivel
+  - **C)** Aguardar disponibilidade (sem criar separacao agora) — sugerir nova data baseada
+    em `consultando_programacao_producao.py --produto <produto_em_falta>`
+- AGUARDAR escolha explicita (A, B ou C) ANTES de executar `--executar`.
+- Motivo: criar separacao completa com item em falta gera inconsistencia na expedicao
+  (item nao saira no embarque mas estara reservado, gerando ajuste manual posterior).
+
 ---
 
 ## DECISION TREE - Qual Script Usar?
@@ -161,6 +176,32 @@ Resumo dos 8 scripts:
 | Protocolo | CONDICIONAL | Se exige agendamento |
 
 Sequencia: SIMULAR → Verificar alertas → Mostrar → Confirmar → EXECUTAR
+
+---
+
+## Resumo Padrao de Pedido (CONSULTAS)
+
+Quando responder consulta de UM pedido especifico (ex: "pedido VCD123 esta completo?"),
+INCLUIR PROATIVAMENTE no resumo inicial — sem o usuario pedir:
+
+| Metrica | Origem (script `consultando_situacao_pedidos.py --status`) |
+|---------|-----------------------------------------------------------|
+| Cliente, cidade/UF, CEP | `pedido.cliente`, `pedido.cidade`, `pedido.uf`, `pedido.cep` |
+| Data entrega solicitada | `pedido.data_entrega_pedido` |
+| Status atual | `detalhes.status_descricao` (ex: "100% em separacao") |
+| Valor total | `detalhes.valor_total_pedido` |
+| Itens (count) | derivado do detalhe do retorno |
+| **Peso total (kg)** | `pedido.peso_total_kg` |
+| **Volume total (m3)** | `pedido.volume_total_m3` |
+| **Pallets** | `pedido.pallets_total` |
+| Incoterm / FOB | `pedido.incoterm`, `pedido.eh_fob` |
+| Bonificacao? | `pedido.eh_bonificacao` |
+
+Motivo: peso/volume/pallets sao informacoes operacionais basicas frequentemente solicitadas
+para planejar embarque, frete e logistica. Omiti-las gera turnos desnecessarios.
+Se o script nao retornar volume_total_m3 (cadastro sem dimensoes — altura/largura/comprimento
+zerados em CadastroPalletizacao), o valor sera 0; informar "volume nao cadastrado para
+[N produtos]" em vez de simular.
 
 ---
 
