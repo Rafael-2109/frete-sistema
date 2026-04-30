@@ -184,21 +184,25 @@
      ("Empréstimos com lojas externas", "Backfill via DANFE PDF (lote)")
      e wrap em vez de scroll horizontal. */
   #navbarHora + .dropdown-menu {
-    min-width: 18rem;
-    max-width: 22rem;
+    min-width: 20rem !important;
+    width: 20rem !important;     /* fixa largura — wrap garantido em qualquer item */
+    max-width: 90vw !important;  /* mas nunca passa do viewport (mobile) */
     /* Override do Popper.js do Bootstrap (que aplica max-height baseado no
        viewport e gera scrollbar vertical lateral quando o dropdown nao cabe).
-       Submenus em accordion ja garantem 1-aberto-por-vez, entao a altura
-       maxima na pratica e baixa. */
+       Submenus em accordion ja garantem 1-aberto-por-vez. */
     max-height: none !important;
     overflow-y: visible !important;
-    overflow-x: hidden;
+    overflow-x: hidden !important;  /* belt-and-suspenders */
   }
 
-  #navbarHora + .dropdown-menu .dropdown-item {
-    white-space: normal;       /* permite quebra de linha em textos longos */
+  /* Bootstrap aplica white-space: nowrap em .dropdown-item — sobrescreve
+     com !important para vencer a especificidade do tema/cdn. */
+  #navbarHora + .dropdown-menu .dropdown-item,
+  #navbarHora + .dropdown-menu .dropdown-toggle {
+    white-space: normal !important;
     word-break: break-word;
     line-height: 1.3;
+    overflow-wrap: anywhere;
   }
 
   .dropdown-submenu {
