@@ -180,6 +180,27 @@
      JS handler em base.html (event delegation no .dropdown-submenu > a).
      ═══════════════════════════════════════════════════════════════════════════ */
 
+  /* Dropdown raiz "Lojas HORA": largura suficiente p/ rotulos longos
+     ("Empréstimos com lojas externas", "Backfill via DANFE PDF (lote)")
+     e wrap em vez de scroll horizontal. */
+  #navbarHora + .dropdown-menu {
+    min-width: 18rem;
+    max-width: 22rem;
+    /* Override do Popper.js do Bootstrap (que aplica max-height baseado no
+       viewport e gera scrollbar vertical lateral quando o dropdown nao cabe).
+       Submenus em accordion ja garantem 1-aberto-por-vez, entao a altura
+       maxima na pratica e baixa. */
+    max-height: none !important;
+    overflow-y: visible !important;
+    overflow-x: hidden;
+  }
+
+  #navbarHora + .dropdown-menu .dropdown-item {
+    white-space: normal;       /* permite quebra de linha em textos longos */
+    word-break: break-word;
+    line-height: 1.3;
+  }
+
   .dropdown-submenu {
     position: relative;
   }
