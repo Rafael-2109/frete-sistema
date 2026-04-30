@@ -22,9 +22,25 @@ class ApiClient:
     DEFAULT_TIMEOUT = 60
 
     def __init__(self, conta: HoraTagPlusConta):
-        self.conta = conta
+        # `self.conta` é uma property — armazenamos via OAuthClient porque
+        # ele já mantém o reattach via `_ensure_conta_attached`. Garantir
+        # que `api.conta` SEMPRE retorne objeto attached evita
+        # DetachedInstanceError no backfill (jobs longos com session.close()
+        # periódico + dispose em retry DB invalidam o objeto inicial).
         self.oauth = OAuthClient(conta)
+        self._conta_id = conta.id
         self.base = os.environ.get('HORA_TAGPLUS_BASE_URL', 'https://api.tagplus.com.br')
+
+    @property
+    def conta(self) -> HoraTagPlusConta:
+        """Retorna a HoraTagPlusConta sempre atachada à sessão corrente.
+
+        Delega para `OAuthClient._ensure_conta_attached`. Idempotente —
+        re-busca apenas se o objeto está DETACHED. Acessar `api.conta.id` ou
+        qualquer atributo é seguro mesmo após `db.session.close()` ou
+        `db.engine.dispose()` no recovery do backfill.
+        """
+        return self.oauth._ensure_conta_attached()  # noqa: SLF001
 
     def _headers(self, extra: dict | None = None, *, content_type: bool = True) -> dict:
         token_plain = self.oauth.get_access_token_plain()

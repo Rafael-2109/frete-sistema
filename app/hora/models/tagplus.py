@@ -339,3 +339,45 @@ class HoraTagPlusBackfillJob(db.Model):
             f'<HoraTagPlusBackfillJob id={self.id} status={self.status} '
             f'{self.processadas}/{self.total_listadas}>'
         )
+
+
+class HoraDanfeParserAppend(db.Model):
+    """Append-prompt versionado para o parser de DANFE/extrator de chassi/motor.
+
+    Mecanismo de aprendizado por feedback: quando o parser erra a extracao
+    de uma NF, o operador insere o valor correto e o sistema (Sonnet)
+    recomenda uma instrucao curta a ser anexada ao prompt do LLM. Apos
+    teste e aprovacao, a nova versao vira a `ativa`.
+
+    Apenas UMA versao fica ativa por vez (`ativo=True`). Versoes antigas
+    permanecem como historico — permitem rollback.
+
+    Aplicado em:
+      - `app/hora/services/tagplus/backfill_service._extrair_chassi_motor`
+        (fallback LLM quando regex falha).
+      - `app/hora/services/parsers/hora_danfe_parser.HoraDanfePDFParser`
+        (subclasse do parser CarVia que prefixa o `texto_secao` com o
+        append antes de delegar).
+    """
+    __tablename__ = 'hora_danfe_parser_append'
+
+    id = db.Column(db.Integer, primary_key=True)
+    versao = db.Column(db.Integer, nullable=False, unique=True)
+    # Texto completo do append (acumulado — operador edita texto inteiro
+    # ao gravar nova versao). Pode ter ate ~10k chars (Text).
+    texto_append = db.Column(db.Text, nullable=False)
+    # Trecho ACRESCENTADO em relacao a versao anterior (para auditoria).
+    acrescimo_aplicado = db.Column(db.Text, nullable=True)
+    # Motivo / contexto (ex: "NFe 538 — chassi vinha apos MOTOR sem prefixo Nº").
+    motivo = db.Column(db.String(500), nullable=True)
+    criado_por = db.Column(db.String(100), nullable=True)
+    criado_em = db.Column(
+        db.DateTime, nullable=False, default=agora_utc_naive, index=True,
+    )
+    ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+    def __repr__(self) -> str:
+        return (
+            f'<HoraDanfeParserAppend v{self.versao} '
+            f'ativo={self.ativo} criado_em={self.criado_em}>'
+        )

@@ -1380,6 +1380,68 @@ def tagplus_backfill_detalhe(job_id: int):
     return render_template('hora/tagplus/backfill_detalhe.html', job=job)
 
 
+@hora_bp.route('/tagplus/backfill/nfe-unica', methods=['POST'])
+@require_hora_perm('vendas', 'criar')
+def tagplus_backfill_nfe_unica():
+    """Importa UMA NFe especifica do TagPlus, sincronamente (modo teste).
+
+    Nao usa RQ — executa direto na request. Util para validar pipeline
+    apos um deploy ou investigar por que uma NFe especifica falhou no
+    backfill em lote.
+    """
+    from app.hora.services.tagplus.backfill_service import (
+        executar_backfill_unica_nfe,
+    )
+
+    nfe_id_raw = (request.form.get('tagplus_nfe_id') or '').strip()
+    if not nfe_id_raw:
+        flash('Informe o ID TagPlus da NFe.', 'warning')
+        return redirect(url_for('hora.tagplus_backfill'))
+
+    try:
+        nfe_id = int(nfe_id_raw)
+    except ValueError:
+        flash(f'ID invalido: {nfe_id_raw!r} (esperado numero inteiro).', 'danger')
+        return redirect(url_for('hora.tagplus_backfill'))
+
+    operador = (
+        current_user.nome
+        if current_user.is_authenticated and getattr(current_user, 'nome', None)
+        else (current_user.email if current_user.is_authenticated else None)
+    )
+
+    try:
+        resultado = executar_backfill_unica_nfe(nfe_id, operador=operador)
+    except RuntimeError as exc:
+        flash(f'Backfill unica NFe falhou: {exc}', 'danger')
+        return redirect(url_for('hora.tagplus_backfill'))
+
+    status = resultado.get('status') or 'desconhecido'
+    msg = resultado.get('mensagem') or ''
+    venda_id = resultado.get('venda_id')
+
+    # Mapeamento status -> categoria flash.
+    if status in ('criado', 'atualizado', 'cancelado'):
+        categoria = 'success'
+    elif status in ('inalterado', 'pulada_cancelada', 'pulada_status_invalido'):
+        categoria = 'info'
+    elif status == 'duplicado':
+        categoria = 'warning'
+    else:
+        categoria = 'danger'
+
+    detalhe = (
+        f'NFe {nfe_id} → status={status}. {msg}'
+        + (f' (venda #{venda_id})' if venda_id else '')
+    )
+    flash(detalhe, categoria)
+
+    # Se criou/atualizou venda, redireciona direto pra tela do pedido.
+    if venda_id and status in ('criado', 'atualizado'):
+        return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
+    return redirect(url_for('hora.tagplus_backfill'))
+
+
 @hora_bp.route('/tagplus/backfill/<int:job_id>/json', methods=['GET'])
 @require_hora_perm('vendas', 'criar')
 def tagplus_backfill_job_json(job_id: int):
@@ -1419,3 +1481,155 @@ def tagplus_backfill_job_json(job_id: int):
         'em_estado_final': job.em_estado_final,
         'erros': erros_lista,
     })
+
+
+# ============================================================================
+# Append-prompt do parser de chassi/motor (aprendizado por feedback)
+# ============================================================================
+
+@hora_bp.route('/tagplus/parser-append', methods=['GET'])
+@require_hora_perm('tagplus', 'ver')
+def tagplus_parser_append():
+    """Tela de gestao do append-prompt: ver atual + historico + form de
+    recomendacao/teste/gravacao via AJAX."""
+    from app.hora.services.parser_append_service import (
+        get_append_ativo, listar_historico,
+    )
+    ativo = get_append_ativo()
+    historico = listar_historico(limit=20)
+    # Pre-preenchimento opcional via querystring (?detalhes=...).
+    detalhes_pre = (request.args.get('detalhes') or '').strip()
+    return render_template(
+        'hora/tagplus/parser_append.html',
+        ativo=ativo,
+        historico=historico,
+        detalhes_pre=detalhes_pre,
+    )
+
+
+@hora_bp.route('/tagplus/parser-append/recomendar', methods=['POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_parser_append_recomendar():
+    """Recebe `detalhes`, `extracao_atual`, `valor_correto` (JSON) e devolve
+    o ACRESCIMO sugerido + o append PROPOSTO (atual + acrescimo)."""
+    from flask import jsonify
+    from app.hora.services.parser_append_service import (
+        recomendar_acrescimo, texto_append_ativo,
+    )
+
+    data = request.get_json(silent=True) or {}
+    detalhes = (data.get('detalhes') or '').strip()
+    extracao_atual = data.get('extracao_atual') or {}
+    valor_correto = data.get('valor_correto') or {}
+
+    if not detalhes:
+        return jsonify({'ok': False, 'erro': 'detalhes obrigatorio'}), 400
+    if not (valor_correto.get('chassi') or valor_correto.get('motor')):
+        return jsonify({
+            'ok': False,
+            'erro': 'informe ao menos chassi OU motor correto',
+        }), 400
+
+    append_atual = texto_append_ativo()
+    acrescimo = recomendar_acrescimo(
+        detalhes=detalhes,
+        extracao_atual=extracao_atual,
+        valor_correto=valor_correto,
+        append_atual=append_atual,
+    )
+    if not acrescimo:
+        return jsonify({
+            'ok': False,
+            'erro': 'LLM indisponivel ou nao retornou recomendacao',
+        }), 502
+
+    proposto = (
+        (append_atual.rstrip() + '\n\n' + acrescimo.strip())
+        if append_atual else acrescimo.strip()
+    )
+    return jsonify({
+        'ok': True,
+        'append_atual': append_atual,
+        'acrescimo': acrescimo,
+        'append_proposto': proposto,
+    })
+
+
+@hora_bp.route('/tagplus/parser-append/testar', methods=['POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_parser_append_testar():
+    """Roda Haiku com `append_proposto` sobre `detalhes` e devolve a extracao."""
+    from flask import jsonify
+    from app.hora.services.parser_append_service import testar_append
+
+    data = request.get_json(silent=True) or {}
+    detalhes = (data.get('detalhes') or '').strip()
+    append_proposto = (data.get('append_proposto') or '').strip()
+    if not detalhes:
+        return jsonify({'ok': False, 'erro': 'detalhes obrigatorio'}), 400
+
+    resultado = testar_append(detalhes, append_proposto)
+    return jsonify({
+        'ok': resultado.get('ok', False),
+        'chassi': resultado.get('chassi'),
+        'motor': resultado.get('motor'),
+        'raw_response': resultado.get('_raw_response'),
+    })
+
+
+@hora_bp.route('/tagplus/parser-append/salvar', methods=['POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_parser_append_salvar():
+    """Persiste novo append (texto completo + acrescimo + motivo)."""
+    from app.hora.services.parser_append_service import salvar_nova_versao
+
+    texto = (request.form.get('texto_completo') or '').strip()
+    acrescimo = (request.form.get('acrescimo_aplicado') or '').strip() or None
+    motivo = (request.form.get('motivo') or '').strip() or None
+    if not texto:
+        flash('Texto do append vazio.', 'danger')
+        return redirect(url_for('hora.tagplus_parser_append'))
+
+    autor = (
+        current_user.nome
+        if current_user.is_authenticated and getattr(current_user, 'nome', None)
+        else (current_user.email if current_user.is_authenticated else None)
+    )
+    try:
+        nova = salvar_nova_versao(
+            texto, acrescimo_aplicado=acrescimo, motivo=motivo,
+            criado_por=autor,
+        )
+        flash(f'Append v{nova.versao} gravado e ativado.', 'success')
+    except Exception as exc:  # pragma: no cover
+        logger.exception('Falha ao gravar append')
+        flash(f'Erro ao gravar: {exc}', 'danger')
+    return redirect(url_for('hora.tagplus_parser_append'))
+
+
+@hora_bp.route('/tagplus/parser-append/<int:append_id>/reativar', methods=['POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_parser_append_reativar(append_id: int):
+    """Rollback: marca a versao escolhida como ativa (clona como nova versao)."""
+    from app.hora.models.tagplus import HoraDanfeParserAppend
+    from app.hora.services.parser_append_service import salvar_nova_versao
+
+    alvo = HoraDanfeParserAppend.query.get_or_404(append_id)
+    autor = (
+        current_user.nome
+        if current_user.is_authenticated and getattr(current_user, 'nome', None)
+        else (current_user.email if current_user.is_authenticated else None)
+    )
+    try:
+        nova = salvar_nova_versao(
+            alvo.texto_append,
+            motivo=f'Rollback para v{alvo.versao}',
+            criado_por=autor,
+        )
+        flash(
+            f'Append v{nova.versao} (clone de v{alvo.versao}) ativado.',
+            'success',
+        )
+    except Exception as exc:  # pragma: no cover
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.tagplus_parser_append'))

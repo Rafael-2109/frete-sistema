@@ -117,9 +117,96 @@
   </div>
 </div>
 
+{# Resumo do batch LLM (so aparece quando job ja finalizou). #}
+{% if job.relatorio and job.relatorio.get('chassi_pendencias') is not none %}
+<div class="alert alert-secondary small mb-3">
+  <i class="fas fa-magic"></i>
+  <strong>Batch LLM (pos-processamento):</strong>
+  {{ job.relatorio.get('chassi_pendencias', 0) }} NFs sem chassi extraivel
+  por regex →
+  {{ job.relatorio.get('chassi_sugerido_llm', 0) }} ganharam sugestao do LLM
+  (gravada no detalhe da divergencia <code>CHASSI_NAO_CADASTRADO</code> da venda).
+  Revisar manualmente antes de criar o item.
+  <a href="{{ url_for('hora.tagplus_parser_append') }}" class="ms-2">
+    Ajustar append-prompt
+  </a>
+</div>
+{% endif %}
+
 <div id="job-erro-box" class="alert alert-danger {% if not job.ultimo_erro %}d-none{% endif %}">
   <strong>Último erro:</strong>
   <pre class="mb-0" id="job-ultimo-erro">{{ job.ultimo_erro or '' }}</pre>
+</div>
+
+{# ---------------------------------------------------------------- #}
+{# Tabela de erros — atualizada incrementalmente via polling AJAX.   #}
+{# Lista populada por backfill_service.executar_backfill (campo      #}
+{# `erros` no relatorio), cap 500 entradas. Quando job.n_erro > 500, #}
+{# os primeiros 500 sao mostrados; restantes vao para os logs Render.#}
+{# ---------------------------------------------------------------- #}
+{% set erros_lista = (job.relatorio or {}).get('erros') or [] %}
+<div id="job-erros-card" class="card mb-3 {% if not erros_lista and not job.n_erro %}d-none{% endif %}">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <h5 class="mb-0">
+      <i class="fas fa-exclamation-triangle text-danger"></i>
+      NFs com erro
+      <span class="badge bg-danger ms-2" id="job-erros-count">{{ erros_lista|length }}</span>
+      {% if job.n_erro and job.n_erro > erros_lista|length %}
+        <small class="text-muted ms-2">
+          (mostrando {{ erros_lista|length }} de {{ job.n_erro }} —
+          consulte os logs do worker para ver todos)
+        </small>
+      {% endif %}
+    </h5>
+    <small class="text-muted">Apenas informativo — nao trava o backfill.</small>
+  </div>
+  <div class="table-responsive" style="max-height: 400px;">
+    <table class="table table-sm table-striped mb-0" id="job-erros-table">
+      <thead class="table-light sticky-top">
+        <tr>
+          <th style="width: 90px;">TagPlus ID</th>
+          <th style="width: 90px;">Nº NF</th>
+          <th style="width: 60px;">Status</th>
+          <th>Mensagem</th>
+          <th style="width: 130px;" class="text-end">Ação</th>
+        </tr>
+      </thead>
+      <tbody id="job-erros-tbody">
+        {% for err in erros_lista %}
+        <tr>
+          <td><code>{{ err.tagplus_nfe_id or '—' }}</code></td>
+          <td>{{ err.numero_nf or '—' }}</td>
+          <td>
+            <span class="badge bg-secondary">{{ err.status_tagplus or '?' }}</span>
+          </td>
+          <td><small>{{ err.mensagem or '' }}</small></td>
+          <td class="text-end">
+            {% if err.tagplus_nfe_id %}
+            <form method="post"
+                  action="{{ url_for('hora.tagplus_backfill_nfe_unica') }}"
+                  class="d-inline"
+                  onsubmit="return confirm('Reimportar NFe TagPlus #{{ err.tagplus_nfe_id }}?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="tagplus_nfe_id" value="{{ err.tagplus_nfe_id }}">
+              <button type="submit" class="btn btn-sm btn-outline-warning"
+                      title="Reimportar esta NFe agora (sincrono)">
+                <i class="fas fa-redo"></i> Reimportar
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not erros_lista %}
+        <tr id="job-erros-empty">
+          <td colspan="5" class="text-center text-muted py-3">
+            Nenhum erro registrado neste job.
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
 {% if job.relatorio %}
@@ -193,6 +280,64 @@
           erroBox.classList.remove('d-none');
         } else {
           erroBox.classList.add('d-none');
+        }
+
+        // Atualiza tabela de erros incremental (informativa, nao trava nada).
+        var erros = Array.isArray(data.erros) ? data.erros : [];
+        var card = document.getElementById('job-erros-card');
+        var tbody = document.getElementById('job-erros-tbody');
+        var countBadge = document.getElementById('job-erros-count');
+        if (countBadge) countBadge.textContent = erros.length;
+        if (card) {
+          if (erros.length || data.n_erro) {
+            card.classList.remove('d-none');
+          }
+        }
+        if (tbody) {
+          var csrfToken = '{{ csrf_token() }}';
+          var reimportUrl = '{{ url_for("hora.tagplus_backfill_nfe_unica") }}';
+          if (erros.length) {
+            var html = '';
+            erros.forEach(function(err) {
+              var msg = (err.mensagem || '').toString();
+              // Escape minimo (HTML safe).
+              msg = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                       .replace(/>/g, '&gt;');
+              var nfeId = err.tagplus_nfe_id;
+              var acaoCell = '<td class="text-end"></td>';
+              if (nfeId) {
+                acaoCell = '<td class="text-end">' +
+                  '<form method="post" action="' + reimportUrl + '" ' +
+                    'class="d-inline" ' +
+                    "onsubmit=\"return confirm('Reimportar NFe TagPlus #" +
+                    nfeId + "?');\">" +
+                    '<input type="hidden" name="csrf_token" value="' +
+                      csrfToken + '">' +
+                    '<input type="hidden" name="tagplus_nfe_id" value="' +
+                      nfeId + '">' +
+                    '<button type="submit" class="btn btn-sm btn-outline-warning"' +
+                      ' title="Reimportar esta NFe agora (sincrono)">' +
+                      '<i class="fas fa-redo"></i> Reimportar' +
+                    '</button>' +
+                  '</form>' +
+                '</td>';
+              }
+              html += '<tr>' +
+                '<td><code>' + (nfeId || '—') + '</code></td>' +
+                '<td>' + (err.numero_nf || '—') + '</td>' +
+                '<td><span class="badge bg-secondary">' +
+                  (err.status_tagplus || '?') + '</span></td>' +
+                '<td><small>' + msg + '</small></td>' +
+                acaoCell +
+                '</tr>';
+            });
+            tbody.innerHTML = html;
+          } else if (!tbody.querySelector('#job-erros-empty')) {
+            // Sem erros e nada renderizado — placeholder.
+            tbody.innerHTML = '<tr id="job-erros-empty">' +
+              '<td colspan="5" class="text-center text-muted py-3">' +
+              'Nenhum erro registrado neste job.</td></tr>';
+          }
         }
 
         if (STATUS_FINAIS.indexOf(data.status) === -1) {

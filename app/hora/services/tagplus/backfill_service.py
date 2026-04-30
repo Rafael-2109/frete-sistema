@@ -134,6 +134,18 @@ _RE_NSERIE = re.compile(
     re.IGNORECASE,
 )
 
+# Chassi com label standalone "CHASSI: ###" (sem prefixo "Nº" exigido).
+# Necessario para layouts onde a NF lista MOTOR e CHASSI em linhas separadas:
+#   MOTOR: 12345
+#   CHASSI: 67890
+# Sem este regex, o `_RE_CHASSI_MOTOR` (que exige Chassi antes de Motor) e
+# o `_RE_NSERIE` (que exige "Nº" prefix) nao matcham, e o fallback
+# `_RE_CHASSI_PURO` so funciona se ambos tiverem 13+ chars.
+_RE_CHASSI_LABEL = re.compile(
+    r'\bCHASSI\s*[:\.\-]\s*<?\s*([A-Z0-9][A-Z0-9\-]{5,29})\s*>?',
+    re.IGNORECASE,
+)
+
 # Chassis "puros" (string alfanumerica longa) — ultima cartada quando rotulos
 # estao ausentes. Aceita 13-30 chars alfanuméricos (incluindo 100% numéricos
 # como 172922502660076). Exclui-se motor já capturado para não duplicar.
@@ -197,6 +209,13 @@ def _extrair_chassi_motor(detalhes: Optional[str]) -> tuple[Optional[str], Optio
         if m:
             chassi = m.group(1).strip().upper()
 
+    # 2.5) Padrao "CHASSI: ..." standalone (sem prefixo Nº exigido).
+    # Layouts MOTOR\nCHASSI usam esse formato.
+    if not chassi:
+        m = _RE_CHASSI_LABEL.search(detalhes)
+        if m:
+            chassi = m.group(1).strip().upper()
+
     # 3) Token bruto longo (fallback) — aceita chassi 100% numerico, mas
     # exclui o token ja capturado como motor.
     if not chassi:
@@ -207,6 +226,11 @@ def _extrair_chassi_motor(detalhes: Optional[str]) -> tuple[Optional[str], Optio
                 continue
             chassi = cand_norm
             break
+
+    # NAO chamamos LLM aqui (per-NF) — em backfill inicial com 500+ NFs ficaria
+    # lento e caro. O fallback LLM acontece em UMA UNICA chamada batch ao FIM
+    # do job (ver `_resolver_pendencias_chassi_em_batch` em executar_backfill).
+    # Os HoraVendaItem sem chassi sao reconciliados depois.
 
     if motor in ('', '-', 'NONE', 'NULL'):
         motor = None
@@ -319,11 +343,28 @@ def _upsert_emissao_nfe(
         agora_utc_naive() if status_local == NFE_STATUS_CANCELADA else None
     )
 
+    # Defesa: extrair conta.id ANTES de qualquer query que possa expirar/detachar.
+    # Em runs longos do backfill, mesmo com api.conta sendo property, o objeto
+    # passado aqui pode estar expired após commits intermediários. Snapshot
+    # imediato evita refresh implícito quando acessarmos conta.id no construtor.
+    try:
+        conta_id_snapshot = int(conta.id)
+    except Exception:
+        # Se acessar .id falhar (DetachedInstanceError), tenta extrair PK via inspect.
+        from sqlalchemy import inspect as _sa_inspect
+        try:
+            pk = _sa_inspect(conta).identity[0]  # type: ignore[index]
+            conta_id_snapshot = int(pk)
+        except Exception as exc:
+            raise RuntimeError(
+                f'Conta TagPlus em estado inválido em _upsert_emissao_nfe: {exc!r}'
+            ) from exc
+
     emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda.id).first()
     if emissao is None:
         emissao = HoraTagPlusNfeEmissao(
             venda_id=venda.id,
-            conta_id=conta.id,
+            conta_id=conta_id_snapshot,
             status=status_local,
             tagplus_nfe_id=nfe_id_tagplus,
             numero_nfe=numero_nfe,
@@ -616,6 +657,7 @@ def importar_nfe_da_api(
     api: ApiClient,
     nfe_id_tagplus: int,
     operador: Optional[str] = None,
+    pendencias_chassi_llm: Optional[list] = None,
 ) -> tuple[Optional[HoraVenda], str]:
     """Puxa GET /nfes/{id} e cria/atualiza/cancela HoraVenda conforme status.
 
@@ -755,11 +797,17 @@ def importar_nfe_da_api(
         )
 
     # ------ destinatario (cliente) ------
+    # Aceita PF (CPF, 11 digitos) ou PJ (CNPJ, 14 digitos). Coluna
+    # `cpf_cliente` em hora_venda eh String(14) — comporta ambos. O nome
+    # da coluna eh historico (modulo nasceu B2C); semanticamente e
+    # "documento fiscal do destinatario".
+    from app.hora.services.tagplus._documento import normalizar_documento
     dest = nfe.get('destinatario') or {}
-    cpf = _so_digitos(dest.get('cpf') or dest.get('cnpj'))
-    if len(cpf) != 11:
+    cpf, tipo_doc = normalizar_documento(dest.get('cpf') or dest.get('cnpj'))
+    if not tipo_doc:
         raise NfeIncompleta(
-            f'NFe {nfe_id_tagplus} destinatario sem CPF valido (got={cpf!r})'
+            f'NFe {nfe_id_tagplus} destinatario sem CPF/CNPJ valido '
+            f'(got={cpf!r}, esperado 11 ou 14 digitos)'
         )
     nome_cliente = (dest.get('razao_social') or '').strip()[:200] or 'CLIENTE_NAO_INFORMADO'
 
@@ -829,6 +877,7 @@ def importar_nfe_da_api(
                 operador=operador,
                 inf_contribuinte_nf=inf_contribuinte_nf,
                 observacoes_nf=observacoes_nf,
+                pendencias_chassi_llm=pendencias_chassi_llm,
             )
             db.session.flush()
             criou_itens = any(it.id not in antes for it in existente.itens)
@@ -931,6 +980,7 @@ def importar_nfe_da_api(
         operador=operador,
         inf_contribuinte_nf=inf_contribuinte_nf,
         observacoes_nf=observacoes_nf,
+        pendencias_chassi_llm=pendencias_chassi_llm,
     )
 
     # Sincroniza HoraTagPlusNfeEmissao para o botao 'Baixar DANFE'
@@ -1145,6 +1195,7 @@ def _criar_itens_da_api(
     operador: Optional[str],
     inf_contribuinte_nf: str = '',
     observacoes_nf: str = '',
+    pendencias_chassi_llm: Optional[list] = None,
 ) -> None:
     """Cria HoraVendaItem para cada chassi listado em `itens_api`.
 
@@ -1239,7 +1290,7 @@ def _criar_itens_da_api(
                 pass
 
         if not chassis_motores:
-            _registrar_divergencia(
+            div = _registrar_divergencia(
                 venda_id=venda.id, tipo='CHASSI_NAO_CADASTRADO',
                 detalhe=(
                     f'Item produto={codigo_produto or descricao!r} qtd={qtd} '
@@ -1248,6 +1299,20 @@ def _criar_itens_da_api(
                 )[:1000],
                 valor_conferido=(detalhes or descricao_raw)[:255],
             )
+            # Coleta pendencia para o batch LLM final (1 chamada por chunk
+            # no final do job — evita N requests em runs com 500+ NFs).
+            if pendencias_chassi_llm is not None:
+                texto_consolidado = '\n'.join(filter(None, [
+                    detalhes, descricao_raw, complemento, numero_serie,
+                    inf_contribuinte_nf, observacoes_nf,
+                ]))[:1500]
+                if texto_consolidado.strip():
+                    pendencias_chassi_llm.append({
+                        'venda_id': venda.id,
+                        'divergencia_id': getattr(div, 'id', None),
+                        'detalhes': texto_consolidado,
+                        'codigo_produto': codigo_produto,
+                    })
             continue
 
         modelo_id_resolvido = _resolver_modelo_id(codigo_produto)
@@ -1651,6 +1716,7 @@ def _importar_com_retry_db(
     nfe_id: int,
     operador: Optional[str],
     max_tentativas: int = 3,
+    pendencias_chassi_llm: Optional[list] = None,
 ) -> tuple:
     """Wrapper que recupera de SSL/connection drop no Postgres.
 
@@ -1669,7 +1735,10 @@ def _importar_com_retry_db(
 
     for tentativa in range(max_tentativas):
         try:
-            return importar_nfe_da_api(api, nfe_id, operador=operador)
+            return importar_nfe_da_api(
+                api, nfe_id, operador=operador,
+                pendencias_chassi_llm=pendencias_chassi_llm,
+            )
         except (OperationalError, DBAPIError) as exc:
             ultima_excecao = exc
             connection_invalidated = getattr(exc, 'connection_invalidated', False)
@@ -1738,6 +1807,20 @@ def executar_backfill(
     api = ApiClient(conta)
 
     resultados = []
+    # Lista enxuta de erros (subset de `resultados` filtrado) para exibicao
+    # incremental na tela de detalhe do job. Persistida no `relatorio['erros']`
+    # via `_gravar_progresso` — ver backfill_worker._gravar_progresso.
+    # Cap de seguranca: 500 entradas. Em jobs com muitos erros, mantem so
+    # os 500 primeiros + sinaliza truncamento via `n_err`.
+    MAX_ERROS_PERSISTIDOS = 500
+    erros_acumulados: list[dict] = []
+
+    # Coletor de pendencias de chassi (para batch LLM no fim do job).
+    # Cada entrada: {venda_id, divergencia_id, detalhes, codigo_produto}.
+    # Backfill inicial (volume alto, nao-recorrente) -> 1 chamada Haiku
+    # batch por chunk de 30 NFs e atualiza divergencias com sugestao LLM.
+    pendencias_chassi_llm: list[dict] = []
+
     n_criado = n_atualizado = n_inalterado = 0
     n_cancelado = n_pulada_cancelada = n_pulada_invalida = 0
     n_dup = n_err = n_div = 0
@@ -1761,6 +1844,9 @@ def executar_backfill(
                 'ultima_nfe_id': ultima_nfe,
                 'ultima_status': ultima_status,
                 'ultimo_erro': ultimo_erro,
+                # Lista enxuta de NFs com erro — visivel na tela de detalhe.
+                # Nao trava o backfill: e apenas um snapshot pra UI.
+                'erros': list(erros_acumulados),
             })
         except Exception:  # pragma: no cover
             logger.exception('progress_callback falhou — ignorado')
@@ -1839,7 +1925,10 @@ def executar_backfill(
 
         ultimo_erro_str: Optional[str] = None
         try:
-            venda, status = _importar_com_retry_db(api, nfe_id, operador=operador)
+            venda, status = _importar_com_retry_db(
+                api, nfe_id, operador=operador,
+                pendencias_chassi_llm=pendencias_chassi_llm,
+            )
 
             if venda is not None:
                 entry.update({
@@ -1911,6 +2000,16 @@ def executar_backfill(
                 pass
             logger.exception('Backfill: falha NFe %s', nfe_id)
         resultados.append(entry)
+        # Acumula entrada simplificada para exibicao na tela quando for erro.
+        # Limitado a MAX_ERROS_PERSISTIDOS para nao inflar JSONB do relatorio.
+        if entry.get('status') == 'erro' and len(erros_acumulados) < MAX_ERROS_PERSISTIDOS:
+            erros_acumulados.append({
+                'tagplus_nfe_id': entry.get('tagplus_nfe_id'),
+                'numero_nf': entry.get('numero_nf'),
+                'chave': entry.get('chave'),
+                'status_tagplus': entry.get('status_tagplus'),
+                'mensagem': entry.get('mensagem'),
+            })
         _emit_progress(nfe_id, entry['status'], ultimo_erro_str)
 
         # Higiene de sessao: a cada 25 NFs faz close() para liberar a
@@ -1920,6 +2019,13 @@ def executar_backfill(
                 db.session.close()
             except Exception:
                 logger.exception('Falha em session.close() periodico')
+
+    # ----------------------------------------------------------------
+    # Pos-processamento: batch LLM para resolver pendencias de chassi.
+    # ----------------------------------------------------------------
+    n_chassi_sugerido_llm = _resolver_pendencias_chassi_em_batch(
+        pendencias_chassi_llm,
+    )
 
     return {
         'total': len(resultados),
@@ -1934,8 +2040,267 @@ def executar_backfill(
         'duplicado': n_dup,
         'erro': n_err,
         'divergencias': n_div,
+        # Pos-processamento LLM:
+        'chassi_pendencias': len(pendencias_chassi_llm),
+        'chassi_sugerido_llm': n_chassi_sugerido_llm,
+        # Lista detalhada de cada NF (sucesso e erro). Este campo e REMOVIDO
+        # pelo backfill_worker._marcar_fim antes de persistir no DB —
+        # significa que so e usado quando executar_backfill roda em modo
+        # sincrono (dev/testes). A lista persistida na tela vem de `erros`
+        # (apenas erros, cap 500).
         'resultados': resultados,
+        'erros': erros_acumulados,
     }
+
+
+def _resolver_pendencias_chassi_em_batch(
+    pendencias: list[dict],
+    chunk_size: int = 30,
+) -> int:
+    """Apos o loop de NFs, resolve em BATCH as pendencias de chassi.
+
+    Para cada chunk de ate `chunk_size` pendencias:
+      1. Monta payload [{nfe_id=divergencia_id, detalhes}].
+      2. Chama Haiku UMA VEZ com todos via
+         `parser_append_service.extrair_lote_via_llm_com_append`.
+      3. Para cada resposta, atualiza o detalhe da divergencia com a
+         sugestao LLM (chassi/motor) — operador revisa na tela da venda
+         antes de criar o `HoraVendaItem` definitivo.
+
+    Returns:
+        Quantidade de divergencias enriquecidas com sugestao LLM.
+    """
+    if not pendencias:
+        return 0
+
+    try:
+        from app.hora.services.parser_append_service import (
+            extrair_lote_via_llm_com_append,
+        )
+    except Exception:  # pragma: no cover
+        logger.exception(
+            'Batch LLM indisponivel — pendencias chassi nao resolvidas'
+        )
+        return 0
+
+    from app.hora.models.venda import HoraVendaDivergencia
+    from app.utils.timezone import agora_utc_naive
+
+    n_atualizado = 0
+    chunks = [
+        pendencias[i:i + chunk_size]
+        for i in range(0, len(pendencias), chunk_size)
+    ]
+    logger.info(
+        'Batch LLM chassi: %d pendencias em %d chunks de ate %d.',
+        len(pendencias), len(chunks), chunk_size,
+    )
+
+    for idx, chunk in enumerate(chunks, start=1):
+        # Usa divergencia_id como chave do batch (univoca, persistida).
+        casos = [
+            {
+                'nfe_id': p['divergencia_id'],
+                'detalhes': p['detalhes'],
+            }
+            for p in chunk if p.get('divergencia_id')
+        ]
+        if not casos:
+            continue
+        logger.info(
+            'Batch LLM chassi: chunk %d/%d (%d casos)',
+            idx, len(chunks), len(casos),
+        )
+        resposta = extrair_lote_via_llm_com_append(casos)
+        if resposta is None:
+            logger.warning(
+                'Batch LLM chassi: chunk %d falhou (LLM indisponivel ou '
+                'resposta invalida) — sem sugestao para %d divergencias',
+                idx, len(casos),
+            )
+            continue
+
+        # Resposta -> map por divergencia_id.
+        mapa = {item['nfe_id']: item for item in resposta if item.get('nfe_id')}
+
+        # Defensiva: se LLM retorna alucinando IDs (numero certo de items
+        # mas nfe_id que nao bate com nenhum divergencia_id enviado),
+        # `mapa.get(div_id)` retorna None silenciosamente. Logamos um
+        # warning para o operador investigar (ver code review R3 2026-04-30).
+        n_matched = sum(
+            1 for p in chunk
+            if p.get('divergencia_id') and mapa.get(p['divergencia_id'])
+        )
+        if n_matched == 0 and casos:
+            logger.warning(
+                'Batch LLM chassi: chunk %d/%d — zero divergencias enriquecidas '
+                '(LLM retornou %d items, nenhum nfe_id bateu com divergencia_id '
+                'enviado=%s). Possivel alucinacao de IDs pelo LLM.',
+                idx, len(chunks), len(resposta),
+                [c.get('nfe_id') for c in casos[:5]],
+            )
+
+        for p in chunk:
+            div_id = p.get('divergencia_id')
+            if not div_id:
+                continue
+            sug = mapa.get(div_id)
+            if not sug:
+                continue
+            chassi_sug = (sug.get('chassi') or '').strip().upper() or None
+            motor_sug = (sug.get('motor') or '').strip().upper() or None
+            if not chassi_sug and not motor_sug:
+                continue
+
+            div = db.session.get(HoraVendaDivergencia, div_id)
+            if div is None:
+                continue
+            sufixo = (
+                f"\n\n[LLM SUGESTAO — {agora_utc_naive().strftime('%d/%m %H:%M')}]\n"
+                f"chassi={chassi_sug or '?'}  motor={motor_sug or '?'}\n"
+                f"(revisar manualmente antes de criar o item — extracao "
+                f"feita por LLM apos regex falhar)"
+            )
+            div.detalhe = ((div.detalhe or '') + sufixo)[:1000]
+            n_atualizado += 1
+
+        try:
+            db.session.commit()
+        except Exception:
+            logger.exception(
+                'Batch LLM chassi: commit chunk %d falhou — rollback', idx,
+            )
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+    logger.info(
+        'Batch LLM chassi: %d divergencias enriquecidas com sugestao.',
+        n_atualizado,
+    )
+    return n_atualizado
+
+
+# --------------------------------------------------------------------------
+# Backfill sincrono de UMA UNICA NFe (modo teste)
+# --------------------------------------------------------------------------
+
+def executar_backfill_unica_nfe(
+    nfe_id_tagplus: int,
+    operador: Optional[str] = None,
+) -> dict:
+    """Importa UMA NFe especifica do TagPlus, sincronamente, sem RQ.
+
+    Util para testar o pipeline de backfill com baixa latencia (sem
+    enfileirar job e aguardar worker), e para validar fixes em NFes
+    especificas que falharam em backfill em lote.
+
+    Args:
+        nfe_id_tagplus: ID da NFe no TagPlus (campo `id` em /nfes/{id}).
+        operador: nome/email do usuario logado (para auditoria).
+
+    Returns:
+        dict com:
+            - status: 'criado' | 'atualizado' | 'inalterado' | 'cancelado' |
+                      'pulada_cancelada' | 'pulada_status_invalido' |
+                      'duplicado' | 'erro'
+            - venda_id: int | None
+            - tagplus_nfe_id: int
+            - numero_nf: str | None
+            - chave: str | None
+            - mensagem: str (descricao humana do resultado)
+            - qtd_chassis: int (apenas se venda criada/atualizada)
+            - qtd_divergencias: int (apenas se venda criada/atualizada)
+
+    Levanta:
+        RuntimeError se nao houver HoraTagPlusConta ativa.
+        Outros erros sao capturados e retornados em status='erro'.
+    """
+    conta = HoraTagPlusConta.ativa()
+    if conta is None:
+        raise RuntimeError(
+            'Nenhuma HoraTagPlusConta ativa — configure em /hora/tagplus/conta.'
+        )
+    api = ApiClient(conta)
+
+    entry: dict = {
+        'tagplus_nfe_id': nfe_id_tagplus,
+        'numero_nf': None,
+        'chave': None,
+        'status_tagplus': None,
+        'status': None,
+        'venda_id': None,
+        'qtd_chassis': 0,
+        'qtd_divergencias': 0,
+        'mensagem': '',
+    }
+
+    try:
+        venda, status = _importar_com_retry_db(
+            api, nfe_id_tagplus, operador=operador,
+        )
+        entry['status'] = status
+
+        if venda is not None:
+            entry['venda_id'] = venda.id
+            entry['numero_nf'] = venda.nf_saida_numero
+            entry['chave'] = venda.nf_saida_chave_44
+            entry['qtd_chassis'] = len(venda.itens)
+            entry['qtd_divergencias'] = len(venda.divergencias_abertas)
+
+        if status == 'criado':
+            entry['mensagem'] = (
+                f'NF {entry["numero_nf"]} criada — '
+                f'{entry["qtd_chassis"]} chassi(s) para {venda.nome_cliente}.'
+            )
+        elif status == 'atualizado':
+            entry['mensagem'] = (
+                f'NF {entry["numero_nf"]} atualizada (campos vazios '
+                f'preenchidos a partir da API).'
+            )
+        elif status == 'inalterado':
+            entry['mensagem'] = (
+                f'NF {entry["numero_nf"]} ja estava completa — nada a fazer.'
+            )
+        elif status == 'cancelado':
+            entry['mensagem'] = (
+                f'NF {entry["numero_nf"]} CANCELADA na SEFAZ. '
+                f'Pedido marcado como CANCELADO + DEVOLVIDA emitida nos chassis.'
+            )
+        elif status == 'pulada_cancelada':
+            entry['mensagem'] = (
+                f'NFe cancelada/inutilizada e nao existia no sistema — pulada.'
+            )
+        elif status == 'pulada_status_invalido':
+            entry['mensagem'] = (
+                f'NFe com status nao-aprovado (denegada/em-digitacao) — pulada.'
+            )
+        else:
+            entry['mensagem'] = f'Status retornado desconhecido: {status!r}'
+            entry['status'] = 'erro'
+    except NfeJaImportada as exc:
+        entry['status'] = 'duplicado'
+        entry['mensagem'] = str(exc)
+    except NfeIncompleta as exc:
+        entry['status'] = 'erro'
+        entry['mensagem'] = f'Incompleta: {exc}'
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+    except Exception as exc:  # noqa: BLE001
+        entry['status'] = 'erro'
+        entry['mensagem'] = f'Erro inesperado: {exc}'
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        logger.exception(
+            'Backfill unica NFe %s: falha terminal', nfe_id_tagplus,
+        )
+
+    return entry
 
 
 # --------------------------------------------------------------------------

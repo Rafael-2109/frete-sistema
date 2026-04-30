@@ -8,6 +8,10 @@
        title="Para NFs que não estão na conta TagPlus atual">
       <i class="fas fa-upload"></i> Backfill via DANFE PDF
     </a>
+    <a href="{{ url_for('hora.tagplus_parser_append') }}" class="btn btn-outline-warning btn-sm"
+       title="Quando o parser erra a extração de chassi/motor">
+      <i class="fas fa-magic"></i> Append-prompt
+    </a>
     <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary btn-sm">
       <i class="fas fa-clipboard-check"></i> Checklist
     </a>

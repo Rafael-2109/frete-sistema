@@ -45,9 +45,15 @@ def _gravar_progresso(job_id: int, snapshot: dict) -> None:
     nao interferir com a transacao do `importar_nfe_da_api`. Se a sessao
     principal estiver em estado quebrado (rollback recente), nao queremos
     propagar isso ao UPDATE de progresso.
+
+    Persiste tambem `snapshot['erros']` (lista enxuta de NFs com erro)
+    incrementalmente em `job.relatorio['erros']`. Isso permite que o
+    operador veja a lista de erros em tempo real, mesmo antes do job
+    terminar.
     """
     from app import db
     from app.hora.models import HoraTagPlusBackfillJob
+    from app.utils.json_helpers import sanitize_for_json
     from app.utils.timezone import agora_utc_naive
 
     try:
@@ -68,6 +74,15 @@ def _gravar_progresso(job_id: int, snapshot: dict) -> None:
         job.atualizado_em = agora_utc_naive()
         if snapshot.get('ultimo_erro'):
             job.ultimo_erro = (snapshot['ultimo_erro'] or '')[:2000]
+        # Persiste lista incremental de erros no relatorio.
+        # Mantem demais chaves preexistentes (caso _marcar_fim ja tenha
+        # rodado num cenario raro de race). Sanitize evita Decimal/datetime
+        # nao-JSON-serializavel vindo de extensoes futuras.
+        erros_snap = snapshot.get('erros') or []
+        if erros_snap:
+            relatorio_atual = dict(job.relatorio or {})
+            relatorio_atual['erros'] = sanitize_for_json(erros_snap)
+            job.relatorio = relatorio_atual
         db.session.commit()
     except Exception:
         logger.exception('Falha ao gravar progresso do job %s', job_id)
@@ -111,7 +126,8 @@ def _marcar_fim(job_id: int, status: str, relatorio: dict | None,
         job.ultimo_erro = erro[:2000]
     if relatorio is not None:
         # Remove a lista detalhada `resultados` antes de persistir — pode
-        # ficar grande (1 entrada por NF). Mantem so contadores.
+        # ficar grande (1 entrada por NF). Mantem so contadores + lista
+        # `erros` (cap 500 em executar_backfill, util para a tela).
         rel_compacto = {k: v for k, v in relatorio.items() if k != 'resultados'}
         job.relatorio = sanitize_for_json(rel_compacto)
     db.session.commit()

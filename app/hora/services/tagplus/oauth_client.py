@@ -69,6 +69,7 @@ class OAuthClient:
 
     def get_authorization_url(self, state: str) -> str:
         """URL para redirecionar o usuario ao TagPlus para autorizar."""
+        self._ensure_conta_attached()
         params = {
             'response_type': 'code',
             'client_id': self.conta.client_id,
@@ -81,6 +82,7 @@ class OAuthClient:
 
     def exchange_code(self, code: str) -> HoraTagPlusToken:
         """Troca authorization_code por access/refresh tokens."""
+        self._ensure_conta_attached()
         data = {
             'grant_type': 'authorization_code',
             'code': code,

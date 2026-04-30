@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Optional
 
-from app.carvia.services.parsers.danfe_pdf_parser import parsear_danfe_pdf
+from app.hora.services.parsers.hora_danfe_parser import HoraDanfePDFParser
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,10 @@ def parse_danfe_to_hora_payload(
     if not pdf_bytes:
         raise DanfeParseError("pdf_bytes vazio")
 
-    resultado = parsear_danfe_pdf(pdf_bytes=pdf_bytes)
+    # Subclasse HORA injeta append-prompt aprendido por feedback no prompt
+    # do LLM (ver app/hora/services/parsers/hora_danfe_parser.py).
+    parser = HoraDanfePDFParser(pdf_bytes=pdf_bytes)
+    resultado = parser.get_todas_informacoes()
 
     chave = resultado.get('chave_acesso_nf')
     numero = resultado.get('numero_nf')
@@ -191,13 +194,23 @@ def parse_danfe_to_hora_payload(
         raise DanfeParseError("Após filtrar chassis inválidos, nenhum item restou")
 
     # Destinatario: na NF de Entrada (Motochefe -> HORA) e B2B com CNPJ da
-    # matriz; na NF de Saida (HORA -> consumidor) e pessoa fisica com CPF.
+    # matriz; na NF de Saida (HORA -> consumidor) pode ser pessoa fisica
+    # (CPF, 11 digitos) ou pessoa juridica (CNPJ, 14 digitos).
     # O parser CarVia ja suporta CPF via get_cnpj_destinatario (P5 fix).
-    # Aqui separamos em campos tipados para consumo pelo service HORA.
+    # Aqui aceitamos ambos no campo `cpf_destinatario` (nome historico —
+    # semanticamente eh "documento fiscal do destinatario na NF de saida").
     dest_digits = (
         ''.join(c for c in (resultado.get('cnpj_destinatario') or '') if c.isdigit())
     )
-    cpf_destinatario = _sanitizar_cpf(dest_digits) if len(dest_digits) == 11 else None
+    if len(dest_digits) == 11:
+        cpf_destinatario = _sanitizar_cpf(dest_digits)
+    elif len(dest_digits) == 14:
+        # PJ: mantem digitos sem formatacao (consumido por venda_service que
+        # vai sanitizar via normalizar_documento). hora_venda.cpf_cliente eh
+        # String(14) e comporta.
+        cpf_destinatario = dest_digits
+    else:
+        cpf_destinatario = None
 
     return {
         'nf': {

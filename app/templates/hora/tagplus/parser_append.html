@@ -1,0 +1,353 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2>
+    <i class="fas fa-magic"></i>
+    Append-prompt do parser de chassi/motor
+  </h2>
+  <a href="{{ url_for('hora.tagplus_backfill') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="fas fa-arrow-left"></i> Voltar ao backfill
+  </a>
+</div>
+
+<div class="alert alert-info">
+  <strong>O que e isso?</strong>
+  Quando o parser erra a extracao de chassi/motor de uma NF, voce
+  cola aqui o trecho problematico e o valor correto. O sistema usa Sonnet
+  para sugerir <strong>uma instrucao curta a anexar</strong> ao prompt do Haiku
+  (que faz a extracao). Voce testa antes de gravar — se passar, a nova versao
+  fica ativa e melhora futuras extracoes.
+  <br><small class="text-muted">
+    Aplicado em 2 fluxos: (1) backfill TagPlus — fallback LLM quando o regex
+    nao encontra chassi; (2) parser DANFE PDF — prefixado no prompt do
+    extrator de veiculos.
+  </small>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">
+          Append ATIVO
+          {% if ativo %}
+            <span class="badge bg-success ms-2">v{{ ativo.versao }}</span>
+          {% else %}
+            <span class="badge bg-secondary ms-2">vazio</span>
+          {% endif %}
+        </h5>
+      </div>
+      <div class="card-body">
+        {% if ativo %}
+          <pre class="bg-light p-2 rounded" style="white-space: pre-wrap; max-height: 300px; overflow: auto;">{{ ativo.texto_append }}</pre>
+          <div class="small text-muted">
+            Criado em {{ ativo.criado_em.strftime('%d/%m/%Y %H:%M') }}
+            por {{ ativo.criado_por or '—' }}
+            {% if ativo.motivo %} · motivo: {{ ativo.motivo }}{% endif %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">
+            Nenhum append definido — Haiku usa apenas o prompt-base.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card border-warning">
+      <div class="card-header bg-warning bg-opacity-25">
+        <h5 class="mb-0">
+          <i class="fas fa-flask"></i>
+          Reportar erro de extracao
+        </h5>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">
+          1. Cole o trecho da NF onde o parser errou.<br>
+          2. Informe o valor correto.<br>
+          3. Clique em <strong>Recomendar</strong> — o sistema sugere o acrescimo.<br>
+          4. Clique em <strong>Testar</strong> — Haiku tenta extrair com o append.<br>
+          5. Se OK, clique em <strong>Gravar</strong>.
+        </p>
+
+        <div class="mb-2">
+          <label class="form-label small">
+            Trecho da NF (texto bruto: <code>detalhes</code> da API ou
+            "Dados Adicionais" da DANFE)
+          </label>
+          <textarea id="ap-detalhes" class="form-control" rows="5"
+                    placeholder="Ex.: MOTOR: ABC123&#10;CHASSI: XYZ789&#10;COR: AZUL&#10;ANO/MOD 2025/2026">{{ detalhes_pre or '' }}</textarea>
+        </div>
+
+        <div class="row g-2 mb-2">
+          <div class="col-md-6">
+            <label class="form-label small">
+              Chassi correto
+              <small class="text-muted">(opcional)</small>
+            </label>
+            <input id="ap-chassi-correto" type="text" class="form-control"
+                   placeholder="Ex.: XYZ789">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small">
+              Motor correto
+              <small class="text-muted">(opcional)</small>
+            </label>
+            <input id="ap-motor-correto" type="text" class="form-control"
+                   placeholder="Ex.: ABC123">
+          </div>
+        </div>
+
+        <div class="row g-2 mb-2">
+          <div class="col-md-6">
+            <label class="form-label small">
+              Chassi extraido (errado)
+              <small class="text-muted">(opcional)</small>
+            </label>
+            <input id="ap-chassi-errado" type="text" class="form-control"
+                   placeholder="Ex.: ABC123 (motor virou chassi)">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small">
+              Motor extraido (errado)
+              <small class="text-muted">(opcional)</small>
+            </label>
+            <input id="ap-motor-errado" type="text" class="form-control"
+                   placeholder="Ex.: null">
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mb-3">
+          <button id="ap-btn-recomendar" type="button" class="btn btn-primary btn-sm">
+            <i class="fas fa-lightbulb"></i> Recomendar acrescimo
+          </button>
+          <button id="ap-btn-testar" type="button" class="btn btn-warning btn-sm" disabled>
+            <i class="fas fa-vial"></i> Testar append
+          </button>
+        </div>
+
+        <div id="ap-resultado-recomendacao" class="d-none">
+          <hr>
+          <h6>Acrescimo sugerido (Sonnet)</h6>
+          <pre id="ap-acrescimo" class="bg-light p-2 rounded small" style="white-space: pre-wrap;"></pre>
+
+          <h6 class="mt-2">Append PROPOSTO (atual + acrescimo)</h6>
+          <textarea id="ap-proposto" class="form-control mb-2" rows="6"
+                    spellcheck="false"></textarea>
+          <small class="text-muted">
+            Voce pode editar o texto antes de testar/gravar.
+          </small>
+        </div>
+
+        <div id="ap-resultado-teste" class="d-none mt-3">
+          <hr>
+          <h6>Resultado do teste (Haiku)</h6>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <strong>Chassi extraido:</strong>
+              <code id="ap-teste-chassi">—</code>
+            </div>
+            <div class="col-md-6">
+              <strong>Motor extraido:</strong>
+              <code id="ap-teste-motor">—</code>
+            </div>
+          </div>
+          <details class="small mt-1">
+            <summary>Resposta bruta do LLM</summary>
+            <pre id="ap-teste-raw" class="bg-light p-2 rounded mt-1" style="white-space: pre-wrap; max-height: 200px; overflow: auto;"></pre>
+          </details>
+          <div id="ap-teste-veredito" class="alert mt-2 mb-0 d-none"></div>
+        </div>
+
+        <form id="ap-form-salvar" method="post" class="d-none mt-3"
+              action="{{ url_for('hora.tagplus_parser_append_salvar') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input id="ap-form-texto" type="hidden" name="texto_completo">
+          <input id="ap-form-acrescimo" type="hidden" name="acrescimo_aplicado">
+          <div class="mb-2">
+            <label class="form-label small">Motivo (auditoria)</label>
+            <input type="text" name="motivo" class="form-control"
+                   placeholder="Ex.: NFe 538 - chassi vinha apos MOTOR sem prefixo Nº">
+          </div>
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="fas fa-save"></i> Gravar nova versao
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h5 class="mt-4">Histórico ({{ historico|length }} versões)</h5>
+{% if historico %}
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th style="width: 50px;">v</th>
+        <th style="width: 110px;">Status</th>
+        <th>Acréscimo</th>
+        <th style="width: 200px;">Motivo</th>
+        <th style="width: 150px;">Criado em</th>
+        <th style="width: 130px;">Por</th>
+        <th style="width: 100px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in historico %}
+      <tr>
+        <td><code>v{{ h.versao }}</code></td>
+        <td>
+          {% if h.ativo %}
+            <span class="badge bg-success">ATIVO</span>
+          {% else %}
+            <span class="badge bg-light text-dark">historico</span>
+          {% endif %}
+        </td>
+        <td><small>{{ (h.acrescimo_aplicado or '—')[:200] }}</small></td>
+        <td><small>{{ h.motivo or '—' }}</small></td>
+        <td><small>{{ h.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+        <td><small>{{ h.criado_por or '—' }}</small></td>
+        <td>
+          {% if not h.ativo %}
+          <form method="post"
+                action="{{ url_for('hora.tagplus_parser_append_reativar', append_id=h.id) }}"
+                onsubmit="return confirm('Reativar v{{ h.versao }} como nova versão?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+              <i class="fas fa-undo"></i> Reativar
+            </button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">Nenhuma versão criada ainda.</p>
+{% endif %}
+
+<script>
+(function() {
+  var detalhes = document.getElementById('ap-detalhes');
+  var btnRec = document.getElementById('ap-btn-recomendar');
+  var btnTes = document.getElementById('ap-btn-testar');
+  var boxRec = document.getElementById('ap-resultado-recomendacao');
+  var boxTes = document.getElementById('ap-resultado-teste');
+  var formSalvar = document.getElementById('ap-form-salvar');
+  var elProposto = document.getElementById('ap-proposto');
+  var elAcrescimo = document.getElementById('ap-acrescimo');
+  var elTesteChassi = document.getElementById('ap-teste-chassi');
+  var elTesteMotor = document.getElementById('ap-teste-motor');
+  var elTesteRaw = document.getElementById('ap-teste-raw');
+  var elVeredito = document.getElementById('ap-teste-veredito');
+  var formTexto = document.getElementById('ap-form-texto');
+  var formAcrescimo = document.getElementById('ap-form-acrescimo');
+
+  function getValores() {
+    return {
+      detalhes: detalhes.value || '',
+      extracao_atual: {
+        chassi: document.getElementById('ap-chassi-errado').value || null,
+        motor: document.getElementById('ap-motor-errado').value || null,
+      },
+      valor_correto: {
+        chassi: document.getElementById('ap-chassi-correto').value || null,
+        motor: document.getElementById('ap-motor-correto').value || null,
+      },
+    };
+  }
+
+  btnRec.addEventListener('click', function() {
+    btnRec.disabled = true;
+    btnRec.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pensando…';
+    fetch('{{ url_for("hora.tagplus_parser_append_recomendar") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token() }}',
+      },
+      body: JSON.stringify(getValores()),
+    })
+    .then(function(r) { return r.json().then(function(j){ return [r.status, j]; }); })
+    .then(function(arr) {
+      var status = arr[0], j = arr[1];
+      if (!j.ok) {
+        alert('Erro: ' + (j.erro || ('HTTP ' + status)));
+        return;
+      }
+      elAcrescimo.textContent = j.acrescimo || '';
+      elProposto.value = j.append_proposto || '';
+      boxRec.classList.remove('d-none');
+      btnTes.disabled = false;
+    })
+    .catch(function(err) { alert('Falha: ' + err); })
+    .finally(function() {
+      btnRec.disabled = false;
+      btnRec.innerHTML = '<i class="fas fa-lightbulb"></i> Recomendar acrescimo';
+    });
+  });
+
+  btnTes.addEventListener('click', function() {
+    btnTes.disabled = true;
+    btnTes.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testando…';
+    elVeredito.classList.add('d-none');
+    fetch('{{ url_for("hora.tagplus_parser_append_testar") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': '{{ csrf_token() }}',
+      },
+      body: JSON.stringify({
+        detalhes: detalhes.value || '',
+        append_proposto: elProposto.value || '',
+      }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      elTesteChassi.textContent = j.chassi || '—';
+      elTesteMotor.textContent = j.motor || '—';
+      elTesteRaw.textContent = j.raw_response || '';
+      boxTes.classList.remove('d-none');
+
+      // Veredito: bate com valor_correto?
+      var v = getValores().valor_correto;
+      var okChassi = !v.chassi || (j.chassi || '').toUpperCase() === v.chassi.toUpperCase();
+      var okMotor = !v.motor || (j.motor || '').toUpperCase() === v.motor.toUpperCase();
+      if (j.ok && okChassi && okMotor) {
+        elVeredito.className = 'alert alert-success mt-2 mb-0';
+        elVeredito.innerHTML = '<i class="fas fa-check"></i> ' +
+          'Bateu com o valor correto. Pronto para gravar.';
+        elVeredito.classList.remove('d-none');
+        // Prepara form de gravacao.
+        formTexto.value = elProposto.value || '';
+        formAcrescimo.value = elAcrescimo.textContent || '';
+        formSalvar.classList.remove('d-none');
+      } else {
+        elVeredito.className = 'alert alert-warning mt-2 mb-0';
+        elVeredito.innerHTML = (j.ok ?
+          'Resultado nao bate com o valor correto — ajuste o append e teste de novo.' :
+          'LLM indisponivel. Verifique ANTHROPIC_API_KEY no servidor.');
+        elVeredito.classList.remove('d-none');
+        formSalvar.classList.add('d-none');
+      }
+    })
+    .catch(function(err) { alert('Falha: ' + err); })
+    .finally(function() {
+      btnTes.disabled = false;
+      btnTes.innerHTML = '<i class="fas fa-vial"></i> Testar append';
+    });
+  });
+
+  // Re-edicao manual do proposto invalida o teste anterior.
+  elProposto.addEventListener('input', function() {
+    formSalvar.classList.add('d-none');
+    boxTes.classList.add('d-none');
+  });
+})();
+</script>
+{% endblock %}

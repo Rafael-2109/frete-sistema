@@ -48,6 +48,11 @@ class PayloadBuilder:
     def __init__(self, conta: HoraTagPlusConta):
         self.conta = conta
         self.api = ApiClient(conta)
+        # Cache de lookups de cidade — POR INSTANCIA. Antes era class-level
+        # (mutavel compartilhada entre todos os PayloadBuilder do processo)
+        # e cacheava `None` em falha transiente, envenenando emissoes
+        # subsequentes para a mesma cidade. Ver R1 do code review 2026-04-30.
+        self._cache_id_cidade: dict[tuple[str, str], int | None] = {}
 
     # --------------------------------------------------------------
     # Public
@@ -138,12 +143,23 @@ class PayloadBuilder:
     # Destinatario (cliente TagPlus)
     # --------------------------------------------------------------
     def _resolver_destinatario(self, venda: 'HoraVenda') -> int:
-        cpf = self._so_digitos(venda.cpf_cliente)
-        if not cpf or len(cpf) != 11:
+        # Aceita PF (CPF, 11) ou PJ (CNPJ, 14). doc_tagplus.md:716-744
+        # confirma que schema do Cliente expoe campos `cpf` E `cnpj` separados;
+        # TagPlus discrimina PF/PJ por `tipo` ('F'/'J').
+        from app.hora.services.tagplus._documento import (
+            TIPO_CNPJ, normalizar_documento,
+        )
+        documento, tipo_doc = normalizar_documento(venda.cpf_cliente)
+        if not tipo_doc:
             raise PayloadBuilderError(
                 'cpf_invalido',
-                f'CPF invalido na venda {venda.id}: {venda.cpf_cliente!r}',
+                f'Documento invalido na venda {venda.id}: '
+                f'{venda.cpf_cliente!r} (esperado CPF com 11 ou CNPJ com 14 digitos)',
             )
+        # Mantem nome de variavel `cpf` no resto da funcao para minimizar
+        # diff — semanticamente eh "documento" (CPF ou CNPJ).
+        cpf = documento
+        is_pj = tipo_doc == TIPO_CNPJ
 
         # 1) Localizar via busca livre + match local exato.
         # NF #727 (venda #2, 2026-04-28) confirmou via response do POST /nfes que:
@@ -221,15 +237,17 @@ class PayloadBuilder:
                     m.get('cpf') or m.get('cpf_cnpj') or m.get('cnpj') or ''
                 )
                 if cpf_match != cpf:
+                    rotulo_doc = 'CNPJ' if is_pj else 'CPF'
                     logger.error(
                         'TagPlus _resolver_destinatario MATCH INVALIDO: '
-                        'CPF venda=%s != CPF retornado=%s. Match=%r',
-                        cpf, cpf_match, m,
+                        '%s venda=%s != documento retornado=%s. Match=%r',
+                        rotulo_doc, cpf, cpf_match, m,
                     )
                     raise PayloadBuilderError(
                         'cliente_match_invalido',
-                        f'GET /clientes?q={cpf} retornou cliente com CPF '
-                        f'{cpf_match!r} (esperado {cpf!r}). '
+                        f'GET /clientes?q={cpf} retornou cliente com '
+                        f'documento {cpf_match!r} (esperado {rotulo_doc} '
+                        f'{cpf!r}). '
                         f'Match candidato: id={m.get("id")} '
                         f'id_entidade={m.get("id_entidade")} '
                         f'razao_social={m.get("razao_social") or m.get("nome")!r}. '
@@ -261,28 +279,34 @@ class PayloadBuilder:
                 )
                 return int(id_entidade)
             if len(matches) > 1:
+                rotulo_doc = 'CNPJ' if is_pj else 'CPF'
                 raise PayloadBuilderError(
                     'destinatario_ambiguo',
-                    f'CPF {cpf} encontrado em {len(matches)} clientes no TagPlus '
-                    f'(IDs: {[(m.get("id"), m.get("id_entidade")) for m in matches]}). '
+                    f'{rotulo_doc} {cpf} encontrado em {len(matches)} clientes '
+                    f'no TagPlus (IDs: '
+                    f'{[(m.get("id"), m.get("id_entidade")) for m in matches]}). '
                     f'Resolver manualmente no portal antes de emitir.',
                 )
             # 0 matches -> nao existe ainda, criar via POST abaixo.
 
         # 2) Cria.
-        # Schema TagPlus Cliente PF (doc_tagplus.md:506-525, 716-744): apenas
+        # Schema TagPlus Cliente (doc_tagplus.md:506-525, 716-744): apenas
         # campos confirmados sao enviados (TagPlus retorna 422 com "Campo
         # adicional nao permitido" se enviar campos fora do schema).
         # Campos do schema: tipo, razao_social, cpf, cnpj, ativo, codigo,
         # exterior, enderecos[].
+        # tipo='F' (PF) usa cpf; tipo='J' (PJ) usa cnpj.
         # NAO ENVIAR: nome (use razao_social), email/telefone (nao confirmados
         # no schema de Cliente embutido na resposta da NFe — sao campos de
         # Funcionario/Vendedor, nao Cliente).
         body: dict = {
-            'tipo': 'F',
+            'tipo': 'J' if is_pj else 'F',
             'razao_social': (venda.nome_cliente or '').strip(),
-            'cpf': cpf,
         }
+        if is_pj:
+            body['cnpj'] = cpf
+        else:
+            body['cpf'] = cpf
 
         # Endereco do destinatario — exigido pela SEFAZ na emissao.
         # Vendas DANFE legacy nao tem endereco (parser nao extrai). Vendas
@@ -305,10 +329,12 @@ class PayloadBuilder:
                 id_entidade = created.get('id_entidade')
                 logger.info(
                     'TagPlus POST /clientes criou: id=%r id_entidade=%r '
-                    'razao_social=%r cpf=%r',
+                    'razao_social=%r tipo=%s documento=%r',
                     id_cliente, id_entidade,
                     created.get('razao_social') or created.get('nome'),
-                    created.get('cpf') or created.get('cpf_cnpj'),
+                    'J' if is_pj else 'F',
+                    created.get('cnpj') if is_pj
+                    else (created.get('cpf') or created.get('cpf_cnpj')),
                 )
 
             if not id_entidade and id_cliente:
@@ -316,9 +342,9 @@ class PayloadBuilder:
 
             if id_entidade:
                 logger.info(
-                    'TagPlus cliente novo cpf=%s id_cliente=%s id_entidade=%s '
-                    '(destinatario)',
-                    cpf, id_cliente, id_entidade,
+                    'TagPlus cliente novo tipo=%s documento=%s id_cliente=%s '
+                    'id_entidade=%s (destinatario)',
+                    'J' if is_pj else 'F', cpf, id_cliente, id_entidade,
                 )
                 return int(id_entidade)
 
@@ -387,9 +413,6 @@ class PayloadBuilder:
             )
 
         return {k: v for k, v in endereco.items() if v is not None}
-
-    # Cache de sessao para lookups de cidade (evita N+1 em batch).
-    _cache_id_cidade: dict[tuple[str, str], int | None] = {}
 
     def _resolver_id_cidade(self, cidade: str, uf: str) -> int | None:
         """Lookup `GET /cidades?q=<cidade>` com match local por nome+UF.
