@@ -1,139 +1,311 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
-<h2 class="mb-3">Preview: Importar Pedido de Compra</h2>
-<p class="text-muted"><small>Arquivo: <code>{{ nome_arquivo }}</code> — header detectado na linha {{ extracao.header_row }}.</small></p>
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h2 class="mb-1">Preview: Importar Pedidos de Compra</h2>
+    <small class="text-muted">
+      <strong>{{ total_arquivos }}</strong> arquivo(s) processado(s) ·
+      <strong class="text-success">{{ total_elegiveis }}</strong> elegíveis (HORA) ·
+      <strong class="text-secondary">{{ total_arquivos - total_elegiveis }}</strong> descartados
+    </small>
+  </div>
+  <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-secondary btn-sm">
+    <i class="fas fa-arrow-left"></i> Voltar
+  </a>
+</div>
 
-{% if extracao.avisos %}
+{# Avisos de duplicidade dentro do batch #}
+{% set duplicados = numeros_vistos.items() | selectattr('1', 'gt', 1) | list %}
+{% if duplicados %}
 <div class="alert alert-warning">
-  <strong>Avisos:</strong>
+  <strong>Pedido(s) duplicado(s) no batch:</strong>
   <ul class="mb-0">
-    {% for aviso in extracao.avisos %}<li>{{ aviso }}</li>{% endfor %}
+    {% for numero, qtd in duplicados %}
+      <li><code>{{ numero }}</code> aparece <strong>{{ qtd }}</strong> vezes —
+        confirme só uma das ocorrências (a outra falharia com "pedido já existe").</li>
+    {% endfor %}
   </ul>
 </div>
 {% endif %}
 
-<form method="post" action="{{ url_for('hora.pedidos_importar_xlsx_confirmar') }}">
+<form method="post" action="{{ url_for('hora.pedidos_importar_xlsx_confirmar') }}" id="form-confirmar">
   <input type="hidden" name="token" value="{{ token }}">
 
-  <div class="card p-3 mb-3">
-    <h5>Loja destino</h5>
-    <p class="mb-2"><small class="text-muted">{{ msg_lookup }}</small></p>
-
-    <div class="mb-2">
-      <strong>Texto detectado no cabeçalho:</strong>
-      {% if extracao.apelido_detectado %}
-        <code class="me-2">{{ extracao.apelido_detectado }}</code>
-      {% else %}
-        <span class="text-muted">nenhum</span>
-      {% endif %}
-      {% if extracao.cnpjs_candidatos %}
-        <br><small class="text-muted">
-          CNPJs no arquivo ({{ extracao.cnpjs_candidatos|length }}):
-          {% for c in extracao.cnpjs_candidatos %}<code class="me-1">{{ c }}</code>{% endfor %}
-          — típico vir o CNPJ da matriz (Tatuapé).
-        </small>
-      {% endif %}
+  {# Toolbar topo: select all / none + botão confirmar #}
+  <div class="d-flex align-items-center justify-content-between mb-3 sticky-top bg-body py-2"
+       style="top: 0; z-index: 10; border-bottom: 1px solid var(--bs-border-color);">
+    <div class="d-flex gap-2 align-items-center">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-select-all">
+        <i class="fas fa-check-square"></i> Marcar todos elegíveis
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-select-none">
+        <i class="fas fa-square"></i> Desmarcar todos
+      </button>
+      <small class="text-muted ms-2">
+        <span id="counter-marcados">0</span> de {{ total_elegiveis }} marcado(s)
+      </small>
     </div>
-
-    <div class="row g-2">
-      <div class="col-md-8">
-        <label class="form-label">
-          Loja HORA (destino físico) <span class="text-danger">*</span>
-        </label>
-        <select name="loja_destino_id" class="form-select" required>
-          <option value="">— Selecione a loja —</option>
-          {% for loja in lojas_ativas %}
-            <option value="{{ loja.id }}"
-                    {% if loja.id == loja_sugerida_id %}selected{% endif %}>
-              {{ loja.rotulo_display }}{% if loja.cidade %} ({{ loja.cidade }}){% endif %}{% if loja.id == loja_sugerida_id %} — sugerida{% endif %}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-4 d-flex align-items-end">
-        <div class="text-muted small">
-          {% if loja_sugerida_id %}
-            <i class="fas fa-check-circle text-success"></i> Auto-sugerida via cabeçalho
-          {% else %}
-            <i class="fas fa-exclamation-triangle text-warning"></i> Selecione manualmente
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card p-3 mb-3">
-    <h5>Cabeçalho do pedido</h5>
-    <div class="row g-2 small">
-      <div class="col-md-3">
-        <label class="form-label">Número pedido</label>
-        <input type="text" class="form-control" value="{{ extracao.numero_pedido or '—' }}" readonly>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">Data do pedido</label>
-        <input type="text" class="form-control"
-               value="{{ extracao.data_pedido.strftime('%d/%m/%Y') if extracao.data_pedido else '—' }}"
-               readonly>
-      </div>
-      <div class="col-md-6">
-        <label class="form-label">Cliente (texto do arquivo)</label>
-        <input type="text" class="form-control" value="{{ extracao.cliente_nome or '—' }}" readonly>
-      </div>
-    </div>
-  </div>
-
-  <div class="card p-3 mb-3">
-    <h5>Itens extraídos ({{ extracao.itens|length }})</h5>
-    <div class="table-responsive hora-table-sticky" style="max-height: 500px; overflow-y: auto;">
-      <table class="table table-sm table-hover">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Linha</th>
-            <th>Chassi</th>
-            <th>Modelo</th>
-            <th>Cor</th>
-            <th>Preço</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in extracao.itens %}
-            <tr class="{% if item.aviso == 'chassi_pendente' %}table-warning{% endif %}">
-              <td><small>{{ loop.index }}</small></td>
-              <td><small>L{{ item.linha_origem }}</small></td>
-              <td class="chassi-mono">
-                {% if item.numero_chassi %}
-                  {{ item.numero_chassi }}
-                {% else %}
-                  <span class="text-warning"><i class="fas fa-hourglass-half"></i> PENDENTE</span>
-                {% endif %}
-              </td>
-              <td>{{ item.modelo or '—' }}</td>
-              <td>{{ item.cor or '—' }}</td>
-              <td>{{ item.preco_compra_esperado|valor_br if item.preco_compra_esperado else '—' }}</td>
-              <td>
-                {% if item.aviso == 'chassi_pendente' %}
-                  <span class="badge hora-badge-divergencia">chassi pendente</span>
-                {% else %}
-                  <span class="badge bg-success">OK</span>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-success">
-      <i class="fas fa-check"></i> Confirmar e criar pedido
+    <button type="submit" class="btn btn-success" id="btn-confirmar" disabled>
+      <i class="fas fa-check"></i> Confirmar e criar
+      <span id="btn-confirmar-count">0</span> pedido(s)
     </button>
-    <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-secondary">
-      Voltar e escolher outro arquivo
-    </a>
+  </div>
+
+  {# Cards dos arquivos ELEGÍVEIS (CNPJ matriz HORA presente) #}
+  {% for card in cards_elegiveis %}
+    {% set idx = card.token_index %}
+    {% set ext = card.extracao %}
+
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center gap-2">
+        <input type="checkbox" name="incluir_idx[]" value="{{ idx }}"
+               class="form-check-input incluir-checkbox"
+               id="incluir-{{ idx }}" checked>
+
+        <strong class="me-auto">
+          <i class="fas fa-file-excel text-success"></i>
+          {{ card.nome_arquivo }}
+          <small class="text-muted">({{ card.tamanho_kb }} KB)</small>
+        </strong>
+
+        {% if card.aviso_duplicado_batch %}
+          <span class="badge bg-warning text-dark">duplicado no batch</span>
+        {% else %}
+          <span class="badge bg-success">OK</span>
+        {% endif %}
+      </div>
+
+      <div class="card-body">
+          {# Cabeçalho do pedido #}
+          <div class="row g-2 mb-3">
+            <div class="col-md-3">
+              <label class="form-label small">Número pedido</label>
+              <input type="text" class="form-control form-control-sm"
+                     value="{{ ext.numero_pedido or '—' }}" readonly>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">Data</label>
+              <input type="text" class="form-control form-control-sm"
+                     value="{{ ext.data_pedido.strftime('%d/%m/%Y') if ext.data_pedido else '—' }}"
+                     readonly>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">Cliente (texto do arquivo)</label>
+              <input type="text" class="form-control form-control-sm"
+                     value="{{ ext.cliente_nome or '—' }}" readonly>
+            </div>
+          </div>
+
+          {# Loja destino — campo único com select #}
+          <div class="row g-2 mb-3">
+            <div class="col-md-8">
+              <label class="form-label small">
+                Loja HORA (destino físico) <span class="text-danger">*</span>
+              </label>
+              <select name="loja_destino_id_{{ idx }}" class="form-select form-select-sm" required>
+                <option value="">— Selecione a loja —</option>
+                {% for loja in lojas_ativas %}
+                  <option value="{{ loja.id }}"
+                          {% if loja.id == card.loja_sugerida_id %}selected{% endif %}>
+                    {{ loja.rotulo_display }}{% if loja.cidade %} ({{ loja.cidade }}){% endif %}{% if loja.id == card.loja_sugerida_id %} — sugerida{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+              <small class="text-muted">
+                {% if card.loja_sugerida_id %}
+                  <i class="fas fa-check-circle text-success"></i>
+                  Auto-sugerida via cabeçalho
+                  {% if ext.apelido_detectado %}
+                    (<code>{{ ext.apelido_detectado }}</code>)
+                  {% endif %}
+                {% else %}
+                  <i class="fas fa-exclamation-triangle text-warning"></i>
+                  {{ card.msg_lookup or 'Selecione manualmente' }}
+                {% endif %}
+              </small>
+            </div>
+          </div>
+
+          {# Avisos do parser #}
+          {% if ext.avisos %}
+            <div class="alert alert-warning py-2 mb-3">
+              <small>
+                <strong>Avisos:</strong>
+                {{ ext.avisos | join(' · ') }}
+              </small>
+            </div>
+          {% endif %}
+
+          {# Itens (collapse para batch grande) #}
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Itens ({{ ext.itens|length }})</strong>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-bs-toggle="collapse" data-bs-target="#itens-{{ idx }}">
+              <i class="fas fa-chevron-down"></i> Ver/ocultar itens
+            </button>
+          </div>
+          <div class="collapse" id="itens-{{ idx }}">
+            <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+              <table class="table table-sm table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Linha</th>
+                    <th>Chassi</th>
+                    <th>Modelo</th>
+                    <th>Cor</th>
+                    <th>Preço</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in ext.itens %}
+                    <tr class="{% if item.aviso == 'chassi_pendente' %}table-warning{% endif %}">
+                      <td><small>{{ loop.index }}</small></td>
+                      <td><small>L{{ item.linha_origem }}</small></td>
+                      <td class="chassi-mono">
+                        {% if item.numero_chassi %}
+                          {{ item.numero_chassi }}
+                        {% else %}
+                          <span class="text-warning">
+                            <i class="fas fa-hourglass-half"></i> PENDENTE
+                          </span>
+                        {% endif %}
+                      </td>
+                      <td>{{ item.modelo or '—' }}</td>
+                      <td>{{ item.cor or '—' }}</td>
+                      <td>{{ item.preco_compra_esperado|valor_br if item.preco_compra_esperado else '—' }}</td>
+                      <td>
+                        {% if item.aviso == 'chassi_pendente' %}
+                          <span class="badge hora-badge-divergencia">chassi pendente</span>
+                        {% else %}
+                          <span class="badge bg-success">OK</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+      </div>
+    </div>
+  {% endfor %}
+
+  {# Lista compacta de DESCARTADOS (sem CNPJ matriz HORA ou erro de parse).
+     Caso típico: subir 1000 XLSX e ter 900 de outros clientes — nao queremos
+     poluir a tela com cards grandes para cada um. #}
+  {% if cards_descartados %}
+  <div class="card mb-3">
+    <div class="card-header bg-light d-flex align-items-center">
+      <strong>
+        <i class="fas fa-filter text-muted"></i>
+        {{ cards_descartados|length }} arquivo(s) descartado(s)
+      </strong>
+      <small class="text-muted ms-2">
+        — XLSX que não são pedidos HORA (CNPJ matriz ausente) ou que falharam no parse
+      </small>
+      <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+              data-bs-toggle="collapse" data-bs-target="#descartados-lista">
+        <i class="fas fa-chevron-down"></i> Ver/ocultar
+      </button>
+    </div>
+    <div class="collapse" id="descartados-lista">
+      <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="sticky-top bg-light">
+            <tr>
+              <th>#</th>
+              <th>Arquivo</th>
+              <th>Tamanho</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for card in cards_descartados %}
+              <tr>
+                <td><small class="text-muted">{{ loop.index }}</small></td>
+                <td><small><code>{{ card.nome_arquivo }}</code></small></td>
+                <td><small class="text-muted">{{ card.tamanho_kb }} KB</small></td>
+                <td>
+                  {% if not card.parse_ok %}
+                    <span class="badge bg-danger">erro de parse</span>
+                  {% else %}
+                    <span class="badge bg-secondary">CNPJ matriz ausente</span>
+                  {% endif %}
+                  <small class="text-muted ms-1">{{ card.erro }}</small>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Botão de confirmar repetido no rodapé para usabilidade em listas longas #}
+  <div class="d-flex justify-content-end mt-3 mb-5">
+    <button type="submit" class="btn btn-success" id="btn-confirmar-bottom" disabled>
+      <i class="fas fa-check"></i> Confirmar e criar
+      <span id="btn-confirmar-count-bottom">0</span> pedido(s)
+    </button>
   </div>
 </form>
+
+<script>
+(function() {
+  const checkboxes = document.querySelectorAll('.incluir-checkbox');
+  const counter = document.getElementById('counter-marcados');
+  const btnTop = document.getElementById('btn-confirmar');
+  const btnBottom = document.getElementById('btn-confirmar-bottom');
+  const countTop = document.getElementById('btn-confirmar-count');
+  const countBottom = document.getElementById('btn-confirmar-count-bottom');
+
+  function atualizar() {
+    const marcados = Array.from(checkboxes).filter(c => c.checked).length;
+    counter.textContent = marcados;
+    countTop.textContent = marcados;
+    countBottom.textContent = marcados;
+    btnTop.disabled = (marcados === 0);
+    btnBottom.disabled = (marcados === 0);
+  }
+
+  checkboxes.forEach(c => c.addEventListener('change', atualizar));
+
+  document.getElementById('btn-select-all').addEventListener('click', () => {
+    checkboxes.forEach(c => { c.checked = true; });
+    atualizar();
+  });
+  document.getElementById('btn-select-none').addEventListener('click', () => {
+    checkboxes.forEach(c => { c.checked = false; });
+    atualizar();
+  });
+
+  // Validação de submit: garante que cada pedido marcado tem loja selecionada.
+  document.getElementById('form-confirmar').addEventListener('submit', (ev) => {
+    const faltando = [];
+    checkboxes.forEach(c => {
+      if (!c.checked) return;
+      const idx = c.value;
+      const select = document.querySelector(`select[name="loja_destino_id_${idx}"]`);
+      if (select && !select.value) {
+        faltando.push(idx);
+        select.classList.add('is-invalid');
+      } else if (select) {
+        select.classList.remove('is-invalid');
+      }
+    });
+    if (faltando.length > 0) {
+      ev.preventDefault();
+      alert(`Selecione a loja destino para ${faltando.length} pedido(s) marcado(s).`);
+    }
+  });
+
+  atualizar();  // estado inicial (todos marcados por default)
+})();
+</script>
 {% endblock %}

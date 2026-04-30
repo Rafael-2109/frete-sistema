@@ -524,10 +524,35 @@ def create_app(config_name=None):
 
         @app.errorhandler(413)
         def request_entity_too_large(error):  # pyright: ignore[reportUnusedFunction]
-            """Captura erros 413 - arquivo muito grande para upload"""
+            """Captura erros 413 - request muito grande.
+
+            Werkzeug dispara 413 em 3 cenarios distintos:
+            1. Body total > MAX_CONTENT_LENGTH (request inteiro)
+            2. Campo de form > MAX_FORM_MEMORY_SIZE (default 500 KB no
+               Werkzeug 3.x — comum em tokens base64 grandes)
+            3. Numero de partes multipart > MAX_FORM_PARTS (default 1000)
+            """
             from flask import jsonify, flash, redirect, url_for
-            max_mb = app.config.get('MAX_CONTENT_LENGTH', 32 * 1024 * 1024) // (1024 * 1024)
-            msg = f'Arquivo muito grande. Limite máximo: {max_mb}MB'
+            max_body_mb = app.config.get('MAX_CONTENT_LENGTH', 32 * 1024 * 1024) // (1024 * 1024)
+            max_form_mb = app.config.get('MAX_FORM_MEMORY_SIZE', 500 * 1024) // (1024 * 1024)
+            content_length = request.content_length or 0
+            content_mb = content_length // (1024 * 1024) if content_length else None
+
+            err_msg = str(error) or ''
+            if 'parts' in err_msg.lower():
+                msg = (
+                    f'Muitas partes no formulario (max '
+                    f'{app.config.get("MAX_FORM_PARTS", 1000)}).'
+                )
+            elif 'form' in err_msg.lower() or 'field' in err_msg.lower():
+                msg = (
+                    f'Campo de formulario muito grande. Limite por campo: '
+                    f'{max_form_mb}MB. Reduza dados antes de enviar.'
+                )
+            else:
+                detalhe = f' (recebido: ~{content_mb}MB)' if content_mb else ''
+                msg = f'Arquivo muito grande. Limite maximo: {max_body_mb}MB{detalhe}.'
+
             if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({'erro': msg}), 413
             flash(msg, 'danger')

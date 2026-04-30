@@ -19,6 +19,21 @@
         <i class="fas fa-magic"></i> Completar chassis ({{ pendentes|length }})
       </a>
     {% endif %}
+    <button type="button" class="btn btn-sm btn-outline-primary"
+            data-bs-toggle="modal" data-bs-target="#modalEditarPedido">
+      <i class="fas fa-pen"></i> Editar pedido
+    </button>
+    {% if pode_excluir_pedido %}
+      <button type="button" class="btn btn-sm btn-outline-danger"
+              data-bs-toggle="modal" data-bs-target="#modalExcluirPedido">
+        <i class="fas fa-trash"></i> Excluir pedido
+      </button>
+    {% else %}
+      <button type="button" class="btn btn-sm btn-outline-danger" disabled
+              title="Pedido tem NF(s) vinculada(s) — desvincule antes de excluir">
+        <i class="fas fa-trash"></i> Excluir pedido
+      </button>
+    {% endif %}
   </div>
 </div>
 
@@ -55,7 +70,13 @@
 </div>
 {% endif %}
 
-<h4>Itens do pedido <small class="text-muted">— 1 linha = dados do pedido · 2ª linha = vinculo com NF</small></h4>
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h4 class="mb-0">Itens do pedido <small class="text-muted">— 1 linha = dados do pedido · 2ª linha = vinculo com NF</small></h4>
+  <button type="button" class="btn btn-sm btn-outline-success"
+          data-bs-toggle="modal" data-bs-target="#modalAdicionarItem">
+    <i class="fas fa-plus"></i> Adicionar item
+  </button>
+</div>
 <div class="table-responsive mb-4">
   <table class="table table-sm table-hover align-middle">
     <thead><tr>
@@ -96,14 +117,31 @@
             {% endif %}
           </td>
           <td rowspan="2" class="align-middle">
-            <button type="button" class="btn btn-sm btn-outline-secondary btn-editar-item"
-                    data-bs-toggle="modal" data-bs-target="#modalEditarItem"
-                    data-item-id="{{ item.id }}"
-                    data-chassi="{{ item.numero_chassi or '' }}"
-                    data-modelo="{{ item.modelo.nome_modelo if item.modelo else '' }}"
-                    data-cor="{{ item.cor or '' }}">
-              Editar
-            </button>
+            <div class="d-flex gap-1">
+              <button type="button" class="btn btn-sm btn-outline-secondary btn-editar-item"
+                      data-bs-toggle="modal" data-bs-target="#modalEditarItem"
+                      data-item-id="{{ item.id }}"
+                      data-chassi="{{ item.numero_chassi or '' }}"
+                      data-modelo="{{ item.modelo.nome_modelo if item.modelo else '' }}"
+                      data-cor="{{ item.cor or '' }}">
+                Editar
+              </button>
+              {% set chassi_em_nf = item.numero_chassi and item.numero_chassi in chassis_faturados_set %}
+              {% if chassi_em_nf %}
+                <button type="button" class="btn btn-sm btn-outline-danger" disabled
+                        title="Chassi ja faturado em NF — desvincule antes de remover">
+                  <i class="fas fa-times"></i>
+                </button>
+              {% else %}
+                <form method="post" class="d-inline m-0"
+                      action="{{ url_for('hora.pedidos_excluir_item', pedido_id=pedido.id, item_id=item.id) }}"
+                      onsubmit="return confirm('Remover este item do pedido?');">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Remover item">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         <tr class="{% if not v %}text-muted{% endif %}" style="background-color: rgba(0,0,0,.02);">
@@ -208,6 +246,120 @@
     </form>
   </div>
 </div>
+
+<!-- Modal editar header do pedido -->
+<div class="modal fade" id="modalEditarPedido" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post"
+          action="{{ url_for('hora.pedidos_editar_header', pedido_id=pedido.id) }}"
+          class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar pedido {{ pedido.numero_pedido }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Data do pedido</label>
+          <input type="date" name="data_pedido" class="form-control"
+                 value="{{ pedido.data_pedido.strftime('%Y-%m-%d') }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Loja destino</label>
+          <select name="loja_destino_id" class="form-select">
+            {% for loja in lojas_ativas %}
+              <option value="{{ loja.id }}"
+                      {% if loja.id == pedido.loja_destino_id %}selected{% endif %}>
+                {{ loja.rotulo_display }}{% if loja.cidade %} ({{ loja.cidade }}){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Observacoes</label>
+          <textarea name="observacoes" class="form-control" rows="3">{{ pedido.observacoes or '' }}</textarea>
+        </div>
+        <small class="text-muted">
+          <i class="fas fa-info-circle"></i>
+          Numero do pedido e CNPJ destino sao imutaveis.
+        </small>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal adicionar item ao pedido -->
+<div class="modal fade" id="modalAdicionarItem" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post"
+          action="{{ url_for('hora.pedidos_adicionar_item', pedido_id=pedido.id) }}"
+          class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Adicionar item ao pedido</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Chassi <small class="text-muted">(deixe vazio para pedido pre-NF)</small></label>
+          <input type="text" name="numero_chassi" class="form-control chassi-mono" maxlength="30">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Modelo</label>
+          <input type="text" name="modelo_nome" class="form-control"
+                 placeholder="ex: Voltz EV1">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Cor</label>
+          <input type="text" name="cor" class="form-control" placeholder="ex: PRETO">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Preco compra esperado (R$) <span class="text-danger">*</span></label>
+          <input type="text" name="preco_compra_esperado" class="form-control" required
+                 placeholder="0,00">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success">Adicionar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if pode_excluir_pedido %}
+<!-- Modal confirmar exclusao do pedido -->
+<div class="modal fade" id="modalExcluirPedido" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post"
+          action="{{ url_for('hora.pedidos_excluir', pedido_id=pedido.id) }}"
+          class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger">
+          <i class="fas fa-exclamation-triangle"></i> Excluir pedido?
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Voce esta prestes a excluir o pedido
+          <strong>{{ pedido.numero_pedido }}</strong>
+          com <strong>{{ pedido.itens|length }}</strong> item(ns).
+        </p>
+        <div class="alert alert-warning small mb-0">
+          Esta acao nao pode ser desfeita. Os itens serao removidos junto.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-danger">Excluir definitivamente</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 <script>
 (function() {

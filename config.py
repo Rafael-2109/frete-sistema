@@ -142,7 +142,19 @@ class Config:
     S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME")
 
     # Upload de arquivos
-    MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32MB max upload
+    # 512 MB cobre batches grandes do HORA (multi-XLSX) e roundtrip do token
+    # base64 no /pedidos/importar-xlsx/confirmar. Sistema interno, sem risco
+    # de DoS externo. Disco tem 889 GB livres.
+    MAX_CONTENT_LENGTH = 512 * 1024 * 1024  # 512MB max upload
+    # Werkzeug 3.x default = 500 KB para CAMPOS de form (nao files). O token
+    # base64 do /hora/pedidos/importar-xlsx/confirmar vai como campo de form
+    # e estourava esse limite mesmo com poucos arquivos. Subindo para 512 MB
+    # (mesmo que MAX_CONTENT_LENGTH) elimina esse gargalo.
+    MAX_FORM_MEMORY_SIZE = 512 * 1024 * 1024
+    # Numero maximo de partes em multipart/form-data (default 1000). Subimos
+    # para 2000 para acomodar o cap de 1000 XLSX + campos auxiliares (loja_*,
+    # incluir_idx[], token).
+    MAX_FORM_PARTS = 2000
     UPLOAD_EXTENSIONS = ["jpg", "jpeg", "png", "pdf", "xlsx", "docx", "txt"]
 
     # ===========================

@@ -325,6 +325,115 @@ def editar_nf_item_manual(
     }
 
 
+def exportar_nfs_excel(
+    data_inicio=None,
+    data_fim=None,
+    lojas_ids=None,
+    limit: int = 10000,
+) -> bytes:
+    """Exporta NFs de entrada com itens e vinculo de pedido por chassi para XLSX.
+
+    Cada linha = 1 item da NF (chassi). Se NF tem pedido vinculado, mostra
+    dados do pedido + tenta casar item-pedido pelo chassi para diferenca de preco.
+    """
+    import io
+    import pandas as pd
+    from app.hora.models import HoraPedidoItem
+
+    query = HoraNfEntrada.query
+    if data_inicio:
+        query = query.filter(HoraNfEntrada.data_emissao >= data_inicio)
+    if data_fim:
+        query = query.filter(HoraNfEntrada.data_emissao <= data_fim)
+    if lojas_ids is not None:
+        if not lojas_ids:
+            nfs = []
+        else:
+            query = query.filter(HoraNfEntrada.loja_destino_id.in_(lojas_ids))
+            nfs = query.order_by(HoraNfEntrada.data_emissao.desc(), HoraNfEntrada.id.desc()).limit(limit).all()
+    else:
+        nfs = query.order_by(HoraNfEntrada.data_emissao.desc(), HoraNfEntrada.id.desc()).limit(limit).all()
+
+    # Mapa (pedido_id, chassi) -> HoraPedidoItem para casar preco esperado.
+    pedido_ids = {nf.pedido_id for nf in nfs if nf.pedido_id}
+    itens_pedido_map: dict[tuple, HoraPedidoItem] = {}
+    if pedido_ids:
+        itens = (
+            HoraPedidoItem.query
+            .filter(HoraPedidoItem.pedido_id.in_(list(pedido_ids)))
+            .filter(HoraPedidoItem.numero_chassi.isnot(None))
+            .all()
+        )
+        for it in itens:
+            itens_pedido_map[(it.pedido_id, it.numero_chassi)] = it
+
+    linhas = []
+    for nf in nfs:
+        loja_nome = nf.loja_destino.rotulo_display if nf.loja_destino else ''
+        pedido = nf.pedido
+        for nfi in nf.itens:
+            chassi = nfi.numero_chassi
+            preco_real = float(nfi.preco_real) if nfi.preco_real is not None else None
+
+            item_ped = itens_pedido_map.get((pedido.id, chassi)) if pedido else None
+            preco_esp = (
+                float(item_ped.preco_compra_esperado)
+                if item_ped and item_ped.preco_compra_esperado is not None
+                else None
+            )
+            diferenca = (preco_real - preco_esp) if (preco_real is not None and preco_esp is not None) else None
+
+            if pedido and item_ped:
+                vinculo_chassi = 'CASADO'
+            elif pedido and not item_ped:
+                vinculo_chassi = 'CHASSI_NAO_NO_PEDIDO'
+            else:
+                vinculo_chassi = 'NF_SEM_PEDIDO'
+
+            linhas.append({
+                'NF Número': nf.numero_nf,
+                'Série': nf.serie_nf or '',
+                'Chave 44': nf.chave_44,
+                'Data Emissão': nf.data_emissao,
+                'Emitente': nf.nome_emitente or '',
+                'CNPJ Emitente': nf.cnpj_emitente,
+                'Loja Destino': loja_nome,
+                'Valor Total NF': float(nf.valor_total) if nf.valor_total is not None else None,
+                'Pedido Vinculado': pedido.numero_pedido if pedido else '',
+                'Data Pedido': pedido.data_pedido if pedido else None,
+                'Status Pedido': pedido.status if pedido else '',
+                'Chassi': chassi,
+                'Modelo (NF)': nfi.modelo_texto_original or '',
+                'Cor (NF)': nfi.cor_texto_original or '',
+                'Preço Real (NF)': preco_real,
+                'Preço Esperado (Pedido)': preco_esp,
+                'Diferença Preço': diferenca,
+                'Vínculo Chassi↔Pedido': vinculo_chassi,
+            })
+
+    df = pd.DataFrame(linhas, columns=[
+        'NF Número', 'Série', 'Chave 44', 'Data Emissão',
+        'Emitente', 'CNPJ Emitente', 'Loja Destino', 'Valor Total NF',
+        'Pedido Vinculado', 'Data Pedido', 'Status Pedido',
+        'Chassi', 'Modelo (NF)', 'Cor (NF)',
+        'Preço Real (NF)', 'Preço Esperado (Pedido)', 'Diferença Preço',
+        'Vínculo Chassi↔Pedido',
+    ])
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='NFs Compra HORA')
+        ws = writer.sheets['NFs Compra HORA']
+        for col_idx, col in enumerate(df.columns, start=1):
+            max_len = max(
+                [len(str(col))] + [len(str(v)) for v in df[col].head(200).astype(str)]
+            )
+            ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 2, 40)
+
+    output.seek(0)
+    return output.read()
+
+
 def listar_nfs_entrada(limit: int = 100, lojas_permitidas_ids=None, cnpjs_permitidos=None):
     """Lista NFs de entrada. lojas_permitidas_ids=None → todas; filtra por loja_destino_id."""
     query = HoraNfEntrada.query.order_by(

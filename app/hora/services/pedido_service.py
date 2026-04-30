@@ -180,6 +180,250 @@ def listar_pedidos(
     return query.limit(limit).all()
 
 
+def _pedido_tem_nf_vinculada(pedido) -> bool:
+    """True se ha pelo menos uma NF de entrada vinculada ao pedido."""
+    from app.hora.models import HoraNfEntrada
+    return db.session.query(
+        HoraNfEntrada.query.filter_by(pedido_id=pedido.id).exists()
+    ).scalar()
+
+
+def excluir_pedido(pedido_id: int, operador: Optional[str] = None) -> str:
+    """Exclui pedido (e seus itens via cascade). Bloqueia se tem NF vinculada."""
+    pedido = HoraPedido.query.get(pedido_id)
+    if not pedido:
+        raise ValueError(f'Pedido {pedido_id} nao encontrado')
+    if _pedido_tem_nf_vinculada(pedido):
+        raise ValueError(
+            f'Pedido {pedido.numero_pedido} tem NF(s) vinculada(s) — '
+            f'desvincule antes de excluir.'
+        )
+    numero = pedido.numero_pedido
+    db.session.delete(pedido)
+    db.session.commit()
+    return numero
+
+
+def editar_pedido_header(
+    pedido_id: int,
+    data_pedido: Optional[date] = None,
+    loja_destino_id: Optional[int] = None,
+    observacoes: Optional[str] = None,
+    operador: Optional[str] = None,
+) -> HoraPedido:
+    """Atualiza campos do header. numero_pedido e cnpj_destino sao imutaveis."""
+    pedido = HoraPedido.query.get(pedido_id)
+    if not pedido:
+        raise ValueError(f'Pedido {pedido_id} nao encontrado')
+
+    if data_pedido is not None:
+        pedido.data_pedido = data_pedido
+    if loja_destino_id is not None:
+        from app.hora.models import HoraLoja
+        if not HoraLoja.query.get(loja_destino_id):
+            raise ValueError(f'loja_destino_id={loja_destino_id} inexistente')
+        pedido.loja_destino_id = loja_destino_id
+    if observacoes is not None:
+        pedido.observacoes = observacoes or None
+
+    db.session.commit()
+    return pedido
+
+
+def adicionar_item_pedido(
+    pedido_id: int,
+    numero_chassi: Optional[str],
+    modelo_nome: Optional[str],
+    cor: Optional[str],
+    preco_compra_esperado,
+    operador: Optional[str] = None,
+) -> HoraPedidoItem:
+    """Cria novo HoraPedidoItem em pedido existente.
+
+    chassi opcional (pedido pre-NF). Valida chassi nao duplicado no pedido.
+    """
+    pedido = HoraPedido.query.get(pedido_id)
+    if not pedido:
+        raise ValueError(f'Pedido {pedido_id} nao encontrado')
+
+    chassi = (numero_chassi or '').strip().upper() or None
+
+    if chassi:
+        ja_no_pedido = any(
+            (i.numero_chassi or '').upper() == chassi for i in pedido.itens
+        )
+        if ja_no_pedido:
+            raise ValueError(f'Chassi {chassi} ja existe neste pedido')
+
+    if preco_compra_esperado is None:
+        raise ValueError('preco_compra_esperado obrigatorio')
+
+    if chassi:
+        moto = get_or_create_moto(
+            numero_chassi=chassi,
+            modelo_nome=modelo_nome,
+            cor=cor or 'NAO_INFORMADA',
+            criado_por=operador,
+        )
+        modelo_id = moto.modelo_id
+        chassi_final = moto.numero_chassi
+    else:
+        modelo_id = None
+        if modelo_nome:
+            from app.hora.services.cadastro_service import buscar_ou_criar_modelo
+            modelo = buscar_ou_criar_modelo(modelo_nome)
+            modelo_id = modelo.id
+        chassi_final = None
+
+    item = HoraPedidoItem(
+        pedido_id=pedido.id,
+        numero_chassi=chassi_final,
+        modelo_id=modelo_id,
+        cor=cor,
+        preco_compra_esperado=Decimal(str(preco_compra_esperado)),
+    )
+    db.session.add(item)
+    db.session.commit()
+    return item
+
+
+def excluir_item_pedido(
+    pedido_id: int,
+    item_id: int,
+    operador: Optional[str] = None,
+) -> None:
+    """Remove item de pedido. Bloqueia se chassi do item ja apareceu em NF vinculada."""
+    from app.hora.models import HoraNfEntrada, HoraNfEntradaItem
+
+    item = HoraPedidoItem.query.get(item_id)
+    if not item or item.pedido_id != pedido_id:
+        raise ValueError(f'Item {item_id} nao encontrado neste pedido')
+
+    pedido = item.pedido
+    # Impede deletar item cujo chassi ja foi faturado em NF deste pedido.
+    if item.numero_chassi:
+        existe_em_nf = db.session.query(
+            db.session.query(HoraNfEntradaItem)
+            .join(HoraNfEntrada, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+            .filter(HoraNfEntrada.pedido_id == pedido_id)
+            .filter(HoraNfEntradaItem.numero_chassi == item.numero_chassi)
+            .exists()
+        ).scalar()
+        if existe_em_nf:
+            raise ValueError(
+                f'Chassi {item.numero_chassi} ja foi faturado em NF deste pedido — '
+                f'desvincule a NF antes de remover o item.'
+            )
+
+    if len(pedido.itens) <= 1:
+        raise ValueError('Pedido precisa ter pelo menos 1 item')
+
+    db.session.delete(item)
+    db.session.commit()
+
+
+def exportar_pedidos_excel(
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+    lojas_ids: Optional[List[int]] = None,
+    limit: int = 10000,
+) -> bytes:
+    """Exporta pedidos com itens e vinculo NF por chassi para XLSX.
+
+    Cada linha = 1 item de pedido. Se chassi ja apareceu em NF vinculada,
+    mostra dados da NF na mesma linha.
+    """
+    import io
+    import pandas as pd
+    from app.hora.models import HoraNfEntrada, HoraNfEntradaItem
+
+    query = HoraPedido.query
+    if data_inicio:
+        query = query.filter(HoraPedido.data_pedido >= data_inicio)
+    if data_fim:
+        query = query.filter(HoraPedido.data_pedido <= data_fim)
+    if lojas_ids is not None:
+        if not lojas_ids:
+            pedidos = []
+        else:
+            query = query.filter(HoraPedido.loja_destino_id.in_(lojas_ids))
+            pedidos = query.order_by(HoraPedido.data_pedido.desc(), HoraPedido.id.desc()).limit(limit).all()
+    else:
+        pedidos = query.order_by(HoraPedido.data_pedido.desc(), HoraPedido.id.desc()).limit(limit).all()
+
+    # Mapa chassi -> (NF, NF item) para os pedidos retornados.
+    pedido_ids = [p.id for p in pedidos]
+    vinculos: dict[str, tuple] = {}
+    if pedido_ids:
+        nf_items_query = (
+            db.session.query(HoraNfEntradaItem, HoraNfEntrada)
+            .join(HoraNfEntrada, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+            .filter(HoraNfEntrada.pedido_id.in_(pedido_ids))
+            .all()
+        )
+        for nf_item, nf in nf_items_query:
+            chave = (nf.pedido_id, nf_item.numero_chassi)
+            vinculos[chave] = (nf, nf_item)
+
+    linhas = []
+    for p in pedidos:
+        loja_nome = p.loja_destino.rotulo_display if p.loja_destino else ''
+        for item in p.itens:
+            chassi = item.numero_chassi or ''
+            modelo_nome = item.modelo.nome_modelo if item.modelo else ''
+            preco_esp = float(item.preco_compra_esperado) if item.preco_compra_esperado is not None else None
+
+            nf, nf_item = vinculos.get((p.id, chassi), (None, None)) if chassi else (None, None)
+            preco_real = float(nf_item.preco_real) if nf_item and nf_item.preco_real is not None else None
+            diferenca = (preco_real - preco_esp) if (preco_real is not None and preco_esp is not None) else None
+
+            if nf:
+                status_item = 'FATURADO'
+            elif chassi:
+                status_item = 'AGUARDANDO_NF'
+            else:
+                status_item = 'CHASSI_PENDENTE'
+
+            linhas.append({
+                'Pedido #': p.numero_pedido,
+                'Data Pedido': p.data_pedido,
+                'Loja Destino': loja_nome,
+                'Status Pedido': p.status,
+                'Chassi': chassi,
+                'Modelo': modelo_nome,
+                'Cor': item.cor or '',
+                'Preço Esperado': preco_esp,
+                'NF Vinculada': nf.numero_nf if nf else '',
+                'Série NF': (nf.serie_nf or '') if nf else '',
+                'Data NF': nf.data_emissao if nf else None,
+                'Emitente NF': (nf.nome_emitente or nf.cnpj_emitente or '') if nf else '',
+                'Preço Real (NF)': preco_real,
+                'Diferença Preço': diferenca,
+                'Status Item': status_item,
+            })
+
+    df = pd.DataFrame(linhas, columns=[
+        'Pedido #', 'Data Pedido', 'Loja Destino', 'Status Pedido',
+        'Chassi', 'Modelo', 'Cor', 'Preço Esperado',
+        'NF Vinculada', 'Série NF', 'Data NF', 'Emitente NF',
+        'Preço Real (NF)', 'Diferença Preço', 'Status Item',
+    ])
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Pedidos HORA')
+        # Auto-ajusta largura das colunas (heuristica simples).
+        ws = writer.sheets['Pedidos HORA']
+        for col_idx, col in enumerate(df.columns, start=1):
+            max_len = max(
+                [len(str(col))] + [len(str(v)) for v in df[col].head(200).astype(str)]
+            )
+            ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = min(max_len + 2, 40)
+
+    output.seek(0)
+    return output.read()
+
+
 def atualizar_status_pedido_por_faturamento(pedido_id: int) -> None:
     """Recalcula status do pedido com base em quais chassis já foram faturados.
 

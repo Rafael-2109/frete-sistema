@@ -4,6 +4,10 @@
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h2>Pedidos de Compras (HORA → Motochefe)</h2>
   <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-success"
+            data-bs-toggle="modal" data-bs-target="#modalExportarPedidos">
+      <i class="fas fa-file-excel"></i> Exportar Excel
+    </button>
     <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-outline-primary">
       <i class="fas fa-file-import"></i> Importar XLSX
     </a>
@@ -94,4 +98,68 @@
     </tbody>
   </table>
 </div>
+
+<!-- Modal exportar pedidos -->
+<div class="modal fade" id="modalExportarPedidos" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="get" action="{{ url_for('hora.pedidos_exportar') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-file-excel text-success"></i> Exportar pedidos para Excel
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Data inicial</label>
+            <input type="date" name="data_inicio" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Data final</label>
+            <input type="date" name="data_fim" class="form-control" required>
+          </div>
+        </div>
+        <div class="mt-3">
+          <label class="form-label">Loja (opcional)</label>
+          <select name="loja_id" class="form-select">
+            <option value="">— Todas as lojas do meu escopo —</option>
+            {% for loja in lojas_ativas %}
+              <option value="{{ loja.id }}">
+                {{ loja.rotulo_display }}{% if loja.cidade %} ({{ loja.cidade }}){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">Selecione vazio para todas as lojas permitidas.</small>
+        </div>
+        <div class="mt-3 alert alert-info small mb-0">
+          Cada linha do Excel = 1 chassi. Para itens ja faturados, mostra dados da NF
+          vinculada e diferenca de preco esperado x preco real.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success">
+          <i class="fas fa-download"></i> Baixar XLSX
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Default datas: ultimos 30 dias.
+(function() {
+  const modal = document.getElementById('modalExportarPedidos');
+  modal.addEventListener('show.bs.modal', () => {
+    const hoje = new Date();
+    const ini = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fmt = d => d.toISOString().slice(0, 10);
+    const di = modal.querySelector('input[name="data_inicio"]');
+    const df = modal.querySelector('input[name="data_fim"]');
+    if (!di.value) di.value = fmt(ini);
+    if (!df.value) df.value = fmt(hoje);
+  });
+})();
+</script>
 {% endblock %}

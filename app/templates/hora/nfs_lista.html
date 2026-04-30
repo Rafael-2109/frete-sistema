@@ -3,9 +3,15 @@
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h2>NFs de Entrada (Motochefe → HORA)</h2>
-  <a href="{{ url_for('hora.nfs_upload') }}" class="btn btn-primary">
-    <i class="fas fa-upload"></i> Importar DANFE
-  </a>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-success"
+            data-bs-toggle="modal" data-bs-target="#modalExportarNfs">
+      <i class="fas fa-file-excel"></i> Exportar Excel
+    </button>
+    <a href="{{ url_for('hora.nfs_upload') }}" class="btn btn-primary">
+      <i class="fas fa-upload"></i> Importar DANFE
+    </a>
+  </div>
 </div>
 
 <div class="table-responsive">
@@ -99,4 +105,66 @@
     </tbody>
   </table>
 </div>
+
+<!-- Modal exportar NFs -->
+<div class="modal fade" id="modalExportarNfs" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="get" action="{{ url_for('hora.nfs_exportar') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-file-excel text-success"></i> Exportar NFs para Excel
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Data inicial</label>
+            <input type="date" name="data_inicio" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Data final</label>
+            <input type="date" name="data_fim" class="form-control" required>
+          </div>
+        </div>
+        <div class="mt-3">
+          <label class="form-label">Loja (opcional)</label>
+          <select name="loja_id" class="form-select">
+            <option value="">— Todas as lojas do meu escopo —</option>
+            {% for loja in lojas_ativas %}
+              <option value="{{ loja.id }}">
+                {{ loja.rotulo_display }}{% if loja.cidade %} ({{ loja.cidade }}){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mt-3 alert alert-info small mb-0">
+          Cada linha do Excel = 1 chassi da NF. Mostra dados do pedido vinculado e
+          marca chassis casados/orfaos. Filtro por <strong>data de emissao</strong>.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success">
+          <i class="fas fa-download"></i> Baixar XLSX
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function() {
+  const modal = document.getElementById('modalExportarNfs');
+  modal.addEventListener('show.bs.modal', () => {
+    const hoje = new Date();
+    const ini = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fmt = d => d.toISOString().slice(0, 10);
+    const di = modal.querySelector('input[name="data_inicio"]');
+    const df = modal.querySelector('input[name="data_fim"]');
+    if (!di.value) di.value = fmt(ini);
+    if (!df.value) df.value = fmt(hoje);
+  });
+})();
+</script>
 {% endblock %}

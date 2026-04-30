@@ -1,7 +1,9 @@
 """Rotas de NF de entrada (Motochefe -> HORA): upload, listagem, vinculo e match."""
 from __future__ import annotations
 
-from flask import flash, jsonify, redirect, render_template, request, url_for
+from datetime import date, datetime, timedelta
+
+from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user
 from app.hora.decorators import require_hora_perm
 
@@ -50,6 +52,48 @@ def _lojas_ativas_permitidas():
 # Listagem / detalhe
 # ------------------------------------------------------------------------
 
+@hora_bp.route('/nfs/exportar')
+@require_hora_perm('nfs', 'ver')
+def nfs_exportar():
+    """Exporta NFs de entrada para XLSX. Filtros: data_inicio, data_fim, loja_id."""
+    import io as _io
+
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+    loja_str = (request.args.get('loja_id') or '').strip()
+
+    try:
+        data_inicio = datetime.strptime(data_ini_str, '%Y-%m-%d').date() if data_ini_str else (date.today() - timedelta(days=30))
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else date.today()
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+
+    escopo = lojas_permitidas_ids()
+    if loja_str.isdigit():
+        loja_id = int(loja_str)
+        if escopo is not None and loja_id not in escopo:
+            flash('Acesso negado: loja fora do seu escopo.', 'danger')
+            return redirect(url_for('hora.nfs_lista'))
+        lojas_filtro = [loja_id]
+    else:
+        lojas_filtro = list(escopo) if escopo is not None else None
+
+    xlsx_bytes = nf_entrada_service.exportar_nfs_excel(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        lojas_ids=lojas_filtro,
+    )
+
+    filename = f'nfs_compra_hora_{data_inicio.isoformat()}_a_{data_fim.isoformat()}.xlsx'
+    return send_file(
+        _io.BytesIO(xlsx_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
 @hora_bp.route('/nfs')
 @require_hora_perm('nfs', 'ver')
 def nfs_lista():
@@ -64,7 +108,10 @@ def nfs_lista():
         nf.id: matching_service.resumo_vinculo_nf(nf, chassis_por_pedido)
         for nf in nfs
     }
-    return render_template('hora/nfs_lista.html', nfs=nfs, resumos=resumos)
+    lojas_ativas = _lojas_ativas_permitidas()
+    return render_template(
+        'hora/nfs_lista.html', nfs=nfs, resumos=resumos, lojas_ativas=lojas_ativas,
+    )
 
 
 @hora_bp.route('/nfs/<int:nf_id>')
