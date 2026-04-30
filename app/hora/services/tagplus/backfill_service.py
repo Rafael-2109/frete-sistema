@@ -32,7 +32,9 @@ from typing import Iterator, Optional
 
 from app import db
 from app.hora.models import HoraMoto, HoraVenda, HoraVendaItem
-from app.hora.models.tagplus import HoraTagPlusConta, HoraTagPlusProdutoMap
+from app.hora.models.tagplus import (
+    HoraTagPlusConta, HoraTagPlusFormaPagamentoMap, HoraTagPlusProdutoMap,
+)
 from app.hora.models.venda import VENDA_STATUS_FATURADO
 from app.hora.services import venda_audit
 from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
@@ -194,6 +196,157 @@ def _resolver_modelo_id(codigo_produto: Optional[str]) -> Optional[int]:
     return mapa.modelo_id if mapa else None
 
 
+def _extrair_endereco(dest: dict, nfe: dict) -> dict:
+    """Extrai campos de endereco do destinatario.
+
+    Procura na ordem:
+      1. nfe['endereco_destinatario'] (objeto completo, formato canonico).
+      2. dest['enderecos'][0] com principal=True (lista no destinatario).
+      3. dest['enderecos'][0] qualquer (primeiro disponivel).
+    Retorna dict com chaves: cep, logradouro, numero, complemento, bairro,
+    cidade, uf — todos Optional[str].
+    """
+    end = nfe.get('endereco_destinatario') or {}
+    if not isinstance(end, dict) or not end:
+        # Fallback: pegar do destinatario.enderecos[]
+        enderecos = dest.get('enderecos') or [] if isinstance(dest, dict) else []
+        if isinstance(enderecos, list) and enderecos:
+            principal = next(
+                (e for e in enderecos if isinstance(e, dict) and e.get('principal')),
+                None,
+            )
+            end = principal or (enderecos[0] if isinstance(enderecos[0], dict) else {})
+
+    cidade_obj = end.get('cidade') or {}
+    cidade_nome = None
+    uf = None
+    if isinstance(cidade_obj, dict):
+        cidade_nome = (cidade_obj.get('nome') or cidade_obj.get('descricao') or '').strip() or None
+        uf = (
+            cidade_obj.get('uf')
+            or (cidade_obj.get('estado') or {}).get('sigla')
+            or (cidade_obj.get('estado') or {}).get('uf')
+        )
+        if uf:
+            uf = uf.strip().upper() or None
+    elif isinstance(cidade_obj, str):
+        cidade_nome = cidade_obj.strip() or None
+
+    return {
+        'cep': _so_digitos(end.get('cep')) or None,
+        'logradouro': (end.get('logradouro') or '').strip() or None,
+        'numero': (end.get('numero') or '').strip() or None,
+        'complemento': (end.get('complemento') or '').strip() or None,
+        'bairro': (end.get('bairro') or '').strip() or None,
+        'cidade': cidade_nome,
+        'uf': uf,
+    }
+
+
+def _extrair_telefone(dest: dict, nfe: dict) -> Optional[str]:
+    """Telefone: tenta dados_entrega_telefone -> destinatario.contatos[]."""
+    tel = (nfe.get('dados_entrega_telefone') or '').strip()
+    if tel:
+        return tel
+    if isinstance(dest, dict):
+        contatos = dest.get('contatos') or []
+        if isinstance(contatos, list):
+            for c in contatos:
+                if not isinstance(c, dict):
+                    continue
+                v = (c.get('telefone') or c.get('numero') or c.get('valor') or '').strip()
+                if v:
+                    return v
+    return None
+
+
+def _extrair_email(dest: dict) -> Optional[str]:
+    """Email: tenta destinatario.email_principal -> contatos[]."""
+    if not isinstance(dest, dict):
+        return None
+    e = (dest.get('email_principal') or dest.get('email') or '').strip()
+    if e:
+        return e
+    contatos = dest.get('contatos') or []
+    if isinstance(contatos, list):
+        for c in contatos:
+            if not isinstance(c, dict):
+                continue
+            v = (c.get('email') or '').strip()
+            if v:
+                return v
+    return None
+
+
+def _resolver_forma_pagamento(faturas: list) -> Optional[str]:
+    """Mapeia ID inteiro do TagPlus -> forma_pagamento_hora (PIX, CARTAO_CREDITO...).
+
+    Lookup em HoraTagPlusFormaPagamentoMap.tagplus_forma_id -> forma_pagamento_hora.
+    Retorna None se nao houver fatura ou ID nao mapeado (operador edita depois).
+    """
+    if not faturas or not isinstance(faturas, list):
+        return None
+    primeira = faturas[0]
+    if not isinstance(primeira, dict):
+        return None
+    fp_id = primeira.get('forma_pagamento')
+    if isinstance(fp_id, dict):
+        fp_id = fp_id.get('id')
+    if fp_id is None:
+        return None
+    try:
+        fp_id = int(fp_id)
+    except (TypeError, ValueError):
+        return None
+    mapa = HoraTagPlusFormaPagamentoMap.query.filter_by(tagplus_forma_id=fp_id).first()
+    return mapa.forma_pagamento_hora if mapa else None
+
+
+def _extrair_parcelas_info(faturas: list) -> tuple[int, int]:
+    """Deriva (numero_parcelas, intervalo_dias) das parcelas TagPlus.
+
+    Numero = len(parcelas[0]).
+    Intervalo = media arredondada das diferencas em dias entre vencimentos
+                consecutivos (tolera vencimentos fora de ordem).
+    Defaults: (1, 30) quando nao da pra inferir.
+    """
+    if not faturas or not isinstance(faturas, list):
+        return (1, 30)
+    primeira = faturas[0]
+    if not isinstance(primeira, dict):
+        return (1, 30)
+    parcelas = primeira.get('parcelas') or []
+    if not isinstance(parcelas, list) or not parcelas:
+        return (1, 30)
+
+    n = len(parcelas)
+    if n == 1:
+        return (1, 30)
+
+    from datetime import datetime as _dt
+    dts = []
+    for p in parcelas:
+        if not isinstance(p, dict):
+            continue
+        s = p.get('data_vencimento')
+        if not s:
+            continue
+        try:
+            d = _dt.fromisoformat(str(s).replace('Z', '+00:00')).date()
+            dts.append(d)
+        except (ValueError, TypeError):
+            continue
+    if len(dts) < 2:
+        return (n, 30)
+
+    dts.sort()
+    diffs = [(dts[i+1] - dts[i]).days for i in range(len(dts) - 1) if (dts[i+1] - dts[i]).days > 0]
+    if not diffs:
+        return (n, 30)
+    media = round(sum(diffs) / len(diffs))
+    return (n, max(1, min(90, media)))
+
+
 # --------------------------------------------------------------------------
 # Importador unitario
 # --------------------------------------------------------------------------
@@ -230,14 +383,24 @@ def importar_nfe_da_api(
     except ValueError:
         raise NfeIncompleta(f'/nfes/{nfe_id_tagplus} resposta nao-JSON')
 
-    # Log diagnostico do JSON da NFe (apenas chaves relevantes para chassi).
-    # Imprescindivel para entender NFs historicas que nao foram emitidas pelo
-    # nosso PayloadBuilder (campo `detalhes` vazio, chassi em outro lugar).
+    # Log diagnostico do JSON da NFe (apenas chaves relevantes).
     logger.info(
-        'TagPlus NFe %s: inf_contrib=%r observacoes=%r itens=%s',
+        'TagPlus NFe %s: inf_contrib=%r observacoes=%r '
+        'end_dest=%s dados_entrega_tel=%r dest_email=%r '
+        'faturas=%s itens=%s',
         nfe_id_tagplus,
         (nfe.get('inf_contribuinte') or '')[:300],
         (nfe.get('observacoes') or '')[:200],
+        bool(nfe.get('endereco_destinatario')),
+        nfe.get('dados_entrega_telefone'),
+        ((nfe.get('destinatario') or {}).get('email_principal') or '')[:80],
+        [
+            {
+                'forma_pagamento': f.get('forma_pagamento') if isinstance(f, dict) else None,
+                'parcelas_count': len(f.get('parcelas') or []) if isinstance(f, dict) else 0,
+            }
+            for f in (nfe.get('faturas') or [])[:2]
+        ],
         [
             {
                 'produto': (it.get('produto') if isinstance(it.get('produto'), (str, int))
@@ -248,7 +411,7 @@ def importar_nfe_da_api(
                 'numero_serie': it.get('numero_serie'),
                 'complemento_descricao': (it.get('complemento_descricao') or '')[:200],
             }
-            for it in (nfe.get('itens') or [])[:3]  # max 3 itens no log
+            for it in (nfe.get('itens') or [])[:3]
         ],
     )
 
@@ -297,13 +460,29 @@ def importar_nfe_da_api(
 
     valor_total_dec = Decimal(str(valor_nota))
 
+    # ------ Endereco / contato / pagamento ------
+    endereco = _extrair_endereco(dest, nfe)
+    telefone = _extrair_telefone(dest, nfe)
+    email = _extrair_email(dest)
+
+    faturas_api = nfe.get('faturas') or []
+    forma_pgto_hora = _resolver_forma_pagamento(faturas_api)
+    n_parcelas, interv_parcelas = _extrair_parcelas_info(faturas_api)
+
+    # CEP: hora_venda armazena no formato "XXXXX-XXX".
+    cep_db = endereco['cep']
+    if cep_db and len(cep_db) == 8:
+        cep_db = f'{cep_db[:5]}-{cep_db[5:]}'
+
     # ------ Cria HoraVenda ------
     venda = HoraVenda(
         loja_id=loja_emitente.id if loja_emitente else None,
         cpf_cliente=cpf[:14],
         nome_cliente=nome_cliente,
+        telefone_cliente=(telefone or '')[:20] or None,
+        email_cliente=(email or '')[:120] or None,
         data_venda=data_emissao,
-        forma_pagamento='NAO_INFORMADO',
+        forma_pagamento=forma_pgto_hora or 'NAO_INFORMADO',
         valor_total=valor_total_dec,
         nf_saida_numero=numero_nf,
         nf_saida_chave_44=chave,
@@ -317,9 +496,15 @@ def importar_nfe_da_api(
         vendedor=None,
         origem_criacao='TAGPLUS_API',
         modalidade_frete=modalidade_frete,
-        # numero_parcelas e intervalo_parcelas_dias permanecem default (1 / 30) —
-        # parcelas reais ficam refletidas em hora_tagplus_nfe_emissao se for
-        # NF emitida pelo nosso fluxo. Para NF historica, defaults bastam.
+        numero_parcelas=n_parcelas,
+        intervalo_parcelas_dias=interv_parcelas,
+        cep=cep_db,
+        endereco_logradouro=(endereco['logradouro'] or '')[:255] or None,
+        endereco_numero=(endereco['numero'] or '')[:20] or None,
+        endereco_complemento=(endereco['complemento'] or '')[:100] or None,
+        endereco_bairro=(endereco['bairro'] or '')[:100] or None,
+        endereco_cidade=(endereco['cidade'] or '')[:100] or None,
+        endereco_uf=endereco['uf'],
     )
     db.session.add(venda)
     db.session.flush()
