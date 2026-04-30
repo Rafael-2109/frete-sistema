@@ -33,7 +33,9 @@ from typing import Iterator, Optional
 from app import db
 from app.hora.models import HoraMoto, HoraVenda, HoraVendaItem
 from app.hora.models.tagplus import (
-    HoraTagPlusConta, HoraTagPlusFormaPagamentoMap, HoraTagPlusProdutoMap,
+    HoraTagPlusConta, HoraTagPlusFormaPagamentoMap, HoraTagPlusNfeEmissao,
+    HoraTagPlusProdutoMap,
+    NFE_STATUS_APROVADA, NFE_STATUS_CANCELADA,
 )
 from app.hora.models.venda import VENDA_STATUS_CANCELADO, VENDA_STATUS_FATURADO
 from app.hora.services import venda_audit
@@ -198,6 +200,91 @@ def _parse_data_emissao(valor) -> Optional[date]:
         except ValueError:
             return None
     return None
+
+
+def _upsert_emissao_nfe(
+    venda: HoraVenda,
+    nfe_id_tagplus: int,
+    chave_44: str,
+    numero_nfe: Optional[str],
+    serie_nfe: Optional[str],
+    data_emissao,
+    status_tagplus: str,
+    conta: HoraTagPlusConta,
+) -> HoraTagPlusNfeEmissao:
+    """Cria ou atualiza HoraTagPlusNfeEmissao para refletir uma NFe vinda
+    da API TagPlus.
+
+    Sem isso, a tela /vendas/<id>/nfe/status mostra 'NFe ainda nao
+    emitida' e o botao 'Baixar DANFE' nao aparece — o template depende
+    de HoraTagPlusNfeEmissao para descobrir o tagplus_nfe_id que e
+    repassado ao endpoint /nfes/pdf/recibo_a4/{id}.
+
+    Mapeamento status TagPlus -> NFE_STATUS:
+      'A' -> NFE_STATUS_APROVADA
+      'S' -> NFE_STATUS_CANCELADA
+      '4' -> NFE_STATUS_CANCELADA (inutilizada cai como cancelada local)
+    """
+    if status_tagplus == 'A':
+        status_local = NFE_STATUS_APROVADA
+    elif status_tagplus in ('S', '4'):
+        status_local = NFE_STATUS_CANCELADA
+    else:
+        # Defensivo — caller nao deve chamar com outro status, mas se chamar,
+        # nao mexe no registro existente.
+        existente = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda.id).first()
+        if existente:
+            return existente
+        # Cria como APROVADA por padrao (best-effort) para nao perder vinculo.
+        status_local = NFE_STATUS_APROVADA
+
+    aprovado_em = (
+        datetime.combine(data_emissao, datetime.min.time())
+        if status_local == NFE_STATUS_APROVADA else None
+    )
+    cancelado_em_dt = (
+        agora_utc_naive() if status_local == NFE_STATUS_CANCELADA else None
+    )
+
+    emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda.id).first()
+    if emissao is None:
+        emissao = HoraTagPlusNfeEmissao(
+            venda_id=venda.id,
+            conta_id=conta.id,
+            status=status_local,
+            tagplus_nfe_id=nfe_id_tagplus,
+            numero_nfe=numero_nfe,
+            serie_nfe=serie_nfe,
+            chave_44=chave_44,
+            aprovado_em=aprovado_em,
+            cancelado_em=cancelado_em_dt,
+            tentativas=0,
+        )
+        db.session.add(emissao)
+        db.session.flush()
+        return emissao
+
+    # Atualiza campos vazios + ajusta status quando necessario.
+    if not emissao.tagplus_nfe_id:
+        emissao.tagplus_nfe_id = nfe_id_tagplus
+    if not emissao.numero_nfe and numero_nfe:
+        emissao.numero_nfe = numero_nfe
+    if not emissao.serie_nfe and serie_nfe:
+        emissao.serie_nfe = serie_nfe
+    if not emissao.chave_44 and chave_44:
+        emissao.chave_44 = chave_44
+    if not emissao.aprovado_em and aprovado_em:
+        emissao.aprovado_em = aprovado_em
+    # Status: nunca regride APROVADA -> CANCELADA so se TagPlus indicou.
+    if status_local == NFE_STATUS_CANCELADA and emissao.status != NFE_STATUS_CANCELADA:
+        emissao.status = NFE_STATUS_CANCELADA
+        if not emissao.cancelado_em:
+            emissao.cancelado_em = agora_utc_naive()
+    elif status_local == NFE_STATUS_APROVADA and emissao.status not in (
+        NFE_STATUS_APROVADA, NFE_STATUS_CANCELADA,
+    ):
+        emissao.status = NFE_STATUS_APROVADA
+    return emissao
 
 
 def _resolver_modelo_id(codigo_produto: Optional[str]) -> Optional[int]:
@@ -379,6 +466,12 @@ def _cancelar_via_backfill(
     venda: HoraVenda,
     status_tagplus: str,
     operador: Optional[str],
+    nfe_id_tagplus: Optional[int] = None,
+    chave_44: Optional[str] = None,
+    numero_nfe: Optional[str] = None,
+    serie_nfe: Optional[str] = None,
+    data_emissao=None,
+    conta: Optional[HoraTagPlusConta] = None,
 ) -> HoraVenda:
     """Marca venda como CANCELADA + emite DEVOLVIDA nos chassis.
 
@@ -387,8 +480,21 @@ def _cancelar_via_backfill(
     SEFAZ (NF historica vinda do TagPlus com status=S/4).
 
     Idempotente: se ja CANCELADA, retorna sem alterar.
+
+    Se `nfe_id_tagplus` + `conta` forem passados, sincroniza
+    HoraTagPlusNfeEmissao (status=CANCELADA) — necessario para a tela
+    /vendas/<id>/nfe oferecer o link 'Baixar DANFE' apontando ao TagPlus.
     """
     if venda.status == VENDA_STATUS_CANCELADO:
+        # Mesmo se ja cancelado, garante que a emissao reflete tagplus_nfe_id.
+        if nfe_id_tagplus and conta and chave_44:
+            _upsert_emissao_nfe(
+                venda=venda, nfe_id_tagplus=nfe_id_tagplus,
+                chave_44=chave_44, numero_nfe=numero_nfe, serie_nfe=serie_nfe,
+                data_emissao=data_emissao or venda.data_venda,
+                status_tagplus=status_tagplus, conta=conta,
+            )
+            db.session.commit()
         return venda
 
     rotulo = {'S': 'Cancelada', '4': 'Inutilizada'}.get(status_tagplus, status_tagplus)
@@ -412,6 +518,15 @@ def _cancelar_via_backfill(
             loja_id=venda.loja_id,
             operador=operador or 'sistema (backfill)',
             detalhe=f'NFe {rotulo} via TagPlus (backfill)',
+        )
+
+    # Sincroniza HoraTagPlusNfeEmissao (botao 'Baixar DANFE' funcionar).
+    if nfe_id_tagplus and conta and chave_44:
+        _upsert_emissao_nfe(
+            venda=venda, nfe_id_tagplus=nfe_id_tagplus,
+            chave_44=chave_44, numero_nfe=numero_nfe, serie_nfe=serie_nfe,
+            data_emissao=data_emissao or venda.data_venda,
+            status_tagplus=status_tagplus, conta=conta,
         )
 
     venda_audit.registrar_auditoria(
@@ -522,8 +637,21 @@ def importar_nfe_da_api(
     # CANCELADA / INUTILIZADA: cancela venda existente; nao cria nova.
     if status_tagplus in ('S', '4'):
         if existente:
-            cancelada = _cancelar_via_backfill(existente, status_tagplus, operador)
-            return cancelada, ('inalterado' if existente.status == VENDA_STATUS_CANCELADO else 'cancelado')
+            ja_cancelada = existente.status == VENDA_STATUS_CANCELADO
+            # Tenta extrair numero/serie/data para sincronizar emissao.
+            numero_nf = str(nfe.get('numero') or '')[:20] or None
+            serie_nf = str(nfe.get('serie') or '') or None
+            data_emis = _parse_data_emissao(nfe.get('data_emissao')) or date.today()
+            cancelada = _cancelar_via_backfill(
+                existente, status_tagplus, operador,
+                nfe_id_tagplus=nfe_id_tagplus,
+                chave_44=chave,
+                numero_nfe=numero_nf,
+                serie_nfe=serie_nf,
+                data_emissao=data_emis,
+                conta=api.conta,
+            )
+            return cancelada, ('inalterado' if ja_cancelada else 'cancelado')
         logger.info(
             'Pulando NFe %s (chave=%s) — status TagPlus=%r (cancelada/inutilizada) '
             'e venda nao existe no sistema.',
@@ -629,18 +757,29 @@ def importar_nfe_da_api(
             db.session.flush()
             criou_itens = any(it.id not in antes for it in existente.itens)
 
-        if status_upsert or criou_itens:
+        # Sincroniza HoraTagPlusNfeEmissao (botao 'Baixar DANFE' funcionar).
+        emissao_existia = HoraTagPlusNfeEmissao.query.filter_by(venda_id=existente.id).first() is not None
+        _upsert_emissao_nfe(
+            venda=existente, nfe_id_tagplus=nfe_id_tagplus,
+            chave_44=chave, numero_nfe=numero_nf, serie_nfe=serie_nf,
+            data_emissao=data_emissao, status_tagplus='A', conta=api.conta,
+        )
+        criou_emissao = not emissao_existia
+
+        if status_upsert or criou_itens or criou_emissao:
             venda_audit.registrar_auditoria(
                 venda_id=existente.id, usuario=operador or '',
                 acao='EDITOU_HEADER',
                 detalhe=(
                     f'Backfill TagPlus refresh — '
                     f'campos atualizados={status_upsert}, '
-                    f'itens_criados={criou_itens}'
+                    f'itens_criados={criou_itens}, '
+                    f'emissao_criada={criou_emissao}'
                 ),
             )
             db.session.commit()
             return existente, 'atualizado'
+        db.session.commit()
         return existente, 'inalterado'
 
     # ------ Cria HoraVenda (nova) ------
@@ -700,6 +839,14 @@ def importar_nfe_da_api(
         operador=operador,
         inf_contribuinte_nf=inf_contribuinte_nf,
         observacoes_nf=observacoes_nf,
+    )
+
+    # Sincroniza HoraTagPlusNfeEmissao para o botao 'Baixar DANFE'
+    # funcionar na tela /vendas/<id>/nfe.
+    _upsert_emissao_nfe(
+        venda=venda, nfe_id_tagplus=nfe_id_tagplus,
+        chave_44=chave, numero_nfe=numero_nf, serie_nfe=serie_nf,
+        data_emissao=data_emissao, status_tagplus='A', conta=api.conta,
     )
 
     venda_audit.registrar_auditoria(

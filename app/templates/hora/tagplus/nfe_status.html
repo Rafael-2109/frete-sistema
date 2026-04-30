@@ -53,10 +53,23 @@
         </form>
       {% elif venda.nf_saida_chave_44 %}
         <p class="text-muted mb-0">
-          Este pedido ja tem NF emitida fora do TagPlus
-          (chave <code class="small">{{ venda.nf_saida_chave_44 }}</code>) — nao pode ser
+          Este pedido ja tem NF emitida
+          {% if venda.origem_criacao == 'TAGPLUS_API' %}
+            (origem: TagPlus, importada via backfill)
+          {% else %}
+            fora do TagPlus
+          {% endif %}
+          — chave <code class="small">{{ venda.nf_saida_chave_44 }}</code>. Nao pode ser
           emitida novamente. Para reemissao, registre uma devolucao primeiro.
         </p>
+        {% if venda.origem_criacao == 'TAGPLUS_API' %}
+        <p class="small text-warning mt-2 mb-0">
+          <i class="fas fa-info-circle"></i>
+          Para baixar a DANFE, rode o backfill novamente — o vinculo com a
+          conta TagPlus e criado automaticamente e o botao 'Baixar DANFE'
+          passa a aparecer aqui.
+        </p>
+        {% endif %}
       {% elif venda.status == 'COTACAO' %}
         <p class="text-muted mb-0">
           Pedido em <strong>COTACAO</strong>. Confirme primeiro o pedido na tela
