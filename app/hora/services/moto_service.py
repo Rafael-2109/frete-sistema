@@ -67,6 +67,12 @@ def registrar_evento(
         'EM_TRANSITO', 'CANCELADA',
         'RESERVADA', 'VENDIDA', 'DEVOLVIDA', 'AVARIADA',
         'FALTANDO_PECA',
+        # Emprestimo entre lojas (nossa HORA <-> loja externa).
+        # EMPRESTIMO_SAIDA: chassi nosso saiu para loja externa (fora estoque).
+        # EMPRESTIMO_ENTRADA: chassi externo entrou no nosso estoque.
+        # RESSARCIMENTO_*: ao fechar, complementa com chassi do mesmo modelo.
+        'EMPRESTIMO_SAIDA', 'EMPRESTIMO_ENTRADA',
+        'RESSARCIMENTO_SAIDA', 'RESSARCIMENTO_ENTRADA',
     }
     if tipo not in TIPOS_VALIDOS:
         raise ValueError(f"Tipo de evento inválido: {tipo}. Aceitos: {TIPOS_VALIDOS}")

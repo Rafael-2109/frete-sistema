@@ -1,0 +1,162 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+{% set status_badge = {
+    'EM_ABERTO': 'warning',
+    'RESSARCIDO': 'success',
+    'CANCELADO': 'secondary',
+} %}
+{% set tipo_badge = {'SAIDA': 'danger', 'ENTRADA': 'primary'} %}
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2>
+    Empréstimo #{{ emp.id }}
+    <span class="badge bg-{{ tipo_badge.get(emp.tipo, 'secondary') }}">{{ emp.tipo }}</span>
+    <span class="badge bg-{{ status_badge.get(emp.status, 'secondary') }}">{{ emp.status }}</span>
+  </h2>
+  <a href="{{ url_for('hora.emprestimos_lista') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="fas fa-arrow-left"></i> Voltar à lista
+  </a>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5 class="mb-3">Operação</h5>
+      <div class="mb-2">
+        <small class="text-muted">Loja HORA:</small><br>
+        <strong>{{ emp.loja_hora.rotulo_display if emp.loja_hora else '—' }}</strong>
+      </div>
+      <div class="mb-2">
+        <small class="text-muted">Loja externa:</small><br>
+        <strong>{{ emp.loja_externa_nome }}</strong>
+        {% if emp.loja_externa_cnpj %}
+          <span class="text-muted small">· {{ emp.loja_externa_cnpj }}</span>
+        {% endif %}
+      </div>
+      <div class="mb-2">
+        <small class="text-muted">Modelo:</small><br>
+        <strong>{{ emp.modelo.nome_modelo if emp.modelo else '—' }}</strong>
+      </div>
+      <div class="mb-2">
+        <small class="text-muted">Data empréstimo:</small>
+        <strong>{{ emp.data_emprestimo.strftime('%d/%m/%Y') }}</strong>
+        {% if emp.data_ressarcimento %}
+          · <small class="text-muted">Data ressarcimento:</small>
+          <strong>{{ emp.data_ressarcimento.strftime('%d/%m/%Y') }}</strong>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5 class="mb-3">Chassis</h5>
+      <div class="mb-2">
+        <small class="text-muted">Chassi que sai do nosso estoque:</small><br>
+        {% if emp.chassi_saida %}
+          <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=emp.chassi_saida) }}"
+             class="chassi-mono">{{ emp.chassi_saida }}</a>
+        {% else %}
+          <span class="text-warning">— pendente</span>
+        {% endif %}
+      </div>
+      <div class="mb-2">
+        <small class="text-muted">Chassi que entra no nosso estoque:</small><br>
+        {% if emp.chassi_entrada %}
+          <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=emp.chassi_entrada) }}"
+             class="chassi-mono">{{ emp.chassi_entrada }}</a>
+        {% else %}
+          <span class="text-warning">— pendente</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if emp.observacoes %}
+<div class="card p-3 mb-3">
+  <h5 class="mb-2">Observações</h5>
+  <p class="text-muted mb-0" style="white-space: pre-wrap;">{{ emp.observacoes }}</p>
+</div>
+{% endif %}
+
+{% if emp.status == 'EM_ABERTO' and current_user.tem_perm_hora('emprestimos', 'editar') %}
+<div class="card p-3 mb-3 border-success">
+  <h5 class="mb-3"><i class="fas fa-check-circle text-success"></i> Ressarcir empréstimo</h5>
+  <p class="small text-muted mb-2">
+    {% if emp.tipo == 'SAIDA' %}
+      Informe o chassi da moto recebida da <strong>{{ emp.loja_externa_nome }}</strong>
+      (deve ser do modelo <strong>{{ emp.modelo.nome_modelo }}</strong>).
+      Será criado em <code>hora_moto</code> se ainda não existir.
+    {% else %}
+      Informe o chassi nosso que será enviado para <strong>{{ emp.loja_externa_nome }}</strong>
+      (deve estar em estoque na loja {{ emp.loja_hora.rotulo_display if emp.loja_hora else '—' }} e ser do modelo
+      <strong>{{ emp.modelo.nome_modelo }}</strong>).
+    {% endif %}
+  </p>
+  <form method="post" action="{{ url_for('hora.emprestimos_ressarcir', emprestimo_id=emp.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-5">
+        <label class="form-label small">Chassi de ressarcimento</label>
+        <input type="text" name="chassi" class="form-control form-control-sm" required
+               style="font-family: monospace;" maxlength="30">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small">Data</label>
+        <input type="date" name="data_ressarcimento" class="form-control form-control-sm" required>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small">Observações</label>
+        <input type="text" name="observacoes_extra" class="form-control form-control-sm">
+      </div>
+      <div class="col-12 mt-2">
+        <button type="submit" class="btn btn-success btn-sm">
+          <i class="fas fa-check"></i> Confirmar ressarcimento
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if current_user.tem_perm_hora('emprestimos', 'apagar') %}
+<div class="card p-3 mb-3 border-danger">
+  <h5 class="mb-3"><i class="fas fa-times-circle text-danger"></i> Cancelar empréstimo</h5>
+  <p class="small text-muted mb-2">
+    Reverte a operação: o chassi original
+    {% if emp.tipo == 'SAIDA' %}volta ao estoque{% else %}sai do estoque{% endif %}
+    (evento <code>DEVOLVIDA</code>). Use somente se o empréstimo foi registrado por engano.
+  </p>
+  <form method="post" action="{{ url_for('hora.emprestimos_cancelar', emprestimo_id=emp.id) }}"
+        onsubmit="return confirm('Cancelar empréstimo #{{ emp.id }}? Ação não reversível.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2">
+      <div class="col-md-9">
+        <input type="text" name="motivo" class="form-control form-control-sm" required minlength="3"
+               placeholder="Motivo do cancelamento (mínimo 3 caracteres)">
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-outline-danger btn-sm w-100">Cancelar empréstimo</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endif %}
+
+{% if emp.status == 'CANCELADO' and emp.cancelamento_motivo %}
+<div class="alert alert-secondary small">
+  <strong>Cancelado:</strong> {{ emp.cancelamento_motivo }}
+  {% if emp.cancelado_em %}
+    <br><small>Por {{ emp.cancelado_por or '—' }} em {{ emp.cancelado_em.strftime('%d/%m/%Y %H:%M') }}.</small>
+  {% endif %}
+</div>
+{% endif %}
+
+<small class="text-muted">
+  Criado em {{ emp.criado_em.strftime('%d/%m/%Y %H:%M') }} por {{ emp.criado_por or '—' }}
+  {% if emp.ressarcido_em %}
+    · Ressarcido em {{ emp.ressarcido_em.strftime('%d/%m/%Y %H:%M') }} por {{ emp.ressarcido_por or '—' }}
+  {% endif %}
+</small>
+{% endblock %}

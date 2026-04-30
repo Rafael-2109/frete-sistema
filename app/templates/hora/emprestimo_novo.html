@@ -1,0 +1,78 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3"><i class="fas fa-handshake"></i> Novo empréstimo</h2>
+
+<form method="post" class="card p-3" style="max-width: 800px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">Tipo <span class="text-danger">*</span></label>
+      <select name="tipo" class="form-select" required>
+        <option value="SAIDA">SAÍDA — nossa loja → externa (chassi sai do estoque)</option>
+        <option value="ENTRADA">ENTRADA — externa → nossa loja (chassi entra no estoque)</option>
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Data do empréstimo <span class="text-danger">*</span></label>
+      <input type="date" name="data_emprestimo" class="form-control" required
+             value="{{ today_iso if today_iso else '' }}">
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label">Nossa loja HORA <span class="text-danger">*</span></label>
+      <select name="loja_hora_id" class="form-select" required>
+        <option value="">— selecione —</option>
+        {% for l in lojas %}
+          <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Modelo <span class="text-danger">*</span></label>
+      <select name="modelo_id" class="form-select" required>
+        <option value="">— selecione —</option>
+        {% for m in modelos %}
+          <option value="{{ m.id }}">{{ m.nome_modelo }}</option>
+        {% endfor %}
+      </select>
+      <small class="text-muted">Ressarcimento exigirá outra moto do MESMO modelo.</small>
+    </div>
+
+    <div class="col-12">
+      <label class="form-label">Loja externa <span class="text-danger">*</span></label>
+      <input type="text" name="loja_externa_nome" maxlength="200" class="form-control" required
+             placeholder="Ex.: Concessionária X">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">CNPJ da loja externa <span class="text-muted small">(opcional)</span></label>
+      <input type="text" name="loja_externa_cnpj" maxlength="20" class="form-control"
+             placeholder="00.000.000/0000-00">
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label">Chassi <span class="text-danger">*</span></label>
+      <input type="text" name="chassi" maxlength="30" class="form-control" required
+             style="font-family: monospace;"
+             placeholder="Ex.: LYDAE3936T1203254">
+      <small class="text-muted">
+        SAÍDA: chassi nosso (deve estar em estoque na loja escolhida).<br>
+        ENTRADA: chassi recebido (será cadastrado se ainda não existir).
+      </small>
+    </div>
+
+    <div class="col-12">
+      <label class="form-label">Observações</label>
+      <textarea name="observacoes" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="col-12 d-flex gap-2">
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i> Registrar empréstimo
+      </button>
+      <a href="{{ url_for('hora.emprestimos_lista') }}" class="btn btn-secondary">Cancelar</a>
+    </div>
+  </div>
+</form>
+{% endblock %}

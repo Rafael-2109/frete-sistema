@@ -1,0 +1,135 @@
+{% extends "hora/base.html" %}
+{% from "hora/_pagination.html" import render_pagination %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-handshake"></i> Empréstimos com lojas externas</h2>
+  <div class="d-flex gap-2">
+    {% if current_user.tem_perm_hora('emprestimos', 'criar') %}
+      <a href="{{ url_for('hora.emprestimos_novo') }}" class="btn btn-primary">
+        <i class="fas fa-plus-circle"></i> Novo empréstimo
+      </a>
+    {% endif %}
+    <a href="{{ url_for('hora.emprestimos_exportar_xlsx',
+                        status=status_filtro or None,
+                        tipo=tipo_filtro or None) }}"
+       class="btn btn-outline-success">
+      <i class="fas fa-file-excel"></i> Exportar Excel
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-info small mb-3">
+  <i class="fas fa-info-circle"></i>
+  <strong>SAIDA</strong>: nossa loja empresta moto para externa (chassi sai).
+  <strong>ENTRADA</strong>: externa empresta moto para nossa loja (chassi entra).
+  Ressarcimento entra/sai com OUTRA moto do mesmo modelo.
+</div>
+
+{# Filtros: tipo + status + per_page #}
+<form method="get" class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+  <small class="text-muted me-1">Tipo:</small>
+  {% set _tipo_btns = [('', 'Todos'), ('SAIDA', 'Saída'), ('ENTRADA', 'Entrada')] %}
+  {% for v, l in _tipo_btns %}
+    <a href="{{ url_for('hora.emprestimos_lista', tipo=v or None,
+                        status=status_filtro or None, per_page=per_page) }}"
+       class="btn btn-sm btn-{% if (tipo_filtro or '') == v %}primary{% else %}outline-primary{% endif %}">
+      {{ l }}
+    </a>
+  {% endfor %}
+  <small class="text-muted ms-3 me-1">Status:</small>
+  {% set _status_btns = [('', 'Todos'), ('EM_ABERTO', 'Em aberto'),
+                          ('RESSARCIDO', 'Ressarcido'), ('CANCELADO', 'Cancelado')] %}
+  {% for v, l in _status_btns %}
+    <a href="{{ url_for('hora.emprestimos_lista', status=v or None,
+                        tipo=tipo_filtro or None, per_page=per_page) }}"
+       class="btn btn-sm btn-{% if (status_filtro or '') == v %}secondary{% else %}outline-secondary{% endif %}">
+      {{ l }}
+    </a>
+  {% endfor %}
+  <span class="ms-auto"></span>
+  <small class="text-muted me-1">Por página:</small>
+  <select name="per_page" class="form-select form-select-sm" style="width:auto;"
+          onchange="this.form.submit()">
+    {% for opt in [25, 50, 100, 200] %}
+      <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
+    {% endfor %}
+  </select>
+  {% if status_filtro %}<input type="hidden" name="status" value="{{ status_filtro }}">{% endif %}
+  {% if tipo_filtro %}<input type="hidden" name="tipo" value="{{ tipo_filtro }}">{% endif %}
+</form>
+
+{% set status_badge = {
+    'EM_ABERTO': 'warning',
+    'RESSARCIDO': 'success',
+    'CANCELADO': 'secondary',
+} %}
+{% set tipo_badge = {'SAIDA': 'danger', 'ENTRADA': 'primary'} %}
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Tipo</th>
+        <th>Status</th>
+        <th>Loja HORA</th>
+        <th>Loja externa</th>
+        <th>Modelo</th>
+        <th>Chassi saída</th>
+        <th>Chassi entrada</th>
+        <th>Data emp.</th>
+        <th>Ressarcido</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in emprestimos %}
+      <tr>
+        <td><small>{{ e.id }}</small></td>
+        <td><span class="badge bg-{{ tipo_badge.get(e.tipo, 'secondary') }}">{{ e.tipo }}</span></td>
+        <td><span class="badge bg-{{ status_badge.get(e.status, 'secondary') }}">{{ e.status }}</span></td>
+        <td>{{ e.loja_hora.rotulo_display if e.loja_hora else '—' }}</td>
+        <td>
+          <strong>{{ e.loja_externa_nome }}</strong>
+          {% if e.loja_externa_cnpj %}
+            <div class="small text-muted">{{ e.loja_externa_cnpj }}</div>
+          {% endif %}
+        </td>
+        <td>{{ e.modelo.nome_modelo if e.modelo else '—' }}</td>
+        <td>
+          {% if e.chassi_saida %}
+            <code class="small">{{ e.chassi_saida }}</code>
+          {% else %}
+            <span class="text-muted small">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if e.chassi_entrada %}
+            <code class="small">{{ e.chassi_entrada }}</code>
+          {% else %}
+            <span class="text-muted small">—</span>
+          {% endif %}
+        </td>
+        <td><small>{{ e.data_emprestimo.strftime('%d/%m/%Y') }}</small></td>
+        <td>
+          {% if e.data_ressarcimento %}
+            <small>{{ e.data_ressarcimento.strftime('%d/%m/%Y') }}</small>
+          {% else %}
+            <span class="text-muted small">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('hora.emprestimos_detalhe', emprestimo_id=e.id) }}"
+             class="btn btn-sm btn-outline-primary">Ver</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="text-center text-muted">Nenhum empréstimo registrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{{ render_pagination(pagination, request) }}
+{% endblock %}

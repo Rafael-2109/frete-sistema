@@ -45,6 +45,16 @@ from app.hora.models.transferencia import (
     HoraTransferenciaAuditoria,
 )
 from app.hora.models.avaria import HoraAvaria, HoraAvariaFoto
+from app.hora.models.emprestimo import (
+    HoraEmprestimoMoto,
+    EMPRESTIMO_TIPO_SAIDA,
+    EMPRESTIMO_TIPO_ENTRADA,
+    EMPRESTIMO_TIPOS,
+    EMPRESTIMO_STATUS_EM_ABERTO,
+    EMPRESTIMO_STATUS_RESSARCIDO,
+    EMPRESTIMO_STATUS_CANCELADO,
+    EMPRESTIMO_STATUS_VALIDOS,
+)
 from app.hora.models.tagplus import (
     HoraTagPlusConta,
     HoraTagPlusToken,

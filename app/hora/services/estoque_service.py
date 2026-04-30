@@ -24,14 +24,21 @@ EVENTOS_EM_ESTOQUE = (
     'RECEBIDA', 'CONFERIDA', 'TRANSFERIDA',
     'CANCELADA',  # transferencia cancelada — moto voltou a origem
     'AVARIADA', 'FALTANDO_PECA',
+    # Emprestimo: chassi externo recebido entra como disponivel para venda;
+    # ressarcimento que CHEGA tambem (chassi novo entra resolvendo SAIDA).
+    'EMPRESTIMO_ENTRADA', 'RESSARCIMENTO_SAIDA',
 )
 # Eventos que tiram a moto do estoque
 # - RESERVADA: pedido de venda em COTACAO/CONFIRMADO. Reservada por hora_venda.
 # - VENDIDA, NF_EMITIDA: pedido FATURADO (NFe emitida via TagPlus ou DANFE legado).
 # - DEVOLVIDA: moto saiu por devolucao ao fornecedor OU pedido cancelado.
-# - NF_CANCELADA: NFe foi cancelada na SEFAZ; pedido pode estar em CONFIRMADO
-#   (apos webhook nfe_cancelada). Estado de retorno depende do status do pedido.
-EVENTOS_FORA_ESTOQUE = ('RESERVADA', 'VENDIDA', 'DEVOLVIDA', 'NF_EMITIDA', 'NF_CANCELADA')
+# - NF_CANCELADA: NFe foi cancelada na SEFAZ; pedido pode estar em CONFIRMADO.
+# - EMPRESTIMO_SAIDA: chassi nosso emprestado para loja externa (fora estoque).
+# - RESSARCIMENTO_ENTRADA: chassi nosso enviado para fechar emprestimo ENTRADA.
+EVENTOS_FORA_ESTOQUE = (
+    'RESERVADA', 'VENDIDA', 'DEVOLVIDA', 'NF_EMITIDA', 'NF_CANCELADA',
+    'EMPRESTIMO_SAIDA', 'RESSARCIMENTO_ENTRADA',
+)
 # Eventos "em limbo" — nao estao no estoque de nenhuma loja
 EVENTOS_EM_TRANSITO = ('EM_TRANSITO',)
 

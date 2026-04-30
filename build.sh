@@ -71,6 +71,12 @@ echo "Criando tabela claude_session_store (SessionStore v0.1.64 Fase A)..."
 python scripts/migrations/2026_04_21_claude_session_store.py \
     || echo "⚠️ Migration claude_session_store falhou, continuando deploy..."
 
+# 8. HORA 23: tabela hora_emprestimo_moto (emprestimo entre lojas).
+# Idempotente (CREATE TABLE IF NOT EXISTS + DO $$ guards).
+echo "HORA 23: emprestimo entre lojas..."
+python scripts/migrations/hora_23_emprestimo_moto.py \
+    || echo "⚠️ Migration hora_23 falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
