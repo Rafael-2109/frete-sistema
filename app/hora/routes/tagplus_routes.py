@@ -1459,13 +1459,17 @@ def venda_nfe_xml_cancelamento(venda_id: int):
 @hora_bp.route('/tagplus/backfill', methods=['GET', 'POST'])
 @require_hora_perm('vendas', 'criar')
 def tagplus_backfill():
-    """Importa NFs ja emitidas no TagPlus para HoraVenda via API.
+    """Enfileira backfill TagPlus em RQ (queue hora_backfill).
 
-    GET: tela com filtros (since/until/limite).
-    POST: dispara backfill sincrono e renderiza relatorio.
+    GET: tela com filtros (since/until/limite) + lista de jobs anteriores.
+    POST: cria HoraTagPlusBackfillJob, enfileira e redireciona para o
+          detalhe do job (auto-refresh AJAX).
     """
     from datetime import date, timedelta
-    from app.hora.services.tagplus.backfill_service import executar_backfill
+    from app.hora.models import HoraTagPlusBackfillJob
+    from app.hora.services.tagplus.backfill_service import (
+        enfileirar_backfill_job,
+    )
 
     today = date.today()
     default_since = (today - timedelta(days=30)).isoformat()
@@ -1497,34 +1501,74 @@ def tagplus_backfill():
             else (current_user.email if current_user.is_authenticated else None)
         )
 
-        relatorio = None
         try:
-            relatorio = executar_backfill(
+            job_id = enfileirar_backfill_job(
                 since=since, until=until, operador=operador, limite=limite,
             )
             flash(
-                f'Backfill: {relatorio["sucesso"]} ok · '
-                f'{relatorio["duplicado"]} duplicado(s) · '
-                f'{relatorio["erro"]} erro(s) · '
-                f'{relatorio["divergencias"]} divergencia(s).',
-                'warning' if (relatorio['erro'] or relatorio['divergencias']) else 'success',
+                f'Backfill enfileirado (job #{job_id}). '
+                f'Acompanhe o progresso abaixo — pode fechar a aba e voltar depois.',
+                'success',
             )
+            return redirect(url_for('hora.tagplus_backfill_detalhe', job_id=job_id))
         except RuntimeError as exc:
-            flash(f'Backfill nao pode rodar: {exc}', 'danger')
+            flash(f'Backfill nao pode ser enfileirado: {exc}', 'danger')
         except Exception as exc:  # pragma: no cover
-            flash(f'Erro inesperado no backfill: {exc}', 'danger')
-            logger.exception('Backfill TagPlus falhou')
+            flash(f'Erro inesperado ao enfileirar backfill: {exc}', 'danger')
+            logger.exception('Enfileiramento backfill TagPlus falhou')
 
-        return render_template(
-            'hora/tagplus/backfill.html',
-            relatorio=relatorio,
-            since=since, until=until, limite=limite,
-            default_since=default_since, default_until=default_until,
-        )
+    jobs = (
+        HoraTagPlusBackfillJob.query
+        .order_by(HoraTagPlusBackfillJob.id.desc())
+        .limit(20)
+        .all()
+    )
 
     return render_template(
         'hora/tagplus/backfill.html',
-        relatorio=None,
-        since=None, until=None, limite=None,
+        jobs=jobs,
         default_since=default_since, default_until=default_until,
     )
+
+
+@hora_bp.route('/tagplus/backfill/<int:job_id>', methods=['GET'])
+@require_hora_perm('vendas', 'criar')
+def tagplus_backfill_detalhe(job_id: int):
+    """Tela de detalhe de um HoraTagPlusBackfillJob com auto-refresh AJAX."""
+    from app.hora.models import HoraTagPlusBackfillJob
+
+    job = HoraTagPlusBackfillJob.query.get_or_404(job_id)
+    return render_template('hora/tagplus/backfill_detalhe.html', job=job)
+
+
+@hora_bp.route('/tagplus/backfill/<int:job_id>/json', methods=['GET'])
+@require_hora_perm('vendas', 'criar')
+def tagplus_backfill_job_json(job_id: int):
+    """Endpoint AJAX para polling do progresso (a tela de detalhe consome)."""
+    from flask import jsonify
+    from app.hora.models import HoraTagPlusBackfillJob
+
+    job = HoraTagPlusBackfillJob.query.get_or_404(job_id)
+
+    def _fmt(dt):
+        return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+
+    return jsonify({
+        'id': job.id,
+        'status': job.status,
+        'iniciado_em': _fmt(job.iniciado_em),
+        'finalizado_em': _fmt(job.finalizado_em),
+        'total_listadas': job.total_listadas,
+        'processadas': job.processadas,
+        'n_criado': job.n_criado,
+        'n_atualizado': job.n_atualizado,
+        'n_inalterado': job.n_inalterado,
+        'n_cancelado': job.n_cancelado,
+        'n_pulada_cancelada': job.n_pulada_cancelada,
+        'n_pulada_invalida': job.n_pulada_invalida,
+        'n_dup': job.n_dup,
+        'n_erro': job.n_erro,
+        'n_divergencias': job.n_divergencias,
+        'ultimo_erro': job.ultimo_erro,
+        'em_estado_final': job.em_estado_final,
+    })

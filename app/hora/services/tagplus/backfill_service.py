@@ -25,13 +25,14 @@ Resolucao do chassi:
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional
 
 from app import db
-from app.hora.models import HoraMoto, HoraVenda, HoraVendaItem
+from app.hora.models import HoraMoto, HoraMotoEvento, HoraVenda, HoraVendaItem
 from app.hora.models.tagplus import (
     HoraTagPlusConta, HoraTagPlusFormaPagamentoMap, HoraTagPlusNfeEmissao,
     HoraTagPlusProdutoMap,
@@ -117,25 +118,44 @@ def listar_nfes_emitidas(
 # --------------------------------------------------------------------------
 
 _RE_CHASSI_MOTOR = re.compile(
-    r'Chassi:\s*([A-Z0-9]+)(?:\s*/\s*Motor:\s*([A-Z0-9\-]*))?',
+    r'Chassi\s*[:\.\-]?\s*<?\s*([A-Z0-9][A-Z0-9\-]*)\s*>?'
+    r'(?:\s*[/,;]?\s*Motor\s*[:\.\-]?\s*<?\s*([A-Z0-9][A-Z0-9\-]*)\s*>?)?',
     re.IGNORECASE,
 )
 
 # Padroes alternativos comuns em NFs TagPlus historicas (preenchimento manual):
-#   "N° SERIE: XXX / SERIE: XXX / Nº SERIE: XXX"
+#   "N° SERIE: XXX / SERIE: XXX / Nº SERIE: XXX / Nº SERIE: < 172922502660076>"
+# Suporta:
+#   - <, >, espaços ao redor do valor (NFs com chassi 100% numérico).
+#   - Chassi alfanumérico OU numérico puro (ex.: 172922502660076).
 _RE_NSERIE = re.compile(
     r'(?:N[ºo°]?|Numero)\s*[:\.\-]?\s*(?:SERIE|S[eé]rie|CHASSI|Chassi)\s*[:\.\-]?\s*'
-    r'([A-Z0-9][A-Z0-9\-]{8,29})',
+    r'<?\s*([A-Z0-9][A-Z0-9\-]{8,29})\s*>?',
     re.IGNORECASE,
 )
 
 # Chassis "puros" (string alfanumerica longa) — ultima cartada quando rotulos
-# estao ausentes. Aceita 13-30 chars com pelo menos 1 letra E 1 numero (evita
-# pegar codigos de produto curtos como MT-X11).
-_RE_CHASSI_PURO = re.compile(r'\b([A-Z][A-Z0-9]{12,29})\b')
+# estao ausentes. Aceita 13-30 chars alfanuméricos (incluindo 100% numéricos
+# como 172922502660076). Exclui-se motor já capturado para não duplicar.
+_RE_CHASSI_PURO = re.compile(r'\b([A-Z0-9]{13,30})\b', re.IGNORECASE)
 
 _RE_MOTOR = re.compile(
-    r'Motor\s*[:\.\-]?\s*([A-Z0-9\-]{6,30})',
+    r'Motor\s*[:\.\-]?\s*<?\s*([A-Z0-9][A-Z0-9\-]{5,29})\s*>?',
+    re.IGNORECASE,
+)
+
+# Cor: aceita "COR: <Cinza>", "COR: Vermelho", "COR Cinza" (sem :)
+# Para na próxima palavra reservada (ANO/MOD/MOTOR/Nº/N°/GARANTIA) ou pontuação.
+_RE_COR = re.compile(
+    r'\bCOR\s*[:\.\-]?\s*<?\s*'
+    r'([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]*?)'
+    r'\s*>?(?=\s*(?:ANO\b|MOD\b|MOTOR\b|N[ºo°]?\b|Numero\b|GARANTIA\b|[<>\.,;\|]|$))',
+    re.IGNORECASE,
+)
+
+# Ano modelo: "ANO 2025/MOD 2025", "ANO: 2025", "MOD 2025"
+_RE_ANO_MODELO = re.compile(
+    r'(?:ANO|MOD)\s*[:\.\-]?\s*(\d{4})',
     re.IGNORECASE,
 )
 
@@ -148,6 +168,9 @@ def _extrair_chassi_motor(detalhes: Optional[str]) -> tuple[Optional[str], Optio
       2. 'N° SERIE: X' ou 'CHASSI: X'  (NFs historicas TagPlus).
       3. Token alfanumerico 13+ chars  (ultima cartada).
     Motor extraido separado quando presente.
+
+    Garante que o token capturado como motor NAO seja recapturado como chassi
+    no fallback (`_RE_CHASSI_PURO`).
     """
     if not detalhes:
         return (None, None)
@@ -161,27 +184,77 @@ def _extrair_chassi_motor(detalhes: Optional[str]) -> tuple[Optional[str], Optio
         chassi = (m.group(1) or '').strip().upper() or None
         motor = (m.group(2) or '').strip().upper() or None
 
-    # 2) Padrao "N° SERIE: ..." (TagPlus historico)
-    if not chassi:
-        m = _RE_NSERIE.search(detalhes)
-        if m:
-            chassi = m.group(1).strip().upper()
-
-    # 3) Token bruto longo (fallback)
-    if not chassi:
-        m = _RE_CHASSI_PURO.search(detalhes.upper())
-        if m:
-            chassi = m.group(1).strip()
-
-    # Motor independente (caso o padrao 1 nao tenha capturado)
+    # Motor independente — extraido cedo para que possa ser excluido do
+    # fallback `_RE_CHASSI_PURO` (evita gravar motor como chassi).
     if not motor:
         m = _RE_MOTOR.search(detalhes)
         if m:
             motor = m.group(1).strip().upper()
 
+    # 2) Padrao "N° SERIE: ..." (TagPlus historico) — aceita <,>,espacos
+    if not chassi:
+        m = _RE_NSERIE.search(detalhes)
+        if m:
+            chassi = m.group(1).strip().upper()
+
+    # 3) Token bruto longo (fallback) — aceita chassi 100% numerico, mas
+    # exclui o token ja capturado como motor.
+    if not chassi:
+        texto_upper = detalhes.upper()
+        for cand in _RE_CHASSI_PURO.findall(texto_upper):
+            cand_norm = cand.strip()
+            if motor and cand_norm == motor:
+                continue
+            chassi = cand_norm
+            break
+
     if motor in ('', '-', 'NONE', 'NULL'):
         motor = None
     return (chassi, motor)
+
+
+def _extrair_cor_ano(texto: Optional[str]) -> tuple[Optional[str], Optional[int]]:
+    """Extrai (cor, ano_modelo) do `inf_contribuinte`/`observacoes` da NFe.
+
+    Padroes suportados:
+      - 'COR: <Cinza>'  -> 'CINZA'
+      - 'COR Vermelho'  -> 'VERMELHO'
+      - 'ANO 2025/MOD 2025' -> 2025
+      - 'MOD 2025'      -> 2025
+
+    Retorna (None, None) quando nao consegue extrair.
+    """
+    if not texto:
+        return (None, None)
+    cor = None
+    ano = None
+
+    m = _RE_COR.search(texto)
+    if m:
+        cor_raw = (m.group(1) or '').strip().upper()
+        # Filtra valores improvaveis (1 char, palavras-reservadas).
+        if cor_raw and len(cor_raw) >= 3 and cor_raw not in (
+            'NAO', 'NÃO', 'INFORMADA', 'INFORMADO',
+        ):
+            cor = cor_raw
+
+    # Para ano, prefere o "MOD" (ano modelo) em vez do "ANO" (ano fabricacao).
+    matches = list(_RE_ANO_MODELO.finditer(texto))
+    if matches:
+        # Preferir "MOD <ANO>" se existir; senao usa o primeiro "ANO <ANO>".
+        mod_match = next(
+            (m for m in matches if m.group(0).upper().startswith('MOD')),
+            None,
+        )
+        chosen = mod_match or matches[0]
+        try:
+            ano_int = int(chosen.group(1))
+            if 1990 <= ano_int <= 2099:
+                ano = ano_int
+        except (ValueError, TypeError):
+            pass
+
+    return (cor, ano)
 
 
 def _so_digitos(valor: Optional[str]) -> str:
@@ -739,11 +812,14 @@ def importar_nfe_da_api(
             cnpj_emitente=cnpj_emitente,
             loja_emitente_id=loja_emitente.id if loja_emitente else None,
         )
+        inf_contribuinte_nf = nfe.get('inf_contribuinte') or ''
+        observacoes_nf = nfe.get('observacoes') or ''
+
         # Se nao tem itens ainda, tenta criar agora.
         criou_itens = False
+        atualizou_motos = False
+        corrigiu_chassis = 0
         if not existente.itens:
-            inf_contribuinte_nf = nfe.get('inf_contribuinte') or ''
-            observacoes_nf = nfe.get('observacoes') or ''
             antes = {it.id for it in existente.itens}
             _criar_itens_da_api(
                 venda=existente,
@@ -756,6 +832,17 @@ def importar_nfe_da_api(
             )
             db.session.flush()
             criou_itens = any(it.id not in antes for it in existente.itens)
+        else:
+            # Itens ja existem: tenta upsert das motos via re-extracao
+            # da API (cor, ano, motor) e corrige bug chassi==motor.
+            atualizou_motos, corrigiu_chassis = _atualizar_motos_dos_itens_existentes(
+                venda=existente,
+                itens_api=itens_raw,
+                inf_contribuinte_nf=inf_contribuinte_nf,
+                observacoes_nf=observacoes_nf,
+                operador=operador,
+                loja_emitente_id=loja_emitente.id if loja_emitente else None,
+            )
 
         # Sincroniza HoraTagPlusNfeEmissao (botao 'Baixar DANFE' funcionar).
         emissao_existia = HoraTagPlusNfeEmissao.query.filter_by(venda_id=existente.id).first() is not None
@@ -766,7 +853,10 @@ def importar_nfe_da_api(
         )
         criou_emissao = not emissao_existia
 
-        if status_upsert or criou_itens or criou_emissao:
+        if (
+            status_upsert or criou_itens or criou_emissao
+            or atualizou_motos or corrigiu_chassis
+        ):
             venda_audit.registrar_auditoria(
                 venda_id=existente.id, usuario=operador or '',
                 acao='EDITOU_HEADER',
@@ -774,7 +864,9 @@ def importar_nfe_da_api(
                     f'Backfill TagPlus refresh — '
                     f'campos atualizados={status_upsert}, '
                     f'itens_criados={criou_itens}, '
-                    f'emissao_criada={criou_emissao}'
+                    f'emissao_criada={criou_emissao}, '
+                    f'motos_complementadas={atualizou_motos}, '
+                    f'chassis_corrigidos={corrigiu_chassis}'
                 ),
             )
             db.session.commit()
@@ -860,6 +952,50 @@ def importar_nfe_da_api(
 
     db.session.commit()
     return venda, 'criado'
+
+
+def _atualizar_moto_complementar(
+    moto: HoraMoto,
+    cor_nova: Optional[str],
+    ano_modelo_novo: Optional[int],
+    motor_novo: Optional[str],
+) -> bool:
+    """UPSERT de campos complementares de `HoraMoto` durante backfill TagPlus.
+
+    Excecao controlada ao invariante 3 (insert-once): so atualiza campos que
+    estao em estado sentinela (NULL, 'NAO_INFORMADA' ou motor==chassi —
+    sinal do bug regex que gravava motor como chassi). NUNCA sobrescreve
+    valores ja preenchidos com dados reais (preserva edicoes de operador
+    e mantem rastreabilidade da identidade da moto).
+
+    Returns:
+        True se algum campo foi alterado, False caso contrario.
+    """
+    alterou = False
+
+    cor_norm = (cor_nova or '').strip().upper() or None
+    if (
+        cor_norm
+        and cor_norm != 'NAO_INFORMADA'
+        and (moto.cor in (None, '', 'NAO_INFORMADA'))
+    ):
+        moto.cor = cor_norm
+        alterou = True
+
+    if ano_modelo_novo and moto.ano_modelo is None:
+        moto.ano_modelo = ano_modelo_novo
+        alterou = True
+
+    motor_norm = (motor_novo or '').strip().upper() or None
+    if motor_norm and (
+        moto.numero_motor is None
+        or moto.numero_motor == ''
+        or moto.numero_motor == moto.numero_chassi  # sinal do bug regex
+    ) and motor_norm != moto.numero_chassi:
+        moto.numero_motor = motor_norm
+        alterou = True
+
+    return alterou
 
 
 def _atualizar_campos_vazios(
@@ -968,10 +1104,14 @@ def _criar_itens_da_api(
     )
 
     # Pre-extrai chassi(s) do nivel da NFe-mae (compartilhado entre os itens).
-    nfe_chassis = _extrair_chassis_multiplos(
-        f'{inf_contribuinte_nf}\n{observacoes_nf}'
-    )
+    texto_nfe_mae = f'{inf_contribuinte_nf}\n{observacoes_nf}'
+    nfe_chassis = _extrair_chassis_multiplos(texto_nfe_mae)
     nfe_chassis_iter = iter(nfe_chassis)
+
+    # Cor e ano modelo da NFe-mae (compartilhados entre os itens; quando
+    # uma NF tem multiplas motos com cores diferentes, o item.detalhes
+    # ainda pode sobrescrever no proprio item).
+    cor_nfe, ano_nfe = _extrair_cor_ano(texto_nfe_mae)
 
     for it in itens_api:
         if not isinstance(it, dict):
@@ -1049,10 +1189,17 @@ def _criar_itens_da_api(
 
         modelo_id_resolvido = _resolver_modelo_id(codigo_produto)
 
+        # Cor/ano podem vir do proprio detalhes do item (sobrescreve NFe-mae).
+        cor_item, ano_item = _extrair_cor_ano(detalhes or descricao_raw or complemento)
+        cor_final = cor_item or cor_nfe
+        ano_final = ano_item or ano_nfe
+
         for chassi, motor in chassis_motores:
             chassi_norm = (chassi or '').strip().upper()
             if not chassi_norm:
                 continue
+
+            cor_para_moto = cor_final or 'NAO_INFORMADA'
 
             moto_existia = HoraMoto.query.get(chassi_norm) is not None
 
@@ -1060,9 +1207,9 @@ def _criar_itens_da_api(
                 moto = HoraMoto(
                     numero_chassi=chassi_norm,
                     modelo_id=modelo_id_resolvido,
-                    cor='NAO_INFORMADA',
+                    cor=cor_para_moto,
                     numero_motor=motor,
-                    ano_modelo=None,
+                    ano_modelo=ano_final,
                     criado_por=operador,
                 )
                 db.session.add(moto)
@@ -1071,11 +1218,23 @@ def _criar_itens_da_api(
                 moto = get_or_create_moto(
                     numero_chassi=chassi_norm,
                     modelo_nome=descricao or codigo_produto or 'MODELO_DESCONHECIDO',
-                    cor='NAO_INFORMADA',
+                    cor=cor_para_moto,
                     numero_motor=motor,
-                    ano_modelo=None,
+                    ano_modelo=ano_final,
                     criado_por=operador,
                 )
+                # UPSERT: moto ja existia — atualiza campos que estao em
+                # estado sentinela ('NAO_INFORMADA' / NULL / motor==chassi).
+                if moto_existia:
+                    if _atualizar_moto_complementar(
+                        moto, cor_nova=cor_final,
+                        ano_modelo_novo=ano_final,
+                        motor_novo=motor,
+                    ):
+                        logger.info(
+                            'UPSERT moto chassi=%s — cor/ano/motor complementados '
+                            'a partir da API TagPlus.', chassi_norm,
+                        )
                 if codigo_produto and not modelo_id_resolvido and not moto_existia:
                     _registrar_divergencia(
                         venda_id=venda.id, tipo='TABELA_PRECO_AUSENTE',
@@ -1150,6 +1309,246 @@ def _criar_itens_da_api(
             )
 
 
+def _atualizar_motos_dos_itens_existentes(
+    venda: HoraVenda,
+    itens_api: list,
+    inf_contribuinte_nf: str,
+    observacoes_nf: str,
+    operador: Optional[str],
+    loja_emitente_id: Optional[int],
+) -> tuple[bool, int]:
+    """UPSERT das motos vinculadas a itens ja persistidos.
+
+    Para cada `HoraVendaItem` da venda, re-extrai (chassi, motor, cor, ano)
+    da API TagPlus (campos do item + inf_contribuinte da NF-mae) e:
+
+      - Se moto.cor='NAO_INFORMADA' e API tem cor real -> atualiza.
+      - Se moto.ano_modelo IS NULL e API tem ano -> atualiza.
+      - Se moto.numero_motor IS NULL ou == numero_chassi (sinal do bug regex)
+        e API tem motor diferente -> atualiza.
+      - Se moto.numero_chassi == numero_motor extraido E novo extracao tem
+        chassi diferente -> dispara `_corrigir_chassi_motor_invertido`
+        (renomeia chassi via cascade em FKs e cria moto com chassi correto).
+
+    Returns:
+        (alterou_motos: bool, qtd_chassis_corrigidos: int)
+    """
+    alterou_qq = False
+    n_corrigidos = 0
+    if not venda.itens or not itens_api:
+        return (False, 0)
+
+    texto_nfe_mae = f'{inf_contribuinte_nf}\n{observacoes_nf}'
+    cor_nfe, ano_nfe = _extrair_cor_ano(texto_nfe_mae)
+    nfe_chassis_pares = _extrair_chassis_multiplos(texto_nfe_mae)
+
+    # Empacota itens da API com sua melhor extracao (chassi, motor, cor, ano).
+    api_extracoes: list[dict] = []
+    for it in itens_api:
+        if not isinstance(it, dict):
+            continue
+        detalhes = (it.get('detalhes') or '').strip()
+        descricao = (it.get('descricao') or '').strip()
+        complemento = (it.get('complemento_descricao') or '').strip()
+        numero_serie = (it.get('numero_serie') or '').strip()
+
+        chassis_motores: list[tuple[Optional[str], Optional[str]]] = []
+        for fonte in (detalhes, descricao, complemento, numero_serie):
+            chassis_motores = _extrair_chassis_multiplos(fonte)
+            if chassis_motores:
+                break
+
+        cor_item, ano_item = _extrair_cor_ano(detalhes or descricao or complemento)
+        api_extracoes.append({
+            'chassis_motores': chassis_motores,
+            'cor': cor_item or cor_nfe,
+            'ano': ano_item or ano_nfe,
+            'detalhes': detalhes,
+        })
+
+    # Fallback: se algum item nao teve chassi proprio, usa fila da NF-mae.
+    pares_fila = list(nfe_chassis_pares)
+    pares_fila_iter = iter(pares_fila)
+    for ext in api_extracoes:
+        if not ext['chassis_motores']:
+            try:
+                ext['chassis_motores'] = [next(pares_fila_iter)]
+            except StopIteration:
+                pass
+
+    # Casa cada item da venda com a extracao correspondente da API.
+    # Usamos casamento posicional (mesma ordem do TagPlus).
+    venda_itens_ord = list(venda.itens)
+    for idx, item in enumerate(venda_itens_ord):
+        if idx >= len(api_extracoes):
+            break
+        ext = api_extracoes[idx]
+        pares = ext['chassis_motores']
+        if not pares:
+            continue
+        chassi_api, motor_api = pares[0]
+        chassi_api_norm = (chassi_api or '').strip().upper() or None
+        motor_api_norm = (motor_api or '').strip().upper() or None
+        cor_api = ext['cor']
+        ano_api = ext['ano']
+
+        moto = HoraMoto.query.get(item.numero_chassi)
+        if moto is None:
+            continue
+
+        # Caso 1: bug chassi==motor — chassi gravado na verdade e o motor.
+        if (
+            chassi_api_norm
+            and motor_api_norm
+            and item.numero_chassi == motor_api_norm
+            and chassi_api_norm != motor_api_norm
+        ):
+            try:
+                _corrigir_chassi_motor_invertido(
+                    venda_id=venda.id,
+                    item=item,
+                    chassi_errado=item.numero_chassi,
+                    chassi_correto=chassi_api_norm,
+                    motor_correto=motor_api_norm,
+                    cor=cor_api,
+                    ano_modelo=ano_api,
+                    operador=operador,
+                    loja_id=loja_emitente_id,
+                )
+                n_corrigidos += 1
+                alterou_qq = True
+                logger.info(
+                    'Chassi corrigido na venda #%s item #%s: %s -> %s',
+                    venda.id, item.id, motor_api_norm, chassi_api_norm,
+                )
+                continue
+            except Exception as e:
+                logger.exception(
+                    'Falha ao corrigir chassi invertido na venda #%s item #%s: %s',
+                    venda.id, item.id, e,
+                )
+                continue
+
+        # Caso 2: chassi correto, mas cor/ano/motor podem estar incompletos.
+        if _atualizar_moto_complementar(
+            moto, cor_nova=cor_api, ano_modelo_novo=ano_api,
+            motor_novo=motor_api_norm,
+        ):
+            alterou_qq = True
+
+    return (alterou_qq, n_corrigidos)
+
+
+def _corrigir_chassi_motor_invertido(
+    venda_id: int,
+    item: HoraVendaItem,
+    chassi_errado: str,
+    chassi_correto: str,
+    motor_correto: str,
+    cor: Optional[str],
+    ano_modelo: Optional[int],
+    operador: Optional[str],
+    loja_id: Optional[int],
+) -> None:
+    """Corrige o bug historico onde regex gravou motor como chassi.
+
+    Estado de entrada (bug):
+      - HoraMoto(numero_chassi=motor, numero_motor=motor)  # ambos = motor
+      - HoraVendaItem.numero_chassi = motor
+      - HoraMotoEvento.numero_chassi = motor
+
+    Acao:
+      1. Cria HoraMoto(numero_chassi=chassi_correto) com cor/ano/motor reais
+         (se ainda nao existe).
+      2. Re-aponta HoraVendaItem.numero_chassi -> chassi_correto.
+      3. Re-aponta os HoraMotoEvento desta venda (matched por origem_id =
+         item.id) -> chassi_correto.
+      4. Se nenhum outro registro aponta para o chassi_errado, remove a
+         HoraMoto orfa (chassi_errado).
+
+    Idempotente: se ja foi corrigido, nao faz nada.
+    """
+    chassi_errado_norm = chassi_errado.strip().upper()
+    chassi_correto_norm = chassi_correto.strip().upper()
+    motor_norm = motor_correto.strip().upper() or None
+    cor_norm = (cor or 'NAO_INFORMADA').strip().upper()
+
+    if chassi_errado_norm == chassi_correto_norm:
+        return  # ja corrigido, nada a fazer
+
+    moto_errada = HoraMoto.query.get(chassi_errado_norm)
+    if moto_errada is None:
+        # Nao deveria acontecer (caller checou), mas defesa em profundidade.
+        return
+
+    # 1. Cria moto correta se nao existe.
+    moto_correta = HoraMoto.query.get(chassi_correto_norm)
+    if moto_correta is None:
+        moto_correta = HoraMoto(
+            numero_chassi=chassi_correto_norm,
+            modelo_id=moto_errada.modelo_id,
+            cor=cor_norm,
+            numero_motor=motor_norm,
+            ano_modelo=ano_modelo,
+            criado_por=(operador or 'backfill_corrige_chassi'),
+        )
+        db.session.add(moto_correta)
+        db.session.flush()
+    else:
+        # Se ja existe, garante que cor/ano/motor estejam preenchidos.
+        _atualizar_moto_complementar(
+            moto_correta, cor_nova=cor, ano_modelo_novo=ano_modelo,
+            motor_novo=motor_norm,
+        )
+
+    # 2. Re-aponta item.
+    item.numero_chassi = chassi_correto_norm
+    db.session.flush()
+
+    # 3. Re-aponta eventos do chassi_errado vinculados a este item.
+    eventos = HoraMotoEvento.query.filter_by(
+        numero_chassi=chassi_errado_norm,
+        origem_tabela='hora_venda_item',
+        origem_id=item.id,
+    ).all()
+    for ev in eventos:
+        ev.numero_chassi = chassi_correto_norm
+    db.session.flush()
+
+    # 4. Se nenhum outro item ou evento aponta para chassi_errado, remove orfao.
+    sobra_itens = HoraVendaItem.query.filter_by(
+        numero_chassi=chassi_errado_norm,
+    ).count()
+    sobra_eventos = HoraMotoEvento.query.filter_by(
+        numero_chassi=chassi_errado_norm,
+    ).count()
+    if sobra_itens == 0 and sobra_eventos == 0:
+        db.session.delete(moto_errada)
+        db.session.flush()
+        logger.info(
+            'HoraMoto orfa removida: chassi_errado=%s (sem refs apos correcao, venda=%s)',
+            chassi_errado_norm, venda_id,
+        )
+
+    # Registra evento auditavel da correcao na linha do tempo do chassi correto.
+    try:
+        registrar_evento(
+            numero_chassi=chassi_correto_norm,
+            tipo='VENDIDA',
+            origem_tabela='hora_venda_item',
+            origem_id=item.id,
+            loja_id=loja_id,
+            operador=(operador or 'backfill_corrige_chassi'),
+            detalhe=(
+                f'Correcao chassi invertido (motor): {chassi_errado_norm}'
+                f' -> {chassi_correto_norm}'
+            ),
+        ) if not eventos else None  # se ja re-apontamos, nao duplica
+    except ValueError:
+        # tipo 'VENDIDA' e valido — fallback so por seguranca.
+        pass
+
+
 def _extrair_chassis_multiplos(detalhes: str) -> list[tuple[Optional[str], Optional[str]]]:
     """Extrai pares (chassi, motor) de uma string `detalhes`.
 
@@ -1176,11 +1575,67 @@ def _extrair_chassis_multiplos(detalhes: str) -> list[tuple[Optional[str], Optio
 # Orquestrador
 # --------------------------------------------------------------------------
 
+def _importar_com_retry_db(
+    api: ApiClient,
+    nfe_id: int,
+    operador: Optional[str],
+    max_tentativas: int = 3,
+) -> tuple:
+    """Wrapper que recupera de SSL/connection drop no Postgres.
+
+    Em runs longos no Render, conexoes SSL podem cair (timeout, deploy do
+    DB, network glitch). SQLAlchemy lanca `OperationalError` /
+    `DBAPIError` com `connection_invalidated=True`. Resposta correta:
+    rollback, dispose do pool inteiro (forca reabrir TCP+SSL), retry.
+
+    Aplica backoff linear: 5s, 15s, 30s.
+    """
+    import time
+    from sqlalchemy.exc import DBAPIError, OperationalError
+
+    delays = [5, 15, 30]
+    ultima_excecao: Optional[Exception] = None
+
+    for tentativa in range(max_tentativas):
+        try:
+            return importar_nfe_da_api(api, nfe_id, operador=operador)
+        except (OperationalError, DBAPIError) as exc:
+            ultima_excecao = exc
+            connection_invalidated = getattr(exc, 'connection_invalidated', False)
+            logger.warning(
+                'DB error em NFe %s (tentativa %d/%d, invalidated=%s): %s',
+                nfe_id, tentativa + 1, max_tentativas,
+                connection_invalidated, exc,
+            )
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.close()
+                db.engine.dispose()
+            except Exception:
+                logger.exception(
+                    'Falha ao dispose do pool em recovery NFe %s', nfe_id,
+                )
+            if tentativa + 1 < max_tentativas:
+                delay = delays[min(tentativa, len(delays) - 1)]
+                logger.info(
+                    'Aguardando %ds antes de retentar NFe %s', delay, nfe_id,
+                )
+                time.sleep(delay)
+
+    # Esgotou tentativas — propaga.
+    assert ultima_excecao is not None
+    raise ultima_excecao
+
+
 def executar_backfill(
     since: Optional[date] = None,
     until: Optional[date] = None,
     operador: Optional[str] = None,
     limite: Optional[int] = None,
+    progress_callback: Optional[Callable[[dict], None]] = None,
 ) -> dict:
     """Lista NFes da API TagPlus no intervalo + importa cada uma.
 
@@ -1189,6 +1644,21 @@ def executar_backfill(
         operador: nome do usuario logado para auditoria.
         limite: maximo de NFes a importar (None = sem limite). Util para
             testes ou primeiro lote.
+        progress_callback: callable opcional invocado a cada NFe processada
+            com snapshot dos contadores parciais. Use para atualizar UI ou
+            persistir progresso (ex.: HoraTagPlusBackfillJob).
+            Forma do snapshot:
+              {
+                'processadas': int,        # NFs ja iteradas
+                'criado', 'atualizado', 'inalterado', 'cancelado',
+                'pulada_cancelada', 'pulada_invalida',
+                'duplicado', 'erro', 'divergencias': int,
+                'ultima_nfe_id': int|None,
+                'ultima_status': str|None,  # 'criado'/'atualizado'/...
+                'ultimo_erro': str|None,
+              }
+            O callback eh executado fora da sessao de import — pode commitar
+            em outra sessao com seguranca.
 
     Returns:
         dict com contadores e lista detalhada de cada NFe processada.
@@ -1200,6 +1670,29 @@ def executar_backfill(
     n_criado = n_atualizado = n_inalterado = 0
     n_cancelado = n_pulada_cancelada = n_pulada_invalida = 0
     n_dup = n_err = n_div = 0
+
+    def _emit_progress(ultima_nfe: Optional[int], ultima_status: Optional[str],
+                       ultimo_erro: Optional[str]) -> None:
+        if not progress_callback:
+            return
+        try:
+            progress_callback({
+                'processadas': len(resultados),
+                'criado': n_criado,
+                'atualizado': n_atualizado,
+                'inalterado': n_inalterado,
+                'cancelado': n_cancelado,
+                'pulada_cancelada': n_pulada_cancelada,
+                'pulada_invalida': n_pulada_invalida,
+                'duplicado': n_dup,
+                'erro': n_err,
+                'divergencias': n_div,
+                'ultima_nfe_id': ultima_nfe,
+                'ultima_status': ultima_status,
+                'ultimo_erro': ultimo_erro,
+            })
+        except Exception:  # pragma: no cover
+            logger.exception('progress_callback falhou — ignorado')
 
     iterador = listar_nfes_emitidas(api, since=since, until=until)
     for i, nfe_resumo in enumerate(iterador):
@@ -1227,10 +1720,12 @@ def executar_backfill(
             entry['mensagem'] = 'NFe na listagem sem campo `id`'
             n_err += 1
             resultados.append(entry)
+            _emit_progress(None, 'erro', entry['mensagem'])
             continue
 
+        ultimo_erro_str: Optional[str] = None
         try:
-            venda, status = importar_nfe_da_api(api, nfe_id, operador=operador)
+            venda, status = _importar_com_retry_db(api, nfe_id, operador=operador)
 
             if venda is not None:
                 entry.update({
@@ -1289,14 +1784,28 @@ def executar_backfill(
             entry['status'] = 'erro'
             entry['mensagem'] = f'Incompleta: {exc}'
             n_err += 1
+            ultimo_erro_str = entry['mensagem']
             db.session.rollback()
         except Exception as exc:  # pragma: no cover
             entry['status'] = 'erro'
             entry['mensagem'] = f'Erro inesperado: {exc}'
             n_err += 1
-            db.session.rollback()
+            ultimo_erro_str = entry['mensagem']
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             logger.exception('Backfill: falha NFe %s', nfe_id)
         resultados.append(entry)
+        _emit_progress(nfe_id, entry['status'], ultimo_erro_str)
+
+        # Higiene de sessao: a cada 25 NFs faz close() para liberar a
+        # conexao SSL ao pool. Evita "idle in transaction" do Render.
+        if (i + 1) % 25 == 0:
+            try:
+                db.session.close()
+            except Exception:
+                logger.exception('Falha em session.close() periodico')
 
     return {
         'total': len(resultados),
@@ -1313,3 +1822,68 @@ def executar_backfill(
         'divergencias': n_div,
         'resultados': resultados,
     }
+
+
+# --------------------------------------------------------------------------
+# Background: enfileiramento de jobs RQ
+# --------------------------------------------------------------------------
+
+QUEUE_BACKFILL = 'hora_backfill'
+
+
+def enfileirar_backfill_job(
+    since: Optional[date],
+    until: Optional[date],
+    operador: Optional[str],
+    limite: Optional[int] = None,
+) -> int:
+    """Cria HoraTagPlusBackfillJob + enfileira em RQ. Retorna job_id local.
+
+    Levanta RuntimeError se REDIS_URL nao estiver configurado.
+    """
+    from app.hora.models import (
+        HoraTagPlusBackfillJob,
+        BACKFILL_JOB_STATUS_PENDENTE,
+    )
+
+    job = HoraTagPlusBackfillJob(
+        status=BACKFILL_JOB_STATUS_PENDENTE,
+        since=since,
+        until=until,
+        limite=limite,
+        operador=operador,
+    )
+    db.session.add(job)
+    db.session.commit()
+
+    try:
+        from rq import Queue, Retry
+        from redis import Redis
+    except ImportError:
+        raise RuntimeError(
+            'RQ/Redis nao instalado — backfill background indisponivel.'
+        )
+
+    redis_url = os.environ.get('REDIS_URL')
+    if not redis_url:
+        # Marca job como erro e avisa caller.
+        from app.hora.models import BACKFILL_JOB_STATUS_ERRO
+        job.status = BACKFILL_JOB_STATUS_ERRO
+        job.ultimo_erro = 'REDIS_URL ausente — job nao pode ser enfileirado.'
+        db.session.commit()
+        raise RuntimeError(job.ultimo_erro)
+
+    redis_conn = Redis.from_url(redis_url)
+    queue = Queue(QUEUE_BACKFILL, connection=redis_conn)
+    rq_job = queue.enqueue(
+        'app.hora.workers.backfill_worker.processar_backfill_job',
+        job.id,
+        job_timeout=7200,    # 2h — backfill pode ser muito longo
+        result_ttl=86400,    # 1 dia
+        failure_ttl=86400,
+        retry=Retry(max=2, interval=[60, 300]),
+        description=f'HORA backfill TagPlus job_id={job.id}',
+    )
+    job.rq_job_id = rq_job.id
+    db.session.commit()
+    return job.id

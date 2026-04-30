@@ -26,8 +26,8 @@
     <li><strong>Status TagPlus tratados</strong>:
       <code>A</code>=Aprovada → cria/atualiza · <code>S</code>=Cancelada / <code>4</code>=Inutilizada → cancela venda + libera chassis ·
       <code>2</code>=Denegada / <code>N</code>=Em digitação → pula.</li>
-    <li>Divergências são registradas mas não bloqueiam (CHASSI_NAO_CADASTRADO, LOJA_DIVERGENTE,
-        CNPJ_DESCONHECIDO, TABELA_PRECO_AUSENTE).</li>
+    <li><strong>Background</strong>: o backfill roda no worker RQ (queue <code>hora_backfill</code>).
+        Você pode fechar a aba e voltar depois — o progresso é salvo em <code>hora_tagplus_backfill_job</code>.</li>
   </ul>
 </div>
 
@@ -40,7 +40,7 @@
         Data emissão — desde
       </label>
       <input type="date" name="since" class="form-control"
-             value="{{ since.isoformat() if since else default_since }}">
+             value="{{ default_since }}">
       <small class="text-muted">Inclusivo. Default: 30 dias atrás.</small>
     </div>
     <div class="col-md-4">
@@ -48,7 +48,7 @@
         Data emissão — até
       </label>
       <input type="date" name="until" class="form-control"
-             value="{{ until.isoformat() if until else default_until }}">
+             value="{{ default_until }}">
       <small class="text-muted">Inclusivo. Default: hoje.</small>
     </div>
     <div class="col-md-4">
@@ -56,22 +56,20 @@
         Limite de NFs <span class="text-muted small">(opcional)</span>
       </label>
       <input type="number" name="limite" min="1" max="5000" class="form-control"
-             value="{{ limite or '' }}" placeholder="Ex.: 50 (sem limite = todas)">
+             placeholder="Ex.: 50 (sem limite = todas)">
       <small class="text-muted">Útil para 1º teste. Vazio = importa tudo do período.</small>
     </div>
   </div>
 
-  <div class="alert alert-warning small mt-3 mb-3">
-    <i class="fas fa-exclamation-triangle"></i>
-    Backfill é <strong>síncrono</strong> — a página fica aberta até terminar.
-    Para muitas NFs, comece com <code>limite=10</code> para validar o fluxo.
-    Cada chamada à API TagPlus leva ~1-3s; estime ≈ 50 NFs/min.
+  <div class="alert alert-success small mt-3 mb-3">
+    <i class="fas fa-check-circle"></i>
+    Background: ao confirmar, o job é enfileirado e você é redirecionado para a tela de progresso
+    com auto-refresh. Pode fechar a aba e voltar depois — o estado fica salvo no banco.
   </div>
 
   <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-primary"
-            onclick="this.disabled=true; this.innerHTML='<i class=\'fas fa-spinner fa-spin\'></i> Processando...'; this.form.submit();">
-      <i class="fas fa-play"></i> Executar backfill
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-play"></i> Enfileirar backfill
     </button>
     <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-outline-secondary">
       Voltar
@@ -79,135 +77,83 @@
   </div>
 </form>
 
-{% if relatorio %}
-<h4 class="mt-4">Relatório do backfill</h4>
-<div class="row g-2 mb-3">
-  <div class="col-auto">
-    <span class="badge bg-secondary fs-6">Total: {{ relatorio.total }}</span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-success fs-6"
-          title="Vendas novas criadas (NFe Aprovada)">Criadas: {{ relatorio.criado or 0 }}</span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-primary fs-6"
-          title="Vendas existentes (TAGPLUS_API) com campos vazios refrescados pela API">
-      Atualizadas: {{ relatorio.atualizado or 0 }}
-    </span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-light text-dark fs-6"
-          title="Já estavam completas — nada a fazer">
-      Inalteradas: {{ relatorio.inalterado or 0 }}
-    </span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-dark fs-6"
-          title="NFe estava CANCELADA/INUTILIZADA na SEFAZ — venda local marcada como CANCELADO + DEVOLVIDA emitida nos chassis">
-      Canceladas: {{ relatorio.cancelado or 0 }}
-    </span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-secondary fs-6"
-          title="NFe cancelada/inutilizada que não existia no sistema — pulada">
-      Puladas (canceladas): {{ relatorio.pulada_cancelada or 0 }}
-    </span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-secondary fs-6"
-          title="NFe denegada / em digitação / status indefinido — pulada">
-      Puladas (não-aprovada): {{ relatorio.pulada_invalida or 0 }}
-    </span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-warning text-dark fs-6"
-          title="NFe já importada por DANFE/MANUAL — backfill não toca">
-      Outra origem: {{ relatorio.duplicado }}
-    </span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-danger fs-6">Erro: {{ relatorio.erro }}</span>
-  </div>
-  <div class="col-auto">
-    <span class="badge bg-info text-dark fs-6">Divergências: {{ relatorio.divergencias }}</span>
-  </div>
-</div>
-
+<h4 class="mt-4">Jobs anteriores</h4>
+{% if jobs %}
 <div class="table-responsive">
   <table class="table table-sm align-middle">
     <thead>
       <tr>
-        <th>TagPlus ID</th>
-        <th>NF</th>
-        <th title="Status TagPlus na SEFAZ">SEFAZ</th>
-        <th>Resultado</th>
-        <th class="text-end">Chassis</th>
-        <th class="text-end">Diverg.</th>
-        <th>Mensagem</th>
+        <th>#</th>
+        <th>Status</th>
+        <th>Período</th>
+        <th>Limite</th>
+        <th>Operador</th>
+        <th>Iniciado</th>
+        <th>Finalizado</th>
+        <th class="text-end">Progresso</th>
+        <th class="text-end">OK</th>
+        <th class="text-end">Erros</th>
         <th></th>
       </tr>
     </thead>
     <tbody>
-      {% for r in relatorio.resultados %}
+      {% for j in jobs %}
         <tr>
-          <td><code>{{ r.tagplus_nfe_id }}</code></td>
-          <td>{{ r.numero_nf or '—' }}</td>
+          <td><code>{{ j.id }}</code></td>
           <td>
-            {% set st = r.status_tagplus %}
-            {% if st == 'A' %}
-              <span class="badge bg-success" title="Aprovada">A</span>
-            {% elif st == 'S' %}
-              <span class="badge bg-dark" title="Cancelada">S</span>
-            {% elif st == '4' %}
-              <span class="badge bg-dark" title="Inutilizada">4</span>
-            {% elif st == '2' %}
-              <span class="badge bg-secondary" title="Denegada">2</span>
-            {% elif st == 'N' %}
-              <span class="badge bg-secondary" title="Em digitação">N</span>
+            {% if j.status == 'CONCLUIDO' %}
+              <span class="badge bg-success">{{ j.status }}</span>
+            {% elif j.status == 'EM_PROGRESSO' %}
+              <span class="badge bg-primary">
+                <i class="fas fa-spinner fa-spin"></i> {{ j.status }}
+              </span>
+            {% elif j.status == 'PENDENTE' %}
+              <span class="badge bg-secondary">{{ j.status }}</span>
+            {% elif j.status == 'ERRO' %}
+              <span class="badge bg-danger">{{ j.status }}</span>
             {% else %}
-              <span class="text-muted">{{ st or '—' }}</span>
+              <span class="badge bg-light text-dark">{{ j.status }}</span>
             {% endif %}
           </td>
-          <td>
-            {% if r.status == 'criado' %}
-              <span class="badge bg-success">criado</span>
-            {% elif r.status == 'atualizado' %}
-              <span class="badge bg-primary">atualizado</span>
-            {% elif r.status == 'inalterado' %}
-              <span class="badge bg-light text-dark">inalterado</span>
-            {% elif r.status == 'cancelado' %}
-              <span class="badge bg-dark">cancelado</span>
-            {% elif r.status == 'pulada_cancelada' %}
-              <span class="badge bg-secondary">pulada (cancel.)</span>
-            {% elif r.status == 'pulada_status_invalido' %}
-              <span class="badge bg-secondary">pulada (não-aprov.)</span>
-            {% elif r.status == 'duplicado' %}
-              <span class="badge bg-warning text-dark">outra origem</span>
-            {% else %}
-              <span class="badge bg-danger">erro</span>
+          <td><small>
+            {{ j.since.isoformat() if j.since else '—' }}
+            →
+            {{ j.until.isoformat() if j.until else '—' }}
+          </small></td>
+          <td><small>{{ j.limite or '—' }}</small></td>
+          <td><small>{{ j.operador or '—' }}</small></td>
+          <td><small>
+            {{ j.iniciado_em.strftime('%d/%m %H:%M:%S') if j.iniciado_em else '—' }}
+          </small></td>
+          <td><small>
+            {{ j.finalizado_em.strftime('%d/%m %H:%M:%S') if j.finalizado_em else '—' }}
+          </small></td>
+          <td class="text-end"><small>
+            {{ j.processadas }}/{{ j.total_listadas or '?' }}
+            {% if j.total_listadas %}
+              ({{ j.percentual }}%)
             {% endif %}
-          </td>
-          <td class="text-end">{{ r.qtd_chassis or 0 }}</td>
+          </small></td>
           <td class="text-end">
-            {% if r.qtd_divergencias %}
-              <span class="badge bg-warning text-dark">{{ r.qtd_divergencias }}</span>
+            {{ (j.n_criado or 0) + (j.n_atualizado or 0) }}
+          </td>
+          <td class="text-end">
+            {% if j.n_erro %}
+              <span class="badge bg-danger">{{ j.n_erro }}</span>
             {% else %}
               0
             {% endif %}
           </td>
-          <td><small>{{ r.mensagem }}</small></td>
           <td>
-            {% if r.venda_id %}
-              <a href="{{ url_for('hora.vendas_detalhe', venda_id=r.venda_id) }}"
-                 class="btn btn-sm btn-outline-primary">Ver</a>
-            {% endif %}
+            <a href="{{ url_for('hora.tagplus_backfill_detalhe', job_id=j.id) }}"
+               class="btn btn-sm btn-outline-primary">Acompanhar</a>
           </td>
         </tr>
-      {% else %}
-        <tr><td colspan="8" class="text-center text-muted">Nenhuma NF processada.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+{% else %}
+<p class="text-muted">Nenhum job executado ainda.</p>
 {% endif %}
 {% endblock %}

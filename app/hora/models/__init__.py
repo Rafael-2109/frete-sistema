@@ -61,6 +61,7 @@ from app.hora.models.tagplus import (
     HoraTagPlusProdutoMap,
     HoraTagPlusFormaPagamentoMap,
     HoraTagPlusNfeEmissao,
+    HoraTagPlusBackfillJob,
     NFE_STATUS_PENDENTE,
     NFE_STATUS_EM_ENVIO,
     NFE_STATUS_ENVIADA_SEFAZ,
@@ -71,6 +72,12 @@ from app.hora.models.tagplus import (
     NFE_STATUS_CANCELAMENTO_SOLICITADO,
     NFE_STATUS_CANCELADA,
     NFE_STATUS_VALIDOS,
+    BACKFILL_JOB_STATUS_PENDENTE,
+    BACKFILL_JOB_STATUS_EM_PROGRESSO,
+    BACKFILL_JOB_STATUS_CONCLUIDO,
+    BACKFILL_JOB_STATUS_ERRO,
+    BACKFILL_JOB_STATUS_CANCELADO,
+    BACKFILL_JOB_STATUS_FINAIS,
 )
 
 __all__ = [
@@ -115,6 +122,7 @@ __all__ = [
     'HoraTagPlusProdutoMap',
     'HoraTagPlusFormaPagamentoMap',
     'HoraTagPlusNfeEmissao',
+    'HoraTagPlusBackfillJob',
     'NFE_STATUS_PENDENTE',
     'NFE_STATUS_EM_ENVIO',
     'NFE_STATUS_ENVIADA_SEFAZ',
@@ -125,4 +133,10 @@ __all__ = [
     'NFE_STATUS_CANCELAMENTO_SOLICITADO',
     'NFE_STATUS_CANCELADA',
     'NFE_STATUS_VALIDOS',
+    'BACKFILL_JOB_STATUS_PENDENTE',
+    'BACKFILL_JOB_STATUS_EM_PROGRESSO',
+    'BACKFILL_JOB_STATUS_CONCLUIDO',
+    'BACKFILL_JOB_STATUS_ERRO',
+    'BACKFILL_JOB_STATUS_CANCELADO',
+    'BACKFILL_JOB_STATUS_FINAIS',
 ]

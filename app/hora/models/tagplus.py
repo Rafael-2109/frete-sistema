@@ -244,3 +244,98 @@ class HoraTagPlusNfeEmissao(db.Model):
             f'<HoraTagPlusNfeEmissao venda={self.venda_id} status={self.status} '
             f'nfe={self.numero_nfe}>'
         )
+
+
+# Status do job de backfill — mantidos como constantes para reuso em workers,
+# rotas e templates.
+BACKFILL_JOB_STATUS_PENDENTE = 'PENDENTE'
+BACKFILL_JOB_STATUS_EM_PROGRESSO = 'EM_PROGRESSO'
+BACKFILL_JOB_STATUS_CONCLUIDO = 'CONCLUIDO'
+BACKFILL_JOB_STATUS_ERRO = 'ERRO'
+BACKFILL_JOB_STATUS_CANCELADO = 'CANCELADO'
+
+BACKFILL_JOB_STATUS_FINAIS = (
+    BACKFILL_JOB_STATUS_CONCLUIDO,
+    BACKFILL_JOB_STATUS_ERRO,
+    BACKFILL_JOB_STATUS_CANCELADO,
+)
+
+
+class HoraTagPlusBackfillJob(db.Model):
+    """Job de backfill TagPlus enfileirado em RQ (queue `hora_backfill`).
+
+    Cada execucao do backfill cria 1 linha. O worker atualiza a linha
+    incrementalmente para que a tela de detalhe mostre progresso em tempo
+    real (auto-refresh AJAX).
+
+    Estados:
+      PENDENTE      — enfileirado, ainda nao pegou no worker.
+      EM_PROGRESSO  — worker ativo, processando NFs.
+      CONCLUIDO     — terminou OK (mesmo com erros parciais — ver `n_erro`).
+      ERRO          — falha terminal (ex.: API TagPlus offline, exception
+                       fora do try-per-NF).
+      CANCELADO     — operador cancelou (futuro; por enquanto so PENDENTE).
+
+    `relatorio` (JSON): snapshot final igual ao retornado por
+    `executar_backfill` quando rodava sincrono.
+    """
+    __tablename__ = 'hora_tagplus_backfill_job'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    status = db.Column(
+        db.String(20), nullable=False,
+        default=BACKFILL_JOB_STATUS_PENDENTE, index=True,
+    )
+
+    # Filtros aplicados (echoa o input do operador).
+    since = db.Column(db.Date, nullable=True)
+    until = db.Column(db.Date, nullable=True)
+    limite = db.Column(db.Integer, nullable=True)
+
+    operador = db.Column(db.String(100), nullable=True)
+    rq_job_id = db.Column(db.String(80), nullable=True, index=True)
+
+    iniciado_em = db.Column(db.DateTime, nullable=True)
+    finalizado_em = db.Column(db.DateTime, nullable=True)
+
+    # Progresso (atualizado em batches pelo worker, sessao separada).
+    total_listadas = db.Column(db.Integer, nullable=False, default=0)
+    processadas = db.Column(db.Integer, nullable=False, default=0)
+
+    # Contadores por status do importar_nfe_da_api.
+    n_criado = db.Column(db.Integer, nullable=False, default=0)
+    n_atualizado = db.Column(db.Integer, nullable=False, default=0)
+    n_inalterado = db.Column(db.Integer, nullable=False, default=0)
+    n_cancelado = db.Column(db.Integer, nullable=False, default=0)
+    n_pulada_cancelada = db.Column(db.Integer, nullable=False, default=0)
+    n_pulada_invalida = db.Column(db.Integer, nullable=False, default=0)
+    n_dup = db.Column(db.Integer, nullable=False, default=0)
+    n_erro = db.Column(db.Integer, nullable=False, default=0)
+    n_divergencias = db.Column(db.Integer, nullable=False, default=0)
+
+    ultimo_erro = db.Column(db.Text, nullable=True)
+
+    # Relatorio final (mesmo dict retornado por executar_backfill sincrono).
+    # Sanitizar com sanitize_for_json antes de atribuir.
+    relatorio = db.Column(db.JSON, nullable=True)
+
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive, index=True)
+    atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
+
+    @property
+    def percentual(self) -> int:
+        """0..100. Quando total nao conhecido ainda, retorna 0."""
+        if not self.total_listadas:
+            return 0
+        return min(100, int((self.processadas / self.total_listadas) * 100))
+
+    @property
+    def em_estado_final(self) -> bool:
+        return self.status in BACKFILL_JOB_STATUS_FINAIS
+
+    def __repr__(self) -> str:
+        return (
+            f'<HoraTagPlusBackfillJob id={self.id} status={self.status} '
+            f'{self.processadas}/{self.total_listadas}>'
+        )

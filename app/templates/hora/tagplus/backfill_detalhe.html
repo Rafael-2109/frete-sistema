@@ -1,0 +1,214 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2>
+    <i class="fas fa-cloud-download-alt"></i>
+    Backfill TagPlus — Job #{{ job.id }}
+  </h2>
+  <a href="{{ url_for('hora.tagplus_backfill') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="fas fa-arrow-left"></i> Voltar à lista
+  </a>
+</div>
+
+<div class="card mb-3" id="job-card">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <strong>Status:</strong>
+        <span id="job-status" class="badge fs-6
+          {% if job.status == 'CONCLUIDO' %}bg-success
+          {% elif job.status == 'EM_PROGRESSO' %}bg-primary
+          {% elif job.status == 'PENDENTE' %}bg-secondary
+          {% elif job.status == 'ERRO' %}bg-danger
+          {% else %}bg-light text-dark{% endif %}">
+          {{ job.status }}
+        </span>
+      </div>
+      <div class="col-md-3">
+        <strong>Período:</strong><br>
+        <small>
+          {{ job.since.isoformat() if job.since else '—' }}
+          →
+          {{ job.until.isoformat() if job.until else '—' }}
+        </small>
+      </div>
+      <div class="col-md-3">
+        <strong>Limite:</strong> {{ job.limite or 'sem limite' }}
+      </div>
+      <div class="col-md-3">
+        <strong>Operador:</strong> {{ job.operador or '—' }}
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="row g-3">
+      <div class="col-md-4">
+        <strong>Iniciado em:</strong><br>
+        <small id="job-iniciado">
+          {{ job.iniciado_em.strftime('%d/%m/%Y %H:%M:%S') if job.iniciado_em else '—' }}
+        </small>
+      </div>
+      <div class="col-md-4">
+        <strong>Finalizado em:</strong><br>
+        <small id="job-finalizado">
+          {{ job.finalizado_em.strftime('%d/%m/%Y %H:%M:%S') if job.finalizado_em else '—' }}
+        </small>
+      </div>
+      <div class="col-md-4">
+        <strong>RQ Job ID:</strong><br>
+        <small><code>{{ job.rq_job_id or '—' }}</code></small>
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="mb-2">
+      <strong>Progresso:</strong>
+      <span id="job-progresso-texto">
+        {{ job.processadas }}/{{ job.total_listadas or '?' }}
+        {% if job.total_listadas %}({{ job.percentual }}%){% endif %}
+      </span>
+    </div>
+    <div class="progress" style="height: 24px;">
+      <div id="job-progress-bar"
+           class="progress-bar progress-bar-striped progress-bar-animated
+                  {% if job.status == 'CONCLUIDO' %}bg-success
+                  {% elif job.status == 'ERRO' %}bg-danger
+                  {% else %}bg-primary{% endif %}"
+           role="progressbar"
+           style="width: {{ job.percentual }}%;"
+           aria-valuenow="{{ job.percentual }}" aria-valuemin="0" aria-valuemax="100">
+        {{ job.percentual }}%
+      </div>
+    </div>
+  </div>
+</div>
+
+<h5>Contadores</h5>
+<div class="row g-2 mb-3" id="job-contadores">
+  <div class="col-auto">
+    <span class="badge bg-success fs-6">Criadas: <span data-counter="n_criado">{{ job.n_criado or 0 }}</span></span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-primary fs-6">Atualizadas: <span data-counter="n_atualizado">{{ job.n_atualizado or 0 }}</span></span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-light text-dark fs-6">Inalteradas: <span data-counter="n_inalterado">{{ job.n_inalterado or 0 }}</span></span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-dark fs-6">Canceladas: <span data-counter="n_cancelado">{{ job.n_cancelado or 0 }}</span></span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-secondary fs-6">Puladas (cancel.): <span data-counter="n_pulada_cancelada">{{ job.n_pulada_cancelada or 0 }}</span></span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-secondary fs-6">Puladas (não-aprov.): <span data-counter="n_pulada_invalida">{{ job.n_pulada_invalida or 0 }}</span></span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-warning text-dark fs-6">Outra origem: <span data-counter="n_dup">{{ job.n_dup or 0 }}</span></span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-danger fs-6">Erros: <span data-counter="n_erro">{{ job.n_erro or 0 }}</span></span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-info text-dark fs-6">Divergências: <span data-counter="n_divergencias">{{ job.n_divergencias or 0 }}</span></span>
+  </div>
+</div>
+
+<div id="job-erro-box" class="alert alert-danger {% if not job.ultimo_erro %}d-none{% endif %}">
+  <strong>Último erro:</strong>
+  <pre class="mb-0" id="job-ultimo-erro">{{ job.ultimo_erro or '' }}</pre>
+</div>
+
+{% if job.relatorio %}
+<h5 class="mt-3">Relatório final</h5>
+<pre class="bg-light p-2 rounded" style="max-height: 300px; overflow: auto;">{{ job.relatorio | tojson(indent=2) }}</pre>
+{% endif %}
+
+<script>
+(function() {
+  var jobId = {{ job.id }};
+  var statusFinal = {{ 'true' if job.em_estado_final else 'false' }};
+  if (statusFinal) return;  // nao precisa polling se ja terminou
+
+  var STATUS_FINAIS = ['CONCLUIDO', 'ERRO', 'CANCELADO'];
+
+  function setBadge(el, status) {
+    el.className = 'badge fs-6';
+    el.textContent = status;
+    if (status === 'CONCLUIDO') el.classList.add('bg-success');
+    else if (status === 'EM_PROGRESSO') el.classList.add('bg-primary');
+    else if (status === 'PENDENTE') el.classList.add('bg-secondary');
+    else if (status === 'ERRO') el.classList.add('bg-danger');
+    else el.classList.add('bg-light', 'text-dark');
+  }
+
+  function setProgressBar(percent, status) {
+    var bar = document.getElementById('job-progress-bar');
+    bar.style.width = percent + '%';
+    bar.setAttribute('aria-valuenow', percent);
+    bar.textContent = percent + '%';
+    bar.className = 'progress-bar progress-bar-striped progress-bar-animated';
+    if (status === 'CONCLUIDO') bar.classList.add('bg-success');
+    else if (status === 'ERRO') bar.classList.add('bg-danger');
+    else bar.classList.add('bg-primary');
+  }
+
+  function poll() {
+    fetch('{{ url_for("hora.tagplus_backfill_job_json", job_id=job.id) }}')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var statusEl = document.getElementById('job-status');
+        setBadge(statusEl, data.status);
+
+        var pct = data.total_listadas
+          ? Math.min(100, Math.round((data.processadas / data.total_listadas) * 100))
+          : 0;
+        setProgressBar(pct, data.status);
+
+        document.getElementById('job-progresso-texto').textContent =
+          data.processadas + '/' + (data.total_listadas || '?') +
+          (data.total_listadas ? ' (' + pct + '%)' : '');
+
+        if (data.iniciado_em) {
+          document.getElementById('job-iniciado').textContent = data.iniciado_em;
+        }
+        if (data.finalizado_em) {
+          document.getElementById('job-finalizado').textContent = data.finalizado_em;
+        }
+
+        // Atualiza contadores
+        ['n_criado', 'n_atualizado', 'n_inalterado', 'n_cancelado',
+         'n_pulada_cancelada', 'n_pulada_invalida', 'n_dup', 'n_erro',
+         'n_divergencias'].forEach(function(k) {
+          var el = document.querySelector('[data-counter="' + k + '"]');
+          if (el) el.textContent = data[k] || 0;
+        });
+
+        var erroBox = document.getElementById('job-erro-box');
+        if (data.ultimo_erro) {
+          document.getElementById('job-ultimo-erro').textContent = data.ultimo_erro;
+          erroBox.classList.remove('d-none');
+        } else {
+          erroBox.classList.add('d-none');
+        }
+
+        if (STATUS_FINAIS.indexOf(data.status) === -1) {
+          setTimeout(poll, 3000);
+        } else {
+          // estado final atingido — recarrega para mostrar relatorio JSON
+          setTimeout(function() { window.location.reload(); }, 1500);
+        }
+      })
+      .catch(function(err) {
+        console.error('polling falhou', err);
+        setTimeout(poll, 5000);
+      });
+  }
+
+  setTimeout(poll, 2000);
+})();
+</script>
+{% endblock %}
