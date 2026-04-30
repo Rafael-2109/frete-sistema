@@ -71,15 +71,6 @@ echo "Criando tabela claude_session_store (SessionStore v0.1.64 Fase A)..."
 python scripts/migrations/2026_04_21_claude_session_store.py \
     || echo "⚠️ Migration claude_session_store falhou, continuando deploy..."
 
-# 8. HORA 22: cleanup data-fix das vendas TAGPLUS_API sem itens
-# (criadas pelo 1° backfill antes do fix de regex de chassi em 06fee87a).
-# Idempotente: roda 2x sem efeito (na 2ª passa o SELECT retorna 0).
-# SO apaga vendas backfill com qtd_itens=0; vendas com itens NAO sao tocadas.
-# (hora_21 ja foi aplicada manualmente em prod — nao precisa entrar aqui.)
-echo "HORA 22: cleanup vendas TAGPLUS_API sem itens (idempotente)..."
-python scripts/migrations/hora_22_cleanup_backfill_vazio.py \
-    || echo "⚠️ Cleanup hora_22 falhou, continuando deploy..."
-
 echo "Build concluído com sucesso!"
 
 
