@@ -15,13 +15,17 @@
 </div>
 
 <div class="alert alert-info">
-  <strong>Importa NFs já emitidas no TagPlus para o sistema HORA.</strong>
+  <strong>Importa NFs já emitidas no TagPlus para o sistema HORA (modo UPSERT).</strong>
   <ul class="mb-0 mt-1">
-    <li>O sistema chama <code>GET /nfes</code> filtrando pela data de emissão e itera todas as NFs do período.</li>
-    <li>Para cada NF, chama <code>GET /nfes/{id}</code> e cria <code>HoraVenda</code> + <code>HoraVendaItem</code>
+    <li>O sistema chama <code>GET /nfes</code> filtrando pela data de emissão e itera todas as NFs do período (todos os status).</li>
+    <li>Para cada NF, chama <code>GET /nfes/{id}</code> e cria/atualiza <code>HoraVenda</code> + itens
         diretamente do JSON estruturado da API — <strong>sem PDF, sem LLM</strong>.</li>
     <li>Resolução do modelo via <code>tagplus_codigo</code> (cadastrado em <code>/hora/modelos</code>).</li>
-    <li>Idempotente: NFs já importadas (mesma <code>chave_acesso</code>) caem como <em>duplicado</em>.</li>
+    <li><strong>UPSERT</strong>: NF já existente recebe atualização de campos vazios (endereço, telefone, etc).
+        Edições manuais do operador são preservadas.</li>
+    <li><strong>Status TagPlus tratados</strong>:
+      <code>A</code>=Aprovada → cria/atualiza · <code>S</code>=Cancelada / <code>4</code>=Inutilizada → cancela venda + libera chassis ·
+      <code>2</code>=Denegada / <code>N</code>=Em digitação → pula.</li>
     <li>Divergências são registradas mas não bloqueiam (CHASSI_NAO_CADASTRADO, LOJA_DIVERGENTE,
         CNPJ_DESCONHECIDO, TABELA_PRECO_AUSENTE).</li>
   </ul>
@@ -83,11 +87,11 @@
   </div>
   <div class="col-auto">
     <span class="badge bg-success fs-6"
-          title="Vendas novas criadas">Criadas: {{ relatorio.criado or 0 }}</span>
+          title="Vendas novas criadas (NFe Aprovada)">Criadas: {{ relatorio.criado or 0 }}</span>
   </div>
   <div class="col-auto">
     <span class="badge bg-primary fs-6"
-          title="Vendas existentes (TAGPLUS_API) cujos campos vazios foram refrescados pela API">
+          title="Vendas existentes (TAGPLUS_API) com campos vazios refrescados pela API">
       Atualizadas: {{ relatorio.atualizado or 0 }}
     </span>
   </div>
@@ -98,9 +102,27 @@
     </span>
   </div>
   <div class="col-auto">
+    <span class="badge bg-dark fs-6"
+          title="NFe estava CANCELADA/INUTILIZADA na SEFAZ — venda local marcada como CANCELADO + DEVOLVIDA emitida nos chassis">
+      Canceladas: {{ relatorio.cancelado or 0 }}
+    </span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-secondary fs-6"
+          title="NFe cancelada/inutilizada que não existia no sistema — pulada">
+      Puladas (canceladas): {{ relatorio.pulada_cancelada or 0 }}
+    </span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-secondary fs-6"
+          title="NFe denegada / em digitação / status indefinido — pulada">
+      Puladas (não-aprovada): {{ relatorio.pulada_invalida or 0 }}
+    </span>
+  </div>
+  <div class="col-auto">
     <span class="badge bg-warning text-dark fs-6"
           title="NFe já importada por DANFE/MANUAL — backfill não toca">
-      Duplicadas (outra origem): {{ relatorio.duplicado }}
+      Outra origem: {{ relatorio.duplicado }}
     </span>
   </div>
   <div class="col-auto">
@@ -117,7 +139,8 @@
       <tr>
         <th>TagPlus ID</th>
         <th>NF</th>
-        <th>Status</th>
+        <th title="Status TagPlus na SEFAZ">SEFAZ</th>
+        <th>Resultado</th>
         <th class="text-end">Chassis</th>
         <th class="text-end">Diverg.</th>
         <th>Mensagem</th>
@@ -130,10 +153,36 @@
           <td><code>{{ r.tagplus_nfe_id }}</code></td>
           <td>{{ r.numero_nf or '—' }}</td>
           <td>
-            {% if r.status == 'sucesso' %}
-              <span class="badge bg-success">OK</span>
+            {% set st = r.status_tagplus %}
+            {% if st == 'A' %}
+              <span class="badge bg-success" title="Aprovada">A</span>
+            {% elif st == 'S' %}
+              <span class="badge bg-dark" title="Cancelada">S</span>
+            {% elif st == '4' %}
+              <span class="badge bg-dark" title="Inutilizada">4</span>
+            {% elif st == '2' %}
+              <span class="badge bg-secondary" title="Denegada">2</span>
+            {% elif st == 'N' %}
+              <span class="badge bg-secondary" title="Em digitação">N</span>
+            {% else %}
+              <span class="text-muted">{{ st or '—' }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.status == 'criado' %}
+              <span class="badge bg-success">criado</span>
+            {% elif r.status == 'atualizado' %}
+              <span class="badge bg-primary">atualizado</span>
+            {% elif r.status == 'inalterado' %}
+              <span class="badge bg-light text-dark">inalterado</span>
+            {% elif r.status == 'cancelado' %}
+              <span class="badge bg-dark">cancelado</span>
+            {% elif r.status == 'pulada_cancelada' %}
+              <span class="badge bg-secondary">pulada (cancel.)</span>
+            {% elif r.status == 'pulada_status_invalido' %}
+              <span class="badge bg-secondary">pulada (não-aprov.)</span>
             {% elif r.status == 'duplicado' %}
-              <span class="badge bg-warning text-dark">duplicado</span>
+              <span class="badge bg-warning text-dark">outra origem</span>
             {% else %}
               <span class="badge bg-danger">erro</span>
             {% endif %}
@@ -155,7 +204,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="7" class="text-center text-muted">Nenhuma NF processada.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted">Nenhuma NF processada.</td></tr>
       {% endfor %}
     </tbody>
   </table>

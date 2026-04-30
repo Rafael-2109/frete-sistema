@@ -35,7 +35,7 @@ from app.hora.models import HoraMoto, HoraVenda, HoraVendaItem
 from app.hora.models.tagplus import (
     HoraTagPlusConta, HoraTagPlusFormaPagamentoMap, HoraTagPlusProdutoMap,
 )
-from app.hora.models.venda import VENDA_STATUS_FATURADO
+from app.hora.models.venda import VENDA_STATUS_CANCELADO, VENDA_STATUS_FATURADO
 from app.hora.services import venda_audit
 from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
 from app.hora.services.moto_service import (
@@ -56,6 +56,7 @@ def listar_nfes_emitidas(
     since: Optional[date] = None,
     until: Optional[date] = None,
     per_page: int = 50,
+    apenas_aprovadas: bool = False,
 ) -> Iterator[dict]:
     """Itera NFes da API TagPlus filtradas por data_emissao.
 
@@ -63,10 +64,23 @@ def listar_nfes_emitidas(
     valor_nota etc.). Paginacao via parametro `page`.
 
     Header X-Data-Filter: data_emissao (sobrescreve default data_criacao do TagPlus).
+
+    Args:
+        apenas_aprovadas: quando True (default), passa `status=A` no query
+            string — TagPlus retorna apenas NFs APROVADAS na SEFAZ.
+            Quando False, passa `status=0` (Indiferente) e o caller decide
+            o que fazer com Cancelada/Denegada/Inutilizada/Em-digitacao.
     """
     page = 1
     while True:
         params = {'page': page, 'per_page': per_page}
+        if apenas_aprovadas:
+            # Status TagPlus: A=Aprovada, S=Cancelada, 2=Denegada, 4=Inutilizada,
+            # N=Em digitacao, 0=Indiferente (doc:185-188).
+            # Default APENAS_APROVADAS=False para detectar canceladas/inutilizadas
+            # e refletir o cancelamento em vendas ja existentes no sistema.
+            params['status'] = 'A'
+        # else: nao envia params['status'] — TagPlus retorna todas (default 0).
         if since:
             params['since'] = since.isoformat()
         if until:
@@ -361,26 +375,83 @@ class NfeIncompleta(Exception):
     """NFe da API TagPlus sem campos obrigatorios (chave_acesso, valor_nota)."""
 
 
+def _cancelar_via_backfill(
+    venda: HoraVenda,
+    status_tagplus: str,
+    operador: Optional[str],
+) -> HoraVenda:
+    """Marca venda como CANCELADA + emite DEVOLVIDA nos chassis.
+
+    Diferente de `cancelar_venda` (no venda_service): NAO valida NFe
+    em-voo nem aprovacao SEFAZ — porque o cancelamento ja aconteceu na
+    SEFAZ (NF historica vinda do TagPlus com status=S/4).
+
+    Idempotente: se ja CANCELADA, retorna sem alterar.
+    """
+    if venda.status == VENDA_STATUS_CANCELADO:
+        return venda
+
+    rotulo = {'S': 'Cancelada', '4': 'Inutilizada'}.get(status_tagplus, status_tagplus)
+    motivo = (
+        f'Backfill TagPlus: NFe esta {rotulo} na SEFAZ (status TagPlus={status_tagplus}). '
+        f'Pedido marcado como CANCELADO automaticamente.'
+    )
+
+    venda.status = VENDA_STATUS_CANCELADO
+    venda.cancelado_em = agora_utc_naive()
+    venda.cancelado_por = operador or 'sistema (backfill)'
+    venda.cancelamento_motivo = motivo[:500]
+
+    # Emite DEVOLVIDA para cada chassi (libera ao estoque).
+    for item in venda.itens:
+        registrar_evento(
+            numero_chassi=item.numero_chassi,
+            tipo='DEVOLVIDA',
+            origem_tabela='hora_venda',
+            origem_id=venda.id,
+            loja_id=venda.loja_id,
+            operador=operador or 'sistema (backfill)',
+            detalhe=f'NFe {rotulo} via TagPlus (backfill)',
+        )
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=operador or '',
+        acao='CANCELOU',
+        detalhe=motivo[:500],
+    )
+
+    db.session.commit()
+    return venda
+
+
 def importar_nfe_da_api(
     api: ApiClient,
     nfe_id_tagplus: int,
     operador: Optional[str] = None,
-) -> tuple[HoraVenda, str]:
-    """Puxa GET /nfes/{id} e cria OU atualiza HoraVenda.
+) -> tuple[Optional[HoraVenda], str]:
+    """Puxa GET /nfes/{id} e cria/atualiza/cancela HoraVenda conforme status.
 
-    Modo UPSERT (2026-04-30):
+    Status TagPlus tratados (nfe.status, doc:185-188):
+      - 'A' (Aprovada)    -> cria ou atualiza venda como FATURADO (path normal).
+      - 'S' (Cancelada)   -> se venda existe, marca CANCELADO + DEVOLVIDA;
+                             se nao existe, skip (nao cria venda cancelada).
+      - '4' (Inutilizada) -> mesmo tratamento de 'S'.
+      - '2' (Denegada)    -> skip; logger.warning se venda existe.
+      - 'N' (Em digitacao)-> skip; logger.warning se venda existe.
+      - '0' / outros      -> skip; logger.warning.
+
+    Modo UPSERT para status='A':
       - Se nao existe HoraVenda com essa chave_44 -> cria tudo (HoraVenda +
         itens + eventos VENDIDA + divergencias). Retorna (venda, 'criado').
-      - Se existe E origem_criacao='TAGPLUS_API' -> atualiza apenas campos
-        em estado default/NULL na venda atual (nao sobrescreve edicoes do
-        operador). Itens sao criados se ainda nao existirem; vendas que ja
-        tem itens nao recebem novos. Retorna (venda, 'atualizado') ou
-        (venda, 'inalterado') se nada mudou.
-      - Se existe com outra origem (DANFE, MANUAL) -> levanta
-        NfeJaImportada (nao toca).
+      - Se existe E origem='TAGPLUS_API' -> atualiza apenas campos em estado
+        default/NULL (nao sobrescreve edicoes do operador). Itens sao criados
+        se ainda nao existirem. Retorna (venda, 'atualizado'|'inalterado').
+      - Se existe com outra origem (DANFE/MANUAL) -> levanta NfeJaImportada.
 
     Returns:
-        Tupla (HoraVenda, status) onde status in {'criado','atualizado','inalterado'}.
+        Tupla (Optional[HoraVenda], status) com status in:
+        {'criado', 'atualizado', 'inalterado', 'cancelado',
+         'pulada_cancelada', 'pulada_status_invalido'}.
     """
     from app.hora.services.venda_service import (
         _registrar_divergencia, _resolver_loja_por_cnpj,
@@ -429,12 +500,8 @@ def importar_nfe_da_api(
     )
 
     chave = nfe.get('chave_acesso')
-    valor_nota = nfe.get('valor_nota')
-    if not chave or valor_nota is None:
-        raise NfeIncompleta(
-            f'NFe {nfe_id_tagplus} sem chave_acesso ou valor_nota '
-            f'(chave={chave!r}, valor={valor_nota!r})'
-        )
+    if not chave:
+        raise NfeIncompleta(f'NFe {nfe_id_tagplus} sem chave_acesso')
     chave = chave.strip()
     if len(chave) != 44:
         raise NfeIncompleta(
@@ -447,6 +514,43 @@ def importar_nfe_da_api(
             f'NF chave={chave} ja importada (venda_id={existente.id}) '
             f'com origem={existente.origem_criacao} — backfill nao toca '
             f'vendas DANFE/MANUAL.'
+        )
+
+    # ------ Switch por status TagPlus (doc:185-188) ------
+    status_tagplus = (nfe.get('status') or '').strip().upper()
+
+    # CANCELADA / INUTILIZADA: cancela venda existente; nao cria nova.
+    if status_tagplus in ('S', '4'):
+        if existente:
+            cancelada = _cancelar_via_backfill(existente, status_tagplus, operador)
+            return cancelada, ('inalterado' if existente.status == VENDA_STATUS_CANCELADO else 'cancelado')
+        logger.info(
+            'Pulando NFe %s (chave=%s) — status TagPlus=%r (cancelada/inutilizada) '
+            'e venda nao existe no sistema.',
+            nfe_id_tagplus, chave, status_tagplus,
+        )
+        return None, 'pulada_cancelada'
+
+    # DENEGADA / EM-DIGITACAO / INDIFERENTE: pular sem criar.
+    if status_tagplus in ('2', 'N', '0', ''):
+        if existente:
+            logger.warning(
+                'Venda %s existe localmente mas TagPlus retornou status=%r '
+                '(denegada/em-digitacao) — investigar inconsistencia.',
+                existente.id, status_tagplus,
+            )
+        else:
+            logger.info(
+                'Pulando NFe %s — status TagPlus=%r (nao-aprovada).',
+                nfe_id_tagplus, status_tagplus,
+            )
+        return None, 'pulada_status_invalido'
+
+    # Status APROVADA: continua fluxo normal de criacao/upsert.
+    valor_nota = nfe.get('valor_nota')
+    if valor_nota is None:
+        raise NfeIncompleta(
+            f'NFe {nfe_id_tagplus} APROVADA mas sem valor_nota'
         )
 
     # ------ destinatario (cliente) ------
@@ -946,7 +1050,9 @@ def executar_backfill(
     api = ApiClient(conta)
 
     resultados = []
-    n_criado = n_atualizado = n_inalterado = n_dup = n_err = n_div = 0
+    n_criado = n_atualizado = n_inalterado = 0
+    n_cancelado = n_pulada_cancelada = n_pulada_invalida = 0
+    n_dup = n_err = n_div = 0
 
     iterador = listar_nfes_emitidas(api, since=since, until=until)
     for i, nfe_resumo in enumerate(iterador):
@@ -956,11 +1062,13 @@ def executar_backfill(
         nfe_id = nfe_resumo.get('id')
         chave_resumo = nfe_resumo.get('chave_acesso')
         numero_resumo = nfe_resumo.get('numero')
+        status_resumo = nfe_resumo.get('status')
 
         entry = {
             'tagplus_nfe_id': nfe_id,
             'numero_nf': numero_resumo,
             'chave': chave_resumo,
+            'status_tagplus': status_resumo,
             'status': None,
             'venda_id': None,
             'qtd_chassis': 0,
@@ -976,13 +1084,17 @@ def executar_backfill(
 
         try:
             venda, status = importar_nfe_da_api(api, nfe_id, operador=operador)
-            entry.update({
-                'status': status,
-                'venda_id': venda.id,
-                'numero_nf': venda.nf_saida_numero,
-                'qtd_chassis': len(venda.itens),
-                'qtd_divergencias': len(venda.divergencias_abertas),
-            })
+
+            if venda is not None:
+                entry.update({
+                    'venda_id': venda.id,
+                    'numero_nf': venda.nf_saida_numero,
+                    'qtd_chassis': len(venda.itens),
+                    'qtd_divergencias': len(venda.divergencias_abertas),
+                })
+                n_div += len(venda.divergencias_abertas)
+            entry['status'] = status
+
             if status == 'criado':
                 entry['mensagem'] = (
                     f'NF {venda.nf_saida_numero} criada — '
@@ -995,12 +1107,33 @@ def executar_backfill(
                     f'preenchidos a partir da API).'
                 )
                 n_atualizado += 1
-            else:  # inalterado
+            elif status == 'inalterado':
                 entry['mensagem'] = (
                     f'NF {venda.nf_saida_numero} ja estava completa — nada a fazer.'
                 )
                 n_inalterado += 1
-            n_div += len(venda.divergencias_abertas)
+            elif status == 'cancelado':
+                entry['mensagem'] = (
+                    f'NF {venda.nf_saida_numero} CANCELADA na SEFAZ '
+                    f'(TagPlus={status_resumo!r}). Pedido marcado como '
+                    f'CANCELADO + DEVOLVIDA emitida nos chassis.'
+                )
+                n_cancelado += 1
+            elif status == 'pulada_cancelada':
+                entry['mensagem'] = (
+                    f'NFe cancelada/inutilizada (TagPlus={status_resumo!r}) '
+                    f'e nao existia no sistema — pulada.'
+                )
+                n_pulada_cancelada += 1
+            elif status == 'pulada_status_invalido':
+                entry['mensagem'] = (
+                    f'NFe com status nao-aprovado (TagPlus={status_resumo!r}) '
+                    f'— pulada.'
+                )
+                n_pulada_invalida += 1
+            else:
+                entry['mensagem'] = f'Status retornado desconhecido: {status!r}'
+                n_err += 1
         except NfeJaImportada as exc:
             entry['status'] = 'duplicado'
             entry['mensagem'] = str(exc)
@@ -1023,8 +1156,10 @@ def executar_backfill(
         'criado': n_criado,
         'atualizado': n_atualizado,
         'inalterado': n_inalterado,
-        # `sucesso` mantido para compat backward com codigo/template antigo
-        # = criado + atualizado (operacoes que efetivamente preencheram dados).
+        'cancelado': n_cancelado,
+        'pulada_cancelada': n_pulada_cancelada,
+        'pulada_invalida': n_pulada_invalida,
+        # `sucesso` = criado + atualizado (compat com codigo antigo).
         'sucesso': n_criado + n_atualizado,
         'duplicado': n_dup,
         'erro': n_err,
