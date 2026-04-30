@@ -101,18 +101,18 @@
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_pedido_id",
-      "columns": [
-        "pedido_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_nf_entrada_chave_44",
       "columns": [
         "chave_44"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_nf_entrada_pedido_id",
+      "columns": [
+        "pedido_id"
+      ],
+      "unique": false
     },
     {
       "name": "ix_hora_nf_entrada_loja_destino_id",

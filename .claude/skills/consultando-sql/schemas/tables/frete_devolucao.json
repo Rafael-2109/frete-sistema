@@ -148,13 +148,6 @@
   ],
   "indices": [
     {
-      "name": "idx_frete_dev_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_frete_devolucao_ocorrencia_devolucao_id",
       "columns": [
         "ocorrencia_devolucao_id"
@@ -200,6 +193,13 @@
       "name": "ix_frete_devolucao_despesa_extra_id",
       "columns": [
         "despesa_extra_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_frete_dev_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

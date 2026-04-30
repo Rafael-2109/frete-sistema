@@ -119,6 +119,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_tagplus_nfe_emissao_conta_id",
+      "columns": [
+        "conta_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_tagplus_nfe_emissao_tagplus_nfe_id",
       "columns": [
         "tagplus_nfe_id"
@@ -138,13 +145,6 @@
         "venda_id"
       ],
       "unique": true
-    },
-    {
-      "name": "ix_hora_tagplus_nfe_emissao_conta_id",
-      "columns": [
-        "conta_id"
-      ],
-      "unique": false
     }
   ]
 }

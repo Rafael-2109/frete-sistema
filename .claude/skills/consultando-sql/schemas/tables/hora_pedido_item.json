@@ -48,16 +48,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_pedido_item_numero_chassi",
+      "name": "ix_hora_pedido_item_pedido_id",
       "columns": [
-        "numero_chassi"
+        "pedido_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_item_pedido_id",
+      "name": "ix_hora_pedido_item_numero_chassi",
       "columns": [
-        "pedido_id"
+        "numero_chassi"
       ],
       "unique": false
     }

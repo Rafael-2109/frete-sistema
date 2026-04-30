@@ -235,20 +235,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_ativo",
-      "columns": [
-        "ativo"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_e_pallet_devolucao",
       "columns": [
         "e_pallet_devolucao"
@@ -277,6 +263,13 @@
       "unique": false
     },
     {
+      "name": "ix_nf_devolucao_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_nfd_numero_serie",
       "columns": [
         "numero_nfd",
@@ -285,16 +278,16 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_status",
+      "name": "ix_nf_devolucao_origem_registro",
       "columns": [
-        "status"
+        "origem_registro"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_origem_registro",
+      "name": "ix_nf_devolucao_numero_nf_venda",
       "columns": [
-        "origem_registro"
+        "numero_nf_venda"
       ],
       "unique": false
     },
@@ -307,9 +300,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_numero_nf_venda",
+      "name": "ix_nf_devolucao_tipo_documento",
       "columns": [
-        "numero_nf_venda"
+        "tipo_documento"
       ],
       "unique": false
     },
@@ -321,11 +314,11 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_tipo_documento",
+      "name": "ix_nf_devolucao_odoo_dfe_id",
       "columns": [
-        "tipo_documento"
+        "odoo_dfe_id"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "idx_nfd_nf_venda",
@@ -333,13 +326,6 @@
         "numero_nf_venda"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": true
     },
     {
       "name": "idx_nfd_odoo_dfe",
@@ -388,6 +374,20 @@
       "name": "ix_nf_devolucao_odoo_nota_credito_id",
       "columns": [
         "odoo_nota_credito_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_ativo",
+      "columns": [
+        "ativo"
       ],
       "unique": false
     }
