@@ -888,13 +888,27 @@ def tagplus_emissoes_lista():
     if status_filtro and status_filtro not in NFE_STATUS_VALIDOS:
         status_filtro = None
 
+    try:
+        page = int(request.args.get('page', 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per_page = int(request.args.get('per_page', 50))
+    except (TypeError, ValueError):
+        per_page = 50
+    page = max(1, page)
+    per_page = max(1, min(per_page, 200))
+
     q = HoraTagPlusNfeEmissao.query.order_by(HoraTagPlusNfeEmissao.criado_em.desc())
     if status_filtro:
         q = q.filter_by(status=status_filtro)
-    emissoes = q.limit(300).all()
+
+    pagination = q.paginate(page=page, per_page=per_page, error_out=False)
     return render_template(
         'hora/tagplus/emissoes_lista.html',
-        emissoes=emissoes,
+        emissoes=pagination.items,
+        pagination=pagination,
+        per_page=per_page,
         status_filtro=status_filtro,
         status_validos=NFE_STATUS_VALIDOS,
     )

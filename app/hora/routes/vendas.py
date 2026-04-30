@@ -49,11 +49,33 @@ def _operador_atual() -> str:
 @hora_bp.route('/vendas')
 @require_hora_perm('vendas', 'ver')
 def vendas_lista():
-    vendas = venda_service.listar_vendas(
-        limit=200,
+    try:
+        page = int(request.args.get('page', 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per_page = int(request.args.get('per_page', 50))
+    except (TypeError, ValueError):
+        per_page = 50
+
+    status_filtro = (request.args.get('status') or '').strip().upper() or None
+    if status_filtro and status_filtro not in (
+        'COTACAO', 'CONFIRMADO', 'FATURADO', 'CANCELADO',
+    ):
+        status_filtro = None
+
+    pagination = venda_service.paginar_vendas(
+        page=page, per_page=per_page,
         lojas_permitidas_ids=lojas_permitidas_ids(),
+        status=status_filtro,
     )
-    return render_template('hora/vendas_lista.html', vendas=vendas)
+    return render_template(
+        'hora/vendas_lista.html',
+        pagination=pagination,
+        vendas=(pagination.items if pagination else []),
+        status_filtro=status_filtro,
+        per_page=per_page,
+    )
 
 
 # ------------------------------------------------------------------------

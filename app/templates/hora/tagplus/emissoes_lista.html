@@ -1,4 +1,5 @@
 {% extends "hora/base.html" %}
+{% from "hora/_pagination.html" import render_pagination %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -35,21 +36,34 @@
     'CANCELADA': 'Cancelada'
 } %}
 
-{# ---- Atalhos por status ---- #}
+{# ---- Filtros: status + per_page ---- #}
 <div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
   <small class="text-muted me-1">Filtrar:</small>
-  <a href="{{ url_for('hora.tagplus_emissoes_lista') }}"
+  <a href="{{ url_for('hora.tagplus_emissoes_lista', per_page=per_page) }}"
      class="btn btn-sm btn-{% if not status_filtro %}primary{% else %}outline-primary{% endif %}">
     Todos
   </a>
   {% for s in ('APROVADA', 'ENVIADA_SEFAZ', 'EM_ENVIO', 'PENDENTE',
                'REJEITADA_LOCAL', 'REJEITADA_SEFAZ', 'ERRO_INFRA',
                'CANCELAMENTO_SOLICITADO', 'CANCELADA') %}
-    <a href="{{ url_for('hora.tagplus_emissoes_lista', status=s) }}"
+    <a href="{{ url_for('hora.tagplus_emissoes_lista', status=s, per_page=per_page) }}"
        class="btn btn-sm btn-{% if status_filtro == s %}{{ nfe_badge.get(s, 'secondary') }}{% else %}outline-{{ nfe_badge.get(s, 'secondary') }}{% endif %}">
       {{ nfe_label.get(s, s) }}
     </a>
   {% endfor %}
+
+  <form method="get" class="ms-auto d-flex gap-2 align-items-center mb-0">
+    {% if status_filtro %}
+      <input type="hidden" name="status" value="{{ status_filtro }}">
+    {% endif %}
+    <small class="text-muted">Por página:</small>
+    <select name="per_page" class="form-select form-select-sm" style="width:auto;"
+            onchange="this.form.submit()">
+      {% for opt in [25, 50, 100, 200] %}
+        <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </form>
 </div>
 
 {% if not emissoes %}
@@ -159,6 +173,6 @@
     </tbody>
   </table>
 </div>
-<small class="text-muted">Mostrando ate 300 emissoes mais recentes.</small>
+{{ render_pagination(pagination, request) }}
 {% endif %}
 {% endblock %}

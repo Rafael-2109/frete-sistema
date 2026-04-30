@@ -1304,20 +1304,46 @@ def listar_vendas(
     lojas_permitidas_ids: Optional[Iterable[int]] = None,
     status: Optional[str] = None,
 ) -> List[HoraVenda]:
-    """Lista pedidos com filtro por lojas permitidas e status."""
+    """Lista pedidos com filtro por lojas permitidas e status (sem paginacao)."""
+    query = _query_vendas(lojas_permitidas_ids=lojas_permitidas_ids, status=status)
+    if query is None:
+        return []
+    return query.limit(limit).all()
+
+
+def _query_vendas(
+    lojas_permitidas_ids: Optional[Iterable[int]] = None,
+    status: Optional[str] = None,
+):
+    """Constroi query base de vendas com filtros — usado por listar e paginar."""
     query = HoraVenda.query.order_by(
         HoraVenda.data_venda.desc(), HoraVenda.id.desc()
     )
     if status:
         query = query.filter(HoraVenda.status == status)
-
     if lojas_permitidas_ids is not None:
         ids_list = list(lojas_permitidas_ids)
         if not ids_list:
-            return []
+            return None
         query = query.filter(HoraVenda.loja_id.in_(ids_list))
+    return query
 
-    return query.limit(limit).all()
+
+def paginar_vendas(
+    page: int = 1,
+    per_page: int = 50,
+    lojas_permitidas_ids: Optional[Iterable[int]] = None,
+    status: Optional[str] = None,
+):
+    """Pagina vendas com filtros. Retorna `Pagination` (Flask-SQLAlchemy)
+    ou None quando o usuario nao tem nenhuma loja permitida (lista vazia).
+    """
+    page = max(1, int(page or 1))
+    per_page = max(1, min(int(per_page or 50), 200))
+    query = _query_vendas(lojas_permitidas_ids=lojas_permitidas_ids, status=status)
+    if query is None:
+        return None
+    return query.paginate(page=page, per_page=per_page, error_out=False)
 
 
 __all__ = [
