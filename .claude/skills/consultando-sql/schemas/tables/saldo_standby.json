@@ -119,6 +119,20 @@
   ],
   "indices": [
     {
+      "name": "ix_saldo_standby_num_pedido",
+      "columns": [
+        "num_pedido"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_saldo_standby_origem_separacao_lote_id",
+      "columns": [
+        "origem_separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_saldo_standby_status_standby",
       "columns": [
         "status_standby"
@@ -143,20 +157,6 @@
       "name": "ix_saldo_standby_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_saldo_standby_num_pedido",
-      "columns": [
-        "num_pedido"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_saldo_standby_origem_separacao_lote_id",
-      "columns": [
-        "origem_separacao_lote_id"
       ],
       "unique": false
     }

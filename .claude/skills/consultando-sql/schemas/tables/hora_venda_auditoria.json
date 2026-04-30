@@ -1,6 +1,6 @@
 {
-  "name": "hora_transferencia_auditoria",
-  "description": "Tabela hora_transferencia_auditoria",
+  "name": "hora_venda_auditoria",
+  "description": "Tabela hora_venda_auditoria",
   "fields": [
     {
       "name": "id",
@@ -8,15 +8,15 @@
       "description": "Primary key"
     },
     {
-      "name": "transferencia_id",
+      "name": "venda_id",
       "type": "integer",
-      "description": "FK → hora_transferencia.id",
+      "description": "FK → hora_venda.id",
       "nullable": false
     },
     {
       "name": "item_id",
       "type": "integer",
-      "description": "FK → hora_transferencia_item.id"
+      "description": "FK → hora_venda_item.id"
     },
     {
       "name": "usuario",
@@ -53,33 +53,33 @@
   ],
   "foreign_keys": [
     {
-      "column": "transferencia_id",
-      "references": "hora_transferencia.id"
+      "column": "venda_id",
+      "references": "hora_venda.id"
     },
     {
       "column": "item_id",
-      "references": "hora_transferencia_item.id"
+      "references": "hora_venda_item.id"
     }
   ],
   "indices": [
     {
-      "name": "ix_hora_transferencia_auditoria_acao",
-      "columns": [
-        "acao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_transferencia_auditoria_item_id",
+      "name": "ix_hora_venda_auditoria_item_id",
       "columns": [
         "item_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_transferencia_auditoria_transferencia_id",
+      "name": "ix_hora_venda_auditoria_venda_id",
       "columns": [
-        "transferencia_id"
+        "venda_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_auditoria_acao",
+      "columns": [
+        "acao"
       ],
       "unique": false
     }

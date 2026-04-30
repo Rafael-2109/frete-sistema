@@ -78,7 +78,31 @@
       "name": "status",
       "type": "varchar(20)",
       "nullable": false,
-      "default": "CONCLUIDA"
+      "default": "COTACAO"
+    },
+    {
+      "name": "confirmado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "confirmado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "faturado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cancelamento_motivo",
+      "type": "varchar(500)"
     },
     {
       "name": "vendedor",
@@ -87,6 +111,39 @@
     {
       "name": "observacoes",
       "type": "text"
+    },
+    {
+      "name": "cep",
+      "type": "varchar(9)"
+    },
+    {
+      "name": "endereco_logradouro",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "endereco_numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "endereco_complemento",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "endereco_bairro",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "endereco_cidade",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "endereco_uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "origem_criacao",
+      "type": "varchar(20)",
+      "default": "DANFE"
     },
     {
       "name": "criado_em",
@@ -107,6 +164,27 @@
     }
   ],
   "indices": [
+    {
+      "name": "ix_hora_venda_cpf_cliente",
+      "columns": [
+        "cpf_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_nf_saida_numero",
+      "columns": [
+        "nf_saida_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_origem_criacao",
+      "columns": [
+        "origem_criacao"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_hora_venda_cnpj_emitente",
       "columns": [
@@ -132,20 +210,6 @@
       "name": "ix_hora_venda_data_venda",
       "columns": [
         "data_venda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_cpf_cliente",
-      "columns": [
-        "cpf_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_nf_saida_numero",
-      "columns": [
-        "nf_saida_numero"
       ],
       "unique": false
     }

@@ -180,16 +180,16 @@
   ],
   "indices": [
     {
-      "name": "ix_ocorrencia_devolucao_status",
+      "name": "ix_ocorrencia_devolucao_autorizado_por_id",
       "columns": [
-        "status"
+        "autorizado_por_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_ocorrencia_devolucao_autorizado_por_id",
+      "name": "ix_ocorrencia_devolucao_status",
       "columns": [
-        "autorizado_por_id"
+        "status"
       ],
       "unique": false
     },
@@ -201,17 +201,17 @@
       "unique": true
     },
     {
-      "name": "idx_ocorrencia_status_destino",
+      "name": "ix_ocorrencia_devolucao_ativo",
       "columns": [
-        "status",
-        "destino"
+        "ativo"
       ],
       "unique": false
     },
     {
-      "name": "ix_ocorrencia_devolucao_ativo",
+      "name": "idx_ocorrencia_status_destino",
       "columns": [
-        "ativo"
+        "status",
+        "destino"
       ],
       "unique": false
     },

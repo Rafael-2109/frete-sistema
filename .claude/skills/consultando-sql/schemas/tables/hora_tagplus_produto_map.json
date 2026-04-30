@@ -15,7 +15,7 @@
     },
     {
       "name": "tagplus_produto_id",
-      "type": "integer",
+      "type": "varchar(50)",
       "nullable": false
     },
     {
@@ -26,7 +26,7 @@
       "name": "cfop_default",
       "type": "varchar(5)",
       "nullable": false,
-      "default": "5.102"
+      "default": "5.403"
     },
     {
       "name": "criado_em",
