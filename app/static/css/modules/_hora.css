@@ -173,4 +173,48 @@
     z-index: 10;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     NAVBAR DROPDOWN SUBMENU (Lojas HORA — 4 categorias expansiveis)
+     Bootstrap 5 nao tem submenu nativo; helper CSS+JS faz o trabalho.
+     JS handler em base.html (event delegation no .dropdown-submenu > a).
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .dropdown-submenu {
+    position: relative;
+  }
+
+  .dropdown-submenu > .dropdown-toggle::after {
+    /* Caret do submenu aponta para a direita ao inves de para baixo */
+    transform: rotate(-90deg);
+    margin-left: 0.5em;
+  }
+
+  .dropdown-submenu > .dropdown-menu {
+    /* Submenu posicionado a direita do item pai */
+    top: 0;
+    left: 100%;
+    margin-top: -0.25rem;
+    margin-left: 0.125rem;
+    border-radius: 0.375rem;
+  }
+
+  .dropdown-submenu > .dropdown-menu.show {
+    display: block;
+  }
+
+  /* Em telas estreitas (<= 992px) o navbar colapsa; submenu vira inline */
+  @media (max-width: 992px) {
+    .dropdown-submenu > .dropdown-menu {
+      position: static;
+      float: none;
+      margin-left: 1rem;
+      border: none;
+      box-shadow: none;
+      padding-left: 0;
+    }
+    .dropdown-submenu > .dropdown-toggle::after {
+      transform: none;
+    }
+  }
+
 }

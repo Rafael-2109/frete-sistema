@@ -270,8 +270,8 @@ def tagplus_checklist():
     qtd_formas = HoraTagPlusFormaPagamentoMap.query.count()
     checks.append({
         'item': 'Mapeamento de formas de pagamento',
-        'status': 'ok' if qtd_formas >= 3 else 'aviso',
-        'mensagem': f'{qtd_formas} formas mapeadas (esperado: PIX, CARTAO_CREDITO, DINHEIRO).',
+        'status': 'ok' if qtd_formas >= 1 else 'aviso',
+        'mensagem': f'{qtd_formas} forma(s) de pagamento mapeada(s).',
     })
 
     return render_template(
@@ -480,19 +480,12 @@ def tagplus_produto_map_listar_excel():
 @hora_bp.route('/tagplus/conta/formas-pagamento', methods=['GET'])
 @require_hora_perm('tagplus', 'ver')
 def tagplus_forma_map_lista():
-    """Lista todas as formas mapeadas. Operador pode adicionar livremente
-    (sugestoes iniciais: PIX, CARTAO_CREDITO, DINHEIRO).
-    """
-    sugestoes = ('PIX', 'CARTAO_CREDITO', 'DINHEIRO', 'CARTAO_DEBITO', 'BOLETO', 'TRANSFERENCIA')
+    """Lista todas as formas mapeadas. Operador adiciona novas via botao
+    "Adicionar nova forma" no template (sem sugestoes hardcoded)."""
     todas = HoraTagPlusFormaPagamentoMap.query.order_by(
         HoraTagPlusFormaPagamentoMap.forma_pagamento_hora
     ).all()
-    nomes_existentes = {m.forma_pagamento_hora for m in todas}
     rows = [{'forma': m.forma_pagamento_hora, 'map': m} for m in todas]
-    # Linhas vazias para sugestoes ainda nao cadastradas (facilita primeiro setup).
-    for s in sugestoes:
-        if s not in nomes_existentes:
-            rows.append({'forma': s, 'map': None})
     return render_template('hora/tagplus/forma_pag_map.html', rows=rows)
 
 
@@ -606,7 +599,7 @@ def tagplus_forma_map_listar_api():
         },
         'instrucoes': (
             'Opcoes: (a) emitir 1 NFe de teste no portal TagPlus com cada forma '
-            '(PIX, CARTAO_CREDITO, DINHEIRO) e clicar de novo neste botao para '
+            'utilizada e clicar de novo neste botao para '
             'extrair os IDs automaticamente das NFes; (b) ampliar o scope no '
             'campo "Scopes" em /hora/tagplus/conta (adicionar `read:formas_pagamento` '
             'ou variante como `read:formas_pgto`), salvar e clicar "Re-autorizar OAuth" '
@@ -914,197 +907,6 @@ def tagplus_emissoes_lista():
     )
 
 
-# ============================================================
-# 4.5) Esboco — preview do payload sem emitir
-# ============================================================
-
-@hora_bp.route('/tagplus/esboco')
-@require_hora_perm('tagplus', 'ver')
-def tagplus_esboco_lista():
-    """Lista de pedidos prontos para emitir NFe (tela "Conferir antes de emitir").
-
-    URL `/tagplus/esboco` mantida para nao quebrar links externos; UI exibe
-    como "Conferir antes de emitir NFe". Mostra ate 50 vendas mais recentes;
-    o template filtra por padrao para esconder pedidos ja faturados/cancelados.
-    """
-    # Vendas com itens, sem emissao ou em estado retomavel.
-    q = (
-        HoraVenda.query
-        .order_by(HoraVenda.id.desc())
-        .limit(50)
-    )
-    vendas = q.all()
-    # Marcar status de emissao por venda.
-    emissoes_por_venda = {
-        e.venda_id: e for e in HoraTagPlusNfeEmissao.query.filter(
-            HoraTagPlusNfeEmissao.venda_id.in_([v.id for v in vendas])
-        ).all()
-    } if vendas else {}
-    rows = [{'venda': v, 'emissao': emissoes_por_venda.get(v.id)} for v in vendas]
-    return render_template('hora/tagplus/esboco_lista.html', rows=rows)
-
-
-def _auditar_payload_required(payload: dict) -> list[dict]:
-    """Audita o payload contra os 3 campos required do POST /nfes (doc_tagplus.md:163-178).
-
-    required: destinatario (integer), itens (Array), cfop (string mascara 9.999).
-    Tambem valida campos relevantes do `Item de Venda` e `Fatura Pagamento`.
-
-    Retorna lista de checks: [{campo, ok, detalhe}].
-    """
-    import re
-    checks = []
-
-    # destinatario: required integer
-    dest = payload.get('destinatario')
-    checks.append({
-        'campo': 'destinatario',
-        'ok': isinstance(dest, int) and dest > 0,
-        'required': True,
-        'detalhe': f'integer={dest}' if isinstance(dest, int) else f'tipo={type(dest).__name__} valor={dest!r}',
-    })
-
-    # itens: required Array (>= 1)
-    itens = payload.get('itens')
-    itens_ok = isinstance(itens, list) and len(itens) > 0
-    checks.append({
-        'campo': 'itens',
-        'ok': itens_ok,
-        'required': True,
-        'detalhe': f'{len(itens) if isinstance(itens, list) else "—"} item(ns)',
-    })
-    if itens_ok:
-        for idx, it in enumerate(itens):
-            # API real exige `produto_servico` (doc TagPlus desatualizada
-            # mostra `produto` no sample mas API rejeita com 422).
-            prod = it.get('produto_servico') if isinstance(it, dict) else None
-            qtd = it.get('qtd') if isinstance(it, dict) else None
-            vu = it.get('valor_unitario') if isinstance(it, dict) else None
-            checks.append({
-                'campo': f'itens[{idx}].produto_servico',
-                'ok': bool(prod) and (isinstance(prod, (int, str))),
-                'required': False,
-                'detalhe': f'tipo={type(prod).__name__} valor={prod!r}',
-            })
-            checks.append({
-                'campo': f'itens[{idx}].qtd',
-                'ok': isinstance(qtd, (int, float)) and qtd > 0,
-                'required': False,
-                'detalhe': f'{qtd}',
-            })
-            checks.append({
-                'campo': f'itens[{idx}].valor_unitario',
-                'ok': isinstance(vu, (int, float)) and vu >= 0,
-                'required': False,
-                'detalhe': f'{vu}',
-            })
-
-    # cfop: required string mascara 9.999
-    cfop = payload.get('cfop')
-    checks.append({
-        'campo': 'cfop',
-        'ok': isinstance(cfop, str) and bool(re.match(r'^\d\.\d{3}$', cfop)),
-        'required': True,
-        'detalhe': f'{cfop!r} (mascara 9.999)',
-    })
-
-    # faturas (nao required pela doc, mas necessario na pratica para emissao com pagamento)
-    faturas = payload.get('faturas')
-    checks.append({
-        'campo': 'faturas',
-        'ok': isinstance(faturas, list) and len(faturas) > 0,
-        'required': False,
-        'detalhe': f'{len(faturas) if isinstance(faturas, list) else "—"} fatura(s)',
-    })
-    if isinstance(faturas, list):
-        for idx, fat in enumerate(faturas):
-            fp = fat.get('forma_pagamento') if isinstance(fat, dict) else None
-            parcs = fat.get('parcelas') if isinstance(fat, dict) else None
-            checks.append({
-                'campo': f'faturas[{idx}].forma_pagamento',
-                'ok': isinstance(fp, int) and fp > 0,
-                'required': False,
-                'detalhe': f'tipo={type(fp).__name__} valor={fp!r}',
-            })
-            checks.append({
-                'campo': f'faturas[{idx}].parcelas',
-                'ok': isinstance(parcs, list) and len(parcs) > 0,
-                'required': False,
-                'detalhe': f'{len(parcs) if isinstance(parcs, list) else "—"} parcela(s)',
-            })
-
-    return checks
-
-
-@hora_bp.route('/tagplus/esboco/<int:venda_id>')
-@require_hora_perm('tagplus', 'ver')
-def tagplus_esboco_preview(venda_id: int):
-    """Monta payload via PayloadBuilder SEM enviar ao TagPlus.
-
-    Retorna JSON renderizado + auditoria dos campos required (doc_tagplus.md:163-178).
-    Erros de pré-condição (forma_pagamento ausente, modelo não mapeado, CPF inválido)
-    são exibidos de forma amigável para o operador corrigir antes de emitir.
-    """
-    from app.hora.services.tagplus.payload_builder import PayloadBuilder, PayloadBuilderError
-
-    venda = HoraVenda.query.get_or_404(venda_id)
-    conta = HoraTagPlusConta.query.filter_by(ativo=True).first()
-    if not conta:
-        flash('Conta TagPlus não configurada.', 'danger')
-        return redirect(url_for('hora.tagplus_esboco_lista'))
-
-    payload = None
-    erro = None
-    auditoria = None
-    try:
-        builder = PayloadBuilder(conta)
-        payload = builder.build(venda)
-        auditoria = _auditar_payload_required(payload)
-    except PayloadBuilderError as exc:
-        erro = {'code': exc.code, 'message': exc.message}
-    except Exception as exc:  # noqa: BLE001
-        logger.exception('Falha gerando esboco para venda %s', venda_id)
-        erro = {'code': 'erro_inesperado', 'message': str(exc)}
-
-    import json
-    payload_json = json.dumps(payload, indent=2, ensure_ascii=False) if payload else None
-
-    # Verifica se ja existe emissao para esta venda (evita re-emissao acidental).
-    emissao_existente = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda.id).first()
-
-    return render_template(
-        'hora/tagplus/esboco_preview.html',
-        venda=venda,
-        payload=payload,
-        payload_json=payload_json,
-        auditoria=auditoria,
-        erro=erro,
-        emissao_existente=emissao_existente,
-        ambiente=conta.ambiente,
-    )
-
-
-@hora_bp.route('/tagplus/esboco/<int:venda_id>/emitir', methods=['POST'])
-@require_hora_perm('vendas', 'criar')
-def tagplus_esboco_emitir(venda_id: int):
-    """Emite NFe a partir da tela de conferencia (mesmo fluxo de /vendas/<id>/nfe/emitir).
-
-    Reusa EmissorNfeHora.enfileirar — POST /nfes com headers X-Enviar-Nota=true e
-    X-Calculo-Trib-Automatico=true (envia para SEFAZ direto, status 202 esperado).
-    """
-    try:
-        emissao_id = EmissorNfeHora.enfileirar(venda_id)
-        flash(
-            f'NFe enviada para emissao (id={emissao_id}). Acompanhe o status abaixo.',
-            'success',
-        )
-        return redirect(url_for('hora.venda_nfe_status', venda_id=venda_id))
-    except EmissaoBloqueadaError as exc:
-        flash(f'Emissão bloqueada: {exc}', 'warning')
-    except RuntimeError as exc:
-        flash(f'Erro: {exc}', 'danger')
-    return redirect(url_for('hora.tagplus_esboco_preview', venda_id=venda_id))
-
 
 # ============================================================
 # 4.6) Pedido de Venda — formulario manual para emissao TagPlus
@@ -1116,8 +918,8 @@ def tagplus_pedido_venda_novo():
     """Formulario para criar HoraVenda manualmente (sem upload de DANFE).
 
     Operador preenche cliente + endereco + escolhe modelo/cor/chassi e forma de
-    pagamento. Submissao cria venda + redireciona para o esboco TagPlus para o
-    operador conferir o payload e emitir.
+    pagamento. Submissao cria venda em status COTACAO + redireciona para o
+    detalhe da venda; a emissao da NFe e feita la pelo botao "Emitir NFe".
 
     Filtros do SELECT respeitam o escopo de loja (`lojas_permitidas_ids`).
     """
@@ -1145,7 +947,7 @@ def tagplus_pedido_venda_novo():
 @hora_bp.route('/tagplus/pedido-venda', methods=['POST'])
 @require_hora_perm('vendas', 'criar')
 def tagplus_pedido_venda_criar():
-    """Cria HoraVenda manual e redireciona para o esboco TagPlus."""
+    """Cria HoraVenda manual e redireciona para o detalhe da venda."""
     from decimal import Decimal, InvalidOperation
     from app.hora.services import venda_service
 
