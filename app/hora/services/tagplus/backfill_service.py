@@ -103,20 +103,64 @@ _RE_CHASSI_MOTOR = re.compile(
     re.IGNORECASE,
 )
 
+# Padroes alternativos comuns em NFs TagPlus historicas (preenchimento manual):
+#   "N° SERIE: XXX / SERIE: XXX / Nº SERIE: XXX"
+_RE_NSERIE = re.compile(
+    r'(?:N[ºo°]?|Numero)\s*[:\.\-]?\s*(?:SERIE|S[eé]rie|CHASSI|Chassi)\s*[:\.\-]?\s*'
+    r'([A-Z0-9][A-Z0-9\-]{8,29})',
+    re.IGNORECASE,
+)
+
+# Chassis "puros" (string alfanumerica longa) — ultima cartada quando rotulos
+# estao ausentes. Aceita 13-30 chars com pelo menos 1 letra E 1 numero (evita
+# pegar codigos de produto curtos como MT-X11).
+_RE_CHASSI_PURO = re.compile(r'\b([A-Z][A-Z0-9]{12,29})\b')
+
+_RE_MOTOR = re.compile(
+    r'Motor\s*[:\.\-]?\s*([A-Z0-9\-]{6,30})',
+    re.IGNORECASE,
+)
+
 
 def _extrair_chassi_motor(detalhes: Optional[str]) -> tuple[Optional[str], Optional[str]]:
     """Parsa string `detalhes` do item TagPlus.
 
-    Formato emitido pelo nosso PayloadBuilder: 'Chassi: XYZ / Motor: ABC'.
-    Tolera variacoes (espacos, caso, motor ausente).
+    Tenta na ordem:
+      1. 'Chassi: X / Motor: Y'  (formato do nosso PayloadBuilder).
+      2. 'N° SERIE: X' ou 'CHASSI: X'  (NFs historicas TagPlus).
+      3. Token alfanumerico 13+ chars  (ultima cartada).
+    Motor extraido separado quando presente.
     """
     if not detalhes:
         return (None, None)
+
+    chassi = None
+    motor = None
+
+    # 1) Padrao Chassi+Motor inline
     m = _RE_CHASSI_MOTOR.search(detalhes)
-    if not m:
-        return (None, None)
-    chassi = (m.group(1) or '').strip().upper() or None
-    motor = (m.group(2) or '').strip().upper() or None
+    if m:
+        chassi = (m.group(1) or '').strip().upper() or None
+        motor = (m.group(2) or '').strip().upper() or None
+
+    # 2) Padrao "N° SERIE: ..." (TagPlus historico)
+    if not chassi:
+        m = _RE_NSERIE.search(detalhes)
+        if m:
+            chassi = m.group(1).strip().upper()
+
+    # 3) Token bruto longo (fallback)
+    if not chassi:
+        m = _RE_CHASSI_PURO.search(detalhes.upper())
+        if m:
+            chassi = m.group(1).strip()
+
+    # Motor independente (caso o padrao 1 nao tenha capturado)
+    if not motor:
+        m = _RE_MOTOR.search(detalhes)
+        if m:
+            motor = m.group(1).strip().upper()
+
     if motor in ('', '-', 'NONE', 'NULL'):
         motor = None
     return (chassi, motor)
@@ -185,6 +229,28 @@ def importar_nfe_da_api(
         nfe = r.json()
     except ValueError:
         raise NfeIncompleta(f'/nfes/{nfe_id_tagplus} resposta nao-JSON')
+
+    # Log diagnostico do JSON da NFe (apenas chaves relevantes para chassi).
+    # Imprescindivel para entender NFs historicas que nao foram emitidas pelo
+    # nosso PayloadBuilder (campo `detalhes` vazio, chassi em outro lugar).
+    logger.info(
+        'TagPlus NFe %s: inf_contrib=%r observacoes=%r itens=%s',
+        nfe_id_tagplus,
+        (nfe.get('inf_contribuinte') or '')[:300],
+        (nfe.get('observacoes') or '')[:200],
+        [
+            {
+                'produto': (it.get('produto') if isinstance(it.get('produto'), (str, int))
+                            else (it.get('produto') or {}).get('codigo')),
+                'descricao': (it.get('descricao') or '')[:120],
+                'detalhes': (it.get('detalhes') or '')[:200],
+                'qtd': it.get('qtd'),
+                'numero_serie': it.get('numero_serie'),
+                'complemento_descricao': (it.get('complemento_descricao') or '')[:200],
+            }
+            for it in (nfe.get('itens') or [])[:3]  # max 3 itens no log
+        ],
+    )
 
     chave = nfe.get('chave_acesso')
     valor_nota = nfe.get('valor_nota')
@@ -271,12 +337,16 @@ def importar_nfe_da_api(
     # ------ Itens -> HoraVendaItem + eventos ------
     itens_raw = nfe.get('itens') or []
     _ = serie_nf  # serie capturada para futuro armazenamento (hoje hora_venda nao guarda)
+    inf_contribuinte_nf = nfe.get('inf_contribuinte') or ''
+    observacoes_nf = nfe.get('observacoes') or ''
     _criar_itens_da_api(
         venda=venda,
         itens_api=itens_raw,
         loja_emitente_id=loja_emitente.id if loja_emitente else None,
         data_venda=data_emissao,
         operador=operador,
+        inf_contribuinte_nf=inf_contribuinte_nf,
+        observacoes_nf=observacoes_nf,
     )
 
     venda_audit.registrar_auditoria(
@@ -298,20 +368,34 @@ def _criar_itens_da_api(
     loja_emitente_id: Optional[int],
     data_venda,
     operador: Optional[str],
+    inf_contribuinte_nf: str = '',
+    observacoes_nf: str = '',
 ) -> None:
     """Cria HoraVendaItem para cada chassi listado em `itens_api`.
 
     Cada item TagPlus pode ter `qtd > 1` — nesse caso espera-se 1 chassi por
-    unidade (formato esperado: campo `detalhes` da resposta lista os chassis
-    OU multiplos itens com qtd=1 cada).
+    unidade.
 
-    Estrategia:
-      1. Tenta extrair chassi do campo `detalhes` do item ('Chassi: X / Motor: Y').
-      2. Se nao achar, registra divergencia tipo CHASSI_NAO_CADASTRADO.
+    Estrategia (ordem de busca do chassi):
+      1. `item.detalhes`               (NFs emitidas via PayloadBuilder).
+      2. `item.descricao`              (texto livre do item).
+      3. `item.complemento_descricao`  (campo opcional do TagPlus).
+      4. `item.numero_serie`           (campo nativo NFe).
+      5. `inf_contribuinte` da NFe-mae (texto livre comum em NFs historicas).
+      6. `observacoes` da NFe-mae.
+
+    Quando nenhum dos campos tem chassi extraivel, registra divergencia
+    CHASSI_NAO_CADASTRADO com diagnostico das fontes consultadas.
     """
     from app.hora.services.venda_service import (
         _registrar_divergencia, _resolver_preco_tabela,
     )
+
+    # Pre-extrai chassi(s) do nivel da NFe-mae (compartilhado entre os itens).
+    nfe_chassis = _extrair_chassis_multiplos(
+        f'{inf_contribuinte_nf}\n{observacoes_nf}'
+    )
+    nfe_chassis_iter = iter(nfe_chassis)
 
     for it in itens_api:
         if not isinstance(it, dict):
@@ -336,18 +420,54 @@ def _criar_itens_da_api(
         valor_desconto = Decimal(str(it.get('valor_desconto') or 0))
         preco_final_unit = (valor_unitario - (valor_desconto / qtd if qtd else 0))
 
-        # Extrair chassis do campo detalhes (1 ou multiplos separados por ';' ou '|').
+        # ----- Extracao do chassi: tenta multiplas fontes em ordem -----
         detalhes = (it.get('detalhes') or '').strip()
-        chassis_motores = _extrair_chassis_multiplos(detalhes)
+        descricao_raw = (it.get('descricao') or '').strip()
+        complemento = (it.get('complemento_descricao') or '').strip()
+        numero_serie = (it.get('numero_serie') or '').strip()
+
+        chassis_motores: list[tuple[Optional[str], Optional[str]]] = []
+        fontes_tentadas = []
+
+        for fonte_nome, fonte_valor in [
+            ('detalhes', detalhes),
+            ('descricao', descricao_raw),
+            ('complemento_descricao', complemento),
+            ('numero_serie', numero_serie),
+        ]:
+            fontes_tentadas.append(f'{fonte_nome}={fonte_valor[:60]!r}')
+            extraidos = _extrair_chassis_multiplos(fonte_valor)
+            if extraidos:
+                chassis_motores = extraidos
+                logger.info(
+                    'Chassi extraido de item.%s: %s', fonte_nome,
+                    [p[0] for p in extraidos],
+                )
+                break
+
+        # Fallback final: consome 1 chassi do `inf_contribuinte`/`observacoes`
+        # da NFe-mae (na ordem em que aparecem no texto, 1 por item).
+        if not chassis_motores:
+            try:
+                par = next(nfe_chassis_iter)
+                chassis_motores = [par]
+                fontes_tentadas.append('NFe.inf_contribuinte/observacoes (fallback)')
+                logger.info(
+                    'Chassi fallback NFe-mae para item produto=%r: %s',
+                    codigo_produto, par[0],
+                )
+            except StopIteration:
+                pass
 
         if not chassis_motores:
             _registrar_divergencia(
                 venda_id=venda.id, tipo='CHASSI_NAO_CADASTRADO',
                 detalhe=(
                     f'Item produto={codigo_produto or descricao!r} qtd={qtd} '
-                    f'sem chassi extraivel de detalhes={detalhes!r}'
-                ),
-                valor_conferido=detalhes,
+                    f'sem chassi extraivel. Fontes consultadas: '
+                    f'{" | ".join(fontes_tentadas)}.'
+                )[:1000],
+                valor_conferido=(detalhes or descricao_raw)[:255],
             )
             continue
 
