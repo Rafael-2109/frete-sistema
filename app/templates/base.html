@@ -1167,10 +1167,10 @@
     });
   </script>
 
-  {# Helper para submenus aninhados no dropdown "Lojas HORA" (Bootstrap 5 nao tem nativo) #}
+  {# Helper para submenus do dropdown "Lojas HORA" — expansao inline tipo accordion #}
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      // Click no toggle do submenu: abre/fecha sem fechar o dropdown pai.
+      // Click no toggle do submenu: expande/colapsa inline sem fechar o dropdown pai.
       document.querySelectorAll('.dropdown-submenu > .dropdown-toggle').forEach(function (toggle) {
         toggle.addEventListener('click', function (e) {
           e.preventDefault();
@@ -1178,17 +1178,24 @@
           var parentLi = toggle.parentElement;
           var submenu = toggle.nextElementSibling;
           if (!submenu) return;
-          // Fecha outros submenus do MESMO nivel (evita varios abertos juntos).
-          var siblings = parentLi.parentElement.querySelectorAll('.dropdown-submenu > .dropdown-menu.show');
-          siblings.forEach(function (other) {
-            if (other !== submenu) other.classList.remove('show');
+          // Fecha outros submenus do MESMO nivel (so um aberto por vez).
+          parentLi.parentElement.querySelectorAll(':scope > .dropdown-submenu').forEach(function (other) {
+            if (other !== parentLi) {
+              other.classList.remove('open');
+              var sm = other.querySelector(':scope > .dropdown-menu');
+              if (sm) sm.classList.remove('show');
+            }
           });
+          parentLi.classList.toggle('open');
           submenu.classList.toggle('show');
         });
       });
       // Quando o dropdown principal fecha, fecha tambem todos os submenus.
       document.querySelectorAll('.dropdown').forEach(function (dd) {
         dd.addEventListener('hidden.bs.dropdown', function () {
+          dd.querySelectorAll('.dropdown-submenu.open').forEach(function (li) {
+            li.classList.remove('open');
+          });
           dd.querySelectorAll('.dropdown-submenu > .dropdown-menu.show').forEach(function (sm) {
             sm.classList.remove('show');
           });

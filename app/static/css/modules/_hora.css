@@ -174,8 +174,9 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
-     NAVBAR DROPDOWN SUBMENU (Lojas HORA — 4 categorias expansiveis)
-     Bootstrap 5 nao tem submenu nativo; helper CSS+JS faz o trabalho.
+     NAVBAR DROPDOWN SUBMENU (Lojas HORA — 4 categorias expansiveis inline)
+     Submenu expande para baixo (accordion) tanto em desktop quanto mobile.
+     Evita scrollbar e mantem comportamento identico em qualquer viewport.
      JS handler em base.html (event delegation no .dropdown-submenu > a).
      ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -183,38 +184,43 @@
     position: relative;
   }
 
+  .dropdown-submenu > .dropdown-toggle {
+    /* Indica visualmente que e expansivel */
+    cursor: pointer;
+  }
+
   .dropdown-submenu > .dropdown-toggle::after {
-    /* Caret do submenu aponta para a direita ao inves de para baixo */
-    transform: rotate(-90deg);
-    margin-left: 0.5em;
+    /* Caret aponta pra baixo (default Bootstrap), gira ao expandir */
+    transition: transform 0.15s ease;
+  }
+
+  .dropdown-submenu.open > .dropdown-toggle::after {
+    transform: rotate(180deg);
   }
 
   .dropdown-submenu > .dropdown-menu {
-    /* Submenu posicionado a direita do item pai */
-    top: 0;
-    left: 100%;
-    margin-top: -0.25rem;
-    margin-left: 0.125rem;
-    border-radius: 0.375rem;
+    /* Sempre inline (nao flutua a direita): expande para baixo dentro do dropdown pai */
+    position: static;
+    float: none;
+    display: none;
+    border: none;
+    box-shadow: none;
+    padding: 0.25rem 0 0.25rem 0;
+    margin: 0;
+    background: transparent;
   }
 
   .dropdown-submenu > .dropdown-menu.show {
     display: block;
   }
 
-  /* Em telas estreitas (<= 992px) o navbar colapsa; submenu vira inline */
-  @media (max-width: 992px) {
-    .dropdown-submenu > .dropdown-menu {
-      position: static;
-      float: none;
-      margin-left: 1rem;
-      border: none;
-      box-shadow: none;
-      padding-left: 0;
-    }
-    .dropdown-submenu > .dropdown-toggle::after {
-      transform: none;
-    }
+  /* Indenta os itens do submenu para destacar a hierarquia */
+  .dropdown-submenu > .dropdown-menu > li > .dropdown-item {
+    padding-left: 2.25rem;
+  }
+
+  .dropdown-submenu > .dropdown-menu > li > hr.dropdown-divider {
+    margin-left: 1rem;
   }
 
 }
