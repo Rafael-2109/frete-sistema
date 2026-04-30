@@ -43,6 +43,8 @@ def _lojas_ativas_permitidas():
 @hora_bp.route('/emprestimos')
 @require_hora_perm('emprestimos', 'ver')
 def emprestimos_lista():
+    from datetime import datetime as _dt
+
     try:
         page = int(request.args.get('page', 1))
     except (TypeError, ValueError):
@@ -66,12 +68,43 @@ def emprestimos_lista():
     ):
         tipo_filtro = None
 
+    chassi = (request.args.get('chassi') or '').strip() or None
+    loja_hora_id_str = (request.args.get('loja_hora_id') or '').strip()
+    loja_hora_id = int(loja_hora_id_str) if loja_hora_id_str.isdigit() else None
+    modelo_id_str = (request.args.get('modelo_id') or '').strip()
+    modelo_id = int(modelo_id_str) if modelo_id_str.isdigit() else None
+    loja_externa = (request.args.get('loja_externa') or '').strip() or None
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+
+    try:
+        data_inicio = _dt.strptime(data_ini_str, '%Y-%m-%d').date() if data_ini_str else None
+        data_fim = _dt.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else None
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'warning')
+        data_inicio = None
+        data_fim = None
+
+    permitidas = lojas_permitidas_ids()
+    if loja_hora_id and not usuario_tem_acesso_a_loja(loja_hora_id):
+        flash('Acesso negado a essa loja.', 'danger')
+        return redirect(url_for('hora.emprestimos_lista'))
+
     pagination = emprestimo_service.paginar_emprestimos(
         page=page, per_page=per_page,
-        lojas_permitidas_ids=lojas_permitidas_ids(),
+        lojas_permitidas_ids=permitidas,
         status=status_filtro,
         tipo=tipo_filtro,
+        chassi=chassi,
+        loja_hora_id=loja_hora_id,
+        modelo_id=modelo_id,
+        loja_externa=loja_externa,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
     )
+
+    lojas_ativas = _lojas_ativas_permitidas()
+    modelos_ativos = HoraModelo.query.filter_by(ativo=True).order_by(HoraModelo.nome_modelo).all()
 
     return render_template(
         'hora/emprestimos_lista.html',
@@ -80,6 +113,14 @@ def emprestimos_lista():
         status_filtro=status_filtro,
         tipo_filtro=tipo_filtro,
         per_page=per_page,
+        filtro_chassi=chassi,
+        filtro_loja_hora_id=loja_hora_id,
+        filtro_modelo_id=modelo_id,
+        filtro_loja_externa=loja_externa,
+        filtro_data_inicio=data_ini_str,
+        filtro_data_fim=data_fim_str,
+        lojas_ativas=lojas_ativas,
+        modelos_ativos=modelos_ativos,
     )
 
 

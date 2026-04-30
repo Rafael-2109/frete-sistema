@@ -247,21 +247,47 @@ def listar_pecas(
     status: Optional[str] = None,
     lojas_permitidas_ids: Optional[List[int]] = None,
     limit: int = 200,
+    *,
+    descricao: Optional[str] = None,
+    loja_id: Optional[int] = None,
+    data_inicio=None,
+    data_fim=None,
 ) -> List[HoraPecaFaltando]:
     """Lista pecas. Se lojas_permitidas_ids, filtra chassis cuja loja atual
-    (ultimo evento) esteja na lista — via JOIN SQL para preservar paginacao."""
+    (ultimo evento) esteja na lista — via JOIN SQL para preservar paginacao.
+
+    Filtros opcionais:
+    - chassi: substring (ilike) — antes era match exato, agora aceita parte
+    - descricao: substring em descricao
+    - loja_id: id especifico de loja_id (se fornecido, mais restritivo que escopo)
+    - data_inicio/data_fim: faixa em criado_em
+    """
     from sqlalchemy import and_, func
     from app.hora.models import HoraMotoEvento
 
     q = HoraPecaFaltando.query
     if chassi:
-        q = q.filter(HoraPecaFaltando.numero_chassi == chassi.strip().upper())
+        q = q.filter(HoraPecaFaltando.numero_chassi.ilike(f'%{chassi.strip().upper()}%'))
     if status:
         q = q.filter(HoraPecaFaltando.status == status)
+    if descricao:
+        q = q.filter(HoraPecaFaltando.descricao.ilike(f'%{descricao.strip()}%'))
+    if data_inicio:
+        q = q.filter(HoraPecaFaltando.criado_em >= data_inicio)
+    if data_fim:
+        from datetime import timedelta
+        q = q.filter(HoraPecaFaltando.criado_em <= data_fim + timedelta(days=1))
 
-    if lojas_permitidas_ids is not None:
+    # Escopo: aplica join no ultimo evento. Se loja_id fornecida, restringe ainda mais.
+    lojas_filtro = None
+    if loja_id:
+        lojas_filtro = [loja_id]
+    elif lojas_permitidas_ids is not None:
         if not lojas_permitidas_ids:
             return []
+        lojas_filtro = list(lojas_permitidas_ids)
+
+    if lojas_filtro is not None:
         # Subquery: ultimo evento por chassi.
         sub_ult = (
             db.session.query(
@@ -277,7 +303,7 @@ def listar_pecas(
                 HoraMotoEvento,
                 and_(
                     HoraMotoEvento.id == sub_ult.c.max_id,
-                    HoraMotoEvento.loja_id.in_(lojas_permitidas_ids),
+                    HoraMotoEvento.loja_id.in_(lojas_filtro),
                 ),
             )
         )

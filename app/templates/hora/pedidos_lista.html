@@ -1,4 +1,5 @@
 {% extends "hora/base.html" %}
+{% from "hora/_filtros.html" import filtros_form, filtro_texto, filtro_loja, filtro_status, filtro_data, filtros_botoes, status_botoes %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
@@ -17,16 +18,27 @@
   </div>
 </div>
 
-<div class="mb-3">
-  <a class="btn btn-sm btn-outline-secondary {% if not filtro_status %}active{% endif %}"
-     href="{{ url_for('hora.pedidos_lista') }}">Todos</a>
-  <a class="btn btn-sm btn-outline-secondary {% if filtro_status == 'ABERTO' %}active{% endif %}"
-     href="{{ url_for('hora.pedidos_lista', status='ABERTO') }}">Abertos</a>
-  <a class="btn btn-sm btn-outline-secondary {% if filtro_status == 'PARCIALMENTE_FATURADO' %}active{% endif %}"
-     href="{{ url_for('hora.pedidos_lista', status='PARCIALMENTE_FATURADO') }}">Parcialmente faturados</a>
-  <a class="btn btn-sm btn-outline-secondary {% if filtro_status == 'FATURADO' %}active{% endif %}"
-     href="{{ url_for('hora.pedidos_lista', status='FATURADO') }}">Faturados</a>
-</div>
+{# Filtros rapidos por status (atalhos GET) #}
+{{ status_botoes('hora.pedidos_lista',
+                 [('ABERTO','Abertos'),('PARCIALMENTE_FATURADO','Parc. faturados'),('FATURADO','Faturados')],
+                 filtro_status) }}
+
+{% call filtros_form(url_for('hora.pedidos_lista')) %}
+  <input type="hidden" name="status" value="{{ filtro_status or '' }}">
+  <div class="col-md-3">
+    <label class="form-label small mb-1">Pedido (auto-complete)</label>
+    <input type="text" name="numero_pedido"
+           value="{{ filtro_numero_pedido or '' }}"
+           placeholder="Digite ao menos 2 caracteres"
+           class="form-control form-control-sm"
+           data-hora-autocomplete="pedido"
+           data-hora-target-key="numero_pedido">
+  </div>
+  {{ filtro_loja('loja_id', 'Loja Destino', filtro_loja_id, lojas_ativas, 'col-md-3') }}
+  {{ filtro_data('data_inicio', 'Data a partir', filtro_data_inicio, 'col-md-2') }}
+  {{ filtro_data('data_fim', 'Data até', filtro_data_fim, 'col-md-2') }}
+  {{ filtros_botoes(url_for('hora.pedidos_lista', status=(filtro_status or None))) }}
+{% endcall %}
 
 <div class="table-responsive">
   <table class="table table-hover">

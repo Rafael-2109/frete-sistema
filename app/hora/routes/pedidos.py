@@ -26,11 +26,33 @@ from app.hora.services.parsers import (
 @hora_bp.route('/pedidos')
 @require_hora_perm('pedidos', 'ver')
 def pedidos_lista():
-    status = request.args.get('status') or None
+    status = (request.args.get('status') or '').strip() or None
+    numero_pedido = (request.args.get('numero_pedido') or '').strip() or None
+    loja_id_str = (request.args.get('loja_id') or '').strip()
+    loja_id = int(loja_id_str) if loja_id_str.isdigit() else None
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+
+    try:
+        data_inicio = datetime.strptime(data_ini_str, '%Y-%m-%d').date() if data_ini_str else None
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else None
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'warning')
+        data_inicio = None
+        data_fim = None
+
+    if loja_id and not usuario_tem_acesso_a_loja(loja_id):
+        flash('Acesso negado a essa loja.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
+
     pedidos = pedido_service.listar_pedidos(
         status=status,
         limit=200,
         lojas_permitidas_ids=lojas_permitidas_ids(),
+        numero_pedido=numero_pedido,
+        loja_id=loja_id,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
     )
     # Bulk load para evitar N+1 (uma query agregada em vez de N por pedido).
     pedido_ids = [p.id for p in pedidos]
@@ -50,6 +72,10 @@ def pedidos_lista():
         'hora/pedidos_lista.html',
         pedidos=pedidos,
         filtro_status=status,
+        filtro_numero_pedido=numero_pedido,
+        filtro_loja_id=loja_id,
+        filtro_data_inicio=data_ini_str,
+        filtro_data_fim=data_fim_str,
         resumos=resumos,
         lojas_ativas=lojas_ativas,
     )

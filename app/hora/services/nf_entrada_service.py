@@ -434,8 +434,33 @@ def exportar_nfs_excel(
     return output.read()
 
 
-def listar_nfs_entrada(limit: int = 100, lojas_permitidas_ids=None, cnpjs_permitidos=None):
-    """Lista NFs de entrada. lojas_permitidas_ids=None → todas; filtra por loja_destino_id."""
+def listar_nfs_entrada(
+    limit: int = 100,
+    lojas_permitidas_ids=None,
+    cnpjs_permitidos=None,
+    *,
+    numero_nf=None,
+    emitente=None,
+    loja_id=None,
+    data_inicio=None,
+    data_fim=None,
+    vinculo_status=None,  # 'vinculada' | 'sem_pedido' | None
+):
+    """Lista NFs de entrada com filtros opcionais.
+
+    Filtros:
+    - numero_nf: substring no campo numero_nf (ilike)
+    - emitente: substring em nome_emitente OU cnpj_emitente
+    - loja_id: id especifico de loja_destino_id
+    - data_inicio / data_fim: faixa em data_emissao
+    - vinculo_status: 'vinculada' (pedido_id is not None) ou 'sem_pedido'
+
+    Escopo:
+    - lojas_permitidas_ids=None -> todas
+    - lista vazia -> []
+    """
+    from sqlalchemy import or_
+
     query = HoraNfEntrada.query.order_by(
         HoraNfEntrada.data_emissao.desc(), HoraNfEntrada.id.desc()
     )
@@ -447,4 +472,24 @@ def listar_nfs_entrada(limit: int = 100, lojas_permitidas_ids=None, cnpjs_permit
         if not cnpjs_permitidos:
             return []
         query = query.filter(HoraNfEntrada.cnpj_destinatario.in_(list(cnpjs_permitidos)))
+
+    if numero_nf:
+        query = query.filter(HoraNfEntrada.numero_nf.ilike(f'%{numero_nf.strip()}%'))
+    if emitente:
+        e = emitente.strip()
+        query = query.filter(or_(
+            HoraNfEntrada.nome_emitente.ilike(f'%{e}%'),
+            HoraNfEntrada.cnpj_emitente.ilike(f'%{e}%'),
+        ))
+    if loja_id:
+        query = query.filter(HoraNfEntrada.loja_destino_id == loja_id)
+    if data_inicio:
+        query = query.filter(HoraNfEntrada.data_emissao >= data_inicio)
+    if data_fim:
+        query = query.filter(HoraNfEntrada.data_emissao <= data_fim)
+    if vinculo_status == 'vinculada':
+        query = query.filter(HoraNfEntrada.pedido_id.isnot(None))
+    elif vinculo_status == 'sem_pedido':
+        query = query.filter(HoraNfEntrada.pedido_id.is_(None))
+
     return query.limit(limit).all()

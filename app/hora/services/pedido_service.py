@@ -164,8 +164,19 @@ def listar_pedidos(
     limit: int = 100,
     lojas_permitidas_ids=None,
     cnpjs_permitidos=None,  # legacy, mantido por compat
+    *,
+    numero_pedido=None,
+    loja_id=None,
+    data_inicio=None,
+    data_fim=None,
 ) -> List[HoraPedido]:
-    """Lista pedidos. lojas_permitidas_ids=None → todos; [id] → filtra por loja_destino_id."""
+    """Lista pedidos. lojas_permitidas_ids=None → todos; [id] → filtra por loja_destino_id.
+
+    Filtros opcionais:
+    - numero_pedido: substring (ilike) em numero_pedido
+    - loja_id: id especifico de loja_destino_id
+    - data_inicio / data_fim: faixa em data_pedido
+    """
     query = HoraPedido.query.order_by(HoraPedido.data_pedido.desc(), HoraPedido.id.desc())
     if status:
         query = query.filter_by(status=status)
@@ -177,6 +188,18 @@ def listar_pedidos(
         if not cnpjs_permitidos:
             return []
         query = query.filter(HoraPedido.cnpj_destino.in_(list(cnpjs_permitidos)))
+
+    if numero_pedido:
+        query = query.filter(
+            HoraPedido.numero_pedido.ilike(f'%{numero_pedido.strip()}%')
+        )
+    if loja_id:
+        query = query.filter(HoraPedido.loja_destino_id == loja_id)
+    if data_inicio:
+        query = query.filter(HoraPedido.data_pedido >= data_inicio)
+    if data_fim:
+        query = query.filter(HoraPedido.data_pedido <= data_fim)
+
     return query.limit(limit).all()
 
 

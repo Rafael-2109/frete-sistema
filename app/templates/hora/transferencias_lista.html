@@ -1,4 +1,5 @@
 {% extends "hora/base.html" %}
+{% from "hora/_filtros.html" import filtros_form, filtro_loja, filtro_status, filtro_data %}
 
 {% block hora_content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -10,31 +11,38 @@
   {% endif %}
 </div>
 
-<form method="get" class="card p-3 mb-3">
-  <div class="row g-2">
-    <div class="col-md-3">
-      <label class="form-label">Status</label>
-      <select name="status" class="form-select form-select-sm">
-        <option value="">Todos</option>
-        {% for s in ['EM_TRANSITO', 'CONFIRMADA', 'CANCELADA'] %}
-          <option value="{{ s }}" {% if filtros.status == s %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-4">
-      <label class="form-label">Loja (origem ou destino)</label>
-      <select name="loja_id" class="form-select form-select-sm">
-        <option value="">Todas</option>
-        {% for l in lojas %}
-          <option value="{{ l.id }}" {% if filtros.loja_id == l.id %}selected{% endif %}>{{ l.rotulo_display }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-2 d-flex align-items-end">
-      <button class="btn btn-sm btn-primary">Filtrar</button>
-    </div>
+{% call filtros_form(url_for('hora.transferencias_lista')) %}
+  {{ filtro_status('status', 'Status', filtros.status,
+                   [('EM_TRANSITO','Em trânsito'),('CONFIRMADA','Confirmada'),('CANCELADA','Cancelada')], 'col-md-2') }}
+  {{ filtro_loja('loja_id', 'Loja', filtros.loja_id, lojas, 'col-md-3') }}
+  <div class="col-md-2">
+    <label class="form-label small mb-1">Direção</label>
+    <select name="direcao" class="form-select form-select-sm">
+      <option value="">Origem ou destino</option>
+      <option value="origem" {% if filtros.direcao == 'origem' %}selected{% endif %}>Apenas origem</option>
+      <option value="destino" {% if filtros.direcao == 'destino' %}selected{% endif %}>Apenas destino</option>
+    </select>
   </div>
-</form>
+  <div class="col-md-3">
+    <label class="form-label small mb-1">Chassi (item)</label>
+    <input type="text" name="chassi"
+           value="{{ filtros.chassi or '' }}"
+           placeholder="parte do chassi"
+           class="form-control form-control-sm chassi-mono"
+           style="text-transform:uppercase;"
+           data-hora-autocomplete="chassi">
+  </div>
+  {{ filtro_data('data_inicio', 'Emitida a partir', filtros.data_inicio, 'col-md-2') }}
+  {{ filtro_data('data_fim', 'Emitida até', filtros.data_fim, 'col-md-2') }}
+  <div class="col-md-auto d-flex gap-2 align-items-end">
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="fas fa-filter"></i> Filtrar
+    </button>
+    <a href="{{ url_for('hora.transferencias_lista') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-eraser"></i> Limpar
+    </a>
+  </div>
+{% endcall %}
 
 <div class="card">
   <div class="table-responsive">

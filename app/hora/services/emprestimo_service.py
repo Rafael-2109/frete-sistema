@@ -402,8 +402,25 @@ def paginar_emprestimos(
     lojas_permitidas_ids: Optional[Iterable[int]] = None,
     status: Optional[str] = None,
     tipo: Optional[str] = None,
+    *,
+    chassi: Optional[str] = None,
+    loja_hora_id: Optional[int] = None,
+    modelo_id: Optional[int] = None,
+    loja_externa: Optional[str] = None,
+    data_inicio=None,
+    data_fim=None,
 ):
-    """Pagina emprestimos respeitando escopo de loja."""
+    """Pagina emprestimos respeitando escopo de loja.
+
+    Filtros opcionais:
+    - chassi: substring em chassi_saida ou chassi_entrada
+    - loja_hora_id: id especifico
+    - modelo_id: id de modelo
+    - loja_externa: substring em loja_externa_nome ou cnpj
+    - data_inicio/data_fim: faixa em data_emprestimo
+    """
+    from sqlalchemy import or_
+
     page = max(1, int(page or 1))
     per_page = max(1, min(int(per_page or 50), 200))
 
@@ -420,6 +437,28 @@ def paginar_emprestimos(
         if not ids_list:
             return None
         query = query.filter(HoraEmprestimoMoto.loja_hora_id.in_(ids_list))
+
+    if chassi:
+        c = chassi.strip().upper()
+        query = query.filter(or_(
+            HoraEmprestimoMoto.chassi_saida.ilike(f'%{c}%'),
+            HoraEmprestimoMoto.chassi_entrada.ilike(f'%{c}%'),
+        ))
+    if loja_hora_id:
+        query = query.filter(HoraEmprestimoMoto.loja_hora_id == loja_hora_id)
+    if modelo_id:
+        query = query.filter(HoraEmprestimoMoto.modelo_id == modelo_id)
+    if loja_externa:
+        le = loja_externa.strip()
+        digits = ''.join(c for c in le if c.isdigit())
+        cond = HoraEmprestimoMoto.loja_externa_nome.ilike(f'%{le}%')
+        if digits:
+            cond = or_(cond, HoraEmprestimoMoto.loja_externa_cnpj.ilike(f'%{digits}%'))
+        query = query.filter(cond)
+    if data_inicio:
+        query = query.filter(HoraEmprestimoMoto.data_emprestimo >= data_inicio)
+    if data_fim:
+        query = query.filter(HoraEmprestimoMoto.data_emprestimo <= data_fim)
 
     return query.paginate(page=page, per_page=per_page, error_out=False)
 

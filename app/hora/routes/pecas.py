@@ -35,19 +35,55 @@ def _redirect_sem_acesso():
 @hora_bp.route('/pecas-faltando')
 @require_hora_perm('pecas', 'ver')
 def pecas_lista():
+    from datetime import datetime as _dt
+    from app.hora.models import HoraLoja
+
     permitidas = lojas_permitidas_ids()
     status = (request.args.get('status') or '').strip() or None
     chassi = (request.args.get('chassi') or '').strip() or None
+    descricao = (request.args.get('descricao') or '').strip() or None
+    loja_id_str = (request.args.get('loja_id') or '').strip()
+    loja_id = int(loja_id_str) if loja_id_str.isdigit() else None
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+
+    if loja_id and not usuario_tem_acesso_a_loja(loja_id):
+        flash('Acesso negado a essa loja.', 'danger')
+        return redirect(url_for('hora.pecas_lista'))
+
+    try:
+        data_inicio = _dt.strptime(data_ini_str, '%Y-%m-%d') if data_ini_str else None
+        data_fim = _dt.strptime(data_fim_str, '%Y-%m-%d') if data_fim_str else None
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'warning')
+        data_inicio = None
+        data_fim = None
+
     pecas = peca_service.listar_pecas(
         chassi=chassi,
         status=status,
         lojas_permitidas_ids=permitidas,
+        descricao=descricao,
+        loja_id=loja_id,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
     )
+
+    lojas_q = HoraLoja.query.filter_by(ativa=True)
+    if permitidas is not None:
+        lojas_q = lojas_q.filter(HoraLoja.id.in_(permitidas))
+    lojas_ativas = lojas_q.order_by(HoraLoja.nome).all()
+
     return render_template(
         'hora/pecas_faltando_lista.html',
         pecas=pecas,
         filtro_status=status,
         filtro_chassi=chassi,
+        filtro_descricao=descricao,
+        filtro_loja_id=loja_id,
+        filtro_data_inicio=data_ini_str,
+        filtro_data_fim=data_fim_str,
+        lojas_ativas=lojas_ativas,
     )
 
 

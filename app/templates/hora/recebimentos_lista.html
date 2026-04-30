@@ -1,4 +1,5 @@
 {% extends "hora/base.html" %}
+{% from "hora/_filtros.html" import filtros_form, filtro_loja, filtro_status, filtro_data, filtros_botoes %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
@@ -8,27 +9,23 @@
   </a>
 </div>
 
-<form method="get" class="row g-2 mb-3">
+{% call filtros_form(url_for('hora.recebimentos_lista')) %}
   <div class="col-md-3">
-    <select name="loja_id" class="form-select form-select-sm">
-      <option value="">Todas lojas</option>
-      {% for l in lojas %}
-        <option value="{{ l.id }}" {% if filtro_loja_id == l.id %}selected{% endif %}>{{ l.nome }}</option>
-      {% endfor %}
-    </select>
+    <label class="form-label small mb-1">Número NF</label>
+    <input type="text" name="numero_nf"
+           value="{{ filtro_numero_nf or '' }}"
+           placeholder="Digite ao menos 2 caracteres"
+           class="form-control form-control-sm"
+           data-hora-autocomplete="nf-entrada">
   </div>
-  <div class="col-md-3">
-    <select name="status" class="form-select form-select-sm">
-      <option value="">Todos status</option>
-      <option value="EM_CONFERENCIA" {% if filtro_status == 'EM_CONFERENCIA' %}selected{% endif %}>Em conferência</option>
-      <option value="CONCLUIDO" {% if filtro_status == 'CONCLUIDO' %}selected{% endif %}>Concluído</option>
-      <option value="COM_DIVERGENCIA" {% if filtro_status == 'COM_DIVERGENCIA' %}selected{% endif %}>Com divergência</option>
-    </select>
-  </div>
-  <div class="col-md-2">
-    <button type="submit" class="btn btn-sm btn-outline-primary">Filtrar</button>
-  </div>
-</form>
+  {{ filtro_loja('loja_id', 'Loja', filtro_loja_id, lojas, 'col-md-3') }}
+  {{ filtro_status('status', 'Status', filtro_status,
+                   [('EM_CONFERENCIA','Em conferência'),('CONCLUIDO','Concluído'),('COM_DIVERGENCIA','Com divergência')],
+                   'col-md-2') }}
+  {{ filtro_data('data_inicio', 'Data a partir', filtro_data_inicio, 'col-md-2') }}
+  {{ filtro_data('data_fim', 'Data até', filtro_data_fim, 'col-md-2') }}
+  {{ filtros_botoes(url_for('hora.recebimentos_lista')) }}
+{% endcall %}
 
 {% set pode_ver_motos_nf = current_user.tem_perm_hora('recebimento_motos_nf', 'ver') %}
 <div class="table-responsive">

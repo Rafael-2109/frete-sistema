@@ -292,9 +292,15 @@ def criar_venda_manual(
     6. Emite evento RESERVADA (saida do estoque disponivel).
     7. Auditoria: CRIOU.
     """
-    cpf_norm = ''.join(c for c in (cpf_cliente or '') if c.isdigit())
-    if len(cpf_norm) != 11:
-        raise ValueError(f'CPF invalido: {cpf_cliente!r} (esperado 11 digitos)')
+    # Aceita CPF (11) ou CNPJ (14) — coluna `cpf_cliente` eh String(14) e
+    # comporta ambos. Ver app/hora/services/tagplus/_documento.py.
+    from app.hora.services.tagplus._documento import normalizar_documento
+    cpf_norm, _tipo_doc = normalizar_documento(cpf_cliente)
+    if not _tipo_doc:
+        raise ValueError(
+            f'Documento invalido: {cpf_cliente!r} '
+            f'(esperado CPF com 11 digitos ou CNPJ com 14 digitos)'
+        )
 
     nome_norm = (nome_cliente or '').strip()
     if not nome_norm:
@@ -615,9 +621,14 @@ def editar_venda(
     if nome_cliente is not None:
         _atualizar('nome_cliente', nome_cliente.strip()[:200] or venda.nome_cliente)
     if cpf_cliente is not None:
-        cpf_norm = ''.join(c for c in cpf_cliente if c.isdigit())
-        if cpf_norm and len(cpf_norm) != 11:
-            raise ValueError(f'CPF invalido: {cpf_cliente!r}')
+        # Aceita CPF (11) ou CNPJ (14). String vazia mantem valor anterior.
+        from app.hora.services.tagplus._documento import normalizar_documento
+        cpf_norm, _tipo_doc = normalizar_documento(cpf_cliente)
+        if cpf_norm and not _tipo_doc:
+            raise ValueError(
+                f'Documento invalido: {cpf_cliente!r} '
+                f'(esperado CPF com 11 digitos ou CNPJ com 14 digitos)'
+            )
         _atualizar('cpf_cliente', cpf_norm or venda.cpf_cliente)
     if cep is not None:
         cep_norm = ''.join(c for c in cep if c.isdigit()) or None
@@ -1170,10 +1181,14 @@ def importar_nf_saida_pdf(
             f'NF de saida com chave {chave_44} ja importada (venda_id={existente.id})'
         )
 
+    # `cpf_destinatario` no payload do parser comporta CPF (11) ou CNPJ (14)
+    # — ver app/hora/services/parsers/danfe_adapter.py.
     cpf_cliente = nf_data.get('cpf_destinatario')
     nome_cliente = nf_data.get('nome_destinatario')
     if not cpf_cliente:
-        raise ValueError('NF de saida sem CPF do destinatario.')
+        raise ValueError(
+            'NF de saida sem CPF/CNPJ do destinatario.'
+        )
     if not nome_cliente:
         raise ValueError('NF de saida sem nome do destinatario.')
 
@@ -1417,8 +1432,20 @@ def listar_vendas(
 def _query_vendas(
     lojas_permitidas_ids: Optional[Iterable[int]] = None,
     status: Optional[str] = None,
+    *,
+    busca: Optional[str] = None,
+    loja_id: Optional[int] = None,
+    data_inicio=None,
+    data_fim=None,
 ):
-    """Constroi query base de vendas com filtros — usado por listar e paginar."""
+    """Constroi query base de vendas com filtros — usado por listar e paginar.
+
+    busca: substring que casa em nf_saida_numero, nome_cliente ou cpf_cliente.
+    loja_id: id especifico de loja_id (precisa estar dentro de lojas_permitidas).
+    data_inicio/data_fim: faixa em data_venda.
+    """
+    from sqlalchemy import or_
+
     query = HoraVenda.query.order_by(
         HoraVenda.data_venda.desc(), HoraVenda.id.desc()
     )
@@ -1429,6 +1456,23 @@ def _query_vendas(
         if not ids_list:
             return None
         query = query.filter(HoraVenda.loja_id.in_(ids_list))
+
+    if busca:
+        b = busca.strip()
+        digits = ''.join(c for c in b if c.isdigit())
+        cond = or_(
+            HoraVenda.nf_saida_numero.ilike(f'%{b}%'),
+            HoraVenda.nome_cliente.ilike(f'%{b}%'),
+        )
+        if digits:
+            cond = or_(cond, HoraVenda.cpf_cliente.ilike(f'%{digits}%'))
+        query = query.filter(cond)
+    if loja_id:
+        query = query.filter(HoraVenda.loja_id == loja_id)
+    if data_inicio:
+        query = query.filter(HoraVenda.data_venda >= data_inicio)
+    if data_fim:
+        query = query.filter(HoraVenda.data_venda <= data_fim)
     return query
 
 
@@ -1437,13 +1481,25 @@ def paginar_vendas(
     per_page: int = 50,
     lojas_permitidas_ids: Optional[Iterable[int]] = None,
     status: Optional[str] = None,
+    *,
+    busca: Optional[str] = None,
+    loja_id: Optional[int] = None,
+    data_inicio=None,
+    data_fim=None,
 ):
     """Pagina vendas com filtros. Retorna `Pagination` (Flask-SQLAlchemy)
     ou None quando o usuario nao tem nenhuma loja permitida (lista vazia).
     """
     page = max(1, int(page or 1))
     per_page = max(1, min(int(per_page or 50), 200))
-    query = _query_vendas(lojas_permitidas_ids=lojas_permitidas_ids, status=status)
+    query = _query_vendas(
+        lojas_permitidas_ids=lojas_permitidas_ids,
+        status=status,
+        busca=busca,
+        loja_id=loja_id,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
     if query is None:
         return None
     return query.paginate(page=page, per_page=per_page, error_out=False)

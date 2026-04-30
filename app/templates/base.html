@@ -168,6 +168,7 @@
               current_user.tem_perm_hora('nfs', 'ver') or
               current_user.tem_perm_hora('recebimentos', 'ver') or
               current_user.tem_perm_hora('vendas', 'ver') or
+              current_user.tem_perm_hora('tagplus', 'ver') or
               current_user.tem_perm_hora('transferencias', 'ver') or
               current_user.tem_perm_hora('emprestimos', 'ver') or
               current_user.tem_perm_hora('estoque', 'ver')
@@ -254,13 +255,17 @@
                         <i class="fas fa-cash-register fa-fw"></i> Pedidos de Venda
                     </a></li>
                     {% endif %}
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="{{ url_for('hora.movimentacoes_hub') }}">
-                        <i class="fas fa-exchange-alt fa-fw"></i> Movimentações (hub)
+                    {% if current_user.tem_perm_hora('tagplus', 'ver') or current_user.tem_perm_hora('vendas', 'ver') %}
+                    <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_emissoes_lista') }}">
+                        <i class="fas fa-file-invoice-dollar fa-fw"></i> NFs de Saída
                     </a></li>
+                    {% endif %}
+                    {% if current_user.tem_perm_hora('transferencias', 'ver') or current_user.tem_perm_hora('emprestimos', 'ver') %}
+                    <li><hr class="dropdown-divider"></li>
+                    {% endif %}
                     {% if current_user.tem_perm_hora('transferencias', 'ver') %}
                     <li><a class="dropdown-item" href="{{ url_for('hora.transferencias_lista') }}">
-                        <i class="fas fa-truck-moving fa-fw"></i> Transferências entre filiais
+                        <i class="fas fa-exchange-alt fa-fw"></i> Transferências entre filiais
                     </a></li>
                     {% endif %}
                     {% if current_user.tem_perm_hora('emprestimos', 'ver') %}

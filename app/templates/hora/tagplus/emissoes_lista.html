@@ -1,9 +1,10 @@
 {% extends "hora/base.html" %}
 {% from "hora/_pagination.html" import render_pagination %}
+{% from "hora/_filtros.html" import filtros_form, filtro_data %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-  <h2><i class="fas fa-list-check"></i> NFes emitidas / em emissao</h2>
+  <h2><i class="fas fa-file-invoice-dollar"></i> NFs de Saída</h2>
   <div class="d-flex gap-2">
     {% if current_user.tem_perm_hora('vendas', 'criar') %}
       <a href="{{ url_for('hora.tagplus_pedido_venda_novo') }}" class="btn btn-primary">
@@ -36,9 +37,9 @@
     'CANCELADA': 'Cancelada'
 } %}
 
-{# ---- Filtros: status + per_page ---- #}
-<div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
-  <small class="text-muted me-1">Filtrar:</small>
+{# ---- Filtros rapidos por status (atalhos GET) ---- #}
+<div class="mb-2 d-flex gap-2 flex-wrap align-items-center">
+  <small class="text-muted me-1">Status:</small>
   <a href="{{ url_for('hora.tagplus_emissoes_lista', per_page=per_page) }}"
      class="btn btn-sm btn-{% if not status_filtro %}primary{% else %}outline-primary{% endif %}">
     Todos
@@ -51,11 +52,29 @@
       {{ nfe_label.get(s, s) }}
     </a>
   {% endfor %}
+</div>
 
-  <form method="get" class="ms-auto d-flex gap-2 align-items-center mb-0">
-    {% if status_filtro %}
-      <input type="hidden" name="status" value="{{ status_filtro }}">
-    {% endif %}
+{% call filtros_form(url_for('hora.tagplus_emissoes_lista')) %}
+  <input type="hidden" name="status" value="{{ status_filtro or '' }}">
+  <div class="col-md-4">
+    <label class="form-label small mb-1">Busca (NF, chave, cliente)</label>
+    <input type="text" name="busca"
+           value="{{ filtro_busca or '' }}"
+           placeholder="Número da NFe, chave ou nome do cliente"
+           class="form-control form-control-sm"
+           data-hora-autocomplete="venda"
+           data-hora-target-key="nf_saida_numero">
+  </div>
+  {{ filtro_data('data_inicio', 'Criada a partir', filtro_data_inicio, 'col-md-2') }}
+  {{ filtro_data('data_fim', 'Criada até', filtro_data_fim, 'col-md-2') }}
+  <div class="col-md-auto d-flex gap-2 align-items-end">
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="fas fa-filter"></i> Filtrar
+    </button>
+    <a href="{{ url_for('hora.tagplus_emissoes_lista', status=(status_filtro or None), per_page=per_page) }}"
+       class="btn btn-sm btn-outline-secondary"><i class="fas fa-eraser"></i> Limpar</a>
+  </div>
+  <div class="col-md-auto ms-auto d-flex gap-2 align-items-end">
     <small class="text-muted">Por página:</small>
     <select name="per_page" class="form-select form-select-sm" style="width:auto;"
             onchange="this.form.submit()">
@@ -63,8 +82,8 @@
         <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
       {% endfor %}
     </select>
-  </form>
-</div>
+  </div>
+{% endcall %}
 
 {% if not emissoes %}
   <div class="alert alert-secondary">

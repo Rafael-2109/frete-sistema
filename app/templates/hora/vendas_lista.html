@@ -1,5 +1,6 @@
 {% extends "hora/base.html" %}
 {% from "hora/_pagination.html" import render_pagination %}
+{% from "hora/_filtros.html" import filtros_form, filtro_loja, filtro_data, filtros_botoes, status_botoes %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -28,30 +29,41 @@
   </div>
 </div>
 
-{# ---- Filtros: status + per_page ---- #}
-<form method="get" class="mb-3 d-flex gap-2 flex-wrap align-items-center">
-  <small class="text-muted me-1">Status:</small>
-  {% set _status_btns = [('', 'Todos'), ('COTACAO', 'Cotação'),
-                          ('CONFIRMADO', 'Confirmado'), ('FATURADO', 'Faturado'),
-                          ('CANCELADO', 'Cancelado')] %}
-  {% for value, label in _status_btns %}
-    <a href="{{ url_for('hora.vendas_lista', status=value or None, per_page=per_page) }}"
-       class="btn btn-sm btn-{% if (status_filtro or '') == value %}primary{% else %}outline-primary{% endif %}">
-      {{ label }}
-    </a>
-  {% endfor %}
-  <span class="ms-auto"></span>
-  <small class="text-muted me-1">Por página:</small>
-  <select name="per_page" class="form-select form-select-sm" style="width:auto;"
-          onchange="this.form.submit()">
-    {% for opt in [25, 50, 100, 200] %}
-      <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
-    {% endfor %}
-  </select>
-  {% if status_filtro %}
-    <input type="hidden" name="status" value="{{ status_filtro }}">
-  {% endif %}
-</form>
+{{ status_botoes('hora.vendas_lista',
+                 [('COTACAO','Cotação'),('CONFIRMADO','Confirmado'),('FATURADO','Faturado'),('CANCELADO','Cancelado')],
+                 status_filtro,
+                 query_extra={'per_page': per_page}) }}
+
+{% call filtros_form(url_for('hora.vendas_lista')) %}
+  <input type="hidden" name="status" value="{{ status_filtro or '' }}">
+  <div class="col-md-4">
+    <label class="form-label small mb-1">Busca (NF, cliente ou CPF)</label>
+    <input type="text" name="busca"
+           value="{{ filtro_busca or '' }}"
+           placeholder="Digite ao menos 2 caracteres"
+           class="form-control form-control-sm"
+           data-hora-autocomplete="venda">
+  </div>
+  {{ filtro_loja('loja_id', 'Loja', filtro_loja_id, lojas_ativas, 'col-md-3') }}
+  {{ filtro_data('data_inicio', 'Data a partir', filtro_data_inicio, 'col-md-2') }}
+  {{ filtro_data('data_fim', 'Data até', filtro_data_fim, 'col-md-2') }}
+  <div class="col-md-auto d-flex gap-2 align-items-end">
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="fas fa-filter"></i> Filtrar
+    </button>
+    <a href="{{ url_for('hora.vendas_lista', status=(status_filtro or None), per_page=per_page) }}"
+       class="btn btn-sm btn-outline-secondary"><i class="fas fa-eraser"></i> Limpar</a>
+  </div>
+  <div class="col-md-auto ms-auto d-flex gap-2 align-items-end">
+    <small class="text-muted">Por página:</small>
+    <select name="per_page" class="form-select form-select-sm" style="width:auto;"
+            onchange="this.form.submit()">
+      {% for opt in [25, 50, 100, 200] %}
+        <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </div>
+{% endcall %}
 
 <div class="table-responsive">
   <table class="table table-hover align-middle">

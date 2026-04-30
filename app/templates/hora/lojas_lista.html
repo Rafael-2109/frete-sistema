@@ -1,4 +1,5 @@
 {% extends "hora/base.html" %}
+{% from "hora/_filtros.html" import filtros_form %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -12,6 +13,43 @@
     </a>
   </div>
 </div>
+
+{% call filtros_form(url_for('hora.lojas_lista')) %}
+  <div class="col-md-4">
+    <label class="form-label small mb-1">Busca (nome, apelido, CNPJ)</label>
+    <input type="text" name="busca"
+           value="{{ filtro_busca or '' }}"
+           placeholder="Digite ao menos 2 caracteres"
+           class="form-control form-control-sm"
+           data-hora-autocomplete="loja"
+           data-hora-target-key="rotulo_display">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label small mb-1">UF</label>
+    <select name="uf" class="form-select form-select-sm">
+      <option value="">Todas</option>
+      {% for u in ufs %}
+        <option value="{{ u }}" {% if filtro_uf == u %}selected{% endif %}>{{ u }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label small mb-1">Status</label>
+    <div class="form-check form-check-inline mt-1">
+      <input class="form-check-input" type="checkbox" name="apenas_ativas" value="1"
+             id="chkApenasAtivas" {% if filtro_apenas_ativas %}checked{% endif %}>
+      <label class="form-check-label" for="chkApenasAtivas">Apenas ativas</label>
+    </div>
+  </div>
+  <div class="col-md-auto d-flex gap-2 align-items-end">
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="fas fa-filter"></i> Filtrar
+    </button>
+    <a href="{{ url_for('hora.lojas_lista') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-eraser"></i> Limpar
+    </a>
+  </div>
+{% endcall %}
 
 <div class="table-responsive">
   <table class="table table-hover align-middle">

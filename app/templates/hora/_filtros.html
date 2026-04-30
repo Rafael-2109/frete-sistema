@@ -1,0 +1,132 @@
+{# ============================================================
+   Macros Jinja para barra de filtros padronizada nas listas HORA.
+
+   Uso: {% from "hora/_filtros.html" import filtros_form, filtro_data, filtro_loja, filtro_status, filtro_texto, filtro_autocomplete %}
+
+   Cada macro renderiza uma celula <div class="col-...">. O wrapper
+   `filtros_form(action_url)` abre o <form GET> e o `endblock` dele
+   adiciona botoes Filtrar/Limpar.
+   ============================================================ #}
+
+{% macro filtros_form(action_url=None, extra_classes='') %}
+  <form method="get" action="{{ action_url or '' }}"
+        class="card p-3 mb-3 hora-filtros-form {{ extra_classes }}">
+    <div class="row g-2 align-items-end">
+      {{ caller() }}
+    </div>
+  </form>
+{% endmacro %}
+
+
+{# Texto livre (busca por substring numa coluna) #}
+{% macro filtro_texto(name, label, valor='', placeholder='', col='col-md-3', uppercase=False) %}
+  <div class="{{ col }}">
+    <label class="form-label small mb-1">{{ label }}</label>
+    <input type="text" name="{{ name }}"
+           value="{{ valor or '' }}"
+           placeholder="{{ placeholder }}"
+           class="form-control form-control-sm{% if uppercase %} text-uppercase{% endif %}"
+           {% if uppercase %}style="text-transform:uppercase;"{% endif %}>
+  </div>
+{% endmacro %}
+
+
+{# Input com autocomplete + hidden id (para selecao canonica).
+   Sufixos distintos (`_txt` e `_val`) evitam colisao de HTML id quando
+   `name_label == name_id` ou quando o mesmo macro e usado 2x na mesma pagina. #}
+{% macro filtro_autocomplete(name_label, name_id, tipo, label, valor_label='', valor_id='', placeholder='', col='col-md-3', target_key=None) %}
+  <div class="{{ col }}">
+    <label class="form-label small mb-1">{{ label }}</label>
+    <input type="text"
+           name="{{ name_label }}"
+           id="{{ name_label }}_txt"
+           value="{{ valor_label or '' }}"
+           placeholder="{{ placeholder }}"
+           class="form-control form-control-sm"
+           data-hora-autocomplete="{{ tipo }}"
+           data-hora-target-id="{{ name_id }}_val"
+           {% if target_key %}data-hora-target-key="{{ target_key }}"{% endif %}>
+    <input type="hidden" name="{{ name_id }}" id="{{ name_id }}_val" value="{{ valor_id or '' }}">
+  </div>
+{% endmacro %}
+
+
+{# Select de loja (recebe lista `lojas` + valor selecionado) #}
+{% macro filtro_loja(name='loja_id', label='Loja', valor=None, lojas=[], col='col-md-3', incluir_todas=True, label_todas='Todas as lojas') %}
+  <div class="{{ col }}">
+    <label class="form-label small mb-1">{{ label }}</label>
+    <select name="{{ name }}" class="form-select form-select-sm">
+      {% if incluir_todas %}
+        <option value="">— {{ label_todas }} —</option>
+      {% endif %}
+      {% for l in lojas %}
+        <option value="{{ l.id }}" {% if valor and (valor|int) == l.id %}selected{% endif %}>
+          {{ l.rotulo_display }}{% if l.cidade %} ({{ l.cidade }}){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+{% endmacro %}
+
+
+{# Select de status (recebe lista de tuplas (value, label) ou strings) #}
+{% macro filtro_status(name='status', label='Status', valor=None, opcoes=[], col='col-md-2', label_todos='Todos') %}
+  <div class="{{ col }}">
+    <label class="form-label small mb-1">{{ label }}</label>
+    <select name="{{ name }}" class="form-select form-select-sm">
+      <option value="">{{ label_todos }}</option>
+      {% for opt in opcoes %}
+        {% if opt is string %}
+          <option value="{{ opt }}" {% if valor == opt %}selected{% endif %}>{{ opt }}</option>
+        {% else %}
+          <option value="{{ opt[0] }}" {% if valor == opt[0] %}selected{% endif %}>{{ opt[1] }}</option>
+        {% endif %}
+      {% endfor %}
+    </select>
+  </div>
+{% endmacro %}
+
+
+{# Datepicker simples #}
+{% macro filtro_data(name, label, valor='', col='col-md-2') %}
+  <div class="{{ col }}">
+    <label class="form-label small mb-1">{{ label }}</label>
+    <input type="date" name="{{ name }}" value="{{ valor or '' }}"
+           class="form-control form-control-sm">
+  </div>
+{% endmacro %}
+
+
+{# Botoes Filtrar / Limpar #}
+{% macro filtros_botoes(reset_url, col='col-md-auto', extra='') %}
+  <div class="{{ col }} d-flex gap-2">
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="fas fa-filter"></i> Filtrar
+    </button>
+    <a href="{{ reset_url }}" class="btn btn-sm btn-outline-secondary"
+       title="Limpar filtros">
+      <i class="fas fa-eraser"></i> Limpar
+    </a>
+    {{ extra }}
+  </div>
+{% endmacro %}
+
+
+{# Combo de status como botoes (mantem padrao do pedidos_lista atual) #}
+{% macro status_botoes(base_url_endpoint, opcoes=[], valor=None, query_extra={}) %}
+  <div class="d-flex gap-1 flex-wrap mb-2">
+    <a href="{{ url_for(base_url_endpoint, **query_extra) }}"
+       class="btn btn-sm btn-{% if not valor %}primary{% else %}outline-primary{% endif %}">
+      Todos
+    </a>
+    {% for opt in opcoes %}
+      {% set v = opt[0] if opt is not string else opt %}
+      {% set l = opt[1] if opt is not string else opt %}
+      {% set q = dict(query_extra, **{'status': v}) %}
+      <a href="{{ url_for(base_url_endpoint, **q) }}"
+         class="btn btn-sm btn-{% if valor == v %}primary{% else %}outline-primary{% endif %}">
+        {{ l }}
+      </a>
+    {% endfor %}
+  </div>
+{% endmacro %}

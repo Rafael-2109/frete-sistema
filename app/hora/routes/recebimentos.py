@@ -46,14 +46,34 @@ def _op_name() -> str | None:
 @hora_bp.route('/recebimentos')
 @require_hora_perm('recebimentos', 'ver')
 def recebimentos_lista():
+    from datetime import datetime as _dt
+
     loja_id_str = request.args.get('loja_id') or ''
     status = request.args.get('status') or None
     loja_id = int(loja_id_str) if loja_id_str.isdigit() else None
+    numero_nf = (request.args.get('numero_nf') or '').strip() or None
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+
+    if loja_id and not usuario_tem_acesso_a_loja(loja_id):
+        flash('Acesso negado a essa loja.', 'danger')
+        return redirect(url_for('hora.recebimentos_lista'))
+
+    try:
+        data_inicio = _dt.strptime(data_ini_str, '%Y-%m-%d').date() if data_ini_str else None
+        data_fim = _dt.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else None
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'warning')
+        data_inicio = None
+        data_fim = None
 
     permitidas = lojas_permitidas_ids()
     recebimentos = recebimento_service.listar_recebimentos(
         loja_id=loja_id, status=status, limit=200,
         lojas_permitidas_ids=permitidas,
+        numero_nf=numero_nf,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
     )
     lojas_query = HoraLoja.query.filter_by(ativa=True)
     if permitidas is not None:
@@ -65,6 +85,9 @@ def recebimentos_lista():
         lojas=lojas,
         filtro_loja_id=loja_id,
         filtro_status=status,
+        filtro_numero_nf=numero_nf,
+        filtro_data_inicio=data_ini_str,
+        filtro_data_fim=data_fim_str,
     )
 
 

@@ -297,7 +297,20 @@ def listar_devolucoes(
     status: Optional[str] = None,
     lojas_permitidas_ids: Optional[List[int]] = None,
     limit: int = 200,
+    *,
+    motivo: Optional[str] = None,
+    chassi: Optional[str] = None,
+    nf_saida: Optional[str] = None,
+    data_inicio=None,
+    data_fim=None,
 ) -> List[HoraDevolucaoFornecedor]:
+    """Lista devolucoes com filtros opcionais.
+
+    motivo: substring/match em motivo (case-insensitive)
+    chassi: substring em algum item da devolucao
+    nf_saida: substring em nf_saida_numero
+    data_inicio/data_fim: faixa em data_devolucao
+    """
     q = HoraDevolucaoFornecedor.query.order_by(
         HoraDevolucaoFornecedor.data_devolucao.desc(),
         HoraDevolucaoFornecedor.id.desc(),
@@ -310,4 +323,22 @@ def listar_devolucoes(
         q = q.filter(HoraDevolucaoFornecedor.loja_id == loja_id)
     if status:
         q = q.filter(HoraDevolucaoFornecedor.status == status)
+    if motivo:
+        q = q.filter(HoraDevolucaoFornecedor.motivo.ilike(f'%{motivo.strip()}%'))
+    if nf_saida:
+        q = q.filter(HoraDevolucaoFornecedor.nf_saida_numero.ilike(f'%{nf_saida.strip()}%'))
+    if chassi:
+        from app.hora.models.devolucao import HoraDevolucaoFornecedorItem
+        c = chassi.strip().upper()
+        sub = (
+            db.session.query(HoraDevolucaoFornecedorItem.devolucao_id)
+            .filter(HoraDevolucaoFornecedorItem.numero_chassi.ilike(f'%{c}%'))
+            .distinct()
+            .subquery()
+        )
+        q = q.filter(HoraDevolucaoFornecedor.id.in_(sub))
+    if data_inicio:
+        q = q.filter(HoraDevolucaoFornecedor.data_devolucao >= data_inicio)
+    if data_fim:
+        q = q.filter(HoraDevolucaoFornecedor.data_devolucao <= data_fim)
     return q.limit(limit).all()

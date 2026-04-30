@@ -74,10 +74,35 @@ def criar_loja(
     return loja
 
 
-def listar_lojas(apenas_ativas: bool = True) -> Iterable[HoraLoja]:
+def listar_lojas(
+    apenas_ativas: bool = True,
+    *,
+    busca: Optional[str] = None,
+    uf: Optional[str] = None,
+) -> Iterable[HoraLoja]:
+    """Lista lojas. Filtros opcionais:
+    - busca: substring em nome, apelido, razao_social, nome_fantasia ou CNPJ
+    - uf: UF exato (case-insensitive)
+    """
+    from sqlalchemy import or_
+
     query = HoraLoja.query.order_by(HoraLoja.nome)
     if apenas_ativas:
         query = query.filter_by(ativa=True)
+    if busca:
+        b = busca.strip()
+        digits = ''.join(c for c in b if c.isdigit())
+        cond = or_(
+            HoraLoja.nome.ilike(f'%{b}%'),
+            HoraLoja.apelido.ilike(f'%{b}%'),
+            HoraLoja.razao_social.ilike(f'%{b}%'),
+            HoraLoja.nome_fantasia.ilike(f'%{b}%'),
+        )
+        if digits:
+            cond = or_(cond, HoraLoja.cnpj.ilike(f'%{digits}%'))
+        query = query.filter(cond)
+    if uf:
+        query = query.filter(HoraLoja.uf == uf.strip().upper())
     return query.all()
 
 
@@ -128,10 +153,26 @@ def buscar_ou_criar_modelo(nome_modelo: str) -> HoraModelo:
     return modelo
 
 
-def listar_modelos(apenas_ativos: bool = True) -> Iterable[HoraModelo]:
+def listar_modelos(
+    apenas_ativos: bool = True,
+    *,
+    busca: Optional[str] = None,
+) -> Iterable[HoraModelo]:
+    """Lista modelos. Filtros opcionais:
+    - busca: substring em nome_modelo, potencia_motor ou descricao
+    """
+    from sqlalchemy import or_
+
     query = HoraModelo.query.order_by(HoraModelo.nome_modelo)
     if apenas_ativos:
         query = query.filter_by(ativo=True)
+    if busca:
+        b = busca.strip()
+        query = query.filter(or_(
+            HoraModelo.nome_modelo.ilike(f'%{b}%'),
+            HoraModelo.potencia_motor.ilike(f'%{b}%'),
+            HoraModelo.descricao.ilike(f'%{b}%'),
+        ))
     return query.all()
 
 

@@ -17,6 +17,9 @@ from app.hora.services.auth_helper import (
 @hora_bp.route('/avarias')
 @require_hora_perm('avarias', 'ver')
 def avarias_lista():
+    from datetime import datetime as _dt
+    from app.hora.models import HoraMoto
+
     permitidas = lojas_permitidas_ids()
     q = HoraAvaria.query
 
@@ -38,12 +41,53 @@ def avarias_lista():
             HoraAvaria.numero_chassi.ilike(f"%{chassi_query.strip().upper()}%")
         )
 
+    modelo_id_str = (request.args.get('modelo_id') or '').strip()
+    modelo_id = int(modelo_id_str) if modelo_id_str.isdigit() else None
+    if modelo_id:
+        # Avarias cujo chassi tem esse modelo (join via HoraMoto).
+        q = q.join(HoraMoto, HoraMoto.numero_chassi == HoraAvaria.numero_chassi) \
+             .filter(HoraMoto.modelo_id == modelo_id)
+
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+    try:
+        data_inicio = _dt.strptime(data_ini_str, '%Y-%m-%d') if data_ini_str else None
+        data_fim = _dt.strptime(data_fim_str, '%Y-%m-%d') if data_fim_str else None
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'warning')
+        data_inicio = None
+        data_fim = None
+    if data_inicio:
+        q = q.filter(HoraAvaria.criado_em >= data_inicio)
+    if data_fim:
+        from datetime import timedelta
+        q = q.filter(HoraAvaria.criado_em <= data_fim + timedelta(days=1))
+
+    descricao = (request.args.get('descricao') or '').strip() or None
+    if descricao:
+        q = q.filter(HoraAvaria.descricao.ilike(f'%{descricao}%'))
+
     avarias = q.order_by(HoraAvaria.criado_em.desc()).limit(500).all()
-    lojas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.apelido).all()
+    lojas_q = HoraLoja.query.filter_by(ativa=True)
+    if permitidas is not None:
+        lojas_q = lojas_q.filter(HoraLoja.id.in_(permitidas)) if permitidas else lojas_q.filter(False)
+    lojas = lojas_q.order_by(HoraLoja.apelido).all()
+    from app.hora.models import HoraModelo
+    modelos_ativos = HoraModelo.query.filter_by(ativo=True).order_by(HoraModelo.nome_modelo).all()
     return render_template(
         'hora/avarias_lista.html',
-        avarias=avarias, lojas=lojas,
-        filtros={'status': status, 'loja_id': loja_id, 'chassi': chassi_query},
+        avarias=avarias,
+        lojas=lojas,
+        modelos_ativos=modelos_ativos,
+        filtros={
+            'status': status,
+            'loja_id': loja_id,
+            'chassi': chassi_query,
+            'modelo_id': modelo_id,
+            'descricao': descricao,
+            'data_inicio': data_ini_str,
+            'data_fim': data_fim_str,
+        },
     )
 
 

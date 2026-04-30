@@ -97,9 +97,37 @@ def nfs_exportar():
 @hora_bp.route('/nfs')
 @require_hora_perm('nfs', 'ver')
 def nfs_lista():
+    numero_nf = (request.args.get('numero_nf') or '').strip() or None
+    emitente = (request.args.get('emitente') or '').strip() or None
+    loja_id_str = (request.args.get('loja_id') or '').strip()
+    loja_id = int(loja_id_str) if loja_id_str.isdigit() else None
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+    vinculo_status = (request.args.get('vinculo') or '').strip() or None
+    if vinculo_status not in (None, 'vinculada', 'sem_pedido'):
+        vinculo_status = None
+
+    try:
+        data_inicio = datetime.strptime(data_ini_str, '%Y-%m-%d').date() if data_ini_str else None
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else None
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'warning')
+        data_inicio = None
+        data_fim = None
+
+    if loja_id and not usuario_tem_acesso_a_loja(loja_id):
+        flash('Acesso negado a essa loja.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+
     nfs = nf_entrada_service.listar_nfs_entrada(
         limit=200,
         lojas_permitidas_ids=lojas_permitidas_ids(),
+        numero_nf=numero_nf,
+        emitente=emitente,
+        loja_id=loja_id,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        vinculo_status=vinculo_status,
     )
     # Bulk: chassis de cada pedido vinculado (1 query vs N).
     pedido_ids = list({nf.pedido_id for nf in nfs if nf.pedido_id})
@@ -110,7 +138,16 @@ def nfs_lista():
     }
     lojas_ativas = _lojas_ativas_permitidas()
     return render_template(
-        'hora/nfs_lista.html', nfs=nfs, resumos=resumos, lojas_ativas=lojas_ativas,
+        'hora/nfs_lista.html',
+        nfs=nfs,
+        resumos=resumos,
+        lojas_ativas=lojas_ativas,
+        filtro_numero_nf=numero_nf,
+        filtro_emitente=emitente,
+        filtro_loja_id=loja_id,
+        filtro_data_inicio=data_ini_str,
+        filtro_data_fim=data_fim_str,
+        filtro_vinculo=vinculo_status,
     )
 
 

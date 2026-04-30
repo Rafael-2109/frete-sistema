@@ -617,6 +617,10 @@ def listar_recebimentos(
     status: Optional[str] = None,
     limit: int = 100,
     lojas_permitidas_ids=None,
+    *,
+    numero_nf: Optional[str] = None,
+    data_inicio=None,
+    data_fim=None,
 ) -> List[HoraRecebimento]:
     # selectinload em conferencias e nf.itens: o template `recebimentos_lista`
     # usa `r.conferencias|rejectattr('substituida')` e `r.nf.itens|length`
@@ -636,6 +640,15 @@ def listar_recebimentos(
         query = query.filter_by(loja_id=loja_id)
     if status:
         query = query.filter_by(status=status)
+    if numero_nf:
+        query = (
+            query.join(HoraRecebimento.nf)
+            .filter(HoraNfEntrada.numero_nf.ilike(f'%{numero_nf.strip()}%'))
+        )
+    if data_inicio:
+        query = query.filter(HoraRecebimento.data_recebimento >= data_inicio)
+    if data_fim:
+        query = query.filter(HoraRecebimento.data_recebimento <= data_fim)
     return query.limit(limit).all()
 
 

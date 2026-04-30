@@ -877,6 +877,9 @@ def tagplus_webhook():
 @hora_bp.route('/tagplus/emissoes')
 @require_hora_perm('tagplus', 'ver')
 def tagplus_emissoes_lista():
+    from datetime import datetime as _dt
+    from sqlalchemy import or_
+
     status_filtro = (request.args.get('status') or '').strip().upper() or None
     if status_filtro and status_filtro not in NFE_STATUS_VALIDOS:
         status_filtro = None
@@ -892,9 +895,40 @@ def tagplus_emissoes_lista():
     page = max(1, page)
     per_page = max(1, min(per_page, 200))
 
+    busca = (request.args.get('busca') or '').strip() or None
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+    try:
+        data_inicio = _dt.strptime(data_ini_str, '%Y-%m-%d') if data_ini_str else None
+        data_fim = _dt.strptime(data_fim_str, '%Y-%m-%d') if data_fim_str else None
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'warning')
+        data_inicio = None
+        data_fim = None
+
     q = HoraTagPlusNfeEmissao.query.order_by(HoraTagPlusNfeEmissao.criado_em.desc())
     if status_filtro:
         q = q.filter_by(status=status_filtro)
+
+    if busca:
+        # Busca em numero_nfe, chave_44 (NF) e nome_cliente da venda relacionada.
+        b = busca
+        q = (
+            q.outerjoin(HoraVenda, HoraTagPlusNfeEmissao.venda_id == HoraVenda.id)
+            .filter(or_(
+                HoraTagPlusNfeEmissao.numero_nfe.ilike(f'%{b}%'),
+                HoraTagPlusNfeEmissao.chave_44.ilike(f'%{b}%'),
+                HoraVenda.nome_cliente.ilike(f'%{b}%'),
+                HoraVenda.cpf_cliente.ilike(f'%{b}%'),
+            ))
+        )
+
+    if data_inicio:
+        q = q.filter(HoraTagPlusNfeEmissao.criado_em >= data_inicio)
+    if data_fim:
+        # data_fim inclusivo: pegar tudo ate 23:59 do dia
+        from datetime import timedelta
+        q = q.filter(HoraTagPlusNfeEmissao.criado_em <= data_fim + timedelta(days=1))
 
     pagination = q.paginate(page=page, per_page=per_page, error_out=False)
     return render_template(
@@ -904,6 +938,9 @@ def tagplus_emissoes_lista():
         per_page=per_page,
         status_filtro=status_filtro,
         status_validos=NFE_STATUS_VALIDOS,
+        filtro_busca=busca,
+        filtro_data_inicio=data_ini_str,
+        filtro_data_fim=data_fim_str,
     )
 
 
@@ -1355,6 +1392,13 @@ def tagplus_backfill_job_json(job_id: int):
     def _fmt(dt):
         return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
 
+    # `erros` (cap 500) gravado incrementalmente em job.relatorio['erros'] —
+    # ver backfill_worker._gravar_progresso. Permite que a tela atualize a
+    # tabela de erros em tempo real durante o backfill.
+    erros_lista = []
+    if isinstance(job.relatorio, dict):
+        erros_lista = job.relatorio.get('erros') or []
+
     return jsonify({
         'id': job.id,
         'status': job.status,
@@ -1373,4 +1417,5 @@ def tagplus_backfill_job_json(job_id: int):
         'n_divergencias': job.n_divergencias,
         'ultimo_erro': job.ultimo_erro,
         'em_estado_final': job.em_estado_final,
+        'erros': erros_lista,
     })

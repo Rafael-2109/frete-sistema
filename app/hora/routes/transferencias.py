@@ -21,6 +21,9 @@ from app.hora.services.auth_helper import (
 @hora_bp.route('/transferencias')
 @require_hora_perm('transferencias', 'ver')
 def transferencias_lista():
+    from datetime import datetime as _dt
+    from app.hora.models import HoraTransferenciaItem
+
     permitidas = lojas_permitidas_ids()
     q = HoraTransferencia.query
 
@@ -33,18 +36,62 @@ def transferencias_lista():
             HoraTransferencia.loja_origem_id == loja_id,
             HoraTransferencia.loja_destino_id == loja_id,
         ))
+
+    direcao = (request.args.get('direcao') or '').strip()
+    if direcao == 'origem' and loja_id:
+        # sobrescreve filtro acima
+        q = q.filter(HoraTransferencia.loja_origem_id == loja_id)
+    elif direcao == 'destino' and loja_id:
+        q = q.filter(HoraTransferencia.loja_destino_id == loja_id)
+
     if permitidas is not None:
         q = q.filter(or_(
             HoraTransferencia.loja_origem_id.in_(permitidas),
             HoraTransferencia.loja_destino_id.in_(permitidas),
         ))
 
+    chassi = (request.args.get('chassi') or '').strip().upper() or None
+    if chassi:
+        # Transferencia que tem ao menos 1 item com esse chassi.
+        sub = (
+            db.session.query(HoraTransferenciaItem.transferencia_id)
+            .filter(HoraTransferenciaItem.numero_chassi.ilike(f'%{chassi}%'))
+            .distinct()
+            .subquery()
+        )
+        q = q.filter(HoraTransferencia.id.in_(sub))
+
+    data_ini_str = (request.args.get('data_inicio') or '').strip()
+    data_fim_str = (request.args.get('data_fim') or '').strip()
+    try:
+        data_inicio = _dt.strptime(data_ini_str, '%Y-%m-%d') if data_ini_str else None
+        data_fim = _dt.strptime(data_fim_str, '%Y-%m-%d') if data_fim_str else None
+    except ValueError:
+        flash('Data invalida (use formato YYYY-MM-DD).', 'warning')
+        data_inicio = None
+        data_fim = None
+    if data_inicio:
+        q = q.filter(HoraTransferencia.emitida_em >= data_inicio)
+    if data_fim:
+        from datetime import timedelta
+        q = q.filter(HoraTransferencia.emitida_em <= data_fim + timedelta(days=1))
+
     transferencias = q.order_by(HoraTransferencia.emitida_em.desc()).limit(500).all()
-    lojas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.apelido).all()
+    lojas_q = HoraLoja.query.filter_by(ativa=True)
+    if permitidas is not None:
+        lojas_q = lojas_q.filter(HoraLoja.id.in_(permitidas)) if permitidas else lojas_q.filter(False)
+    lojas = lojas_q.order_by(HoraLoja.apelido).all()
     return render_template(
         'hora/transferencias_lista.html',
         transferencias=transferencias, lojas=lojas,
-        filtros={'status': status, 'loja_id': loja_id},
+        filtros={
+            'status': status,
+            'loja_id': loja_id,
+            'direcao': direcao,
+            'chassi': chassi,
+            'data_inicio': data_ini_str,
+            'data_fim': data_fim_str,
+        },
     )
 
 

@@ -1,4 +1,5 @@
 {% extends "hora/base.html" %}
+{% from "hora/_filtros.html" import filtros_form, filtro_texto, filtro_loja, filtro_status, filtro_data, filtros_botoes %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
@@ -13,6 +14,16 @@
     </a>
   </div>
 </div>
+
+{% call filtros_form(url_for('hora.nfs_lista')) %}
+  {{ filtro_texto('numero_nf', 'Número NF', filtro_numero_nf, 'ex.: 12345', 'col-md-2') }}
+  {{ filtro_texto('emitente', 'Emissor (nome ou CNPJ)', filtro_emitente, '', 'col-md-3') }}
+  {{ filtro_loja('loja_id', 'Loja Destino', filtro_loja_id, lojas_ativas, 'col-md-3') }}
+  {{ filtro_status('vinculo', 'Vínculo', filtro_vinculo, [('vinculada','Com pedido'),('sem_pedido','Sem pedido')], 'col-md-2') }}
+  {{ filtro_data('data_inicio', 'Emitida a partir', filtro_data_inicio, 'col-md-2') }}
+  {{ filtro_data('data_fim', 'Emitida até', filtro_data_fim, 'col-md-2') }}
+  {{ filtros_botoes(url_for('hora.nfs_lista')) }}
+{% endcall %}
 
 <div class="table-responsive">
   <table class="table table-hover">

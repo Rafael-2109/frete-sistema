@@ -20,8 +20,33 @@ from app.hora.services.geocoding_service import geocodar_loja, GeocodingError
 @hora_bp.route('/lojas')
 @require_hora_perm('lojas', 'ver')
 def lojas_lista():
-    lojas = cadastro_service.listar_lojas(apenas_ativas=False)
-    return render_template('hora/lojas_lista.html', lojas=lojas)
+    busca = (request.args.get('busca') or '').strip() or None
+    uf = (request.args.get('uf') or '').strip().upper() or None
+    apenas_ativas_str = (request.args.get('apenas_ativas') or '').strip()
+    # Default: mostra todas (filtro pode restringir)
+    apenas_ativas = apenas_ativas_str == '1'
+
+    lojas = cadastro_service.listar_lojas(
+        apenas_ativas=apenas_ativas,
+        busca=busca,
+        uf=uf,
+    )
+    # UFs distintas para o select
+    from app.hora.models import HoraLoja
+    ufs = [
+        u for (u,) in db.session.query(HoraLoja.uf)
+        .filter(HoraLoja.uf.isnot(None))
+        .distinct().order_by(HoraLoja.uf).all()
+        if u
+    ]
+    return render_template(
+        'hora/lojas_lista.html',
+        lojas=lojas,
+        filtro_busca=busca,
+        filtro_uf=uf,
+        filtro_apenas_ativas=apenas_ativas,
+        ufs=ufs,
+    )
 
 
 @hora_bp.route('/lojas/novo', methods=['GET', 'POST'])
@@ -241,11 +266,29 @@ def lojas_consultar_cnpj():
 @require_hora_perm('modelos', 'ver')
 def modelos_lista():
     from app.hora.models.tagplus import HoraTagPlusProdutoMap
-    modelos = cadastro_service.listar_modelos(apenas_ativos=False)
+
+    busca = (request.args.get('busca') or '').strip() or None
+    apenas_ativos_str = (request.args.get('apenas_ativos') or '').strip()
+    apenas_ativos = apenas_ativos_str == '1'
+    sem_tagplus = (request.args.get('sem_tagplus') or '').strip() == '1'
+
+    modelos = cadastro_service.listar_modelos(
+        apenas_ativos=apenas_ativos,
+        busca=busca,
+    )
     # Enriquece com mapeamento TagPlus em uma query (evita N+1).
     maps = {m.modelo_id: m for m in HoraTagPlusProdutoMap.query.all()}
     rows = [{'modelo': m, 'tagplus_map': maps.get(m.id)} for m in modelos]
-    return render_template('hora/modelos_lista.html', rows=rows)
+    if sem_tagplus:
+        rows = [r for r in rows if r['tagplus_map'] is None]
+
+    return render_template(
+        'hora/modelos_lista.html',
+        rows=rows,
+        filtro_busca=busca,
+        filtro_apenas_ativos=apenas_ativos,
+        filtro_sem_tagplus=sem_tagplus,
+    )
 
 
 @hora_bp.route('/modelos/novo', methods=['GET', 'POST'])

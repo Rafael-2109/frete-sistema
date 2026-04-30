@@ -1,5 +1,6 @@
 {% extends "hora/base.html" %}
 {% from "hora/_pagination.html" import render_pagination %}
+{% from "hora/_filtros.html" import filtros_form, filtro_loja, filtro_data, filtro_status %}
 
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -26,11 +27,10 @@
   Ressarcimento entra/sai com OUTRA moto do mesmo modelo.
 </div>
 
-{# Filtros: tipo + status + per_page #}
-<form method="get" class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+{# Atalhos rapidos: tipo + status #}
+<div class="mb-2 d-flex gap-2 flex-wrap align-items-center">
   <small class="text-muted me-1">Tipo:</small>
-  {% set _tipo_btns = [('', 'Todos'), ('SAIDA', 'Saída'), ('ENTRADA', 'Entrada')] %}
-  {% for v, l in _tipo_btns %}
+  {% for v, l in [('', 'Todos'), ('SAIDA', 'Saída'), ('ENTRADA', 'Entrada')] %}
     <a href="{{ url_for('hora.emprestimos_lista', tipo=v or None,
                         status=status_filtro or None, per_page=per_page) }}"
        class="btn btn-sm btn-{% if (tipo_filtro or '') == v %}primary{% else %}outline-primary{% endif %}">
@@ -38,26 +38,68 @@
     </a>
   {% endfor %}
   <small class="text-muted ms-3 me-1">Status:</small>
-  {% set _status_btns = [('', 'Todos'), ('EM_ABERTO', 'Em aberto'),
-                          ('RESSARCIDO', 'Ressarcido'), ('CANCELADO', 'Cancelado')] %}
-  {% for v, l in _status_btns %}
+  {% for v, l in [('', 'Todos'), ('EM_ABERTO', 'Em aberto'),
+                   ('RESSARCIDO', 'Ressarcido'), ('CANCELADO', 'Cancelado')] %}
     <a href="{{ url_for('hora.emprestimos_lista', status=v or None,
                         tipo=tipo_filtro or None, per_page=per_page) }}"
        class="btn btn-sm btn-{% if (status_filtro or '') == v %}secondary{% else %}outline-secondary{% endif %}">
       {{ l }}
     </a>
   {% endfor %}
-  <span class="ms-auto"></span>
-  <small class="text-muted me-1">Por página:</small>
-  <select name="per_page" class="form-select form-select-sm" style="width:auto;"
-          onchange="this.form.submit()">
-    {% for opt in [25, 50, 100, 200] %}
-      <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
-    {% endfor %}
-  </select>
-  {% if status_filtro %}<input type="hidden" name="status" value="{{ status_filtro }}">{% endif %}
-  {% if tipo_filtro %}<input type="hidden" name="tipo" value="{{ tipo_filtro }}">{% endif %}
-</form>
+</div>
+
+{% call filtros_form(url_for('hora.emprestimos_lista')) %}
+  <input type="hidden" name="status" value="{{ status_filtro or '' }}">
+  <input type="hidden" name="tipo" value="{{ tipo_filtro or '' }}">
+  <div class="col-md-2">
+    <label class="form-label small mb-1">Chassi</label>
+    <input type="text" name="chassi"
+           value="{{ filtro_chassi or '' }}"
+           placeholder="parte do chassi"
+           class="form-control form-control-sm chassi-mono"
+           style="text-transform:uppercase;"
+           data-hora-autocomplete="chassi">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label small mb-1">Loja externa</label>
+    <input type="text" name="loja_externa"
+           value="{{ filtro_loja_externa or '' }}"
+           placeholder="nome ou CNPJ"
+           class="form-control form-control-sm"
+           data-hora-autocomplete="loja-externa">
+  </div>
+  {{ filtro_loja('loja_hora_id', 'Loja HORA', filtro_loja_hora_id, lojas_ativas, 'col-md-2') }}
+  <div class="col-md-2">
+    <label class="form-label small mb-1">Modelo</label>
+    <select name="modelo_id" class="form-select form-select-sm">
+      <option value="">— Todos —</option>
+      {% for m in modelos_ativos %}
+        <option value="{{ m.id }}" {% if filtro_modelo_id == m.id %}selected{% endif %}>
+          {{ m.nome_modelo }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  {{ filtro_data('data_inicio', 'Data a partir', filtro_data_inicio, 'col-md-2') }}
+  {{ filtro_data('data_fim', 'Data até', filtro_data_fim, 'col-md-2') }}
+  <div class="col-md-auto d-flex gap-2 align-items-end">
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="fas fa-filter"></i> Filtrar
+    </button>
+    <a href="{{ url_for('hora.emprestimos_lista') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-eraser"></i> Limpar
+    </a>
+  </div>
+  <div class="col-md-auto ms-auto d-flex gap-2 align-items-end">
+    <small class="text-muted">Por página:</small>
+    <select name="per_page" class="form-select form-select-sm" style="width:auto;"
+            onchange="this.form.submit()">
+      {% for opt in [25, 50, 100, 200] %}
+        <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </div>
+{% endcall %}
 
 {% set status_badge = {
     'EM_ABERTO': 'warning',
