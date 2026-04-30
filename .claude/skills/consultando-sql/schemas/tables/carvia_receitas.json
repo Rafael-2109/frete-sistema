@@ -76,16 +76,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_receitas_status",
+      "name": "ix_carvia_receitas_tipo_receita",
       "columns": [
-        "status"
+        "tipo_receita"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_receitas_tipo_receita",
+      "name": "ix_carvia_receitas_status",
       "columns": [
-        "tipo_receita"
+        "status"
       ],
       "unique": false
     }

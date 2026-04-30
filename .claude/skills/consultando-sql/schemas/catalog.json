@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 216,
+  "total_tabelas": 230,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -651,6 +651,68 @@
         "uf_origem",
         "uf_destino",
         "nome_tabela"
+      ]
+    },
+    {
+      "name": "chat_attachments",
+      "description": "Tabela chat_attachments",
+      "key_fields": [
+        "message_id",
+        "s3_key",
+        "filename"
+      ]
+    },
+    {
+      "name": "chat_forwards",
+      "description": "Tabela chat_forwards",
+      "key_fields": [
+        "original_message_id",
+        "forwarded_message_id",
+        "forwarded_by_id"
+      ]
+    },
+    {
+      "name": "chat_members",
+      "description": "Tabela chat_members",
+      "key_fields": [
+        "thread_id",
+        "user_id",
+        "role"
+      ]
+    },
+    {
+      "name": "chat_mentions",
+      "description": "Tabela chat_mentions",
+      "key_fields": [
+        "message_id",
+        "mentioned_user_id"
+      ]
+    },
+    {
+      "name": "chat_messages",
+      "description": "Tabela chat_messages",
+      "key_fields": [
+        "thread_id",
+        "sender_type",
+        "sender_user_id"
+      ]
+    },
+    {
+      "name": "chat_reactions",
+      "description": "Tabela chat_reactions",
+      "key_fields": [
+        "message_id",
+        "user_id",
+        "emoji"
+      ]
+    },
+    {
+      "name": "chat_threads",
+      "description": "Tabela chat_threads",
+      "key_fields": [
+        "tipo",
+        "titulo",
+        "entity_type"
       ]
     },
     {
@@ -1212,6 +1274,51 @@
       ]
     },
     {
+      "name": "hora_tagplus_conta",
+      "description": "Tabela hora_tagplus_conta",
+      "key_fields": [
+        "client_id",
+        "client_secret_encrypted",
+        "webhook_secret"
+      ]
+    },
+    {
+      "name": "hora_tagplus_forma_pagamento_map",
+      "description": "Tabela hora_tagplus_forma_pagamento_map",
+      "key_fields": [
+        "forma_pagamento_hora",
+        "tagplus_forma_id",
+        "descricao"
+      ]
+    },
+    {
+      "name": "hora_tagplus_nfe_emissao",
+      "description": "Tabela hora_tagplus_nfe_emissao",
+      "key_fields": [
+        "venda_id",
+        "conta_id",
+        "status"
+      ]
+    },
+    {
+      "name": "hora_tagplus_produto_map",
+      "description": "Tabela hora_tagplus_produto_map",
+      "key_fields": [
+        "modelo_id",
+        "tagplus_produto_id",
+        "tagplus_codigo"
+      ]
+    },
+    {
+      "name": "hora_tagplus_token",
+      "description": "Tabela hora_tagplus_token",
+      "key_fields": [
+        "conta_id",
+        "access_token_encrypted",
+        "refresh_token_encrypted"
+      ]
+    },
+    {
       "name": "hora_transferencia",
       "description": "Tabela hora_transferencia",
       "key_fields": [
@@ -1254,6 +1361,24 @@
         "loja_id",
         "cpf_cliente",
         "nome_cliente"
+      ]
+    },
+    {
+      "name": "hora_venda_auditoria",
+      "description": "Tabela hora_venda_auditoria",
+      "key_fields": [
+        "venda_id",
+        "item_id",
+        "usuario"
+      ]
+    },
+    {
+      "name": "hora_venda_divergencia",
+      "description": "Tabela hora_venda_divergencia",
+      "key_fields": [
+        "venda_id",
+        "numero_chassi",
+        "tipo"
       ]
     },
     {

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 335,
+  "total_relationships": 352,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -546,6 +546,60 @@
       "from_table": "carvia_tabelas_frete",
       "from_column": "grupo_cliente_id",
       "to_table": "carvia_grupos_cliente",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_attachments",
+      "from_column": "message_id",
+      "to_table": "chat_messages",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_forwards",
+      "from_column": "original_message_id",
+      "to_table": "chat_messages",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_forwards",
+      "from_column": "forwarded_message_id",
+      "to_table": "chat_messages",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_members",
+      "from_column": "thread_id",
+      "to_table": "chat_threads",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_members",
+      "from_column": "last_read_message_id",
+      "to_table": "chat_messages",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_mentions",
+      "from_column": "message_id",
+      "to_table": "chat_messages",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_messages",
+      "from_column": "thread_id",
+      "to_table": "chat_threads",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_messages",
+      "from_column": "reply_to_message_id",
+      "to_table": "chat_messages",
+      "to_column": "id"
+    },
+    {
+      "from_table": "chat_reactions",
+      "from_column": "message_id",
+      "to_table": "chat_messages",
       "to_column": "id"
     },
     {
@@ -1245,6 +1299,30 @@
       "to_column": "id"
     },
     {
+      "from_table": "hora_tagplus_nfe_emissao",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_tagplus_nfe_emissao",
+      "from_column": "conta_id",
+      "to_table": "hora_tagplus_conta",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_tagplus_produto_map",
+      "from_column": "modelo_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_tagplus_token",
+      "from_column": "conta_id",
+      "to_table": "hora_tagplus_conta",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_transferencia",
       "from_column": "loja_origem_id",
       "to_table": "hora_loja",
@@ -1285,6 +1363,30 @@
       "from_column": "loja_id",
       "to_table": "hora_loja",
       "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_auditoria",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_auditoria",
+      "from_column": "item_id",
+      "to_table": "hora_venda_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_divergencia",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_divergencia",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
     },
     {
       "from_table": "hora_venda_item",

@@ -42,6 +42,24 @@
       "default": "NAO_INFORMADO"
     },
     {
+      "name": "modalidade_frete",
+      "type": "varchar(1)",
+      "nullable": false,
+      "default": "9"
+    },
+    {
+      "name": "numero_parcelas",
+      "type": "integer",
+      "nullable": false,
+      "default": 1
+    },
+    {
+      "name": "intervalo_parcelas_dias",
+      "type": "integer",
+      "nullable": false,
+      "default": 30
+    },
+    {
       "name": "valor_total",
       "type": "numeric(15,2)",
       "nullable": false
@@ -165,9 +183,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_data_venda",
+      "name": "ix_hora_venda_cpf_cliente",
       "columns": [
-        "data_venda"
+        "cpf_cliente"
       ],
       "unique": false
     },
@@ -179,16 +197,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_cnpj_emitente",
+      "name": "ix_hora_venda_loja_id",
       "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_cpf_cliente",
-      "columns": [
-        "cpf_cliente"
+        "loja_id"
       ],
       "unique": false
     },
@@ -200,16 +211,23 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_status",
+      "name": "ix_hora_venda_cnpj_emitente",
       "columns": [
-        "status"
+        "cnpj_emitente"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_venda_loja_id",
+      "name": "ix_hora_venda_data_venda",
       "columns": [
-        "loja_id"
+        "data_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

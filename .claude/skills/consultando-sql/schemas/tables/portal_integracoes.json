@@ -98,16 +98,16 @@
       "unique": false
     },
     {
-      "name": "ix_portal_integracoes_lote_id",
+      "name": "ix_portal_integracoes_criado_em",
       "columns": [
-        "lote_id"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_integracoes_criado_em",
+      "name": "ix_portal_integracoes_lote_id",
       "columns": [
-        "criado_em"
+        "lote_id"
       ],
       "unique": false
     },

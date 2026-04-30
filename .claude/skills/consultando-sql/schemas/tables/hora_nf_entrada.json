@@ -94,13 +94,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_nf_entrada_cnpj_destinatario",
-      "columns": [
-        "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_nf_entrada_chave_44",
       "columns": [
         "chave_44"
@@ -108,9 +101,16 @@
       "unique": true
     },
     {
-      "name": "ix_hora_nf_entrada_pedido_id",
+      "name": "ix_hora_nf_entrada_cnpj_emitente",
       "columns": [
-        "pedido_id"
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_nf_entrada_cnpj_destinatario",
+      "columns": [
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -122,9 +122,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_cnpj_emitente",
+      "name": "ix_hora_nf_entrada_pedido_id",
       "columns": [
-        "cnpj_emitente"
+        "pedido_id"
       ],
       "unique": false
     }

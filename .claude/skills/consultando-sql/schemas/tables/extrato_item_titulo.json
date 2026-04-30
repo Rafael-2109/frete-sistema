@@ -177,14 +177,14 @@
       "unique": false
     },
     {
-      "name": "idx_extrato_titulo_status",
+      "name": "ix_extrato_item_titulo_status",
       "columns": [
         "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_extrato_item_titulo_status",
+      "name": "idx_extrato_titulo_status",
       "columns": [
         "status"
       ],
