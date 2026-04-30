@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
 from flask import Response, flash, jsonify, redirect, render_template, request, url_for
-from flask_login import current_user
+from flask_login import current_user, login_required
 
 from app.hora.decorators import require_hora_perm
 from app.hora.models import (
@@ -520,6 +520,7 @@ def vendas_cancelar(venda_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/vendas/<int:venda_id>/descartar-teste', methods=['POST'])
+@login_required
 def vendas_descartar_teste(venda_id: int):
     if not getattr(current_user, 'is_admin', False):
         flash('Apenas administradores podem descartar NF de teste.', 'danger')
