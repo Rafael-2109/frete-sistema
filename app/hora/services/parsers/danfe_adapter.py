@@ -90,6 +90,11 @@ def parse_danfe_to_hora_payload(
                     'cor_texto_original': Optional[str],
                     'ano_modelo': Optional[int],
                     'preco_real': Decimal,
+                    # Codigo de produto da secao "Dados do Produto" (ex:
+                    # 'MT-JETMAX', 'MT-X12'). Determministico para layouts
+                    # como TagPlus. Usado no backfill para match em
+                    # hora_tagplus_produto_map.tagplus_codigo -> modelo_id.
+                    'codigo_produto': Optional[str],
                 },
                 ...
             ],
@@ -169,6 +174,7 @@ def parse_danfe_to_hora_payload(
             raise DanfeParseError(
                 f"Chassi excede 30 chars: {chassi_norm!r} (len={len(chassi_norm)})"
             )
+        codigo = (v.get('codigo') or '').strip() or None
         itens.append({
             'numero_chassi': chassi_norm,
             'numero_motor': v.get('numero_motor') or None,
@@ -176,6 +182,9 @@ def parse_danfe_to_hora_payload(
             'cor_texto_original': v.get('cor') or None,
             'ano_modelo': v.get('ano_modelo') or None,
             'preco_real': preco_unitario_fallback,
+            # Codigo de produto da seção "Dados do Produto" (anchor TagPlus).
+            # Truncado para 50 chars (limite hora_tagplus_produto_map.tagplus_codigo).
+            'codigo_produto': (codigo[:50] if codigo else None),
         })
 
     if not itens:

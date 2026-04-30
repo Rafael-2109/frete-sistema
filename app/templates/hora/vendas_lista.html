@@ -8,8 +8,9 @@
       <a href="{{ url_for('hora.tagplus_pedido_venda_novo') }}" class="btn btn-primary">
         <i class="fas fa-plus-circle"></i> Novo pedido (manual)
       </a>
-      <a href="{{ url_for('hora.vendas_upload') }}" class="btn btn-outline-secondary">
-        <i class="fas fa-upload"></i> Importar DANFE legado
+      <a href="{{ url_for('hora.vendas_upload') }}" class="btn btn-outline-secondary"
+         title="Importar 1 ou múltiplos DANFE PDFs (backfill TagPlus)">
+        <i class="fas fa-upload"></i> Importar DANFE (lote)
       </a>
     {% endif %}
     {% if current_user.tem_perm_hora('tagplus', 'ver') %}

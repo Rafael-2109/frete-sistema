@@ -1146,6 +1146,15 @@ def tagplus_pedido_venda_criar():
         flash(f'Valor invalido: {valor_raw!r}', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
+    # Frete e parcelamento (defaults preservam comportamento anterior).
+    mod_frete = _g('modalidade_frete', 1) or '9'
+    try:
+        n_parcelas = int(_g('numero_parcelas', 3) or '1')
+        intervalo = int(_g('intervalo_parcelas_dias', 3) or '30')
+    except ValueError:
+        flash('Numero de parcelas / intervalo invalidos.', 'danger')
+        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+
     try:
         venda = venda_service.criar_venda_manual(
             cpf_cliente=_g('cpf', 14),
@@ -1164,6 +1173,9 @@ def tagplus_pedido_venda_criar():
             email_cliente=_g('email', 120) or None,
             vendedor=_g('vendedor', 100) or None,
             observacoes=_g('observacoes', 500) or None,
+            modalidade_frete=mod_frete,
+            numero_parcelas=n_parcelas,
+            intervalo_parcelas_dias=intervalo,
             criado_por=_operador(),
         )
     except ValueError as exc:
@@ -1423,4 +1435,82 @@ def venda_nfe_xml_cancelamento(venda_id: int):
         r.content,
         mimetype='application/xml',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+# ============================================================================
+# Backfill via API TagPlus (puxa NFs emitidas, sem PDF)
+# ============================================================================
+
+@hora_bp.route('/tagplus/backfill', methods=['GET', 'POST'])
+@require_hora_perm('vendas', 'criar')
+def tagplus_backfill():
+    """Importa NFs ja emitidas no TagPlus para HoraVenda via API.
+
+    GET: tela com filtros (since/until/limite).
+    POST: dispara backfill sincrono e renderiza relatorio.
+    """
+    from datetime import date, timedelta
+    from app.hora.services.tagplus.backfill_service import executar_backfill
+
+    today = date.today()
+    default_since = (today - timedelta(days=30)).isoformat()
+    default_until = today.isoformat()
+
+    if request.method == 'POST':
+        def _parse_data(name: str):
+            v = (request.form.get(name) or '').strip()
+            if not v:
+                return None
+            try:
+                return date.fromisoformat(v)
+            except ValueError:
+                flash(f'Data invalida em {name}: {v!r}', 'danger')
+                return None
+
+        since = _parse_data('since')
+        until = _parse_data('until')
+        limite_raw = (request.form.get('limite') or '').strip()
+        try:
+            limite = int(limite_raw) if limite_raw else None
+        except ValueError:
+            limite = None
+            flash(f'Limite invalido: {limite_raw!r} — ignorado.', 'warning')
+
+        operador = (
+            current_user.nome
+            if current_user.is_authenticated and getattr(current_user, 'nome', None)
+            else (current_user.email if current_user.is_authenticated else None)
+        )
+
+        relatorio = None
+        try:
+            relatorio = executar_backfill(
+                since=since, until=until, operador=operador, limite=limite,
+            )
+            flash(
+                f'Backfill: {relatorio["sucesso"]} ok · '
+                f'{relatorio["duplicado"]} duplicado(s) · '
+                f'{relatorio["erro"]} erro(s) · '
+                f'{relatorio["divergencias"]} divergencia(s).',
+                'warning' if (relatorio['erro'] or relatorio['divergencias']) else 'success',
+            )
+        except RuntimeError as exc:
+            flash(f'Backfill nao pode rodar: {exc}', 'danger')
+        except Exception as exc:  # pragma: no cover
+            flash(f'Erro inesperado no backfill: {exc}', 'danger')
+            logger.exception('Backfill TagPlus falhou')
+
+        return render_template(
+            'hora/tagplus/backfill.html',
+            relatorio=relatorio,
+            since=since, until=until, limite=limite,
+            default_since=default_since, default_until=default_until,
+        )
+
+    return render_template(
+        'hora/tagplus/backfill.html',
+        relatorio=None,
+        since=None, until=None, limite=None,
+        default_since=default_since, default_until=default_until,
     )

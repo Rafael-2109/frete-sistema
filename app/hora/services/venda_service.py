@@ -42,6 +42,7 @@ from app.hora.models import (
 )
 from app.hora.models.tagplus import (
     HoraTagPlusNfeEmissao,
+    HoraTagPlusProdutoMap,
     NFE_STATUS_APROVADA,
     NFE_STATUS_CANCELAMENTO_SOLICITADO,
     NFE_STATUS_EM_ENVIO,
@@ -246,6 +247,9 @@ def criar_venda_manual(
     email_cliente: Optional[str] = None,
     vendedor: Optional[str] = None,
     observacoes: Optional[str] = None,
+    modalidade_frete: str = '9',
+    numero_parcelas: int = 1,
+    intervalo_parcelas_dias: int = 30,
     criado_por: Optional[str] = None,
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO.
@@ -272,6 +276,23 @@ def criar_venda_manual(
     forma_norm = (forma_pagamento or '').strip().upper()
     if not forma_norm or forma_norm == 'NAO_INFORMADO':
         raise ValueError('Forma de pagamento obrigatoria')
+
+    mod_frete = (modalidade_frete or '9').strip()
+    if mod_frete not in ('0', '1', '2', '3', '4', '9'):
+        raise ValueError(
+            f'modalidade_frete invalida: {modalidade_frete!r} '
+            f"(esperado '0','1','2','3','4','9')"
+        )
+    n_parcelas = int(numero_parcelas or 1)
+    if n_parcelas < 1 or n_parcelas > 60:
+        raise ValueError(
+            f'numero_parcelas fora do intervalo 1..60: {numero_parcelas!r}'
+        )
+    intervalo = int(intervalo_parcelas_dias or 30)
+    if intervalo < 1 or intervalo > 90:
+        raise ValueError(
+            f'intervalo_parcelas_dias fora do intervalo 1..90: {intervalo_parcelas_dias!r}'
+        )
 
     moto, ult = _lock_chassi_e_validar_disponivel(numero_chassi)
     chassi_norm = moto.numero_chassi
@@ -323,6 +344,9 @@ def criar_venda_manual(
         endereco_cidade=(endereco_cidade or '').strip()[:100] or None,
         endereco_uf=uf_norm,
         origem_criacao='MANUAL',
+        modalidade_frete=mod_frete,
+        numero_parcelas=n_parcelas,
+        intervalo_parcelas_dias=intervalo,
     )
     db.session.add(venda)
     db.session.flush()
@@ -469,12 +493,14 @@ _CAMPOS_EDITAVEIS_HEADER = {
         'observacoes', 'nome_cliente', 'cpf_cliente',
         'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
         'endereco_bairro', 'endereco_cidade', 'endereco_uf',
+        'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
     },
     VENDA_STATUS_CONFIRMADO: {
         'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
         'observacoes',
         'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
         'endereco_bairro', 'endereco_cidade', 'endereco_uf',
+        'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
     },
     VENDA_STATUS_FATURADO: {'observacoes'},
     VENDA_STATUS_CANCELADO: set(),
@@ -512,6 +538,9 @@ def editar_venda(
     endereco_bairro: Optional[str] = None,
     endereco_cidade: Optional[str] = None,
     endereco_uf: Optional[str] = None,
+    modalidade_frete: Optional[str] = None,
+    numero_parcelas: Optional[int] = None,
+    intervalo_parcelas_dias: Optional[int] = None,
     usuario: Optional[str] = None,
 ) -> HoraVenda:
     """Edita campos do header conforme regra por status.
@@ -580,6 +609,36 @@ def editar_venda(
         if uf_norm and len(uf_norm) != 2:
             raise ValueError(f'UF invalido: {endereco_uf!r}')
         _atualizar('endereco_uf', uf_norm)
+    if modalidade_frete is not None:
+        mod_norm = (modalidade_frete or '').strip()
+        if mod_norm not in ('0', '1', '2', '3', '4', '9'):
+            raise ValueError(
+                f'modalidade_frete invalida: {modalidade_frete!r} '
+                f"(esperado '0','1','2','3','4','9')"
+            )
+        _atualizar('modalidade_frete', mod_norm)
+    if numero_parcelas is not None:
+        try:
+            n = int(numero_parcelas)
+        except (TypeError, ValueError):
+            raise ValueError(f'numero_parcelas invalido: {numero_parcelas!r}')
+        if n < 1 or n > 60:
+            raise ValueError(
+                f'numero_parcelas fora do intervalo 1..60: {n}'
+            )
+        _atualizar('numero_parcelas', n)
+    if intervalo_parcelas_dias is not None:
+        try:
+            d = int(intervalo_parcelas_dias)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f'intervalo_parcelas_dias invalido: {intervalo_parcelas_dias!r}'
+            )
+        if d < 1 or d > 90:
+            raise ValueError(
+                f'intervalo_parcelas_dias fora do intervalo 1..90: {d}'
+            )
+        _atualizar('intervalo_parcelas_dias', d)
 
     db.session.commit()
     return venda
@@ -1049,6 +1108,27 @@ def importar_nf_saida_pdf(
     return venda
 
 
+def _resolver_modelo_id_por_codigo(codigo_produto: Optional[str]) -> Optional[int]:
+    """Resolve modelo_id deterministicamente via tagplus_codigo.
+
+    Caminho principal do BACKFILL TagPlus: o parser DANFE extrai o codigo
+    de produto da seção "Dados do Produto" (ex: 'MT-JETMAX', 'MT-X12'),
+    e este helper busca o `modelo_id` em `hora_tagplus_produto_map`.
+
+    Returns:
+        modelo_id quando ha mapeamento exato; None quando nao ha codigo OU
+        codigo nao mapeado (caller cai no fallback `buscar_ou_criar_modelo`
+        pelo nome textual e registra divergencia).
+    """
+    if not codigo_produto:
+        return None
+    cod = codigo_produto.strip()
+    if not cod:
+        return None
+    mapa = HoraTagPlusProdutoMap.query.filter_by(tagplus_codigo=cod).first()
+    return mapa.modelo_id if mapa else None
+
+
 def _criar_itens_e_eventos(
     venda: HoraVenda,
     itens_data: List[dict],
@@ -1060,16 +1140,49 @@ def _criar_itens_e_eventos(
     for item in itens_data:
         chassi = item['numero_chassi']
         preco_final = Decimal(str(item['preco_real']))
+        codigo_produto = item.get('codigo_produto')
 
         moto_existia = HoraMoto.query.get(chassi) is not None
-        moto = get_or_create_moto(
-            numero_chassi=chassi,
-            modelo_nome=item.get('modelo_texto_original'),
-            cor=item.get('cor_texto_original') or 'NAO_INFORMADA',
-            numero_motor=item.get('numero_motor'),
-            ano_modelo=item.get('ano_modelo'),
-            criado_por=operador,
-        )
+
+        # Caminho 1 (DETERMINISTICO): codigo TagPlus -> modelo_id via mapa.
+        # Caminho 2 (FALLBACK): nome textual extraido do PDF — pode criar
+        # 'BICICLETA ELETRICA' generico, registrar divergencia.
+        modelo_id_resolvido = _resolver_modelo_id_por_codigo(codigo_produto)
+        if modelo_id_resolvido and not moto_existia:
+            # Cria moto vinculada direto ao modelo correto.
+            moto = HoraMoto(
+                numero_chassi=chassi,
+                modelo_id=modelo_id_resolvido,
+                cor=(item.get('cor_texto_original') or 'NAO_INFORMADA').strip().upper(),
+                numero_motor=item.get('numero_motor') or None,
+                ano_modelo=item.get('ano_modelo'),
+                criado_por=operador,
+            )
+            db.session.add(moto)
+            db.session.flush()
+        else:
+            moto = get_or_create_moto(
+                numero_chassi=chassi,
+                modelo_nome=item.get('modelo_texto_original'),
+                cor=item.get('cor_texto_original') or 'NAO_INFORMADA',
+                numero_motor=item.get('numero_motor'),
+                ano_modelo=item.get('ano_modelo'),
+                criado_por=operador,
+            )
+            # Se chegou ate aqui sem modelo_id resolvido E havia codigo no PDF,
+            # operador esqueceu de mapear -> registra divergencia.
+            if codigo_produto and not modelo_id_resolvido and not moto_existia:
+                _registrar_divergencia(
+                    venda_id=venda.id, tipo='TABELA_PRECO_AUSENTE',
+                    numero_chassi=chassi,
+                    detalhe=(
+                        f'Codigo TagPlus {codigo_produto!r} nao mapeado em '
+                        f'hora_tagplus_produto_map. Modelo criado por nome '
+                        f'textual (pode ser duplicata). Mapear em '
+                        f'/hora/modelos/{moto.modelo_id}/editar.'
+                    ),
+                    valor_conferido=codigo_produto,
+                )
         if not moto_existia:
             _registrar_divergencia(
                 venda_id=venda.id, tipo='CHASSI_NAO_CADASTRADO',

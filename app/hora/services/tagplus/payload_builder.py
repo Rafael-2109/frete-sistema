@@ -110,7 +110,14 @@ class PayloadBuilder:
             'consumidor_final': True,
             'indicador_presenca': 1,            # Presencial (loja fisica).
             'tipo_emissao': 1,                  # Normal (nao contingencia).
-            'modalidade_frete': 9,              # Sem frete (cliente leva).
+            # TagPlus exige string ('0'-'4', '9') conforme doc:258-272.
+            # venda.modalidade_frete tem default '9' (sem ocorrencia).
+            'modalidade_frete': str(venda.modalidade_frete or '9'),
+            # indicador_forma_pagamento (doc:3201-3205):
+            #   0 = a vista (1 parcela), 1 = a prazo (>= 2 parcelas), 2 = outros.
+            # Sem isso, TagPlus assume default 0 mesmo com parcelado, causando
+            # divergencia na NFe (<pag><detPag><indPag> da SEFAZ).
+            'indicador_forma_pagamento': 1 if (venda.numero_parcelas or 1) > 1 else 0,
             'data_emissao': agora_utc_naive().isoformat(timespec='seconds'),
             'data_entrada_saida': date.today().isoformat(),
             'cfop': cfop,                       # mascara 9.999 obrigatoria.
@@ -555,14 +562,70 @@ class PayloadBuilder:
             (i.preco_final for i in venda.itens),
             Decimal('0'),
         )
+
+        # Parcelamento: N parcelas iguais com diferenca de centavos absorvida
+        # pela ULTIMA parcela. Vencimentos espacados por intervalo_dias a partir
+        # da data_venda. Documento: "<venda_id>/<idx>" para parcelas > 1
+        # (idempotencia caso TagPlus rejeite parcelado e operador re-envie).
+        n = max(1, int(venda.numero_parcelas or 1))
+        intervalo = max(1, int(venda.intervalo_parcelas_dias or 30))
+        base_date = venda.data_venda or date.today()
+
+        parcelas = self._dividir_parcelas(valor_total, n, intervalo, base_date, venda.id)
+
         return [{
             'forma_pagamento': int(forma_map.tagplus_forma_id),
-            'parcelas': [{
-                'documento': str(venda.id),
-                'valor_parcela': self._round2_float(valor_total),
-                'data_vencimento': (venda.data_venda or date.today()).isoformat(),
-            }],
+            'parcelas': parcelas,
         }]
+
+    def _dividir_parcelas(
+        self,
+        valor_total: Decimal,
+        n: int,
+        intervalo_dias: int,
+        base_date: 'date',
+        venda_id: int,
+    ) -> list[dict]:
+        """Divide `valor_total` em `n` parcelas iguais, ajustando ultima.
+
+        Regra: cada parcela = round2(valor_total / n). Diferenca de
+        arredondamento vai para a ULTIMA parcela.
+        """
+        from datetime import timedelta
+
+        if n <= 1:
+            return [{
+                'documento': str(venda_id),
+                'valor_parcela': self._round2_float(valor_total),
+                'data_vencimento': base_date.isoformat(),
+            }]
+
+        valor_total_dec = (
+            valor_total if isinstance(valor_total, Decimal)
+            else Decimal(str(valor_total))
+        )
+        parcela_base = (valor_total_dec / Decimal(n)).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP,
+        )
+        parcelas = []
+        soma = Decimal('0.00')
+        for i in range(1, n):
+            parcelas.append({
+                'documento': f'{venda_id}/{i}',
+                'valor_parcela': float(parcela_base),
+                'data_vencimento': (base_date + timedelta(days=intervalo_dias * i)).isoformat(),
+            })
+            soma += parcela_base
+        # Ultima parcela = total - soma das anteriores (corrige centavos).
+        ultima = (valor_total_dec - soma).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP,
+        )
+        parcelas.append({
+            'documento': f'{venda_id}/{n}',
+            'valor_parcela': float(ultima),
+            'data_vencimento': (base_date + timedelta(days=intervalo_dias * n)).isoformat(),
+        })
+        return parcelas
 
     # --------------------------------------------------------------
     # CFOP por UF

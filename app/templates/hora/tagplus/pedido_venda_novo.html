@@ -155,9 +155,39 @@
           </select>
           <small class="text-muted">Apenas formas mapeadas no TagPlus aparecem aqui.</small>
         </div>
+        <div class="col-md-3">
+          <label class="form-label">Nº de parcelas</label>
+          <input type="number" name="numero_parcelas" class="form-control"
+                 min="1" max="60" value="1">
+          <small class="text-muted">1 = à vista. Máx 60.</small>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Intervalo (dias)</label>
+          <input type="number" name="intervalo_parcelas_dias" id="f-intervalo"
+                 class="form-control" min="1" max="90" value="30">
+          <small class="text-muted">
+            <strong>30 = mensal (padrão)</strong> · 7 = semanal · 1 = diário.
+          </small>
+          <div id="f-intervalo-aviso" class="alert alert-warning mt-1 py-1 px-2 small"
+               style="display:none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            Intervalo abaixo do padrão mensal (30) — confirme se é mesmo isso.
+          </div>
+        </div>
         <div class="col-md-6">
           <label class="form-label">Vendedor</label>
           <input type="text" name="vendedor" class="form-control" maxlength="100">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Modalidade de frete (NFe)</label>
+          <select name="modalidade_frete" class="form-select">
+            <option value="9" selected>9 — Sem ocorrência (cliente leva)</option>
+            <option value="0">0 — Contratação Remetente (CIF)</option>
+            <option value="1">1 — Contratação Destinatário (FOB)</option>
+            <option value="2">2 — Contratação por Terceiros</option>
+            <option value="3">3 — Transporte Próprio do Remetente</option>
+            <option value="4">4 — Transporte Próprio do Destinatário</option>
+          </select>
         </div>
         <div class="col-12">
           <label class="form-label">Observações</label>
@@ -364,6 +394,20 @@
       return;
     }
   });
+
+  // ----------------- Aviso de intervalo atípico ---------------------------
+  // Padrão é 30 dias (mensal). Valores < 7 sao raros e quase sempre erro
+  // de digitacao (NF #738 saiu errada com 1 dia/parcela).
+  const elIntervalo = document.getElementById('f-intervalo');
+  const elIntervaloAviso = document.getElementById('f-intervalo-aviso');
+  if (elIntervalo && elIntervaloAviso) {
+    const checarIntervalo = () => {
+      const v = parseInt(elIntervalo.value, 10);
+      elIntervaloAviso.style.display = (v && v < 7) ? '' : 'none';
+    };
+    elIntervalo.addEventListener('input', checarIntervalo);
+    elIntervalo.addEventListener('change', checarIntervalo);
+  }
 })();
 </script>
 

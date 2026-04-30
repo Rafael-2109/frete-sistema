@@ -9,11 +9,23 @@
 </div>
 
 <div class="alert alert-info">
-  Cada modelo de moto da HORA precisa apontar para o <strong>ID inteiro do produto</strong>
-  cadastrado no TagPlus (campo <code>id</code> em <code>GET /produtos</code>).
-  O TagPlus rejeita códigos string (ex: <code>MT-JET</code>) com erro 400 — use o
-  ID numérico retornado pela API.
-  <br>CFOP padrão: <code>5.403</code> (intra, venda de mercadoria com ST — contribuinte substituído)
+  Cada modelo de moto da HORA mapeia para <strong>dois identificadores</strong> no TagPlus:
+  <ul class="mb-1 mt-2">
+    <li>
+      <strong>ID TagPlus (inteiro)</strong>: usado na <strong>emissão</strong> de NFe
+      (campo <code>id</code> em <code>GET /produtos</code>). O TagPlus rejeita códigos
+      string aqui com erro 400 — só ID numérico funciona.
+    </li>
+    <li>
+      <strong>Código de Produto (DANFE)</strong>: o código curto que aparece na coluna
+      <code>CÓDIGO</code> da DANFE PDF emitida pelo TagPlus
+      (ex: <code>MT-JETMAX</code>, <code>MT-X12</code>, <code>BK-VTB4</code>).
+      Usado no <strong>backfill</strong> de NFs já emitidas — o parser DANFE lê esse
+      código e resolve <code>modelo_id</code> deterministicamente, sem depender de LLM
+      adivinhar o nome do modelo.
+    </li>
+  </ul>
+  CFOP padrão: <code>5.403</code> (intra, venda de mercadoria com ST — contribuinte substituído)
   — o builder ajusta para <code>6.403</code> quando UF do cliente difere da UF do emitente.
 </div>
 
@@ -34,8 +46,16 @@
       <thead>
         <tr>
           <th>Modelo HORA</th>
-          <th>ID TagPlus (inteiro)</th>
-          <th>tagplus_codigo (alternativo, opcional)</th>
+          <th>
+            ID TagPlus (inteiro)
+            <i class="fas fa-info-circle text-muted"
+               title="Usado na EMISSÃO via API. Só ID numérico funciona."></i>
+          </th>
+          <th>
+            Código de Produto (DANFE)
+            <i class="fas fa-info-circle text-muted"
+               title="Código curto que aparece na coluna CÓDIGO da DANFE (ex: MT-JETMAX). Usado no BACKFILL de NFs emitidas."></i>
+          </th>
           <th>CFOP padrão</th>
         </tr>
       </thead>
@@ -54,9 +74,9 @@
                      value="{{ r.map.tagplus_produto_id if r.map else '' }}">
             </td>
             <td>
-              <input type="text" class="form-control form-control-sm"
+              <input type="text" maxlength="50" class="form-control form-control-sm"
                      name="modelo_{{ r.modelo.id }}_codigo"
-                     placeholder="ex: MT-JET"
+                     placeholder="ex: MT-JETMAX, MT-X12, BK-VTB4"
                      value="{{ r.map.tagplus_codigo if r.map else '' }}">
             </td>
             <td>

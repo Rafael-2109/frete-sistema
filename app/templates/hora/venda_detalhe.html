@@ -337,6 +337,44 @@
           {% endif %}
         </select>
       </div>
+      <div class="row g-2 mb-2">
+        <div class="col-6">
+          <label class="form-label small mb-1">Nº de parcelas</label>
+          <input type="number" name="numero_parcelas" min="1" max="60"
+                 class="form-control form-control-sm"
+                 value="{{ venda.numero_parcelas or 1 }}"
+                 {% if bloqueia_oper %}readonly{% endif %}>
+        </div>
+        <div class="col-6">
+          <label class="form-label small mb-1">Intervalo (dias)</label>
+          <input type="number" name="intervalo_parcelas_dias" id="d-intervalo"
+                 min="1" max="90"
+                 class="form-control form-control-sm"
+                 value="{{ venda.intervalo_parcelas_dias or 30 }}"
+                 {% if bloqueia_oper %}readonly{% endif %}>
+          <small class="text-muted d-block">
+            <strong>30 = mensal (padrão)</strong> · 7 = semanal.
+          </small>
+          <div id="d-intervalo-aviso" class="alert alert-warning mt-1 py-1 px-2 small"
+               style="display:none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            Intervalo &lt; 7 dias — confirme se é mesmo isso.
+          </div>
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small mb-1">Modalidade de frete (NFe)</label>
+        {% set mf = venda.modalidade_frete or '9' %}
+        <select name="modalidade_frete" class="form-select form-select-sm"
+                {% if bloqueia_oper %}disabled{% endif %}>
+          <option value="9" {% if mf == '9' %}selected{% endif %}>9 — Sem ocorrência (cliente leva)</option>
+          <option value="0" {% if mf == '0' %}selected{% endif %}>0 — Contratação Remetente (CIF)</option>
+          <option value="1" {% if mf == '1' %}selected{% endif %}>1 — Contratação Destinatário (FOB)</option>
+          <option value="2" {% if mf == '2' %}selected{% endif %}>2 — Contratação por Terceiros</option>
+          <option value="3" {% if mf == '3' %}selected{% endif %}>3 — Transporte Próprio Remetente</option>
+          <option value="4" {% if mf == '4' %}selected{% endif %}>4 — Transporte Próprio Destinatário</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -538,4 +576,19 @@
 </details>
 {% endif %}
 
+<script>
+(function () {
+  // Aviso de intervalo atípico (<7 dias) — defesa contra erro de digitacao.
+  const el = document.getElementById('d-intervalo');
+  const aviso = document.getElementById('d-intervalo-aviso');
+  if (!el || !aviso) return;
+  const checar = () => {
+    const v = parseInt(el.value, 10);
+    aviso.style.display = (v && v < 7) ? '' : 'none';
+  };
+  el.addEventListener('input', checar);
+  el.addEventListener('change', checar);
+  checar();
+})();
+</script>
 {% endblock %}

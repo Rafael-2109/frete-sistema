@@ -25,7 +25,7 @@
       <th>Potência</th>
       <th>Descrição</th>
       <th>Status</th>
-      <th title="Código do produto no TagPlus (usado na emissão de NFe)">Produto TagPlus</th>
+      <th title="ID inteiro (emissão NFe) e Código de Produto (backfill DANFE)">Mapeamento TagPlus</th>
       <th class="text-end">Ações</th>
     </tr></thead>
     <tbody>
@@ -42,10 +42,23 @@
           </td>
           <td>
             {% if tm %}
-              <code>{{ tm.tagplus_produto_id }}</code>
-              {% if tm.cfop_default %}
-                <span class="badge bg-light text-dark ms-1" title="CFOP padrão">CFOP {{ tm.cfop_default }}</span>
-              {% endif %}
+              <div>
+                <span class="text-muted small" title="ID inteiro usado na emissão NFe">ID:</span>
+                <code>{{ tm.tagplus_produto_id }}</code>
+                {% if tm.cfop_default %}
+                  <span class="badge bg-light text-dark ms-1" title="CFOP padrão">CFOP {{ tm.cfop_default }}</span>
+                {% endif %}
+              </div>
+              <div>
+                <span class="text-muted small" title="Código exibido na DANFE PDF (backfill)">Cód:</span>
+                {% if tm.tagplus_codigo %}
+                  <code>{{ tm.tagplus_codigo }}</code>
+                {% else %}
+                  <span class="text-warning small">
+                    <i class="fas fa-exclamation-triangle"></i> sem código de DANFE
+                  </span>
+                {% endif %}
+              </div>
             {% else %}
               <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> não mapeado</span>
             {% endif %}

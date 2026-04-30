@@ -251,19 +251,46 @@ def modelos_lista():
 @hora_bp.route('/modelos/novo', methods=['GET', 'POST'])
 @require_hora_perm('modelos', 'criar')
 def modelos_novo():
+    pode_editar_tagplus = current_user.tem_perm_hora('tagplus', 'editar')
+
     if request.method == 'POST':
         try:
-            cadastro_service.criar_modelo(
+            modelo = cadastro_service.criar_modelo(
                 nome_modelo=request.form['nome_modelo'],
                 potencia_motor=request.form.get('potencia_motor') or None,
                 descricao=request.form.get('descricao') or None,
             )
+            # Cria mapeamento TagPlus se o usuario tem permissao e preencheu
+            # o ID TagPlus (chave para emissao). tagplus_codigo sozinho nao
+            # cria o map — exige tagplus_produto_id (NOT NULL no schema).
+            if pode_editar_tagplus:
+                from app.hora.models.tagplus import HoraTagPlusProdutoMap
+                from app import db
+                tagplus_id = (request.form.get('tagplus_produto_id') or '').strip()
+                tagplus_codigo = (request.form.get('tagplus_codigo') or '').strip() or None
+                cfop = (request.form.get('cfop_default') or '5.403').strip() or '5.403'
+                if tagplus_id:
+                    if len(tagplus_id) > 50:
+                        flash('tagplus_produto_id excede 50 caracteres.', 'danger')
+                    elif tagplus_codigo and len(tagplus_codigo) > 50:
+                        flash('tagplus_codigo excede 50 caracteres.', 'danger')
+                    else:
+                        db.session.add(HoraTagPlusProdutoMap(
+                            modelo_id=modelo.id,
+                            tagplus_produto_id=tagplus_id,
+                            tagplus_codigo=tagplus_codigo,
+                            cfop_default=cfop,
+                        ))
+                        db.session.commit()
             flash('Modelo cadastrado com sucesso.', 'success')
             return redirect(url_for('hora.modelos_lista'))
         except ValueError as exc:
             flash(f'Erro: {exc}', 'danger')
 
-    return render_template('hora/modelos_novo.html')
+    return render_template(
+        'hora/modelos_novo.html',
+        pode_editar_tagplus=pode_editar_tagplus,
+    )
 
 
 @hora_bp.route('/modelos/<int:modelo_id>/editar', methods=['GET', 'POST'])
@@ -288,18 +315,23 @@ def modelos_editar(modelo_id: int):
             # Atualiza mapeamento TagPlus se o usuario tem permissao.
             if pode_editar_tagplus:
                 tagplus_id = (request.form.get('tagplus_produto_id') or '').strip()
+                tagplus_codigo = (request.form.get('tagplus_codigo') or '').strip() or None
                 cfop = (request.form.get('cfop_default') or '5.403').strip() or '5.403'
                 if tagplus_id:
                     if len(tagplus_id) > 50:
                         flash('tagplus_produto_id excede 50 caracteres.', 'danger')
+                    elif tagplus_codigo and len(tagplus_codigo) > 50:
+                        flash('tagplus_codigo excede 50 caracteres.', 'danger')
                     else:
                         if tagplus_map:
                             tagplus_map.tagplus_produto_id = tagplus_id
+                            tagplus_map.tagplus_codigo = tagplus_codigo
                             tagplus_map.cfop_default = cfop
                         else:
                             db.session.add(HoraTagPlusProdutoMap(
                                 modelo_id=modelo.id,
                                 tagplus_produto_id=tagplus_id,
+                                tagplus_codigo=tagplus_codigo,
                                 cfop_default=cfop,
                             ))
                         db.session.commit()

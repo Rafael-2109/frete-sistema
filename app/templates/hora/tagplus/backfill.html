@@ -1,0 +1,148 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-cloud-download-alt"></i> Backfill TagPlus → Lojas HORA (via API)</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('hora.vendas_upload') }}" class="btn btn-outline-secondary btn-sm"
+       title="Para NFs que não estão na conta TagPlus atual">
+      <i class="fas fa-upload"></i> Backfill via DANFE PDF
+    </a>
+    <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-clipboard-check"></i> Checklist
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>Importa NFs já emitidas no TagPlus para o sistema HORA.</strong>
+  <ul class="mb-0 mt-1">
+    <li>O sistema chama <code>GET /nfes</code> filtrando pela data de emissão e itera todas as NFs do período.</li>
+    <li>Para cada NF, chama <code>GET /nfes/{id}</code> e cria <code>HoraVenda</code> + <code>HoraVendaItem</code>
+        diretamente do JSON estruturado da API — <strong>sem PDF, sem LLM</strong>.</li>
+    <li>Resolução do modelo via <code>tagplus_codigo</code> (cadastrado em <code>/hora/modelos</code>).</li>
+    <li>Idempotente: NFs já importadas (mesma <code>chave_acesso</code>) caem como <em>duplicado</em>.</li>
+    <li>Divergências são registradas mas não bloqueiam (CHASSI_NAO_CADASTRADO, LOJA_DIVERGENTE,
+        CNPJ_DESCONHECIDO, TABELA_PRECO_AUSENTE).</li>
+  </ul>
+</div>
+
+<form method="post" class="card p-3 mb-3" style="max-width: 900px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">
+        Data emissão — desde
+      </label>
+      <input type="date" name="since" class="form-control"
+             value="{{ since.isoformat() if since else default_since }}">
+      <small class="text-muted">Inclusivo. Default: 30 dias atrás.</small>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">
+        Data emissão — até
+      </label>
+      <input type="date" name="until" class="form-control"
+             value="{{ until.isoformat() if until else default_until }}">
+      <small class="text-muted">Inclusivo. Default: hoje.</small>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">
+        Limite de NFs <span class="text-muted small">(opcional)</span>
+      </label>
+      <input type="number" name="limite" min="1" max="5000" class="form-control"
+             value="{{ limite or '' }}" placeholder="Ex.: 50 (sem limite = todas)">
+      <small class="text-muted">Útil para 1º teste. Vazio = importa tudo do período.</small>
+    </div>
+  </div>
+
+  <div class="alert alert-warning small mt-3 mb-3">
+    <i class="fas fa-exclamation-triangle"></i>
+    Backfill é <strong>síncrono</strong> — a página fica aberta até terminar.
+    Para muitas NFs, comece com <code>limite=10</code> para validar o fluxo.
+    Cada chamada à API TagPlus leva ~1-3s; estime ≈ 50 NFs/min.
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary"
+            onclick="this.disabled=true; this.innerHTML='<i class=\'fas fa-spinner fa-spin\'></i> Processando...'; this.form.submit();">
+      <i class="fas fa-play"></i> Executar backfill
+    </button>
+    <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-outline-secondary">
+      Voltar
+    </a>
+  </div>
+</form>
+
+{% if relatorio %}
+<h4 class="mt-4">Relatório do backfill</h4>
+<div class="row g-2 mb-3">
+  <div class="col-auto">
+    <span class="badge bg-secondary fs-6">Total: {{ relatorio.total }}</span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-success fs-6">Sucesso: {{ relatorio.sucesso }}</span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-warning text-dark fs-6">Duplicado: {{ relatorio.duplicado }}</span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-danger fs-6">Erro: {{ relatorio.erro }}</span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-info text-dark fs-6">Divergências: {{ relatorio.divergencias }}</span>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>TagPlus ID</th>
+        <th>NF</th>
+        <th>Status</th>
+        <th class="text-end">Chassis</th>
+        <th class="text-end">Diverg.</th>
+        <th>Mensagem</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in relatorio.resultados %}
+        <tr>
+          <td><code>{{ r.tagplus_nfe_id }}</code></td>
+          <td>{{ r.numero_nf or '—' }}</td>
+          <td>
+            {% if r.status == 'sucesso' %}
+              <span class="badge bg-success">OK</span>
+            {% elif r.status == 'duplicado' %}
+              <span class="badge bg-warning text-dark">duplicado</span>
+            {% else %}
+              <span class="badge bg-danger">erro</span>
+            {% endif %}
+          </td>
+          <td class="text-end">{{ r.qtd_chassis or 0 }}</td>
+          <td class="text-end">
+            {% if r.qtd_divergencias %}
+              <span class="badge bg-warning text-dark">{{ r.qtd_divergencias }}</span>
+            {% else %}
+              0
+            {% endif %}
+          </td>
+          <td><small>{{ r.mensagem }}</small></td>
+          <td>
+            {% if r.venda_id %}
+              <a href="{{ url_for('hora.vendas_detalhe', venda_id=r.venda_id) }}"
+                 class="btn btn-sm btn-outline-primary">Ver</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted">Nenhuma NF processada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

@@ -64,6 +64,23 @@ class HoraVenda(db.Model):
     # Default cobre import via DANFE (parser nao extrai <pag><detPag>); operador
     # edita manualmente pos-import na tela de detalhe.
 
+    # ---- Frete e parcelamento (TagPlus POST /nfes) ----
+    modalidade_frete = db.Column(
+        db.String(1), nullable=False, default='9', server_default='9',
+    )
+    # TagPlus enum: '0' Contratacao Remetente (CIF), '1' Destinatario (FOB),
+    # '2' Terceiros, '3' Proprio Remetente, '4' Proprio Destinatario, '9' Sem
+    # Ocorrencia. Default '9' preserva comportamento anterior hardcoded.
+    numero_parcelas = db.Column(
+        db.Integer, nullable=False, default=1, server_default='1',
+    )
+    # 1..60. NF #738 emitida com 18 parcelas. PayloadBuilder gera N parcelas
+    # com vencimentos espacados por intervalo_parcelas_dias.
+    intervalo_parcelas_dias = db.Column(
+        db.Integer, nullable=False, default=30, server_default='30',
+    )
+    # 1..90. Mensal=30, semanal=7, diario=1. NF #738 usou intervalo=1.
+
     valor_total = db.Column(db.Numeric(15, 2), nullable=False)
     # Soma de hora_venda_item.preco_final (validado em serviço).
 

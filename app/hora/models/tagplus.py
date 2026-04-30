@@ -116,7 +116,15 @@ class HoraTagPlusProdutoMap(db.Model):
     # Doc mostra exemplo `"produto": 1` (linha 638), mas o ERP aceita codigo string.
 
     tagplus_codigo = db.Column(db.String(50), nullable=True)
-    # Opcional, exibicao/debug.
+    # Codigo curto exibido na coluna CODIGO da DANFE PDF emitida pelo TagPlus
+    # (ex: 'MT-JETMAX', 'MT-X12', 'BK-VTB4').
+    #
+    # Papel duplo:
+    # 1. Exibicao/debug na tela de mapeamento.
+    # 2. CHAVE DE BACKFILL: parser DANFE (`danfe_pdf_parser._extrair_veiculos_llm`)
+    #    extrai esse codigo da NF emitida e o backfill resolve `modelo_id` via
+    #    SELECT ... WHERE tagplus_codigo = :codigo. Caminho deterministico que
+    #    nao depende de LLM adivinhar o nome do modelo.
 
     cfop_default = db.Column(db.String(5), nullable=False, default='5.403')
     # 5.403 intra / 6.403 inter (venda de mercadoria com ST — contribuinte substituido).

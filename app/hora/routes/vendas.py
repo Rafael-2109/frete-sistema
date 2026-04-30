@@ -63,50 +63,86 @@ def vendas_lista():
 @hora_bp.route('/vendas/upload', methods=['GET', 'POST'])
 @require_hora_perm('vendas', 'criar')
 def vendas_upload():
-    """Upload DANFE PDF emitido pela loja HORA. Parseia via adapter e cria
-    HoraVenda + itens + eventos VENDIDA + divergencias.
+    """Upload DANFE PDF emitido pela loja HORA — aceita 1 ou N arquivos
+    (BACKFILL em lote). Parseia via adapter e cria HoraVenda + itens +
+    eventos VENDIDA + divergencias para cada PDF.
 
     Nao pede loja nem cliente — tudo vem da NF. Operador preenche vendedor e
     forma_pagamento depois na tela de detalhe.
     """
     if request.method == 'POST':
-        arquivo = request.files.get('pdf')
-        if not arquivo or arquivo.filename == '':
-            flash('Selecione um arquivo PDF.', 'danger')
-            return render_template('hora/venda_upload.html')
+        # Aceita campo `pdf` (legacy 1 arquivo) e `pdfs` (multiplo).
+        arquivos = request.files.getlist('pdfs') or []
+        if not arquivos:
+            unico = request.files.get('pdf')
+            if unico and unico.filename:
+                arquivos = [unico]
 
-        try:
-            pdf_bytes = arquivo.read()
-            venda = venda_service.importar_nf_saida_pdf(
-                pdf_bytes=pdf_bytes,
-                nome_arquivo_origem=arquivo.filename,
-                criado_por=_operador_atual(),
-            )
-            qtd_chassis = len(venda.itens)
-            qtd_div = len(venda.divergencias_abertas)
-            loja_txt = (
-                venda.loja.rotulo_display
-                if venda.loja else 'sem loja (CNPJ nao cadastrado)'
-            )
-            msg = (
-                f'Venda #{venda.id} importada — NF {venda.nf_saida_numero} '
-                f'({qtd_chassis} chassi(s)) para {venda.nome_cliente} '
-                f'em {loja_txt}.'
-            )
-            if qtd_div > 0:
-                msg += f' ATENCAO: {qtd_div} divergencia(s) — revise na tela de detalhe.'
-                flash(msg, 'warning')
-            else:
-                flash(msg, 'success')
-            return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
-        except venda_service.NfSaidaJaImportada as exc:
-            flash(str(exc), 'warning')
-        except (ValueError, DanfeParseError) as exc:
-            flash(f'Erro ao importar: {exc}', 'danger')
-        except Exception as exc:  # pragma: no cover
-            flash(f'Erro inesperado: {exc}', 'danger')
+        arquivos = [a for a in arquivos if a and a.filename]
+        if not arquivos:
+            flash('Selecione ao menos 1 arquivo PDF.', 'danger')
+            return render_template('hora/venda_upload.html', resultados=[])
 
-    return render_template('hora/venda_upload.html')
+        resultados = []
+        operador = _operador_atual()
+        for arq in arquivos:
+            entry = {
+                'arquivo': arq.filename,
+                'status': None,         # 'sucesso' | 'duplicado' | 'erro'
+                'venda_id': None,
+                'numero_nf': None,
+                'qtd_chassis': 0,
+                'qtd_divergencias': 0,
+                'mensagem': '',
+            }
+            try:
+                pdf_bytes = arq.read()
+                venda = venda_service.importar_nf_saida_pdf(
+                    pdf_bytes=pdf_bytes,
+                    nome_arquivo_origem=arq.filename,
+                    criado_por=operador,
+                )
+                entry.update({
+                    'status': 'sucesso',
+                    'venda_id': venda.id,
+                    'numero_nf': venda.nf_saida_numero,
+                    'qtd_chassis': len(venda.itens),
+                    'qtd_divergencias': len(venda.divergencias_abertas),
+                    'mensagem': (
+                        f'NF {venda.nf_saida_numero} importada — '
+                        f'{len(venda.itens)} chassi(s) para {venda.nome_cliente}.'
+                    ),
+                })
+            except venda_service.NfSaidaJaImportada as exc:
+                entry['status'] = 'duplicado'
+                entry['mensagem'] = str(exc)
+            except (ValueError, DanfeParseError) as exc:
+                entry['status'] = 'erro'
+                entry['mensagem'] = f'Erro ao importar: {exc}'
+            except Exception as exc:  # pragma: no cover
+                entry['status'] = 'erro'
+                entry['mensagem'] = f'Erro inesperado: {exc}'
+            resultados.append(entry)
+
+        # Resumo flash + tela de resultados.
+        n_ok = sum(1 for r in resultados if r['status'] == 'sucesso')
+        n_dup = sum(1 for r in resultados if r['status'] == 'duplicado')
+        n_err = sum(1 for r in resultados if r['status'] == 'erro')
+        n_div = sum(r['qtd_divergencias'] for r in resultados)
+        if len(resultados) == 1 and n_ok == 1 and n_div == 0:
+            # Caso 1-arquivo bem sucedido: mantem comportamento legado
+            # (redireciona pro detalhe).
+            return redirect(url_for(
+                'hora.vendas_detalhe', venda_id=resultados[0]['venda_id'],
+            ))
+        flash(
+            f'Backfill: {n_ok} ok · {n_dup} duplicado(s) · {n_err} erro(s) '
+            f'· {n_div} divergencia(s) total.',
+            'warning' if (n_err or n_dup or n_div) else 'success',
+        )
+        return render_template('hora/venda_upload.html', resultados=resultados)
+
+    return render_template('hora/venda_upload.html', resultados=[])
 
 
 # ------------------------------------------------------------------------
@@ -209,6 +245,9 @@ def vendas_editar(venda_id: int):
             endereco_bairro=request.form.get('endereco_bairro'),
             endereco_cidade=request.form.get('endereco_cidade'),
             endereco_uf=request.form.get('endereco_uf'),
+            modalidade_frete=request.form.get('modalidade_frete'),
+            numero_parcelas=request.form.get('numero_parcelas'),
+            intervalo_parcelas_dias=request.form.get('intervalo_parcelas_dias'),
             usuario=_operador_atual(),
         )
         flash('Pedido atualizado.', 'success')

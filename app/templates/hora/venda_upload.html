@@ -1,38 +1,109 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
-<h2 class="mb-3">Importar NF de Saida (DANFE PDF)</h2>
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2 class="mb-0">Backfill via DANFE PDF (lote)</h2>
+  {% if current_user.tem_perm_hora('vendas', 'criar') %}
+  <a href="{{ url_for('hora.tagplus_backfill') }}" class="btn btn-outline-primary btn-sm"
+     title="Mais rápido — puxa direto da conta TagPlus, sem precisar dos PDFs">
+    <i class="fas fa-cloud-download-alt"></i> Backfill via API TagPlus
+  </a>
+  {% endif %}
+</div>
+<p class="text-muted small">
+  Use esta tela quando os PDFs estão disponíveis localmente mas as NFs <strong>não estão</strong>
+  na conta TagPlus atual (ex: NFs antigas, conta diferente, ou NFs emitidas em outro ERP).
+</p>
 
-<form method="post" enctype="multipart/form-data" class="card p-3" style="max-width: 700px;">
+<form method="post" enctype="multipart/form-data" class="card p-3 mb-3" style="max-width: 800px;">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-3">
-    <label class="form-label">Arquivo DANFE da NF de saida <span class="text-danger">*</span></label>
-    <input type="file" name="pdf" accept="application/pdf" class="form-control" required>
+    <label class="form-label">
+      Arquivos DANFE da NF de saída <span class="text-danger">*</span>
+    </label>
+    <input type="file" name="pdfs" accept="application/pdf" class="form-control"
+           multiple required>
     <div class="form-text">
-      Parser reusado do CarVia: regex &rarr; Haiku (LLM) &rarr; Sonnet.
-      Extrai chave, numero, CPF/nome do cliente, chassis e valor.
+      Selecione 1 ou múltiplos PDFs (segure <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> para selecionar
+      vários). O sistema processa cada NF e gera relatório consolidado abaixo.
     </div>
   </div>
 
   <div class="alert alert-info small mb-3">
     <i class="fas fa-info-circle"></i>
-    <strong>Import automatico:</strong> o sistema identifica a loja emitente pelo CNPJ da NF,
-    busca a tabela de preco vigente para cada chassi e ja dispara o evento <code>VENDIDA</code>
-    nos chassis (sai do estoque). Campos como <strong>vendedor</strong> e
-    <strong>forma de pagamento</strong> ficam para preencher manualmente na tela de detalhe apos
-    o import.
+    <strong>Resolução determinística do modelo:</strong>
+    o parser extrai o <code>Código de Produto</code> (ex: <code>MT-JETMAX</code>) da
+    seção "Dados do Produto" da DANFE; o backfill resolve <code>modelo_id</code> via
+    <code>hora_tagplus_produto_map.tagplus_codigo</code>. Códigos não mapeados criam
+    modelo pelo nome textual e registram divergência para revisão.
   </div>
 
   <div class="alert alert-warning small mb-3">
     <i class="fas fa-exclamation-triangle"></i>
-    <strong>Divergencias sao registradas, nao bloqueiam.</strong> Se o chassi nao estiver em
-    estoque, estiver em outra loja, nao existir no sistema, ou o CNPJ emitente nao bater com
-    nenhuma loja cadastrada, a venda e criada mesmo assim com divergencias anexadas para revisao.
+    <strong>Divergências são registradas, não bloqueiam.</strong>
+    Se o chassi não estiver em estoque, estiver em outra loja, não existir no sistema, ou
+    o CNPJ emitente não bater com nenhuma loja cadastrada, a venda é criada mesmo assim
+    com divergências anexadas.
   </div>
 
   <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-primary">Importar</button>
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-upload"></i> Importar
+    </button>
     <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
+
+{% if resultados %}
+<h4 class="mt-4">Resultado do backfill</h4>
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>Arquivo</th>
+        <th>Status</th>
+        <th>NF</th>
+        <th class="text-end">Chassis</th>
+        <th class="text-end">Divergências</th>
+        <th>Mensagem</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in resultados %}
+        <tr>
+          <td><code>{{ r.arquivo }}</code></td>
+          <td>
+            {% if r.status == 'sucesso' %}
+              <span class="badge bg-success">OK</span>
+            {% elif r.status == 'duplicado' %}
+              <span class="badge bg-warning text-dark">duplicado</span>
+            {% else %}
+              <span class="badge bg-danger">erro</span>
+            {% endif %}
+          </td>
+          <td>{{ r.numero_nf or '—' }}</td>
+          <td class="text-end">{{ r.qtd_chassis or 0 }}</td>
+          <td class="text-end">
+            {% if r.qtd_divergencias %}
+              <span class="badge bg-warning text-dark">{{ r.qtd_divergencias }}</span>
+            {% else %}
+              0
+            {% endif %}
+          </td>
+          <td><small>{{ r.mensagem }}</small></td>
+          <td>
+            {% if r.venda_id %}
+              <a href="{{ url_for('hora.vendas_detalhe', venda_id=r.venda_id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                Ver
+              </a>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 {% endblock %}

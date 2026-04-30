@@ -245,6 +245,12 @@
                 <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_forma_map_lista') }}">
                     <i class="fas fa-money-bill-wave"></i> Formas de pagamento
                 </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_backfill') }}">
+                    <i class="fas fa-cloud-download-alt"></i> Backfill via API (puxar NFs do TagPlus)
+                </a></li>
+                <li><a class="dropdown-item" href="{{ url_for('hora.vendas_upload') }}">
+                    <i class="fas fa-upload"></i> Backfill via DANFE PDF (lote)
+                </a></li>
                 {% endif %}
             </ul>
           </li>

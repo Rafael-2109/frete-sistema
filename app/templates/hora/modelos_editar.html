@@ -23,17 +23,38 @@
 
   {% if pode_editar_tagplus %}
   <hr>
-  <h5 class="mb-3"><i class="fas fa-link"></i> Mapeamento TagPlus (emissão NFe)</h5>
+  <h5 class="mb-3"><i class="fas fa-link"></i> Mapeamento TagPlus</h5>
+
   <div class="mb-3">
-    <label class="form-label">Código do produto no TagPlus</label>
+    <label class="form-label">
+      ID TagPlus (inteiro) <span class="text-muted small">— para emissão de NFe</span>
+    </label>
     <input type="text" name="tagplus_produto_id" class="form-control" maxlength="50"
-           placeholder="ex.: PROD-001 (deixe vazio para remover mapeamento)"
+           placeholder="ex.: 1234 (deixe vazio para remover mapeamento)"
            value="{{ tagplus_map.tagplus_produto_id if tagplus_map else '' }}">
     <small class="text-muted">
-      Código string do produto cadastrado no TagPlus (campo <code>codigo</code>/<code>cod_secundario</code>).
+      ID inteiro do produto retornado por <code>GET /produtos</code> da API TagPlus
+      (campo <code>id</code>). Usado no <strong>POST /nfes</strong> ao emitir.
+      O TagPlus rejeita códigos string aqui com erro 400.
       Sem isso a emissão de NFe deste modelo será bloqueada.
     </small>
   </div>
+
+  <div class="mb-3">
+    <label class="form-label">
+      Código de Produto (DANFE)
+      <span class="text-muted small">— para backfill de NFs já emitidas</span>
+    </label>
+    <input type="text" name="tagplus_codigo" class="form-control" maxlength="50"
+           placeholder="ex.: MT-JETMAX, MT-X12, BK-VTB4"
+           value="{{ tagplus_map.tagplus_codigo if tagplus_map else '' }}">
+    <small class="text-muted">
+      Código curto exibido na coluna <code>CÓDIGO</code> da DANFE PDF emitida pelo TagPlus.
+      Quando preenchido, o backfill de NFs já emitidas usa esse código para resolver
+      <code>modelo_id</code> deterministicamente (sem depender de LLM adivinhar o nome).
+    </small>
+  </div>
+
   <div class="mb-3">
     <label class="form-label">CFOP padrão</label>
     <input type="text" name="cfop_default" class="form-control" maxlength="5"

@@ -1421,6 +1421,7 @@ class DanfePDFParser:
         texto_secao: str,
         qtd_esperada: Optional[int] = None,
         ja_extraidos: Optional[List[Dict]] = None,
+        itens_contexto: Optional[List[Dict]] = None,
     ) -> Optional[List[Dict]]:
         """Extrai dados de veiculos via LLM.
 
@@ -1434,9 +1435,18 @@ class DanfePDFParser:
             ja_extraidos: (opcional) lista de veiculos ja extraidos em
                 tentativa anterior. Usada para apontar ao LLM quais chassis
                 faltam (anti-exemplo).
+            itens_contexto: (opcional) lista de itens NCM 8711* da NF, cada
+                qual `{codigo_produto, descricao, quantidade}`. Quando
+                informado, o prompt orienta o LLM a usar EXATAMENTE um desses
+                codigos como `codigo` em cada veiculo, e a `descricao` como
+                fonte do `modelo`. Anchor deterministico para layouts que
+                escondem o modelo real atras de classificacao fiscal generica
+                (ex: TagPlus exibe "<VEICULO AUTOPROPELIDO/BICICLETA ELETRICA>"
+                em todas as NFs).
 
         Returns:
-            Lista de dicts com chassi/cor/modelo/numero_motor/ano_modelo ou None
+            Lista de dicts com chassi/cor/modelo/codigo/numero_motor/ano_modelo
+            ou None
         """
         client = self._get_anthropic_client()
         if not client:
@@ -1464,18 +1474,61 @@ class DanfePDFParser:
                         f"faltaram.\n"
                     )
 
+        # Anchor deterministico: lista os codigos+descricoes da secao "Dados do
+        # Produto" (extraidos por regex) para o LLM associar cada chassi ao
+        # codigo correto. Imprescindivel para DANFE TagPlus, que coloca "<VEICULO
+        # AUTOPROPELIDO/BICICLETA ELETRICA>" no Dados Adicionais (texto fiscal
+        # CONTRAN, NAO o modelo real do produto).
+        contexto_itens_txt = ''
+        if itens_contexto:
+            linhas_ctx = []
+            for it in itens_contexto:
+                cod = (it.get('codigo_produto') or '').strip()
+                desc = (it.get('descricao') or '').strip()
+                qtd = it.get('quantidade')
+                if cod:
+                    linhas_ctx.append(
+                        f"  - codigo='{cod}'  descricao='{desc}'  qtd={qtd}"
+                    )
+            if linhas_ctx:
+                contexto_itens_txt = (
+                    "\n\nÂNCORA DETERMINÍSTICA — CÓDIGOS DE PRODUTO DA SEÇÃO "
+                    "\"Dados do Produto\" desta MESMA NF (extraídos por regex):\n"
+                    + '\n'.join(linhas_ctx)
+                    + "\n\nUse OBRIGATORIAMENTE estes valores:\n"
+                    "- O campo `codigo` de cada veículo DEVE ser EXATAMENTE um "
+                    "dos códigos listados acima (ex: 'MT-JETMAX', 'MT-X12'). "
+                    "NÃO invente. NÃO traduza.\n"
+                    "- O campo `modelo` deve vir da `descricao` do mesmo item "
+                    "(ex: 'SCOOTER ELETRICA JET MAX 1000W' → modelo='JET MAX' "
+                    "ou modelo='SCOOTER ELETRICA JET MAX 1000W' completo).\n"
+                    "- Se houver múltiplos itens, distribua os chassis em ORDEM "
+                    "(item[0] consome qtd[0] chassis, depois item[1] consome "
+                    "qtd[1], etc.).\n"
+                )
+
         prompt = (
             "Extraia informações de veículos do texto abaixo (seção DADOS ADICIONAIS "
             "de uma Nota Fiscal brasileira).\n\n"
             "Para cada veículo/unidade encontrado, extraia:\n"
             "- modelo: nome/modelo do veículo (ex: \"JOY SUPER\", \"X11-MINI\", "
             "\"X11-MINI (RP)\", \"MIA\", \"RET\", \"JET MAX\")\n"
+            "- codigo: código de produto (ex: \"MT-JETMAX\", \"MT-X12\", "
+            "\"BK-VTB4\"). Use exatamente um dos códigos da ÂNCORA quando ela "
+            "estiver presente abaixo. Se ausente, retorne null.\n"
             "- chassi: código do chassi (alfanumérico)\n"
             "- numero_motor: número do motor, se presente (pode ser alfanumérico "
-            "OU puramente numérico, diferente do chassi)\n"
+            "OU puramente numérico, diferente do chassi). DANFEs TagPlus de "
+            "scooter elétrica geralmente NÃO declaram motor — retorne null.\n"
             "- cor: cor do veículo (ex: \"AZUL\", \"BRANCO\", \"PRETA\")\n"
             "- ano_modelo: ano/modelo se presente (ex: \"2025/MOD 2025\")\n\n"
             "REGRAS:\n"
+            "- IGNORE classificações fiscais genéricas como \"VEICULO AUTOPROPELIDO\", "
+            "\"BICICLETA ELÉTRICA\" entre <colchetes angulares> ou em frases que "
+            "citam \"RESOLUÇÃO 996/2023 CONTRAN\". Esses textos NÃO são o modelo "
+            "do produto — são apenas uma classificação fiscal aplicada a TODOS "
+            "os scooters elétricos. O modelo real está na descrição do item "
+            "(seção \"Dados do Produto\") ou no campo Nº SERIE/CHASSI.\n"
             "- Nomes de modelo são palavras curtas (DOT, JET, MIA, RET, JET MAX, "
             "JOY SUPER, X11-MINI, X11-MINI (RP))\n"
             "- ORDEM POSICIONAL OBRIGATÓRIA: quando aparecem 2 códigos longos "
@@ -1496,22 +1549,33 @@ class DanfePDFParser:
             "- Exemplo 1 (ambos alfanuméricos): 'DOT LA25860V1000W2087 "
             "QS60V30H25111101233 CINZA' → modelo=DOT, "
             "chassi=LA25860V1000W2087 (1º), numero_motor=QS60V30H25111101233 "
-            "(2º), cor=CINZA\n"
+            "(2º), cor=CINZA, codigo=null (sem âncora)\n"
             "- Exemplo 2 (1º numérico puro + 2º alfanumérico): "
             "'Inf. Contribuinte: RET 172922506731512 LM60V1000W2025062100444 "
             "CINZA' → modelo=RET, chassi=172922506731512 (1º), "
             "numero_motor=LM60V1000W2025062100444 (2º), cor=CINZA. O rótulo "
             "\"Inf. Contribuinte:\" é ignorado. NÃO inverta a ordem — mesmo "
             "que o 1º pareça \"só número\", ele é o chassi.\n"
-            "- Exemplo 3 (só 1 código + potência): 'JET MAX 1000W "
-            "LYDAE393XT1204195 CINZA' → modelo=JET MAX, "
-            "chassi=LYDAE393XT1204195, cor=CINZA. 1000W é especificação de "
-            "potência, não motor; sem motor explícito, numero_motor fica ausente.\n"
+            "- Exemplo 3 (TagPlus, com âncora codigo='MT-JETMAX' "
+            "descricao='SCOOTER ELETRICA JET MAX 1000W'): texto Dados Adicionais "
+            "'<VEICULO AUTOPROPELIDO/BICICLETA ELÉTRICA> ... Nº SERIE: "
+            "LYDAE3936T1203254 COR: Preta ANO/MODELO 2025/2026' → "
+            "codigo='MT-JETMAX', modelo='SCOOTER ELETRICA JET MAX 1000W' (da "
+            "descricao do item, NÃO de \"BICICLETA ELÉTRICA\"), "
+            "chassi='LYDAE3936T1203254', cor='PRETA', ano_modelo='2025/2026', "
+            "numero_motor=null.\n"
+            "- Exemplo 4 (TagPlus, com âncora codigo='MT-X12' "
+            "descricao='SCOOTER ELETRICA X12-10 1000W'): 'Nº SERIE: "
+            "MCBRX122602120354 COR: Carbono ANO/MODELO 2025/2026' → "
+            "codigo='MT-X12', modelo='SCOOTER ELETRICA X12-10 1000W', "
+            "chassi='MCBRX122602120354', cor='CARBONO', ano_modelo='2025/2026', "
+            "numero_motor=null.\n"
             "- Ignore endereços, telefones, CEPs, CNPJs e textos informativos\n"
             "- Se não houver informações de veículos, retorne []\n"
             "- Retorne APENAS um array JSON válido, sem texto adicional\n"
-            f"{reforco}\n"
-            f"Texto:\n{texto_secao}"
+            f"{reforco}"
+            f"{contexto_itens_txt}\n"
+            f"\nTexto:\n{texto_secao}"
         )
 
         try:
@@ -1536,6 +1600,13 @@ class DanfePDFParser:
                 return None
 
             # Normalizar e validar
+            codigos_validos = set()
+            if itens_contexto:
+                for it in itens_contexto:
+                    cod = (it.get('codigo_produto') or '').strip()
+                    if cod:
+                        codigos_validos.add(cod)
+
             resultado = []
             for v in veiculos_raw:
                 if not isinstance(v, dict) or not v.get('chassi'):
@@ -1550,6 +1621,13 @@ class DanfePDFParser:
                     veiculo['numero_motor'] = str(v['numero_motor']).strip()
                 if v.get('ano_modelo'):
                     veiculo['ano_modelo'] = str(v['ano_modelo']).strip()
+                if v.get('codigo'):
+                    cod_llm = str(v['codigo']).strip()
+                    # Aceita apenas codigos que aparecem na ancora — bloqueia
+                    # invencao do LLM. Se nao for valido, omitido (alinhamento
+                    # ordinal posterior tenta resgatar).
+                    if not codigos_validos or cod_llm in codigos_validos:
+                        veiculo['codigo'] = cod_llm
                 resultado.append(veiculo)
 
             logger.info(
@@ -1594,6 +1672,68 @@ class DanfePDFParser:
                     continue
         return total if algum_ncm_veiculo and total > 0 else None
 
+    def _itens_contexto_veiculo(self) -> List[Dict]:
+        """Filtra itens com NCM de veiculos (8711*) para servir de ancora
+        no prompt do LLM e no alinhamento ordinal.
+
+        Returns:
+            Lista de itens com NCM 8711*, cada qual `{codigo_produto,
+            descricao, quantidade}`.
+        """
+        try:
+            itens = self.get_itens_produto() or []
+        except Exception:
+            return []
+        ctx = []
+        for it in itens:
+            ncm = (it.get('ncm') or '').replace('.', '').strip()
+            if ncm.startswith('8711'):
+                ctx.append({
+                    'codigo_produto': (it.get('codigo_produto') or '').strip(),
+                    'descricao': (it.get('descricao') or '').strip(),
+                    'quantidade': it.get('quantidade'),
+                })
+        return ctx
+
+    def _alinhar_codigo_ordinal(
+        self,
+        veiculos: List[Dict],
+        itens_ctx: List[Dict],
+    ) -> List[Dict]:
+        """Preenche `codigo` em veiculos sem codigo, via distribuicao ordinal.
+
+        Regra: item[0] consome qtd[0] chassis, depois item[1] consome qtd[1],
+        e assim por diante. Aplicado como fallback quando o LLM nao retornou
+        `codigo` (ou retornou um valor invalido que foi descartado).
+
+        Mantém intacto qualquer codigo ja presente no veiculo.
+        """
+        if not veiculos or not itens_ctx:
+            return veiculos
+
+        # Lista expandida de codigos: cada item contribui com qtd entradas.
+        codigos_expandidos: List[Optional[str]] = []
+        for it in itens_ctx:
+            cod = (it.get('codigo_produto') or '').strip() or None
+            qtd = it.get('quantidade') or 0
+            try:
+                n = int(qtd) if qtd is not None else 0
+            except (TypeError, ValueError):
+                n = 0
+            if n <= 0:
+                # Item sem qtd valida: 1 entrada por seguranca.
+                n = 1
+            codigos_expandidos.extend([cod] * n)
+
+        # Quando o tamanho nao bate, tenta ainda assim (best-effort): casa em
+        # ordem ate o menor dos dois.
+        for i, v in enumerate(veiculos):
+            if v.get('codigo'):
+                continue
+            if i < len(codigos_expandidos) and codigos_expandidos[i]:
+                v['codigo'] = codigos_expandidos[i]
+        return veiculos
+
     def get_veiculos_info(self) -> List[Dict]:
         """Extrai informacoes de veiculos (chassi, motor, cor) da secao
         DADOS ADICIONAIS / INFORMACOES COMPLEMENTARES via LLM.
@@ -1610,8 +1750,10 @@ class DanfePDFParser:
         sem chamada API (NFs de alimentos, eletronicos, etc.).
 
         Returns:
-            Lista de dicts com: modelo (opcional), chassi, numero_motor (opcional),
-                                cor, ano_modelo (opcional)
+            Lista de dicts com: modelo (opcional), codigo (opcional, codigo
+                                de produto ex: 'MT-JETMAX'), chassi,
+                                numero_motor (opcional), cor,
+                                ano_modelo (opcional)
         """
         if not self._tem_indicativo_veiculo():
             return []
@@ -1621,6 +1763,7 @@ class DanfePDFParser:
             return []
 
         esperado = self._quantidade_esperada_veiculos()
+        itens_ctx = self._itens_contexto_veiculo()
 
         def _completo(lst: Optional[List[Dict]]) -> bool:
             if not lst:
@@ -1632,9 +1775,11 @@ class DanfePDFParser:
         melhor: Optional[List[Dict]] = None
 
         # Camada 1: Haiku
-        resultado = self._extrair_veiculos_llm(self.HAIKU_MODEL, texto_secao)
+        resultado = self._extrair_veiculos_llm(
+            self.HAIKU_MODEL, texto_secao, itens_contexto=itens_ctx,
+        )
         if _completo(resultado):
-            return resultado or []
+            return self._alinhar_codigo_ordinal(resultado or [], itens_ctx)
         melhor = resultado if (resultado and (not melhor or len(resultado) > len(melhor))) else melhor
 
         logger.info(
@@ -1643,9 +1788,11 @@ class DanfePDFParser:
         )
 
         # Camada 2: Sonnet (mesmo prompt)
-        resultado = self._extrair_veiculos_llm(self.SONNET_MODEL, texto_secao)
+        resultado = self._extrair_veiculos_llm(
+            self.SONNET_MODEL, texto_secao, itens_contexto=itens_ctx,
+        )
         if _completo(resultado):
-            return resultado or []
+            return self._alinhar_codigo_ordinal(resultado or [], itens_ctx)
         melhor = resultado if (resultado and (not melhor or len(resultado) > len(melhor))) else melhor
 
         # Camada 3: Sonnet com prompt reforcado (informa esperado e chassis ja
@@ -1659,9 +1806,10 @@ class DanfePDFParser:
                 self.SONNET_MODEL, texto_secao,
                 qtd_esperada=esperado,
                 ja_extraidos=melhor or [],
+                itens_contexto=itens_ctx,
             )
             if _completo(resultado):
-                return resultado or []
+                return self._alinhar_codigo_ordinal(resultado or [], itens_ctx)
             melhor = resultado if (resultado and (not melhor or len(resultado) > len(melhor))) else melhor
 
         if melhor:
@@ -1670,7 +1818,7 @@ class DanfePDFParser:
                     "Extracao incompleta apos fallback: %d/%d veiculo(s)",
                     len(melhor), esperado,
                 )
-            return melhor
+            return self._alinhar_codigo_ordinal(melhor, itens_ctx)
 
         return []
 
