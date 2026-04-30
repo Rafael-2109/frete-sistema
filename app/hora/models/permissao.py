@@ -34,6 +34,7 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('emprestimos', 'Emprestimos com lojas externas'),
     ('avarias', 'Avarias'),
     ('vendas', 'Vendas (NF saida)'),
+    ('vendas_descarte', 'Vendas: Descartar (NF teste)'),
     ('tagplus', 'Integracao TagPlus (NFe)'),
 ]
 

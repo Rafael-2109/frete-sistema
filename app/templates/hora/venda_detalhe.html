@@ -118,7 +118,8 @@
         <i class="fas fa-ban"></i> Cancelar pedido
       </button>
     {% endif %}
-    {% if is_faturado and current_user.is_admin %}
+    {% set pode_descartar_teste = current_user.tem_perm_hora('vendas_descarte', 'apagar') %}
+    {% if is_faturado and pode_descartar_teste %}
       <button type="button" class="btn btn-outline-warning" data-bs-toggle="collapse"
               data-bs-target="#descartar-teste-form"
               title="Descarta NF de teste pos janela 24h SEFAZ. NFe permanece valida na SEFAZ.">
@@ -161,7 +162,7 @@
   </div>
   {% endif %}
 
-  {% if is_faturado and current_user.is_admin %}
+  {% if is_faturado and pode_descartar_teste %}
   <div id="descartar-teste-form" class="collapse">
     <div class="card-body border-top bg-warning-subtle">
       <form method="post" action="{{ url_for('hora.vendas_descartar_teste', venda_id=venda.id) }}">
