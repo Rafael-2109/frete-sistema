@@ -17,6 +17,8 @@ Acoes registradas:
   NFE_CANCELADA_SEFAZ    webhook nfe_cancelada confirmou cancelamento na SEFAZ.
   EMITIU_CCE             carta de correcao emitida.
   CANCELOU               transicao * -> CANCELADO.
+  DESCARTOU_TESTE        descarte de NF de teste pos janela 24h SEFAZ
+                         (nao cancela na SEFAZ; status -> CANCELADO).
   RESOLVEU_DIVERGENCIA   divergencia marcada como resolvida.
   DEFINIU_LOJA           CNPJ_DESCONHECIDO resolvido manualmente.
 """
@@ -41,6 +43,7 @@ ACOES_VALIDAS = {
     'NFE_CANCELADA_SEFAZ',
     'EMITIU_CCE',
     'CANCELOU',
+    'DESCARTOU_TESTE',
     'RESOLVEU_DIVERGENCIA',
     'DEFINIU_LOJA',
 }

@@ -516,6 +516,34 @@ def vendas_cancelar(venda_id: int):
 
 
 # ------------------------------------------------------------------------
+# Descartar NF de teste (pos janela 24h SEFAZ) — admin only
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/vendas/<int:venda_id>/descartar-teste', methods=['POST'])
+def vendas_descartar_teste(venda_id: int):
+    if not getattr(current_user, 'is_admin', False):
+        flash('Apenas administradores podem descartar NF de teste.', 'danger')
+        return redirect(url_for('hora.vendas_detalhe', venda_id=venda_id))
+
+    venda = HoraVenda.query.get_or_404(venda_id)
+    motivo = (request.form.get('motivo') or '').strip()
+    try:
+        venda_service.descartar_venda_teste(
+            venda_id=venda.id,
+            motivo=motivo,
+            usuario=_operador_atual(),
+        )
+        flash(
+            f'Pedido #{venda.id} descartado (NF teste). NFe permanece valida na SEFAZ; '
+            'chassis devolvidos ao estoque.',
+            'success',
+        )
+    except (ValueError, venda_service.TransicaoInvalidaError) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+# ------------------------------------------------------------------------
 # Resolver divergencia (marca como tratada)
 # ------------------------------------------------------------------------
 

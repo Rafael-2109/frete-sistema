@@ -938,6 +938,79 @@ def cancelar_venda(
 
 
 # --------------------------------------------------------------------------
+# Descarte de NF de teste (pos janela 24h SEFAZ)
+# --------------------------------------------------------------------------
+
+def descartar_venda_teste(
+    venda_id: int,
+    motivo: str,
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    """Descarta venda de teste cuja NFe estourou janela 24h SEFAZ.
+
+    Diferenca de cancelar_venda: NAO checa se NFe foi cancelada na SEFAZ.
+    A NFe permanece valida na SEFAZ; apenas marca o pedido como CANCELADO
+    no sistema interno e libera os chassis para o estoque. Uso restrito a
+    limpar NFs de teste poluindo o sistema.
+
+    Bloqueios mantidos:
+      - Motivo obrigatorio (min 3 chars).
+      - Venda deve existir.
+      - NFe em estado em-voo (EM_ENVIO/ENVIADA_SEFAZ/CANCELAMENTO_SOLICITADO):
+        ainda bloqueia (race condition real).
+      - Idempotente se ja CANCELADO.
+
+    Efeito (identico a cancelar_venda):
+      - status -> CANCELADO; cancelado_em/por preenchidos.
+      - cancelamento_motivo persistido com prefixo "[DESCARTE TESTE] ".
+      - DEVOLVIDA em todos os chassis (libera estoque).
+      - Auditoria: acao DESCARTOU_TESTE (distinta de CANCELOU).
+    """
+    motivo_limpo = (motivo or '').strip()
+    if len(motivo_limpo) < 3:
+        raise ValueError('Motivo obrigatorio (min 3 chars)')
+
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    if venda.status == VENDA_STATUS_CANCELADO:
+        return venda
+
+    emissao = _emissao_nfe(venda.id)
+    if emissao and emissao.status in _NFE_EM_VOO:
+        raise TransicaoInvalidaError(
+            f'NFe em estado {emissao.status} — aguarde resolucao SEFAZ '
+            'antes de descartar o pedido.'
+        )
+
+    motivo_persistido = f'[DESCARTE TESTE] {motivo_limpo}'[:500]
+    venda.status = VENDA_STATUS_CANCELADO
+    venda.cancelado_em = agora_utc_naive()
+    venda.cancelado_por = usuario or 'desconhecido'
+    venda.cancelamento_motivo = motivo_persistido
+
+    for item in venda.itens:
+        registrar_evento(
+            numero_chassi=item.numero_chassi,
+            tipo='DEVOLVIDA',
+            origem_tabela='hora_venda',
+            origem_id=venda.id,
+            loja_id=venda.loja_id,
+            operador=usuario,
+            detalhe=f'Pedido #{venda.id} descartado (NF teste): {motivo_limpo[:160]}',
+        )
+
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='DESCARTOU_TESTE',
+        detalhe=motivo_limpo[:500],
+    )
+
+    db.session.commit()
+    return venda
+
+
+# --------------------------------------------------------------------------
 # Definir loja (CNPJ_DESCONHECIDO)
 # --------------------------------------------------------------------------
 
@@ -1357,6 +1430,7 @@ __all__ = [
     'remover_item_pedido',
     'editar_item_pedido',
     'cancelar_venda',
+    'descartar_venda_teste',
     'definir_loja_venda',
     'resolver_divergencia',
     'importar_nf_saida_pdf',
