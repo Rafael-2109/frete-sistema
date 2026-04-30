@@ -164,7 +164,10 @@ def vendas_detalhe(venda_id: int):
         )
         return redirect(url_for('hora.vendas_lista'))
 
-    lojas_ativas = _lojas_ativas_permitidas() if not venda.loja_id else []
+    # Sempre popular lojas_ativas — operador pode trocar loja em vendas
+    # backfilladas que caem na matriz por causa do CNPJ emitente (regra
+    # fiscal: NFe HORA sai sempre com CNPJ da matriz). Filtrado por escopo.
+    lojas_ativas = _lojas_ativas_permitidas()
 
     # Formas de pagamento dinamicas: mapeamentos cadastrados em
     # HoraTagPlusFormaPagamentoMap (mesma fonte usada no formulario de pedido
@@ -407,28 +410,51 @@ def vendas_item_editar(venda_id: int, item_id: int):
 @hora_bp.route('/vendas/<int:venda_id>/definir-loja', methods=['POST'])
 @require_hora_perm('vendas', 'editar')
 def vendas_definir_loja(venda_id: int):
-    venda = HoraVenda.query.get_or_404(venda_id)
-    if venda.loja_id:
-        flash('Venda ja tem loja definida.', 'warning')
-        return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+    """Define ou TROCA a loja do pedido.
 
-    # Apenas admin abre venda com loja=NULL — coerente com vendas_detalhe.
-    if lojas_permitidas_ids() is not None:
-        flash('Apenas administradores podem definir loja de venda sem loja.', 'danger')
-        return redirect(url_for('hora.vendas_lista'))
+    - Vendas sem loja (CNPJ_DESCONHECIDO): apenas admin pode definir.
+    - Vendas com loja: usuario com permissao `vendas/editar` na loja
+      atual pode trocar (caso tipico do backfill TagPlus, onde todas
+      caem na matriz por causa do CNPJ emitente).
+    """
+    venda = HoraVenda.query.get_or_404(venda_id)
+
+    if venda.loja_id is None:
+        # Apenas admin abre venda com loja=NULL — coerente com vendas_detalhe.
+        if lojas_permitidas_ids() is not None:
+            flash('Apenas administradores podem definir loja de venda sem loja.', 'danger')
+            return redirect(url_for('hora.vendas_lista'))
+    else:
+        # Trocar loja: usuario precisa ter acesso a loja atual.
+        if not usuario_tem_acesso_a_loja(venda.loja_id):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('hora.vendas_lista'))
 
     loja_str = (request.form.get('loja_id') or '').strip()
     if not loja_str.isdigit():
         flash('Selecione a loja.', 'danger')
         return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
 
+    nova_loja_id = int(loja_str)
+    # Usuario nao-admin nao pode mover venda para loja fora do seu escopo.
+    permitidas = lojas_permitidas_ids()
+    if permitidas is not None and nova_loja_id not in permitidas:
+        flash(
+            'Voce nao tem permissao na loja destino — peca para um administrador.',
+            'danger',
+        )
+        return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
     try:
-        venda_service.definir_loja_venda(
+        venda_atualizada = venda_service.definir_loja_venda(
             venda_id=venda.id,
-            loja_id=int(loja_str),
+            loja_id=nova_loja_id,
             usuario=_operador_atual(),
         )
-        flash('Loja definida e divergencia CNPJ_DESCONHECIDO resolvida.', 'success')
+        if venda.loja_id is None and venda_atualizada.loja_id == nova_loja_id:
+            flash('Loja definida e divergencia CNPJ_DESCONHECIDO resolvida.', 'success')
+        else:
+            flash('Loja do pedido atualizada.', 'success')
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))

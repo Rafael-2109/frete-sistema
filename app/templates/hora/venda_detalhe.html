@@ -212,23 +212,50 @@
   </div></div>
 </div>
 
-{# Definir loja (CNPJ_DESCONHECIDO) #}
-{% if not venda.loja_id and lojas_ativas and pode_editar %}
+{# Definir / trocar loja do pedido.
+   Loja NAO sai na NFe (regra fiscal: emitente eh sempre a matriz HORA),
+   entao operador precisa indicar a loja fisica real onde a venda aconteceu.
+   - venda.loja_id IS NULL: campo de definicao inicial (border warning).
+   - venda.loja_id JA preenchido: dropdown de troca (border light). #}
+{% if lojas_ativas and pode_editar and not is_cancelado %}
 <form method="post" action="{{ url_for('hora.vendas_definir_loja', venda_id=venda.id) }}"
-      class="card p-3 mb-3 border-warning">
+      class="card p-3 mb-3 {% if not venda.loja_id %}border-warning{% endif %}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <h5><i class="fas fa-exclamation-circle text-warning"></i> Definir loja emitente</h5>
-  <div class="row">
+  <h5>
+    {% if not venda.loja_id %}
+      <i class="fas fa-exclamation-circle text-warning"></i> Definir loja física
+    {% else %}
+      <i class="fas fa-store"></i> Loja física da venda
+    {% endif %}
+  </h5>
+  <small class="text-muted d-block mb-2">
+    {% if not venda.loja_id %}
+      A NFe não sai com a loja física (sai sempre com CNPJ da matriz HORA).
+      Indique abaixo onde a venda foi feita.
+    {% else %}
+      Loja atual: <strong>{{ venda.loja.rotulo_display if venda.loja else 'desconhecida' }}</strong>.
+      Pode trocar caso o operador tenha registrado errado ou se foi backfill via API.
+    {% endif %}
+  </small>
+  <div class="row g-2 align-items-center">
     <div class="col-md-8">
       <select name="loja_id" class="form-select" required>
-        <option value="">— Selecione —</option>
+        {% if not venda.loja_id %}
+          <option value="">— Selecione —</option>
+        {% endif %}
         {% for loja in lojas_ativas %}
-          <option value="{{ loja.id }}">{{ loja.rotulo_display }}{% if loja.cnpj %} · CNPJ {{ loja.cnpj }}{% endif %}</option>
+          <option value="{{ loja.id }}"
+                  {% if venda.loja_id == loja.id %}selected{% endif %}>
+            {{ loja.rotulo_display }}{% if loja.cnpj %} · CNPJ {{ loja.cnpj }}{% endif %}
+          </option>
         {% endfor %}
       </select>
     </div>
     <div class="col-md-4">
-      <button type="submit" class="btn btn-warning">Definir loja</button>
+      <button type="submit"
+              class="btn {% if not venda.loja_id %}btn-warning{% else %}btn-outline-primary{% endif %}">
+        {% if not venda.loja_id %}Definir loja{% else %}Trocar loja{% endif %}
+      </button>
     </div>
   </div>
 </form>

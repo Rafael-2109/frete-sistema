@@ -946,17 +946,45 @@ def definir_loja_venda(
     loja_id: int,
     usuario: Optional[str] = None,
 ) -> HoraVenda:
+    """Define ou TROCA a loja fisica do pedido.
+
+    Caso de uso primario: como NFe da Lojas HORA sai sempre com CNPJ da
+    matriz (regra fiscal — invariante 2026-04-27 em CLAUDE.md), o
+    backfill resolve `loja_id` pelo CNPJ emitente e cai sempre na matriz.
+    Operador precisa indicar a loja fisica real onde a venda aconteceu.
+
+    Comportamento:
+      - Se loja_id atual == novo loja_id: no-op (idempotente).
+      - Se atual e NULL ou diferente: atualiza + emite VENDIDA com a nova
+        loja_id (auditoria de movimentacao). Resolve divergencia
+        CNPJ_DESCONHECIDO se houver.
+    """
     venda = HoraVenda.query.get(venda_id)
     if not venda:
         raise ValueError(f'Venda {venda_id} nao encontrada')
-    if venda.loja_id:
-        raise ValueError(f'Venda {venda_id} ja tem loja {venda.loja_id} definida.')
 
     loja = HoraLoja.query.get(loja_id)
     if not loja:
         raise ValueError(f'Loja {loja_id} nao encontrada')
 
+    loja_anterior_id = venda.loja_id
+    if loja_anterior_id == loja_id:
+        return venda
+
     venda.loja_id = loja_id
+
+    if loja_anterior_id is None:
+        detalhe_evt = (
+            f'Loja definida retroativamente no pedido #{venda.id} '
+            '(evento anterior com loja_id=NULL).'
+        )
+    else:
+        loja_ant = HoraLoja.query.get(loja_anterior_id)
+        rotulo_ant = loja_ant.rotulo_display if loja_ant else f'#{loja_anterior_id}'
+        detalhe_evt = (
+            f'Loja trocada de {rotulo_ant} para {loja.rotulo_display} '
+            f'no pedido #{venda.id}.'
+        )
 
     for item in venda.itens:
         registrar_evento(
@@ -966,10 +994,7 @@ def definir_loja_venda(
             origem_id=item.id,
             loja_id=loja_id,
             operador=usuario,
-            detalhe=(
-                f'Loja definida retroativamente no pedido #{venda.id} '
-                '(evento anterior emitido com loja_id=NULL por CNPJ_DESCONHECIDO).'
-            ),
+            detalhe=detalhe_evt,
         )
 
     div = (
@@ -984,8 +1009,12 @@ def definir_loja_venda(
     venda_audit.registrar_auditoria(
         venda_id=venda.id, usuario=usuario or '',
         acao='DEFINIU_LOJA',
+        valor_antes=str(loja_anterior_id) if loja_anterior_id else None,
         valor_depois=str(loja_id),
-        detalhe=f'Loja definida: {loja.rotulo_display}',
+        detalhe=(
+            f'Loja {"definida" if loja_anterior_id is None else "trocada"}: '
+            f'{loja.rotulo_display}'
+        ),
     )
 
     db.session.commit()
