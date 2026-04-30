@@ -954,6 +954,64 @@ def importar_nfe_da_api(
     return venda, 'criado'
 
 
+def _resolver_conflito_motor_unique(
+    motor_norm: str, chassi_destino: str,
+) -> bool:
+    """Garante que `motor_norm` esteja livre antes de gravar em `chassi_destino`.
+
+    `hora_moto.numero_motor` tem UNIQUE (`hora_moto_numero_motor_key`). Se outra
+    `HoraMoto` X ja ocupa esse motor, qualquer UPDATE em `chassi_destino`
+    levanta `UniqueViolation`. Esta funcao trata o conflito:
+
+      - Caso A: X eh moto-bug do regex historico (`numero_chassi == numero_motor`).
+        Consolidamos X em `chassi_destino`:
+          1) re-aponta `HoraVendaItem.numero_chassi=X` -> chassi_destino
+          2) re-aponta `HoraMotoEvento.numero_chassi=X` -> chassi_destino
+          3) deleta a `HoraMoto` orfa X
+          4) flush (libera UNIQUE no banco)
+        Retorna True (caller pode setar `chassi_destino.numero_motor=motor_norm`).
+
+      - Caso B: X eh moto valida (chassi != motor). Motor pertence legitimamente
+        a outra moto fisica — NAO mexer. Loga warning e retorna False.
+
+      - Sem conflito: retorna True direto.
+    """
+    outra = HoraMoto.query.filter(
+        HoraMoto.numero_motor == motor_norm,
+        HoraMoto.numero_chassi != chassi_destino,
+    ).first()
+
+    if outra is None:
+        return True
+
+    if outra.numero_chassi == outra.numero_motor:
+        chassi_bug = outra.numero_chassi
+        logger.info(
+            'Conflito UNIQUE motor=%s: moto-bug %s sera consolidada em %s',
+            motor_norm, chassi_bug, chassi_destino,
+        )
+        # Re-aponta refs para o chassi correto antes de deletar a moto-bug
+        # (FK em hora_venda_item e hora_moto_evento exige a moto destino existir).
+        HoraVendaItem.query.filter_by(numero_chassi=chassi_bug).update(
+            {'numero_chassi': chassi_destino}, synchronize_session=False,
+        )
+        HoraMotoEvento.query.filter_by(numero_chassi=chassi_bug).update(
+            {'numero_chassi': chassi_destino}, synchronize_session=False,
+        )
+        db.session.delete(outra)
+        # Flush IMEDIATO — sem ele, o autoflush pode emitir o UPDATE em
+        # chassi_destino antes do DELETE da moto-bug, perpetuando o conflito.
+        db.session.flush()
+        return True
+
+    logger.warning(
+        'Motor %s pertence a moto valida %s (chassi != motor); '
+        'pulando UPDATE em %s para preservar integridade.',
+        motor_norm, outra.numero_chassi, chassi_destino,
+    )
+    return False
+
+
 def _atualizar_moto_complementar(
     moto: HoraMoto,
     cor_nova: Optional[str],
@@ -967,6 +1025,9 @@ def _atualizar_moto_complementar(
     sinal do bug regex que gravava motor como chassi). NUNCA sobrescreve
     valores ja preenchidos com dados reais (preserva edicoes de operador
     e mantem rastreabilidade da identidade da moto).
+
+    Para motor: alem da checagem de campo vazio/sentinela, valida UNIQUE
+    via `_resolver_conflito_motor_unique` (consolida moto-bug ou pula).
 
     Returns:
         True se algum campo foi alterado, False caso contrario.
@@ -992,8 +1053,10 @@ def _atualizar_moto_complementar(
         or moto.numero_motor == ''
         or moto.numero_motor == moto.numero_chassi  # sinal do bug regex
     ) and motor_norm != moto.numero_chassi:
-        moto.numero_motor = motor_norm
-        alterou = True
+        # Resolve conflito UNIQUE antes de atribuir (libera moto-bug ou skip).
+        if _resolver_conflito_motor_unique(motor_norm, moto.numero_chassi):
+            moto.numero_motor = motor_norm
+            alterou = True
 
     return alterou
 
@@ -1481,6 +1544,14 @@ def _corrigir_chassi_motor_invertido(
         # Nao deveria acontecer (caller checou), mas defesa em profundidade.
         return
 
+    # PRE-PASSO: libera o motor da moto-bug ANTES de criar/atualizar a correta.
+    # Sem isso, o INSERT/UPDATE da moto correta com `numero_motor=motor_norm`
+    # bate em UniqueViolation porque a moto-bug ainda ocupa esse motor
+    # (estado: chassi=motor=motor_norm).
+    if motor_norm and moto_errada.numero_motor == motor_norm:
+        moto_errada.numero_motor = None
+        db.session.flush()
+
     # 1. Cria moto correta se nao existe.
     moto_correta = HoraMoto.query.get(chassi_correto_norm)
     if moto_correta is None:
@@ -1694,7 +1765,50 @@ def executar_backfill(
         except Exception:  # pragma: no cover
             logger.exception('progress_callback falhou — ignorado')
 
-    iterador = listar_nfes_emitidas(api, since=since, until=until)
+    def _iterador_resiliente():
+        """Itera NFes da API com defesa contra DetachedInstanceError.
+
+        A paginacao real do TagPlus eh 50 NFs por request. Em jobs longos no
+        worker, a `conta` carregada uma vez no inicio sobrevive a centenas
+        de commits e pode ficar DETACHED — quando o iterador pede a proxima
+        pagina, `oauth.refresh_if_needed -> conta.token` (lazy) explode
+        DetachedInstanceError. Esse erro acontece DENTRO do generator, fora
+        do try/except per-NF, e mataria o job.
+
+        Aqui re-emitimos a paginacao reattachando a conta via OAuthClient e
+        recriando o iterador. Sintoma classico que isso resolve: job
+        congelado em `processadas=50, total_listadas=N>50, status=ERRO,
+        ultimo_erro=DetachedInstanceError`.
+        """
+        from sqlalchemy.orm.exc import DetachedInstanceError
+
+        nfes_ja_vistas: set[int] = set()
+        while True:
+            try:
+                api.oauth._ensure_conta_attached()  # noqa: SLF001
+                for nfe_resumo in listar_nfes_emitidas(api, since=since, until=until):
+                    nfe_id_local = nfe_resumo.get('id')
+                    if nfe_id_local in nfes_ja_vistas:
+                        continue  # pula NFs ja entregues antes do retry
+                    if nfe_id_local is not None:
+                        nfes_ja_vistas.add(nfe_id_local)
+                    yield nfe_resumo
+                return  # iteracao normal terminou
+            except DetachedInstanceError as exc:
+                logger.warning(
+                    'DetachedInstanceError na paginacao (apos %d NFs); '
+                    'reattachando conta e re-iterando. exc=%s',
+                    len(nfes_ja_vistas), exc,
+                )
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                # Re-attach explicitamente; o set `nfes_ja_vistas` evita
+                # reprocessar NFs ja entregues nesta paginacao.
+                api.oauth._ensure_conta_attached()  # noqa: SLF001
+
+    iterador = _iterador_resiliente()
     for i, nfe_resumo in enumerate(iterador):
         if limite is not None and i >= limite:
             break

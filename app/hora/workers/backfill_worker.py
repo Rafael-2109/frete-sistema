@@ -120,7 +120,7 @@ def _marcar_fim(job_id: int, status: str, relatorio: dict | None,
 def _contar_total_listadas(since: _date | None, until: _date | None) -> int:
     """Pre-conta NFes no intervalo via API TagPlus para popular total_listadas.
 
-    Iteracao paginada — para nao explodir tempo, limitamos a 5000.
+    Iteracao paginada — sem cap (worker roda em background com job_timeout=2h).
     Retorna 0 se a contagem falhar (UI mostra '?' em vez de progresso %).
     """
     from app.hora.models.tagplus import HoraTagPlusConta
@@ -135,8 +135,6 @@ def _contar_total_listadas(since: _date | None, until: _date | None) -> int:
         total = 0
         for _ in listar_nfes_emitidas(api, since=since, until=until):
             total += 1
-            if total >= 5000:
-                break
         return total
     except Exception:
         logger.exception('Pre-contagem total_listadas falhou — UI sem %')

@@ -124,8 +124,38 @@ def _registrar_divergencia(
     valor_esperado: Optional[str] = None,
     valor_conferido: Optional[str] = None,
 ) -> HoraVendaDivergencia:
+    """UPSERT idempotente em HoraVendaDivergencia.
+
+    A tabela tem UNIQUE (venda_id, tipo, numero_chassi). Em re-execucoes do
+    backfill TagPlus, INSERT puro violava `uq_hora_venda_divergencia_tipo_chassi`
+    e cada NF re-importada falhava (50s perdidos no retry de SSL drop antes
+    de marcar erro). Agora reutilizamos a divergencia existente — se algo
+    mudou no detalhe/valores, atualizamos; se ja foi resolvida, mantemos
+    como esta (operador ja decidiu).
+    """
     if tipo not in TIPOS_DIVERGENCIA_VENDA:
         raise ValueError(f'tipo de divergencia invalido: {tipo}')
+
+    # Procura divergencia existente (chassi NULL precisa de filtro `IS NULL`).
+    query = HoraVendaDivergencia.query.filter_by(venda_id=venda_id, tipo=tipo)
+    if numero_chassi is None:
+        query = query.filter(HoraVendaDivergencia.numero_chassi.is_(None))
+    else:
+        query = query.filter(HoraVendaDivergencia.numero_chassi == numero_chassi)
+    div = query.first()
+
+    if div is not None:
+        # Atualiza apenas se ainda esta aberta (preserva resolucoes do operador).
+        if div.aberta:
+            if detalhe is not None and div.detalhe != detalhe:
+                div.detalhe = detalhe
+            if valor_esperado is not None and div.valor_esperado != valor_esperado:
+                div.valor_esperado = valor_esperado
+            if valor_conferido is not None and div.valor_conferido != valor_conferido:
+                div.valor_conferido = valor_conferido
+            db.session.flush()
+        return div
+
     div = HoraVendaDivergencia(
         venda_id=venda_id,
         tipo=tipo,

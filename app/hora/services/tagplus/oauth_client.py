@@ -29,6 +29,41 @@ class OAuthClient:
 
     def __init__(self, conta: HoraTagPlusConta):
         self.conta = conta
+        # Snapshot do PK — usado por `_ensure_conta_attached` para re-buscar
+        # a conta apos `db.engine.dispose()` no recovery do backfill.
+        # `self.conta.id` continua acessivel mesmo em DETACHED state, mas
+        # guardar o ID separado evita qualquer chance de NotFoundError.
+        self._conta_id = conta.id
+
+    def _ensure_conta_attached(self) -> HoraTagPlusConta:
+        """Re-vincula `self.conta` a sessao corrente se ficou DETACHED.
+
+        O backfill TagPlus faz `db.session.close()` + `db.engine.dispose()` em
+        `_importar_com_retry_db` para recuperar de SSL drop no Postgres do
+        Render. Apos o dispose, qualquer objeto carregado anteriormente fica
+        DETACHED — a proxima leitura lazy de relationship (ex.: `conta.token`)
+        levanta `DetachedInstanceError`.
+
+        Aqui re-buscamos a conta da sessao corrente para restaurar o vinculo.
+        Idempotente: se ja esta atachada, no-op.
+        """
+        from sqlalchemy import inspect as sa_inspect
+
+        try:
+            state = sa_inspect(self.conta)
+            if not state.detached:
+                return self.conta
+        except Exception:
+            # Falha na inspecao: melhor recarregar do que arriscar.
+            pass
+
+        recarregada = db.session.get(HoraTagPlusConta, self._conta_id)
+        if recarregada is None:
+            raise RuntimeError(
+                f'HoraTagPlusConta {self._conta_id} sumiu do banco apos recovery.'
+            )
+        self.conta = recarregada
+        return self.conta
 
     # ----- Authorization Code flow -----
 
@@ -65,22 +100,29 @@ class OAuthClient:
 
     def refresh_if_needed(self) -> HoraTagPlusToken:
         """Retorna token valido. Refresh se faltar < EXPIRY_MARGIN."""
-        token = self.conta.token
+        self._ensure_conta_attached()
+        # Query explicita em vez de `self.conta.token` (lazy load) — ja que
+        # garantimos a sessao acima, ambos funcionariam, mas a query explicita
+        # eh mais defensiva e nao depende do relationship estar carregado.
+        token = (
+            HoraTagPlusToken.query.filter_by(conta_id=self._conta_id).first()
+        )
         if token and token.expires_at > agora_utc_naive() + self.EXPIRY_MARGIN:
             return token
         return self._do_refresh()
 
     def _do_refresh(self) -> HoraTagPlusToken:
         """Refresh com lock pessimista (FOR UPDATE) para serializar workers."""
+        self._ensure_conta_attached()
         token = (
             HoraTagPlusToken.query
-            .filter_by(conta_id=self.conta.id)
+            .filter_by(conta_id=self._conta_id)
             .with_for_update()
             .first()
         )
         if not token:
             raise RuntimeError(
-                f'Conta {self.conta.id} sem token. Refazer OAuth em /hora/tagplus/conta/oauth'
+                f'Conta {self._conta_id} sem token. Refazer OAuth em /hora/tagplus/conta/oauth'
             )
 
         # Re-check apos lock: outro worker pode ter refreshed enquanto esperavamos.
@@ -110,13 +152,18 @@ class OAuthClient:
     # ----- Persistencia -----
 
     def _save_token(self, body: dict) -> HoraTagPlusToken:
+        self._ensure_conta_attached()
         expires_in = int(body.get('expires_in', 86400))
         expires_at = agora_utc_naive() + timedelta(seconds=expires_in)
 
-        token = self.conta.token
+        # Query explicita (em vez de `self.conta.token` lazy) por defesa em
+        # profundidade — _ensure_conta_attached ja garantiu sessao viva.
+        token = (
+            HoraTagPlusToken.query.filter_by(conta_id=self._conta_id).first()
+        )
         is_new = token is None
         if is_new:
-            token = HoraTagPlusToken(conta_id=self.conta.id)
+            token = HoraTagPlusToken(conta_id=self._conta_id)
             db.session.add(token)
 
         token.access_token_encrypted = encrypt(body['access_token'])
@@ -132,7 +179,7 @@ class OAuthClient:
         logger.info(
             'TagPlus token %s salvo conta=%s expires_at=%s',
             'criado' if is_new else 'refreshed',
-            self.conta.id, expires_at,
+            self._conta_id, expires_at,
         )
         return token
 
