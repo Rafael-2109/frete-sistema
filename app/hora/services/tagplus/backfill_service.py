@@ -352,7 +352,9 @@ def _extrair_parcelas_info(faturas: list) -> tuple[int, int]:
 # --------------------------------------------------------------------------
 
 class NfeJaImportada(Exception):
-    """Mesma chave_acesso ja existe em hora_venda.nf_saida_chave_44."""
+    """Chave_acesso ja existe e venda nao foi originada por TAGPLUS_API
+    (foi importada via DANFE ou criada manualmente — nao deve ser tocada).
+    """
 
 
 class NfeIncompleta(Exception):
@@ -363,11 +365,22 @@ def importar_nfe_da_api(
     api: ApiClient,
     nfe_id_tagplus: int,
     operador: Optional[str] = None,
-) -> HoraVenda:
-    """Puxa GET /nfes/{id} e cria HoraVenda + itens + eventos + divergencias.
+) -> tuple[HoraVenda, str]:
+    """Puxa GET /nfes/{id} e cria OU atualiza HoraVenda.
 
-    Idempotente: levanta `NfeJaImportada` quando chave_acesso ja existe.
-    Retorna `HoraVenda` criada.
+    Modo UPSERT (2026-04-30):
+      - Se nao existe HoraVenda com essa chave_44 -> cria tudo (HoraVenda +
+        itens + eventos VENDIDA + divergencias). Retorna (venda, 'criado').
+      - Se existe E origem_criacao='TAGPLUS_API' -> atualiza apenas campos
+        em estado default/NULL na venda atual (nao sobrescreve edicoes do
+        operador). Itens sao criados se ainda nao existirem; vendas que ja
+        tem itens nao recebem novos. Retorna (venda, 'atualizado') ou
+        (venda, 'inalterado') se nada mudou.
+      - Se existe com outra origem (DANFE, MANUAL) -> levanta
+        NfeJaImportada (nao toca).
+
+    Returns:
+        Tupla (HoraVenda, status) onde status in {'criado','atualizado','inalterado'}.
     """
     from app.hora.services.venda_service import (
         _registrar_divergencia, _resolver_loja_por_cnpj,
@@ -429,9 +442,11 @@ def importar_nfe_da_api(
         )
 
     existente = HoraVenda.query.filter_by(nf_saida_chave_44=chave).first()
-    if existente:
+    if existente and existente.origem_criacao != 'TAGPLUS_API':
         raise NfeJaImportada(
-            f'NF chave={chave} ja importada (venda_id={existente.id})'
+            f'NF chave={chave} ja importada (venda_id={existente.id}) '
+            f'com origem={existente.origem_criacao} — backfill nao toca '
+            f'vendas DANFE/MANUAL.'
         )
 
     # ------ destinatario (cliente) ------
@@ -474,7 +489,57 @@ def importar_nfe_da_api(
     if cep_db and len(cep_db) == 8:
         cep_db = f'{cep_db[:5]}-{cep_db[5:]}'
 
-    # ------ Cria HoraVenda ------
+    # Itens da API (compartilhado entre fluxo UPSERT e CREATE).
+    itens_raw = nfe.get('itens') or []
+
+    # ------ MODO UPSERT: se ja existe TAGPLUS_API, atualiza campos vazios ------
+    if existente:
+        status_upsert = _atualizar_campos_vazios(
+            venda=existente,
+            cep_db=cep_db,
+            endereco=endereco,
+            telefone=telefone,
+            email=email,
+            forma_pagamento=forma_pgto_hora,
+            modalidade_frete=modalidade_frete,
+            n_parcelas=n_parcelas,
+            interv_parcelas=interv_parcelas,
+            cnpj_emitente=cnpj_emitente,
+            loja_emitente_id=loja_emitente.id if loja_emitente else None,
+        )
+        # Se nao tem itens ainda, tenta criar agora.
+        criou_itens = False
+        if not existente.itens:
+            inf_contribuinte_nf = nfe.get('inf_contribuinte') or ''
+            observacoes_nf = nfe.get('observacoes') or ''
+            antes = {it.id for it in existente.itens}
+            _criar_itens_da_api(
+                venda=existente,
+                itens_api=itens_raw,
+                loja_emitente_id=loja_emitente.id if loja_emitente else None,
+                data_venda=data_emissao,
+                operador=operador,
+                inf_contribuinte_nf=inf_contribuinte_nf,
+                observacoes_nf=observacoes_nf,
+            )
+            db.session.flush()
+            criou_itens = any(it.id not in antes for it in existente.itens)
+
+        if status_upsert or criou_itens:
+            venda_audit.registrar_auditoria(
+                venda_id=existente.id, usuario=operador or '',
+                acao='EDITOU_HEADER',
+                detalhe=(
+                    f'Backfill TagPlus refresh — '
+                    f'campos atualizados={status_upsert}, '
+                    f'itens_criados={criou_itens}'
+                ),
+            )
+            db.session.commit()
+            return existente, 'atualizado'
+        return existente, 'inalterado'
+
+    # ------ Cria HoraVenda (nova) ------
     venda = HoraVenda(
         loja_id=loja_emitente.id if loja_emitente else None,
         cpf_cliente=cpf[:14],
@@ -520,7 +585,6 @@ def importar_nfe_da_api(
         )
 
     # ------ Itens -> HoraVendaItem + eventos ------
-    itens_raw = nfe.get('itens') or []
     _ = serie_nf  # serie capturada para futuro armazenamento (hoje hora_venda nao guarda)
     inf_contribuinte_nf = nfe.get('inf_contribuinte') or ''
     observacoes_nf = nfe.get('observacoes') or ''
@@ -544,7 +608,83 @@ def importar_nfe_da_api(
     )
 
     db.session.commit()
-    return venda
+    return venda, 'criado'
+
+
+def _atualizar_campos_vazios(
+    venda: HoraVenda,
+    cep_db: Optional[str],
+    endereco: dict,
+    telefone: Optional[str],
+    email: Optional[str],
+    forma_pagamento: Optional[str],
+    modalidade_frete: str,
+    n_parcelas: int,
+    interv_parcelas: int,
+    cnpj_emitente: Optional[str],
+    loja_emitente_id: Optional[int],
+) -> bool:
+    """Atualiza campos da venda existente que estao em estado default/NULL.
+
+    NAO sobrescreve valores ja preenchidos (preserva edicoes do operador).
+
+    Definicao de "vazio":
+      - Strings: None, '' ou 'NAO_INFORMADO' (forma_pagamento).
+      - Numero: para parcelas/intervalo, considera vazio se = default
+        (1 / 30) E API tem valor diferente (>1 / != 30).
+      - modalidade_frete: vazio se = '9' (default) E API retorna outro.
+
+    Returns:
+        True se algum campo foi alterado, False caso contrario.
+    """
+    alterou = False
+
+    def _set_se_vazio(campo: str, novo_valor, vazios=(None, '')):
+        nonlocal alterou
+        atual = getattr(venda, campo, None)
+        if atual in vazios and novo_valor not in vazios:
+            setattr(venda, campo, novo_valor)
+            alterou = True
+
+    # Endereco / contato
+    _set_se_vazio('cep', cep_db)
+    _set_se_vazio('endereco_logradouro', (endereco.get('logradouro') or '')[:255] or None)
+    _set_se_vazio('endereco_numero', (endereco.get('numero') or '')[:20] or None)
+    _set_se_vazio('endereco_complemento', (endereco.get('complemento') or '')[:100] or None)
+    _set_se_vazio('endereco_bairro', (endereco.get('bairro') or '')[:100] or None)
+    _set_se_vazio('endereco_cidade', (endereco.get('cidade') or '')[:100] or None)
+    _set_se_vazio('endereco_uf', endereco.get('uf'))
+    _set_se_vazio('telefone_cliente', (telefone or '')[:20] or None)
+    _set_se_vazio('email_cliente', (email or '')[:120] or None)
+
+    # Forma de pagamento: 'NAO_INFORMADO' tambem conta como vazio.
+    if (
+        venda.forma_pagamento in (None, '', 'NAO_INFORMADO')
+        and forma_pagamento and forma_pagamento != 'NAO_INFORMADO'
+    ):
+        venda.forma_pagamento = forma_pagamento
+        alterou = True
+
+    # Loja / CNPJ emitente: so preenche se NULL.
+    _set_se_vazio('cnpj_emitente', cnpj_emitente)
+    if venda.loja_id is None and loja_emitente_id is not None:
+        venda.loja_id = loja_emitente_id
+        alterou = True
+
+    # Modalidade de frete: '9' eh default; se API retornou outro, atualiza.
+    if (venda.modalidade_frete or '9') == '9' and modalidade_frete != '9':
+        venda.modalidade_frete = modalidade_frete
+        alterou = True
+
+    # Parcelas: defaults sao (1, 30); se API trouxe valores reais, atualiza.
+    atual_n = venda.numero_parcelas or 1
+    atual_interv = venda.intervalo_parcelas_dias or 30
+    if (atual_n, atual_interv) == (1, 30) and (n_parcelas, interv_parcelas) != (1, 30):
+        venda.numero_parcelas = n_parcelas
+        venda.intervalo_parcelas_dias = interv_parcelas
+        alterou = True
+
+    return alterou
 
 
 def _criar_itens_da_api(
@@ -806,7 +946,7 @@ def executar_backfill(
     api = ApiClient(conta)
 
     resultados = []
-    n_ok = n_dup = n_err = n_div = 0
+    n_criado = n_atualizado = n_inalterado = n_dup = n_err = n_div = 0
 
     iterador = listar_nfes_emitidas(api, since=since, until=until)
     for i, nfe_resumo in enumerate(iterador):
@@ -835,19 +975,31 @@ def executar_backfill(
             continue
 
         try:
-            venda = importar_nfe_da_api(api, nfe_id, operador=operador)
+            venda, status = importar_nfe_da_api(api, nfe_id, operador=operador)
             entry.update({
-                'status': 'sucesso',
+                'status': status,
                 'venda_id': venda.id,
                 'numero_nf': venda.nf_saida_numero,
                 'qtd_chassis': len(venda.itens),
                 'qtd_divergencias': len(venda.divergencias_abertas),
-                'mensagem': (
-                    f'NF {venda.nf_saida_numero} importada — '
-                    f'{len(venda.itens)} chassi(s) para {venda.nome_cliente}.'
-                ),
             })
-            n_ok += 1
+            if status == 'criado':
+                entry['mensagem'] = (
+                    f'NF {venda.nf_saida_numero} criada — '
+                    f'{len(venda.itens)} chassi(s) para {venda.nome_cliente}.'
+                )
+                n_criado += 1
+            elif status == 'atualizado':
+                entry['mensagem'] = (
+                    f'NF {venda.nf_saida_numero} atualizada (campos vazios '
+                    f'preenchidos a partir da API).'
+                )
+                n_atualizado += 1
+            else:  # inalterado
+                entry['mensagem'] = (
+                    f'NF {venda.nf_saida_numero} ja estava completa — nada a fazer.'
+                )
+                n_inalterado += 1
             n_div += len(venda.divergencias_abertas)
         except NfeJaImportada as exc:
             entry['status'] = 'duplicado'
@@ -868,7 +1020,12 @@ def executar_backfill(
 
     return {
         'total': len(resultados),
-        'sucesso': n_ok,
+        'criado': n_criado,
+        'atualizado': n_atualizado,
+        'inalterado': n_inalterado,
+        # `sucesso` mantido para compat backward com codigo/template antigo
+        # = criado + atualizado (operacoes que efetivamente preencheram dados).
+        'sucesso': n_criado + n_atualizado,
         'duplicado': n_dup,
         'erro': n_err,
         'divergencias': n_div,

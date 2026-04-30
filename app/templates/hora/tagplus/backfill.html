@@ -82,10 +82,26 @@
     <span class="badge bg-secondary fs-6">Total: {{ relatorio.total }}</span>
   </div>
   <div class="col-auto">
-    <span class="badge bg-success fs-6">Sucesso: {{ relatorio.sucesso }}</span>
+    <span class="badge bg-success fs-6"
+          title="Vendas novas criadas">Criadas: {{ relatorio.criado or 0 }}</span>
   </div>
   <div class="col-auto">
-    <span class="badge bg-warning text-dark fs-6">Duplicado: {{ relatorio.duplicado }}</span>
+    <span class="badge bg-primary fs-6"
+          title="Vendas existentes (TAGPLUS_API) cujos campos vazios foram refrescados pela API">
+      Atualizadas: {{ relatorio.atualizado or 0 }}
+    </span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-light text-dark fs-6"
+          title="Já estavam completas — nada a fazer">
+      Inalteradas: {{ relatorio.inalterado or 0 }}
+    </span>
+  </div>
+  <div class="col-auto">
+    <span class="badge bg-warning text-dark fs-6"
+          title="NFe já importada por DANFE/MANUAL — backfill não toca">
+      Duplicadas (outra origem): {{ relatorio.duplicado }}
+    </span>
   </div>
   <div class="col-auto">
     <span class="badge bg-danger fs-6">Erro: {{ relatorio.erro }}</span>
