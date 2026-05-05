@@ -216,5 +216,9 @@
     "defaultMode": "auto"
   },
   "outputStyle": "precision-engineer",
-  "prefersReducedMotion": false
+  "spinnerTipsEnabled": true,
+  "prefersReducedMotion": false,
+  "enabledPlugins": {
+    "github@claude-plugins-official": false
+  }
 }
