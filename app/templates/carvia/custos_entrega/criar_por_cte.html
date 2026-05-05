@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block title %}Criar Despesa Extra - CTe {{ operacao.cte_numero }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-plus"></i> Criar Despesa Extra
+                <small class="text-muted">CTe {{ operacao.cte_numero or operacao.ctrc_numero or ('OP #' ~ operacao.id) }}</small>
+            </h1>
+        </div>
+    </div>
+
+    {% set carvia_active = 'custos_entrega' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}">Nova Despesa Extra</a></li>
+            <li class="breadcrumb-item active">Criar via CTe</li>
+        </ol>
+    </nav>
+
+    <div class="alert alert-info small">
+        <i class="fas fa-info-circle"></i>
+        <strong>Modo CTe-direto:</strong> esta despesa sera vinculada ao CTe CarVia
+        <strong>{{ operacao.cte_numero or operacao.ctrc_numero }}</strong>. O CarviaFrete sera autovinculado se ja existir; senao,
+        sera vinculado depois quando a portaria registrar o embarque (sem bloquear esta operacao).
+    </div>
+
+    <div class="row">
+        <!-- Formulario -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle"></i> Dados da Despesa Extra
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        {{ form.hidden_tag() }}
+
+                        <!-- Tipo de Despesa -->
+                        <div class="form-group">
+                            {{ form.tipo_despesa.label(class="form-label") }}
+                            {{ form.tipo_despesa(class="form-control") }}
+                            {% if form.tipo_despesa.errors %}
+                            {% for error in form.tipo_despesa.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <!-- Valor + Data -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-dollar-sign"></i> Valor e Data
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.valor_despesa.label(class="form-label") }}
+                                    <div class="input-group">
+                                        <span class="input-group-text">R$</span>
+                                        {{ form.valor_despesa(class="form-control valor-monetario", placeholder="0,00") }}
+                                    </div>
+                                    {% if form.valor_despesa.errors %}
+                                    {% for error in form.valor_despesa.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.data_custo.label(class="form-label") }}
+                                    {{ form.data_custo(class="form-control", type="date") }}
+                                    <small class="text-muted">A data de vencimento sera igual a data do custo.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Beneficiario -->
+                        <h6 class="border-bottom pb-2 mb-3 mt-4">
+                            <i class="fas fa-user-tag"></i> Beneficiario
+                        </h6>
+                        <div class="form-group mb-3">
+                            <div class="btn-group" role="group" aria-label="Tipo de beneficiario">
+                                {% for subfield in form.tipo_beneficiario %}
+                                <input type="radio" class="btn-check benef-radio"
+                                       name="{{ subfield.name }}"
+                                       id="{{ subfield.id }}"
+                                       value="{{ subfield.data }}"
+                                       data-benef-target="{{ subfield.data }}"
+                                       autocomplete="off"
+                                       {% if subfield.checked %}checked{% endif %}>
+                                <label class="btn btn-outline-primary" for="{{ subfield.id }}">
+                                    {{ subfield.label.text }}
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div id="benef-TRANSPORTADORA" class="benef-panel">
+                            {{ form.transportadora_id.label(class="form-label") }}
+                            {{ form.transportadora_id(class="form-select") }}
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Sem CarviaFrete vinculado: e obrigatorio escolher a transportadora aqui (nao ha "transportadora padrao do frete").
+                            </small>
+                        </div>
+
+                        <div id="benef-DESTINATARIO" class="benef-panel" style="display:none">
+                            <div class="row">
+                                <div class="col-md-7">
+                                    <label class="form-label">Nome do Destinatario (do CTe)</label>
+                                    <input type="text" class="form-control" value="{{ operacao.nome_cliente or '-' }}" disabled>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">CNPJ</label>
+                                    <input type="text" class="form-control" value="{{ operacao.cnpj_cliente or '-' }}" disabled>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="benef-OUTROS" class="benef-panel" style="display:none">
+                            {{ form.beneficiario_nome.label(class="form-label") }}
+                            {{ form.beneficiario_nome(class="form-control", placeholder="Nome do beneficiario (terceiro)") }}
+                        </div>
+
+                        <!-- Anexos -->
+                        <div class="form-group mt-4">
+                            {{ form.anexos.label(class="form-label") }}
+                            {{ form.anexos(class="form-control", multiple=True) }}
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Comprovantes, fotos, PDFs, emails (.msg/.eml). Multiplos arquivos.
+                            </small>
+                        </div>
+
+                        <!-- Observacoes -->
+                        <div class="form-group">
+                            {{ form.observacoes.label(class="form-label") }}
+                            {{ form.observacoes(class="form-control", rows="3") }}
+                        </div>
+
+                        <!-- Acoes -->
+                        <div class="border rounded p-3 mt-4 bg-body-tertiary">
+                            <h6 class="mb-3"><i class="fas fa-check-circle"></i> Continuar</h6>
+                            <div class="d-flex gap-2 justify-content-end flex-wrap">
+                                <a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times"></i> Cancelar
+                                </a>
+                                <button type="submit" name="acao" value="emitir_ssw"
+                                        class="btn btn-primary"
+                                        {% if not pode_emitir %}disabled
+                                            title="Operacao precisa ter CTRC SSW emitido"
+                                        {% else %}
+                                            title="Cria a despesa e enfileira a emissao do CTe Complementar no SSW"
+                                        {% endif %}>
+                                    <i class="fas fa-paper-plane"></i> Emitir CTe Compl. SSW
+                                </button>
+                                <button type="submit" name="acao" value="sem_emissao" class="btn btn-success">
+                                    <i class="fas fa-arrow-right"></i> Continuar S/ Emissao
+                                </button>
+                            </div>
+                            {% if not pode_emitir %}
+                            <small class="text-muted d-block mt-2">
+                                <i class="fas fa-info-circle"></i>
+                                Emissao SSW indisponivel: o CTe pai ainda nao tem CTRC emitido.
+                            </small>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar — dados do CTe pai -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Resumo do CTe (Operacao)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>CTe:</strong> {{ operacao.cte_numero or '-' }}</p>
+                    <p><strong>CTRC SSW:</strong> {{ operacao.ctrc_numero or '-' }}</p>
+                    <p><strong>Cliente:</strong> {{ operacao.nome_cliente or '-' }}</p>
+                    <p><strong>CNPJ:</strong> {{ operacao.cnpj_cliente or '-' }}</p>
+                    <p><strong>Cidade/UF:</strong> {{ operacao.cidade_destino or '-' }}/{{ operacao.uf_destino or '-' }}</p>
+                    <p><strong>Valor CTe:</strong> {{ (operacao.cte_valor or 0)|moeda_carteira }}</p>
+                    <p><strong>Status:</strong>
+                        <span class="badge bg-secondary">{{ operacao.status or '-' }}</span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-question-circle"></i> Sobre este fluxo
+                    </h6>
+                </div>
+                <div class="card-body small">
+                    <p>O sistema vai tentar vincular este custo ao <strong>CarviaFrete</strong>
+                    correspondente em 3 niveis:</p>
+                    <ol class="small">
+                        <li>Por <code>operacao_id</code> (1:1)</li>
+                        <li>Por NFs da operacao (CSV match)</li>
+                        <li>Por (transportadora + CNPJ destino) — fallback</li>
+                    </ol>
+                    <p class="mb-0 text-muted"><i class="fas fa-info-circle"></i>
+                    Se nada for encontrado, o custo fica com <code>frete_id=NULL</code> e
+                    podera ser vinculado depois automaticamente quando o frete aparecer.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Mascara monetaria
+document.querySelectorAll('.valor-monetario').forEach(function(input) {
+    input.addEventListener('blur', function(e) {
+        let value = e.target.value.trim();
+        if (!value) return;
+        value = value.replace(/[^\d.,]/g, '');
+        let numero;
+        if (value.includes(',')) {
+            numero = parseFloat(value.replace(/\./g, '').replace(',', '.'));
+        } else if (value.includes('.')) {
+            const partes = value.split('.');
+            if (partes[partes.length - 1].length <= 2) {
+                numero = parseFloat(value);
+            } else {
+                numero = parseFloat(value.replace(/\./g, ''));
+            }
+        } else {
+            numero = parseFloat(value);
+        }
+        if (!isNaN(numero)) {
+            e.target.value = numero.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+    });
+    input.addEventListener('input', function(e) {
+        e.target.value = e.target.value.replace(/[^\d.,]/g, '');
+    });
+});
+
+// Toggle dos paineis de Beneficiario
+(function() {
+    const radios = document.querySelectorAll('.benef-radio');
+    const panels = {
+        'TRANSPORTADORA': document.getElementById('benef-TRANSPORTADORA'),
+        'DESTINATARIO': document.getElementById('benef-DESTINATARIO'),
+        'OUTROS': document.getElementById('benef-OUTROS'),
+    };
+    function mostrar(tipo) {
+        Object.keys(panels).forEach(function(k) {
+            if (panels[k]) panels[k].style.display = (k === tipo) ? 'block' : 'none';
+        });
+    }
+    radios.forEach(function(r) {
+        r.addEventListener('change', function() {
+            if (r.checked) mostrar(r.value);
+        });
+        if (r.checked) mostrar(r.value);
+    });
+})();
+</script>
+{% endblock %}

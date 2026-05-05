@@ -361,10 +361,13 @@ class CarviaEmissaoCteComplementar(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Vinculos
+    # Vinculo opcional com CE (nullable=True desde 2026-05-05).
+    # CE deixou de ser pre-requisito para emissao SSW 222 — pode ser anexado
+    # depois via "Vincular CE" no detalhe do CTe Comp, ou nem ser vinculado.
     custo_entrega_id = db.Column(
         db.Integer,
         db.ForeignKey('carvia_custos_entrega.id'),
-        nullable=False,
+        nullable=True,
         index=True
     )
     cte_complementar_id = db.Column(

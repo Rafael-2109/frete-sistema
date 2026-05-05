@@ -40,6 +40,37 @@ logger = logging.getLogger(__name__)
 S3_FOLDER_XML = 'carvia/ctes_complementares_xml'
 S3_FOLDER_DACTE = 'carvia/ctes_complementares_dacte'
 
+# PIS/COFINS fixo 9.25% — divisor para grossing up.
+# Usado por `calcular_valor_complementar` e replicado em
+# `app/carvia/routes/custo_entrega_routes.py::PISCOFINS_DIVISOR`.
+PISCOFINS_DIVISOR_DEFAULT = 0.9075
+
+
+def calcular_valor_complementar(
+    valor_base: float,
+    icms_aliquota: float,
+    piscofins_divisor: float = PISCOFINS_DIVISOR_DEFAULT,
+) -> float:
+    """Aplica grossing-up (PIS/COFINS + ICMS) ao valor base do custo.
+
+    Formula: valor_base / piscofins_divisor / (1 - icms_aliquota/100).
+
+    Args:
+        valor_base: valor liquido do custo (R$)
+        icms_aliquota: aliquota ICMS em pontos percentuais (ex: 12.0 = 12%)
+        piscofins_divisor: divisor PIS/COFINS (default 0.9075 = 1 - 9.25%)
+
+    Returns:
+        Valor bruto do CTe Complementar (R$, 2 casas).
+
+    Raises:
+        ValueError: se icms_aliquota >= 100 (divisao invalida).
+    """
+    icms_divisor = 1 - (float(icms_aliquota) / 100)
+    if icms_divisor <= 0:
+        raise ValueError(f'Aliquota ICMS invalida: {icms_aliquota}')
+    return round(float(valor_base) / piscofins_divisor / icms_divisor, 2)
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Parser XML

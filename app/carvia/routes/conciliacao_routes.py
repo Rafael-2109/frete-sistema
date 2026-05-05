@@ -1430,7 +1430,6 @@ def register_conciliacao_routes(bp):
             CarviaExtratoLinha,
             CarviaOperacao,
             CarviaCustoEntrega,
-            CarviaFrete,
         )
         from app.carvia.services.financeiro.carvia_conciliacao_service import (
             CarviaConciliacaoService,
@@ -1492,12 +1491,11 @@ def register_conciliacao_routes(bp):
             db.session.add(custo)
             db.session.flush()
 
-            # Auto-link frete (mesmo padrão de custo_entrega_routes.py)
-            frete = CarviaFrete.query.filter_by(
-                operacao_id=custo.operacao_id
-            ).first()
-            if frete:
-                custo.frete_id = frete.id
+            # Auto-link frete via service (heuristica 3-niveis)
+            from app.carvia.services.financeiro.custo_entrega_autolink_service import (
+                tentar_vincular_frete,
+            )
+            tentar_vincular_frete(custo)
 
             # Auto-conciliar com a linha do extrato
             resultado_conc = CarviaConciliacaoService.conciliar(

@@ -334,12 +334,9 @@ class CustoEntregaFaturaService:
         if not fatura.transportadora_id:
             return []
 
-        # Buscar CEs PENDENTE sem FT cujo frete_id aponta para um frete
-        # que possui subcontrato da mesma transportadora da FT.
-        # JOIN CE -> CarviaSubcontrato (via frete_id) para filtrar por
-        # transportadora_id, com distinct para evitar duplicatas quando
-        # o frete tem multiplos subs.
-        ces = (
+        # Branch A — CEs com frete_id: JOIN CE -> CarviaSubcontrato (via frete_id)
+        # para filtrar por transportadora_id, com distinct para evitar duplicatas.
+        ces_com_frete = (
             db.session.query(CarviaCustoEntrega)
             .join(
                 CarviaSubcontrato,
@@ -352,8 +349,45 @@ class CustoEntregaFaturaService:
                 CarviaSubcontrato.transportadora_id == fatura.transportadora_id,
             )
             .distinct()
-            .order_by(CarviaCustoEntrega.criado_em.desc())
             .all()
+        )
+
+        # Branch B (fallback 2026-05-05) — CEs sem frete_id mas com operacao_id.
+        # Cobre o cenario novo de CE criado direto no CTe (sem CarviaFrete).
+        # Match deve ser deterministico — duas vias INDEPENDENTES (EXISTS evita
+        # fan-out do OUTERJOIN+OR que poderia trazer CEs de outra transportadora):
+        #
+        #   (a) override explicito: CE.transportadora_id == FT.transportadora_id
+        #   (b) inferido pela operacao: EXISTS CarviaSubcontrato com mesma operacao
+        #       E mesma transportadora da FT
+        sub_exists = (
+            db.session.query(CarviaSubcontrato.id)
+            .filter(
+                CarviaSubcontrato.operacao_id == CarviaCustoEntrega.operacao_id,
+                CarviaSubcontrato.transportadora_id == fatura.transportadora_id,
+                CarviaSubcontrato.status != 'CANCELADO',
+            )
+            .exists()
+        )
+        ces_sem_frete = (
+            db.session.query(CarviaCustoEntrega)
+            .filter(
+                CarviaCustoEntrega.status == 'PENDENTE',
+                CarviaCustoEntrega.fatura_transportadora_id.is_(None),
+                CarviaCustoEntrega.frete_id.is_(None),
+                CarviaCustoEntrega.operacao_id.isnot(None),
+                db.or_(
+                    CarviaCustoEntrega.transportadora_id == fatura.transportadora_id,
+                    sub_exists,
+                ),
+            )
+            .all()
+        )
+
+        # Merge sem duplicatas (chave: ce.id) — preserva ordem por criado_em DESC
+        ce_map = {ce.id: ce for ce in (ces_com_frete + ces_sem_frete)}
+        ces = sorted(
+            ce_map.values(), key=lambda c: c.criado_em or db.func.now(), reverse=True,
         )
 
         if not ces:

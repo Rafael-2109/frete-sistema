@@ -4,7 +4,9 @@
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-plus-circle"></i> Novo CTe Complementar</h2>
+        <h2><i class="fas fa-plus-circle"></i> Novo CTe Complementar
+            <small class="text-muted">Emissao SSW 222</small>
+        </h2>
         <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> Voltar
         </a>
@@ -16,67 +18,138 @@
     <!-- Info da operacao (read-only) -->
     <div class="card mb-3">
         <div class="card-header">
-            <h6 class="mb-0"><i class="fas fa-link"></i> CTe do Frete (pai)</h6>
+            <h6 class="mb-0"><i class="fas fa-link"></i> CTe pai (Operacao CarVia)</h6>
         </div>
         <div class="card-body py-2">
             <div class="row g-2">
-                <div class="col-md-4">
-                    <small class="text-muted d-block">CTe CarVia</small>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">CTe</small>
                     <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="text-decoration-none">
                         {{ carvia_ref(operacao.cte_numero, operacao.ctrc_numero, fallback='(sem CTe)') }}
                     </a>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <small class="text-muted d-block">Cliente</small>
                     <strong>{{ operacao.nome_cliente or operacao.cnpj_cliente }}</strong>
                 </div>
-                <div class="col-md-4">
-                    <small class="text-muted d-block">Valor CTe</small>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Valor CTe pai</small>
                     <strong>{{ operacao.cte_valor|valor_br if operacao.cte_valor else '-' }}</strong>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">ICMS aliquota</small>
+                    <strong>{{ icms_aliquota }}%</strong>
                 </div>
             </div>
         </div>
     </div>
 
+    {% if not pode_emitir %}
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>Emissao indisponivel:</strong>
+        {% if not operacao.ctrc_numero %}
+            CTe pai nao tem CTRC SSW (operacao ainda nao emitiu o original).
+        {% elif not icms_aliquota %}
+            ICMS nao encontrado. Verifique o XML do CTe pai (`/carvia/importar`).
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <div class="col-md-9">
             <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-paper-plane"></i> Dados para emissao SSW 222
+                    </h5>
+                </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('carvia.criar_cte_complementar', operacao_id=operacao.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label for="cte_numero" class="form-label">Numero CTe</label>
-                                <input type="text" class="form-control" id="cte_numero" name="cte_numero"
-                                       maxlength="20" placeholder="Numero do CTe complementar">
+                                <label for="tipo_custo" class="form-label">Tipo de Custo *</label>
+                                <select class="form-select" id="tipo_custo" name="tipo_custo" required>
+                                    <option value="">-- Selecione --</option>
+                                    {% for t in tipos_custo %}
+                                    <option value="{{ t }}">{{ t }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Define o motivo SSW (C/D/E/R) automaticamente.</small>
                             </div>
+
                             <div class="col-md-6">
-                                <label for="cte_valor" class="form-label">Valor (R$) *</label>
-                                <input type="text" class="form-control" id="cte_valor" name="cte_valor"
-                                       inputmode="decimal" required placeholder="0,00">
+                                <label for="valor_base" class="form-label">Valor Base (R$, liquido) *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input type="text" class="form-control" id="valor_base"
+                                           name="valor_base" inputmode="decimal" required
+                                           placeholder="0,00">
+                                </div>
+                                <small class="text-muted">Valor que voce quer cobrar (sera bruteado com PIS/COFINS + ICMS).</small>
                             </div>
-                            <div class="col-md-6">
-                                <label for="cte_data_emissao" class="form-label">Data Emissao</label>
-                                <input type="date" class="form-control" id="cte_data_emissao" name="cte_data_emissao">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="cte_chave_acesso" class="form-label">Chave de Acesso</label>
-                                <input type="text" class="form-control" id="cte_chave_acesso" name="cte_chave_acesso"
-                                       maxlength="44" placeholder="44 digitos">
-                            </div>
+
                             <div class="col-12">
-                                <label for="observacoes" class="form-label">Observacoes</label>
-                                <textarea class="form-control" id="observacoes" name="observacoes"
-                                          rows="3" placeholder="Observacoes adicionais..."></textarea>
+                                <label for="motivo_texto" class="form-label">Motivo (texto) *</label>
+                                <textarea class="form-control" id="motivo_texto" name="motivo_texto"
+                                          rows="2" maxlength="500" required
+                                          placeholder="Ex: Reentrega solicitada pelo cliente em 03/05 — sem agendamento previo"></textarea>
+                                <small class="text-muted">Sera gravado no CTe (tag ObsCont) e no campo motivo do CTe Comp.</small>
+                            </div>
+
+                            <div class="col-12">
+                                <label for="custo_entrega_id" class="form-label">
+                                    Vincular Custo Entrega <span class="text-muted">(opcional)</span>
+                                </label>
+                                {% if ces_elegiveis %}
+                                <select class="form-select" id="custo_entrega_id" name="custo_entrega_id">
+                                    <option value="">-- Sem vinculo (criar CE depois) --</option>
+                                    {% for ce in ces_elegiveis %}
+                                    <option value="{{ ce.id }}"
+                                            data-tipo="{{ ce.tipo_custo }}"
+                                            data-valor="{{ ce.valor }}">
+                                        {{ ce.numero_custo }} | {{ ce.tipo_custo }} | R$ {{ ce.valor|valor_br }}
+                                        {% if ce.descricao %} | {{ ce.descricao[:50] }}{% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">CEs PENDENTE/VINCULADO_FT da mesma operacao, sem CTe Comp vinculado.</small>
+                                {% else %}
+                                <input type="hidden" name="custo_entrega_id" value="">
+                                <p class="form-control-plaintext text-muted small mb-0">
+                                    <i class="fas fa-info-circle"></i> Nenhum CE elegivel para esta operacao.
+                                    Voce pode emitir o CTe Comp e vincular um CE depois pela tela do CTe Comp.
+                                </p>
+                                {% endif %}
                             </div>
                         </div>
 
+                        <!-- Preview do calculo -->
                         <hr>
+                        <div class="alert alert-info py-2 mb-3">
+                            <i class="fas fa-calculator"></i>
+                            <strong>Preview:</strong>
+                            <span id="preview-resultado">
+                                Informe o valor base para ver o calculo
+                            </span>
+                            <br>
+                            <small class="text-muted">
+                                Formula: <code>valor_base / 0.9075 / (1 - {{ icms_aliquota }}/100)</code>
+                                {% if preview_valor_por_100 %}
+                                — exemplo: R$ 100,00 base = R$ {{ preview_valor_por_100|valor_br }} bruto.
+                                {% endif %}
+                            </small>
+                        </div>
+
                         <div class="d-flex justify-content-end gap-2">
-                            <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="btn btn-secondary">Cancelar</a>
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-save"></i> Criar CTe Complementar
+                            <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=operacao.id) }}" class="btn btn-secondary">
+                                Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary"
+                                    {% if not pode_emitir %}disabled{% endif %}>
+                                <i class="fas fa-paper-plane"></i> Emitir CTe Complementar via SSW
                             </button>
                         </div>
                     </form>
@@ -85,4 +158,56 @@
         </div>
     </div>
 </div>
+
+<script>
+(function() {
+    const ICMS = {{ icms_aliquota or 0 }};
+    const PISCOFINS = 0.9075;
+    const inputValor = document.getElementById('valor_base');
+    const preview = document.getElementById('preview-resultado');
+    const inputCe = document.getElementById('custo_entrega_id');
+    const inputTipo = document.getElementById('tipo_custo');
+
+    function parseBR(s) {
+        if (!s) return NaN;
+        s = String(s).replace(/[^\d.,]/g, '');
+        if (s.includes(',')) {
+            return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+        }
+        return parseFloat(s);
+    }
+
+    function formatBR(n) {
+        return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function recalcular() {
+        const v = parseBR(inputValor.value);
+        if (!v || v <= 0 || ICMS <= 0 || ICMS >= 100) {
+            preview.textContent = 'Informe o valor base para ver o calculo';
+            return;
+        }
+        const bruto = v / PISCOFINS / (1 - ICMS / 100);
+        preview.innerHTML = '<strong>Valor CTe Comp:</strong> R$ ' + formatBR(bruto) +
+                            ' (base R$ ' + formatBR(v) + ' + PIS/COFINS 9.25% + ICMS ' + ICMS + '%)';
+    }
+
+    if (inputValor) inputValor.addEventListener('input', recalcular);
+
+    // Auto-preencher valor_base + tipo_custo a partir do CE selecionado
+    if (inputCe) {
+        inputCe.addEventListener('change', function() {
+            const opt = inputCe.options[inputCe.selectedIndex];
+            if (!opt || !opt.value) return;
+            const tipoCe = opt.getAttribute('data-tipo');
+            const valorCe = opt.getAttribute('data-valor');
+            if (tipoCe && inputTipo) inputTipo.value = tipoCe;
+            if (valorCe && inputValor) {
+                inputValor.value = formatBR(parseFloat(valorCe));
+                recalcular();
+            }
+        });
+    }
+})();
+</script>
 {% endblock %}

@@ -166,3 +166,62 @@ Para criar/editar telas, referencia rapida:
 **Criar CTe via NF** (`POST /carvia/nfs/<id>/criar-cte`): modal no detalhe da NF, popula automaticamente cliente/destino/peso/valor. Cria operacao 1:1 a partir da NF.
 
 **Autocomplete Transportadora**: input com debounce 300ms + dropdown `.carvia-autocomplete-results`. Busca via `GET /carvia/api/opcoes-transportadora?busca=X&uf_destino=Y`. Ultimo item fixo "Criar Nova Transportadora" → modal `#modalCriarTransportadora` → `POST /carvia/api/cadastrar-transportadora` (auto-seleciona apos cadastro).
+
+---
+
+## Custo de Entrega — desacoplado de CarviaFrete (2026-05-05)
+
+Antes a UI exigia CarviaFrete pra criar CE. Agora ha 4 caminhos:
+
+| # | Rota | Requer | Quando usar |
+|---|------|--------|-------------|
+| 1 | `/carvia/despesas-extras/nova` (busca por NF) | NF em algum CarviaFrete | Caminho default — frete ja existe |
+| 2 | `/carvia/fretes/<id>/despesas-extras/nova` | `frete_id` na URL | Botao no detalhe do frete |
+| 3 | `/carvia/despesas-extras/criar-por-cte/<operacao_id>` | `operacao_id` (CTe CarVia) | **NOVO** — frete ainda nao existe; CE entra com `frete_id=NULL` |
+| 4 | `/api/conciliacao/criar-custo-fiscal` | `operacao_id` + linha extrato DEBITO | Conciliacao bancaria |
+
+### Auto-link `frete_id` (best-effort)
+
+`app/carvia/services/financeiro/custo_entrega_autolink_service.py::tentar_vincular_frete` e chamado em **todos os 4 caminhos** apos `db.session.flush()`. Heuristica 3-niveis:
+
+1. **`operacao_id`** -> `CarviaFrete.operacao_id` (1:1 esperado)
+2. **NFs da operacao** -> `CarviaFrete.numeros_nfs` (CSV match)
+3. **(transportadora + cnpj_destino)** — fallback fraco
+
+Sem matches: CE fica com `frete_id=NULL` e log info. Operacao **nao bloqueia**. Quando o frete aparecer (portaria registra embarque), o vinculo pode ser feito retroativamente.
+
+### Impacto em FT (`ces_disponiveis_para_fatura`)
+
+`app/carvia/services/financeiro/custo_entrega_fatura_service.py::ces_disponiveis_para_fatura` agora cobre 2 branches:
+- **Branch A**: CEs com `frete_id IS NOT NULL` — JOIN via `CarviaSubcontrato.frete_id`
+- **Branch B (novo)**: CEs com `frete_id IS NULL` mas `operacao_id IS NOT NULL` — JOIN via `CarviaSubcontrato.operacao_id` (legacy) ou via `CarviaCustoEntrega.transportadora_id` (override)
+
+---
+
+## CTe Complementar — fluxo unificado (2026-05-05)
+
+3 caminhos de criacao consolidados em `CteComplementarService` (`app/carvia/services/cte_complementar_service.py`):
+
+| # | Caminho | Modo | Service method |
+|---|---------|------|----------------|
+| 1 | UI Manual via menu | `EMISSAO_SSW` | `criar_para_emissao_ssw(operacao_id, valor_base, tipo_custo, motivo_texto, ...)` |
+| 2 | Botao "Gerar CTe Comp" no detalhe do CE (1-click) | `EMISSAO_SSW` (com CE pre-vinculado) | mesma + shim em `_executar_gerar_cte_complementar` |
+| 3 | Importacao XML | `IMPORTACAO_XML` | delega para `cte_complementar_persistencia.persistir_cte_complementar_completo` |
+
+### Migration 2026-05-05
+
+`carvia_emissao_cte_complementar.custo_entrega_id` virou **NULLABLE**. CE deixou de ser pre-requisito para emissao SSW 222.
+
+### UI
+
+- **Menu CarVia ganha "Criar CTe Complementar"** -> `/carvia/ctes-complementares/criar` (busca por CTRC/CTe).
+- **Botao "Lancar Custo Extra" no `detalhe_operacao.html`** -> `/carvia/despesas-extras/criar-por-cte/<operacao_id>`.
+- **Card "Custos de Entrega vinculados" no `detalhe.html` do CTe Comp** com modal "Vincular CE" (filtros deterministicos: mesma `operacao_id`, sem `cte_complementar_id`, status PENDENTE/VINCULADO_FT) e botao "Desvincular" 1-click.
+
+### Calculo grossing-up centralizado
+
+Helper `calcular_valor_complementar(valor_base, icms_aliquota)` em `app/carvia/services/cte_complementar_persistencia.py`. Formula: `valor_base / 0.9075 / (1 - icms/100)`. Usado pelo service e pelo preview JS no template `criar.html`.
+
+### Mutex revisado
+
+Permite **N CTes Comp por operacao sequencialmente** (regra fiscal SSW 222 — fila unica por CTRC). Bloqueia apenas concorrencia: existe outra emissao em PENDENTE/EM_PROCESSAMENTO para a mesma `operacao_id`.

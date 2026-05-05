@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Criar CTe Complementar - Buscar CTe pai{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-plus"></i> Criar CTe Complementar
+                <small class="text-muted">Buscar CTe CarVia (pai)</small>
+            </h1>
+        </div>
+    </div>
+
+    {% set carvia_active = 'ctes_complementares' %}
+    {% include 'carvia/_quick_nav.html' %}
+
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.listar_ctes_complementares') }}">CTes Complementares</a></li>
+            <li class="breadcrumb-item active">Criar</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-search"></i> Buscar CTe pai
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('carvia.buscar_operacao_para_cte_complementar') }}">
+                        <div class="form-group mb-4">
+                            <label for="termo" class="form-label">
+                                <i class="fas fa-file-alt"></i> CTRC, CTe ou Chave de Acesso
+                            </label>
+                            <div class="input-group">
+                                <input type="text"
+                                       id="termo"
+                                       name="termo"
+                                       class="form-control form-control-lg"
+                                       placeholder="Ex: CAR-113-9, CTe-001 ou chave 44 digitos..."
+                                       value="{{ termo or '' }}"
+                                       required>
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                Encontre o CTe CarVia (pai) que servira de base para o CTe Complementar.
+                            </small>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if operacoes_encontradas %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-list"></i> {{ operacoes_encontradas|length }} CTe(s) encontrado(s) para "{{ termo }}"
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>CTe</th>
+                                <th>CTRC SSW</th>
+                                <th>Cliente</th>
+                                <th>Cidade/UF</th>
+                                <th>Valor</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for op in operacoes_encontradas %}
+                            <tr>
+                                <td><strong>{{ op.cte_numero or '-' }}</strong></td>
+                                <td>{{ op.ctrc_numero or '-' }}</td>
+                                <td>{{ op.nome_cliente or '-' }}</td>
+                                <td>{{ op.cidade_destino or '-' }}/{{ op.uf_destino or '-' }}</td>
+                                <td>{{ (op.cte_valor or 0)|moeda_carteira }}</td>
+                                <td><span class="badge bg-secondary">{{ op.status or '-' }}</span></td>
+                                <td>
+                                    <a href="{{ url_for('carvia.criar_cte_complementar', operacao_id=op.id) }}"
+                                       class="btn btn-sm btn-primary">
+                                        <i class="fas fa-arrow-right"></i> Selecionar
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Como funciona
+                    </h6>
+                </div>
+                <div class="card-body small">
+                    <p><strong>O que e CTe Complementar?</strong> Documento fiscal que cobra do
+                    cliente um valor adicional (descarga, reentrega, diaria, avaria, etc.) sobre
+                    um CTe ja emitido.</p>
+                    <hr>
+                    <p><strong>Pre-requisitos do CTe pai:</strong></p>
+                    <ul class="mb-0">
+                        <li>CTRC SSW emitido</li>
+                        <li>ICMS conhecido (do XML ou campo)</li>
+                        <li>Status diferente de CANCELADO</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

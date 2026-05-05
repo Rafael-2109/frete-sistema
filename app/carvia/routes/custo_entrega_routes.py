@@ -4,13 +4,12 @@ Rotas de Custo de Entrega CarVia — CRUD completo + AJAX anexos
 
 import logging
 import os
-from datetime import date, datetime
+from datetime import date
 
 from flask import (
     render_template, request, flash, redirect, url_for, jsonify,
 )
 from flask_login import login_required, current_user
-from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.carvia.models import (
@@ -757,20 +756,14 @@ def register_custo_entrega_routes(bp):
     # ── CTe Complementar: trigger de emissao via SSW opcao 222 ──
 
     def _executar_gerar_cte_complementar(custo, user_email):
-        """Executa a logica tecnica de emissao de CTe Complementar SSW 222.
+        """Shim para compatibilidade — delega ao CteComplementarService.
 
-        Extraida da rota gerar_cte_complementar para ser reutilizavel pelo
-        fluxo da tela "Nova Despesa Extra" quando o usuario clica em
-        "Emitir CTe Compl. SSW" apos criar o custo.
+        Refatorado em 2026-05-05: a logica de emissao foi unificada em
+        `app.carvia.services.cte_complementar_service.CteComplementarService.criar_para_emissao_ssw`.
 
-        Validacoes cobertas:
-            - operacao_id preenchido
-            - cte_complementar_id nao preenchido
-            - status != CANCELADO
-            - sem emissao ativa para o mesmo custo
-            - operacao existe e possui ctrc_numero
-            - ICMS resolvel via campo ou re-parse do XML
-            - calculo de valor com grossing up (PIS/COFINS + ICMS)
+        Esta funcao continua sendo o ponto de entrada do botao "Gerar CTe
+        Complementar" no detalhe do CE (1-click), preservando o contrato
+        de retorno `(sucesso, mensagem, emissao_id)`.
 
         Args:
             custo: CarviaCustoEntrega ja persistido em sessao.
@@ -779,7 +772,11 @@ def register_custo_entrega_routes(bp):
         Returns:
             tuple(sucesso: bool, mensagem: str, emissao_id: int | None)
         """
-        # Guards de estado
+        from app.carvia.services.cte_complementar_service import (
+            CteComplementarService,
+        )
+
+        # Guards de pre-estado (mantidos aqui por UX — service tambem valida)
         if custo.cte_complementar_id:
             return (False, 'Este custo ja possui CTe Complementar vinculado.', None)
         if custo.status == 'CANCELADO':
@@ -787,138 +784,23 @@ def register_custo_entrega_routes(bp):
         if not custo.operacao_id:
             return (
                 False,
-                'Este custo nao possui CTe CarVia vinculado (frete sem operacao de venda).',
+                'Este custo nao possui CTe CarVia vinculado. '
+                'Vincule a uma operacao primeiro ou crie o CTe Complementar '
+                'direto pela tela /ctes-complementares/criar.',
                 None,
             )
 
-        # Verificar emissao em andamento
-        emissao_ativa = CarviaEmissaoCteComplementar.query.filter(
-            CarviaEmissaoCteComplementar.custo_entrega_id == custo.id,
-            CarviaEmissaoCteComplementar.status.in_(['PENDENTE', 'EM_PROCESSAMENTO']),
-        ).first()
-        if emissao_ativa:
-            return (False, 'Ja existe emissao em andamento para este custo.', None)
-
-        operacao = db.session.get(CarviaOperacao, custo.operacao_id)
-        if not operacao or not operacao.ctrc_numero:
-            return (
-                False,
-                'Operacao nao possui CTRC. Importe o CTe XML primeiro.',
-                None,
-            )
-
-        # Resolver ICMS — do campo persistido ou re-parse do XML
-        icms = float(operacao.icms_aliquota or 0)
-        if icms == 0 and operacao.cte_xml_path:
-            try:
-                from app.utils.file_storage import get_file_storage
-                from app.carvia.services.parsers.cte_xml_parser_carvia import (
-                    CTeXMLParserCarvia,
-                )
-                storage = get_file_storage()
-                xml_bytes = storage.download_file(operacao.cte_xml_path)
-                if xml_bytes:
-                    xml_str = xml_bytes.decode('utf-8', errors='replace')
-                    parser = CTeXMLParserCarvia(xml_str)
-                    impostos = parser.get_impostos()
-                    icms = float(impostos.get('aliquota_icms') or 0)
-                    if icms > 0:
-                        operacao.icms_aliquota = icms  # Persistir para futuro
-            except Exception as e:
-                logger.warning("Falha ao resolver ICMS do XML op=%s: %s", operacao.id, e)
-
-        if icms == 0:
-            return (
-                False,
-                'ICMS nao encontrado para esta operacao. Verifique se o XML do CTe foi importado.',
-                None,
-            )
-
-        # Calcular valor CTe Complementar: valor / 0.9075 / (1 - icms/100)
-        valor_base = float(custo.valor)
-        icms_divisor = 1 - (icms / 100)
-        if icms_divisor <= 0:
-            return (False, 'Aliquota ICMS invalida.', None)
-
-        valor_cte = round(valor_base / PISCOFINS_DIVISOR / icms_divisor, 2)
-        motivo_ssw = TIPO_CUSTO_MOTIVO_SSW.get(custo.tipo_custo, 'C')
-
-        try:
-            # Criar CTe Complementar (RASCUNHO)
-            cte_comp = CarviaCteComplementar(
-                numero_comp=CarviaCteComplementar.gerar_numero_comp(),
-                operacao_id=operacao.id,
-                cte_valor=valor_cte,
-                cnpj_cliente=operacao.cnpj_cliente,
-                nome_cliente=operacao.nome_cliente,
-                status='RASCUNHO',
-                observacoes=(
-                    f'Gerado automaticamente de {custo.numero_custo} '
-                    f'({custo.tipo_custo}). '
-                    f'Base={valor_base:.2f}, PIS/COFINS=9.25%, ICMS={icms}%'
-                ),
-                criado_por=user_email,
-            )
-            db.session.add(cte_comp)
-            db.session.flush()
-
-            # Vincular custo ao CTe Complementar
-            custo.cte_complementar_id = cte_comp.id
-
-            # Criar emissao (tracking)
-            emissao = CarviaEmissaoCteComplementar(
-                custo_entrega_id=custo.id,
-                cte_complementar_id=cte_comp.id,
-                operacao_id=operacao.id,
-                ctrc_pai=operacao.ctrc_numero,
-                motivo_ssw=motivo_ssw,
-                filial_ssw='CAR',
-                valor_calculado=valor_cte,
-                icms_aliquota_usada=icms,
-                status='PENDENTE',
-                criado_por=user_email,
-            )
-            db.session.add(emissao)
-            db.session.flush()
-
-            # Enfileirar job RQ
-            from app.portal.workers import enqueue_job
-            from app.carvia.workers.ssw_cte_complementar_jobs import (
-                emitir_cte_complementar_job,
-            )
-
-            job = enqueue_job(
-                emitir_cte_complementar_job,
-                emissao.id,
-                queue_name='high',
-                timeout='10m',
-            )
-            emissao.job_id = job.id
-            db.session.commit()
-
-            logger.info(
-                "CTe Complementar %s criado para custo %s (valor=%s, icms=%s%%, motivo=%s)",
-                cte_comp.numero_comp, custo.numero_custo,
-                valor_cte, icms, motivo_ssw
-            )
-            return (
-                True,
-                (
-                    f'CTe Complementar {cte_comp.numero_comp} criado — '
-                    f'valor {valor_cte:.2f} (base {valor_base:.2f} + PIS/COFINS 9.25% + ICMS {icms}%). '
-                    f'Emissao SSW em andamento...'
-                ),
-                emissao.id,
-            )
-
-        except IntegrityError as e:
-            db.session.rollback()
-            logger.error("IntegrityError ao gerar CTe Complementar: %s", e)
-            return (False, 'Erro de integridade ao criar CTe Complementar.', None)
-        except Exception as e:
-            db.session.rollback()
-            logger.error("Erro ao gerar CTe Complementar custo=%s: %s", custo.id, e)
-            return (False, f'Erro: {e}', None)
+        return CteComplementarService.criar_para_emissao_ssw(
+            operacao_id=custo.operacao_id,
+            valor_base=float(custo.valor or 0),
+            tipo_custo=custo.tipo_custo,
+            motivo_texto=(
+                custo.descricao
+                or f'{custo.tipo_custo} ({custo.numero_custo})'
+            ),
+            usuario=user_email,
+            custo_entrega_id=custo.id,
+        )
 
     @bp.route('/custos-entrega/<int:custo_id>/gerar-cte-complementar', methods=['POST'])  # type: ignore
     @login_required
@@ -983,16 +865,28 @@ def register_custo_entrega_routes(bp):
             flash('Emissao nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_custos_entrega'))
 
+        # Helper: redirect para CE (se houver) ou para CTe Comp (CE pode ser None
+        # desde 2026-05-05 — emissao SSW direta sem CE pre-vinculado).
+        def _redirect_apos_retry():
+            if emissao.custo_entrega_id:
+                return redirect(url_for(
+                    'carvia.detalhe_custo_entrega',
+                    custo_id=emissao.custo_entrega_id,
+                ))
+            if emissao.cte_complementar_id:
+                return redirect(url_for(
+                    'carvia.detalhe_cte_complementar',
+                    cte_comp_id=emissao.cte_complementar_id,
+                ))
+            return redirect(url_for('carvia.listar_ctes_complementares'))
+
         if emissao.status != 'ERRO':
             flash(
                 f'Emissao nao esta em ERRO (status={emissao.status}). '
                 f'Nao pode re-tentar.',
                 'warning',
             )
-            return redirect(url_for(
-                'carvia.detalhe_custo_entrega',
-                custo_id=emissao.custo_entrega_id,
-            ))
+            return _redirect_apos_retry()
 
         # Guardar: cte_comp deve estar em RASCUNHO (senao ja emitiu)
         cte_comp = db.session.get(
@@ -1004,10 +898,7 @@ def register_custo_entrega_routes(bp):
                 f'nao pode re-tentar.',
                 'warning',
             )
-            return redirect(url_for(
-                'carvia.detalhe_custo_entrega',
-                custo_id=emissao.custo_entrega_id,
-            ))
+            return _redirect_apos_retry()
 
         try:
             # Reset da emissao
@@ -1048,10 +939,7 @@ def register_custo_entrega_routes(bp):
             )
             flash(f'Erro ao re-enfileirar: {e}', 'danger')
 
-        return redirect(url_for(
-            'carvia.detalhe_custo_entrega',
-            custo_id=emissao.custo_entrega_id,
-        ))
+        return _redirect_apos_retry()
 
     # ===================================================================
     # Gerenciar CEs por status de vinculacao a Fatura Transportadora
@@ -1528,6 +1416,14 @@ def register_custo_entrega_routes(bp):
                 db.session.add(custo)
                 db.session.flush()
 
+                # Defesa em profundidade: garantir frete_id mesmo no fluxo
+                # principal (operador pode ter chegado aqui pulando NF -> frete)
+                if not custo.frete_id:
+                    from app.carvia.services.financeiro.custo_entrega_autolink_service import (
+                        tentar_vincular_frete,
+                    )
+                    tentar_vincular_frete(custo)
+
                 # Processar anexos (comprovantes/emails)
                 _processar_anexos_despesa(custo, form.anexos.data)
 
@@ -1640,6 +1536,14 @@ def register_custo_entrega_routes(bp):
                 )
                 db.session.add(custo)
                 db.session.flush()
+
+                # Defesa em profundidade: autolink frete se nao foi populado
+                if not custo.frete_id:
+                    from app.carvia.services.financeiro.custo_entrega_autolink_service import (
+                        tentar_vincular_frete,
+                    )
+                    tentar_vincular_frete(custo)
+
                 _processar_anexos_despesa(custo, form.anexos.data)
                 db.session.commit()
 
@@ -1680,6 +1584,134 @@ def register_custo_entrega_routes(bp):
             'carvia/custos_entrega/nova_do_frete.html',
             form=form,
             frete=frete,
+            today=date.today(),
+        )
+
+    # -----------------------------------------------------------------
+    # Fluxo 3 (2026-05-05): Criar despesa diretamente do CTe (sem CarviaFrete)
+    # -----------------------------------------------------------------
+    @bp.route(
+        '/despesas-extras/criar-por-cte/<int:operacao_id>',
+        methods=['GET', 'POST'],
+    )  # type: ignore
+    @login_required
+    def criar_despesa_por_cte_carvia(operacao_id):  # type: ignore
+        """Criar despesa extra direto do CTe CarVia (CarviaOperacao).
+
+        Caminho independente de CarviaFrete (criado em 2026-05-05). Resolve
+        o gap operacional onde a portaria nao gerou frete mas a operacao
+        ja existe (ex: NF importada manualmente, frete legado, GNRE
+        antecipado, etc.).
+
+        Apos criar o CE, tenta autolink com CarviaFrete via
+        `tentar_vincular_frete` — best-effort, nao bloqueia se falhar.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        from app.carvia.forms import CarviaDespesaExtraForm
+
+        operacao = db.session.get(CarviaOperacao, operacao_id)
+        if not operacao:
+            flash('Operacao (CTe CarVia) nao encontrada.', 'warning')
+            return redirect(url_for('carvia.nova_despesa_extra_por_nf_carvia'))
+
+        form = CarviaDespesaExtraForm()
+        # Reusa helper do form (espera frete) — passa operacao envolvida em
+        # objeto fake-frete-like (nome_destino + cnpj_destino + transportadora None)
+        class _OpAsFrete:
+            nome_destino = operacao.nome_cliente
+            cnpj_destino = operacao.cnpj_cliente
+            transportadora = None
+        _popular_choices_despesa_form(form, _OpAsFrete())
+
+        if form.validate_on_submit():
+            try:
+                tipo_benef = form.tipo_beneficiario.data
+                transportadora_id_final = None
+                fornecedor_nome_final = None
+                fornecedor_cnpj_final = None
+                if tipo_benef == 'TRANSPORTADORA':
+                    transportadora_id_final = form.transportadora_id.data or None
+                elif tipo_benef == 'DESTINATARIO':
+                    fornecedor_nome_final = operacao.nome_cliente
+                    fornecedor_cnpj_final = operacao.cnpj_cliente
+                elif tipo_benef == 'OUTROS':
+                    fornecedor_nome_final = (form.beneficiario_nome.data or '').strip() or None
+
+                data_custo_final = form.data_custo.data or date.today()
+
+                custo = CarviaCustoEntrega(
+                    numero_custo=CarviaCustoEntrega.gerar_numero_custo(),
+                    operacao_id=operacao.id,
+                    frete_id=None,  # autolink abaixo (best-effort)
+                    fatura_transportadora_id=None,
+                    transportadora_id=transportadora_id_final,
+                    fornecedor_nome=fornecedor_nome_final,
+                    fornecedor_cnpj=fornecedor_cnpj_final,
+                    tipo_custo=form.tipo_despesa.data,
+                    tipo_documento='PENDENTE_DOCUMENTO',
+                    numero_documento='PENDENTE_FATURA',
+                    valor=_converter_valor_br(form.valor_despesa.data),
+                    data_custo=data_custo_final,
+                    data_vencimento=data_custo_final,
+                    status='PENDENTE',
+                    observacoes=form.observacoes.data or None,
+                    criado_por=current_user.email,
+                )
+                db.session.add(custo)
+                db.session.flush()
+
+                # Autolink frete_id (best-effort)
+                from app.carvia.services.financeiro.custo_entrega_autolink_service import (
+                    tentar_vincular_frete,
+                )
+                tentar_vincular_frete(custo)
+
+                _processar_anexos_despesa(custo, form.anexos.data)
+                db.session.commit()
+
+                acao = request.form.get('acao', 'sem_emissao')
+                if acao == 'emitir_ssw':
+                    sucesso, mensagem, _emissao_id = _executar_gerar_cte_complementar(
+                        custo, current_user.email,
+                    )
+                    if sucesso:
+                        flash(
+                            f'Despesa extra {custo.numero_custo} criada. {mensagem}',
+                            'success',
+                        )
+                    else:
+                        flash(
+                            f'Despesa extra {custo.numero_custo} criada, mas nao foi '
+                            f'possivel emitir CTe Complementar: {mensagem}',
+                            'warning',
+                        )
+                else:
+                    flash(
+                        f'Despesa extra {custo.numero_custo} criada com sucesso.',
+                        'success',
+                    )
+                return redirect(url_for(
+                    'carvia.detalhe_custo_entrega', custo_id=custo.id
+                ))
+
+            except ValueError as ve:
+                db.session.rollback()
+                flash(f'Dados invalidos: {ve}', 'warning')
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f'Erro ao criar despesa por CTe: {e}')
+                flash(f'Erro: {e}', 'danger')
+
+        # Avaliar se podera emitir CTe Comp (igual ao criar_por_frete)
+        pode_emitir = bool(operacao and operacao.ctrc_numero)
+        return render_template(
+            'carvia/custos_entrega/criar_por_cte.html',
+            form=form,
+            operacao=operacao,
+            pode_emitir=pode_emitir,
             today=date.today(),
         )
 

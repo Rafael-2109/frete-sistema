@@ -10,9 +10,10 @@
                class="btn btn-outline-success btn-sm" title="Exportar Excel">
                 <i class="fas fa-file-excel"></i> Excel
             </a>
-            <button class="btn btn-success btn-sm" disabled title="Crie a partir do detalhe da operacao">
+            <a href="{{ url_for('carvia.buscar_operacao_para_cte_complementar') }}"
+               class="btn btn-success btn-sm" title="Buscar CTe pai e emitir SSW 222">
                 <i class="fas fa-plus"></i> Novo CTe Comp.
-            </button>
+            </a>
             <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left"></i> Dashboard
             </a>

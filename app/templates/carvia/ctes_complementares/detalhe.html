@@ -190,6 +190,236 @@
 
     {# Card "Despesas Extras Vinculadas" — xerox readonly Nacom #}
     {% include 'carvia/_card_despesas_extras_readonly.html' %}
+
+    {# Card "Vincular CE" (2026-05-05) — desvincula 1-click + abre modal de vincular #}
+    {% if cte_comp.status != 'CANCELADO' %}
+    <div class="card mt-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="fas fa-link"></i> Custos de Entrega vinculados
+                ({{ custos_vinculados|length }})
+            </h6>
+            <button type="button" class="btn btn-sm btn-primary"
+                    data-bs-toggle="modal" data-bs-target="#modalVincularCe">
+                <i class="fas fa-plus"></i> Vincular CE
+            </button>
+        </div>
+        <div class="card-body p-0">
+            {% if custos_vinculados %}
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>CE</th>
+                        <th>Tipo</th>
+                        <th>Valor</th>
+                        <th>Status</th>
+                        <th>Descricao</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ce in custos_vinculados %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}">
+                                {{ ce.numero_custo }}
+                            </a>
+                        </td>
+                        <td>{{ ce.tipo_custo }}</td>
+                        <td>{{ ce.valor|valor_br }}</td>
+                        <td><span class="badge bg-secondary">{{ ce.status }}</span></td>
+                        <td>{{ (ce.descricao or '-')[:60] }}</td>
+                        <td class="text-end">
+                            {% if ce.status != 'PAGO' %}
+                            <button type="button" class="btn btn-sm btn-outline-danger btn-desvincular-ce"
+                                    data-ce-id="{{ ce.id }}" data-ce-numero="{{ ce.numero_custo }}">
+                                <i class="fas fa-unlink"></i> Desvincular
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted small mb-0 p-3">
+                Nenhum CE vinculado. Use "Vincular CE" para anexar um custo de entrega existente desta operacao.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Modal: Vincular CE -->
+    <div class="modal fade" id="modalVincularCe" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-link"></i> Vincular Custo de Entrega
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">
+                        Filtros: mesma operacao_id, sem CTe Comp vinculado, status PENDENTE/VINCULADO_FT.
+                    </p>
+                    <div id="ces-elegiveis-loading" class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm"></div> Carregando...
+                    </div>
+                    <table class="table table-sm d-none" id="tabela-ces-elegiveis">
+                        <thead>
+                            <tr>
+                                <th>CE</th>
+                                <th>Tipo</th>
+                                <th>Valor</th>
+                                <th>Match</th>
+                                <th>Status</th>
+                                <th>Descricao</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <p class="text-muted d-none" id="ces-elegiveis-vazio">
+                        Nenhum CE elegivel para vinculo nesta operacao.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        const cteCompId = {{ cte_comp.id }};
+        const csrfToken = '{{ csrf_token() }}';
+
+        // Carregar CEs elegiveis quando modal abrir
+        const modal = document.getElementById('modalVincularCe');
+        if (modal) {
+            modal.addEventListener('show.bs.modal', carregarCesElegiveis);
+        }
+
+        function carregarCesElegiveis() {
+            const url = '/carvia/api/ctes-complementares/' + cteCompId + '/ces-elegiveis';
+            const loading = document.getElementById('ces-elegiveis-loading');
+            const tabela = document.getElementById('tabela-ces-elegiveis');
+            const vazio = document.getElementById('ces-elegiveis-vazio');
+            const tbody = tabela.querySelector('tbody');
+
+            loading.classList.remove('d-none');
+            tabela.classList.add('d-none');
+            vazio.classList.add('d-none');
+            tbody.innerHTML = '';
+
+            fetch(url, { headers: { 'Accept': 'application/json' } })
+                .then(r => r.json())
+                .then(data => {
+                    loading.classList.add('d-none');
+                    if (!data.sucesso) {
+                        vazio.textContent = data.erro || 'Erro ao carregar CEs';
+                        vazio.classList.remove('d-none');
+                        return;
+                    }
+                    const ces = data.ces || [];
+                    if (!ces.length) {
+                        vazio.classList.remove('d-none');
+                        return;
+                    }
+                    ces.forEach(ce => {
+                        const tr = document.createElement('tr');
+                        const matchValor = ce.valor_match
+                            ? '<span class="badge bg-success">valor</span> '
+                            : '';
+                        const matchMotivo = ce.motivo_match === true
+                            ? '<span class="badge bg-success">motivo</span>'
+                            : (ce.motivo_match === false
+                                ? '<span class="badge bg-warning text-dark">motivo!=</span>'
+                                : '');
+                        tr.innerHTML = `
+                            <td><strong>${ce.numero_custo}</strong></td>
+                            <td>${ce.tipo_custo}</td>
+                            <td>R$ ${ce.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td>${matchValor}${matchMotivo}</td>
+                            <td><span class="badge bg-secondary">${ce.status}</span></td>
+                            <td>${(ce.descricao || '-').substring(0, 50)}</td>
+                            <td><button type="button" class="btn btn-sm btn-success btn-vincular" data-ce-id="${ce.id}">
+                                <i class="fas fa-link"></i> Vincular
+                            </button></td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                    tabela.classList.remove('d-none');
+                })
+                .catch(err => {
+                    loading.classList.add('d-none');
+                    vazio.textContent = 'Erro: ' + err.message;
+                    vazio.classList.remove('d-none');
+                });
+        }
+
+        // Vincular (delegado)
+        document.body.addEventListener('click', function(e) {
+            const btn = e.target.closest('.btn-vincular');
+            if (!btn) return;
+            const ceId = btn.getAttribute('data-ce-id');
+            btn.disabled = true;
+            const url = '/carvia/ctes-complementares/' + cteCompId + '/vincular-ce';
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({custo_entrega_id: parseInt(ceId)}),
+            })
+                .then(r => r.json().then(d => ({ok: r.ok, data: d})))
+                .then(({ok, data}) => {
+                    if (ok && data.sucesso) {
+                        location.reload();
+                    } else {
+                        alert(data.erro || 'Erro ao vincular');
+                        btn.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    alert('Erro: ' + err.message);
+                    btn.disabled = false;
+                });
+        });
+
+        // Desvincular (delegado)
+        document.body.addEventListener('click', function(e) {
+            const btn = e.target.closest('.btn-desvincular-ce');
+            if (!btn) return;
+            const ceId = btn.getAttribute('data-ce-id');
+            const ceNum = btn.getAttribute('data-ce-numero');
+            if (!confirm('Desvincular CE ' + ceNum + ' deste CTe Complementar?')) return;
+            btn.disabled = true;
+            const url = '/carvia/ctes-complementares/desvincular-ce/' + ceId;
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Accept': 'application/json',
+                },
+            })
+                .then(r => r.json().then(d => ({ok: r.ok, data: d})))
+                .then(({ok, data}) => {
+                    if (ok && data.sucesso) {
+                        location.reload();
+                    } else {
+                        alert(data.erro || 'Erro ao desvincular');
+                        btn.disabled = false;
+                    }
+                });
+        });
+    })();
+    </script>
+    {% endif %}
 </div>
 
 {# modal_admin_excluir removido (Sprint 0) #}

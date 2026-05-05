@@ -58,6 +58,37 @@
                     </form>
                 </div>
             </div>
+
+            <!-- Fallback: buscar por CTe (CarviaOperacao) -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-file-invoice"></i> Buscar por CTe / CTRC (sem NF)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Use quando o frete CarVia nao foi gerado (ex: NF nao cadastrada, embarque nao passou pela portaria).
+                        O custo sera vinculado direto ao CTe e o sistema tenta localizar o frete em background.
+                    </p>
+                    <form method="GET" action="{{ url_for('carvia.buscar_operacao_para_cte_complementar') }}">
+                        <div class="input-group">
+                            <input type="text"
+                                   id="termo_cte"
+                                   name="termo"
+                                   class="form-control"
+                                   placeholder="CTRC (CAR-XXX-X), numero CTe ou chave acesso 44 digitos..."
+                                   required>
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="fas fa-search"></i> Buscar CTe
+                            </button>
+                        </div>
+                        <small class="form-text text-muted mt-1 d-block">
+                            A pagina seguinte mostra o CTe e oferece dois botoes: "Lancar Custo Extra" e "Criar CTe Complementar".
+                        </small>
+                    </form>
+                </div>
+            </div>
         </div>
 
         <!-- Informacoes -->

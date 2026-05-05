@@ -6,7 +6,7 @@ import logging
 from datetime import date, datetime
 
 from flask import (
-    render_template, request, flash, redirect, url_for, Response,
+    render_template, request, flash, redirect, url_for, Response, jsonify,
 )
 from flask_login import login_required, current_user
 
@@ -19,6 +19,13 @@ from app.carvia.models import (
 logger = logging.getLogger(__name__)
 
 STATUS_CTE_COMP = ['RASCUNHO', 'EMITIDO', 'FATURADO', 'CANCELADO']
+
+# Tipos de custo aceitos no form de emissao SSW
+# (espelha CarviaCustoEntrega.TIPOS_CUSTO + custo_entrega_routes.TIPO_CUSTO_MOTIVO_SSW)
+TIPOS_CUSTO_EMISSAO = [
+    'TAXA_DESCARGA', 'DIARIA', 'REENTREGA', 'DEVOLUCAO',
+    'ARMAZENAGEM', 'AVARIA', 'PEDAGIO_EXTRA', 'GNRE_ICMS', 'OUTROS',
+]
 
 
 def register_cte_complementar_routes(bp):
@@ -118,10 +125,81 @@ def register_cte_complementar_routes(bp):
             status_list=STATUS_CTE_COMP,
         )
 
-    @bp.route('/ctes-complementares/criar/<int:operacao_id>', methods=['GET', 'POST']) # type: ignore
+    @bp.route('/ctes-complementares/criar', methods=['GET', 'POST'])  # type: ignore
     @login_required
-    def criar_cte_complementar(operacao_id): # type: ignore
-        """Cria novo CTe complementar vinculado a uma operacao"""
+    def buscar_operacao_para_cte_complementar():  # type: ignore
+        """Tela de busca por CTe pai (CTRC ou cte_numero) para criar CTe Comp.
+
+        Espelha o fluxo `nova_despesa_extra_por_nf_carvia`. Submit redireciona
+        para `criar_cte_complementar(operacao_id)`. Se houver match unico,
+        redireciona direto; se multiplos, mostra lista; se nenhum, alerta.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        termo = (
+            request.form.get('termo')
+            or request.args.get('termo')
+            or ''
+        ).strip()
+
+        if termo:
+            like = f'%{termo}%'
+            ops = (
+                CarviaOperacao.query
+                .filter(
+                    db.or_(
+                        CarviaOperacao.cte_numero.ilike(like),
+                        CarviaOperacao.ctrc_numero.ilike(like),
+                        CarviaOperacao.cte_chave_acesso == termo,
+                    ),
+                    CarviaOperacao.status != 'CANCELADO',
+                )
+                .order_by(CarviaOperacao.criado_em.desc())
+                .limit(50)
+                .all()
+            )
+
+            if not ops:
+                flash(
+                    f'Nenhum CTe CarVia encontrado para "{termo}". '
+                    'Verifique CTRC ou numero do CTe.',
+                    'warning',
+                )
+                return render_template(
+                    'carvia/ctes_complementares/buscar.html',
+                    termo=termo,
+                )
+
+            if len(ops) == 1:
+                return redirect(url_for(
+                    'carvia.criar_cte_complementar', operacao_id=ops[0].id
+                ))
+
+            return render_template(
+                'carvia/ctes_complementares/buscar.html',
+                termo=termo,
+                operacoes_encontradas=ops,
+            )
+
+        return render_template(
+            'carvia/ctes_complementares/buscar.html',
+            termo='',
+        )
+
+    @bp.route('/ctes-complementares/criar/<int:operacao_id>', methods=['GET', 'POST'])  # type: ignore
+    @login_required
+    def criar_cte_complementar(operacao_id):  # type: ignore
+        """Cria CTe Comp via emissao SSW 222 (modo unico).
+
+        Refatorado em 2026-05-05: eliminado modo "input manual de chave/numero"
+        (incoerente com status='RASCUNHO'). Toda criacao manual passa por
+        emissao SSW (que preenche chave/numero pos-protocolo SEFAZ).
+
+        Para registrar CTe ja emitido fora do sistema, usar o pipeline de
+        importacao XML em `/carvia/importar`.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -131,80 +209,96 @@ def register_cte_complementar_routes(bp):
             flash('Operacao nao encontrada.', 'warning')
             return redirect(url_for('carvia.listar_ctes_complementares'))
 
-        if request.method == 'POST':
-            cte_valor_str = request.form.get('cte_valor', '').strip()
-            cte_data_emissao_str = request.form.get('cte_data_emissao', '').strip()
-            cte_numero = request.form.get('cte_numero', '').strip()
-            cte_chave_acesso = request.form.get('cte_chave_acesso', '').strip()
-            observacoes = request.form.get('observacoes', '').strip()
+        from app.carvia.services.cte_complementar_service import (
+            CteComplementarService,
+        )
+        from app.carvia.services.cte_complementar_persistencia import (
+            extrair_icms_do_pai,
+            calcular_valor_complementar,
+        )
 
-            # Validacoes
-            if not cte_valor_str:
-                flash('Valor do CTe complementar e obrigatorio.', 'warning')
+        # Pre-condicoes para emissao SSW (mostradas no template como gates)
+        icms_info = extrair_icms_do_pai(operacao) if operacao else {}
+        icms_aliquota = float(icms_info.get('aliquota_icms') or 0)
+        pode_emitir = bool(operacao and operacao.ctrc_numero) and icms_aliquota > 0
+
+        if request.method == 'POST':
+            tipo_custo = (request.form.get('tipo_custo') or '').strip()
+            valor_base_str = (request.form.get('valor_base') or '').strip()
+            motivo_texto = (request.form.get('motivo_texto') or '').strip()
+            ce_id_str = (request.form.get('custo_entrega_id') or '').strip()
+
+            if tipo_custo not in TIPOS_CUSTO_EMISSAO:
+                flash('Tipo de custo invalido.', 'warning')
                 return redirect(url_for(
                     'carvia.criar_cte_complementar', operacao_id=operacao_id
                 ))
 
             try:
-                cte_valor = float(cte_valor_str.replace(',', '.'))
-                if cte_valor <= 0:
-                    flash('Valor deve ser maior que zero.', 'warning')
-                    return redirect(url_for(
-                        'carvia.criar_cte_complementar', operacao_id=operacao_id
-                    ))
-
-                cte_data_emissao = (
-                    date.fromisoformat(cte_data_emissao_str)
-                    if cte_data_emissao_str else None
-                )
-
-                numero_comp = CarviaCteComplementar.gerar_numero_comp()
-
-                cte_comp = CarviaCteComplementar(
-                    numero_comp=numero_comp,
-                    operacao_id=operacao_id,
-                    cte_valor=cte_valor,
-                    cte_numero=cte_numero or None,
-                    cte_chave_acesso=cte_chave_acesso or None,
-                    cte_data_emissao=cte_data_emissao,
-                    cnpj_cliente=operacao.cnpj_cliente,
-                    nome_cliente=operacao.nome_cliente,
-                    status='RASCUNHO',
-                    observacoes=observacoes or None,
-                    criado_por=current_user.email,
-                )
-                db.session.add(cte_comp)
-                db.session.flush()
-
-                # Vincular ao CarviaFrete pela operacao_id
-                if cte_comp.operacao_id:
-                    from app.carvia.models import CarviaFrete
-                    frete = CarviaFrete.query.filter_by(
-                        operacao_id=cte_comp.operacao_id
-                    ).first()
-                    if frete:
-                        cte_comp.frete_id = frete.id
-
-                db.session.commit()
-
-                flash(
-                    f'CTe Complementar {cte_comp.numero_comp} criado com sucesso.',
-                    'success',
-                )
+                valor_base = float(valor_base_str.replace(',', '.'))
+            except ValueError:
+                flash('Valor base invalido.', 'warning')
                 return redirect(url_for(
-                    'carvia.detalhe_cte_complementar', cte_comp_id=cte_comp.id
+                    'carvia.criar_cte_complementar', operacao_id=operacao_id
                 ))
 
-            except ValueError as ve:
-                flash(f'Dados invalidos: {ve}', 'warning')
-            except Exception as e:
-                db.session.rollback()
-                logger.error(f"Erro ao criar CTe complementar: {e}")
-                flash(f'Erro: {e}', 'danger')
+            if valor_base <= 0:
+                flash('Valor base deve ser maior que zero.', 'warning')
+                return redirect(url_for(
+                    'carvia.criar_cte_complementar', operacao_id=operacao_id
+                ))
+
+            if not motivo_texto:
+                flash('Motivo (texto) e obrigatorio.', 'warning')
+                return redirect(url_for(
+                    'carvia.criar_cte_complementar', operacao_id=operacao_id
+                ))
+
+            ce_id = int(ce_id_str) if ce_id_str.isdigit() else None
+
+            sucesso, mensagem, _emissao_id = (
+                CteComplementarService.criar_para_emissao_ssw(
+                    operacao_id=operacao.id,
+                    valor_base=valor_base,
+                    tipo_custo=tipo_custo,
+                    motivo_texto=motivo_texto,
+                    usuario=current_user.email,
+                    custo_entrega_id=ce_id,
+                )
+            )
+            if sucesso:
+                flash(mensagem, 'success')
+                return redirect(url_for('carvia.listar_ctes_complementares'))
+            flash(mensagem, 'warning')
+
+        # GET — preparar dropdown de CEs vinculaveis (mesma operacao, sem cte_comp)
+        ces_elegiveis = (
+            CarviaCustoEntrega.query
+            .filter(
+                CarviaCustoEntrega.operacao_id == operacao_id,
+                CarviaCustoEntrega.cte_complementar_id.is_(None),
+                CarviaCustoEntrega.status.in_(['PENDENTE', 'VINCULADO_FT']),
+            )
+            .order_by(CarviaCustoEntrega.criado_em.desc())
+            .all()
+        )
+
+        # Preview de calculo (so para exibicao default; JS recalcula on-input)
+        preview_valor = None
+        if pode_emitir and icms_aliquota > 0:
+            try:
+                preview_valor = calcular_valor_complementar(100.0, icms_aliquota)
+            except ValueError:
+                preview_valor = None
 
         return render_template(
             'carvia/ctes_complementares/criar.html',
             operacao=operacao,
+            tipos_custo=TIPOS_CUSTO_EMISSAO,
+            ces_elegiveis=ces_elegiveis,
+            pode_emitir=pode_emitir,
+            icms_aliquota=icms_aliquota,
+            preview_valor_por_100=preview_valor,
         )
 
     @bp.route('/ctes-complementares/<int:cte_comp_id>') # type: ignore
@@ -533,3 +627,105 @@ def register_cte_complementar_routes(bp):
             request.referrer
             or url_for('carvia.detalhe_cte_complementar', cte_comp_id=cte_comp_id)
         )
+
+    # =========================================================================
+    # Vinculo CE <-> CTe Complementar (2026-05-05 — emissao desacoplada de CE)
+    # =========================================================================
+
+    @bp.route(
+        '/api/ctes-complementares/<int:cte_comp_id>/ces-elegiveis',
+        methods=['GET'],
+    )  # type: ignore
+    @login_required
+    def api_ces_elegiveis_para_cte_comp(cte_comp_id):  # type: ignore
+        """Retorna JSON com CEs elegiveis para vincular a este CTe Comp.
+
+        Filtros deterministicos: mesma operacao_id, sem cte_complementar_id,
+        status PENDENTE/VINCULADO_FT. Inclui flags valor_match/motivo_match.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        from app.carvia.services.cte_complementar_service import (
+            CteComplementarService,
+        )
+        try:
+            ces = CteComplementarService.ces_elegiveis_para_vincular(cte_comp_id)
+            return jsonify({'sucesso': True, 'ces': ces})
+        except Exception as e:
+            logger.error(
+                'Erro ao buscar CEs elegiveis para cte_comp #%s: %s',
+                cte_comp_id, e,
+            )
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route(
+        '/ctes-complementares/<int:cte_comp_id>/vincular-ce',
+        methods=['POST'],
+    )  # type: ignore
+    @login_required
+    def vincular_ce_cte_complementar(cte_comp_id):  # type: ignore
+        """Vincula um CarviaCustoEntrega a um CarviaCteComplementar.
+
+        POST aceita JSON `{custo_entrega_id: N}` ou form-encoded.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        payload = request.get_json(silent=True) or request.form
+        ce_id = payload.get('custo_entrega_id') if payload else None
+        try:
+            ce_id = int(ce_id) if ce_id else None
+        except (TypeError, ValueError):
+            return jsonify(
+                {'sucesso': False, 'erro': 'custo_entrega_id invalido'}
+            ), 400
+
+        if not ce_id:
+            return jsonify(
+                {'sucesso': False, 'erro': 'custo_entrega_id obrigatorio'}
+            ), 400
+
+        from app.carvia.services.cte_complementar_service import (
+            CteComplementarService,
+        )
+        try:
+            resultado = CteComplementarService.vincular_ce(
+                cte_comp_id, ce_id, current_user.email
+            )
+            db.session.commit()
+            return jsonify(resultado)
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'sucesso': False, 'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception('Erro ao vincular CE #%s -> cte_comp #%s', ce_id, cte_comp_id)
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+
+    @bp.route(
+        '/ctes-complementares/desvincular-ce/<int:custo_entrega_id>',
+        methods=['POST'],
+    )  # type: ignore
+    @login_required
+    def desvincular_ce_cte_complementar(custo_entrega_id):  # type: ignore
+        """Remove vinculo CE -> CTe Complementar."""
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+
+        from app.carvia.services.cte_complementar_service import (
+            CteComplementarService,
+        )
+        try:
+            resultado = CteComplementarService.desvincular_ce(
+                custo_entrega_id, current_user.email
+            )
+            db.session.commit()
+            return jsonify(resultado)
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({'sucesso': False, 'erro': str(e)}), 400
+        except Exception as e:
+            db.session.rollback()
+            logger.exception('Erro ao desvincular CE #%s', custo_entrega_id)
+            return jsonify({'sucesso': False, 'erro': str(e)}), 500

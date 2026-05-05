@@ -95,6 +95,7 @@ NUNCA mover status para tras (CONFIRMADO → COTADO e PROIBIDO). Cancelar e cria
 - Fatura Subcontrato: subs `status IN (COTADO, CONFIRMADO), fatura_transportadora_id IS NULL`
 - **NUNCA desvincular operacao apos faturamento**. Subcontratos desanexaveis apenas enquanto FT nao CONFERIDO
 - Custos de Entrega disponiveis para FT: `status='PENDENTE', fatura_transportadora_id IS NULL` — ao vincular vira `VINCULADO_FT`
+- **Custo de Entrega pode ter `frete_id=NULL`** (2026-05-05): permitido criar CE direto da operacao quando CarviaFrete ainda nao existe (gap operacional). Auto-link best-effort via `tentar_vincular_frete` em todos os pontos de criacao. Para FT: `ces_disponiveis_para_fatura` cobre os 2 cenarios (com ou sem `frete_id`).
 
 ### R6: Classificacao de CTe por CNPJ emitente
 - CNPJ emitente == `CARVIA_CNPJ` (env var) → `CarviaOperacao` (CTe CarVia)
@@ -110,6 +111,7 @@ Gerado via `MAX(numero_sequencial_transportadora) + 1` filtrado por `transportad
 - `CarviaSubcontrato.cte_numero` = `Sub-001, Sub-002...` via `gerar_numero_sub()`
 - `CarviaCteComplementar.numero_comp` = `COMP-###` via `gerar_numero_comp()`
 - **UI exibe `cte_numero + ctrc_numero`** via macro `carvia_ref` (ver [SSW_INTEGRATION.md](SSW_INTEGRATION.md))
+- **N CTe Complementares por CTe pai sao permitidos** (2026-05-05). Mutex via `CteComplementarService.criar_para_emissao_ssw` bloqueia apenas concorrencia (status PENDENTE/EM_PROCESSAMENTO ja existe para mesma `operacao_id`). Sequenciais sao livres — o SSW opcao 222 e fila unica por CTRC, exigencia da SEFAZ.
 
 ### R10-R13: Orquestrador e condicoes comerciais
 Novos fretes DEVEM seguir o fluxo unico **Cotacao → Pedido → Embarque → NF → Portaria → `CarviaFreteService.lancar_frete_carvia()`**. Criacao manual de `CarviaOperacao` (wizard/freteiro) esta DEPRECATED. Detalhes: [FLUXOS_CRIACAO.md](FLUXOS_CRIACAO.md).
