@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-05-05-1](atualizacao-2026-05-05-1.md) — Sexta auditoria. Sistema saudavel em steady-state. 1 correcao factual: `skills_inventario.md` linha `operando-ssw` 18->22 scripts (alinhamento com `ssw_operacoes.md` e MEMORY.md ja em 22). 29 memorias, MEMORY.md 70 linhas. Frontmatter OK em 29/29. 0 memorias `type:project`.
+
 - [2026-04-27-1](atualizacao-2026-04-27-1.md) — Quinta auditoria. 29 memorias auditadas (sistema saudavel), 5 atualizadas (skills_inventario 24->29, ssw_operacoes 18->22, 3 reclassificacoes type:project->feedback/reference). MEMORY.md 70 linhas. Frontmatter OK em 29/29.
 
 - [2026-04-20-1](atualizacao-2026-04-20-1.md) — Quarta auditoria. 1 memoria removida (carvia_auditoria_pendencias — W9 + FC_VIRTUAL->MANUAL concluidos e validados no codigo). MEMORY.md atualizado (skills 23->24, remocao secao "Trabalho em andamento"). 25 memorias, MEMORY.md 67 linhas.
