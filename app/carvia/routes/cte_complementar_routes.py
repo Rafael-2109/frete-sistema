@@ -390,6 +390,10 @@ def register_cte_complementar_routes(bp):
         ))
 
     # ── Downloads: XML e DACTE do CTe Complementar ─────────────────────────
+    # SOT do DACTE = CarviaCteComplementar.cte_pdf_path (campo direto, alinhado
+    # com CarviaOperacao/CarviaSubcontrato). resultado_json['dacte_s3_path']
+    # da emissao permanece como fallback retrocompat para registros legados
+    # ainda nao cobertos pelo backfill da migration de unificacao.
     # XML vem persistido em cte_comp.cte_xml_path (S3 ou local).
     # DACTE nao tem campo proprio no model — vive em emissao.resultado_json
     # ('dacte_s3_path') preenchido pelo worker apos emissao bem sucedida.
@@ -453,7 +457,12 @@ def register_cte_complementar_routes(bp):
     @bp.route('/ctes-complementares/<int:cte_comp_id>/download/dacte')  # type: ignore
     @login_required
     def download_cte_comp_dacte(cte_comp_id):  # type: ignore
-        """Download do DACTE PDF do CTe Complementar (via emissao.resultado_json)."""
+        """Download do DACTE PDF do CTe Complementar.
+
+        Le do campo `cte_pdf_path` (SOT). Cai em `resultado_json['dacte_s3_path']`
+        da emissao SUCESSO mais recente apenas para registros legados ainda
+        nao cobertos pelo backfill.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -463,17 +472,20 @@ def register_cte_complementar_routes(bp):
             flash('CTe Complementar nao encontrado.', 'warning')
             return redirect(url_for('carvia.listar_ctes_complementares'))
 
-        # Localizar caminho do DACTE no resultado_json da emissao vinculada
-        dacte_path = None
-        emissao = db.session.query(CarviaEmissaoCteComplementar).filter(
-            CarviaEmissaoCteComplementar.cte_complementar_id == cte_comp_id,
-            CarviaEmissaoCteComplementar.status == 'SUCESSO',
-        ).order_by(
-            CarviaEmissaoCteComplementar.criado_em.desc()
-        ).first()
+        # 1. Fonte unica: campo direto no model
+        dacte_path = cte_comp.cte_pdf_path
 
-        if emissao and isinstance(emissao.resultado_json, dict):
-            dacte_path = emissao.resultado_json.get('dacte_s3_path')
+        # 2. Fallback retrocompat: resultado_json da emissao SUCESSO mais recente
+        if not dacte_path:
+            emissao = db.session.query(CarviaEmissaoCteComplementar).filter(
+                CarviaEmissaoCteComplementar.cte_complementar_id == cte_comp_id,
+                CarviaEmissaoCteComplementar.status == 'SUCESSO',
+            ).order_by(
+                CarviaEmissaoCteComplementar.criado_em.desc()
+            ).first()
+
+            if emissao and isinstance(emissao.resultado_json, dict):
+                dacte_path = emissao.resultado_json.get('dacte_s3_path')
 
         if not dacte_path:
             flash('DACTE nao disponivel para este CTe Complementar.', 'warning')

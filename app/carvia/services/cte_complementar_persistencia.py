@@ -507,6 +507,10 @@ def persistir_cte_complementar_completo(
             dacte_nome = f"{base}-dacte.pdf"
         dacte_s3_path = upload_dacte_s3(dacte_bytes, dacte_nome)
         if dacte_s3_path:
+            # SOT do DACTE PDF = CarviaCteComplementar.cte_pdf_path
+            # (alinha com CarviaOperacao/CarviaSubcontrato).
+            # resultado_json mantem o path como audit log da emissao.
+            cte_comp.cte_pdf_path = dacte_s3_path
             extras['dacte_s3_path'] = dacte_s3_path
             extras['dacte_nome_arquivo'] = dacte_nome
         else:

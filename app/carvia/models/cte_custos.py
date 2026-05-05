@@ -46,6 +46,9 @@ class CarviaCteComplementar(db.Model):
     cte_valor = db.Column(db.Numeric(15, 2), nullable=False)
     cte_xml_path = db.Column(db.String(500))
     cte_xml_nome_arquivo = db.Column(db.String(255))
+    # DACTE PDF baixado do SSW (opcao 101 com --baixar-dacte). Populado pelo
+    # worker verificar_ctrc_cte_comp_job quando vazio. S3: carvia/ctes_pdf/
+    cte_pdf_path = db.Column(db.String(500))
     cte_data_emissao = db.Column(db.Date)
 
     # Cliente (herdado da operacao, pode sobrescrever)
