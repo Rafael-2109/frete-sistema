@@ -1,9 +1,113 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.1.66)
+# Agente Web — SDK Changelog (0.1.49 → 0.1.73)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
-> Claude Agent SDK. Extraido de `CLAUDE.md` para reducao de ruido.
+> Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-04-23 (SDK 0.1.66)
+> **Atualizado**: 2026-05-05 (SDK 0.1.73 + anthropic 0.98.1)
+
+---
+
+## SDK 0.1.73 + anthropic 0.98.1 (atualizado 2026-05-05) — Upgrade massivo + features novas
+
+**Versao**: `claude-agent-sdk==0.1.73` (CLI bundled 2.1.128) + `anthropic==0.98.1`
+**Floor adicionado**: `mcp>=1.19.0` (era unbounded; floor garante fix CallToolResult)
+
+### Features adotadas
+
+#### 1. `session_store_flush` (SDK 0.1.73) — feature flag opt-in
+
+**Mecanica**: novo campo em `ClaudeAgentOptions`:
+- `"batched"` (default): TranscriptMirrorBatcher entrega frames ao `SessionStore.append()` no end-of-turn.
+- `"eager"`: entrega near-real-time, frame-by-frame.
+
+**Arquitetura adotada**: feature flag persistente, default OFF.
+
+- **Config**: `AGENT_SDK_SESSION_STORE_FLUSH` env var, default `"batched"`.
+- **Aplicacao** (`client.py:_stream_response_persistent`): `dataclasses.replace(options, session_store_flush=...)`.
+- **Forward-compat**: introspection `dataclasses.fields(options)` evita erro se SDK < 0.1.73.
+
+**Quando ativar `eager`**:
+- Live-tailing UI no `/admin/session_store` (atualizacao mid-turn).
+- Crash durability: se gunicorn worker crasha mid-turn, transcript em andamento persiste.
+- Cross-process resume mid-turn.
+
+**Custos**:
+- Carga Postgres: dezenas-centenas de INSERTs por turn → satura pool asyncpg LAZY (`max=3` per-worker).
+- Latencia: +5-20ms por chunk SSE.
+- ATIVAR APENAS apos profiling (frames/turn medio + impacto em pool DB).
+
+**Rollback**: `AGENT_SDK_SESSION_STORE_FLUSH=batched` + redeploy.
+
+**Arquivos modificados**:
+- `app/agente/config/feature_flags.py`: nova flag `AGENT_SDK_SESSION_STORE_FLUSH`.
+- `app/agente/sdk/client.py:1615-1647`: aplica flush via `dataclasses.replace` com introspection forward-compat.
+
+#### 2. `APIStatusError.type` (anthropic 0.87.0) — classificacao granular de erros
+
+**Mecanica**: `anthropic.APIStatusError` agora expoe `.type` com valores: `invalid_request_error`, `authentication_error`, `permission_error`, `not_found_error`, `rate_limit_error`, `timeout_error`, `overloaded_error`, `api_error`, `billing_error`.
+
+**Beneficio**: distinguir 429 retry-imediato de 529 retry-com-backoff de 403 billing vs 403 permission.
+
+**Arquivos modificados**:
+- `app/scanner/service.py:237-256`: `except anthropic.APIStatusError` separado de `except anthropic.APIError`. Mensagens de erro categorizadas para o usuario por `e.type`.
+- `app/agente/services/memory_consolidator.py:632-647`: log granular com `e.type`. R1 best-effort mantido (return None).
+
+**NAO refatorados** (best-effort generico R1 por design): `improvement_suggester.py`, `session_summarizer.py`, `suggestion_generator.py`, `parser_append_service.py`, `admin_learning.py` — usam `except Exception` que ja captura tudo. Refatorar so se aparecer caso real onde granularidade e necessaria.
+
+#### 3. `stop_details` estruturado (anthropic 0.88.0 + streaming fix em 0.98.0)
+
+**Mecanica**: quando `stop_reason == "refusal"`, response.stop_details retorna `{category: "cyber"|"bio"|None, explanation: str|None}`. Bug fix em 0.98.0: `message_delta` agora propaga `stop_details` para Message acumulado em streaming (antes so aparecia em non-streaming).
+
+**Beneficio**: distinguir refusals de safety reais vs falsos positivos. Util em audit/observability admin.
+
+**Arquivos modificados**:
+- `app/agente/sdk/client.py:_parse_sdk_message` handler `ResultMessage`: captura `stop_details` via `getattr` (tolera SDK pre-0.88.0). Suporta `model_dump()`, dict raw, ou objeto com `.category`/`.explanation`. Logado em INFO se presente.
+- `app/agente/sdk/client.py`: propagado em `StreamEvent('done').content['stop_details']`.
+- `app/agente/routes/chat.py:elif event.type == 'done'`: surfaced no `done_payload` SSE + `logger.warning` quando refusal real ocorre.
+
+#### 4. Bug fix gratuito (SDK 0.1.70): MCP CallToolResult silenciosamente perdido
+
+**Mecanica**: SDK 0.1.69 e anteriores com `mcp<1.19.0` convertiam `CallToolResult` retornado por handlers SDK MCP em validation-error blob. Modelo recebia erro em vez do output real.
+
+**Aplicabilidade**: 7 MCP servers no projeto (memory_mcp_tool 12 ops + session_search_tool 4 ops + render_logs + schema_mcp + text_to_sql + playwright + teams_card + routes_search). `mcp` instalado: 1.26.0+ (atende floor). Floor `mcp>=1.19.0` adicionado em `requirements.txt` para garantir em deploys futuros.
+
+### Features NAO adotadas
+
+- **`session_store_flush=eager`** ativado por default — risco Postgres saturar pool antes de profiling. Flag esta IMPLEMENTADA, mas default `batched`.
+- **Trio compatibility fix (0.1.67)** — sistema usa asyncio puro, nao aplicavel.
+- **Sandbox network config (0.1.71)** — sistema nao usa SDK sandbox.
+- **Filesystem memory tools (anthropic 0.86.0)** — sistema atual (`agent_memories` + Voyage + KG) e mais sofisticado.
+- **Managed Agents + CMA Memory (anthropic 0.92, 0.97, 0.98)** — duplica stack atual de 35K LOC.
+- **Beta advisor tool (anthropic 0.93.0)** — sistema ja tem subagentes para isso.
+- **Workload Identity Federation (anthropic 0.98.0)** — usa API key direto, nao AWS/GCP/Azure.
+- **`task_budget` em subagentes** (anthropic 0.96.0) — campo ja existe em `ClaudeAgentOptions`, candidato a feature flag futura para subagentes Opus longos (`analista-carteira`, `raio-x-pedido`). NAO IMPLEMENTADO neste passo.
+
+### Bumps de CLI bundled (sem mudancas API Python)
+
+| SDK | CLI bundled |
+|-----|-------------|
+| 0.1.67 | 2.1.120 |
+| 0.1.68 | 2.1.119 (rollback CLI) |
+| 0.1.69 | 2.1.121 |
+| 0.1.70 | 2.1.122 |
+| 0.1.71 | 2.1.123 |
+| 0.1.72 | 2.1.126 |
+| 0.1.73 | 2.1.128 |
+
+### Anthropic SDK 0.85.0 → 0.98.1 — features que vieram gratis via upgrade
+
+| Versao | Feature | Status |
+|--------|---------|--------|
+| 0.85.0 | GA `thinking-display-setting` | Ja em uso via SDK 0.1.65 |
+| 0.86.0 | Filesystem memory tools | NAO adotado (sistema atual e superior) |
+| 0.87.0 | `APIStatusError.type` | **ADOTADO** (scanner + memory_consolidator) |
+| 0.88.0 | `stop_details` estruturado | **ADOTADO** (client.py + routes/chat.py) |
+| 0.92.0 | Managed Agents | NAO adotado |
+| 0.93.0 | Beta advisor tool | NAO adotado |
+| 0.94.1 | Streaming missing events fix | Gratis via upgrade |
+| 0.96.0 | `claude-opus-4-7` + token budgets oficiais | Modelo ja em uso, task_budget pendente |
+| 0.97.0 | CMA Memory public beta | NAO adotado |
+| 0.98.0 | Streaming `stop_details` propagation fix | **CRITICO** para feature 3 acima |
 
 ---
 

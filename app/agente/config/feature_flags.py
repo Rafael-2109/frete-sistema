@@ -547,6 +547,33 @@ AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS = int(
 )
 
 # ====================================================================
+# Session Store Flush Mode (claude-agent-sdk 0.1.73+)
+# ====================================================================
+# Controla quando o TranscriptMirrorBatcher entrega frames ao SessionStore.append().
+#
+#   "batched" (default — comportamento atual e seguro):
+#     Buffera frames durante o turn, flush UMA vez no end-of-turn.
+#     Custo Postgres: 1 INSERT por turn. Latencia: imperceptivel ao usuario.
+#     Risco: se worker gunicorn crasha mid-turn, transcript do turn EM ANDAMENTO
+#     se perde (sessao retoma do ultimo turn completo).
+#
+#   "eager" (NOVO 0.1.73 — opt-in):
+#     Flush near-real-time, frame-by-frame. Habilita: live-tailing UIs, cross-process
+#     resume mid-turn, crash durability frame-level.
+#     Custo Postgres: dezenas a centenas de INSERTs por turn — pode saturar pool
+#     asyncpg LAZY per-worker (max=3). Latencia: +5-20ms por chunk SSE.
+#     ATIVAR APENAS apos profiling: medir frames/turn medio + impacto em pool DB.
+#
+# Rollback: AGENT_SDK_SESSION_STORE_FLUSH=batched + redeploy.
+#
+# Ref: claude-agent-sdk CHANGELOG 0.1.73, ClaudeAgentOptions.session_store_flush
+AGENT_SDK_SESSION_STORE_FLUSH = os.getenv(
+    "AGENT_SDK_SESSION_STORE_FLUSH", "batched"
+).lower()
+if AGENT_SDK_SESSION_STORE_FLUSH not in ("batched", "eager"):
+    AGENT_SDK_SESSION_STORE_FLUSH = "batched"
+
+# ====================================================================
 # Thinking Display (SDK 0.1.65+)
 # ====================================================================
 # Controla o campo `display` do ThinkingConfig (forwarded como --thinking-display CLI).

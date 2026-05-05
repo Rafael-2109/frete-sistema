@@ -234,8 +234,26 @@ class ScannerMotoService:
             logger.error("Resposta da Vision API nao e JSON valido: %s", e)
             raise ValueError(f"Formato de resposta invalido da API de visao: {e}")
 
+        except anthropic.APIStatusError as e:
+            # SDK 0.87.0+: APIStatusError.type expoe error.type da API ("rate_limit_error",
+            # "overloaded_error", "billing_error", "authentication_error", etc.)
+            # Util para distinguir 429 (retry) de 529 (overloaded, retry com backoff maior)
+            # de 403 billing vs 403 permission.
+            err_type = getattr(e, 'type', None) or 'unknown'
+            logger.error(
+                "Erro Anthropic API: status=%s type=%s message=%s",
+                getattr(e, 'status_code', '?'), err_type, e
+            )
+            if err_type == 'rate_limit_error':
+                raise RuntimeError(f"Limite de taxa atingido. Tente em alguns segundos.")
+            if err_type == 'overloaded_error':
+                raise RuntimeError(f"API sobrecarregada. Tente novamente em breve.")
+            if err_type == 'billing_error':
+                raise RuntimeError(f"Erro de billing Anthropic. Contate o admin.")
+            raise RuntimeError(f"Erro na API de visao: {e}")
         except anthropic.APIError as e:
-            logger.error("Erro na API Anthropic: %s", e)
+            # Connection errors, timeouts (sem status_code)
+            logger.error("Erro de conexao Anthropic: %s", e)
             raise RuntimeError(f"Erro na API de visao: {e}")
 
         except Exception as e:

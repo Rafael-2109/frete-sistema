@@ -930,6 +930,33 @@ Nunca invente informações."""
             # SDK 0.1.51+: errors detalhados (API errors, tool crashes, validation fails)
             result_errors = getattr(message, 'errors', []) or []
 
+            # Anthropic SDK 0.88.0+ (streaming fix em 0.98.0):
+            # stop_details estruturado quando stop_reason == "refusal" — contem
+            # category ("cyber"|"bio"|None) + explanation. Propaga ate UI/admin
+            # observability para distinguir refusals de safety reais vs falsos
+            # positivos. Modulo legado (pre-0.88.0): atributo nao existe → None.
+            stop_details_raw = getattr(message, 'stop_details', None)
+            stop_details: Optional[Dict[str, Any]] = None
+            if stop_details_raw is not None:
+                try:
+                    if hasattr(stop_details_raw, 'model_dump'):
+                        stop_details = stop_details_raw.model_dump()
+                    elif isinstance(stop_details_raw, dict):
+                        stop_details = stop_details_raw
+                    else:
+                        stop_details = {
+                            'category': getattr(stop_details_raw, 'category', None),
+                            'explanation': getattr(stop_details_raw, 'explanation', None),
+                        }
+                    logger.info(
+                        f"[AGENT_SDK] stop_details capturado: "
+                        f"stop_reason={stop_reason} category={stop_details.get('category')} "
+                        f"explanation={(stop_details.get('explanation') or '')[:200]}"
+                    )
+                except Exception as _sd_err:
+                    logger.debug(f"[AGENT_SDK] stop_details parse falhou (best-effort): {_sd_err}")
+                    stop_details = None
+
             if message.result:
                 state.full_text = message.result
 
@@ -1015,6 +1042,10 @@ Nunca invente informações."""
                         'self_corrected': correction is not None if correction else False,
                         'interrupted': is_interrupted,
                         'stop_reason': stop_reason,
+                        # Anthropic SDK 0.88.0+: stop_details estruturado para refusals
+                        # ({"category": "cyber"|"bio"|None, "explanation": str|None}).
+                        # None se Anthropic SDK < 0.88.0 ou stop_reason nao for refusal.
+                        'stop_details': stop_details,
                         'structured_output': structured_output,
                         'errors': result_errors if result_errors else None,
                     },
@@ -1583,6 +1614,7 @@ Nunca invente informações."""
         # Rollback: AGENT_SDK_SESSION_STORE_ENABLED=false + redeploy (0 downtime).
         from ..config.feature_flags import (
             AGENT_SDK_SESSION_STORE_ENABLED,
+            AGENT_SDK_SESSION_STORE_FLUSH,
             AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS,
         )
         if AGENT_SDK_SESSION_STORE_ENABLED:
@@ -1593,14 +1625,28 @@ Nunca invente informações."""
 
                 from .session_store_adapter import get_or_create_session_store
                 _store = await get_or_create_session_store()
-                options = _dc_replace(
-                    options,
-                    session_store=_store,
-                    load_timeout_ms=AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS,
-                )
+                # claude-agent-sdk 0.1.73+: session_store_flush controla quando o
+                # TranscriptMirrorBatcher entrega frames ao store.append().
+                # batched (default) = end-of-turn, eager = near-real-time.
+                # Flag aplicada via dataclasses.replace para nao quebrar SDK < 0.1.73
+                # (campo so existe a partir de 0.1.73; se SDK antigo, replace falha
+                # silenciosamente e cai no fallback abaixo sem flush).
+                _replace_kwargs: Dict[str, Any] = {
+                    "session_store": _store,
+                    "load_timeout_ms": AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS,
+                }
+                try:
+                    import dataclasses as _dc
+                    _opt_fields = {f.name for f in _dc.fields(options)}
+                    if "session_store_flush" in _opt_fields:
+                        _replace_kwargs["session_store_flush"] = AGENT_SDK_SESSION_STORE_FLUSH
+                except Exception:
+                    pass  # introspection falhou — usar flush default do SDK
+                options = _dc_replace(options, **_replace_kwargs)
                 logger.info(
                     f"[SESSION_STORE] ENABLED: {(our_session_id or 'pending')[:12]}... "
-                    f"load_timeout={AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS}ms"
+                    f"load_timeout={AGENT_SDK_SESSION_STORE_LOAD_TIMEOUT_MS}ms "
+                    f"flush={_replace_kwargs.get('session_store_flush', 'sdk_default')}"
                 )
 
                 # FIX P1 (FaseB.2 review): probe store.load() quando resume_id

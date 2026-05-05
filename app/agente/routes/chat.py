@@ -907,6 +907,23 @@ def _stream_chat_response(
                     if structured is not None:
                         done_payload['structured_output'] = structured
 
+                    # Anthropic SDK 0.88.0+: stop_details estruturado para refusals
+                    # ({"category": "cyber"|"bio"|None, "explanation": str|None}).
+                    # Propaga ao frontend para distinguir refusals de safety reais
+                    # vs falsos positivos. None se SDK < 0.88.0 ou nao for refusal.
+                    stop_reason_done = event.content.get('stop_reason')
+                    stop_details_done = event.content.get('stop_details')
+                    if stop_reason_done:
+                        done_payload['stop_reason'] = stop_reason_done
+                    if stop_details_done is not None:
+                        done_payload['stop_details'] = stop_details_done
+                        logger.warning(
+                            f"[AGENTE] Refusal/stop_details surfaced: "
+                            f"stop_reason={stop_reason_done} "
+                            f"category={stop_details_done.get('category')} "
+                            f"session={response_state.get('our_session_id', '?')[:12]}"
+                        )
+
                     # Sessao A: Context usage — enriquece done payload
                     try:
                         context_usage = client.get_context_usage()

@@ -66,8 +66,8 @@ zxcvbn>=4.4.28              # Password strength estimation (seguranca module)
 # ==========================================
 # AI & CLAUDE INTEGRATION
 # ==========================================
-anthropic==0.84.0           # API direta Anthropic (Structured Outputs, top-level cache_control, MCP converters)
-claude-agent-sdk==0.1.66    # Claude Agent SDK oficial (0.1.66: CLI 2.1.119. 0.1.65: ThinkingConfig.display [--thinking-display] override para Opus 4.7 default "omitted" + ServerToolUseBlock/ServerToolResultBlock parser fix [antes: AssistantMessage(content=[]) silencioso] + fold_session_summary/import_session_to_store helpers + bounded retry mirror append + UUID idempotency + CLI 2.1.118. 0.1.64: SessionStore protocol [6 metodos: append/load/list_sessions/list_session_summaries/delete/list_subkeys] + transcript mirroring via --session-mirror + materialize_resume_session + 9 helpers async store-backed + conformance harness 13 contratos + CLI 2.1.116. 0.1.63: CLI 2.1.114. 0.1.62: top-level skills= param. 0.1.61: CLI 2.1.112. 0.1.60: list_subagents(), get_subagent_messages(), setting_sources=[] fix, TRACEPARENT propagation, CLI 2.1.111)
+anthropic==0.98.1           # API direta Anthropic. Detalhes: ver app/agente/SDK_CHANGELOG.md (Anthropic 0.85→0.98.1)
+claude-agent-sdk==0.1.73    # Claude Agent SDK oficial. Detalhes: ver app/agente/SDK_CHANGELOG.md (0.1.67→0.1.73)
 asyncpg==0.30.0             # Driver async Postgres para SessionStore adapter (paralelo ao psycopg2/SQLAlchemy sync usado no resto do app). Pool separado, lazy per-worker, max_size=3.
 mcp>=1.26.0                 # Model Context Protocol (latest stable)
 pydantic==2.12.5           # Data validation

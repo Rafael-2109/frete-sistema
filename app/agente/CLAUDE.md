@@ -4,7 +4,7 @@
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
-> **Historico SDK** (changelog 0.1.49 → 0.1.66 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
+> **Historico SDK** (changelog 0.1.49 → 0.1.73 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
 
 ---
 
@@ -436,17 +436,27 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 ## Versao SDK atual
 
-- **claude-agent-sdk**: `0.1.66` | **CLI bundled**: 2.1.119
+- **claude-agent-sdk**: `0.1.73` | **CLI bundled**: 2.1.128 | **anthropic**: `0.98.1`
+- **Floor**: `mcp>=1.19.0` (fix `CallToolResult` silenciosamente perdido em 0.1.70)
 - **Modelo default**: `claude-opus-4-7` (Opus 4.7, $5/$25 per MTok, adaptive thinking, 1M context)
 - **Rollback rapido**: `AGENT_MODEL=claude-opus-4-6` + `TEAMS_DEFAULT_MODEL=claude-opus-4-6`
 - **SessionStore**: `PostgresSessionStore` source-of-truth (Fase B cutover 2026-04-21)
   - Tabela `claude_session_store`, flag `AGENT_SDK_SESSION_STORE_ENABLED` default ON
   - Pool asyncpg LAZY per-worker, min=1/max=3
+  - **Flush mode** (SDK 0.1.73): `AGENT_SDK_SESSION_STORE_FLUSH` env var (`batched`|`eager`),
+    default `batched`. Eager habilita live-tailing/crash-durability mas exige profiling antes
+    (impacto pool DB). Ver `SDK_CHANGELOG.md` para criterios de ativacao.
 - **Thinking display**: toggle per-user via `Usuario.preferences['agent_thinking_display']`
   - Default global `AGENT_THINKING_DISPLAY=omitted`
+- **Refusal observability**: `stop_details` estruturado (anthropic 0.88.0+) propagado em
+  `StreamEvent('done').content['stop_details']` e SSE `done_payload`. Logado como WARNING
+  quando `category` (`cyber`/`bio`) preenchido.
+- **Erro Anthropic granular**: `APIStatusError.type` adotado em `app/scanner/service.py` e
+  `app/agente/services/memory_consolidator.py` para classificacao por tipo
+  (`rate_limit_error`, `overloaded_error`, `billing_error`, etc.).
 
 > **Historico completo de adocoes, breaking changes, bug fixes e features NAO adotadas**:
-> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.1.66 com fluxos detalhados, gotchas e arquitetura).
+> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.1.73 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
 
 ---
 

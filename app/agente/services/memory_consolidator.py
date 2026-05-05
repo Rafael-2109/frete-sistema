@@ -629,6 +629,21 @@ def _consolidate_group(
                 f"{verify_err}"
             )
 
+    except anthropic.APIStatusError as e:
+        # SDK 0.87.0+: APIStatusError.type expoe error.type da API
+        # ("rate_limit_error", "overloaded_error", "billing_error", etc.)
+        # Util para distinguir transient (529 retry) de definitivo (403 billing).
+        # R1 best-effort: ainda retorna None, apenas log granular.
+        err_type = getattr(e, 'type', None) or 'unknown'
+        log_fn = (
+            logger.info if err_type == 'overloaded_error'
+            else logger.warning
+        )
+        log_fn(
+            f"[MEMORY_CONSOLIDATOR] Anthropic API error em {dir_path}: "
+            f"status={getattr(e, 'status_code', '?')} type={err_type} msg={e}"
+        )
+        return None
     except Exception as e:
         logger.warning(
             f"[MEMORY_CONSOLIDATOR] Erro ao chamar Sonnet para {dir_path}: {e}"
