@@ -1,0 +1,153 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2 class="mb-0">
+    <i class="fas fa-list-check"></i> Resultado do upload em lote
+  </h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('hora.nfs_upload_lote') }}" class="btn btn-primary btn-sm">
+      <i class="fas fa-upload"></i> Outro lote
+    </a>
+    <a href="{{ url_for('hora.nfs_lista') }}" class="btn btn-secondary btn-sm">
+      <i class="fas fa-list"></i> Lista de NFs
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>{{ resultado.total }}</strong> arquivo(s) processado(s) com loja default
+  <strong>{{ loja_aplicada.rotulo_display if loja_aplicada else 'n/d' }}</strong>:
+  <span class="badge bg-success">{{ resultado.sucesso|length }} importada(s)</span>
+  <span class="badge bg-warning text-dark">{{ resultado.duplicada|length }} duplicada(s)</span>
+  <span class="badge bg-danger">{{ resultado.erro|length }} com erro</span>
+  {% if ignorados %}
+    <span class="badge bg-secondary">{{ ignorados|length }} ignorado(s)</span>
+  {% endif %}
+</div>
+
+{% if resultado.sucesso %}
+<h4 class="mt-4">
+  <i class="fas fa-check-circle text-success"></i>
+  NFs importadas ({{ resultado.sucesso|length }})
+</h4>
+<div class="row g-3 mb-4">
+  {% for s in resultado.sucesso %}
+  <div class="col-md-6">
+    <div class="card border-success">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div class="flex-grow-1">
+            <h5 class="mb-1">
+              NF {{ s.numero_nf }}
+              <span class="badge bg-secondary">{{ s.n_itens }} chassi(s)</span>
+            </h5>
+            <div class="small text-muted text-truncate" title="{{ s.filename }}">
+              <i class="fas fa-file-pdf"></i> {{ s.filename }}
+            </div>
+            <div class="small">
+              <i class="fas fa-store text-muted"></i>
+              <span class="text-muted">Loja:</span>
+              <strong>{{ s.loja_destino_label }}</strong>
+            </div>
+            <div class="chassi-mono small text-muted">{{ s.chave_44 }}</div>
+          </div>
+          <a href="{{ url_for('hora.nfs_detalhe', nf_id=s.nf_id) }}"
+             class="btn btn-sm btn-outline-primary ms-2"
+             title="Abrir detalhe da NF">
+            <i class="fas fa-arrow-right"></i> Ver
+          </a>
+        </div>
+
+        {% if current_user.tem_perm_hora('nfs', 'editar') and lojas_ativas %}
+        <details class="mt-2">
+          <summary class="small text-muted" style="cursor: pointer;">
+            <i class="fas fa-exchange-alt"></i> Alterar loja desta NF
+          </summary>
+          <form method="post"
+                action="{{ url_for('hora.nfs_alterar_loja', nf_id=s.nf_id) }}"
+                class="d-flex gap-2 mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select name="loja_destino_id" class="form-select form-select-sm" required>
+              {% for loja in lojas_ativas %}
+                <option value="{{ loja.id }}"
+                        {% if loja.id == s.loja_destino_id %}selected{% endif %}>
+                  {{ loja.rotulo_display }}
+                </option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-info"
+                    onclick="return confirm('Alterar a loja desta NF?');"
+                    title="Salvar nova loja">
+              <i class="fas fa-save"></i>
+            </button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if resultado.duplicada %}
+<h4 class="mt-4">
+  <i class="fas fa-exclamation-triangle text-warning"></i>
+  NFs duplicadas ({{ resultado.duplicada|length }})
+</h4>
+<div class="row g-3 mb-4">
+  {% for d in resultado.duplicada %}
+  <div class="col-md-6">
+    <div class="card border-warning">
+      <div class="card-body">
+        <h6 class="card-title text-truncate" title="{{ d.filename }}">
+          <i class="fas fa-file-pdf"></i> {{ d.filename }}
+        </h6>
+        <p class="text-muted small mb-2">{{ d.mensagem }}</p>
+        {% if d.chave_44 %}
+          <div class="chassi-mono small text-muted mb-2">{{ d.chave_44 }}</div>
+        {% endif %}
+        {% if d.nf_existente_id %}
+          <a href="{{ url_for('hora.nfs_detalhe', nf_id=d.nf_existente_id) }}"
+             class="btn btn-sm btn-outline-warning">
+            <i class="fas fa-eye"></i> Ver NF existente
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if resultado.erro %}
+<h4 class="mt-4">
+  <i class="fas fa-times-circle text-danger"></i>
+  NFs com erro ({{ resultado.erro|length }})
+</h4>
+<div class="row g-3 mb-4">
+  {% for e in resultado.erro %}
+  <div class="col-md-6">
+    <div class="card border-danger">
+      <div class="card-body">
+        <h6 class="card-title text-truncate" title="{{ e.filename }}">
+          <i class="fas fa-file-pdf"></i> {{ e.filename }}
+        </h6>
+        <p class="text-danger small mb-0">{{ e.mensagem }}</p>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if ignorados %}
+<div class="alert alert-secondary small">
+  <strong>Ignorados (nao-PDF ou ilegivel):</strong>
+  <ul class="mb-0">
+    {% for nome in ignorados %}<li>{{ nome }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endblock %}

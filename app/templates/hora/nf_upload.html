@@ -1,9 +1,15 @@
 {% extends "hora/base.html" %}
 
 {% block hora_content %}
-<h2 class="mb-3">Importar DANFE (PDF)</h2>
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2 class="mb-0">Importar DANFE (PDF)</h2>
+  <a href="{{ url_for('hora.nfs_upload_lote') }}" class="btn btn-sm btn-outline-primary">
+    <i class="fas fa-layer-group"></i> Upload em lote (N NFs)
+  </a>
+</div>
 
 <form method="post" enctype="multipart/form-data" class="card p-3" style="max-width: 700px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-3">
     <label class="form-label">Arquivo DANFE (PDF) <span class="text-danger">*</span></label>
     <input type="file" name="pdf" accept="application/pdf" class="form-control" required>

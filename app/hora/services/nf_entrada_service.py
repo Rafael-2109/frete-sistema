@@ -39,7 +39,21 @@ def _salvar_pdf_danfe_storage(
 
 
 class NfEntradaJaImportada(Exception):
-    """NF com mesma chave_44 já existe."""
+    """NF com mesma chave_44 já existe.
+
+    Carrega `chave_44` e `nf_existente_id` para que callers (especialmente
+    importacao em lote) possam linkar para a NF ja existente sem reparsear.
+    """
+
+    def __init__(self, message: str, chave_44: Optional[str] = None,
+                 nf_existente_id: Optional[int] = None):
+        super().__init__(message)
+        self.chave_44 = chave_44
+        self.nf_existente_id = nf_existente_id
+
+
+class NfEntradaTemDependencias(Exception):
+    """NF nao pode ser removida — possui recebimento fisico ou devolucao vinculada."""
 
 
 def importar_danfe_pdf(
@@ -77,7 +91,9 @@ def importar_danfe_pdf(
     existente = HoraNfEntrada.query.filter_by(chave_44=nf_data['chave_44']).first()
     if existente:
         raise NfEntradaJaImportada(
-            f"NF com chave {nf_data['chave_44']} já importada (id={existente.id})"
+            f"NF com chave {nf_data['chave_44']} já importada (id={existente.id})",
+            chave_44=nf_data['chave_44'],
+            nf_existente_id=existente.id,
         )
 
     pedido_id_vinculo = pedido_id_sugerido
@@ -235,33 +251,10 @@ def editar_nf_item_manual(
     db.session.flush()
 
     # Se o chassi antigo ficou orfao, remove a hora_moto dele.
-    # Checa TODAS as tabelas que tem FK para hora_moto.numero_chassi — se
-    # alguma ainda referencia, NAO deleta (evita FK violation).
+    # Reusa fonte unica de verdade `_limpar_motos_orfas` (cobre todas as FKs
+    # incluindo HoraEmprestimoMoto.chassi_saida/chassi_entrada).
     if chassi_antigo and chassi_antigo != chassi_norm:
-        from app.hora.models import (
-            HoraMoto, HoraMotoEvento, HoraPedidoItem,
-            HoraRecebimentoConferencia, HoraVendaItem, HoraAvaria,
-            HoraTransferenciaItem, HoraPecaFaltando,
-        )
-        def _existe(modelo):
-            return db.session.query(
-                db.exists().where(modelo.numero_chassi == chassi_antigo)
-            ).scalar()
-
-        ainda_referenciado = (
-            _existe(HoraNfEntradaItem)
-            or _existe(HoraPedidoItem)
-            or _existe(HoraMotoEvento)
-            or _existe(HoraRecebimentoConferencia)
-            or _existe(HoraVendaItem)
-            or _existe(HoraAvaria)
-            or _existe(HoraTransferenciaItem)
-            or _existe(HoraPecaFaltando)
-        )
-        if not ainda_referenciado:
-            HoraMoto.query.filter_by(numero_chassi=chassi_antigo).delete(
-                synchronize_session=False
-            )
+        _limpar_motos_orfas([chassi_antigo])
 
     db.session.commit()
 
@@ -322,6 +315,336 @@ def editar_nf_item_manual(
         'motor_antigo': motor_antigo,
         'vinculo_status': vinculo_status,
         'pedidos_revalidados': sorted(p for p in pedidos_a_revalidar if p),
+    }
+
+
+_APELIDO_LOJA_DEFAULT_MATRIZ = 'MOTOCHEFE MATRIZ SP'
+
+
+def get_loja_default_matriz():
+    """Retorna a HoraLoja "MOTOCHEFE MATRIZ SP" (default para upload em lote).
+
+    Usa busca por apelido (case-insensitive) — robusto contra mudanca de id.
+    Confirmado em 2026-05-05 que a loja apelido='MOTOCHEFE MATRIZ SP' (id=1
+    em prod) e a matriz fiscal cujo CNPJ recebe todas as NFs HORA. Fluxo
+    operacional: NF entra na matriz por defeito; loja fisica e ajustada
+    apos o import.
+
+    Returns:
+        HoraLoja ou None (se cadastro foi removido/renomeado — caller
+        decide como reagir).
+    """
+    from app.hora.models import HoraLoja
+    return (
+        HoraLoja.query
+        .filter(db.func.upper(HoraLoja.apelido) == _APELIDO_LOJA_DEFAULT_MATRIZ)
+        .filter(HoraLoja.ativa.is_(True))
+        .first()
+    )
+
+
+def importar_danfe_pdfs_lote(
+    arquivos: list,  # list[tuple[str, bytes]]  (filename, pdf_bytes)
+    loja_destino_id: int,
+    criado_por: Optional[str] = None,
+) -> dict:
+    """Importa N DANFEs em lote, sequencialmente.
+
+    Cada arquivo e tratado em transacao independente (delegada a
+    `importar_danfe_pdf` que ja faz commit). Falha em um nao aborta os
+    demais. Cada NF herda a `loja_destino_id` informada — operador pode
+    ajustar individualmente apos o import via rota `nfs_alterar_loja`.
+
+    Args:
+        arquivos: lista de tuplas (filename, pdf_bytes).
+        loja_destino_id: loja default aplicada a todas as NFs.
+        criado_por: rotulo do usuario responsavel.
+
+    Returns:
+        dict com:
+          - total: int — total de arquivos processados
+          - sucesso: list[dict] — NFs importadas com sucesso
+          - duplicada: list[dict] — chave_44 ja existia (link para NF existente)
+          - erro: list[dict] — falha de parser ou validacao
+
+        Cada dict de sucesso traz `{filename, nf_id, numero_nf, chave_44,
+        n_itens, loja_destino_id, loja_destino_label}`.
+    """
+    sucesso: list[dict] = []
+    duplicada: list[dict] = []
+    erro: list[dict] = []
+
+    for filename, pdf_bytes in arquivos:
+        try:
+            nf = importar_danfe_pdf(
+                pdf_bytes=pdf_bytes,
+                nome_arquivo_origem=filename,
+                pedido_id_sugerido=None,
+                loja_destino_id=loja_destino_id,
+                criado_por=criado_por,
+            )
+            sucesso.append({
+                'filename': filename,
+                'nf_id': nf.id,
+                'numero_nf': nf.numero_nf,
+                'chave_44': nf.chave_44,
+                'n_itens': len(nf.itens),
+                'loja_destino_id': nf.loja_destino_id,
+                'loja_destino_label': (
+                    nf.loja_destino.rotulo_display if nf.loja_destino else '—'
+                ),
+            })
+        except NfEntradaJaImportada as exc:
+            duplicada.append({
+                'filename': filename,
+                'chave_44': exc.chave_44,
+                'nf_existente_id': exc.nf_existente_id,
+                'mensagem': str(exc),
+            })
+        except Exception as exc:  # parser, validacao, qualquer outro
+            erro.append({
+                'filename': filename,
+                'mensagem': str(exc),
+            })
+
+    current_app.logger.info(
+        f'hora: upload em lote por {criado_por or "?"} → '
+        f'{len(sucesso)} sucesso, {len(duplicada)} duplicada(s), '
+        f'{len(erro)} erro(s) de {len(arquivos)} arquivo(s).'
+    )
+
+    return {
+        'total': len(arquivos),
+        'sucesso': sucesso,
+        'duplicada': duplicada,
+        'erro': erro,
+    }
+
+
+def _limpar_motos_orfas(chassis: list[str]) -> list[str]:
+    """Remove HoraMoto cujo chassi nao e mais referenciado por nenhuma tabela.
+
+    Fonte unica de verdade para limpeza de motos orfa apos remover/reapontar
+    referencias em hora_nf_entrada_item. Usado por `remover_nf_entrada` e
+    `editar_nf_item_manual`.
+
+    IMPORTANTE: cada novo modelo com FK para `hora_moto.numero_chassi` precisa
+    ser adicionado aqui, senao a remocao causa FK violation. Modelos cobertos
+    (verificar grep `ForeignKey('hora_moto.numero_chassi')`):
+      - HoraNfEntradaItem
+      - HoraPedidoItem
+      - HoraMotoEvento
+      - HoraRecebimentoConferencia
+      - HoraVendaItem
+      - HoraAvaria
+      - HoraTransferenciaItem
+      - HoraPecaFaltando
+      - HoraEmprestimoMoto (DOIS campos: chassi_saida, chassi_entrada)
+
+    Retorna a lista de chassis que foram efetivamente removidos.
+    """
+    if not chassis:
+        return []
+    from sqlalchemy import or_
+    from app.hora.models import (
+        HoraMoto, HoraMotoEvento, HoraPedidoItem,
+        HoraRecebimentoConferencia, HoraVendaItem, HoraAvaria,
+        HoraTransferenciaItem, HoraPecaFaltando, HoraEmprestimoMoto,
+    )
+
+    def _ainda_referenciado(chassi: str) -> bool:
+        # Modelos com 1 coluna FK para chassi
+        modelos_simples = (
+            HoraNfEntradaItem, HoraPedidoItem, HoraMotoEvento,
+            HoraRecebimentoConferencia, HoraVendaItem, HoraAvaria,
+            HoraTransferenciaItem, HoraPecaFaltando,
+        )
+        for modelo in modelos_simples:
+            existe = db.session.query(
+                db.exists().where(modelo.numero_chassi == chassi)
+            ).scalar()
+            if existe:
+                return True
+        # HoraEmprestimoMoto: 2 colunas FK (chassi_saida e chassi_entrada)
+        existe_emp = db.session.query(
+            db.exists().where(
+                or_(
+                    HoraEmprestimoMoto.chassi_saida == chassi,
+                    HoraEmprestimoMoto.chassi_entrada == chassi,
+                )
+            )
+        ).scalar()
+        if existe_emp:
+            return True
+        return False
+
+    removidos: list[str] = []
+    for chassi in chassis:
+        if not _ainda_referenciado(chassi):
+            HoraMoto.query.filter_by(numero_chassi=chassi).delete(
+                synchronize_session=False
+            )
+            removidos.append(chassi)
+    return removidos
+
+
+def remover_nf_entrada(nf_id: int, operador: Optional[str] = None) -> dict:
+    """Remove uma NF de entrada e seus itens.
+
+    Bloqueia se houver:
+      - `HoraRecebimento` (recebimento fisico) vinculado
+      - `HoraDevolucaoFornecedor` (devolucao a fornecedor) com nf_entrada_id
+
+    Apos remover:
+      - Itens (`HoraNfEntradaItem`) saem por cascade.
+      - `HoraMoto` orfas (sem referencia em outras tabelas) sao apagadas
+        — mesma logica do `editar_nf_item_manual`.
+      - Status do pedido vinculado (se existir) e recalculado via
+        `atualizar_status_pedido_por_faturamento` (pode descer de FATURADO
+        para PARCIALMENTE_FATURADO/ABERTO).
+      - PDF/XML no storage sao removidos em best-effort (warn se falhar).
+    """
+    # Lock pessimista na NF para evitar race com import/edicao concorrente.
+    nf = HoraNfEntrada.query.with_for_update().get(nf_id)
+    if not nf:
+        raise ValueError(f'NF {nf_id} nao encontrada')
+    db.session.refresh(nf)  # garante que itens estao atualizados (evita identity-map stale)
+
+    from app.hora.models import HoraRecebimento, HoraDevolucaoFornecedor
+
+    rec_count = HoraRecebimento.query.filter_by(nf_id=nf.id).count()
+    if rec_count > 0:
+        raise NfEntradaTemDependencias(
+            f'NF possui {rec_count} recebimento(s) fisico(s) registrado(s). '
+            f'Cancele/exclua os recebimentos antes de remover a NF.'
+        )
+
+    dev_count = HoraDevolucaoFornecedor.query.filter_by(nf_entrada_id=nf.id).count()
+    if dev_count > 0:
+        raise NfEntradaTemDependencias(
+            f'NF possui {dev_count} devolucao(oes) ao fornecedor vinculada(s). '
+            f'Resolva-as antes de remover a NF.'
+        )
+
+    pedido_id = nf.pedido_id
+    chassis_da_nf = [it.numero_chassi for it in nf.itens]
+    s3_key_pdf = nf.arquivo_pdf_s3_key
+    s3_key_xml = nf.arquivo_xml_s3_key
+    numero_nf = nf.numero_nf
+    chave_44 = nf.chave_44
+
+    db.session.delete(nf)
+    db.session.flush()
+
+    motos_removidas = _limpar_motos_orfas(chassis_da_nf)
+
+    db.session.commit()
+
+    # NF ja foi removida (irreversivel). Falha no recalculo do pedido NAO deve
+    # propagar como erro generico para o operador — registra warning e continua,
+    # senao o usuario recebe "erro inesperado" achando que a remocao falhou
+    # quando ela ja foi efetivada.
+    if pedido_id:
+        try:
+            atualizar_status_pedido_por_faturamento(pedido_id)
+        except Exception as exc:  # pragma: no cover
+            current_app.logger.error(
+                f'hora: ATENCAO — NF {numero_nf} (id={nf_id}) removida com '
+                f'sucesso, mas falha ao revalidar status do pedido {pedido_id}: '
+                f'{exc}. Status pode estar inconsistente — revalidar manualmente.'
+            )
+
+    storage = FileStorage()
+    for s3_key in (s3_key_pdf, s3_key_xml):
+        if not s3_key:
+            continue
+        try:
+            storage.delete_file(s3_key)
+        except Exception as exc:  # pragma: no cover
+            current_app.logger.warning(
+                f'hora: falha ao remover arquivo {s3_key} ao excluir NF '
+                f'{numero_nf} (chave={chave_44}): {exc}'
+            )
+
+    current_app.logger.info(
+        f'hora: NF {numero_nf} (id={nf_id}, chave={chave_44}) removida por '
+        f'{operador or "?"} — {len(chassis_da_nf)} item(ns), '
+        f'{len(motos_removidas)} moto(s) orfa(s) removida(s).'
+    )
+
+    return {
+        'ok': True,
+        'nf_id': nf_id,
+        'numero_nf': numero_nf,
+        'chassis_removidos': chassis_da_nf,
+        'motos_orfas_removidas': motos_removidas,
+        'pedido_revalidado': pedido_id,
+    }
+
+
+def alterar_loja_nf_entrada(
+    nf_id: int,
+    nova_loja_id: int,
+    operador: Optional[str] = None,
+) -> dict:
+    """Altera a loja de destino de uma NF de entrada.
+
+    Cobre os dois casos:
+      - NF sem loja (`loja_destino_id is None`) → atribui loja inicial.
+      - NF com loja → troca para outra loja.
+
+    Bloqueia se:
+      - Loja nao existe ou esta inativa.
+      - NF tem recebimento fisico em loja diferente da nova
+        (alterar a loja apos receber e contraditorio).
+      - NF esta vinculada a pedido cuja loja e diferente da nova
+        (mantem coerencia NF×Pedido).
+    """
+    nf = HoraNfEntrada.query.get(nf_id)
+    if not nf:
+        raise ValueError(f'NF {nf_id} nao encontrada')
+
+    from app.hora.models import HoraLoja, HoraRecebimento
+
+    loja = HoraLoja.query.get(nova_loja_id)
+    if not loja:
+        raise ValueError(f'Loja {nova_loja_id} nao encontrada')
+    if not loja.ativa:
+        raise ValueError(f'Loja {loja.rotulo_display} esta inativa')
+
+    if nf.loja_destino_id == nova_loja_id:
+        return {'ok': True, 'inalterado': True, 'nf_id': nf.id}
+
+    rec = HoraRecebimento.query.filter_by(nf_id=nf.id).first()
+    if rec and rec.loja_id != nova_loja_id:
+        raise ValueError(
+            f'NF ja possui recebimento fisico (id={rec.id}) em loja diferente. '
+            f'Nao e possivel trocar a loja apos receber.'
+        )
+
+    if nf.pedido_id:
+        pedido = HoraPedido.query.get(nf.pedido_id)
+        if pedido and pedido.loja_destino_id and pedido.loja_destino_id != nova_loja_id:
+            raise ValueError(
+                f'Pedido vinculado ({pedido.numero_pedido}) e da loja '
+                f'{pedido.loja_destino.rotulo_display if pedido.loja_destino else pedido.loja_destino_id}. '
+                f'Desvincule o pedido ou escolha uma loja compativel.'
+            )
+
+    loja_anterior_id = nf.loja_destino_id
+    nf.loja_destino_id = nova_loja_id
+    db.session.commit()
+
+    current_app.logger.info(
+        f'hora: NF {nf.numero_nf} (id={nf.id}) — loja alterada de '
+        f'{loja_anterior_id} para {nova_loja_id} por {operador or "?"}.'
+    )
+
+    return {
+        'ok': True,
+        'nf_id': nf.id,
+        'loja_anterior_id': loja_anterior_id,
+        'loja_nova_id': nova_loja_id,
     }
 
 

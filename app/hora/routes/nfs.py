@@ -159,8 +159,9 @@ def nfs_detalhe(nf_id: int):
         flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
         return redirect(url_for('hora.nfs_lista'))
 
-    # Lojas permitidas para o caso de a NF estar sem loja_destino_id
-    lojas_ativas = _lojas_ativas_permitidas() if not nf.loja_destino_id else []
+    # Lojas permitidas: usadas tanto para "definir loja" (NF legada sem loja)
+    # quanto para "alterar loja" (NF com loja ja definida).
+    lojas_ativas = _lojas_ativas_permitidas()
 
     # Pedidos candidatos para vinculo rapido (filtrados pela loja da NF)
     pedidos_disponiveis = []
@@ -263,6 +264,134 @@ def nfs_upload():
     return render_template(
         'hora/nf_upload.html',
         pedidos=pedidos_disponiveis, lojas_ativas=lojas_ativas,
+    )
+
+
+# ------------------------------------------------------------------------
+# Upload em lote (N DANFEs com loja default MOTOCHEFE MATRIZ SP)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/nfs/upload-lote', methods=['GET', 'POST'])
+@require_hora_perm('nfs', 'criar')
+def nfs_upload_lote():
+    """Upload em lote de N DANFEs com loja default MOTOCHEFE MATRIZ SP.
+
+    Fluxo:
+      - GET: tela com seletor de loja (matriz pre-selecionada) + input multiple.
+      - POST: processa cada PDF, cria NFs com a loja default, retorna tela
+        de resultado com cards (sucesso/duplicada/erro). Cada card de sucesso
+        traz form inline para alterar a loja daquela NF (via nfs_alterar_loja).
+    """
+    permitidas = lojas_permitidas_ids()
+    lojas_ativas = _lojas_ativas_permitidas()
+
+    # Busca a loja default. Pode ser None se foi removida do cadastro ou se
+    # esta inativa. Se o usuario nao tem acesso a essa loja, tambem nao
+    # aplicamos como default (mas ele ainda pode escolher outra).
+    loja_default = nf_entrada_service.get_loja_default_matriz()
+    loja_default_id = None
+    if loja_default and (permitidas is None or loja_default.id in permitidas):
+        loja_default_id = loja_default.id
+
+    if request.method == 'POST':
+        arquivos_upload = request.files.getlist('pdfs')
+        if not arquivos_upload or all(
+            (not a or not a.filename) for a in arquivos_upload
+        ):
+            flash('Selecione um ou mais arquivos PDF.', 'danger')
+            return render_template(
+                'hora/nf_upload_lote.html',
+                lojas_ativas=lojas_ativas,
+                loja_default_id=loja_default_id,
+                loja_default_label=(
+                    loja_default.rotulo_display if loja_default else None
+                ),
+            )
+
+        loja_str = (request.form.get('loja_destino_id') or '').strip()
+        if loja_str.isdigit():
+            loja_destino_id = int(loja_str)
+        elif loja_default_id:
+            loja_destino_id = loja_default_id
+        else:
+            flash(
+                'Loja de destino nao foi informada e default '
+                'MOTOCHEFE MATRIZ SP nao esta disponivel.',
+                'danger',
+            )
+            return render_template(
+                'hora/nf_upload_lote.html',
+                lojas_ativas=lojas_ativas,
+                loja_default_id=loja_default_id,
+                loja_default_label=(
+                    loja_default.rotulo_display if loja_default else None
+                ),
+            )
+
+        if not usuario_tem_acesso_a_loja(loja_destino_id):
+            flash('Acesso negado a essa loja.', 'danger')
+            return render_template(
+                'hora/nf_upload_lote.html',
+                lojas_ativas=lojas_ativas,
+                loja_default_id=loja_default_id,
+                loja_default_label=(
+                    loja_default.rotulo_display if loja_default else None
+                ),
+            )
+
+        # Filtra apenas PDFs reais (FileStorage objects do Werkzeug). Acumula
+        # ignorados para mostrar no resultado.
+        arquivos: list = []
+        ignorados: list[str] = []
+        for f in arquivos_upload:
+            if not f or not f.filename:
+                continue
+            if not f.filename.lower().endswith('.pdf'):
+                ignorados.append(f.filename)
+                continue
+            try:
+                arquivos.append((f.filename, f.read()))
+            except Exception as exc:  # pragma: no cover
+                ignorados.append(f'{f.filename} (erro de leitura: {exc})')
+
+        if not arquivos:
+            flash(
+                'Nenhum PDF valido enviado.'
+                + (f' Ignorados: {", ".join(ignorados)}' if ignorados else ''),
+                'danger',
+            )
+            return render_template(
+                'hora/nf_upload_lote.html',
+                lojas_ativas=lojas_ativas,
+                loja_default_id=loja_default_id,
+                loja_default_label=(
+                    loja_default.rotulo_display if loja_default else None
+                ),
+            )
+
+        resultado = nf_entrada_service.importar_danfe_pdfs_lote(
+            arquivos=arquivos,
+            loja_destino_id=loja_destino_id,
+            criado_por=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+
+        loja_aplicada = HoraLoja.query.get(loja_destino_id)
+        return render_template(
+            'hora/nf_upload_lote_resultado.html',
+            resultado=resultado,
+            ignorados=ignorados,
+            lojas_ativas=lojas_ativas,
+            loja_aplicada=loja_aplicada,
+        )
+
+    # GET
+    return render_template(
+        'hora/nf_upload_lote.html',
+        lojas_ativas=lojas_ativas,
+        loja_default_id=loja_default_id,
+        loja_default_label=(
+            loja_default.rotulo_display if loja_default else None
+        ),
     )
 
 
@@ -385,6 +514,127 @@ def nfs_definir_loja(nf_id: int):
     nf.loja_destino_id = loja_id
     db.session.commit()
     flash(f'Loja {loja.rotulo_display} definida para a NF.', 'success')
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+
+# ------------------------------------------------------------------------
+# Alterar loja vinculada (NF com loja ja definida)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/nfs/<int:nf_id>/alterar-loja', methods=['POST'])
+@require_hora_perm('nfs', 'editar')
+def nfs_alterar_loja(nf_id: int):
+    """Troca a loja_destino_id de uma NF.
+
+    Diferente de `nfs_definir_loja` (que so funciona quando a NF nao tem
+    loja), esta rota cobre o caso de NF que ja tem loja e o operador
+    quer corrigir/realocar para outra. O service aplica os bloqueios de
+    coerencia (recebimento ja feito em outra loja, pedido vinculado de
+    outra loja, loja inativa).
+    """
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+
+    # Permissao de loja ATUAL (se houver)
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+    # NF sem loja + escopo restrito → admin only (mesma logica de nfs_editar_item)
+    if not nf.loja_destino_id and lojas_permitidas_ids() is not None:
+        flash(
+            'NF sem loja atribuida; apenas usuario com escopo total pode definir/alterar.',
+            'warning',
+        )
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    loja_str = (request.form.get('loja_destino_id') or '').strip()
+    if not loja_str.isdigit():
+        flash('Selecione a nova loja de destino.', 'danger')
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    nova_loja_id = int(loja_str)
+    # Permissao da loja NOVA
+    if not usuario_tem_acesso_a_loja(nova_loja_id):
+        flash('Acesso negado a essa loja.', 'danger')
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    try:
+        res = nf_entrada_service.alterar_loja_nf_entrada(
+            nf_id=nf.id,
+            nova_loja_id=nova_loja_id,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        if res.get('inalterado'):
+            flash('A loja informada e a mesma ja vinculada — nada a fazer.', 'info')
+        else:
+            flash('Loja da NF alterada com sucesso.', 'success')
+    except ValueError as exc:
+        flash(f'Erro ao alterar loja: {exc}', 'danger')
+    except Exception as exc:  # pragma: no cover
+        flash(f'Erro inesperado: {exc}', 'danger')
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+
+# ------------------------------------------------------------------------
+# Remover NF de entrada
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/nfs/<int:nf_id>/remover', methods=['POST'])
+@require_hora_perm('nfs', 'apagar')
+def nfs_remover(nf_id: int):
+    """Remove a NF e seus itens (cascade). Bloqueia se houver recebimento
+    fisico ou devolucao a fornecedor vinculados — nesse caso o operador
+    precisa cancelar/excluir essas dependencias antes.
+    """
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+    # NF sem loja + escopo restrito → admin only
+    if not nf.loja_destino_id and lojas_permitidas_ids() is not None:
+        flash(
+            'NF sem loja atribuida; apenas usuario com escopo total pode remover.',
+            'warning',
+        )
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    # Tambem valida escopo do PEDIDO vinculado: remover a NF altera o status
+    # do pedido (FATURADO -> ABERTO/PARCIAL), logo o usuario precisa ter
+    # acesso aquele pedido tambem.
+    if nf.pedido_id:
+        pedido_vinc = HoraPedido.query.get(nf.pedido_id)
+        if (
+            pedido_vinc
+            and pedido_vinc.loja_destino_id
+            and not usuario_tem_acesso_a_loja(pedido_vinc.loja_destino_id)
+        ):
+            flash(
+                'NF vinculada a pedido de loja fora do seu escopo — '
+                'remocao alteraria status do pedido. Operacao bloqueada.',
+                'danger',
+            )
+            return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    numero_nf = nf.numero_nf
+    try:
+        res = nf_entrada_service.remover_nf_entrada(
+            nf_id=nf.id,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        n_itens = len(res.get('chassis_removidos') or [])
+        n_motos = len(res.get('motos_orfas_removidas') or [])
+        msg = f'NF {numero_nf} removida ({n_itens} item(ns)'
+        if n_motos:
+            msg += f', {n_motos} moto(s) orfa(s) limpa(s)'
+        msg += ').'
+        flash(msg, 'success')
+        return redirect(url_for('hora.nfs_lista'))
+    except nf_entrada_service.NfEntradaTemDependencias as exc:
+        flash(f'Nao foi possivel remover: {exc}', 'warning')
+    except ValueError as exc:
+        flash(f'Erro ao remover NF: {exc}', 'danger')
+    except Exception as exc:  # pragma: no cover
+        flash(f'Erro inesperado: {exc}', 'danger')
     return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
 
 

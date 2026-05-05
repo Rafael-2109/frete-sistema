@@ -21,6 +21,13 @@
         </a>
       {% endif %}
     {% endif %}
+    {% if current_user.tem_perm_hora('nfs', 'apagar') %}
+      <button type="button" class="btn btn-sm btn-outline-danger"
+              data-bs-toggle="modal" data-bs-target="#removerNfModal"
+              title="Remover esta NF e seus itens">
+        <i class="fas fa-trash"></i> Remover NF
+      </button>
+    {% endif %}
   </div>
 </div>
 
@@ -67,6 +74,7 @@
 
 {% if not nf.loja_destino_id %}
 <form method="post" action="{{ url_for('hora.nfs_definir_loja', nf_id=nf.id) }}" class="card p-3 mb-3 border-warning">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h5><i class="fas fa-exclamation-circle text-warning"></i> Definir loja destino</h5>
   <p class="text-muted small mb-2">
     A NF foi importada sem loja. Selecione a loja física que vai receber as motos
@@ -90,8 +98,45 @@
 </form>
 {% endif %}
 
+{% if nf.loja_destino_id and current_user.tem_perm_hora('nfs', 'editar') and lojas_ativas %}
+<details class="card p-3 mb-3 border-info">
+  <summary class="cursor-pointer">
+    <i class="fas fa-exchange-alt text-info"></i>
+    <strong>Alterar loja vinculada</strong>
+    <span class="text-muted small">— atualmente: {{ nf.loja_destino.rotulo_display }}</span>
+  </summary>
+  <form method="post" action="{{ url_for('hora.nfs_alterar_loja', nf_id=nf.id) }}" class="mt-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p class="text-muted small mb-2">
+      Use somente para corrigir a loja de destino. Se a NF ja tem
+      <strong>recebimento fisico</strong> em outra loja ou esta vinculada a
+      <strong>pedido de outra loja</strong>, a alteracao sera bloqueada.
+    </p>
+    <div class="row">
+      <div class="col-md-8">
+        <select name="loja_destino_id" class="form-select" required>
+          <option value="">— Selecione nova loja —</option>
+          {% for loja in lojas_ativas %}
+            <option value="{{ loja.id }}" {% if loja.id == nf.loja_destino_id %}selected{% endif %}>
+              {{ loja.rotulo_display }}{% if loja.cidade %} ({{ loja.cidade }}){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <button type="submit" class="btn btn-info"
+                onclick="return confirm('Confirmar alteracao da loja desta NF?');">
+          <i class="fas fa-save"></i> Alterar loja
+        </button>
+      </div>
+    </div>
+  </form>
+</details>
+{% endif %}
+
 {% if not nf.pedido_id and nf.loja_destino_id and pedidos_disponiveis %}
 <form method="post" action="{{ url_for('hora.nfs_vincular_pedido', nf_id=nf.id) }}" class="card p-3 mb-3">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <h5>Vincular a pedido (atalho rápido)</h5>
   <p class="text-muted small mb-2">
     Lista filtrada pela loja da NF ({{ nf.loja_destino.rotulo_display }}).
@@ -218,6 +263,7 @@
 <div class="modal fade" id="editarItemNfModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <form method="post" id="editarItemNfForm" class="modal-content">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-header">
         <h5 class="modal-title">Corrigir item da NF</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
@@ -278,5 +324,45 @@
   });
 })();
 </script>
+{% endif %}
+
+{% if current_user.tem_perm_hora('nfs', 'apagar') %}
+<!-- Modal: confirmar remocao da NF -->
+<div class="modal fade" id="removerNfModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('hora.nfs_remover', nf_id=nf.id) }}" class="modal-content">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-exclamation-triangle"></i> Remover NF {{ nf.numero_nf }}
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">
+          Esta acao remove a NF e seus <strong>{{ nf.itens|length }} item(ns)</strong>
+          (chassi(s) faturado(s)) permanentemente.
+        </p>
+        <ul class="small text-muted mb-3">
+          <li>Status do pedido vinculado sera recalculado.</li>
+          <li>Motos sem outras referencias serao limpas do cadastro.</li>
+          <li>Arquivos do storage (PDF/XML) serao removidos.</li>
+          <li>Bloqueia se houver <strong>recebimento fisico</strong> ou <strong>devolucao</strong> vinculada.</li>
+        </ul>
+        <div class="alert alert-warning small mb-0">
+          <i class="fas fa-info-circle"></i>
+          Acao <strong>irreversivel</strong>. Se quiser apenas corrigir o
+          chassi/motor de um item, use o botao de edicao na linha.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-danger">
+          <i class="fas fa-trash"></i> Confirmar remocao
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endif %}
 {% endblock %}
