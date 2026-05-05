@@ -1,7 +1,7 @@
 # Agent Design Guide
 
-**Ultima Atualizacao**: 2026-04-09
-**Escopo**: Manual prescritivo para criar e editar subagents no sistema de fretes Nacom Goya.
+**Ultima Atualizacao**: 2026-05-05 (clarificacao do escopo Nacom Goya vs Lojas HORA)
+**Escopo**: Manual prescritivo para criar e editar subagents no sistema de fretes Nacom Goya. (O agente isolado `orientador-loja` para Lojas HORA, em `app/agente_lojas/`, segue os mesmos principios mas tem allowlist e contexto separados.)
 
 ---
 
@@ -36,10 +36,10 @@ Referencia oficial: https://code.claude.com/docs/en/sub-agents (secao "Supported
 
 | Campo | Tipo | Quando usar |
 |-------|------|-------------|
-| `memory` | `user`/`project`/`local` | **NAO USAR no contexto deste projeto**. Funciona apenas em Claude Code CLI dev — o `agent_loader.py` do agente web (producao) nao extrai este campo. **Persistencia em producao usa o MCP memory server** (`app/agente/tools/memory_mcp_tool.py`, 13 tools). Os 12 subagents ja tem acesso via 6 tools no allowlist (`mcp__memory__view_memories`, `list_memories`, `save_memory`, `update_memory`, `log_system_pitfall`, `query_knowledge_graph`) e instrucoes de uso via `.claude/references/AGENT_TEMPLATES.md#memory-usage`. |
+| `memory` | `user`/`project`/`local` | **NAO USAR no contexto deste projeto**. Funciona apenas em Claude Code CLI dev — o `agent_loader.py` do agente web (producao) nao extrai este campo. **Persistencia em producao usa o MCP memory server** (`app/agente/tools/memory_mcp_tool.py`, 13 tools). Os 12 subagents Nacom Goya ja tem acesso via 6 tools no allowlist (`mcp__memory__view_memories`, `list_memories`, `save_memory`, `update_memory`, `log_system_pitfall`, `query_knowledge_graph`) e instrucoes de uso via `.claude/references/AGENT_TEMPLATES.md#memory-usage`. O subagent `orientador-loja` (Lojas HORA) tem allowlist proprio, sem acesso a memory MCP — escopo isolado por `<loja_context>`. |
 | `disallowedTools` | string CSV ou lista | Denylist — inverso de `tools`. Use quando quer "todas menos X". |
 | `permissionMode` | string | `default`/`acceptEdits`/`auto`/`dontAsk`/`bypassPermissions`/`plan`. Cuidado com `bypassPermissions` em producao. |
-| `effort` | `low`/`medium`/`high`/`max` | Override do effort level da sessao. `max` apenas em Opus tier (Opus 4.5, 4.6, 4.7). Sonnet/Haiku fazem fallback para `high` no CLI. Opus 4.7 introduz `xhigh` (entre `high` e `max`) — ainda nao exposto no Literal type do SDK 0.1.60, usar via `extra_args` se necessario. |
+| `effort` | `low`/`medium`/`high`/`max` | Override do effort level da sessao. `max` apenas em Opus tier (Opus 4.5, 4.6, 4.7). Sonnet/Haiku fazem fallback para `high` no CLI. Opus 4.7 introduz `xhigh` (entre `high` e `max`) — confirmado: ainda nao exposto no Literal type do SDK 0.1.66 (`Literal["low", "medium", "high", "max"]` em `claude_agent_sdk/types.py`), usar via `extra_args` se necessario. |
 | `color` | string | Display color: `red`, `blue`, `green`, `yellow`, `purple`, `orange`, `pink`, `cyan`. |
 | `background` | bool | `true` = roda em background sempre. Default: `false`. |
 | `isolation` | `worktree` | Roda em git worktree isolado. |

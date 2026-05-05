@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-05-05-1](atualizacao-2026-05-05-1.md) — 9 auditados, 9 modificados (datas). Unica mudanca estrutural: agente/sdk/ +1 arquivo (`shutdown_state.py` — flag atexit suprime Sentry de RuntimeError shutdown no worker Teams). CarVia subiu 600 LOC sem novos arquivos (62.7K -> 63.3K). Demais modulos sem variacao estrutural.
+
 - [2026-04-27-1](atualizacao-2026-04-27-1.md) — 9 auditados, 8 modificados. Agente +4 arquivos (admin_session_store, user_preferences, model_router, session_store_adapter, teams_card_tool). CarVia +3 arquivos (nf_transferencia route+service, importacao_config, rateio_conciliacao_helper, excel_export_helper, papeis_frete). Datas atualizadas.
 
 - [2026-04-20-1](atualizacao-2026-04-20-1.md) — 9 auditados, 8 modificados. Corrigidos contagens/estruturas em agente (+5 sdk, +utils, +workers), carvia (services em 6 sub-pacotes), financeiro (models.py erro chars->linhas). Datas de todos atualizadas.

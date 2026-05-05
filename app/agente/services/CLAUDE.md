@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~8.7K | **Arquivos**: 14 | **Atualizado**: 2026-04-27
+**LOC**: ~8.7K | **Arquivos**: 14 | **Atualizado**: 2026-05-05
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 

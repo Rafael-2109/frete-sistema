@@ -1,6 +1,6 @@
 # Teams Bot — Guia de Desenvolvimento
 
-**LOC**: ~2.5K | **Arquivos**: 4 | **Atualizado**: 27/04/2026
+**LOC**: ~2.5K | **Arquivos**: 4 | **Atualizado**: 05/05/2026
 
 Bot assincrono Microsoft Teams via Azure Function bridge. Non-daemon threads + SSL retry + transcript persistence.
 
