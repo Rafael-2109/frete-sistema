@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Raiz CNPJ (8 primeiros dígitos) de clientes excluídos do filtro Agend. Pendente
 CNPJS_EXCLUIR_AGENDAMENTO = ['93209765', '75315333', '00063960', '01157555', '06057223']
 
-CACHE_KEY = "pedidos:contadores:v4"
+CACHE_KEY = "pedidos:contadores:v4"  # base — sufixo :pend / :all definido em runtime
 CACHE_TTL = 45  # segundos
 
 FACETED_CACHE_PREFIX = "pedidos:contadores:filtros:"
@@ -68,37 +68,52 @@ class PedidosCounterService:
     """Calcula e cacheia contadores da lista de pedidos."""
 
     @staticmethod
-    def obter_contadores() -> Dict[str, Any]:
+    def obter_contadores(apenas_pendentes: bool = True) -> Dict[str, Any]:
         """
         Retorna todos os contadores + dados auxiliares.
         Tenta Redis primeiro; se miss, calcula tudo e cacheia.
+
+        Cache separado por estado do toggle "Apenas Pendentes" (ON=:pend, OFF=:all).
         """
-        cached = redis_cache.get(CACHE_KEY)
+        suffix = ":pend" if apenas_pendentes else ":all"
+        cache_key = f"{CACHE_KEY}{suffix}"
+        cached = redis_cache.get(cache_key)
         if cached is not None:
-            logger.debug("✅ Contadores pedidos: CACHE HIT")
+            logger.debug("✅ Contadores pedidos: CACHE HIT (%s)", suffix)
             return cached
 
-        logger.debug("💨 Contadores pedidos: CACHE MISS - calculando")
-        resultado = PedidosCounterService._calcular_tudo()
+        logger.debug("💨 Contadores pedidos: CACHE MISS (%s) - calculando", suffix)
+        resultado = PedidosCounterService._calcular_tudo(apenas_pendentes=apenas_pendentes)
 
-        redis_cache.set(CACHE_KEY, resultado, CACHE_TTL)
+        redis_cache.set(cache_key, resultado, CACHE_TTL)
         return resultado
 
     @staticmethod
-    def _calcular_tudo() -> Dict[str, Any]:
-        """Calcula todos os contadores em queries otimizadas."""
-        M = _get_model()  # PedidoMV se mv_pedidos existe, senao Pedido (VIEW)
+    def _calcular_tudo(apenas_pendentes: bool = True) -> Dict[str, Any]:
+        """Calcula todos os contadores em queries otimizadas.
+
+        Usa VIEW `Pedido` direta (nao MV) para os contadores de status —
+        garante consistencia com o caminho facetado (`calcular_contadores_filtrados`).
+        Cache Redis 45s amortiza o custo.
+
+        `apenas_pendentes`: quando True, pre-filtra o universo excluindo
+        pedidos finalizados (nf preenchida + embarcado + nf_cd=False).
+        """
+        from app.pedidos.services.lista_service import ListaPedidosService as Svc
+        M = Pedido  # VIEW direta — alinhado com _calcular_contadores_status
         hoje = agora_utc_naive().date()
+        pendente_filter = Svc._apenas_pendentes_filter(M) if apenas_pendentes else None
 
         # 1. Dados auxiliares de agendamento (necessario ANTES dos contadores de status)
         _contatos_por_cnpj, cnpjs_agendamento = PedidosCounterService._obter_dados_agendamento()
 
         # 2. Contadores de data (D+0 a D+3) - 1 query em vez de 8
-        contadores_data = PedidosCounterService._calcular_contadores_data(hoje)
+        contadores_data = PedidosCounterService._calcular_contadores_data(
+            hoje, pendente_filter=pendente_filter)
 
         # 3. Contadores de status + agend_pendente - 1 query em vez de 8
         contadores_status = PedidosCounterService._calcular_contadores_status(
-            hoje, cnpjs_agendamento)
+            hoje, cnpjs_agendamento, pendente_filter=pendente_filter)
 
         # 4. Lotes com falta_item
         lotes_falta_item = PedidosCounterService._obter_lotes_falta_item()
@@ -111,7 +126,7 @@ class PedidosCounterService:
         contadores_status['ag_pagamento'] = 0
         combined_lotes = list(set((lotes_falta_item or []) + (lotes_falta_pgto or [])))
         if combined_lotes:
-            ag_result = db.session.query(
+            ag_query = db.session.query(
                 func.count(distinct(case(
                     (M.separacao_lote_id.in_(lotes_falta_item or []), M.separacao_lote_id),
                     else_=None
@@ -124,7 +139,10 @@ class PedidosCounterService:
                 M.separacao_lote_id.in_(combined_lotes),
                 M.nf_cd == False,
                 (M.nf.is_(None)) | (M.nf == "")
-            ).one()
+            )
+            if pendente_filter is not None:
+                ag_query = ag_query.filter(pendente_filter)
+            ag_result = ag_query.one()
             contadores_status['ag_item'] = ag_result[0] or 0
             contadores_status['ag_pagamento'] = ag_result[1] or 0
 
@@ -137,12 +155,15 @@ class PedidosCounterService:
         }
 
     @staticmethod
-    def _calcular_contadores_data(hoje) -> Dict:
+    def _calcular_contadores_data(hoje, pendente_filter=None) -> Dict:
         """
         Calcula contadores D+0 a D+3 em UMA UNICA QUERY com CASE WHEN.
         Substitui 8 queries individuais.
+
+        Usa VIEW Pedido (nao MV) para consistencia com facetado e suporte
+        ao toggle "Apenas Pendentes".
         """
-        M = _get_model()
+        M = Pedido  # VIEW direta — alinhado com _calcular_contadores_status
         datas = [hoje + timedelta(days=i) for i in range(4)]
 
         # Construir as expressoes CASE WHEN (3 por data: total, pend_embarque, abertos)
@@ -167,7 +188,10 @@ class PedidosCounterService:
                 ))
             )
 
-        resultado = db.session.query(*cases).one()
+        query = db.session.query(*cases)
+        if pendente_filter is not None:
+            query = query.filter(pendente_filter)
+        resultado = query.one()
 
         contadores_data = {}
         for i in range(4):
@@ -180,206 +204,80 @@ class PedidosCounterService:
         return contadores_data
 
     @staticmethod
-    def _calcular_contadores_status(hoje, cnpjs_agendamento: List[str] = None) -> Dict:
+    def _calcular_contadores_status(hoje, cnpjs_agendamento: List[str] = None,
+                                     pendente_filter=None) -> Dict:
         """
         Calcula contadores de status + agend_pendente em UMA UNICA QUERY com CASE WHEN.
         Substitui ~8 queries individuais (inclui agend_pendente que era query separada).
 
-        Semantica unificada NACOM + CarVia:
-          - abertos    = NACOM + CarVia (sem embarque)
-          - cotados    = NACOM + CarVia (em embarque sem data_embarque)
-          - faturados  = APENAS NACOM (CarVia nao entra)
-          - atrasados / sem_data / pend_embarque = NACOM + CarVia
-          - nf_cd      = APENAS NACOM (flag exclusiva NACOM)
+        IMPORTANTE: reutiliza as MESMAS expressoes do caminho facetado
+        (`ListaPedidosService._get_status_filter`, `_filtro_cond_*`,
+        `_expr_cond_agend_pendente`) para garantir que os contadores globais
+        e os contadores filtrados retornem valores consistentes — caso
+        contrario, contadores na entrada inicial divergem dos contadores
+        apos aplicar filtros (bug historico do fluxo P12 de 2026-04-24).
 
-        NACOM filtra com `~CARVIA-%` para evitar capturar CarVia por engano
-        (CarVia 2B na VIEW pedidos tem `nf` preenchida assim que NF e anexada).
-        CarVia e contado via `_carvia_lotes_por_status` (sets reais de embarque).
+        Usa SEMPRE a VIEW `Pedido` (nao a MV) para garantir frescor — pedidos
+        novos/alterados aparecem imediatamente. O cache Redis (45s) ja protege
+        contra recalculo excessivo, entao 1 scan da VIEW a cada 45s e aceitavel.
         """
-        M = _get_model()
-        # Expressao agend_pendente (incorporada aqui para evitar scan extra da VIEW)
-        cnpj_raiz = func.left(func.regexp_replace(M.cnpj_cpf, '[^0-9]', '', 'g'), 8)
-        if cnpjs_agendamento:
-            agend_expr = (
-                (M.cnpj_cpf.in_(cnpjs_agendamento)) &
-                (M.agendamento.is_(None)) &
-                (M.nf_cd == False) &
-                ((M.nf.is_(None)) | (M.nf == "")) &
-                (M.data_embarque.is_(None)) &
-                ((M.cod_uf == 'SP') | (M.rota == 'FOB')) &
-                (~cnpj_raiz.in_(CNPJS_EXCLUIR_AGENDAMENTO)) &
-                (~M.separacao_lote_id.like('CARVIA-%'))
-            )
-        else:
-            agend_expr = M.separacao_lote_id == 'IMPOSSIVEL'
+        from app.pedidos.services.lista_service import ListaPedidosService as Svc
+        M = Pedido  # VIEW direta — frescor > velocidade (cache Redis amortiza)
+        carvia_sets = Svc._carvia_lotes_por_status()
 
-        # NACOM: tudo o que NAO e CarVia
+        # Expressoes unificadas (mesmas do caminho facetado), parametrizadas
+        # para o modelo escolhido (Pedido VIEW ou PedidoMV)
+        f_aberto = Svc._get_status_filter('aberto', carvia_sets, M)
+        f_cotado = Svc._get_status_filter('cotado', carvia_sets, M)
+        f_faturado = Svc._get_status_filter('faturado', carvia_sets, M)
+        f_nf_cd = Svc._get_status_filter('nf_cd', carvia_sets, M)
+        f_atrasados = Svc._filtro_cond_atrasados(hoje, carvia_sets, M)
+        f_sem_data = Svc._filtro_cond_sem_data(carvia_sets, M)
+        f_pend_embarque = Svc._filtro_cond_pend_embarque(carvia_sets, M)
+        f_agend_pendente = Svc._expr_cond_agend_pendente(cnpjs_agendamento, M)
+
+        # NACOM helper para o legado atrasados_abertos (NACOM-only, status=ABERTO)
         nao_carvia = ~M.separacao_lote_id.like('CARVIA-%')
 
-        resultado = db.session.query(
+        query = db.session.query(
             # 0: todos (NACOM + CarVia)
             func.count(),
-            # 1: abertos NACOM (nao inclui CarVia — somado depois)
+            # 1: abertos (NACOM + CarVia, ja unificado)
+            func.count(case((f_aberto, 1))),
+            # 2: cotados (NACOM + CarVia, ja unificado)
+            func.count(case((f_cotado, 1))),
+            # 3: nf_cd (apenas NACOM, expressao unificada)
+            func.count(case((f_nf_cd, 1))),
+            # 4: atrasados (NACOM + CarVia, ja unificado)
+            func.count(case((f_atrasados, 1))),
+            # 5: atrasados_abertos NACOM (legado, mantido por compatibilidade)
             func.count(case(
-                (nao_carvia & ((M.status == 'ABERTO') | (M.nf_cd == True)), 1)
+                (nao_carvia & (M.status == 'ABERTO') & (M.expedicao < hoje), 1)
             )),
-            # 2: cotados NACOM (nao inclui CarVia — somado depois)
-            func.count(case(
-                (
-                    nao_carvia &
-                    (M.cotacao_id.isnot(None)) &
-                    (M.data_embarque.is_(None)) &
-                    ((M.nf.is_(None)) | (M.nf == "")) &
-                    (M.nf_cd == False),
-                    1
-                )
-            )),
-            # 3: nf_cd (apenas NACOM)
-            func.count(case(
-                (nao_carvia & (M.nf_cd == True), 1)
-            )),
-            # 4: atrasados NACOM
-            func.count(case(
-                (
-                    nao_carvia &
-                    (
-                        ((M.cotacao_id.isnot(None)) & (M.data_embarque.is_(None)) & ((M.nf.is_(None)) | (M.nf == ""))) |
-                        ((M.cotacao_id.is_(None)) & ((M.nf.is_(None)) | (M.nf == "")))
-                    ) &
-                    (M.nf_cd == False) &
-                    (M.expedicao < hoje) &
-                    ((M.nf.is_(None)) | (M.nf == "")),
-                    1
-                )
-            )),
-            # 5: atrasados_abertos NACOM
-            func.count(case(
-                (
-                    nao_carvia &
-                    (M.status == 'ABERTO') & (M.expedicao < hoje),
-                    1
-                )
-            )),
-            # 6: sem_data NACOM
-            func.count(case(
-                (
-                    nao_carvia &
-                    (M.expedicao.is_(None)) &
-                    (M.nf_cd == False) &
-                    ((M.nf.is_(None)) | (M.nf == "")) &
-                    (M.data_embarque.is_(None)),
-                    1
-                )
-            )),
-            # 7: pend_embarque NACOM (sem data_embarque — inclui NF no CD)
-            func.count(case(
-                (nao_carvia & (M.data_embarque.is_(None)), 1)
-            )),
+            # 6: sem_data (NACOM + CarVia, ja unificado)
+            func.count(case((f_sem_data, 1))),
+            # 7: pend_embarque (NACOM + CarVia, ja unificado)
+            func.count(case((f_pend_embarque, 1))),
             # 8: faturados (APENAS NACOM — CarVia nao entra)
-            func.count(case(
-                (
-                    nao_carvia &
-                    (M.nf.isnot(None)) & (M.nf != "") &
-                    (M.nf_cd == False),
-                    1
-                )
-            )),
+            func.count(case((f_faturado, 1))),
             # 9: agend_pendente (apenas NACOM)
-            func.count(case(
-                (agend_expr, 1)
-            )),
-        ).one()
-
-        # Contadores CarVia (sets reais via EmbarqueItem) + condicoes (atrasados/sem_data)
-        carvia_counts = PedidosCounterService._calcular_contadores_carvia(hoje)
+            func.count(case((f_agend_pendente, 1))),
+        )
+        if pendente_filter is not None:
+            query = query.filter(pendente_filter)
+        resultado = query.one()
 
         return {
             'todos': resultado[0] or 0,
-            'abertos': (resultado[1] or 0) + carvia_counts['abertos'],
-            'cotados': (resultado[2] or 0) + carvia_counts['cotados'],
+            'abertos': resultado[1] or 0,
+            'cotados': resultado[2] or 0,
             'nf_cd': resultado[3] or 0,  # NACOM apenas
-            'atrasados': (resultado[4] or 0) + carvia_counts['atrasados'],
+            'atrasados': resultado[4] or 0,
             'atrasados_abertos': resultado[5] or 0,  # NACOM apenas (legado)
-            'sem_data': (resultado[6] or 0) + carvia_counts['sem_data'],
-            'pend_embarque': (resultado[7] or 0) + carvia_counts['pend_embarque'],
+            'sem_data': resultado[6] or 0,
+            'pend_embarque': resultado[7] or 0,
             'faturados': resultado[8] or 0,  # APENAS NACOM (CarVia nao entra)
             'agend_pendente': resultado[9] or 0,  # NACOM apenas
-        }
-
-    @staticmethod
-    def _calcular_contadores_carvia(hoje) -> Dict[str, int]:
-        """Calcula contadores CarVia usando sets reais de EmbarqueItem.
-
-        Estrutura:
-          - abertos    = total CarVia - cotados - embarcados
-          - cotados    = len(set cotado)
-          - atrasados  = lotes nao embarcados com expedicao < hoje
-          - sem_data   = lotes nao embarcados com expedicao IS NULL
-          - pend_embarque = total CarVia - embarcados
-        """
-        from app.pedidos.services.lista_service import ListaPedidosService
-        M = _get_model()
-        carvia_sets = ListaPedidosService._carvia_lotes_por_status()
-        cotados_set = carvia_sets['cotado']
-        embarcados_set = carvia_sets['embarcado']
-        cotados = list(cotados_set) or ['_NONE_']
-        embarcados = list(embarcados_set) or ['_NONE_']
-
-        # Query unica para totais CarVia (4 contadores)
-        carvia_prefix = M.separacao_lote_id.like('CARVIA-%')
-        nao_embarcado = M.separacao_lote_id.notin_(embarcados)
-        nao_cotado_nao_embarcado = (
-            M.separacao_lote_id.notin_(cotados) &
-            M.separacao_lote_id.notin_(embarcados)
-        )
-
-        try:
-            row = db.session.query(
-                func.count(case((carvia_prefix, 1))),  # 0: total CarVia
-                func.count(case((carvia_prefix & nao_cotado_nao_embarcado, 1))),  # 1: abertos
-                func.count(case(
-                    (carvia_prefix & nao_embarcado & (M.expedicao < hoje), 1)
-                )),  # 2: atrasados
-                func.count(case(
-                    (carvia_prefix & nao_embarcado & M.expedicao.is_(None), 1)
-                )),  # 3: sem_data
-            ).one()
-            total_carvia = row[0] or 0
-            abertos = row[1] or 0
-            atrasados = row[2] or 0
-            sem_data = row[3] or 0
-        except Exception as e:
-            logger.warning("Erro contadores CarVia: %s", e)
-            return {'abertos': 0, 'cotados': 0, 'atrasados': 0,
-                    'sem_data': 0, 'pend_embarque': 0}
-
-        # cotados = lotes em set cotado E presentes na VIEW
-        try:
-            cotados_count = 0
-            if cotados_set:
-                cotados_count = db.session.query(func.count()).filter(
-                    M.separacao_lote_id.in_(list(cotados_set))
-                ).scalar() or 0
-        except Exception:
-            cotados_count = 0
-
-        # pend_embarque = total CarVia - embarcados na VIEW
-        embarcados_count_view = 0
-        if embarcados_set:
-            try:
-                embarcados_count_view = db.session.query(func.count()).filter(
-                    M.separacao_lote_id.in_(list(embarcados_set))
-                ).scalar() or 0
-            except Exception:
-                embarcados_count_view = 0
-        pend_embarque = max(0, total_carvia - embarcados_count_view)
-
-        return {
-            'abertos': abertos,
-            'cotados': cotados_count,
-            'atrasados': atrasados,
-            'sem_data': sem_data,
-            'pend_embarque': pend_embarque,
         }
 
     @staticmethod
@@ -436,9 +334,13 @@ class PedidosCounterService:
     # ---------------------------------------------------------------
     @staticmethod
     def _build_filter_fingerprint(args) -> str:
-        """Gera hash MD5 dos parametros de filtro (exclui page/sort)."""
+        """Gera hash MD5 dos parametros de filtro (exclui page/sort).
+
+        IMPORTANTE: inclui `pendente` para que cache facetado nao misture
+        universos pendente vs tudo (cache poisoning).
+        """
         filter_keys = sorted([
-            'origem',
+            'origem', 'pendente',
             'status', 'cond_atrasados', 'cond_sem_data', 'cond_pend_embarque',
             'cond_agend_pendente', 'cond_ag_pagamento', 'cond_ag_item',
             'expedicao_de', 'expedicao_ate', 'uf', 'rota', 'sub_rota',
@@ -514,8 +416,14 @@ class PedidosCounterService:
     # ---------------------------------------------------------------
     @staticmethod
     def invalidar_cache():
-        """Invalida todos os caches de contadores e choices."""
-        redis_cache.delete(CACHE_KEY)
-        redis_cache.flush_pattern(f"{FACETED_CACHE_PREFIX}*")
+        """Invalida todos os caches de contadores e choices.
+
+        IMPORTANTE: o cache global tem sufixo dinamico (`:pend` / `:all`)
+        em runtime — nunca existe a chave exata `CACHE_KEY` no Redis.
+        Por isso usamos `flush_pattern(CACHE_KEY)` que faz `KEYS {pattern}*`
+        e remove ambas as variantes.
+        """
+        redis_cache.flush_pattern(CACHE_KEY)  # remove :pend e :all
+        redis_cache.flush_pattern(FACETED_CACHE_PREFIX)
         redis_cache.delete(ROTAS_CACHE_KEY)
         logger.info("Cache de contadores pedidos invalidado (global + facetados + rotas)")

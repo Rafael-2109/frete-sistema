@@ -99,12 +99,19 @@ class ListaPedidosService:
         if origem not in ('NACOM', 'CARVIA'):
             origem = ''
 
+        # Toggle "Apenas Pendentes" — pre-filtra universo
+        # Default ON: tratado em lista_routes (define '1' quando param ausente)
+        pendente_raw = (args.get('pendente', '') or '').strip()
+        # '0' explicito desliga; qualquer outra coisa (inclusive ausente) fica ON
+        apenas_pendentes = pendente_raw != '0'
+
         return {
             'status_list': status_list,
             'active_conds': active_conds,
             'dates': {'expedicao_de': expedicao_de, 'expedicao_ate': expedicao_ate},
             'refinements': refinements,
             'origem': origem,
+            'apenas_pendentes': apenas_pendentes,
         }
 
     # ---------------------------------------------------------------
@@ -122,6 +129,37 @@ class ListaPedidosService:
                     ~Pedido.separacao_lote_id.like('CARVIA-%')
                 )
             )
+        return query
+
+    @staticmethod
+    def _apenas_pendentes_filter(model=None):
+        """Expression: pedido NAO finalizado.
+
+        Finalizado = NF emitida E embarcada E NF nao voltou ao CD.
+        Equivale a: numero_nf preenchida (sincronizado_nf=True na Separacao
+        original) E data_embarque preenchida E nf_cd=False.
+
+        Pendente = NOT(finalizado) → cobre:
+          - sem NF (nf IS NULL ou '')
+          - sem embarque (data_embarque IS NULL)
+          - NF voltou ao CD (nf_cd=True)
+        """
+        if model is None:
+            model = Pedido
+        finalizado = db.and_(
+            model.nf.isnot(None),
+            model.nf != "",
+            model.data_embarque.isnot(None),
+            model.nf_cd == False,
+        )
+        return ~finalizado
+
+    @staticmethod
+    def _apply_apenas_pendentes(query, apenas_pendentes, model=None):
+        """Aplica pre-filtro 'Apenas Pendentes' quando ativo."""
+        if apenas_pendentes:
+            Svc = ListaPedidosService
+            query = query.filter(Svc._apenas_pendentes_filter(model))
         return query
 
     @staticmethod
@@ -215,10 +253,11 @@ class ListaPedidosService:
                                   cnpjs_validos_agendamento=None,
                                   lotes_falta_item_ids=None,
                                   lotes_falta_pagamento_ids=None):
-        """Filtro unificado: origem (escopo), status (OR), condicoes (AND), datas (range), refinamento."""
+        """Filtro unificado: pendente (universo), origem (escopo), status (OR), condicoes (AND), datas (range), refinamento."""
         Svc = ListaPedidosService
         p = Svc._parse_filter_params(args)
         carvia_sets = Svc._carvia_lotes_por_status()
+        query = Svc._apply_apenas_pendentes(query, p['apenas_pendentes'])
         query = Svc._apply_origem(query, p['origem'])
         query = Svc._apply_statuses(query, p['status_list'], carvia_sets)
         query = Svc._apply_conditions(query, p['active_conds'], hoje,
@@ -252,8 +291,9 @@ class ListaPedidosService:
         p = Svc._parse_filter_params(args)
         carvia_sets = Svc._carvia_lotes_por_status()
 
-        # --- STATUS COUNTS: base = origem + refinements + dates + conditions ---
+        # --- STATUS COUNTS: base = pendente + origem + refinements + dates + conditions ---
         q_s = Pedido.query
+        q_s = Svc._apply_apenas_pendentes(q_s, p['apenas_pendentes'])
         q_s = Svc._apply_origem(q_s, p['origem'])
         q_s = Svc._apply_refinements(q_s, p['refinements'])
         q_s = Svc._apply_date_range(q_s, p['dates'])
@@ -275,8 +315,9 @@ class ListaPedidosService:
             func.count(case((f_nf_cd, 1))),
         ).one()
 
-        # --- CONDITION COUNTS: base = origem + refinements + dates + statuses ---
+        # --- CONDITION COUNTS: base = pendente + origem + refinements + dates + statuses ---
         q_c = Pedido.query
+        q_c = Svc._apply_apenas_pendentes(q_c, p['apenas_pendentes'])
         q_c = Svc._apply_origem(q_c, p['origem'])
         q_c = Svc._apply_refinements(q_c, p['refinements'])
         q_c = Svc._apply_date_range(q_c, p['dates'])
@@ -291,8 +332,9 @@ class ListaPedidosService:
             func.count(case((Svc._expr_cond_lotes(lotes_item), 1))),
         ).one()
 
-        # --- DATE COUNTS: base = origem + refinements + statuses + conditions (sem datas) ---
+        # --- DATE COUNTS: base = pendente + origem + refinements + statuses + conditions (sem datas) ---
         q_d = Pedido.query
+        q_d = Svc._apply_apenas_pendentes(q_d, p['apenas_pendentes'])
         q_d = Svc._apply_origem(q_d, p['origem'])
         q_d = Svc._apply_refinements(q_d, p['refinements'])
         q_d = Svc._apply_statuses(q_d, p['status_list'], carvia_sets)
@@ -426,7 +468,7 @@ class ListaPedidosService:
         return {'cotado': cotado, 'embarcado': embarcado}
 
     @staticmethod
-    def _get_status_filter(status_key, carvia_sets=None):
+    def _get_status_filter(status_key, carvia_sets=None, model=None):
         """Retorna clausula WHERE para um status individual.
 
         Semantica unificada NACOM + CarVia (definicao baseada em embarque):
@@ -440,22 +482,27 @@ class ListaPedidosService:
 
         NACOM filtra com `~CARVIA-%` para evitar capturar CarVia por engano
         (CarVia 2B na VIEW pedidos tem `nf` preenchida assim que NF e anexada).
+
+        `model` aceita Pedido (VIEW) ou PedidoMV (Materialized View) para que
+        contadores cacheados (counter_service) compartilhem a mesma logica.
         """
+        if model is None:
+            model = Pedido
         if carvia_sets is None:
             carvia_sets = ListaPedidosService._carvia_lotes_por_status()
         cotados = list(carvia_sets['cotado']) or ['_NONE_']
         embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
-        carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+        carvia_prefix = model.separacao_lote_id.like('CARVIA-%')
         nao_carvia = ~carvia_prefix
 
         if status_key == 'aberto':
             # NACOM: status=ABERTO E nao e CarVia
-            nacom = db.and_(nao_carvia, Pedido.status == 'ABERTO')
+            nacom = db.and_(nao_carvia, model.status == 'ABERTO')
             # CarVia: lote NAO esta em set cotado nem embarcado
             carvia = db.and_(
                 carvia_prefix,
-                Pedido.separacao_lote_id.notin_(cotados),
-                Pedido.separacao_lote_id.notin_(embarcados),
+                model.separacao_lote_id.notin_(cotados),
+                model.separacao_lote_id.notin_(embarcados),
             )
             return db.or_(nacom, carvia)
         elif status_key == 'cotado':
@@ -469,138 +516,148 @@ class ListaPedidosService:
                 db.or_(
                     # Caso A: em cotacao, ainda nao saiu
                     db.and_(
-                        Pedido.cotacao_id.isnot(None),
-                        Pedido.data_embarque.is_(None),
+                        model.cotacao_id.isnot(None),
+                        model.data_embarque.is_(None),
                     ),
                     # Caso B: ja embarcou fisicamente mas NF nao foi emitida
-                    Pedido.status == 'EMBARCADO',
+                    model.status == 'EMBARCADO',
                 ),
-                (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-                Pedido.nf_cd == False
+                (model.nf.is_(None)) | (model.nf == ""),
+                model.nf_cd == False
             )
             # CarVia: lote em set cotado (embarque sem data_embarque)
             carvia = db.and_(
                 carvia_prefix,
-                Pedido.separacao_lote_id.in_(cotados),
+                model.separacao_lote_id.in_(cotados),
             )
             return db.or_(nacom, carvia)
         elif status_key == 'faturado':
             # APENAS NACOM (CarVia embarcado nao entra)
             return db.and_(
                 nao_carvia,
-                (Pedido.nf.isnot(None)) & (Pedido.nf != ""),
-                Pedido.nf_cd == False
+                (model.nf.isnot(None)) & (model.nf != ""),
+                model.nf_cd == False
             )
         elif status_key == 'nf_cd':
-            return Pedido.nf_cd == True
+            return model.nf_cd == True
         return None
 
     @staticmethod
-    def _filtro_cond_atrasados(hoje, carvia_sets=None):
+    def _filtro_cond_atrasados(hoje, carvia_sets=None, model=None):
         """Expression: pedidos atrasados (expedicao < hoje, ainda nao saiu).
 
         NACOM: sem NF, sem data_embarque, expedicao < hoje
         CarVia: lote NAO em set embarcado, expedicao < hoje
         """
+        if model is None:
+            model = Pedido
         if carvia_sets is None:
             carvia_sets = ListaPedidosService._carvia_lotes_por_status()
         embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
-        carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+        carvia_prefix = model.separacao_lote_id.like('CARVIA-%')
         nao_carvia = ~carvia_prefix
 
         nacom = db.and_(
             nao_carvia,
             db.or_(
-                db.and_(Pedido.cotacao_id.isnot(None), Pedido.data_embarque.is_(None),
-                        (Pedido.nf.is_(None)) | (Pedido.nf == "")),
-                db.and_(Pedido.cotacao_id.is_(None),
-                        (Pedido.nf.is_(None)) | (Pedido.nf == ""))
+                db.and_(model.cotacao_id.isnot(None), model.data_embarque.is_(None),
+                        (model.nf.is_(None)) | (model.nf == "")),
+                db.and_(model.cotacao_id.is_(None),
+                        (model.nf.is_(None)) | (model.nf == ""))
             ),
-            Pedido.nf_cd == False,
-            Pedido.expedicao < hoje,
-            (Pedido.nf.is_(None)) | (Pedido.nf == "")
+            model.nf_cd == False,
+            model.expedicao < hoje,
+            (model.nf.is_(None)) | (model.nf == "")
         )
         carvia = db.and_(
             carvia_prefix,
-            Pedido.separacao_lote_id.notin_(embarcados),
-            Pedido.expedicao < hoje,
+            model.separacao_lote_id.notin_(embarcados),
+            model.expedicao < hoje,
         )
         return db.or_(nacom, carvia)
 
     @staticmethod
-    def _filtro_cond_sem_data(carvia_sets=None):
+    def _filtro_cond_sem_data(carvia_sets=None, model=None):
         """Expression: pedidos sem data de expedicao.
 
         NACOM: expedicao IS NULL e ainda nao saiu/faturou
         CarVia: expedicao IS NULL e lote NAO em set embarcado
         """
+        if model is None:
+            model = Pedido
         if carvia_sets is None:
             carvia_sets = ListaPedidosService._carvia_lotes_por_status()
         embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
-        carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+        carvia_prefix = model.separacao_lote_id.like('CARVIA-%')
         nao_carvia = ~carvia_prefix
 
         nacom = db.and_(
             nao_carvia,
-            Pedido.expedicao.is_(None),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-            Pedido.data_embarque.is_(None)
+            model.expedicao.is_(None),
+            model.nf_cd == False,
+            (model.nf.is_(None)) | (model.nf == ""),
+            model.data_embarque.is_(None)
         )
         carvia = db.and_(
             carvia_prefix,
-            Pedido.expedicao.is_(None),
-            Pedido.separacao_lote_id.notin_(embarcados),
+            model.expedicao.is_(None),
+            model.separacao_lote_id.notin_(embarcados),
         )
         return db.or_(nacom, carvia)
 
     @staticmethod
-    def _filtro_cond_pend_embarque(carvia_sets=None):
+    def _filtro_cond_pend_embarque(carvia_sets=None, model=None):
         """Expression: pedidos pendentes de embarque (sem data_embarque).
 
         NACOM: data_embarque IS NULL (inclui NF no CD)
         CarVia: lote NAO em set embarcado (VIEW expoe data_embarque sempre NULL
         para CarVia, entao usar set para coerencia).
         """
+        if model is None:
+            model = Pedido
         if carvia_sets is None:
             carvia_sets = ListaPedidosService._carvia_lotes_por_status()
         embarcados = list(carvia_sets['embarcado']) or ['_NONE_']
-        carvia_prefix = Pedido.separacao_lote_id.like('CARVIA-%')
+        carvia_prefix = model.separacao_lote_id.like('CARVIA-%')
         nao_carvia = ~carvia_prefix
 
-        nacom = db.and_(nao_carvia, Pedido.data_embarque.is_(None))
+        nacom = db.and_(nao_carvia, model.data_embarque.is_(None))
         carvia = db.and_(
             carvia_prefix,
-            Pedido.separacao_lote_id.notin_(embarcados),
+            model.separacao_lote_id.notin_(embarcados),
         )
         return db.or_(nacom, carvia)
 
     @staticmethod
-    def _expr_cond_agend_pendente(cnpjs_agendamento):
+    def _expr_cond_agend_pendente(cnpjs_agendamento, model=None):
         """Expression para agend_pendente (para case())."""
         from app.pedidos.services.counter_service import CNPJS_EXCLUIR_AGENDAMENTO
+        if model is None:
+            model = Pedido
         if not cnpjs_agendamento:
-            return Pedido.separacao_lote_id == 'IMPOSSIVEL'
-        cnpj_raiz = func.left(func.regexp_replace(Pedido.cnpj_cpf, '[^0-9]', '', 'g'), 8)
+            return model.separacao_lote_id == 'IMPOSSIVEL'
+        cnpj_raiz = func.left(func.regexp_replace(model.cnpj_cpf, '[^0-9]', '', 'g'), 8)
         return db.and_(
-            Pedido.cnpj_cpf.in_(cnpjs_agendamento),
-            Pedido.agendamento.is_(None),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == ""),
-            Pedido.data_embarque.is_(None),
-            (Pedido.cod_uf == 'SP') | (Pedido.rota == 'FOB'),
+            model.cnpj_cpf.in_(cnpjs_agendamento),
+            model.agendamento.is_(None),
+            model.nf_cd == False,
+            (model.nf.is_(None)) | (model.nf == ""),
+            model.data_embarque.is_(None),
+            (model.cod_uf == 'SP') | (model.rota == 'FOB'),
             ~cnpj_raiz.in_(CNPJS_EXCLUIR_AGENDAMENTO)
         )
 
     @staticmethod
-    def _expr_cond_lotes(lotes_ids):
+    def _expr_cond_lotes(lotes_ids, model=None):
         """Expression para lotes com falta (para case())."""
+        if model is None:
+            model = Pedido
         if not lotes_ids:
-            return Pedido.separacao_lote_id == 'IMPOSSIVEL'
+            return model.separacao_lote_id == 'IMPOSSIVEL'
         return db.and_(
-            Pedido.separacao_lote_id.in_(lotes_ids),
-            Pedido.nf_cd == False,
-            (Pedido.nf.is_(None)) | (Pedido.nf == "")
+            model.separacao_lote_id.in_(lotes_ids),
+            model.nf_cd == False,
+            (model.nf.is_(None)) | (model.nf == "")
         )
 
     @staticmethod

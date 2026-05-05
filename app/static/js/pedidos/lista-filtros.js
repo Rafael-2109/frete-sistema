@@ -35,7 +35,11 @@
     };
 
     // Params que nao geram chips (controle interno)
-    var SKIP_CHIP_PARAMS = ['page', 'sort_by', 'sort_order', 'origem'];
+    // 'pendente' tem chip proprio so quando OFF (estado nao-default)
+    var SKIP_CHIP_PARAMS = ['page', 'sort_by', 'sort_order', 'origem', 'pendente'];
+
+    // localStorage: lembra preferencia do toggle "Apenas Pendentes"
+    var LS_KEY_PENDENTE = 'pedidos:apenasPendentes';
 
     // ═══════════════════════════════════════════════════════════════
     // CORE: navegarComFiltros
@@ -150,6 +154,14 @@
         var params = new URLSearchParams(window.location.search);
         var html = '';
         var hasChips = false;
+
+        // Chip especial: "Universo: Tudo" quando o toggle Apenas Pendentes esta OFF
+        if (params.get('pendente') === '0') {
+            html += '<span class="pedidos-chip pedidos-chip--info" title="Mostrando todos os pedidos, inclusive faturados/embarcados antigos">' +
+                '<i class="fas fa-globe"></i> Universo: Tudo' +
+                ' <span class="pedidos-chip__remove" data-action="reset-pendente">&times;</span></span>';
+            hasChips = true;
+        }
 
         params.forEach(function (value, key) {
             if (SKIP_CHIP_PARAMS.indexOf(key) >= 0) return;
@@ -305,6 +317,13 @@
         var chipsContainer = document.getElementById('filtros-ativos');
         if (chipsContainer) {
             chipsContainer.addEventListener('click', function (e) {
+                // Reset toggle pendente: voltar ao default ON
+                var resetPendBtn = e.target.closest('[data-action="reset-pendente"]');
+                if (resetPendBtn) {
+                    try { window.localStorage.removeItem(LS_KEY_PENDENTE); } catch (err) {}
+                    navegarComFiltros({ pendente: null });
+                    return;
+                }
                 var removeBtn = e.target.closest('.pedidos-chip__remove');
                 if (removeBtn) {
                     onChipRemove(removeBtn);
@@ -324,16 +343,57 @@
             });
         });
 
-        // Persistir origem nos links da pagina (paginacao, sort, etc.)
+        // Toggle "Apenas Pendentes" — sincroniza URL <-> localStorage
+        var togglePendente = document.getElementById('toggle-apenas-pendentes');
+        if (togglePendente) {
+            // Registrar change listener PRIMEIRO (antes da hidratacao) para
+            // garantir que ele esteja disponivel mesmo se a navegacao de
+            // hidratacao falhar/atrasar.
+            togglePendente.addEventListener('change', function () {
+                // ON = remove o param (default ON); OFF = pendente=0
+                var novoValor = this.checked ? null : '0';
+                // Persistir preferencia
+                try {
+                    if (this.checked) {
+                        window.localStorage.removeItem(LS_KEY_PENDENTE);
+                    } else {
+                        window.localStorage.setItem(LS_KEY_PENDENTE, '0');
+                    }
+                } catch (e) { /* localStorage indisponivel */ }
+                navegarComFiltros({ pendente: novoValor });
+            });
+
+            // Hidratar estado: se URL nao define `pendente` e localStorage='0',
+            // disparar navegacao para refletir preferencia salva.
+            // Nao usar `return` aqui — outros listeners abaixo precisam ser
+            // registrados ate o navegador efetivamente trocar de pagina.
+            var urlParams = new URLSearchParams(window.location.search);
+            if (!urlParams.has('pendente')) {
+                try {
+                    var stored = window.localStorage.getItem(LS_KEY_PENDENTE);
+                    if (stored === '0' && togglePendente.checked) {
+                        // Dispara navegacao em microtask — deixa init() terminar
+                        // de registrar listeners restantes antes do unload.
+                        Promise.resolve().then(function () {
+                            navegarComFiltros({ pendente: '0' });
+                        });
+                    }
+                } catch (e) { /* localStorage indisponivel — segue default */ }
+            }
+        }
+
+        // Persistir origem e pendente nos links da pagina (paginacao, sort, etc.)
         var currentOrigem = new URLSearchParams(window.location.search).get('origem');
-        if (currentOrigem) {
+        var currentPendente = new URLSearchParams(window.location.search).get('pendente');
+        if (currentOrigem || currentPendente !== null) {
             document.querySelectorAll('a[href]').forEach(function (link) {
                 var hrefAttr = link.getAttribute('href') || '';
                 if (!hrefAttr || hrefAttr.startsWith('#') || hrefAttr.startsWith('javascript:')) return;
                 try {
                     var linkUrl = new URL(link.href, window.location.origin);
                     if (linkUrl.pathname !== window.location.pathname) return;
-                    linkUrl.searchParams.set('origem', currentOrigem);
+                    if (currentOrigem) linkUrl.searchParams.set('origem', currentOrigem);
+                    if (currentPendente !== null) linkUrl.searchParams.set('pendente', currentPendente);
                     link.href = linkUrl.toString();
                 } catch (e) { /* ignora URLs invalidas */ }
             });

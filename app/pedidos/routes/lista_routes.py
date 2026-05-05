@@ -35,9 +35,17 @@ def register_lista_routes(bp):
 
         # --- Dados auxiliares (Redis cache) ---
         hoje = agora_utc_naive().date()
-        dados_contadores = PedidosCounterService.obter_contadores()
+
+        # Toggle "Apenas Pendentes" — default ON; '0' explicito desliga
+        apenas_pendentes = (request.args.get('pendente', '') or '').strip() != '0'
+
+        dados_contadores = PedidosCounterService.obter_contadores(
+            apenas_pendentes=apenas_pendentes)
 
         # --- Contadores facetados (atualizam com filtros ativos) ---
+        # NOTA: 'pendente' nao entra em _filter_keys porque ja afeta `obter_contadores`
+        # (cache global tem chaves separadas :pend / :all). O toggle ON e o estado
+        # default — nao deve forcar caminho facetado sozinho.
         _filter_keys = [
             'origem',
             'status', 'cond_atrasados', 'cond_sem_data', 'cond_pend_embarque',

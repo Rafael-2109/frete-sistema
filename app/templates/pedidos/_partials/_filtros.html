@@ -2,6 +2,8 @@
 {# Variaveis de contexto: contadores_status, contadores_data, filtro_args, rotas_choices, sub_rotas_choices, uf_list #}
 
 {% set status_ativos = (filtro_args.get('status', '') or '').split(',') %}
+{# Toggle "Apenas Pendentes" — default ON; query string '?pendente=0' desliga #}
+{% set apenas_pendentes_ativo = filtro_args.get('pendente', '') != '0' %}
 
 <div class="card mb-3">
     <div class="card-header py-2">
@@ -11,21 +13,37 @@
     </div>
     <div class="card-body py-2">
 
-        {# ═══ LINHA 0: Escopo GERAL / NACOM / CARVIA ═══ #}
-        <div class="col-12 mb-2">
-            <label class="form-label fw-bold mb-1 d-block">Escopo</label>
-            <div class="btn-group" role="group" aria-label="Filtro de origem">
-                <input type="radio" class="btn-check" name="origem" id="origem-geral" value=""
-                       {{ 'checked' if not filtro_args.get('origem') }} autocomplete="off">
-                <label class="btn btn-outline-secondary px-4" for="origem-geral">GERAL</label>
+        {# ═══ LINHA 0: Escopo GERAL / NACOM / CARVIA + Toggle Apenas Pendentes ═══ #}
+        <div class="col-12 mb-2 d-flex align-items-end flex-wrap gap-3">
+            <div>
+                <label class="form-label fw-bold mb-1 d-block">Escopo</label>
+                <div class="btn-group" role="group" aria-label="Filtro de origem">
+                    <input type="radio" class="btn-check" name="origem" id="origem-geral" value=""
+                           {{ 'checked' if not filtro_args.get('origem') }} autocomplete="off">
+                    <label class="btn btn-outline-secondary px-4" for="origem-geral">GERAL</label>
 
-                <input type="radio" class="btn-check" name="origem" id="origem-nacom" value="NACOM"
-                       {{ 'checked' if filtro_args.get('origem') == 'NACOM' }} autocomplete="off">
-                <label class="btn btn-outline-primary px-4" for="origem-nacom">NACOM</label>
+                    <input type="radio" class="btn-check" name="origem" id="origem-nacom" value="NACOM"
+                           {{ 'checked' if filtro_args.get('origem') == 'NACOM' }} autocomplete="off">
+                    <label class="btn btn-outline-primary px-4" for="origem-nacom">NACOM</label>
 
-                <input type="radio" class="btn-check" name="origem" id="origem-carvia" value="CARVIA"
-                       {{ 'checked' if filtro_args.get('origem') == 'CARVIA' }} autocomplete="off">
-                <label class="btn btn-outline-warning px-4" for="origem-carvia">CARVIA</label>
+                    <input type="radio" class="btn-check" name="origem" id="origem-carvia" value="CARVIA"
+                           {{ 'checked' if filtro_args.get('origem') == 'CARVIA' }} autocomplete="off">
+                    <label class="btn btn-outline-warning px-4" for="origem-carvia">CARVIA</label>
+                </div>
+            </div>
+
+            <div>
+                <label class="form-label fw-bold mb-1 d-block">Universo</label>
+                <div class="form-check form-switch ps-0 m-0">
+                    <input class="form-check-input ms-0 me-2" type="checkbox" role="switch"
+                           id="toggle-apenas-pendentes"
+                           {{ 'checked' if apenas_pendentes_ativo }}
+                           data-param="pendente" data-value-off="0">
+                    <label class="form-check-label" for="toggle-apenas-pendentes"
+                           title="Quando ligado, exclui pedidos faturados, embarcados e com NF nao retornada ao CD. Reduz drasticamente o universo das consultas.">
+                        <i class="fas fa-filter"></i> Apenas Pendentes
+                    </label>
+                </div>
             </div>
         </div>
 
