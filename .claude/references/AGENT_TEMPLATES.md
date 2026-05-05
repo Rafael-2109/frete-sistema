@@ -1,8 +1,8 @@
 # Agent Templates — Blocos Reusaveis
 
-**Ultima Atualizacao**: 2026-04-09
+**Ultima Atualizacao**: 2026-05-05 (contagem subagents 12 -> 13: orientador-loja adicionado para o Agente Lojas HORA)
 
-Blocos canonicos referenciados pelos 12 subagents em `.claude/agents/`. Atualizacao aqui propaga a todos os agents que referenciam.
+Blocos canonicos referenciados pelos 13 subagents em `.claude/agents/` (12 Nacom Goya + 1 `orientador-loja` Lojas HORA, adicionado em 2026-04-29 via commit `40fcbeb9`). Atualizacao aqui propaga a todos os agents que referenciam.
 
 **Como usar**: Cada agent inclui um bloco com um header e uma linha de referencia:
 ```markdown
