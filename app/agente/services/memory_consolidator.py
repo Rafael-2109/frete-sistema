@@ -667,25 +667,47 @@ def _consolidate_group(
         AgentMemory.create_file(user_id, consolidated_path, consolidated_content)
 
     # Arquivar originais (renomear com prefixo _archived_)
+    # PYTHON-FLASK-Q9 fix: gerar nome unico com timestamp + dedup defensivo
+    # contra UniqueViolation em uq_user_memory_path quando rodadas anteriores
+    # ja criaram _archived_<old_name> para o mesmo user_id.
+    from app.utils.timezone import agora_utc_naive
+    timestamp = agora_utc_naive().strftime('%Y%m%d_%H%M%S')
     archived = 0
-    for mem in memories:
-        if mem.path == consolidated_path:
-            continue
 
-        # Versionar antes de arquivar
-        if mem.content:
-            AgentMemoryVersion.save_version(
-                memory_id=mem.id,
-                content=mem.content,
-                changed_by='sonnet',
-            )
+    # no_autoflush: evita o SQLAlchemy disparar flush durante AgentMemory.query
+    # nas verificacoes abaixo (causou raised-as-result-of-autoflush em prod).
+    with db.session.no_autoflush:
+        for mem in memories:
+            if mem.path == consolidated_path:
+                continue
 
-        # Renomear para _archived_
-        old_name = mem.path.split("/")[-1]
-        archived_path = f"{dir_path}/_archived_{old_name}"
-        mem.path = archived_path
-        mem.is_cold = True  # Excluir da injeção automática
-        archived += 1
+            # Versionar antes de arquivar
+            if mem.content:
+                AgentMemoryVersion.save_version(
+                    memory_id=mem.id,
+                    content=mem.content,
+                    changed_by='sonnet',
+                )
+
+            # Renomear para _archived_<timestamp>_<old_name>
+            # Timestamp resolve colisoes entre rodadas; defensive check resolve
+            # colisoes intra-rodada (improvavel mas barato).
+            old_name = mem.path.split("/")[-1]
+            archived_path = f"{dir_path}/_archived_{timestamp}_{old_name}"
+
+            # Defensive: se path ja existe (rodadas no mesmo segundo, raro),
+            # remover o antigo — e cold/archive duplicado, seguro descartar.
+            existing_archived = AgentMemory.get_by_path(user_id, archived_path)
+            if existing_archived and existing_archived.id != mem.id:
+                logger.info(
+                    f"[MEMORY_CONSOLIDATOR] Removendo _archived_ duplicado: {archived_path}"
+                )
+                db.session.delete(existing_archived)
+                db.session.flush()
+
+            mem.path = archived_path
+            mem.is_cold = True  # Excluir da injeção automática
+            archived += 1
 
     # Remover embeddings stale das memórias archived
     try:

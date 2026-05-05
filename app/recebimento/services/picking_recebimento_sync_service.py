@@ -27,6 +27,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
+from sqlalchemy.exc import IntegrityError
+
 from app import db
 from app.utils.timezone import agora_utc_naive
 from app.recebimento.models import (
@@ -660,11 +662,35 @@ class PickingRecebimentoSyncService:
                     setattr(picking_local, key, val)
                 atualizados += 1
             else:
-                # INSERT
-                picking_local = PickingRecebimento(**picking_data)
-                db.session.add(picking_local)
-                db.session.flush()  # Obter ID
-                novos += 1
+                # INSERT com proteção contra race condition (PYTHON-FLASK-Q1).
+                # 2 jobs paralelos (ex: scheduler + executar-validacao manual)
+                # podem ler o mesmo cache vazio e tentar inserir o mesmo
+                # odoo_picking_id → UniqueViolation em ix_picking_recebimento_odoo_picking_id.
+                # Solução: savepoint + IntegrityError → re-fetch + UPDATE.
+                sp = db.session.begin_nested()
+                try:
+                    picking_local = PickingRecebimento(**picking_data)
+                    db.session.add(picking_local)
+                    db.session.flush()  # Obter ID
+                    sp.commit()
+                    novos += 1
+                except IntegrityError:
+                    sp.rollback()
+                    # Outro processo inseriu este picking entre o cache load
+                    # e o flush. Re-fetch e atualiza com os dados frescos.
+                    picking_local = PickingRecebimento.query.filter_by(
+                        odoo_picking_id=odoo_id
+                    ).first()
+                    if not picking_local:
+                        # Inconsistente — re-raise para investigação
+                        raise
+                    for key, val in picking_data.items():
+                        setattr(picking_local, key, val)
+                    atualizados += 1
+                    logger.info(
+                        f"   Race condition tratada: picking {odoo_id} já criado "
+                        f"por outro processo (atualizando)"
+                    )
 
             # Processar filhos (delete + re-insert para simplificar)
             self._upsert_produtos_e_lines(

@@ -996,10 +996,29 @@ class BaixaTitulosService:
             )
 
             if diferenca > 0.01:
-                # PASSO 4.5: Tentar rebalancear ajustando a última parcela válida
+                # PASSO 4.5: Tentar rebalancear ajustando a última parcela válida.
                 # Causa comum: button_draft recalcula descontos com valores ligeiramente
-                # diferentes dos cacheados pré-draft (PYTHON-FLASK-J0/HZ)
-                if parcelas_validas and diferenca < 50:  # safety: só corrige diffs pequenos
+                # diferentes dos cacheados pré-draft (PYTHON-FLASK-J0/HZ).
+                #
+                # Threshold dinâmico: max(R$ 200, 1% do amount_total da fatura).
+                # NFs com mais itens/parcelas tem mais arredondamentos compostos —
+                # diff de R$ 50-200 e arredondamento normal, R$ 1k+ e estrutural
+                # (desconto duplicado, linha de imposto faltando, etc.).
+                amount_total_invoice = 0.0
+                try:
+                    move_info = self.connection.search_read(
+                        'account.move', [['id', '=', move_id]],
+                        fields=['amount_total'], limit=1
+                    )
+                    if move_info:
+                        amount_total_invoice = abs(move_info[0].get('amount_total') or 0)
+                except Exception:
+                    pass  # fallback para limite fixo se RPC falhar
+
+                limite_percentual = amount_total_invoice * 0.01  # 1% do total
+                threshold_rebalance = max(200.0, limite_percentual)
+
+                if parcelas_validas and diferenca <= threshold_rebalance:
                     ultima_parcela_id = parcelas_validas[-1]['id']
                     # Re-ler debit atual da parcela (pode ter mudado)
                     parcela_atual = self.connection.search_read(
@@ -1061,11 +1080,26 @@ class BaixaTitulosService:
                                 pass
                             return False
                 else:
-                    logger.error(
+                    # Excedeu threshold dinamico — provavel problema estrutural
+                    # (desconto duplicado, linha de imposto faltando, etc.).
+                    # Usar level apropriado para reduzir noise no Sentry:
+                    # - > R$ 1.000 ou > 5% : ERROR (problema serio, requer revisao)
+                    # - <= R$ 1.000 e <= 5%: WARNING (provavelmente arredondamento extremo)
+                    pct_diferenca = (
+                        (diferenca / amount_total_invoice * 100)
+                        if amount_total_invoice > 0 else 100.0
+                    )
+                    msg = (
                         f"[ANO_2000] Fatura {move_id} desbalanceada após correção! "
                         f"Débito: {total_debito:.2f}, Crédito: {total_credito:.2f}. "
-                        f"Diferença {diferenca:.2f} muito grande para rebalancear automaticamente."
+                        f"Diferença {diferenca:.2f} ({pct_diferenca:.2f}% do total "
+                        f"R$ {amount_total_invoice:.2f}) excede threshold "
+                        f"R$ {threshold_rebalance:.2f} — requer revisão manual."
                     )
+                    if diferenca >= 1000 or pct_diferenca >= 5:
+                        logger.error(msg)
+                    else:
+                        logger.warning(msg)
                     # Tentar republicar mesmo assim para não deixar em draft
                     try:
                         self.connection.execute_kw('account.move', 'action_post', [[move_id]])

@@ -6,10 +6,14 @@ Regras:
 - Justificativa obrigatoria com >= 15 caracteres.
 - Confirmacao SEFAZ chega via webhook nfe_cancelada (assincrono).
 - Auditoria: registra acao CANCELOU_NFE em hora_venda_auditoria.
+- Retry transitorio (PYTHON-FLASK-Q4): se TagPlus responde 500
+  "esta sendo processada" (race com outra operacao SEFAZ),
+  fazer backoff exponencial antes de desistir.
 """
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 
 from app import db
@@ -30,9 +34,32 @@ logger = logging.getLogger(__name__)
 JUSTIFICATIVA_MIN = 15
 JANELA_CANCELAMENTO_HORAS = 24
 
+# Retry para erro transitorio "esta sendo processada" (PYTHON-FLASK-Q4).
+# TagPlus retorna 500 quando a NFe ainda esta em processamento na SEFAZ
+# (race com emissao recem-aprovada). Espera curta resolve na maioria dos casos.
+PROCESSANDO_RETRY_DELAYS = [3, 7, 15]  # segundos: 3+7+15 = 25s total
+PROCESSANDO_MARKERS = (
+    'sendo processada',
+    'sendo processado',
+    'em processamento',
+)
+
 
 class CancelamentoBloqueadoError(Exception):
     pass
+
+
+class CancelamentoEmProcessamentoError(CancelamentoBloqueadoError):
+    """NFe ainda esta sendo processada pela SEFAZ — usuario deve aguardar."""
+    pass
+
+
+def _erro_processando(status_code: int, body) -> bool:
+    """Detecta resposta TagPlus que indica NFe em processamento (transitorio)."""
+    if status_code != 500:
+        return False
+    body_str = str(body).lower()
+    return any(marker in body_str for marker in PROCESSANDO_MARKERS)
 
 
 class CanceladorNfe:
@@ -95,15 +122,37 @@ class CanceladorNfe:
         CanceladorNfe._validar_janela(emissao)
 
         client = ApiClient(emissao.conta)
-        response = client.patch(
-            f'/nfes/cancelar/{emissao.tagplus_nfe_id}',
-            json={'justificativa': justificativa.strip()},
-        )
 
-        try:
-            body = response.json()
-        except ValueError:
-            body = {'_raw': response.text[:500]}
+        # Retry transitorio para "NFe sendo processada" (PYTHON-FLASK-Q4).
+        # Ate 4 tentativas (1 inicial + 3 backoffs). Outros erros: fail-fast.
+        body = None
+        response = None
+        tentativas = 0
+        for delay in [0] + PROCESSANDO_RETRY_DELAYS:
+            if delay > 0:
+                logger.info(
+                    'Aguardando %ss antes de retry cancelamento emissao=%s '
+                    '(NFe em processamento SEFAZ)',
+                    delay, emissao.id,
+                )
+                time.sleep(delay)
+            tentativas += 1
+            response = client.patch(
+                f'/nfes/cancelar/{emissao.tagplus_nfe_id}',
+                json={'justificativa': justificativa.strip()},
+            )
+            try:
+                body = response.json()
+            except ValueError:
+                body = {'_raw': response.text[:500]}
+
+            if response.status_code in (200, 202):
+                break  # sucesso
+            if not _erro_processando(response.status_code, body):
+                break  # erro nao-transitorio, parar
+
+        # response e body sempre serao definidos (loop sempre executa ao menos 1x)
+        assert response is not None and body is not None
 
         if response.status_code in (200, 202):
             emissao.status = NFE_STATUS_CANCELAMENTO_SOLICITADO
@@ -136,9 +185,20 @@ class CanceladorNfe:
             return emissao
 
         logger.error(
-            'Cancelamento falhou status=%s body=%s',
-            response.status_code, str(body)[:500],
+            'Cancelamento falhou status=%s body=%s tentativas=%s',
+            response.status_code, str(body)[:500], tentativas,
         )
+
+        # Erro especifico: NFe ainda em processamento apos todos os retries.
+        # Usuario deve aguardar mais alguns instantes e tentar novamente.
+        if _erro_processando(response.status_code, body):
+            raise CancelamentoEmProcessamentoError(
+                'NFe ainda esta sendo processada pela SEFAZ apos '
+                f'{tentativas} tentativas (~{sum(PROCESSANDO_RETRY_DELAYS)}s). '
+                'Aguarde 1-2 minutos e tente novamente. Se persistir, '
+                'verifique o status na tela da NFe.'
+            )
+
         raise CancelamentoBloqueadoError(
             f'TagPlus respondeu {response.status_code}: {str(body)[:300]}'
         )

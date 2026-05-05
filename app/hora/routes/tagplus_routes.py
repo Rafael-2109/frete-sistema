@@ -45,6 +45,7 @@ from app.hora.services.tagplus.api_client import ApiClient
 from app.hora.services.tagplus.cancelador_nfe import (
     CanceladorNfe,
     CancelamentoBloqueadoError,
+    CancelamentoEmProcessamentoError,
 )
 from app.hora.services.tagplus.cce_service import CceError, CceService
 from app.hora.services.tagplus.crypto import encrypt
@@ -1158,6 +1159,9 @@ def venda_nfe_cancelar(venda_id: int):
         flash('Cancelamento solicitado. Aguardando confirmacao SEFAZ.', 'success')
     except ValueError as exc:
         flash(str(exc), 'danger')
+    except CancelamentoEmProcessamentoError as exc:
+        # NFe ainda em processamento na SEFAZ — orientar usuario a aguardar.
+        flash(str(exc), 'info')
     except CancelamentoBloqueadoError as exc:
         flash(f'Bloqueado: {exc}', 'warning')
     except Exception as exc:
