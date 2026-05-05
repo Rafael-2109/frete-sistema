@@ -158,9 +158,20 @@ threads = 2  # 4 workers × 2 threads = 8 requests concorrentes
 # timeout=600 alinha com Render hard limit (600s) e SSE teto absoluto web=540s/teams=600s.
 # Com gthread, timeout e per-request heartbeat — precisa ser >= maior request SSE.
 timeout = 600
-graceful_timeout = 60  # Deploy/reload: master espera 60s para threads terminarem
-max_requests = 1000
-max_requests_jitter = 100
+# graceful_timeout=540 alinha com MAX_STREAM_DURATION_SECONDS (chat.py SSE teto 540s).
+# Antes era 60s — quando max_requests forcava worker rotation com SSE ativo, gunicorn
+# enviava SIGTERM e apos 60s SIGKILL, matando threads gthread mid-stream. Frontend
+# perdia conexao e ficava esperando 'done' que nunca chegava (sintoma observado:
+# "agente sinaliza processando mas nao responde"). 540s permite SSE em andamento
+# concluir antes do SIGKILL. Render hard limit e 600s, mantemos 60s de margem.
+# Trade-off: deploys/reloads esperam ate 540s para drainar workers antigos.
+graceful_timeout = 540
+# max_requests=5000 (antes 1000) reduz frequencia de worker rotation 5x.
+# Com 1.44 rps medio × 4 workers, rotacao agora a cada ~5h (vs ~30-90min antes).
+# Reduz drasticamente janela de SSE morrer por rotation. max_requests existe como
+# defesa contra memory leak — monitorar memoria via /admin/render-metrics.
+max_requests = 5000
+max_requests_jitter = 500
 keepalive = 10  # (typo historico 'keepallive' era ignorado — Gunicorn usava default 2s)
 preload_app = False  # Permite registro de tipos PostgreSQL por worker
 worker_connections = 1000  # Max conexoes simultaneas por worker
