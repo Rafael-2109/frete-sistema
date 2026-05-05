@@ -434,17 +434,23 @@ class CarviaFreteService:
             if resultado is not None:
                 return resultado
 
-        # Fallback final: calculo direto pela tabela do item
+        # Fallback final: calculo direto pela tabela do item (com fallback p/ embarque)
         if itens:
             return CarviaFreteService._calcular_custo_tabela_item(
-                itens, peso_total, valor_total
+                itens, peso_total, valor_total, embarque=embarque,
             )
 
         return None
 
     @staticmethod
     def _calcular_custo_rateio(embarque, peso_grupo, valor_grupo) -> Optional[float]:
-        """Rateio DIRETA: frete_total_embarque * (peso_grupo / peso_embarque)."""
+        """Rateio DIRETA: frete_total_embarque * (peso_grupo / peso_embarque).
+
+        Fix 2026-05-05: CalculadoraFrete retorna Decimal em valor_com_icms.
+        Converter explicitamente para float antes de multiplicar pela
+        proporcao (float) — caso contrario TypeError silencioso engole o
+        calculo e valor_cotado fica zerado para todos os fretes DIRETA.
+        """
         try:
             from app.utils.calculadora_frete import CalculadoraFrete
             from app.utils.tabela_frete_manager import TabelaFreteManager
@@ -453,21 +459,48 @@ class CarviaFreteService:
             if not tabela_dados.get('nome_tabela'):
                 return None
 
+            # Peso/valor do embarque inteiro para o calculo do frete total
+            peso_embarque_real = float(embarque.peso_total or 0)
+            valor_embarque_real = float(embarque.valor_total or 0)
+
+            # Fallback: se embarque sem peso/valor agregado, usar do grupo
+            peso_calc = peso_embarque_real or float(peso_grupo or 0)
+            valor_calc = valor_embarque_real or float(valor_grupo or 0)
+            # Sem valor nao da pra cotar
+            if not valor_calc:
+                return None
+            # Se peso=0 em ambos (raro, mas acontece em embarques que ainda
+            # nao tiveram peso calculado), usar peso minimo positivo para
+            # nao bloquear o calculo do frete minimo da tabela
+            if not peso_calc:
+                peso_calc = 1.0
+
             calc = CalculadoraFrete()
             resultado = calc.calcular_frete_unificado(
-                peso=float(embarque.peso_total or peso_grupo),
-                valor_mercadoria=float(embarque.valor_total or valor_grupo),
+                peso=peso_calc,
+                valor_mercadoria=valor_calc,
                 tabela_dados=tabela_dados,
                 cidade=None,
             )
-            if resultado and 'valor_com_icms' in resultado:
-                frete_total = resultado['valor_com_icms']
-                peso_embarque = float(embarque.peso_total or 1)
-                proporcao = peso_grupo / peso_embarque if peso_embarque > 0 else 1
-                return round(frete_total * proporcao, 2)
+            if not resultado or 'valor_com_icms' not in resultado:
+                return None
+
+            # CalculadoraFrete retorna Decimal — converter para float
+            frete_total = float(resultado['valor_com_icms'])
+            if frete_total <= 0:
+                return None
+
+            # Proporcao de peso: se embarque sem peso agregado, calculo
+            # ficou para o grupo inteiro (proporcao=1)
+            if peso_embarque_real > 0 and peso_grupo:
+                proporcao = float(peso_grupo) / peso_embarque_real
+            else:
+                proporcao = 1.0
+
+            return round(frete_total * proporcao, 2)
 
         except Exception as e:
-            logger.warning("Erro ao calcular rateio DIRETA: %s", e)
+            logger.warning("Erro ao calcular rateio DIRETA: %s", e, exc_info=True)
 
         return None
 
@@ -488,29 +521,42 @@ class CarviaFreteService:
         return None
 
     @staticmethod
-    def _calcular_custo_tabela_item(itens, peso_total, valor_total) -> Optional[float]:
-        """Fallback: calcula custo pela tabela do primeiro item do grupo."""
+    def _calcular_custo_tabela_item(itens, peso_total, valor_total, embarque=None) -> Optional[float]:
+        """Fallback: calcula custo pela tabela do primeiro item do grupo.
+
+        Fix 2026-05-05: itens CarVia tipicamente tem `tabela_nome_tabela=NULL`
+        (apenas o Embarque tem snapshot de tabela em DIRETA). Quando o item
+        nao tem tabela, fazer fallback para a tabela do embarque para garantir
+        que valor_cotado seja preenchido.
+        """
         try:
             from app.utils.calculadora_frete import CalculadoraFrete
             from app.utils.tabela_frete_manager import TabelaFreteManager
 
             item = itens[0]
             tabela_dados = TabelaFreteManager.preparar_dados_tabela(item)
+
+            # Fallback: usar tabela do embarque se item nao tem
+            if not tabela_dados.get('nome_tabela') and embarque is not None:
+                tabela_dados = TabelaFreteManager.preparar_dados_tabela(embarque)
+
             if not tabela_dados.get('nome_tabela'):
+                return None
+            if not peso_total or not valor_total:
                 return None
 
             calc = CalculadoraFrete()
             resultado = calc.calcular_frete_unificado(
-                peso=peso_total,
-                valor_mercadoria=valor_total,
+                peso=float(peso_total),
+                valor_mercadoria=float(valor_total),
                 tabela_dados=tabela_dados,
                 cidade=None,
             )
             if resultado and 'valor_com_icms' in resultado:
-                return round(resultado['valor_com_icms'], 2)
+                return round(float(resultado['valor_com_icms']), 2)
 
         except Exception as e:
-            logger.warning("Erro ao calcular custo por tabela do item: %s", e)
+            logger.warning("Erro ao calcular custo por tabela do item: %s", e, exc_info=True)
 
         return None
 
