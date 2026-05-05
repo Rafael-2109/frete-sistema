@@ -11,6 +11,8 @@ Estoque:
     de EVENTOS_EM_ESTOQUE via evento RESERVADA / VENDIDA / NF_EMITIDA).
   - CANCELADO devolve ao estoque via evento DEVOLVIDA.
 """
+from sqlalchemy.dialects.postgresql import JSONB
+
 from app import db
 from app.utils.timezone import agora_utc_naive
 
@@ -113,8 +115,23 @@ class HoraVenda(db.Model):
     cancelamento_motivo = db.Column(db.String(500), nullable=True)
 
     vendedor = db.Column(db.String(100), nullable=True)
-    # Preenchido manualmente na tela de detalhe pos-import.
+    # Preenchido manualmente na tela de detalhe pos-import OU via backfill
+    # de pedido TagPlus (vendedor.nome em GET /pedidos/{id}).
     observacoes = db.Column(db.Text, nullable=True)
+
+    # ----- Enriquecimento via GET /pedidos/{id} TagPlus -----
+    tagplus_pedido_id = db.Column(db.Integer, nullable=True, index=True)
+    # ID do pedido auto-criado pelo TagPlus quando NFe e confirmada.
+    # Redundancia controlada com hora_tagplus_nfe_emissao.tagplus_pedido_id
+    # para queries diretas em hora_venda sem JOIN.
+    tagplus_pedido_payload = db.Column(JSONB, nullable=True)
+    # JSON bruto do GET /pedidos/{id} para auditoria + reprocessamento.
+    # Sanitizar com sanitize_for_json antes de atribuir.
+    tagplus_departamento = db.Column(db.String(100), nullable=True, index=True)
+    # departamento.descricao raw vinda do pedido TagPlus (ex.: "Praia Grande").
+    # Base para de-para hora_tagplus_departamento_map.departamento_norm ->
+    # loja_id real (REGRA FISCAL: cnpj_emitente sempre matriz, loja fisica
+    # vem do departamento).
 
     # --------------------------------------------------------------
     # Endereco do destinatario (cliente)

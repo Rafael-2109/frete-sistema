@@ -174,6 +174,12 @@ class OAuthClient:
             token.refresh_token_encrypted = encrypt(body['refresh_token'])
         token.token_type = body.get('token_type', 'bearer')
         token.expires_at = expires_at
+        # Persistir scope retornado pelo TagPlus. Pode divergir de
+        # conta.scope_contratado se admin atualizou contratado mas ainda nao
+        # reautorizou (refresh_token NAO re-emite scope — RFC OAuth2).
+        scope_resp = body.get('scope')
+        if scope_resp:
+            token.scope_efetivo = scope_resp.strip()[:255]
         if not is_new:
             token.refreshed_em = agora_utc_naive()
 

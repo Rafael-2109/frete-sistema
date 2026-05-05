@@ -89,6 +89,11 @@ class HoraTagPlusToken(db.Model):
     expires_at = db.Column(db.DateTime, nullable=False, index=True)
     # Timestamp absoluto (TagPlus retorna expires_in=86400, ou seja, 24h).
 
+    scope_efetivo = db.Column(db.String(255), nullable=True)
+    # Scope retornado pelo TagPlus no token response. Pode divergir de
+    # HoraTagPlusConta.scope_contratado quando admin atualiza contratado mas
+    # ainda nao reautorizou (refresh_token nao re-emite scope, conforme RFC OAuth2).
+
     obtido_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     refreshed_em = db.Column(db.DateTime, nullable=True)
 
@@ -214,6 +219,10 @@ class HoraTagPlusNfeEmissao(db.Model):
     chave_44 = db.Column(db.String(44), nullable=True, unique=True)
     protocolo_aprovacao = db.Column(db.String(30), nullable=True)
 
+    tagplus_pedido_id = db.Column(db.Integer, nullable=True, index=True)
+    # ID do pedido auto-criado pelo TagPlus quando NFe e confirmada
+    # (pedido_os_vinculada.id no GET /nfes/{id}). Chave para GET /pedidos/{id}.
+
     # Auditoria (sanitizar com sanitize_for_json antes de atribuir).
     payload_enviado = db.Column(db.JSON, nullable=True)
     response_inicial = db.Column(db.JSON, nullable=True)
@@ -260,6 +269,20 @@ BACKFILL_JOB_STATUS_FINAIS = (
     BACKFILL_JOB_STATUS_CANCELADO,
 )
 
+# Tipo de backfill — discriminador para reuso da mesma tabela.
+BACKFILL_JOB_TIPO_NF = 'NF'
+# Backfill original: lista NFs no TagPlus e cria/atualiza HoraVenda
+# (importar_nfe_da_api).
+BACKFILL_JOB_TIPO_PEDIDO_ENRIQ = 'PEDIDO_ENRIQUECIMENTO'
+# Backfill novo: itera HoraTagPlusNfeEmissao APROVADA, puxa
+# pedido_os_vinculada via GET /nfes/{id} e enriquece HoraVenda com dados
+# do GET /pedidos/{id} (vendedor, departamento, forma_pagamento detalhada).
+
+BACKFILL_JOB_TIPOS_VALIDOS = (
+    BACKFILL_JOB_TIPO_NF,
+    BACKFILL_JOB_TIPO_PEDIDO_ENRIQ,
+)
+
 
 class HoraTagPlusBackfillJob(db.Model):
     """Job de backfill TagPlus enfileirado em RQ (queue `hora_backfill`).
@@ -282,6 +305,14 @@ class HoraTagPlusBackfillJob(db.Model):
     __tablename__ = 'hora_tagplus_backfill_job'
 
     id = db.Column(db.Integer, primary_key=True)
+
+    tipo = db.Column(
+        db.String(30), nullable=False,
+        default=BACKFILL_JOB_TIPO_NF, server_default=BACKFILL_JOB_TIPO_NF,
+        index=True,
+    )
+    # NF: backfill original (importar_nfe_da_api).
+    # PEDIDO_ENRIQUECIMENTO: enriquecimento via GET /pedidos/{id}.
 
     status = db.Column(
         db.String(20), nullable=False,
@@ -338,6 +369,55 @@ class HoraTagPlusBackfillJob(db.Model):
         return (
             f'<HoraTagPlusBackfillJob id={self.id} status={self.status} '
             f'{self.processadas}/{self.total_listadas}>'
+        )
+
+
+class HoraTagPlusDepartamentoMap(db.Model):
+    """De-para departamento.descricao TagPlus -> HoraLoja (loja fisica).
+
+    REGRA FISCAL HORA: emitente das NFes e SEMPRE matriz (loja_id=1). O
+    `departamento` no pedido TagPlus identifica a loja FISICA real onde a
+    venda ocorreu (Praia Grande, Bragança, Tatuape...). Esse mapa permite
+    UPDATE em massa em hora_venda.loja_id apos revisao humana.
+
+    Workflow:
+      1. Backfill coleta departamentos distintos (loja_id=NULL).
+      2. UI /hora/tagplus/departamento-map: operador atribui loja para cada.
+      3. UPDATE em massa: hora_venda.loja_id = mapa.loja_id WHERE
+         hora_venda.tagplus_departamento = mapa.departamento_norm.
+      4. Sem match: loja_id permanece como matriz (1) ate revisao posterior.
+    """
+    __tablename__ = 'hora_tagplus_departamento_map'
+
+    id = db.Column(db.Integer, primary_key=True)
+    departamento_norm = db.Column(db.String(200), nullable=False, unique=True)
+    # Chave normalizada: lowercase + sem acentos + strip. Ex.: "praia grande".
+    departamento_raw = db.Column(db.String(200), nullable=False)
+    # Ultima forma vista em producao (TagPlus pode ter variacoes de digitacao).
+
+    loja_id = db.Column(
+        db.Integer, db.ForeignKey('hora_loja.id'),
+        nullable=True, index=True,
+    )
+    # NULL = pendente de revisao. UPDATE so acontece quando preenchido.
+
+    qtd_vendas_observadas = db.Column(db.Integer, nullable=False, default=0)
+    # Atualizado pelo backfill a cada execucao (suporta novas vendas).
+
+    revisado_por = db.Column(db.String(100), nullable=True)
+    revisado_em = db.Column(db.DateTime, nullable=True)
+    aplicado_em = db.Column(db.DateTime, nullable=True)
+    # Marca timestamp do UPDATE em massa em hora_venda.loja_id.
+
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
+
+    loja = db.relationship('HoraLoja')
+
+    def __repr__(self) -> str:
+        return (
+            f'<HoraTagPlusDepartamentoMap {self.departamento_norm!r} '
+            f'-> loja={self.loja_id}>'
         )
 
 

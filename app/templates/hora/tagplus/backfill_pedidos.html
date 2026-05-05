@@ -1,0 +1,143 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-magic"></i> Backfill enriquecedor de pedidos TagPlus</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('hora.tagplus_backfill') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-cloud-download-alt"></i> Backfill NF (basico)
+    </a>
+    <a href="{{ url_for('hora.tagplus_departamento_map') }}" class="btn btn-outline-warning btn-sm">
+      <i class="fas fa-store"></i> De-para Loja
+    </a>
+    <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-clipboard-check"></i> Checklist
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>Enriquece HoraVenda com dados do pedido vinculado no TagPlus.</strong>
+  <ul class="mb-0 mt-1">
+    <li>Para cada NFe APROVADA: <code>GET /nfes/{id}</code> &rarr; <code>pedido_os_vinculada.id</code> &rarr; <code>GET /pedidos/{id}</code>.</li>
+    <li>Preenche em <code>HoraVenda</code> (somente campos vazios — preserva edicoes manuais):
+      <ul class="mb-0">
+        <li><code>vendedor</code> &larr; <code>pedido.vendedor.nome</code></li>
+        <li><code>forma_pagamento</code> &larr; mapa <code>HoraTagPlusFormaPagamentoMap</code> via ID inteiro</li>
+        <li><code>tagplus_departamento</code> &larr; raw <code>pedido.departamento.descricao</code></li>
+        <li><code>tagplus_pedido_id</code> + <code>tagplus_pedido_payload</code> (auditoria)</li>
+      </ul>
+    </li>
+    <li><strong>NAO mexe em <code>loja_id</code></strong> — depois rodar <a href="{{ url_for('hora.tagplus_departamento_map') }}">De-para Loja</a> para aplicar a loja fisica em massa.</li>
+    <li>Pre-requisito: scope OAuth deve incluir <code>read:pedidos</code>. Se nao, ver <a href="{{ url_for('hora.tagplus_checklist') }}">Checklist</a>.</li>
+    <li><strong>Background</strong>: roda no worker RQ (queue <code>hora_backfill</code>). Pode fechar a aba.</li>
+  </ul>
+</div>
+
+<form method="post" class="card p-3 mb-3" style="max-width: 700px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="row g-3">
+    <div class="col-md-12">
+      <label class="form-label">
+        Universo previsto: <strong>{{ total_universo }}</strong> emissoes APROVADA com <code>tagplus_nfe_id</code>.
+      </label>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">
+        Limite <span class="text-muted small">(opcional)</span>
+      </label>
+      <input type="number" name="limite" min="1" class="form-control"
+             placeholder="Vazio = todas">
+      <small class="text-muted">
+        Util para teste com 5-10 antes de rodar tudo.
+      </small>
+    </div>
+  </div>
+
+  <div class="alert alert-warning small mt-3 mb-3">
+    <i class="fas fa-exclamation-triangle"></i>
+    Cada emissao gera 2 chamadas API (GET /nfes + GET /pedidos). Volume total = 2 &times; limite.
+    Idempotente — rodar 2x e seguro (campos ja preenchidos sao pulados).
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-play"></i> Enfileirar backfill de pedidos
+    </button>
+    <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-outline-secondary">
+      Voltar
+    </a>
+  </div>
+</form>
+
+<h4 class="mt-4">Jobs anteriores (PEDIDO_ENRIQUECIMENTO)</h4>
+{% if jobs %}
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Status</th>
+        <th>Limite</th>
+        <th>Operador</th>
+        <th>Iniciado</th>
+        <th>Finalizado</th>
+        <th class="text-end">Progresso</th>
+        <th class="text-end">Enriquecidas</th>
+        <th class="text-end">Inalt.</th>
+        <th class="text-end">Erros</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+        <tr>
+          <td><code>{{ j.id }}</code></td>
+          <td>
+            {% if j.status == 'CONCLUIDO' %}
+              <span class="badge bg-success">{{ j.status }}</span>
+            {% elif j.status == 'EM_PROGRESSO' %}
+              <span class="badge bg-primary"><i class="fas fa-spinner fa-spin"></i> {{ j.status }}</span>
+            {% elif j.status == 'PENDENTE' %}
+              <span class="badge bg-secondary">{{ j.status }}</span>
+            {% elif j.status == 'ERRO' %}
+              <span class="badge bg-danger">{{ j.status }}</span>
+            {% else %}
+              <span class="badge bg-light text-dark">{{ j.status }}</span>
+            {% endif %}
+          </td>
+          <td><small>{{ j.limite or 'todas' }}</small></td>
+          <td><small>{{ j.operador or '—' }}</small></td>
+          <td><small>{{ j.iniciado_em.strftime('%d/%m %H:%M:%S') if j.iniciado_em else '—' }}</small></td>
+          <td><small>{{ j.finalizado_em.strftime('%d/%m %H:%M:%S') if j.finalizado_em else '—' }}</small></td>
+          <td class="text-end"><small>
+            {{ j.processadas }}/{{ j.total_listadas or '?' }}
+            {% if j.total_listadas %}
+              ({{ j.percentual }}%)
+            {% endif %}
+          </small></td>
+          <td class="text-end">{{ j.n_atualizado or 0 }}</td>
+          <td class="text-end"><small class="text-muted">{{ j.n_inalterado or 0 }}</small></td>
+          <td class="text-end">
+            {% if (j.n_erro or 0) > 0 %}
+              <span class="badge bg-danger">{{ j.n_erro }}</span>
+            {% else %}
+              <small class="text-muted">0</small>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('hora.tagplus_backfill_detalhe', job_id=j.id) }}"
+               class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-search"></i>
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted"><em>Nenhum job de enriquecimento de pedidos rodado ainda.</em></p>
+{% endif %}
+{% endblock %}

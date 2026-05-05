@@ -152,6 +152,15 @@ class WebhookHandler:
             if ser is not None:
                 emissao.serie_nfe = str(ser)
 
+        # Captura pedido_os_vinculada.id da NFe (auto-criado pelo TagPlus
+        # quando NFe e confirmada). Habilita backfill futuro de pedidos
+        # sem precisar refazer GET /nfes/{id}.
+        pedido_vincul = detalhes.get('pedido_os_vinculada') or {}
+        if isinstance(pedido_vincul, dict):
+            pid = pedido_vincul.get('id')
+            if isinstance(pid, int):
+                emissao.tagplus_pedido_id = pid
+
         # Atualiza HoraVenda + emite eventos por chassi (idempotente: query antes).
         venda = emissao.venda
         if venda:
@@ -159,6 +168,11 @@ class WebhookHandler:
             if emissao.chave_44:
                 venda.nf_saida_chave_44 = emissao.chave_44
             venda.nf_saida_emitida_em = emissao.aprovado_em
+            # Espelha tagplus_pedido_id em HoraVenda para queries diretas
+            # (sem JOIN com hora_tagplus_nfe_emissao). Backfill posterior
+            # via GET /pedidos/{id} usa esse ID.
+            if emissao.tagplus_pedido_id and not venda.tagplus_pedido_id:
+                venda.tagplus_pedido_id = emissao.tagplus_pedido_id
             # Transicao de status: CONFIRMADO -> FATURADO (NFe aprovada).
             if venda.status == VENDA_STATUS_CONFIRMADO:
                 venda.status = VENDA_STATUS_FATURADO

@@ -214,6 +214,34 @@ def tagplus_checklist():
                 'item': 'Token OAuth', 'status': 'ok',
                 'mensagem': f'expira em {conta.token.expires_at}',
             })
+            # Scope mismatch: contratado vs efetivo no token vigente.
+            scope_efet = (conta.token.scope_efetivo or '').strip()
+            scope_contr = (conta.scope_contratado or '').strip()
+            if scope_efet and scope_contr and scope_efet != scope_contr:
+                checks.append({
+                    'item': 'Scope OAuth atualizado',
+                    'status': 'erro',
+                    'mensagem': (
+                        f'scope contratado={scope_contr!r} difere do scope '
+                        f'vigente do token={scope_efet!r}. '
+                        'Refresh nao basta — refazer Authorization Code Flow '
+                        '(Conta > Reautorizar OAuth) para ativar novos scopes '
+                        '(ex.: read:pedidos para backfill de pedidos).'
+                    ),
+                })
+            elif scope_efet:
+                checks.append({
+                    'item': 'Scope OAuth atualizado', 'status': 'ok',
+                    'mensagem': f'scope vigente={scope_efet!r} (em sincronia com contratado).',
+                })
+            else:
+                checks.append({
+                    'item': 'Scope OAuth atualizado', 'status': 'aviso',
+                    'mensagem': (
+                        'scope vigente nao registrado (token gerado antes do '
+                        'tracking). Refazer OAuth para sincronizar.'
+                    ),
+                })
             try:
                 client = ApiClient(conta)
                 # Probe leve dentro do scope `read:produtos` — `/usuario_atual` nao existe
@@ -1463,6 +1491,7 @@ def tagplus_backfill_job_json(job_id: int):
 
     return jsonify({
         'id': job.id,
+        'tipo': job.tipo,
         'status': job.status,
         'iniciado_em': _fmt(job.iniciado_em),
         'finalizado_em': _fmt(job.finalizado_em),
@@ -1481,6 +1510,281 @@ def tagplus_backfill_job_json(job_id: int):
         'em_estado_final': job.em_estado_final,
         'erros': erros_lista,
     })
+
+
+# ============================================================================
+# Backfill enriquecedor de pedidos via GET /pedidos/{id} TagPlus
+# ============================================================================
+
+@hora_bp.route('/tagplus/backfill-pedidos', methods=['GET', 'POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_backfill_pedidos():
+    """Enfileira backfill de enriquecimento de pedidos em RQ.
+
+    Para cada HoraTagPlusNfeEmissao APROVADA: puxa pedido_os_vinculada via
+    GET /nfes/{id} e enriquece HoraVenda com dados do GET /pedidos/{id}
+    (vendedor, departamento raw, forma_pagamento via mapa de IDs).
+
+    NAO mexe em loja_id — usar /tagplus/departamento-map depois para
+    aplicar o de-para de loja fisica.
+    """
+    from app.hora.models import (
+        BACKFILL_JOB_TIPO_PEDIDO_ENRIQ,
+        HoraTagPlusBackfillJob,
+        HoraTagPlusNfeEmissao,
+        NFE_STATUS_APROVADA,
+    )
+    from app.hora.services.tagplus.pedido_backfill_service import (
+        enfileirar_backfill_pedidos_job,
+    )
+
+    if request.method == 'POST':
+        limite_raw = (request.form.get('limite') or '').strip()
+        try:
+            limite = int(limite_raw) if limite_raw else None
+        except ValueError:
+            limite = None
+            flash(f'Limite invalido: {limite_raw!r} — ignorado.', 'warning')
+
+        operador = (
+            current_user.nome
+            if current_user.is_authenticated and getattr(current_user, 'nome', None)
+            else (current_user.email if current_user.is_authenticated else None)
+        )
+
+        try:
+            job_id = enfileirar_backfill_pedidos_job(
+                operador=operador, limite=limite,
+            )
+            flash(
+                f'Backfill de pedidos enfileirado (job #{job_id}). '
+                f'Acompanhe o progresso abaixo — pode fechar a aba e voltar depois.',
+                'success',
+            )
+            return redirect(url_for('hora.tagplus_backfill_detalhe', job_id=job_id))
+        except RuntimeError as exc:
+            flash(f'Backfill nao pode ser enfileirado: {exc}', 'danger')
+        except Exception as exc:  # pragma: no cover
+            flash(f'Erro inesperado: {exc}', 'danger')
+            logger.exception('Enfileiramento backfill PEDIDOS falhou')
+
+    # Universo previsto + jobs anteriores deste tipo.
+    total_universo = db.session.query(HoraTagPlusNfeEmissao).filter(
+        HoraTagPlusNfeEmissao.status == NFE_STATUS_APROVADA,
+        HoraTagPlusNfeEmissao.tagplus_nfe_id.isnot(None),
+    ).count()
+
+    jobs = (
+        HoraTagPlusBackfillJob.query
+        .filter(HoraTagPlusBackfillJob.tipo == BACKFILL_JOB_TIPO_PEDIDO_ENRIQ)
+        .order_by(HoraTagPlusBackfillJob.id.desc())
+        .limit(20).all()
+    )
+
+    return render_template(
+        'hora/tagplus/backfill_pedidos.html',
+        jobs=jobs, total_universo=total_universo,
+    )
+
+
+# ============================================================================
+# De-para departamento TagPlus -> HoraLoja (revisao pos-backfill)
+# ============================================================================
+
+@hora_bp.route('/tagplus/departamento-map', methods=['GET'])
+@require_hora_perm('vendas', 'editar')
+def tagplus_departamento_map():
+    """Lista departamentos coletados pelo backfill com de-para para HoraLoja.
+
+    Sugestao automatica: match normalizado entre departamento_norm e
+    apelido da HoraLoja sem prefixo "MOTOCHEFE ".
+    """
+    from app.hora.models import HoraLoja, HoraTagPlusDepartamentoMap
+    from app.hora.services.tagplus.pedido_service import normalizar_departamento
+
+    mapas = (
+        HoraTagPlusDepartamentoMap.query
+        .order_by(HoraTagPlusDepartamentoMap.qtd_vendas_observadas.desc())
+        .all()
+    )
+    lojas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.id).all()
+
+    # Sugestao automatica: normaliza apelido sem "MOTOCHEFE " e compara.
+    def _suggest(mapa: HoraTagPlusDepartamentoMap):
+        if mapa.loja_id:
+            return None
+        for loja in lojas:
+            apelido = (loja.apelido or '').replace('MOTOCHEFE ', '').strip()
+            if normalizar_departamento(apelido) == mapa.departamento_norm:
+                return loja
+        return None
+
+    sugestoes = {m.id: _suggest(m) for m in mapas}
+
+    return render_template(
+        'hora/tagplus/departamento_map.html',
+        mapas=mapas, lojas=lojas, sugestoes=sugestoes,
+    )
+
+
+@hora_bp.route('/tagplus/departamento-map/salvar', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def tagplus_departamento_map_salvar():
+    """Atribui loja_id aos departamentos a partir do form (batch)."""
+    from app.hora.models import HoraTagPlusDepartamentoMap
+
+    operador = (
+        current_user.nome
+        if current_user.is_authenticated and getattr(current_user, 'nome', None)
+        else (current_user.email if current_user.is_authenticated else None)
+    )
+
+    alterados = 0
+    for mapa in HoraTagPlusDepartamentoMap.query.all():
+        novo_raw = (request.form.get(f'loja_{mapa.id}') or '').strip()
+        if not novo_raw:
+            continue  # vazio = mantem (nao limpa).
+        try:
+            novo_loja_id = int(novo_raw)
+        except ValueError:
+            continue
+        if mapa.loja_id != novo_loja_id:
+            mapa.loja_id = novo_loja_id
+            mapa.revisado_por = operador
+            from app.utils.timezone import agora_utc_naive
+            mapa.revisado_em = agora_utc_naive()
+            alterados += 1
+    if alterados:
+        db.session.commit()
+        flash(f'{alterados} departamento(s) atualizado(s).', 'success')
+    else:
+        flash('Nenhuma alteracao detectada.', 'info')
+    return redirect(url_for('hora.tagplus_departamento_map'))
+
+
+@hora_bp.route('/tagplus/departamento-map/aplicar', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def tagplus_departamento_map_aplicar():
+    """Aplica UPDATE em massa em hora_venda.loja_id baseado no de-para.
+
+    Para cada HoraTagPlusDepartamentoMap com loja_id NOT NULL:
+      UPDATE hora_venda SET loja_id = mapa.loja_id
+      WHERE tagplus_departamento (norm) = mapa.departamento_norm.
+
+    Defesas:
+      - PULA vendas onde UF da loja_destino difere da UF da loja_origem
+        (evita mudar CFOP em re-emissao pos-cancelamento — REGRA FISCAL).
+      - Registra HoraVendaAuditoria acao=DEFINIU_LOJA por venda atualizada
+        (em bulk insert, preserva auditoria do modulo).
+
+    Sem match no mapa, ou mapa.loja_id NULL: vendas mantem loja atual
+    (matriz por default — sinalizador para revisao posterior).
+    """
+    from app.hora.models import (
+        HoraLoja, HoraTagPlusDepartamentoMap, HoraVenda, HoraVendaAuditoria,
+    )
+    from app.hora.services.tagplus.pedido_service import normalizar_departamento
+    from app.utils.timezone import agora_utc_naive
+
+    operador = (
+        current_user.nome
+        if current_user.is_authenticated and getattr(current_user, 'nome', None)
+        else (current_user.email if current_user.is_authenticated else None)
+    )
+
+    mapas_resolvidos = (
+        HoraTagPlusDepartamentoMap.query
+        .filter(HoraTagPlusDepartamentoMap.loja_id.isnot(None))
+        .all()
+    )
+    if not mapas_resolvidos:
+        flash(
+            'Nenhum departamento mapeado para loja — preencha os dropdowns '
+            'e clique Salvar mapeamento antes de aplicar.',
+            'info',
+        )
+        return redirect(url_for('hora.tagplus_departamento_map'))
+
+    # Indice por departamento_norm -> mapa, para lookup O(1) no loop unico.
+    mapas_por_norm = {m.departamento_norm: m for m in mapas_resolvidos}
+
+    # Cache UF por loja_id (evita N queries por venda).
+    lojas = {l.id: l for l in HoraLoja.query.all()}
+
+    # Carrega TODAS as vendas candidatas em UMA query (elimina N+1).
+    vendas = HoraVenda.query.filter(
+        HoraVenda.tagplus_departamento.isnot(None),
+    ).all()
+
+    total_atualizado = 0
+    pulada_uf_diferente = 0
+    detalhe: dict[str, int] = {}
+    agora = agora_utc_naive()
+    auditorias = []
+
+    for v in vendas:
+        norm = normalizar_departamento(v.tagplus_departamento)
+        mapa = mapas_por_norm.get(norm)
+        if mapa is None or v.loja_id == mapa.loja_id:
+            continue
+
+        # Defesa em profundidade: nao trocar loja se UF difere (CFOP muda).
+        loja_origem = lojas.get(v.loja_id) if v.loja_id else None
+        loja_destino = lojas.get(mapa.loja_id)
+        uf_origem = (loja_origem.uf or '').upper() if loja_origem else None
+        uf_destino = (loja_destino.uf or '').upper() if loja_destino else None
+        if uf_origem and uf_destino and uf_origem != uf_destino:
+            pulada_uf_diferente += 1
+            continue
+
+        loja_id_anterior = v.loja_id
+        v.loja_id = mapa.loja_id
+        total_atualizado += 1
+        detalhe[mapa.departamento_raw] = detalhe.get(mapa.departamento_raw, 0) + 1
+        auditorias.append({
+            'venda_id': v.id,
+            'usuario': operador or '',
+            'acao': 'DEFINIU_LOJA',
+            'detalhe': (
+                f'De-para departamento TagPlus {v.tagplus_departamento!r} -> '
+                f'loja_id {loja_id_anterior} -> {mapa.loja_id} '
+                f'(loja={(loja_destino.apelido or loja_destino.nome) if loja_destino else "?"})'
+            ),
+            'criado_em': agora,
+        })
+
+    # Marca aplicado_em nos mapas que efetivamente afetaram vendas.
+    for raw_label in detalhe:
+        for m in mapas_resolvidos:
+            if m.departamento_raw == raw_label:
+                m.aplicado_em = agora
+                break
+
+    if total_atualizado:
+        # Bulk insert da auditoria — preserva contrato de auditabilidade
+        # do modulo HORA. ON DELETE SET NULL garantiu que item_id pode
+        # ser NULL aqui (mudanca de header, nao item).
+        db.session.bulk_insert_mappings(HoraVendaAuditoria, auditorias)
+        db.session.commit()
+        msg_detalhe = ', '.join(f'{k}={v}' for k, v in detalhe.items())
+        msg = (
+            f'{total_atualizado} venda(s) atualizada(s). Detalhe: '
+            f'{msg_detalhe}. Operador: {operador}'
+        )
+        if pulada_uf_diferente:
+            msg += (
+                f'. {pulada_uf_diferente} venda(s) PULADAS por UF diferente '
+                '(evita mudanca de CFOP em re-emissao).'
+            )
+        flash(msg, 'success')
+    else:
+        msg = 'Nenhuma venda atualizada'
+        if pulada_uf_diferente:
+            msg += (
+                f' ({pulada_uf_diferente} pulada(s) por UF diferente)'
+            )
+        flash(msg + '.', 'info')
+    return redirect(url_for('hora.tagplus_departamento_map'))
 
 
 # ============================================================================
