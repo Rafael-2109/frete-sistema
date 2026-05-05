@@ -16,6 +16,17 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 10 | 2026-04-27 | 2 | 2 | 0 | 0 | OK |
 | 11 | 2026-04-28 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 12 | 2026-04-30 | 3 | 3 | 0 | 0 | OK |
+| 13 | 2026-05-05 | 1 | 0 | 0 | 1 | OK (proposta — 3 areas RESTRITAS) |
+
+## 2026-05-05
+- 1 sugestao avaliada, valida (3 grep checks + 4 reads confirmaram), respondida com proposta detalhada
+- IMP-2026-05-01-001 (warning, skill_suggestion) — vincular NFe TagPlus ao pedido de venda original (`pedido_os_vinculada.id`) + alerta de scope mismatch no checklist
+- **Decisao: PROPOR (auto_implemented=false)** — sugestao toca em `app/hora/models/tagplus.py` (nova coluna `tagplus_pedido_id`), `app/hora/routes/tagplus_routes.py` (check de scope no checklist) e migration nova (`hora_21_tagplus_pedido_id.{py,sql}`). 3 areas RESTRITAS em D8 (analogas a models.py / routes.py / migration nova).
+- Plano em 4 fases entregue (Fase 1: persistir tagplus_pedido_id no backfill; Fase 2: detectar scope mismatch; Fase 3: enriquecer via GET /pedidos/{id} apos OAuth re-flow; Fase 4: link UI).
+- Nivel 2 do plano requer **reautorizacao OAuth** (Authorization Code Flow novo) — `refresh_token` nao re-emite scope (confirmado empiricamente em sessao 1a854db0 em 01/05/2026).
+- Sessao origem: `1a854db0-270e-4f75-9b9c-4671e8990939` (Rafael, 01/05/2026 13:36-14:00)
+- Persistencia DB: pendente confirmar
+- **Commit**: direto em main (sem branch dedicada — feedback 2026-04-14)
 
 ## 2026-04-30
 - 3 sugestoes avaliadas, todas validas e auto-implementadas
