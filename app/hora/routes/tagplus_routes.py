@@ -1091,6 +1091,23 @@ def tagplus_pedido_venda_criar():
             )
             return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
+    # Loja: SELECT obrigatorio no form. Validar que esta na lista de lojas
+    # disponiveis do operador (escopo + nao-excluida). Coerencia com a loja
+    # do chassi e validada no service via `loja_id_esperada`.
+    from app.hora.services import cadastro_service
+    loja_id_raw = _g('loja_id', 20)
+    if not loja_id_raw or not loja_id_raw.isdigit():
+        flash('Loja obrigatoria — selecione a loja do pedido.', 'danger')
+        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+    loja_id_int = int(loja_id_raw)
+    permitidas = lojas_permitidas_ids()
+    lojas_validas = cadastro_service.listar_lojas_para_pedido_venda(
+        lojas_permitidas_ids=permitidas,
+    )
+    if loja_id_int not in {l.id for l in lojas_validas}:
+        flash('Loja invalida ou fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+
     try:
         venda = venda_service.criar_venda_manual(
             cpf_cliente=_g('cpf', 14),
@@ -1113,6 +1130,7 @@ def tagplus_pedido_venda_criar():
             numero_parcelas=n_parcelas,
             intervalo_parcelas_dias=intervalo,
             criado_por=_operador(),
+            loja_id_esperada=loja_id_int,
         )
     except ValueError as exc:
         flash(f'Erro ao criar pedido de venda: {exc}', 'danger')
