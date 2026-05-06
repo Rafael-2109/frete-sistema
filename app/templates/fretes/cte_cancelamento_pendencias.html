@@ -167,14 +167,7 @@
           <tr>
             <td class="text-muted">{{ p.id }}</td>
             <td>
-              <span class="badge
-                {% if p.status == 'CANCELADO_OK' %}bg-success
-                {% elif p.status == 'ERRO' %}bg-danger
-                {% elif p.status == 'ORPHAN' %}bg-warning text-dark
-                {% elif p.status == 'PENDENTE_FATURA_CONFERIDA' %}bg-info text-dark
-                {% elif p.status == 'FRETE_CANCELADO_REVISAR' %}bg-primary
-                {% elif p.status == 'CANCELAMENTO_ODOO_FALHOU' %}bg-danger
-                {% else %}bg-secondary{% endif %}"
+              <span class="badge {% if p.status == 'CANCELADO_OK' %}bg-success {% elif p.status == 'ERRO' %}bg-danger {% elif p.status == 'ORPHAN' %}bg-warning {% elif p.status == 'PENDENTE_FATURA_CONFERIDA' %}bg-info {% elif p.status == 'FRETE_CANCELADO_REVISAR' %}bg-primary {% elif p.status == 'CANCELAMENTO_ODOO_FALHOU' %}bg-danger {% else %}bg-secondary{% endif %}"
                 title="{{ p.status }}">
                 {{ p.status }}
               </span>
@@ -303,8 +296,8 @@
     <h6><small class="text-muted">Legenda dos status:</small></h6>
     <ul class="list-unstyled small text-muted mb-0">
       <li><span class="badge bg-success">CANCELADO_OK</span> — cancelado localmente e arquivado no Odoo (resolvido automaticamente)</li>
-      <li><span class="badge bg-info text-dark">PENDENTE_FATURA_CONFERIDA</span> — bloqueado: fatura ja conferida, revisao manual necessaria</li>
-      <li><span class="badge bg-warning text-dark">ORPHAN</span> — CTe do XML de cancelamento nao existe no sistema local nem no Odoo (pode ser CTe endereçado a outra empresa do grupo ou nao importado pela SEFAZ ainda)</li>
+      <li><span class="badge bg-info">PENDENTE_FATURA_CONFERIDA</span> — bloqueado: fatura ja conferida, revisao manual necessaria</li>
+      <li><span class="badge bg-warning">ORPHAN</span> — CTe do XML de cancelamento nao existe no sistema local nem no Odoo (pode ser CTe endereçado a outra empresa do grupo ou nao importado pela SEFAZ ainda)</li>
       <li><span class="badge bg-primary">FRETE_CANCELADO_REVISAR</span> — CTe cancelado e frete afetado, revisar pagamentos/conta corrente</li>
       <li><span class="badge bg-danger">CANCELAMENTO_ODOO_FALHOU</span> — cancelado local mas falhou ao marcar como CANCELADO no Odoo (marcacao manual: l10n_br_situacao_dfe='CANCELADA' + l10n_br_status='07')</li>
       <li><span class="badge bg-danger">ERRO</span> — erro tecnico durante processamento (ver mensagem)</li>

@@ -279,16 +279,16 @@
                                 {% elif item.tipo_divergencia == 'preco' %}
                                 <span class="badge bg-danger">Preco</span>
                                 {% elif item.tipo_divergencia == 'quantidade' %}
-                                <span class="badge bg-warning text-dark">Quantidade</span>
+                                <span class="badge bg-warning">Quantidade</span>
                                 {% elif item.tipo_divergencia == 'data_entrega' %}
-                                <span class="badge bg-warning text-dark">Data</span>
+                                <span class="badge bg-warning">Data</span>
                                 {% else %}
                                 <span class="badge bg-secondary">{{ item.tipo_divergencia }}</span>
                                 {% endif %}
                                 <br>
                                 <!-- Status -->
                                 {% if item.status == 'pendente' %}
-                                <span class="badge bg-warning text-dark mt-1">Pendente</span>
+                                <span class="badge bg-warning mt-1">Pendente</span>
                                 {% elif item.status == 'aprovada' %}
                                 <span class="badge bg-success mt-1">Aprovada</span>
                                 {% elif item.status == 'rejeitada' %}

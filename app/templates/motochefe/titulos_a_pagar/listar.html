@@ -53,7 +53,7 @@
                 <div class="col-md-4">
                     <small>Abertos</small><br>
                     <strong class="text-warning">R$ {{ total_aberto|valor_br }}</strong>
-                    <span class="badge bg-warning text-dark">{{ abertos|length }}</span>
+                    <span class="badge bg-warning">{{ abertos|length }}</span>
                 </div>
                 <div class="col-md-4">
                     <small>Parciais</small><br>
@@ -102,7 +102,7 @@
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-lock"></i> Pendentes (Aguardando Liberação)
-                    <span class="badge bg-light text-dark float-end">{{ pendentes|length }} títulos</span>
+                    <span class="badge bg-light float-end">{{ pendentes|length }} títulos</span>
                 </h5>
             </div>
             <div class="card-body">
@@ -197,7 +197,7 @@
                                 <td>{{ t.fornecedor_nome or '-' }}</td>
                                 <td class="text-end">R$ {{ t.valor_saldo|valor_br }}</td>
                                 <td><small>{{ t.criado_em|formatar_data_segura or '-' }}</small></td>
-                                <td><span class="badge bg-warning text-dark">{{ t.status }}</span></td>
+                                <td><span class="badge bg-warning">{{ t.status }}</span></td>
                                 <td>
                                     <a href="{{ url_for('motochefe.detalhes_titulo_a_pagar', id=t.id) }}" class="btn btn-sm btn-outline-info">
                                         <i class="fas fa-eye"></i>
@@ -218,7 +218,7 @@
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-hourglass-half"></i> Parcialmente Pagos
-                    <span class="badge bg-light text-dark float-end">{{ parciais|length }} títulos</span>
+                    <span class="badge bg-light float-end">{{ parciais|length }} títulos</span>
                 </h5>
             </div>
             <div class="card-body">
@@ -273,7 +273,7 @@
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-check-circle"></i> Pagos
-                    <span class="badge bg-light text-dark float-end">{{ pagos|length }} títulos</span>
+                    <span class="badge bg-light float-end">{{ pagos|length }} títulos</span>
                     <button type="button" class="btn btn-sm btn-light" onclick="toggleGrupo('pagos')">
                         <i class="fas fa-chevron-down" id="icon-pagos"></i>
                     </button>

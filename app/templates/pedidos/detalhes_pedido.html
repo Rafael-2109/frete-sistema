@@ -46,7 +46,7 @@
                                     <td>
                                         {% if pedido.status_calculado %}
                                             {% if pedido.status_calculado == 'ABERTO' %}
-                                                <span class="badge bg-warning text-dark">{{ pedido.status_calculado }}</span>
+                                                <span class="badge bg-warning">{{ pedido.status_calculado }}</span>
                                             {% elif pedido.status_calculado == 'COTADO' %}
                                                 <span class="badge bg-info">{{ pedido.status_calculado }}</span>
                                             {% elif pedido.status_calculado == 'EMBARCADO' %}
@@ -56,10 +56,10 @@
                                             {% elif pedido.status_calculado == 'NF no CD' %}
                                                 <span class="badge bg-secondary">{{ pedido.status_calculado }}</span>
                                             {% else %}
-                                                <span class="badge bg-light text-dark">{{ pedido.status_calculado }}</span>
+                                                <span class="badge bg-light">{{ pedido.status_calculado }}</span>
                                             {% endif %}
                                         {% else %}
-                                        <span class="badge bg-warning text-dark">{{pedido.status}}</span>
+                                        <span class="badge bg-warning">{{pedido.status}}</span>
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>

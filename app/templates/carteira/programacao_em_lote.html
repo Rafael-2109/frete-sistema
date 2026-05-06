@@ -241,8 +241,7 @@
                             <td class="col-status">
                                 {% if cnpj_data.status %}
                                 <span
-                                    class="badge 
-                                        {% if cnpj_data.status == 'Reagendar' %}bg-danger{% elif cnpj_data.status == 'Consolidar' %}bg-warning text-dark{% elif cnpj_data.status == 'Ag. Aprovação' %}bg-info{% elif cnpj_data.status == 'Pronto' %}bg-success{% else %}bg-secondary{% endif %}"
+                                    class="badge {% if cnpj_data.status == 'Reagendar' %}bg-danger{% elif cnpj_data.status == 'Consolidar' %}bg-warning {% elif cnpj_data.status == 'Ag. Aprovação' %}bg-info{% elif cnpj_data.status == 'Pronto' %}bg-success{% else %}bg-secondary{% endif %}"
                                     style="font-size: 0.8em; padding: 4px 8px;">
                                     <i class="fas {{ cnpj_data.icone_status }} me-1"></i>
                                     {{ cnpj_data.status }}
@@ -296,10 +295,7 @@
                                                 </div>
                                                 <div class="col-md-2">
                                                     <strong>Status:</strong><br>
-                                                    <span class="badge 
-                                                        {% if pedido.status == 'PENDENTE' %}bg-warning text-dark
-                                                        {% elif pedido.status == 'NF_CD_SEM_CARTEIRA' %}bg-danger
-                                                        {% else %}bg-info text-dark{% endif %}">
+                                                    <span class="badge {% if pedido.status == 'PENDENTE' %}bg-warning {% elif pedido.status == 'NF_CD_SEM_CARTEIRA' %}bg-danger {% else %}bg-info {% endif %}">
                                                         {{ pedido.status }}
                                                     </span>
                                                 </div>
@@ -312,7 +308,7 @@
                                             {% if pedido.qtd_pendente > 0 %}
                                             <div class="mt-2">
                                                 <span class="text-muted">Pendente:</span>
-                                                <span class="badge bg-warning text-dark">
+                                                <span class="badge bg-warning">
                                                     R$ {{ "{:,.2f}".format(pedido.valor_pendente) }} |
                                                     {{ "{:,.2f}".format(pedido.peso_pendente) }} kg |
                                                     {{ "{:,.2f}".format(pedido.pallets_pendente) }} pallets
@@ -326,10 +322,10 @@
                                                 {% for sep in pedido.separacoes %}
                                                 <div class="ms-3 mb-1">
                                                     <span class="text-muted">{{ sep.separacao_lote_id }}:</span>
-                                                    <span class="badge bg-info text-dark">
+                                                    <span class="badge bg-info">
                                                         {{ sep.status }}
                                                     </span>
-                                                    <span class="badge bg-light text-dark border">
+                                                    <span class="badge bg-light border">
                                                         R$ {{ "{:,.2f}".format(sep.valor_total) if sep.valor_total else
                                                         '0,00' }} |
                                                         {{ "{:,.2f}".format(sep.peso_total) if sep.peso_total else
@@ -366,7 +362,7 @@
                                                     <span class="badge bg-danger">
                                                         {{ nf.status }}
                                                     </span>
-                                                    <span class="badge bg-light text-dark border">
+                                                    <span class="badge bg-light border">
                                                         R$ {{ "{:,.2f}".format(nf.valor) if nf.valor else '0,00' }} |
                                                         {{ "{:,.2f}".format(nf.peso) if nf.peso else '0,00' }} kg |
                                                         {{ "{:,.2f}".format(nf.pallet) if nf.pallet else '0,00' }}
@@ -897,7 +893,7 @@
                   <div class="card-header">
                     <h6 class="mb-0">
                       <i class="fas fa-boxes"></i> Pedidos e Produtos
-                      <span class="badge bg-light text-dark ms-2">${dadosCnpj.pedidos.length} itens</span>
+                      <span class="badge bg-light ms-2">${dadosCnpj.pedidos.length} itens</span>
                     </h6>
                   </div>
                   <div class="card-body">

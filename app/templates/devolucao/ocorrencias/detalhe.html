@@ -41,14 +41,14 @@
                             {% if nfd.odoo_status_codigo == '06' %}
                                 <span class="badge bg-success" title="Status Odoo: {{ nfd.odoo_status_descricao or 'Concluído' }}{% if nfd.data_entrada %} | Entrada: {{ nfd.data_entrada|formatar_data_segura }}{% endif %}">Entrada OK</span>
                             {% else %}
-                                <span class="badge bg-warning text-dark" title="Status Odoo: {{ nfd.odoo_status_descricao or 'Pendente' }} | Aguardando entrada física">Pendente</span>
+                                <span class="badge bg-warning" title="Status Odoo: {{ nfd.odoo_status_descricao or 'Pendente' }} | Aguardando entrada física">Pendente</span>
                             {% endif %}
                         {% else %}
                             {# NF de venda - verificar se foi revertida #}
                             {% if nfd.status_odoo == 'Revertida' %}
                                 <span class="badge bg-danger" title="NF revertida no Odoo">Reversão</span>
                             {% else %}
-                                <span class="badge bg-warning text-dark" title="Pendente de reversão">Pendente</span>
+                                <span class="badge bg-warning" title="Pendente de reversão">Pendente</span>
                             {% endif %}
                         {% endif %}
                     </h6>
@@ -59,7 +59,7 @@
                         {% if nfd.status_monitoramento == 'Devolvida' %}
                             <span class="badge bg-danger badge-sm" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
                         {% elif nfd.status_monitoramento == 'Cancelada' %}
-                            <span class="badge bg-warning text-dark badge-sm" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
+                            <span class="badge bg-warning badge-sm" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
                         {% elif nfd.status_monitoramento == 'Troca de NF' %}
                             <span class="badge bg-info badge-sm" title="Status monitoramento">{{ nfd.status_monitoramento }}</span>
                         {% else %}
@@ -835,7 +835,7 @@
                         <h6 class="mb-0 d-inline">Produtos da NFD</h6>
                         {% if linhas %}
                         <span class="badge bg-success ms-2">{{ linhas|selectattr('produto_resolvido')|list|length }} resolvidas</span>
-                        <span class="badge bg-warning text-dark">{{ linhas|rejectattr('produto_resolvido')|list|length }} pendentes</span>
+                        <span class="badge bg-warning">{{ linhas|rejectattr('produto_resolvido')|list|length }} pendentes</span>
                         {% endif %}
                         {% endif %}
                     </div>
@@ -972,7 +972,7 @@
                                             {% if linha.produto_resolvido %}
                                             <span class="badge bg-success">Resolvido</span>
                                             {% else %}
-                                            <span class="badge bg-warning text-dark">Pendente</span>
+                                            <span class="badge bg-warning">Pendente</span>
                                             {% endif %}
                                         </td>
                                         <td>

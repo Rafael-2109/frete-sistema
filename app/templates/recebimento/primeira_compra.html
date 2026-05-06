@@ -197,7 +197,7 @@
                             </td>
                             <td class="text-center">
                                 {% if item.status == 'pendente' %}
-                                <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Pendente</span>
+                                <span class="badge bg-warning"><i class="fas fa-clock"></i> Pendente</span>
                                 {% elif item.status == 'validado' %}
                                 <span class="badge bg-success"><i class="fas fa-check"></i> Validado</span>
                                 {% elif item.status == 'rejeitado' %}
@@ -416,10 +416,10 @@
     };
 
     const formatarRegime = (crt) => {
-        if (!crt) return '<span class="badge bg-light text-dark ms-1">N/I</span>';
+        if (!crt) return '<span class="badge bg-light ms-1">N/I</span>';
         if (crt === '1' || crt === '2') return '<span class="badge bg-info ms-1">Simples</span>';
-        if (crt === '3') return '<span class="badge bg-warning text-dark ms-1">Regime Normal</span>';
-        return '<span class="badge bg-light text-dark ms-1">CRT ' + crt + '</span>';
+        if (crt === '3') return '<span class="badge bg-warning ms-1">Regime Normal</span>';
+        return '<span class="badge bg-light ms-1">CRT ' + crt + '</span>';
     };
 
     // Renderizar detalhes do item - FOCADO EM DECISAO
@@ -522,7 +522,7 @@
                                 <div class="col">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">IPI</small>
-                                        <span class="badge bg-warning text-dark fs-4">${formatarValor(item.aliquota_ipi)}%</span>
+                                        <span class="badge bg-warning fs-4">${formatarValor(item.aliquota_ipi)}%</span>
                                     </div>
                                 </div>
                                 <div class="col">

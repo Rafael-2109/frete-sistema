@@ -459,7 +459,7 @@
                                     {{ em.data_hora_entrega_realizada|formatar_data_segura or 'Entregue' }}
                                 </span>
                             {% elif em and em.status_finalizacao %}
-                                <span class="badge {% if em.status_finalizacao == 'Devolvida' %}bg-danger{% elif em.status_finalizacao == 'Cancelada' %}bg-dark{% elif em.status_finalizacao == 'Sinistro' %}bg-danger{% else %}bg-warning text-dark{% endif %} badge-status">
+                                <span class="badge {% if em.status_finalizacao == 'Devolvida' %}bg-danger{% elif em.status_finalizacao == 'Cancelada' %}bg-dark{% elif em.status_finalizacao == 'Sinistro' %}bg-danger{% else %}bg-warning {% endif %} badge-status">
                                     {{ em.status_finalizacao[:10] }}
                                 </span>
                             {% elif em and em.data_hora_entrega_realizada %}
@@ -472,7 +472,7 @@
 
                             <!-- Reagendar -->
                             {% if em and em.reagendar %}
-                                <span class="badge bg-warning text-dark badge-status">Reag</span>
+                                <span class="badge bg-warning badge-status">Reag</span>
                             {% endif %}
 
                             <!-- Botão Pendência Financeira -->
@@ -558,7 +558,7 @@
                                 VENC <i class="fas fa-balance-scale ms-1"></i>
                             </span>
                         {% else %}
-                            <span class="badge bg-warning text-dark badge-clicavel" style="cursor: pointer;"
+                            <span class="badge bg-warning badge-clicavel" style="cursor: pointer;"
                                   onclick="abrirModalComparativo({{ conta.id }})"
                                   title="Ver abatimentos e baixas">
                                 ABERTO <i class="fas fa-balance-scale ms-1"></i>
@@ -998,7 +998,7 @@
                                 </table>
                             </div>
                             <div class="card-footer py-1 small">
-                                <span class="badge bg-warning text-dark" id="badge-pendentes">0</span> Pendentes
+                                <span class="badge bg-warning" id="badge-pendentes">0</span> Pendentes
                                 <span class="badge bg-success ms-2" id="badge-vinculados">0</span> Vinculados
                                 <span class="badge bg-danger ms-2" id="badge-nao-encontrados">0</span> Não Encontrados
                             </div>

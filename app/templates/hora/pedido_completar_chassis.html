@@ -35,7 +35,7 @@
       <div class="card">
         <div class="card-header d-flex justify-content-between">
           <strong>Itens do pedido (pendentes)</strong>
-          <span class="badge bg-warning text-dark">{{ itens_pendentes|length }}</span>
+          <span class="badge bg-warning">{{ itens_pendentes|length }}</span>
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover mb-0" id="tbl-pedido">
@@ -70,7 +70,7 @@
       <div class="card">
         <div class="card-header d-flex justify-content-between">
           <strong>Chassis disponíveis em NFs</strong>
-          <span class="badge bg-info text-dark">{{ chassis_disponiveis|length }}</span>
+          <span class="badge bg-info">{{ chassis_disponiveis|length }}</span>
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover mb-0" id="tbl-nf">
@@ -100,7 +100,7 @@
                   {% elif d.nf_pedido_id is none %}
                     <span class="badge bg-secondary">sem vinc</span>
                   {% else %}
-                    <span class="badge bg-warning text-dark">outro ped</span>
+                    <span class="badge bg-warning">outro ped</span>
                   {% endif %}
                 </td>
               </tr>
@@ -223,7 +223,7 @@
 
     const warning = (modeloPed && modeloPed !== '—' && modeloNf && modeloNf !== '—'
                      && modeloPed.toUpperCase() !== modeloNf.toUpperCase())
-      ? ` <span class="badge bg-warning text-dark" title="Modelo diverge">!</span>` : '';
+      ? ` <span class="badge bg-warning" title="Modelo diverge">!</span>` : '';
 
     const tr = document.createElement('tr');
     tr.classList.add('par-row');

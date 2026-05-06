@@ -325,7 +325,7 @@
                                         </span>
                                     {% endif %}
                                 {% elif cte.classificacao == 'CTE_COMPLEMENTAR' %}
-                                    <span class="badge bg-warning text-dark">
+                                    <span class="badge bg-warning">
                                         <i class="fas fa-plus-circle"></i> Complementar
                                     </span>
                                 {% else %}
@@ -531,7 +531,7 @@
                                 {% if conf >= 0.6 %}
                                     <span class="badge bg-success">{{ "%.0f"|format(conf * 100) }}%</span>
                                 {% elif conf >= 0.3 %}
-                                    <span class="badge bg-warning text-dark">{{ "%.0f"|format(conf * 100) }}%</span>
+                                    <span class="badge bg-warning">{{ "%.0f"|format(conf * 100) }}%</span>
                                 {% else %}
                                     <span class="badge bg-danger">{{ "%.0f"|format(conf * 100) }}%</span>
                                 {% endif %}
@@ -643,7 +643,7 @@
                             {% elif m.confianca == 'CNPJ_NUMERO' %}
                             <span class="badge bg-info">CNPJ+Numero</span>
                             {% else %}
-                            <span class="badge bg-warning text-dark">Nao Encontrada</span>
+                            <span class="badge bg-warning">Nao Encontrada</span>
                             {% endif %}
                         </td>
                     </tr>

@@ -161,7 +161,7 @@
                             </td>
                             <td>
                                 {% if f.status_conferencia == 'PENDENTE' %}
-                                <span class="badge bg-warning text-dark">{{ f.status_conferencia }}</span>
+                                <span class="badge bg-warning">{{ f.status_conferencia }}</span>
                                 {% elif f.status_conferencia == 'CONFERIDO' %}
                                 <span class="badge bg-success">{{ f.status_conferencia }}</span>
                                 {% elif f.status_conferencia == 'DIVERGENTE' %}

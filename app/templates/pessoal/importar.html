@@ -67,7 +67,7 @@
                 {% if res.tipo == 'extrato_cc' %}
                 <span class="badge bg-info">CC</span>
                 {% else %}
-                <span class="badge bg-warning text-dark">Cartao</span>
+                <span class="badge bg-warning">Cartao</span>
                 {% endif %}
               </td>
             </tr>
@@ -83,7 +83,7 @@
             </tr>
             <tr>
               <th>Empresariais (filtradas)</th>
-              <td><span class="badge bg-warning text-dark">{{ res.filtradas_empresa }}</span></td>
+              <td><span class="badge bg-warning">{{ res.filtradas_empresa }}</span></td>
             </tr>
           </table>
         </div>
@@ -129,7 +129,7 @@
                     {% if imp.tipo_arquivo == 'extrato_cc' %}
                     <span class="badge bg-info">CC</span>
                     {% else %}
-                    <span class="badge bg-warning text-dark">Cartao</span>
+                    <span class="badge bg-warning">Cartao</span>
                     {% endif %}
                   </td>
                   <td>{{ imp.linhas_importadas }}</td>

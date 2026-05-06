@@ -140,7 +140,7 @@
                                         </td>
                                         <td>
                                             {% if mov.status %}
-                                                <span class="badge {% if mov.status == 'ATIVO' %}bg-warning text-dark{% elif mov.status == 'COMPENSADO' %}bg-success{% else %}bg-secondary{% endif %}">
+                                                <span class="badge {% if mov.status == 'ATIVO' %}bg-warning {% elif mov.status == 'COMPENSADO' %}bg-success{% else %}bg-secondary{% endif %}">
                                                     {{ mov.status }}
                                                 </span>
                                             {% else %}

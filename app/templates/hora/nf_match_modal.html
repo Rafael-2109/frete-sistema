@@ -81,7 +81,7 @@
                   <strong>{{ c.numero_pedido }}</strong>
                   <small class="text-muted">{{ c.data_pedido_iso }}</small>
                   <span class="badge bg-secondary">Total {{ c.total_pedido + c.total_pedido_pendente }}</span>
-                  <span class="badge bg-warning text-dark">Sem NF {{ c.sem_nf + c.total_pedido_pendente }}</span>
+                  <span class="badge bg-warning">Sem NF {{ c.sem_nf + c.total_pedido_pendente }}</span>
                   <span class="badge bg-success">Match {{ c.match }}</span>
                   {% if suggested %}
                     <span class="badge bg-primary ms-auto">Sugerido</span>

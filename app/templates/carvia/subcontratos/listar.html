@@ -149,12 +149,12 @@
                                 </span>
                                 {# GAP-22: Indicador de faturamento pendente (sub sem fatura transportadora) #}
                                 {% if sub.status in ('FATURADO', 'CONFERIDO') and not sub.fatura_transportadora_id %}
-                                <span class="badge bg-warning text-dark ms-1" title="Sem fatura de transportadora vinculada">
+                                <span class="badge bg-warning ms-1" title="Sem fatura de transportadora vinculada">
                                     <i class="fas fa-exclamation-circle"></i> s/ fatura
                                 </span>
                                 {% endif %}
                                 {% if sub.frete and sub.frete.requer_aprovacao %}
-                                <br><span class="badge bg-warning text-dark mt-1" title="Aguardando aprovacao de tratativa">
+                                <br><span class="badge bg-warning mt-1" title="Aguardando aprovacao de tratativa">
                                     <i class="fas fa-clipboard-check"></i> EM TRATATIVA
                                 </span>
                                 {% endif %}

@@ -215,7 +215,7 @@
                                 {% endif %}
                                 {% if lanc.po_id %}
                                 <a href="https://odoo.nacomgoya.com.br/web#id={{ lanc.po_id }}&model=purchase.order&view_type=form"
-                                   target="_blank" class="badge bg-primary text-white text-decoration-none" title="Abrir PO no Odoo">
+                                   target="_blank" class="badge bg-primary text-decoration-none" title="Abrir PO no Odoo">
                                     <i class="fas fa-external-link-alt me-1"></i>P:{{ lanc.po_id }}
                                 </a>
                                 {% endif %}
@@ -236,7 +236,7 @@
                                 {% elif lanc.status == 'ERRO' %}
                                 <span class="badge bg-danger"><i class="fas fa-times"></i> Erro</span>
                                 {% else %}
-                                <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> Incompleto</span>
+                                <span class="badge bg-warning"><i class="fas fa-clock"></i> Incompleto</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -483,7 +483,7 @@ function renderJobAccordion(job, tipo, idx) {
                 <span class="badge ${badgeClass} me-2"><i class="fas fa-${badgeIcon}"></i></span>
                 <span class="badge bg-${tipoBadge} me-2"><i class="fas fa-${tipoIcone}"></i> ${tipoLabel.toUpperCase()}</span>
                 <span class="me-2">#${id}</span>
-                ${tituloExtra ? `<span class="badge bg-light text-dark me-2">${tituloExtra}</span>` : ''}
+                ${tituloExtra ? `<span class="badge bg-light me-2">${tituloExtra}</span>` : ''}
                 ${valor ? `<span class="badge bg-secondary me-2">R$ ${valor.toFixed(2)}</span>` : ''}
                 <small class="text-muted">por ${job.args?.usuario || 'N/A'}</small>
             </button>
@@ -574,7 +574,7 @@ function carregarProgressoLote(faturaId) {
                     let icon = 'check text-success';
                     if (item.skipped) icon = 'forward text-warning';
                     else if (!item.success) icon = 'times text-danger';
-                    html += `<span class="badge bg-light text-dark me-1 mb-1"><i class="fas fa-${icon}"></i> ${item.tipo === 'frete' ? 'F' : 'D'}#${item.id}</span>`;
+                    html += `<span class="badge bg-light me-1 mb-1"><i class="fas fa-${icon}"></i> ${item.tipo === 'frete' ? 'F' : 'D'}#${item.id}</span>`;
                 });
                 html += '</div></div>';
             }
@@ -770,7 +770,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.dfe_id}&model=l10n_br_ciel_it_account.dfe&view_type=form" target="_blank" class="badge bg-info text-decoration-none me-1" title="Abrir DFe no Odoo"><i class="fas fa-external-link-alt me-1"></i>DFe: ${lastEtapa.dfe_id}</a>`;
                                 }
                                 if (lastEtapa.purchase_order_id) {
-                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.purchase_order_id}&model=purchase.order&view_type=form" target="_blank" class="badge bg-primary text-white text-decoration-none me-1" title="Abrir PO no Odoo"><i class="fas fa-external-link-alt me-1"></i>PO: ${lastEtapa.purchase_order_id}</a>`;
+                                    html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.purchase_order_id}&model=purchase.order&view_type=form" target="_blank" class="badge bg-primary text-decoration-none me-1" title="Abrir PO no Odoo"><i class="fas fa-external-link-alt me-1"></i>PO: ${lastEtapa.purchase_order_id}</a>`;
                                 }
                                 if (lastEtapa.invoice_id) {
                                     html += `<a href="https://odoo.nacomgoya.com.br/web#id=${lastEtapa.invoice_id}&model=account.move&view_type=form" target="_blank" class="badge bg-success text-decoration-none" title="Abrir Invoice no Odoo"><i class="fas fa-external-link-alt me-1"></i>Invoice: ${lastEtapa.invoice_id}</a>`;

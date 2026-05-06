@@ -532,7 +532,7 @@ function verDetalhes(recebimentoId) {
                         <tr>
                             <td>${escapeHtml(l.odoo_product_name) || l.odoo_product_id}</td>
                             <td>${escapeHtml(l.cfop) || '-'}</td>
-                            <td><span class="badge ${l.tipo === 'auto' ? 'bg-success' : 'bg-warning text-dark'}">${l.tipo}</span></td>
+                            <td><span class="badge ${l.tipo === 'auto' ? 'bg-success' : 'bg-warning '}">${l.tipo}</span></td>
                             <td><code>${escapeHtml(l.lote_nome) || '-'}</code></td>
                             <td>${parseFloat(l.quantidade).toLocaleString('pt-BR', {minimumFractionDigits: 3})}</td>
                             <td>${l.processado ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-clock text-warning"></i>'}</td>

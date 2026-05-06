@@ -145,7 +145,7 @@
       <span class="cnpj-col" title="{{ emit.cnpj if emit else '' }}">
         <strong>{{ emit.nome if emit else '-' }}</strong>
         {% if _tom_visual == 'emitente' %}
-          <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
+          <span class="badge bg-warning ms-1" title="{{ _tom_title }}">
             <i class="fas fa-dollar-sign"></i> TOM
           </span>
         {% endif %}
@@ -154,7 +154,7 @@
       <span class="cnpj-col" title="{{ dest.cnpj if dest else '' }}">
         <strong>{{ dest.nome if dest else '-' }}</strong>
         {% if _tom_visual == 'destinatario' %}
-          <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
+          <span class="badge bg-warning ms-1" title="{{ _tom_title }}">
             <i class="fas fa-dollar-sign"></i> TOM
           </span>
         {% endif %}
@@ -171,7 +171,7 @@
         <small class="text-muted d-block">
           Emitente
           {% if _tom_visual == 'emitente' %}
-            <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
+            <span class="badge bg-warning ms-1" title="{{ _tom_title }}">
               <i class="fas fa-dollar-sign"></i> TOMADOR
             </span>
           {% endif %}
@@ -190,7 +190,7 @@
         <small class="text-muted d-block">
           Destinatario
           {% if _tom_visual == 'destinatario' %}
-            <span class="badge bg-warning text-dark ms-1" title="{{ _tom_title }}">
+            <span class="badge bg-warning ms-1" title="{{ _tom_title }}">
               <i class="fas fa-dollar-sign"></i> TOMADOR
             </span>
           {% endif %}

@@ -208,7 +208,7 @@
                         {% for cte in ctes %}
                         <tr>
                             <td>
-                                <span class="badge bg-light text-dark" style="font-size: 0.75rem;">
+                                <span class="badge bg-light" style="font-size: 0.75rem;">
                                     {{ cte.data_emissao|formatar_data_segura or '-' }}
                                 </span>
                                 <br>
@@ -218,7 +218,7 @@
                             </td>
                             <td>
                                 {% if cte.tipo_cte == '1' %}
-                                <span class="badge bg-warning text-dark" title="CTe Complementar">
+                                <span class="badge bg-warning" title="CTe Complementar">
                                     <i class="fas fa-plus-circle"></i> Compl.
                                 </span>
                                 {% if cte.cte_original %}
@@ -265,7 +265,7 @@
                                         <i class="fas fa-info-circle"></i> NFs do CTe {{ cte.cte_original.numero_cte }}:
                                     </small>
                                     {% for nf in cte.cte_original.numeros_nfs.split(',')[:7] %}
-                                    <span class="badge bg-warning text-dark d-block mb-1" style="font-size: 0.7rem;">{{ nf }}</span>
+                                    <span class="badge bg-warning d-block mb-1" style="font-size: 0.7rem;">{{ nf }}</span>
                                     {% endfor %}
                                     {% if cte.cte_original.numeros_nfs.split(',') | length > 7 %}
                                     <span class="badge bg-info d-block" style="font-size: 0.7rem;">+{{ cte.cte_original.numeros_nfs.split(',') | length - 7 }} mais</span>

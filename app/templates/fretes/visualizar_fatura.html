@@ -70,7 +70,7 @@
                                 {% if fatura.status_conferencia == 'CONFERIDO' %}
                                 <span class="badge bg-success">CONFERIDO</span>
                                 {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
-                                <span class="badge bg-warning text-dark">EM CONFERÊNCIA</span>
+                                <span class="badge bg-warning">EM CONFERÊNCIA</span>
                                 {% else %}
                                 <span class="badge bg-secondary">PENDENTE</span>
                                 {% endif %}
@@ -203,7 +203,7 @@
                                 {% if frete.status == 'APROVADO' %}
                                 <span class="badge bg-success">{{ frete.status }}</span>
                                 {% elif frete.status == 'PENDENTE' %}
-                                <span class="badge bg-warning text-dark">{{ frete.status }}</span>
+                                <span class="badge bg-warning">{{ frete.status }}</span>
                                 {% else %}
                                 <span class="badge bg-secondary">{{ frete.status }}</span>
                                 {% endif %}
@@ -556,7 +556,7 @@ function atualizarResumoLancamento(data) {
 
     // Despesas
     html += `<tr>
-        <td><span class="badge bg-warning text-dark">Despesas</span></td>
+        <td><span class="badge bg-warning">Despesas</span></td>
         <td>${data.total_despesas}</td>
         <td><span class="text-success">${data.despesas_lancadas}</span></td>
         <td><span class="text-warning">${data.despesas_pendentes}</span></td>
@@ -612,7 +612,7 @@ function abrirModalLancarOdoo() {
     if (dadosLancamento.despesas_pendentes > 0) {
         html += `<li class="list-group-item d-flex justify-content-between">
             <span><i class="fas fa-receipt text-warning"></i> Despesas Extras</span>
-            <span class="badge bg-warning text-dark">${dadosLancamento.despesas_pendentes}</span>
+            <span class="badge bg-warning">${dadosLancamento.despesas_pendentes}</span>
         </li>`;
     }
 

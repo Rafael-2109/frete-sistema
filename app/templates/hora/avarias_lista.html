@@ -69,7 +69,7 @@
           <td><code class="chassi-mono">{{ a.numero_chassi }}</code></td>
           <td>{{ a.loja.rotulo_display if a.loja else '—' }}</td>
           <td>
-            {% if a.status=='ABERTA' %}<span class="badge bg-warning text-dark">Aberta</span>
+            {% if a.status=='ABERTA' %}<span class="badge bg-warning">Aberta</span>
             {% elif a.status=='RESOLVIDA' %}<span class="badge bg-success">Resolvida</span>
             {% else %}<span class="badge bg-secondary">Ignorada</span>{% endif %}
           </td>

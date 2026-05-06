@@ -236,7 +236,7 @@
                                     <i class="fas fa-undo text-warning me-1"></i>
                                     <strong>NF no CD — Não Selecionados</strong>
                                 </span>
-                                <span class="badge bg-warning text-dark" id="mapa_count_nf_cd">0</span>
+                                <span class="badge bg-warning" id="mapa_count_nf_cd">0</span>
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
@@ -270,7 +270,7 @@
                                     <i class="fas fa-box-open text-info me-1"></i>
                                     <strong>Pedidos Abertos — Não Selecionados</strong>
                                 </span>
-                                <span class="badge bg-info text-dark" id="mapa_count_normais">0</span>
+                                <span class="badge bg-info" id="mapa_count_normais">0</span>
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
@@ -655,7 +655,7 @@
             cliente.pedidos.forEach((pedido, idx) => {
                 const statusAgend = pedido.agendamento_confirmado
                     ? '<span class="badge bg-success">Confirmado</span>'
-                    : (pedido.agendamento ? '<span class="badge bg-warning text-dark">Aguardando</span>' : '');
+                    : (pedido.agendamento ? '<span class="badge bg-warning">Aguardando</span>' : '');
 
                 pedidosHtml += `
                     <div class="border-start border-2 ps-2 mb-2 ${idx > 0 ? 'mt-2' : ''}">
@@ -678,7 +678,7 @@
                     <div class="info-window-header" style="background: ${getMarkerHexColor(cliente.status)};">
                         <h6 class="mb-0 text-white">
                             <i class="fas fa-building"></i> ${cliente.cliente.nome}
-                            <span class="badge bg-light text-dark ms-2">${cliente.totais.qtd_pedidos} pedido(s)</span>
+                            <span class="badge bg-light ms-2">${cliente.totais.qtd_pedidos} pedido(s)</span>
                         </h6>
                     </div>
                     <div class="info-window-content">
@@ -836,7 +836,7 @@
                 const statusBadge = cliente.status === 'agendado'
                     ? '<span class="badge bg-success">Agendado</span>'
                     : (cliente.status === 'urgente'
-                        ? '<span class="badge bg-warning text-dark">Urgente</span>'
+                        ? '<span class="badge bg-warning">Urgente</span>'
                         : '<span class="badge bg-secondary">Pendente</span>');
 
                 // Lista de pedidos do cliente
@@ -1508,7 +1508,7 @@
                     const agendStatus = cliente.pedidos.some(p => p.agendamento_confirmado)
                         ? '<span class="badge bg-success ms-2">Confirmado</span>'
                         : (cliente.pedidos.some(p => p.agendamento)
-                            ? '<span class="badge bg-warning text-dark ms-2">Aguardando</span>'
+                            ? '<span class="badge bg-warning ms-2">Aguardando</span>'
                             : '');
 
                     html += `

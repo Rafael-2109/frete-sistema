@@ -122,7 +122,7 @@
                     data-bs-target="#content-controle" type="button" role="tab">
                 <i class="fas fa-coins me-1"></i> Controle de Pallets
                 {% if stats_creditos.pendentes + stats_creditos.parciais > 0 %}
-                <span class="badge bg-warning text-dark ms-1">{{ stats_creditos.pendentes + stats_creditos.parciais }}</span>
+                <span class="badge bg-warning ms-1">{{ stats_creditos.pendentes + stats_creditos.parciais }}</span>
                 {% endif %}
             </button>
         </li>
@@ -291,7 +291,7 @@
                             <h6 class="card-title mb-1">Controle de Vales</h6>
                             <p class="card-text small text-muted">Canhotos e vales pallet</p>
                             {% if docs_pendentes > 0 %}
-                            <span class="badge bg-warning text-dark">{{ docs_pendentes }} pendentes</span>
+                            <span class="badge bg-warning">{{ docs_pendentes }} pendentes</span>
                             {% endif %}
                         </div>
                     </a>
@@ -645,7 +645,7 @@ function openDocumentoModal() {
                                     <strong>NF ${credito.numero_nf || 'N/A'}</strong>
                                     <br><small class="text-muted">${credito.nome_responsavel || credito.cnpj_responsavel || '-'}</small>
                                 </div>
-                                <span class="badge bg-warning text-dark">${credito.qtd_saldo} pallets</span>
+                                <span class="badge bg-warning">${credito.qtd_saldo} pallets</span>
                             </div>
                         `;
                         div.addEventListener('click', function() {

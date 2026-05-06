@@ -19,7 +19,7 @@
     <h4>
       <i class="fas fa-receipt"></i> Transacoes Pessoais
       {% if total_pendentes > 0 %}
-      <span class="badge bg-warning text-dark">{{ total_pendentes }} pendentes</span>
+      <span class="badge bg-warning">{{ total_pendentes }} pendentes</span>
       {% endif %}
     </h4>
     <div>
@@ -202,7 +202,7 @@
     </a>
     <a href="?motivo_exclusao=EMPRESA{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-warning">
       <i class="fas fa-briefcase"></i> Empresa
-      <span class="badge bg-warning text-dark">{{ contadores_motivo.EMPRESA }}</span>
+      <span class="badge bg-warning">{{ contadores_motivo.EMPRESA }}</span>
     </a>
     <a href="?motivo_exclusao=OUTRO{{ ns_atalho.qs }}" class="btn btn-sm btn-outline-danger">
       <i class="fas fa-question"></i> Outro (revisar)
@@ -286,12 +286,12 @@
                 {% if motivo == 'SALDO_ANTERIOR' %}
                   <span class="badge bg-secondary" title="Saldo anterior — ruido de fatura">SA</span>
                 {% elif motivo == 'EMPRESA' %}
-                  <span class="badge bg-warning text-dark" title="Categoria empresarial (Desconsiderar/compensavel)">Emp</span>
+                  <span class="badge bg-warning" title="Categoria empresarial (Desconsiderar/compensavel)">Emp</span>
                 {% elif motivo == 'TRANSF_PROPRIA' %}
                   <span class="badge bg-secondary" title="Transferencia propria">T.P.</span>
                 {% elif motivo == 'COMPENSADA' %}
                   {% if t.valor_efetivo > 0 %}
-                  <span class="badge bg-warning text-dark" title="Compensacao parcial (saldo R$ {{ t.valor_efetivo|numero_br(2) }})">Comp~</span>
+                  <span class="badge bg-warning" title="Compensacao parcial (saldo R$ {{ t.valor_efetivo|numero_br(2) }})">Comp~</span>
                   {% else %}
                   <span class="badge bg-info" title="Compensada 100%">Comp</span>
                   {% endif %}
@@ -328,7 +328,7 @@
                 {% if t.excluir_relatorio %}
                 <span class="badge bg-secondary">Excl.</span>
                 {% elif t.status == 'PENDENTE' %}
-                <span class="badge bg-warning text-dark">Pendente</span>
+                <span class="badge bg-warning">Pendente</span>
                 {% elif t.status == 'CATEGORIZADO' %}
                 <span class="badge bg-success">OK</span>
                 {% else %}
@@ -1244,8 +1244,8 @@ $(function() {
         if (a.is_top_level) badges.push('<span class="badge bg-success">TOP-LEVEL</span>');
         if (a.is_atual && !a.is_top_level) badges.push('<span class="badge bg-info">REGRA ATUAL</span>');
         if (a.is_atual && a.is_top_level) badges.push('<span class="badge bg-info">REGRA ATUAL</span>');
-        badges.push(`<span class="badge bg-light text-dark border">${escHtml(a.layer)}</span>`);
-        if (a.score < 100) badges.push(`<span class="badge bg-warning text-dark">fuzzy ${a.score.toFixed(0)}</span>`);
+        badges.push(`<span class="badge bg-light border">${escHtml(a.layer)}</span>`);
+        if (a.score < 100) badges.push(`<span class="badge bg-warning">fuzzy ${a.score.toFixed(0)}</span>`);
         const restricoes = [];
         if (a.cpf_cnpj_padrao) restricoes.push(`<i class="fas fa-id-card text-info" title="CPF/CNPJ: ${escHtml(a.cpf_cnpj_padrao)}"></i>`);
         if (a.valor_min !== null || a.valor_max !== null) {

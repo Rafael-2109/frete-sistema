@@ -57,7 +57,7 @@
                    href="{{ url_for('carvia.listar_aprovacoes_subcontrato') }}">
                 <i class="fas fa-clipboard-check"></i> Aprovacoes Subcontrato
                 {% if carvia_aprovacoes_pendentes and carvia_aprovacoes_pendentes > 0 %}
-                <span class="badge bg-warning text-dark">{{ carvia_aprovacoes_pendentes }}</span>
+                <span class="badge bg-warning">{{ carvia_aprovacoes_pendentes }}</span>
                 {% endif %}
             </a></li>
             <li><a class="dropdown-item {{ 'active' if carvia_active == 'conta_corrente' }}"

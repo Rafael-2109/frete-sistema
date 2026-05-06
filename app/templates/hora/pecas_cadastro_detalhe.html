@@ -44,7 +44,7 @@
         <dt class="col-sm-4">NCM</dt>
         <dd class="col-sm-8">{{ peca.ncm or '—' }}</dd>
         <dt class="col-sm-4">CFOP padrão</dt>
-        <dd class="col-sm-8"><span class="badge bg-light text-dark">{{ peca.cfop_default }}</span></dd>
+        <dd class="col-sm-8"><span class="badge bg-light">{{ peca.cfop_default }}</span></dd>
         <dt class="col-sm-4">Unidade</dt>
         <dd class="col-sm-8">{{ peca.unidade }}</dd>
         <dt class="col-sm-4">Preço de venda padrão</dt>
@@ -67,7 +67,7 @@
         </dd>
         <dt class="col-sm-4">CFOP override</dt>
         <dd class="col-sm-8">
-          {% if tagplus_map.cfop_default %}<span class="badge bg-light text-dark">{{ tagplus_map.cfop_default }}</span>
+          {% if tagplus_map.cfop_default %}<span class="badge bg-light">{{ tagplus_map.cfop_default }}</span>
           {% else %}<span class="text-muted">— (usa o cadastro)</span>{% endif %}
         </dd>
       </dl>

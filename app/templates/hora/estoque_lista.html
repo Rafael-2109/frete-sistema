@@ -415,7 +415,7 @@
               <span class="badge bg-secondary" title="Moto não disponível em estoque">Fora</span>
             {% endif %}
           {% else %}
-            <span class="badge bg-warning text-dark"
+            <span class="badge bg-warning"
                   title="Chassi cadastrado em pedido/NF, mas ainda sem evento físico (não recebido).">
               Aguardando NF
             </span>
@@ -424,14 +424,14 @@
         <td>
           {% if m.avarias_abertas and m.avarias_abertas > 0 %}
             <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=m.chassi) }}#avarias"
-               class="badge bg-warning text-dark text-decoration-none"
+               class="badge bg-warning text-decoration-none"
                title="Avarias abertas">
               ⚠ {{ m.avarias_abertas }} avaria{{ 's' if m.avarias_abertas > 1 else '' }}
             </a>
           {% endif %}
           {% if m.pecas_faltando_abertas and m.pecas_faltando_abertas > 0 %}
             <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=m.chassi) }}#pecas"
-               class="badge bg-info text-dark text-decoration-none"
+               class="badge bg-info text-decoration-none"
                title="Peças faltando abertas">
               📋 {{ m.pecas_faltando_abertas }} peça{{ 's' if m.pecas_faltando_abertas > 1 else '' }}
             </a>

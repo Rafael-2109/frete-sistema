@@ -38,12 +38,7 @@
                     <p><strong>Setor:</strong> {{ despesa.setor_responsavel }}</p>
                     <p><strong>Valor:</strong> <span class="badge bg-success">{{ (despesa.valor_despesa)|moeda_carteira }}</span></p>
                     <p><strong>Status:</strong>
-                        <span class="badge
-                            {% if despesa.status == 'PENDENTE' %}bg-warning text-dark
-                            {% elif despesa.status == 'VINCULADO_CTE' %}bg-info
-                            {% elif despesa.status == 'LANCADO_ODOO' %}bg-success
-                            {% elif despesa.status == 'LANCADO' %}bg-primary
-                            {% else %}bg-secondary{% endif %}">
+                        <span class="badge {% if despesa.status == 'PENDENTE' %}bg-warning {% elif despesa.status == 'VINCULADO_CTE' %}bg-info {% elif despesa.status == 'LANCADO_ODOO' %}bg-success {% elif despesa.status == 'LANCADO' %}bg-primary {% else %}bg-secondary{% endif %}">
                             {{ despesa.status_descricao }}
                         </span>
                     </p>
@@ -171,7 +166,7 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
                         <i class="fas fa-list"></i> CTes Encontrados
-                        <span class="badge bg-light text-dark">{{ ctes|length }}</span>
+                        <span class="badge bg-light">{{ ctes|length }}</span>
                     </h5>
                     <small>
                         {% if filtros %}
@@ -237,7 +232,7 @@
                                     </td>
                                     <td>
                                         {% if cte._ja_vinculado %}
-                                        <span class="badge bg-warning text-dark" title="Este CTe já está vinculado a outra despesa">
+                                        <span class="badge bg-warning" title="Este CTe já está vinculado a outra despesa">
                                             <i class="fas fa-exclamation-triangle"></i> Em uso
                                         </span>
                                         {% else %}

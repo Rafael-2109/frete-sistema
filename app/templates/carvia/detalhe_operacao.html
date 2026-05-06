@@ -965,13 +965,13 @@
                                 </td>
                                 <td>
                                     {% if c.motivo == 'CC-E' %}
-                                    <span class="badge bg-warning text-dark">CC-e</span>
+                                    <span class="badge bg-warning">CC-e</span>
                                     {% elif c.motivo == 'CORRECAO_MANUAL' %}
                                     <span class="badge bg-secondary">Manual</span>
                                     {% elif c.motivo == 'BACKFILL_XML' %}
                                     <span class="badge bg-info">Backfill XML</span>
                                     {% else %}
-                                    <span class="badge bg-light text-dark">{{ c.motivo }}</span>
+                                    <span class="badge bg-light">{{ c.motivo }}</span>
                                     {% endif %}
                                 </td>
                                 <td class="small">{{ c.numero_cce or '-' }}</td>

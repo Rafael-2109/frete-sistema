@@ -34,7 +34,7 @@
                     {% endfor %}
                     {% endif %}
                     {% if pos_minimo_count > 0 %}
-                    <span class="badge bg-warning text-dark">{{ pos_minimo_count }} componentes aplicados PÓS-MÍNIMO</span>
+                    <span class="badge bg-warning">{{ pos_minimo_count }} componentes aplicados PÓS-MÍNIMO</span>
                     {% else %}
                     <span class="badge bg-success">Todos componentes aplicados PRÉ-MÍNIMO</span>
                     {% endif %}
@@ -46,7 +46,7 @@
                     {% endif %}
 
                     {% if configuracao_info.fonte_icms %}
-                    <span class="badge bg-light text-dark">ICMS: {{ configuracao_info.fonte_icms }}</span>
+                    <span class="badge bg-light">ICMS: {{ configuracao_info.fonte_icms }}</span>
                     {% endif %}
 
                     {% if configuracao_info.tem_ajuste_minimo %}
@@ -85,7 +85,7 @@
                             <span class="badge bg-primary" id="badge-fonte-embarque">
                                 <i class="fas fa-lock"></i> Dados fixados no embarque
                             </span>
-                            <span class="badge bg-warning text-dark d-none" id="badge-fonte-cadastrada">
+                            <span class="badge bg-warning d-none" id="badge-fonte-cadastrada">
                                 <i class="fas fa-sync"></i> Tabela atual
                                 {% if reavaliacao_info and reavaliacao_info.mudou %}
                                 — <i class="fas fa-exchange-alt"></i> Vínculo mudou para <strong>{{ reavaliacao_info.nome_tabela_atual }}</strong>
@@ -118,7 +118,7 @@
                         — {{ reavaliacao_info.tabelas_avaliadas }} tabela(s) avaliada(s),
                         {{ reavaliacao_info.cidades_resolvidas|length }} cidade(s) resolvida(s)
                         {% if not reavaliacao_info.todas_cidades_resolvidas %}
-                        <span class="badge bg-warning text-dark ms-1">
+                        <span class="badge bg-warning ms-1">
                             {{ reavaliacao_info.cidades_nao_resolvidas|length }} cidade(s) não resolvida(s)
                         </span>
                         {% endif %}
@@ -175,7 +175,7 @@
                     <h5 class="mb-0">
                         <i class="fas fa-table"></i> Componentes da Tabela de Frete
                         <span class="badge bg-primary ms-2" id="badge-tabela-embarque">TABELA EMBARQUE</span>
-                        <span class="badge bg-warning text-dark ms-2 d-none" id="badge-tabela-cadastrada">TABELA CADASTRADA</span>
+                        <span class="badge bg-warning ms-2 d-none" id="badge-tabela-cadastrada">TABELA CADASTRADA</span>
                     </h5>
                 </div>
                 <div class="card-body">
@@ -202,7 +202,7 @@
 
                                         <!-- Badges para tipo de componente -->
                                         {% if componente.tipo == 'peso' %}
-                                        <span class="badge bg-warning text-dark badge-sm">PESO</span>
+                                        <span class="badge bg-warning badge-sm">PESO</span>
                                         {% elif componente.tipo == 'subtotal' %}
                                         <span class="badge bg-success badge-sm">SUBTOTAL</span>
                                         {% elif componente.tipo == 'subtotal_pre' %}
@@ -210,7 +210,7 @@
                                         {% elif componente.tipo == 'subtotal_pos' %}
                                         <span class="badge bg-secondary badge-sm">PÓS-MÍNIMO</span>
                                         {% elif componente.tipo == 'ajuste' %}
-                                        <span class="badge bg-warning text-dark badge-sm">AJUSTE MÍNIMO</span>
+                                        <span class="badge bg-warning badge-sm">AJUSTE MÍNIMO</span>
                                         {% elif componente.tipo == 'total' %}
                                         <span class="badge bg-success badge-sm">TOTAL</span>
                                         {% elif componente.tipo == 'total_final' %}
@@ -225,7 +225,7 @@
 
                                         <!-- Indicador de componente pós-mínimo -->
                                         {% if componente.pos_minimo %}
-                                        <span class="badge bg-warning text-dark badge-sm"
+                                        <span class="badge bg-warning badge-sm"
                                             title="Este componente é aplicado APÓS o frete mínimo">
                                             <i class="fas fa-exclamation-triangle"></i> PÓS-MÍNIMO
                                         </span>
@@ -503,11 +503,11 @@
 
     function gerarBadgeTipo(comp) {
         const badges = {
-            'peso': '<span class="badge bg-warning text-dark badge-sm">PESO</span>',
+            'peso': '<span class="badge bg-warning badge-sm">PESO</span>',
             'subtotal': '<span class="badge bg-success badge-sm">SUBTOTAL</span>',
             'subtotal_pre': '<span class="badge bg-primary badge-sm">PRÉ-MÍNIMO</span>',
             'subtotal_pos': '<span class="badge bg-secondary badge-sm">PÓS-MÍNIMO</span>',
-            'ajuste': '<span class="badge bg-warning text-dark badge-sm">AJUSTE MÍNIMO</span>',
+            'ajuste': '<span class="badge bg-warning badge-sm">AJUSTE MÍNIMO</span>',
             'total': '<span class="badge bg-success badge-sm">TOTAL</span>',
             'total_final': '<span class="badge bg-dark badge-sm">FINAL</span>',
         };
@@ -522,7 +522,7 @@
         }
 
         if (comp.pos_minimo) {
-            html += ' <span class="badge bg-warning text-dark badge-sm" title="Aplicado APÓS o frete mínimo"><i class="fas fa-exclamation-triangle"></i> PÓS-MÍNIMO</span>';
+            html += ' <span class="badge bg-warning badge-sm" title="Aplicado APÓS o frete mínimo"><i class="fas fa-exclamation-triangle"></i> PÓS-MÍNIMO</span>';
         }
 
         if (comp.tem_minimo && comp.valor_sem_minimo && comp.valor_sem_minimo < comp.valor_calculado) {

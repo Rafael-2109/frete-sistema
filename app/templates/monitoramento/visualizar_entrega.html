@@ -5,7 +5,7 @@
       <h2>
         Entrega NF {{ entrega.numero_nf }} - {% if entrega.origem == 'CARVIA' and entrega._carvia_nome_destinatario %}{{ entrega._carvia_nome_destinatario }}{% else %}{{ entrega.cliente }}{% endif %}
         {% if entrega.origem == 'CARVIA' %}
-          <span class="badge bg-warning text-dark ms-2"
+          <span class="badge bg-warning ms-2"
                 title="NF gerenciada pelo subsistema CarVia (frete subcontratado)">
             <i class="fas fa-truck"></i> CarVia
           </span>
@@ -30,7 +30,7 @@
         {# Emitente acima do Destinatario, com badges e CNPJ formatado #}
         {% if entrega._carvia_cnpj_emitente or entrega._carvia_nome_emitente %}
           <h6>
-            <span class="badge bg-info text-dark" title="Emitente (remetente da carga)">Emit.</span>
+            <span class="badge bg-info" title="Emitente (remetente da carga)">Emit.</span>
             {{ entrega._carvia_cnpj_emitente | cnpj_br if entrega._carvia_cnpj_emitente else '—' }}
             {% if entrega._carvia_nome_emitente %} &mdash; {{ entrega._carvia_nome_emitente }}{% endif %}
           </h6>
@@ -74,7 +74,7 @@
         <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=ocorr.id) }}"
            class="btn btn-sm btn-{{ 'danger' if ocorr.status == 'ABERTA' else 'warning' if ocorr.status == 'EM_ANALISE' else 'success' }} me-2 mb-1"
            title="Clique para ver detalhes da devolucao">
-          NFD {{ ocorr.numero_nfd }} <span class="badge bg-light text-dark">{{ ocorr.status }}</span>
+          NFD {{ ocorr.numero_nfd }} <span class="badge bg-light">{{ ocorr.status }}</span>
         </a>
       {% endfor %}
     </div>
@@ -320,7 +320,7 @@
           <div>
             <strong>{{ log.tipo|capitalize }}</strong> por {{ log.autor }} em {{ log.data_hora | formatar_data_hora_brasil }}<br>
             {{ log.descricao }}
-            {% if log.lembrete_para %}<br><span class="badge bg-warning text-dark">Lembrete: {{ log.lembrete_para | formatar_data_hora_brasil }}</span>{% endif %}
+            {% if log.lembrete_para %}<br><span class="badge bg-warning">Lembrete: {{ log.lembrete_para | formatar_data_hora_brasil }}</span>{% endif %}
           </div>
           <form method="POST" action="{{ url_for('monitoramento.excluir_log', log_id=log.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -436,7 +436,7 @@
                         {% elif ce.status == 'VINCULADO_FT' %}
                           <span class="badge bg-primary">Vinculado FT</span>
                         {% elif ce.status == 'PENDENTE' %}
-                          <span class="badge bg-warning text-dark">Pendente</span>
+                          <span class="badge bg-warning">Pendente</span>
                         {% else %}
                           <span class="badge bg-secondary">{{ ce.status }}</span>
                         {% endif %}
@@ -571,7 +571,7 @@
                   {% if ag.status == 'confirmado' %}
                     <span class="badge bg-primary">✅ Confirmado</span>
                   {% else %}
-                    <span class="badge bg-warning text-dark">⏳ Aguardando</span>
+                    <span class="badge bg-warning">⏳ Aguardando</span>
                   {% endif %}
                 </div>
                 
@@ -656,7 +656,7 @@
                     <hr class="my-2">
                     <strong>🗑️ Resposta apagada em:</strong> {{ pendencia.resposta_excluida_em | formatar_data_hora_brasil }}<br>
                     <strong>Por:</strong> {{ pendencia.resposta_excluida_por }}<br>
-                    <span class="badge bg-warning text-dark">⏳ Aguardando Nova Resposta</span>
+                    <span class="badge bg-warning">⏳ Aguardando Nova Resposta</span>
                   </div>
                 {% else %}
                   <!-- Resposta ativa -->
@@ -667,7 +667,7 @@
                   </div>
                 {% endif %}
               {% else %}
-                <span class="badge bg-warning text-dark">⏳ Aguardando Resposta</span>
+                <span class="badge bg-warning">⏳ Aguardando Resposta</span>
               {% endif %}
             </div>
             <div class="col-md-4 text-end">
@@ -761,7 +761,7 @@
                class="btn btn-sm btn-{{ 'danger' if ocorr.status == 'ABERTA' else 'warning' if ocorr.status == 'EM_ANALISE' else 'success' }} ms-1"
                title="Motivo: {{ ocorr.motivo or 'N/A' }} | Destino: {{ ocorr.destino or 'Indefinido' }}">
               NFD {{ ocorr.numero_nfd }}
-              <span class="badge bg-light text-dark">{{ ocorr.status }}</span>
+              <span class="badge bg-light">{{ ocorr.status }}</span>
             </a>
           {% endfor %}
         </div>

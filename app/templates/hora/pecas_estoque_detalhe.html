@@ -28,7 +28,7 @@
             {% for m in movimentos %}
             <tr>
               <td><small>{{ m.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
-              <td><span class="badge bg-{% if m.qtd > 0 %}success{% else %}warning text-dark{% endif %}">{{ m.tipo }}</span></td>
+              <td><span class="badge bg-{% if m.qtd > 0 %}success{% else %}warning {% endif %}">{{ m.tipo }}</span></td>
               <td class="text-end {% if m.qtd > 0 %}text-success{% else %}text-danger{% endif %}">
                 <strong>{% if m.qtd > 0 %}+{% endif %}{{ m.qtd|numero_br(3) }}</strong>
               </td>

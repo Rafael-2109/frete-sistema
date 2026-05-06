@@ -142,7 +142,7 @@
                             <td>{{ fatura.vencimento | formatar_data_segura if fatura.vencimento else '-' }}</td>
                             <td>
                                 {% if fatura.status_conferencia == 'PENDENTE' %}
-                                <span class="badge bg-warning text-dark">{{ fatura.status_conferencia }}</span>
+                                <span class="badge bg-warning">{{ fatura.status_conferencia }}</span>
                                 {% elif fatura.status_conferencia == 'CONFERIDO' %}
                                 <span class="badge bg-success">{{ fatura.status_conferencia }}</span>
                                 {% else %}
@@ -158,7 +158,7 @@
                                 {% endif %}
                                 <!-- ✅ DESPESAS EXTRAS USANDO MÉTODOS DO MODEL -->
                                 {% if fatura.total_despesas_extras() > 0 %}
-                                <br><span class="badge bg-warning text-dark">{{ fatura.total_despesas_extras() }} despesa(s)</span>
+                                <br><span class="badge bg-warning">{{ fatura.total_despesas_extras() }} despesa(s)</span>
                                 <br><small class="text-muted">
                                     {{ (fatura.valor_total_despesas_extras()|moeda_carteira) }}
                                 </small>

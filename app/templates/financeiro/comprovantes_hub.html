@@ -517,7 +517,7 @@
                                 <span id="multi-nf-count">0</span> titulo(s) selecionado(s)
                                 — Total alocado: <strong id="multi-nf-soma">R$ 0,00</strong>
                                 / Valor pago: <strong id="multi-nf-valor-pago">R$ 0,00</strong>
-                                <span id="multi-nf-juros" class="badge bg-warning text-dark ms-1" style="display: none;">
+                                <span id="multi-nf-juros" class="badge bg-warning ms-1" style="display: none;">
                                     Juros: <span id="multi-nf-juros-valor">R$ 0,00</span>
                                 </span>
                                 <span id="multi-nf-diff" class="ms-2"></span>
@@ -1193,7 +1193,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         html += '<div style="font-size:0.75em;font-family:monospace" class="text-muted">' +
                                 row.beneficiario_cnpj_cpf;
                         if (row.lancamento_beneficiario_e_financeira) {
-                            html += ' <span class="badge bg-warning text-dark" style="font-size:0.85em">Financeira</span>';
+                            html += ' <span class="badge bg-warning" style="font-size:0.85em">Financeira</span>';
                         }
                         html += '</div>';
                     }
@@ -1266,7 +1266,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         html += '<span class="badge bg-success" title="Statement Line: ' + row.odoo_statement_line_id + '">' +
                                 '<i class="fas fa-university me-1"></i>Extrato' + recIcon + '</span>';
                     } else if (row.ofx_fitid) {
-                        html += '<span class="badge bg-warning text-dark" title="OFX vinculado mas sem extrato no Odoo">' +
+                        html += '<span class="badge bg-warning" title="OFX vinculado mas sem extrato no Odoo">' +
                                 '<i class="fas fa-exclamation-triangle me-1"></i>Extrato</span>';
                     } else {
                         html += '<span class="badge bg-light text-muted">' +
@@ -1296,7 +1296,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                        row.lancamento_match_score >= 60 ? '' : 'text-white';
                             scoreHtml = ' ' + row.lancamento_match_score + '%';
                         }
-                        html += '<span class="badge bg-warning text-dark" title="Aguardando confirmacao">' +
+                        html += '<span class="badge bg-warning" title="Aguardando confirmacao">' +
                                 '<i class="fas fa-clock me-1"></i>Pendente' + scoreHtml + '</span>';
                     } else if (val === 'CONFIRMADO') {
                         var scoreC = row.lancamento_match_score != null ? ' ' + row.lancamento_match_score + '%' : '';
@@ -2070,7 +2070,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 scoreHtml = `<span class="badge ${scoreBg} fs-6">${cand.score}%</span>`;
             }
             const financeira = cand.beneficiario_e_financeira
-                ? '<span class="badge bg-warning text-dark ms-2">Financeira</span>' : '';
+                ? '<span class="badge bg-warning ms-2">Financeira</span>' : '';
 
             const valorOriginal = cand.odoo_valor_original != null
                 ? 'R$ ' + cand.odoo_valor_original.toLocaleString('pt-BR', {minimumFractionDigits: 2})

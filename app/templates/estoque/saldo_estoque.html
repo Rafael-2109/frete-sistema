@@ -109,12 +109,12 @@
                                     </td>
                                     <td class="text-start">{{ produto.nome_produto }}</td>
                                     <td class="text-end">
-                                        <span class="badge {% if produto.estoque_inicial <= 0 %}bg-danger{% elif produto.estoque_inicial < 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                        <span class="badge {% if produto.estoque_inicial <= 0 %}bg-danger{% elif produto.estoque_inicial < 10 %}bg-warning {% else %}bg-success{% endif %}">
                                             {{ "{:,.0f}".format(produto.estoque_inicial).replace(',', '.') }}
                                         </span>
                                     </td>
                                     <td class="text-end">
-                                        <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-warning text-dark{% elif produto.previsao_ruptura < 10 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                        <span class="badge {% if produto.previsao_ruptura <= 0 %}bg-warning {% elif produto.previsao_ruptura < 10 %}bg-warning {% else %}bg-success{% endif %}">
                                             {{ "{:,.0f}".format(produto.previsao_ruptura).replace(',', '.') }}
                                         </span>
                                     </td>
@@ -153,7 +153,7 @@
                                         {% if produto.status_ruptura == 'CRÍTICO' %}
                                             <span class="badge bg-danger">🔴 CRÍTICO</span>
                                         {% elif produto.status_ruptura == 'ATENÇÃO' %}
-                                            <span class="badge bg-warning text-dark">🟡 ATENÇÃO</span>
+                                            <span class="badge bg-warning">🟡 ATENÇÃO</span>
                                         {% else %}
                                             <span class="badge bg-success">🟢 OK</span>
                                         {% endif %}
@@ -479,10 +479,10 @@ function gerarTabelaProjecao(produto) {
                     <span class="badge bg-info">Estoque Inicial: ${produto.estoque_inicial.toFixed(1)}</span>
                 </div>
                 <div class="col-md-4">
-                    <span class="badge bg-warning text-dark">Ruptura 7d: ${produto.previsao_ruptura.toFixed(1)}</span>
+                    <span class="badge bg-warning">Ruptura 7d: ${produto.previsao_ruptura.toFixed(1)}</span>
                 </div>
                 <div class="col-md-4">
-                    <span class="badge ${produto.status_ruptura === 'CRÍTICO' ? 'bg-danger' : produto.status_ruptura === 'ATENÇÃO' ? 'bg-warning text-dark' : 'bg-success'}">
+                    <span class="badge ${produto.status_ruptura === 'CRÍTICO' ? 'bg-danger' : produto.status_ruptura === 'ATENÇÃO' ? 'bg-warning ' : 'bg-success'}">
                         ${produto.status_ruptura}
                     </span>
                 </div>

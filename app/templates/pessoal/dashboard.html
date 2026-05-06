@@ -426,7 +426,7 @@ function carregarCategorias() {
       let badge = '';
       if (c.percentual !== null) {
         if (c.percentual > 100) badge = '<span class="badge bg-danger">Estourado</span>';
-        else if (c.percentual > 80) badge = '<span class="badge bg-warning text-dark">Alerta</span>';
+        else if (c.percentual > 80) badge = '<span class="badge bg-warning">Alerta</span>';
         else badge = '<span class="badge bg-success">OK</span>';
       }
 
@@ -459,7 +459,7 @@ function carregarCategorias() {
     if (totPct !== null) {
       let badge = '';
       if (totPct > 100) badge = ' <span class="badge bg-danger">Estourado</span>';
-      else if (totPct > 80) badge = ' <span class="badge bg-warning text-dark">Alerta</span>';
+      else if (totPct > 80) badge = ' <span class="badge bg-warning">Alerta</span>';
       else badge = ' <span class="badge bg-success">OK</span>';
       $('#totalPct').html(totPct + '%' + badge);
     } else {

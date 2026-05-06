@@ -25,7 +25,7 @@
         <div class="card-body py-2 small">
           {% if cats_saida %}
             {% for c in cats_saida %}
-              <span class="badge bg-light text-dark border me-1 mb-1">{{ c.grupo }} / {{ c.nome }}</span>
+              <span class="badge bg-light border me-1 mb-1">{{ c.grupo }} / {{ c.nome }}</span>
             {% endfor %}
           {% else %}
             <div class="text-muted">Nenhuma categoria marcada como Saida compensavel.</div>
@@ -42,7 +42,7 @@
         <div class="card-body py-2 small">
           {% if cats_entrada %}
             {% for c in cats_entrada %}
-              <span class="badge bg-light text-dark border me-1 mb-1">{{ c.grupo }} / {{ c.nome }}</span>
+              <span class="badge bg-light border me-1 mb-1">{{ c.grupo }} / {{ c.nome }}</span>
             {% endfor %}
           {% else %}
             <div class="text-muted">Nenhuma categoria marcada como Entrada compensavel.</div>
@@ -202,7 +202,7 @@ $(function() {
       const gapTxt = (gapSaida === 0 && gapEntrada === 0)
         ? '<span class="badge bg-success">zera ambos</span>'
         : (gapSaida > 0 || gapEntrada > 0)
-          ? `<span class="badge bg-warning text-dark" title="Residuo saida ${fmtBRL(gapSaida)} / entrada ${fmtBRL(gapEntrada)}">parcial</span>`
+          ? `<span class="badge bg-warning" title="Residuo saida ${fmtBRL(gapSaida)} / entrada ${fmtBRL(gapEntrada)}">parcial</span>`
           : '<span class="badge bg-secondary">—</span>';
       tb.append(
         '<tr>' +
@@ -254,7 +254,7 @@ $(function() {
           : '<span class="badge bg-secondary">REVERTIDA</span>';
         const origemBadge = c.origem === 'auto'
           ? '<span class="badge bg-info">auto</span>'
-          : '<span class="badge bg-light text-dark border">manual</span>';
+          : '<span class="badge bg-light border">manual</span>';
         const btnRev = c.status === 'ATIVA'
           ? '<button class="btn btn-outline-danger btn-sm btn-reverter" data-id="' + c.id + '">Reverter</button>'
           : '<span class="text-muted small">' + escHtml(c.revertido_em || '-') + '</span>';

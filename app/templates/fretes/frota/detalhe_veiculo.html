@@ -173,8 +173,7 @@
                                             'LAVAGEM': 'info',
                                             'OUTROS': 'secondary',
                                         } %}
-                                        <span class="badge bg-{{ cat_colors.get(d.categoria, 'secondary') }}
-                                            {%- if d.categoria in ['COMBUSTIVEL', 'PEDAGIO'] %} text-dark{% endif %}">
+                                        <span class="badge bg-{{ cat_colors.get(d.categoria, 'secondary') }} {%- if d.categoria in ['COMBUSTIVEL', 'PEDAGIO'] %} {% endif %}">
                                             {{ d.categoria }}
                                         </span>
                                     </td>
@@ -184,7 +183,7 @@
                                         {% if d.tipo_documento == 'NF' %}
                                             <span class="badge bg-success">NF</span>
                                         {% elif d.tipo_documento == 'RECIBO_CUPOM' %}
-                                            <span class="badge bg-warning text-dark">Recibo</span>
+                                            <span class="badge bg-warning">Recibo</span>
                                         {% else %}
                                             <span class="badge bg-secondary">Sem Doc</span>
                                         {% endif %}

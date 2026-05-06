@@ -295,7 +295,7 @@ function buscarTransportadoras() {
                 tr.innerHTML = `
                     <td><strong>${t.nome}</strong></td>
                     <td class="cnpj-col">${t.cnpj || '-'}</td>
-                    <td>${t.freteiro ? '<span class="badge bg-warning text-dark">Freteiro</span>' : '<span class="badge bg-info">Transportadora</span>'}</td>
+                    <td>${t.freteiro ? '<span class="badge bg-warning">Freteiro</span>' : '<span class="badge bg-info">Transportadora</span>'}</td>
                     <td>${t.tem_tabela ? '<span class="badge bg-success">' + t.qtd_tabelas + ' tabela(s)</span>' : '<span class="badge bg-secondary">Sem tabela</span>'}</td>
                     <td><button class="btn btn-sm btn-outline-primary btn-cotar" data-id="${t.id}" data-nome="${t.nome}"><i class="fas fa-calculator"></i> Cotar</button></td>
                     <td><button class="btn btn-sm btn-success btn-selecionar" data-id="${t.id}" data-nome="${t.nome}"><i class="fas fa-plus"></i> Selecionar</button></td>

@@ -145,7 +145,7 @@
                                 {% if frete.tipo_carga == 'DIRETA' %}
                                 <span class="badge bg-info">{{ frete.tipo_carga }}</span>
                                 {% elif frete.tipo_carga == 'FRACIONADA' %}
-                                <span class="badge bg-warning text-dark">{{ frete.tipo_carga }}</span>
+                                <span class="badge bg-warning">{{ frete.tipo_carga }}</span>
                                 {% else %}
                                 <span class="badge bg-secondary">{{ frete.tipo_carga or '-' }}</span>
                                 {% endif %}
@@ -410,7 +410,7 @@
                                     <h6 class="mb-0">
                                         {% if cotacao_venda.cotacao_manual %}
                                         <i class="fas fa-hand-paper"></i> Cotacao Manual
-                                        <span class="badge bg-warning text-dark ms-1">Manual</span>
+                                        <span class="badge bg-warning ms-1">Manual</span>
                                         {% else %}
                                         <i class="fas fa-table"></i> Cotacao sem Tabela
                                         <span class="badge bg-secondary ms-1">Sem tabela</span>
@@ -455,7 +455,7 @@
                                 <div class="card-header bg-transparent">
                                     <h6 class="mb-0">
                                         <i class="fas fa-hand-paper"></i> Cotacao Manual
-                                        <span class="badge bg-warning text-dark ms-1">Manual</span>
+                                        <span class="badge bg-warning ms-1">Manual</span>
                                     </h6>
                                 </div>
                                 <div class="card-body">
@@ -597,7 +597,7 @@
                         {% if diferenca_pago != 0 %}
                         <div class="mt-1">
                             {% if diferenca_pago > 0 %}
-                            <span class="badge bg-warning text-dark">+{{ diferenca_pago|valor_br }}</span>
+                            <span class="badge bg-warning">+{{ diferenca_pago|valor_br }}</span>
                             {% else %}
                             <span class="badge bg-info">{{ diferenca_pago|valor_br }}</span>
                             {% endif %}
@@ -626,7 +626,7 @@
                         <small class="text-muted d-block">Fatura Transportadora</small>
                         {% if fatura_transportadora %}
                         <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_transportadora.id) }}"
-                           class="badge bg-primary text-white text-decoration-none"
+                           class="badge bg-primary text-decoration-none"
                            title="Ver fatura transportadora">
                             <i class="fas fa-file-invoice-dollar me-1"></i>
                             {{ fatura_transportadora.numero_fatura or '#' ~ fatura_transportadora.id }}
@@ -660,7 +660,7 @@
                         <small class="text-muted d-block">Fatura Cliente</small>
                         {% if fatura_cliente %}
                         <a href="{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_cliente.id) }}"
-                           class="badge bg-success text-white text-decoration-none"
+                           class="badge bg-success text-decoration-none"
                            title="Ver fatura cliente">
                             <i class="fas fa-file-invoice-dollar me-1"></i>
                             {{ fatura_cliente.numero_fatura or '#' ~ fatura_cliente.id }}
@@ -815,7 +815,7 @@
                                     </td>
                                     <td>
                                         {% if despesa.emissao_cte_comp and despesa.emissao_cte_comp.status in ('PENDENTE', 'EM_PROCESSAMENTO') %}
-                                        <span class="badge bg-warning text-dark despesa-emissao-badge"
+                                        <span class="badge bg-warning despesa-emissao-badge"
                                               data-polling-emissao-id="{{ despesa.emissao_cte_comp.id }}"
                                               title="Etapa: {{ despesa.emissao_cte_comp.etapa or '-' }}">
                                             <i class="fas fa-sync fa-spin"></i> Emitindo CTe Comp...

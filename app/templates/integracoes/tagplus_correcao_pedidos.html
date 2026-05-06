@@ -176,9 +176,9 @@
                                         {% if status.resolvido %}
                                             <span class="badge bg-success">Vinculada ao lote</span>
                                         {% elif nf.importada %}
-                                            <span class="badge bg-warning text-dark">Importada (sem lote)</span>
+                                            <span class="badge bg-warning">Importada (sem lote)</span>
                                         {% elif nf.pedido_preenchido %}
-                                            <span class="badge bg-info text-dark">Pedido preenchido</span>
+                                            <span class="badge bg-info">Pedido preenchido</span>
                                         {% else %}
                                             <span class="badge bg-danger">Aguardando pedido</span>
                                         {% endif %}
@@ -336,7 +336,7 @@ function gerarBadgeStatus(importada, status) {
     if (status?.resolvido) {
         badgeHtml = '<span class="badge bg-success">Vinculada ao lote</span>';
     } else if (importada) {
-        badgeHtml = '<span class="badge bg-warning text-dark">Importada (sem lote)</span>';
+        badgeHtml = '<span class="badge bg-warning">Importada (sem lote)</span>';
     } else {
         badgeHtml = '<span class="badge bg-danger">Aguardando pedido</span>';
     }

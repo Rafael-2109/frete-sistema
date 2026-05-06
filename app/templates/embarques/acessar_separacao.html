@@ -31,7 +31,7 @@
                 <span class="text-muted">|</span>
                 <span class="badge bg-secondary mx-2">Pallets: {{ "%.2f"|format(resumo_separacao.pallet_total) }}</span>
                 <span class="text-muted">|</span>
-                <span class="badge bg-warning text-dark ms-2">Peso: {{ "%.0f"|format(resumo_separacao.peso_total) }} kg</span>
+                <span class="badge bg-warning ms-2">Peso: {{ "%.0f"|format(resumo_separacao.peso_total) }} kg</span>
               </h4>
             </div>
           </div>
@@ -152,7 +152,7 @@
                     <strong>{{ item.nome_produto }}</strong>
                   </td>
                   <td class="text-end">
-                    <span class="badge bg-light text-dark">{{ "%.0f"|format(item.qtd_saldo or 0) }}</span>
+                    <span class="badge bg-light">{{ "%.0f"|format(item.qtd_saldo or 0) }}</span>
                   </td>
                   <td class="text-end">
                     <span class="badge bg-success">R$ {{ "%.2f"|format(item.valor_saldo or 0) }}</span>
@@ -161,7 +161,7 @@
                     <span class="badge bg-secondary">{{ "%.2f"|format(item.pallet or 0) }}</span>
                   </td>
                   <td class="text-end">
-                    <span class="badge bg-warning text-dark">{{ "%.0f"|format(item.peso or 0) }}</span>
+                    <span class="badge bg-warning">{{ "%.0f"|format(item.peso or 0) }}</span>
                   </td>
                 </tr>
                 {% endfor %}

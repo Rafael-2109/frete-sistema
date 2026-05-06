@@ -25,7 +25,7 @@
           {% if conta.ambiente == 'producao' %}
             <span class="badge bg-success">Produção</span>
           {% else %}
-            <span class="badge bg-warning text-dark">Homologação (POST /nfes bloqueado)</span>
+            <span class="badge bg-warning">Homologação (POST /nfes bloqueado)</span>
           {% endif %}
         </dd>
         <dt class="col-sm-3">Scopes</dt><dd class="col-sm-9"><code>{{ conta.scope_contratado }}</code></dd>

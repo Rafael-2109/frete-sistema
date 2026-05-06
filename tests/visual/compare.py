@@ -31,6 +31,11 @@ from pathlib import Path
 import yaml
 from PIL import Image, ImageChops
 
+# Desabilita protecao DecompressionBomb para snapshots full-page (carteira_agrupada
+# pode passar de 200M pixels). Estes sao screenshots locais conhecidos, nao input
+# externo nao-confiavel.
+Image.MAX_IMAGE_PIXELS = None
+
 ROOT = Path(__file__).resolve().parents[2]
 VISUAL_DIR = ROOT / "tests" / "visual"
 SNAPSHOTS_DIR = VISUAL_DIR / "snapshots"

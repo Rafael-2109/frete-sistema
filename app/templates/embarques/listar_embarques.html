@@ -262,12 +262,12 @@
               {{ (embarque.status or 'DRAFT').upper() }}
             </span>
             {% if embarque.pallets_pendentes %}
-              <span class="badge bg-warning text-dark" title="{{ embarque.saldo_pallets_pendentes }} pallet(s) pendente(s)">
+              <span class="badge bg-warning" title="{{ embarque.saldo_pallets_pendentes }} pallet(s) pendente(s)">
                 <i class="fas fa-pallet"></i> {{ embarque.saldo_pallets_pendentes }}
               </span>
             {% endif %}
             {% if embarque.precisa_reimprimir %}
-              <span class="badge bg-warning text-dark" title="Embarque modificado apos impressao - reimprimir">
+              <span class="badge bg-warning" title="Embarque modificado apos impressao - reimprimir">
                 <i class="fas fa-print"></i> Reimprimir
               </span>
             {% endif %}
@@ -280,7 +280,7 @@
                 {{ ultimo_registro.status }}
               </span>
             {% else %}
-              <span class="badge bg-light text-dark">Sem registro</span>
+              <span class="badge bg-light">Sem registro</span>
             {% endif %}
           </td>
           <td>

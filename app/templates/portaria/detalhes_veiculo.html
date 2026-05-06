@@ -111,12 +111,7 @@
             <tr>
               <td><strong>Tipo:</strong></td>
               <td>
-                <span class="badge 
-                  {% if registro.tipo_carga == 'Coleta' %}bg-primary
-                  {% elif registro.tipo_carga == 'Entrega' %}bg-success
-                  {% elif registro.tipo_carga == 'Devolução' %}bg-warning text-dark
-                  {% else %}bg-info{% endif %}
-                ">
+                <span class="badge {% if registro.tipo_carga == 'Coleta' %}bg-primary {% elif registro.tipo_carga == 'Entrega' %}bg-success {% elif registro.tipo_carga == 'Devolução' %}bg-warning {% else %}bg-info{% endif %}">
                   {{ registro.tipo_carga }}
                 </span>
               </td>
@@ -225,7 +220,7 @@
               {% set saida_datetime = registro.data_saida | formatar_data_hora_brasil + ' ' + registro.hora_saida | formatar_hora_brasil %}
               <span class="badge bg-info">Finalizado</span>
             {% else %}
-              <span class="badge bg-warning text-dark">Em andamento</span>
+              <span class="badge bg-warning">Em andamento</span>
             {% endif %}
           </div>
           {% endif %}

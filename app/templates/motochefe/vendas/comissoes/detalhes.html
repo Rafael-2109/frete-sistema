@@ -40,7 +40,7 @@
                                 {% if comissao.status == 'PAGO' %}
                                     <span class="badge bg-success"><i class="fas fa-check"></i> PAGO</span>
                                 {% elif comissao.status == 'PENDENTE' %}
-                                    <span class="badge bg-warning text-dark"><i class="fas fa-clock"></i> PENDENTE</span>
+                                    <span class="badge bg-warning"><i class="fas fa-clock"></i> PENDENTE</span>
                                 {% else %}
                                     <span class="badge bg-danger">{{ comissao.status }}</span>
                                 {% endif %}
@@ -242,7 +242,7 @@
                                     {% if c.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>
                                     {% else %}
-                                        <span class="badge bg-warning text-dark">PENDENTE</span>
+                                        <span class="badge bg-warning">PENDENTE</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ c.data_pagamento|formatar_data_segura or '-' }}</td>

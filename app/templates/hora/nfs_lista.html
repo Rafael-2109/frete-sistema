@@ -80,7 +80,7 @@
                   {{ match }}/{{ total_nf }}
                 </span>
               {% elif match > 0 %}
-                <span class="badge bg-warning text-dark"
+                <span class="badge bg-warning"
                       title="{{ total_nf - match }} chassi(s) da NF nao estao no pedido vinculado">
                   {{ match }}/{{ total_nf }}
                 </span>
@@ -91,7 +91,7 @@
                 </span>
               {% endif %}
             {% else %}
-              <span class="badge bg-warning text-dark"><i class="fas fa-unlink"></i> sem pedido</span>
+              <span class="badge bg-warning"><i class="fas fa-unlink"></i> sem pedido</span>
               {% if nf.loja_destino_id %}
                 <a href="{{ url_for('hora.nfs_match', nf_id=nf.id) }}"
                    class="btn btn-sm btn-outline-primary ms-1" title="Vincular via match">

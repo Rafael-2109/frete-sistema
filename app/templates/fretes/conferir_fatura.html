@@ -153,7 +153,7 @@
                                 {% elif doc.status == 'APROVADO' %}
                                 <span class="badge bg-success">APROVADO</span>
                                 {% elif doc.status == 'EM_TRATATIVA' %}
-                                <span class="badge bg-warning text-dark" title="Diferença > R$ 5,00 — resolver em Aprovações">
+                                <span class="badge bg-warning" title="Diferença > R$ 5,00 — resolver em Aprovações">
                                     EM TRATATIVA
                                 </span>
                                 {% elif doc.status == 'REJEITADO' %}
@@ -209,7 +209,7 @@
                         </a>
                     </span>
                     {% elif tem_frete_em_tratativa %}
-                    <span class="badge bg-warning text-dark">
+                    <span class="badge bg-warning">
                         ⚠️ Há fretes EM TRATATIVA —
                         <a href="{{ url_for('fretes.listar_aprovacoes') }}" class="text-dark">
                             <u>resolver em Aprovações</u>

@@ -179,7 +179,7 @@
                                 <small class="text-muted">
                                     {{ item.cnpj_fornecedor|formatar_cnpj }}
                                     {% if item.uf_fornecedor %}
-                                    <span class="badge bg-light text-dark ms-1">{{ item.uf_fornecedor }}</span>
+                                    <span class="badge bg-light ms-1">{{ item.uf_fornecedor }}</span>
                                     {% endif %}
                                     {% if item.regime_tributario == '1' or item.regime_tributario == '2' %}
                                     <span class="badge bg-info">Simples</span>
@@ -206,7 +206,7 @@
                                         <i class="fas fa-exclamation-triangle me-1"></i>{{ item.diferenca_percentual|round(1) }}%
                                     </span>
                                     {% elif item.diferenca_percentual|float > 5 %}
-                                    <span class="badge bg-warning text-dark" title="Diferenca moderada: {{ item.diferenca_percentual }}%">
+                                    <span class="badge bg-warning" title="Diferenca moderada: {{ item.diferenca_percentual }}%">
                                         <i class="fas fa-exclamation me-1"></i>{{ item.diferenca_percentual|round(1) }}%
                                     </span>
                                     {% else %}
@@ -220,7 +220,7 @@
                             </td>
                             <td>
                                 {% if item.status == 'pendente' %}
-                                <span class="badge bg-warning text-dark">Pendente</span>
+                                <span class="badge bg-warning">Pendente</span>
                                 {% elif item.status == 'aprovada' %}
                                 <span class="badge bg-success">Aprovada</span>
                                 {% elif item.status == 'rejeitada' %}
@@ -311,7 +311,7 @@
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-check me-2"></i>Aprovar Divergencia
-                    <span id="aprovar-nf-header" class="ms-2 badge bg-light text-dark"></span>
+                    <span id="aprovar-nf-header" class="ms-2 badge bg-light"></span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -417,7 +417,7 @@
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-times me-2"></i>Rejeitar Divergencia
-                    <span id="rejeitar-nf-header" class="ms-2 badge bg-light text-dark"></span>
+                    <span id="rejeitar-nf-header" class="ms-2 badge bg-light"></span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>

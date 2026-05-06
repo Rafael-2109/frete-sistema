@@ -192,9 +192,9 @@
                                     {% if linha.purchase_state == 'purchase' %}
                                     <span class="badge bg-success">Pedido Compras</span>
                                     {% elif linha.purchase_state == 'to approve' %}
-                                    <span class="badge bg-warning text-dark">A Aprovar</span>
+                                    <span class="badge bg-warning">A Aprovar</span>
                                     {% elif linha.purchase_state == 'sent' %}
-                                    <span class="badge bg-info text-dark">SDC Enviada</span>
+                                    <span class="badge bg-info">SDC Enviada</span>
                                     {% elif linha.purchase_state == 'draft' %}
                                     <span class="badge bg-secondary">SDC</span>
                                     {% elif linha.purchase_state == 'done' %}
@@ -228,7 +228,7 @@
                                         <br>
                                         <small class="text-success">{{ linha.pedido.qtd_recebida|qtd_br(2) }} / {{ linha.pedido.qtd_pedido|qtd_br(2) }}</small>
                                         {% elif linha.pedido.status_recebimento == 'parcial' %}
-                                        <span class="badge bg-warning text-dark">
+                                        <span class="badge bg-warning">
                                             <i class="fas fa-clock"></i> Parcial
                                         </span>
                                         <br>

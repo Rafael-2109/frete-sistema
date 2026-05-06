@@ -34,11 +34,7 @@
         <div class="card-header d-flex justify-content-between align-items-center">
           <div>
             <strong>{{ item.connector_name or ('Connector #' ~ item.connector_id) }}</strong>
-            <span class="badge
-              {% if item.status == 'UPDATED' %}bg-success
-              {% elif item.status == 'UPDATING' %}bg-info
-              {% elif item.status == 'OUTDATED' %}bg-warning text-dark
-              {% else %}bg-danger{% endif %} ms-2">
+            <span class="badge {% if item.status == 'UPDATED' %}bg-success {% elif item.status == 'UPDATING' %}bg-info {% elif item.status == 'OUTDATED' %}bg-warning {% else %}bg-danger{% endif %} ms-2">
               {{ item.status }}
             </span>
             {% if item.execution_status %}
@@ -114,7 +110,7 @@
                     {% if acc.type == 'BANK' %}
                       <span class="badge bg-info">CC</span>
                     {% else %}
-                      <span class="badge bg-warning text-dark">Cartao</span>
+                      <span class="badge bg-warning">Cartao</span>
                     {% endif %}
                   </td>
                   <td>{{ acc.name or acc.marketing_name or '-' }}</td>

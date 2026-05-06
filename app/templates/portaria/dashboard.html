@@ -236,12 +236,7 @@
               <td>{{ registro.hora_entrada | formatar_hora_brasil if registro.hora_entrada else '-' }}</td>
               <td>{{ registro.hora_saida | formatar_hora_brasil if registro.hora_saida else '-' }}</td>
               <td>
-                <span class="badge 
-                  {% if registro.status == 'DENTRO' %}bg-success
-                  {% elif registro.status == 'AGUARDANDO' %}bg-warning text-dark
-                  {% elif registro.status == 'SAIU' %}bg-secondary
-                  {% else %}bg-light text-dark{% endif %}
-                ">
+                <span class="badge {% if registro.status == 'DENTRO' %}bg-success {% elif registro.status == 'AGUARDANDO' %}bg-warning {% elif registro.status == 'SAIU' %}bg-secondary {% else %}bg-light {% endif %}">
                   {{ registro.status }}
                 </span>
               </td>

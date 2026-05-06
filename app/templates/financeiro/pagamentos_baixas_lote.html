@@ -189,11 +189,7 @@
                                 R$ {{ '{:,.2f}'.format(item.valor or 0) }}
                             </td>
                             <td>
-                                <span class="badge
-                                    {% if item.status_match == 'MATCH_ENCONTRADO' %}bg-success
-                                    {% elif item.status_match == 'MULTIPLOS_MATCHES' %}bg-warning text-dark
-                                    {% elif item.status_match == 'SEM_MATCH' %}bg-secondary
-                                    {% else %}bg-light text-dark{% endif %}">
+                                <span class="badge {% if item.status_match == 'MATCH_ENCONTRADO' %}bg-success {% elif item.status_match == 'MULTIPLOS_MATCHES' %}bg-warning {% elif item.status_match == 'SEM_MATCH' %}bg-secondary {% else %}bg-light {% endif %}">
                                     {% if item.match_score %}{{ item.match_score }}%{% endif %}
                                     {{ item.status_match }}
                                 </span>

@@ -75,7 +75,7 @@
                                         <strong>{{ frete.nome_destino[:25] if frete.nome_destino else '-' }}{% if frete.nome_destino and frete.nome_destino|length > 25 %}...{% endif %}</strong>
                                         <br>
                                         <small class="d-block">
-                                            <span class="badge {% if frete.tipo_carga == 'DIRETA' %}bg-info{% else %}bg-warning text-dark{% endif %}">
+                                            <span class="badge {% if frete.tipo_carga == 'DIRETA' %}bg-info{% else %}bg-warning {% endif %}">
                                                 {{ frete.tipo_carga }}
                                             </span>
                                             <span class="text-muted">{{ frete.cidade_destino }}/{{ frete.uf_destino }}</span>
@@ -150,7 +150,7 @@
                                 {% set nfs_list = frete.numeros_nfs.split(',') %}
                                 {% for nf in nfs_list %}
                                     {% if nf.strip() %}
-                                        <span class="badge {% if nf.strip() == numero_nf %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1">
+                                        <span class="badge {% if nf.strip() == numero_nf %}bg-warning {% else %}bg-secondary{% endif %} me-1">
                                             {{ nf.strip() }}
                                             {% if nf.strip() == numero_nf %}
                                                 <i class="fas fa-search"></i>

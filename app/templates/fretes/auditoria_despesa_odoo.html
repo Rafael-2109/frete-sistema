@@ -57,7 +57,7 @@
                         {% if despesa.odoo_purchase_order_id %}
                         <a href="https://odoo.nacomgoya.com.br/web#id={{ despesa.odoo_purchase_order_id }}&model=purchase.order&view_type=form"
                            target="_blank"
-                           class="badge bg-primary text-white text-decoration-none"
+                           class="badge bg-primary text-decoration-none"
                            title="Abrir PO no Odoo">
                             <i class="fas fa-external-link-alt me-1"></i>{{ despesa.odoo_purchase_order_id }}
                         </a>
@@ -130,7 +130,7 @@
                                         {% elif log.status == 'ERRO' %}
                                         <span class="badge bg-danger"><i class="fas fa-times"></i></span>
                                         {% else %}
-                                        <span class="badge bg-warning text-dark">{{ log.status }}</span>
+                                        <span class="badge bg-warning">{{ log.status }}</span>
                                         {% endif %}
                                     </td>
                                     <td>

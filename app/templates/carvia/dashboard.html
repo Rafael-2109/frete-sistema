@@ -31,12 +31,12 @@
         </a>
         {% endif %}
         {% if stats.vencimento_hoje_total > 0 %}
-        <a href="{{ url_for('carvia.fluxo_caixa') }}" class="badge bg-warning text-dark text-decoration-none fs-6 py-2 px-3">
+        <a href="{{ url_for('carvia.fluxo_caixa') }}" class="badge bg-warning text-decoration-none fs-6 py-2 px-3">
             <i class="fas fa-clock"></i> {{ stats.vencimento_hoje_total }} vence{{ 'm' if stats.vencimento_hoje_total != 1 }} hoje
         </a>
         {% endif %}
         {% if stats.cotacoes_pendentes_admin > 0 %}
-        <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="badge bg-warning text-dark text-decoration-none fs-6 py-2 px-3">
+        <a href="{{ url_for('carvia.listar_cotacoes_v2') }}" class="badge bg-warning text-decoration-none fs-6 py-2 px-3">
             <i class="fas fa-user-clock"></i> {{ stats.cotacoes_pendentes_admin }} cotacao{{ 'oes' if stats.cotacoes_pendentes_admin != 1 else '' }} pend. admin
         </a>
         {% endif %}
@@ -104,7 +104,7 @@
                         <a href="{{ url_for('carvia.listar_despesas') }}" class="btn btn-outline-secondary btn-sm">
                             <i class="fas fa-coins"></i> Despesas Empresa
                             {% if stats.despesas_valor_pendente %}
-                            <span class="badge bg-warning text-dark ms-1">{{ stats.despesas_valor_pendente|valor_br }}</span>
+                            <span class="badge bg-warning ms-1">{{ stats.despesas_valor_pendente|valor_br }}</span>
                             {% endif %}
                         </a>
                     </div>
@@ -165,7 +165,7 @@
                         <a href="{{ url_for('carvia.listar_faturas_cliente') }}" class="btn btn-outline-secondary btn-sm">
                             <i class="fas fa-file-invoice-dollar"></i> Fatura CarVia
                             {% if stats.faturas_carvia_pendentes > 0 %}
-                            <span class="badge bg-warning text-dark ms-1">{{ stats.faturas_carvia_pendentes }}</span>
+                            <span class="badge bg-warning ms-1">{{ stats.faturas_carvia_pendentes }}</span>
                             {% endif %}
                         </a>
                         <a href="{{ url_for('carvia.listar_receitas') }}" class="btn btn-outline-secondary btn-sm">

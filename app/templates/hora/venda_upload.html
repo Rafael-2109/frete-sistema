@@ -77,7 +77,7 @@
             {% if r.status == 'sucesso' %}
               <span class="badge bg-success">OK</span>
             {% elif r.status == 'duplicado' %}
-              <span class="badge bg-warning text-dark">duplicado</span>
+              <span class="badge bg-warning">duplicado</span>
             {% else %}
               <span class="badge bg-danger">erro</span>
             {% endif %}
@@ -86,7 +86,7 @@
           <td class="text-end">{{ r.qtd_chassis or 0 }}</td>
           <td class="text-end">
             {% if r.qtd_divergencias %}
-              <span class="badge bg-warning text-dark">{{ r.qtd_divergencias }}</span>
+              <span class="badge bg-warning">{{ r.qtd_divergencias }}</span>
             {% else %}
               0
             {% endif %}

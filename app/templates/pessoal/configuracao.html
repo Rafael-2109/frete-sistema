@@ -233,7 +233,7 @@
                   <td class="cel-confianca" data-val="{{ regra.confianca }}">{{ regra.confianca }}%</td>
                   <td class="cel-match" data-val="{{ match_count }}">
                     {% if match_count > 0 %}
-                    <span class="badge bg-warning text-dark" title="{{ match_count }} pendentes matcham este padrao">{{ match_count }}</span>
+                    <span class="badge bg-warning" title="{{ match_count }} pendentes matcham este padrao">{{ match_count }}</span>
                     {% else %}
                     <span class="text-muted">0</span>
                     {% endif %}
@@ -334,7 +334,7 @@
                     {% if c.tipo == 'conta_corrente' %}
                     <span class="badge bg-info">CC</span>
                     {% else %}
-                    <span class="badge bg-warning text-dark">Cartao</span>
+                    <span class="badge bg-warning">Cartao</span>
                     {% endif %}
                   </td>
                   <td data-val="{{ (c.banco or '')|lower }}">{{ c.banco }}</td>
@@ -1248,7 +1248,7 @@ $(function() {
     const match = payload.match_count || 0;
     tr.find('.cel-match').attr('data-val', match).html(
       match > 0
-        ? `<span class="badge bg-warning text-dark" title="${match} pendentes matcham este padrao">${match}</span>`
+        ? `<span class="badge bg-warning" title="${match} pendentes matcham este padrao">${match}</span>`
         : '<span class="text-muted">0</span>'
     );
 
@@ -1352,7 +1352,7 @@ $(function() {
       const rows = r.transacoes.map(function(t) {
         const val = (t.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         const divergenteBadge = t.divergente
-          ? ' <span class="badge bg-warning text-dark" title="Categoria da transacao != categoria atual da regra">divergente</span>'
+          ? ' <span class="badge bg-warning" title="Categoria da transacao != categoria atual da regra">divergente</span>'
           : '';
         const autoBadge = t.categorizacao_auto
           ? '<span class="badge bg-info" title="Categorizacao automatica">auto</span>'

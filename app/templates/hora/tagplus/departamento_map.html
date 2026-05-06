@@ -58,7 +58,7 @@
           <td><code>{{ m.departamento_raw }}</code></td>
           <td><small class="text-muted">{{ m.departamento_norm }}</small></td>
           <td class="text-end">
-            <span class="badge bg-light text-dark">{{ m.qtd_vendas_observadas }}</span>
+            <span class="badge bg-light">{{ m.qtd_vendas_observadas }}</span>
           </td>
           <td>
             <select name="loja_{{ m.id }}" class="form-select form-select-sm">
@@ -81,7 +81,7 @@
             {% elif m.loja_id %}
               <span class="badge bg-info">Mapeado &mdash; aplicar</span>
             {% elif sugestoes.get(m.id) %}
-              <span class="badge bg-warning text-dark">Sugestao pendente</span>
+              <span class="badge bg-warning">Sugestao pendente</span>
             {% else %}
               <span class="badge bg-secondary">Sem match</span>
             {% endif %}

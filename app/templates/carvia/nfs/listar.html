@@ -238,7 +238,7 @@
                                 {% set subs = subcontratos_por_nf.get(nf.id, []) %}
                                 {% if subs %}
                                     {% for s in subs %}
-                                    <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=s.id) }}" class="badge bg-warning text-dark text-decoration-none d-block mb-1">{{ s.cte_numero or ('Sub #' ~ s.id) }}</a>
+                                    <a href="{{ url_for('carvia.detalhe_subcontrato', sub_id=s.id) }}" class="badge bg-warning text-decoration-none d-block mb-1">{{ s.cte_numero or ('Sub #' ~ s.id) }}</a>
                                     {% endfor %}
                                 {% else %}
                                 -

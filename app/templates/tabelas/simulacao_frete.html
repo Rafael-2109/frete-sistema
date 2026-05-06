@@ -118,7 +118,7 @@
           <small class="text-muted d-block">Peso p/ Cálculo</small>
           <strong>{{ resultado.peso_cubado|numero_br(2) }} kg</strong>
           {% if resultado.usou_peso_cubado %}
-          <span class="badge bg-warning text-dark ms-1">Peso Cubado</span>
+          <span class="badge bg-warning ms-1">Peso Cubado</span>
           {% else %}
           <span class="badge bg-secondary ms-1">Peso Real</span>
           {% endif %}
@@ -288,7 +288,7 @@ document.addEventListener('DOMContentLoaded', function() {
           + `<span class="text-muted">Cubagem:</span> <strong>${formatBR(cubagem, 1)} kg/m3</strong> &nbsp;|&nbsp; `
           + `<span class="text-muted">Peso p/ Cálculo:</span> <strong>${formatBR(pesoCubado, 2)} kg</strong> `
           + (pesoCubado > pesoReal
-              ? '<span class="badge bg-warning text-dark">Peso Cubado</span>'
+              ? '<span class="badge bg-warning">Peso Cubado</span>'
               : '<span class="badge bg-secondary">Peso Real</span>')
         : '';
       document.getElementById('previewCxLxA').innerHTML = html;
@@ -303,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
         ? `<span class="text-muted">Cubagem:</span> <strong>${formatBR(cubagem, 1)} kg/m3</strong> &nbsp;|&nbsp; `
           + `<span class="text-muted">Peso p/ Cálculo:</span> <strong>${formatBR(pesoCubado, 2)} kg</strong> `
           + (pesoCubado > pesoReal
-              ? '<span class="badge bg-warning text-dark">Peso Cubado</span>'
+              ? '<span class="badge bg-warning">Peso Cubado</span>'
               : '<span class="badge bg-secondary">Peso Real</span>')
         : '';
       document.getElementById('previewM3').innerHTML = html;
@@ -492,7 +492,7 @@ function abrirModalDetalhes(row) {
             <td>Frete Mínimo Valor</td>
             <td><code>MAX(frete_liquido, frete_min_valor)</code></td>
             <td class="text-end">
-              ${det.frete_minimo_aplicado ? '<span class="badge bg-warning text-dark">Mínimo Aplicado</span>' : '<span class="text-muted">Não aplicado</span>'}
+              ${det.frete_minimo_aplicado ? '<span class="badge bg-warning">Mínimo Aplicado</span>' : '<span class="text-muted">Não aplicado</span>'}
             </td>
           </tr>
           <tr>

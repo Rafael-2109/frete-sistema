@@ -196,7 +196,7 @@
                 {% if embarque.transportadora_aceita_nf_pallet %}
                   <span class="badge bg-success ms-1">Aceita NF Pallet</span>
                 {% else %}
-                  <span class="badge bg-warning text-dark ms-1">Nao Aceita NF Pallet</span>
+                  <span class="badge bg-warning ms-1">Nao Aceita NF Pallet</span>
                 {% endif %}
               </div>
               <div class="col-md-3">
@@ -373,11 +373,11 @@
                     {% if forma == 'PORTAL' %}
                       <span class="badge bg-primary" title="Agendamento via Portal">{{ forma }}</span>
                     {% elif forma == 'TELEFONE' %}
-                      <span class="badge bg-info text-dark" title="Agendamento via Telefone">{{ forma }}</span>
+                      <span class="badge bg-info" title="Agendamento via Telefone">{{ forma }}</span>
                     {% elif forma == 'E-MAIL' %}
                       <span class="badge bg-success" title="Agendamento via E-mail">{{ forma }}</span>
                     {% elif forma == 'COMERCIAL' %}
-                      <span class="badge bg-warning text-dark" title="Agendamento via Comercial">{{ forma }}</span>
+                      <span class="badge bg-warning" title="Agendamento via Comercial">{{ forma }}</span>
                     {% elif forma == 'SEM AGENDAMENTO' %}
                       <span class="badge bg-secondary" title="Sem necessidade de agendamento">S/AG</span>
                     {% else %}
@@ -409,7 +409,7 @@
                           </span>
                         {% elif tem_data and not confirmado %}
                           <!-- Estado: Aguardando (Amarelo) -->
-                          <span class="badge bg-warning text-dark agendamento-badge"
+                          <span class="badge bg-warning agendamento-badge"
                                 onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', false)"
                                 title="Clique para confirmar">
                             ⏳
@@ -515,7 +515,7 @@
                         <br><small class="text-warning"><i class="fas fa-clock"></i> Provisorio</small>
                       {% elif item and item.erro_validacao %}
                          {% if 'NF_PENDENTE_FATURAMENTO' in item.erro_validacao %}
-                           <span class="badge bg-warning text-dark">Pendente</span>
+                           <span class="badge bg-warning">Pendente</span>
                          {% elif 'NF_DIVERGENTE' in item.erro_validacao %}
                            <span class="badge bg-danger">Divergente</span>
                          {% elif 'CLIENTE_NAO_DEFINIDO' in item.erro_validacao %}

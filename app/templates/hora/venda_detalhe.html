@@ -722,7 +722,7 @@
       <tbody>
         {% for d in venda.divergencias %}
           <tr class="{% if d.resolvida_em %}text-muted{% endif %}">
-            <td><span class="badge bg-{% if d.resolvida_em %}secondary{% else %}warning text-dark{% endif %}">{{ d.tipo }}</span></td>
+            <td><span class="badge bg-{% if d.resolvida_em %}secondary{% else %}warning {% endif %}">{{ d.tipo }}</span></td>
             <td>{% if d.numero_chassi %}<code>{{ d.numero_chassi }}</code>{% else %}—{% endif %}</td>
             <td><small>{{ d.detalhe or '—' }}</small></td>
             <td><small>{{ d.criado_em.strftime('%d/%m %H:%M') }}</small></td>

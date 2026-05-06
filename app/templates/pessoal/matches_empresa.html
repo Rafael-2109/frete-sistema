@@ -220,7 +220,7 @@
     card.className = 'card mb-3';
     const bateBdg = dia.soma_bate
       ? '<span class="badge bg-success">soma bate</span>'
-      : `<span class="badge bg-warning text-dark">diff ${moeda(dia.diff)}</span>`;
+      : `<span class="badge bg-warning">diff ${moeda(dia.diff)}</span>`;
     card.innerHTML = `
       <div class="card-header py-2 d-flex justify-content-between align-items-center">
         <strong>${esc(dia.data_br)}</strong>

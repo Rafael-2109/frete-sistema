@@ -19,7 +19,7 @@
   <strong>{{ resultado.total }}</strong> arquivo(s) processado(s) com loja default
   <strong>{{ loja_aplicada.rotulo_display if loja_aplicada else 'n/d' }}</strong>:
   <span class="badge bg-success">{{ resultado.sucesso|length }} importada(s)</span>
-  <span class="badge bg-warning text-dark">{{ resultado.duplicada|length }} duplicada(s)</span>
+  <span class="badge bg-warning">{{ resultado.duplicada|length }} duplicada(s)</span>
   <span class="badge bg-danger">{{ resultado.erro|length }} com erro</span>
   {% if ignorados %}
     <span class="badge bg-secondary">{{ ignorados|length }} ignorado(s)</span>

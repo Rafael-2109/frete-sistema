@@ -63,7 +63,7 @@
                                     {% if e.status == 'PLANEJADO' %}
                                         <span class="badge bg-secondary">Planejado</span>
                                     {% elif e.status == 'EM_TRANSITO' %}
-                                        <span class="badge bg-warning text-dark">Em Trânsito</span>
+                                        <span class="badge bg-warning">Em Trânsito</span>
                                     {% elif e.status == 'ENTREGUE' %}
                                         <span class="badge bg-success">Entregue</span>
                                     {% elif e.status == 'CANCELADO' %}
@@ -74,7 +74,7 @@
                                     {% if e.status_pagamento_frete == 'PAGO' %}
                                         <span class="badge bg-success">Pago</span>
                                     {% elif e.status_pagamento_frete == 'PENDENTE' %}
-                                        <span class="badge bg-warning text-dark">Pendente</span>
+                                        <span class="badge bg-warning">Pendente</span>
                                     {% else %}
                                         <span class="badge bg-danger">Atrasado</span>
                                     {% endif %}

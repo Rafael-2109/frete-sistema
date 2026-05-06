@@ -98,7 +98,7 @@
                   {% if veiculo.peso_maximo >= 20000 %}
                     <span class="badge bg-danger">PESADO</span>
                   {% elif veiculo.peso_maximo >= 10000 %}
-                    <span class="badge bg-warning text-dark">MÉDIO</span>
+                    <span class="badge bg-warning">MÉDIO</span>
                   {% else %}
                     <span class="badge bg-success">LEVE</span>
                   {% endif %}
@@ -110,7 +110,7 @@
                     <i class="fas fa-car me-1"></i>{{ veiculo.tipo_veiculo or 'Carro' }}
                   </span>
                 {% else %}
-                  <span class="badge bg-warning text-dark">
+                  <span class="badge bg-warning">
                     <i class="fas fa-truck me-1"></i>{{ veiculo.tipo_veiculo or 'Caminhão' }}
                   </span>
                 {% endif %}

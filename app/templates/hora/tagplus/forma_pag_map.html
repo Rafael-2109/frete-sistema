@@ -147,7 +147,7 @@
           return '<tr><td><code>' + id + '</code></td><td>' + nome + origem + '</td></tr>';
         }).join('');
         const fonteLabel = body.fonte === 'nfes_existentes'
-          ? '<span class="badge bg-warning text-dark">extraído de NFes existentes</span>'
+          ? '<span class="badge bg-warning">extraído de NFes existentes</span>'
           : '<span class="badge bg-success">endpoint direto: <code>' + (body.endpoint || '?') + '</code></span>';
         out.innerHTML =
           '<div class="alert alert-info">' + fonteLabel +

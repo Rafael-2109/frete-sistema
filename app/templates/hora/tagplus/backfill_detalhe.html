@@ -16,12 +16,7 @@
     <div class="row g-3">
       <div class="col-md-3">
         <strong>Status:</strong>
-        <span id="job-status" class="badge fs-6
-          {% if job.status == 'CONCLUIDO' %}bg-success
-          {% elif job.status == 'EM_PROGRESSO' %}bg-primary
-          {% elif job.status == 'PENDENTE' %}bg-secondary
-          {% elif job.status == 'ERRO' %}bg-danger
-          {% else %}bg-light text-dark{% endif %}">
+        <span id="job-status" class="badge fs-6 {% if job.status == 'CONCLUIDO' %}bg-success {% elif job.status == 'EM_PROGRESSO' %}bg-primary {% elif job.status == 'PENDENTE' %}bg-secondary {% elif job.status == 'ERRO' %}bg-danger {% else %}bg-light {% endif %}">
           {{ job.status }}
         </span>
       </div>
@@ -95,7 +90,7 @@
     <span class="badge bg-primary fs-6">Atualizadas: <span data-counter="n_atualizado">{{ job.n_atualizado or 0 }}</span></span>
   </div>
   <div class="col-auto">
-    <span class="badge bg-light text-dark fs-6">Inalteradas: <span data-counter="n_inalterado">{{ job.n_inalterado or 0 }}</span></span>
+    <span class="badge bg-light fs-6">Inalteradas: <span data-counter="n_inalterado">{{ job.n_inalterado or 0 }}</span></span>
   </div>
   <div class="col-auto">
     <span class="badge bg-dark fs-6">Canceladas: <span data-counter="n_cancelado">{{ job.n_cancelado or 0 }}</span></span>
@@ -107,13 +102,13 @@
     <span class="badge bg-secondary fs-6">Puladas (não-aprov.): <span data-counter="n_pulada_invalida">{{ job.n_pulada_invalida or 0 }}</span></span>
   </div>
   <div class="col-auto">
-    <span class="badge bg-warning text-dark fs-6">Outra origem: <span data-counter="n_dup">{{ job.n_dup or 0 }}</span></span>
+    <span class="badge bg-warning fs-6">Outra origem: <span data-counter="n_dup">{{ job.n_dup or 0 }}</span></span>
   </div>
   <div class="col-auto">
     <span class="badge bg-danger fs-6">Erros: <span data-counter="n_erro">{{ job.n_erro or 0 }}</span></span>
   </div>
   <div class="col-auto">
-    <span class="badge bg-info text-dark fs-6">Divergências: <span data-counter="n_divergencias">{{ job.n_divergencias or 0 }}</span></span>
+    <span class="badge bg-info fs-6">Divergências: <span data-counter="n_divergencias">{{ job.n_divergencias or 0 }}</span></span>
   </div>
 </div>
 

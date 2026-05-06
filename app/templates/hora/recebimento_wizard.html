@@ -41,9 +41,9 @@
 <!-- Stepper -->
 <div class="d-flex gap-2 mb-3 small" id="stepper">
   <span class="badge bg-primary" data-step="A">A. Chassi (QR)</span>
-  <span class="badge bg-light text-dark border" data-step="B">B. Modelo</span>
-  <span class="badge bg-light text-dark border" data-step="C">C. Cor</span>
-  <span class="badge bg-light text-dark border" data-step="D">D. Resumo</span>
+  <span class="badge bg-light border" data-step="B">B. Modelo</span>
+  <span class="badge bg-light border" data-step="C">C. Cor</span>
+  <span class="badge bg-light border" data-step="D">D. Resumo</span>
 </div>
 
 <!-- ==================================================================== -->
@@ -576,7 +576,7 @@
         + '<strong>Bate com a NF.</strong></div>';
     } else {
       const rows = divs.map(d =>
-        '<li><span class="badge bg-warning text-dark me-2">' + esc(d.tipo) + '</span>'
+        '<li><span class="badge bg-warning me-2">' + esc(d.tipo) + '</span>'
         + esc(d.detalhe) + '</li>').join('');
       box.innerHTML = '<div class="alert alert-warning mb-0">'
         + '<strong><i class="fas fa-exclamation-triangle"></i> Divergência(s):</strong>'

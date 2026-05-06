@@ -359,7 +359,7 @@
                 <i class="fas fa-truck-moving"></i>
                 {% if carvia_vencidos > 0 or carvia_vencimento_dia > 0 %}
                 <span class="badge bg-danger rounded-pill">Venc {{ carvia_vencidos }}</span>
-                <span class="badge bg-warning text-dark rounded-pill">Dia {{ carvia_vencimento_dia }}</span>
+                <span class="badge bg-warning rounded-pill">Dia {{ carvia_vencimento_dia }}</span>
                 {% endif %}
             </a>
           </li>
@@ -772,7 +772,7 @@
               </li>
               <li><a class="dropdown-item" href="{{ url_for('comercial.dashboard_diretoria') }}">
                   <i class="fas fa-chart-bar text-primary"></i> Dashboard Comercial
-                  <span class="badge bg-warning text-dark ms-2">NOVO</span>
+                  <span class="badge bg-warning ms-2">NOVO</span>
                 </a></li>
               <li><a class="dropdown-item" href="{{ url_for('comercial.lista_clientes', posicao='em_aberto') }}">
                   <i class="fas fa-building text-success"></i> Acompanhamento de Clientes
@@ -905,7 +905,7 @@
               <li><a class="dropdown-item" href="{{ url_for('agente_lojas.pagina_chat') }}"
                   title="Agente Lojas HORA — varejo B2C de motos eletricas">
                   <i class="fas fa-motorcycle text-primary"></i> Agente Lojas HORA
-                  <span class="badge bg-warning text-dark ms-1" style="font-size: 0.6rem;">M0</span>
+                  <span class="badge bg-warning ms-1" style="font-size: 0.6rem;">M0</span>
                 </a></li>
               {% endif %}
               {% if current_user.perfil == 'administrador' %}

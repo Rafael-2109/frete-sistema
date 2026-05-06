@@ -199,9 +199,9 @@
                 <li>
                   <a class="dropdown-item {% if request.args.get('status') == 'sem_previsao' %}active{% endif %}" 
                      href="?status=sem_previsao">
-                    <span class="badge bg-warning text-dark me-2">🟡</span> Sem Previsão
+                    <span class="badge bg-warning me-2">🟡</span> Sem Previsão
                     {% if contadores.sem_previsao %}
-                      <span class="badge bg-warning text-dark float-end">{{ contadores.sem_previsao }}</span>
+                      <span class="badge bg-warning float-end">{{ contadores.sem_previsao }}</span>
                     {% endif %}
                   </a>
                 </li>
@@ -221,16 +221,16 @@
                 <i class="fas fa-calendar-alt"></i> Agendamento
                 {% set total_agend = (contadores.sem_agendamento or 0) + (contadores.ag_aprovacao or 0) + (contadores.reagendar or 0) %}
                 {% if total_agend > 0 %}
-                  <span class="badge bg-warning text-dark rounded-pill">{{ total_agend }}</span>
+                  <span class="badge bg-warning rounded-pill">{{ total_agend }}</span>
                 {% endif %}
               </a>
               <ul class="dropdown-menu" aria-labelledby="dropdownAgendamento">
                 <li>
                   <a class="dropdown-item {% if request.args.get('status') == 'sem_agendamento' %}active{% endif %}" 
                      href="?status=sem_agendamento">
-                    <span class="badge bg-warning text-dark me-2">⚠️</span> Agend. Pendente
+                    <span class="badge bg-warning me-2">⚠️</span> Agend. Pendente
                     {% if contadores.sem_agendamento %}
-                      <span class="badge bg-warning text-dark float-end">{{ contadores.sem_agendamento }}</span>
+                      <span class="badge bg-warning float-end">{{ contadores.sem_agendamento }}</span>
                     {% endif %}
                   </a>
                 </li>
@@ -287,7 +287,7 @@
                 <li>
                   <a class="dropdown-item {% if request.args.get('status') == 'devolvida' %}active{% endif %}" 
                      href="?status=devolvida">
-                    <span class="badge bg-warning text-dark me-2">📦</span> Devolvida
+                    <span class="badge bg-warning me-2">📦</span> Devolvida
                   </a>
                 </li>
                 <li>
@@ -501,7 +501,7 @@
             {% else %}
               <small class="text-muted" {% if e.observ_ped_1 %}title="{{ e.observ_ped_1 }}" style="cursor: help; text-decoration: underline dotted;"{% endif %}>{{ e.num_pedido or 'N/A' }}</small><br>
             {% endif %}
-            {{ e.numero_nf }}{% if e.origem == 'CARVIA' %} <span class="badge bg-warning text-dark" title="Frete subcontratado CarVia"><i class="fas fa-truck"></i></span>{% if e._carvia_tipo_material == 'MOTO' %} <span class="badge bg-primary" title="NF de motos (carga por chassi)"><i class="fas fa-motorcycle"></i> Moto</span>{% elif e._carvia_tipo_material == 'CARGA_GERAL' %} <span class="badge bg-secondary" title="NF de carga geral"><i class="fas fa-boxes"></i> Carga Geral</span>{% endif %}{% endif %}{% if e.nf_cancelada %} <span class="badge bg-dark ">Canc.</span>{% endif %}<br>
+            {{ e.numero_nf }}{% if e.origem == 'CARVIA' %} <span class="badge bg-warning" title="Frete subcontratado CarVia"><i class="fas fa-truck"></i></span>{% if e._carvia_tipo_material == 'MOTO' %} <span class="badge bg-primary" title="NF de motos (carga por chassi)"><i class="fas fa-motorcycle"></i> Moto</span>{% elif e._carvia_tipo_material == 'CARGA_GERAL' %} <span class="badge bg-secondary" title="NF de carga geral"><i class="fas fa-boxes"></i> Carga Geral</span>{% endif %}{% endif %}{% if e.nf_cancelada %} <span class="badge bg-dark ">Canc.</span>{% endif %}<br>
             <small class="text-muted">{{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
           </td>
           <td class="sticky-col-2">
@@ -565,7 +565,7 @@
                  title="Ver rastreamento GPS - Embarque #{{ e.embarque_numero }}">
                 <i class="fas fa-map-marker-alt"></i> Rastreada
                 {% if e.rastreamento_status == 'CHEGOU_DESTINO' %}
-                  <span class="badge bg-warning text-dark">🎯 Próximo</span>
+                  <span class="badge bg-warning">🎯 Próximo</span>
                 {% elif e.rastreamento_status == 'ENTREGUE' %}
                   <span class="badge bg-info">✅ Entregue</span>
                 {% endif %}
@@ -660,7 +660,7 @@
                     📄 Canhoto OK
                   </a>
                 {% else %}
-                  <span class="badge bg-light text-dark upload-canhoto-btn"
+                  <span class="badge bg-light upload-canhoto-btn"
                         data-entrega-id="{{ e.id }}"
                         data-numero-nf="{{ e.numero_nf }}"
                         title="Anexar canhoto da entrega"
@@ -677,9 +677,9 @@
             {% elif e.data_entrega_prevista and e.data_entrega_prevista < current_date %}
                 <span class="badge bg-danger">Atrasada</span>
             {% elif e.data_entrega_prevista %}
-            <span class="badge bg-light text-dark">No Prazo</span>
+            <span class="badge bg-light">No Prazo</span>
             {% else %}
-              <span class="badge bg-warning text-dark">Sem Previsão</span>
+              <span class="badge bg-warning">Sem Previsão</span>
             {% endif %}
             </td>
             
@@ -1817,7 +1817,7 @@ document.addEventListener('DOMContentLoaded', function() {
         data.agendamentos.forEach((agendamento, index) => {
           const statusBadge = agendamento.status === 'confirmado' 
             ? '<span class="badge bg-primary">✅ Confirmado</span>'
-            : '<span class="badge bg-warning text-dark">⏳ Aguardando</span>';
+            : '<span class="badge bg-warning">⏳ Aguardando</span>';
           
           // Identifica o último agendamento aguardando
           if (index === 0 && agendamento.status === 'aguardando') {

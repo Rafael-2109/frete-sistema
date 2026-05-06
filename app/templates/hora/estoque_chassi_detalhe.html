@@ -168,7 +168,7 @@
         </div>
         <div class="col-md-2"><small class="text-muted">Avaria física?</small><br>
           {% if rastreio.conferencia.avaria_fisica %}
-            <span class="badge bg-warning text-dark">Sim</span>
+            <span class="badge bg-warning">Sim</span>
           {% else %}Não{% endif %}
         </div>
         <div class="col-md-3"><small class="text-muted">Operador</small><br>
@@ -233,7 +233,7 @@
               {% if t.status=='EM_TRANSITO' %}<span class="badge bg-info">Em trânsito</span>
               {% elif t.status=='CONFIRMADA' %}<span class="badge bg-success">Confirmada</span>
               {% elif t.status=='CANCELADA' %}<span class="badge bg-secondary">Cancelada</span>
-              {% else %}<span class="badge bg-light text-dark">{{ t.status }}</span>{% endif %}
+              {% else %}<span class="badge bg-light">{{ t.status }}</span>{% endif %}
             </td>
             <td><small>{{ t.emitida_por or '—' }}</small></td>
           </tr>
@@ -258,7 +258,7 @@
         <li class="mb-2 pb-2 border-bottom">
           <a href="{{ url_for('hora.avaria_detalhe', avaria_id=a.id) }}"
              class="btn btn-sm btn-outline-primary py-0">Avaria #{{ a.id }}</a>
-          {% if a.status=='ABERTA' %}<span class="badge bg-warning text-dark">Aberta</span>
+          {% if a.status=='ABERTA' %}<span class="badge bg-warning">Aberta</span>
           {% elif a.status=='RESOLVIDA' %}<span class="badge bg-success">Resolvida</span>
           {% else %}<span class="badge bg-secondary">Ignorada</span>{% endif %}
           <small class="text-muted">
@@ -293,7 +293,7 @@
         <li class="mb-2 pb-2 border-bottom">
           <a href="{{ url_for('hora.pecas_detalhe', peca_id=p.id) }}"
              class="btn btn-sm btn-outline-primary py-0">Peça #{{ p.id }}</a>
-          {% if p.status=='ABERTA' %}<span class="badge bg-warning text-dark">Aberta</span>
+          {% if p.status=='ABERTA' %}<span class="badge bg-warning">Aberta</span>
           {% elif p.status=='RESOLVIDA' %}<span class="badge bg-success">Resolvida</span>
           {% else %}<span class="badge bg-secondary">Cancelada</span>{% endif %}
           <strong>{{ p.descricao }}</strong>
@@ -408,7 +408,7 @@
           </a>
         {% endif %}
         {% if emissao_tp and emissao_tp.status not in ('APROVADA', 'CANCELADA') %}
-          <span class="badge bg-info text-dark" title="Status da emissao TagPlus">
+          <span class="badge bg-info" title="Status da emissao TagPlus">
             NFe: {{ emissao_tp.status }}
           </span>
         {% endif %}
@@ -438,7 +438,7 @@
           <td><small>{{ d.data_devolucao.strftime('%d/%m/%Y') if d.data_devolucao else '—' }}</small></td>
           <td>{{ d.motivo }}</td>
           <td>
-            {% if d.status=='ABERTA' %}<span class="badge bg-warning text-dark">Aberta</span>
+            {% if d.status=='ABERTA' %}<span class="badge bg-warning">Aberta</span>
             {% elif d.status=='ENVIADA' %}<span class="badge bg-info">Enviada</span>
             {% elif d.status=='CONFIRMADA' %}<span class="badge bg-success">Confirmada</span>
             {% else %}<span class="badge bg-secondary">{{ d.status }}</span>{% endif %}

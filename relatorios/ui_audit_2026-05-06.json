@@ -5,128 +5,98 @@
     "css": 57
   },
   "totals_by_violation": {
-    "V6_badge_bg_text_combo": 445,
     "V12_table_row_class": 218,
     "V1_inline_style_color": 245,
     "V2_hex_in_template": 70,
+    "V6_badge_bg_text_combo": 9,
     "V7_text_bg_combo": 3,
     "V5_important_in_css": 232,
     "V4_rgb_in_css": 1277,
     "V3_hex_in_css_module": 46
   },
   "totals_by_module": {
-    "templates/base.html": {
-      "V6_badge_bg_text_combo": 3
-    },
-    "templates/_timezone_info.html": {
-      "V6_badge_bg_text_combo": 1
-    },
-    "templates/monitoramento": {
-      "V6_badge_bg_text_combo": 22
-    },
     "templates/separacao": {
-      "V6_badge_bg_text_combo": 2,
       "V12_table_row_class": 1
     },
     "templates/hora": {
-      "V6_badge_bg_text_combo": 55,
       "V1_inline_style_color": 6,
       "V12_table_row_class": 17
     },
     "templates/devolucao": {
       "V1_inline_style_color": 2,
       "V2_hex_in_template": 1,
-      "V6_badge_bg_text_combo": 9,
       "V12_table_row_class": 16
     },
-    "templates/integracoes": {
+    "templates/producao": {
       "V6_badge_bg_text_combo": 3
     },
-    "templates/producao": {
-      "V6_badge_bg_text_combo": 6
-    },
     "templates/portaria": {
-      "V6_badge_bg_text_combo": 3,
       "V12_table_row_class": 7,
       "V7_text_bg_combo": 2
     },
     "templates/embarques": {
       "V1_inline_style_color": 37,
       "V2_hex_in_template": 41,
-      "V6_badge_bg_text_combo": 11,
       "V12_table_row_class": 3
     },
     "templates/portal": {
-      "V6_badge_bg_text_combo": 5,
       "V1_inline_style_color": 1,
       "V12_table_row_class": 6
     },
     "templates/fretes": {
-      "V6_badge_bg_text_combo": 68,
+      "V6_badge_bg_text_combo": 1,
       "V12_table_row_class": 11
     },
     "templates/comercial": {
-      "V6_badge_bg_text_combo": 2,
       "V1_inline_style_color": 23,
       "V12_table_row_class": 4
     },
     "templates/carteira": {
       "V1_inline_style_color": 7,
       "V12_table_row_class": 6,
-      "V6_badge_bg_text_combo": 17,
       "V2_hex_in_template": 5
     },
     "templates/estoque": {
       "V1_inline_style_color": 1,
-      "V12_table_row_class": 7,
-      "V6_badge_bg_text_combo": 7
+      "V12_table_row_class": 7
     },
     "templates/auth": {
       "V12_table_row_class": 2
     },
     "templates/cotacao": {
-      "V6_badge_bg_text_combo": 7,
       "V12_table_row_class": 26
     },
     "templates/custeio": {
-      "V1_inline_style_color": 2,
-      "V6_badge_bg_text_combo": 2
+      "V1_inline_style_color": 2
     },
     "templates/recebimento": {
-      "V6_badge_bg_text_combo": 30,
       "V12_table_row_class": 20,
+      "V6_badge_bg_text_combo": 1,
       "V1_inline_style_color": 4,
       "V2_hex_in_template": 2
     },
     "templates/veiculos": {
-      "V6_badge_bg_text_combo": 2,
       "V12_table_row_class": 1
     },
     "templates/tabelas": {
-      "V12_table_row_class": 3,
-      "V6_badge_bg_text_combo": 4
+      "V12_table_row_class": 3
     },
     "templates/pessoal": {
-      "V6_badge_bg_text_combo": 28,
       "V12_table_row_class": 23,
+      "V6_badge_bg_text_combo": 1,
       "V1_inline_style_color": 2
     },
     "templates/financeiro": {
       "V1_inline_style_color": 116,
-      "V6_badge_bg_text_combo": 20,
       "V2_hex_in_template": 8,
+      "V6_badge_bg_text_combo": 3,
       "V12_table_row_class": 5
-    },
-    "templates/bi": {
-      "V6_badge_bg_text_combo": 2
     },
     "templates/rastreamento": {
       "V1_inline_style_color": 7,
-      "V6_badge_bg_text_combo": 2,
       "V12_table_row_class": 1
     },
     "templates/pedidos": {
-      "V6_badge_bg_text_combo": 15,
       "V12_table_row_class": 14,
       "V1_inline_style_color": 3,
       "V2_hex_in_template": 4
@@ -135,25 +105,21 @@
       "V12_table_row_class": 2
     },
     "templates/carvia": {
-      "V6_badge_bg_text_combo": 53,
       "V1_inline_style_color": 16,
       "V2_hex_in_template": 8,
       "V12_table_row_class": 17
     },
     "templates/faturamento": {
-      "V6_badge_bg_text_combo": 7,
       "V12_table_row_class": 6
     },
     "templates/cadastros_agendamento": {
       "V12_table_row_class": 1
     },
     "templates/pallet": {
-      "V6_badge_bg_text_combo": 15,
       "V12_table_row_class": 2,
       "V1_inline_style_color": 11
     },
     "templates/motochefe": {
-      "V6_badge_bg_text_combo": 40,
       "V12_table_row_class": 16,
       "V7_text_bg_combo": 1,
       "V1_inline_style_color": 6,
@@ -163,7 +129,6 @@
       "V12_table_row_class": 1
     },
     "templates/manufatura": {
-      "V6_badge_bg_text_combo": 4,
       "V1_inline_style_color": 1
     },
     "css": {
@@ -524,16 +489,6 @@
       "total": 21
     },
     {
-      "file": "app/templates/carteira/mapa_pedidos.html",
-      "violations": {
-        "V1_inline_style_color": 6,
-        "V2_hex_in_template": 5,
-        "V6_badge_bg_text_combo": 6,
-        "V12_table_row_class": 3
-      },
-      "total": 20
-    },
-    {
       "file": "app/static/css/modules/_portaria.css",
       "violations": {
         "V5_important_in_css": 12,
@@ -613,12 +568,13 @@
       "total": 15
     },
     {
-      "file": "app/templates/devolucao/ocorrencias/detalhe.html",
+      "file": "app/templates/carteira/mapa_pedidos.html",
       "violations": {
-        "V6_badge_bg_text_combo": 5,
-        "V12_table_row_class": 10
+        "V1_inline_style_color": 6,
+        "V2_hex_in_template": 5,
+        "V12_table_row_class": 3
       },
-      "total": 15
+      "total": 14
     },
     {
       "file": "app/static/css/modules/_seguranca.css",
@@ -626,23 +582,6 @@
         "V4_rgb_in_css": 14
       },
       "total": 14
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "violations": {
-        "V6_badge_bg_text_combo": 12
-      },
-      "total": 12
-    },
-    {
-      "file": "app/templates/embarques/visualizar_embarque.html",
-      "violations": {
-        "V1_inline_style_color": 5,
-        "V2_hex_in_template": 1,
-        "V6_badge_bg_text_combo": 5,
-        "V12_table_row_class": 1
-      },
-      "total": 12
     },
     {
       "file": "app/templates/embarques/imprimir_separacao.html",
@@ -662,21 +601,6 @@
       "total": 12
     },
     {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "violations": {
-        "V6_badge_bg_text_combo": 11
-      },
-      "total": 11
-    },
-    {
-      "file": "app/templates/financeiro/comprovantes_hub.html",
-      "violations": {
-        "V1_inline_style_color": 3,
-        "V6_badge_bg_text_combo": 8
-      },
-      "total": 11
-    },
-    {
       "file": "app/static/css/modules/_pallet-unified.css",
       "violations": {
         "V4_rgb_in_css": 10,
@@ -685,18 +609,9 @@
       "total": 11
     },
     {
-      "file": "app/templates/pessoal/transacoes.html",
+      "file": "app/templates/devolucao/ocorrencias/detalhe.html",
       "violations": {
-        "V6_badge_bg_text_combo": 7,
-        "V12_table_row_class": 3
-      },
-      "total": 10
-    },
-    {
-      "file": "app/templates/pessoal/configuracao.html",
-      "violations": {
-        "V6_badge_bg_text_combo": 4,
-        "V12_table_row_class": 6
+        "V12_table_row_class": 10
       },
       "total": 10
     },
@@ -706,6 +621,53 @@
         "V1_inline_style_color": 10
       },
       "total": 10
+    },
+    {
+      "file": "app/static/css/modules/_motochefe.css",
+      "violations": {
+        "V5_important_in_css": 4,
+        "V4_rgb_in_css": 6
+      },
+      "total": 10
+    },
+    {
+      "file": "app/templates/financeiro/crud_abatimentos.html",
+      "violations": {
+        "V1_inline_style_color": 8
+      },
+      "total": 8
+    },
+    {
+      "file": "app/static/css/modules/_devolucao.css",
+      "violations": {
+        "V5_important_in_css": 6,
+        "V4_rgb_in_css": 2
+      },
+      "total": 8
+    },
+    {
+      "file": "app/static/css/modules/_chat.css",
+      "violations": {
+        "V3_hex_in_css_module": 7,
+        "V4_rgb_in_css": 1
+      },
+      "total": 8
+    },
+    {
+      "file": "app/templates/embarques/visualizar_embarque.html",
+      "violations": {
+        "V1_inline_style_color": 5,
+        "V2_hex_in_template": 1,
+        "V12_table_row_class": 1
+      },
+      "total": 7
+    },
+    {
+      "file": "app/templates/cotacao/cotacao.html",
+      "violations": {
+        "V12_table_row_class": 7
+      },
+      "total": 7
     }
   ],
   "unique_hex_in_css_top": [
@@ -914,214 +876,11 @@
   ],
   "violations": [
     {
-      "file": "app/templates/base.html",
-      "line": 362,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark rounded-pill\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/base.html",
-      "line": 775,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/base.html",
-      "line": 908,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/_timezone_info.html",
-      "line": 7,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 8,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 33,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 77,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 323,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 439,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 574,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 659,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 670,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/visualizar_entrega.html",
-      "line": 764,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 202,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark me-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 204,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark float-end\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 224,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark rounded-pill\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 231,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark me-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 233,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark float-end\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 290,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark me-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 504,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 568,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 663,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark upload-canhoto-btn\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 680,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 682,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/listar_entregas.html",
-      "line": 1820,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/monitoramento/diagnostico.html",
-      "line": 160,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/separacao/listar.html",
-      "line": 451,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/separacao/listar.html",
-      "line": 467,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/separacao/listar.html",
       "line": 130,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/hora/pedidos_lista.html",
-      "line": 80,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/nf_detalhe.html",
@@ -1132,87 +891,10 @@
     },
     {
       "file": "app/templates/hora/nf_detalhe.html",
-      "line": 17,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/nf_detalhe.html",
-      "line": 291,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/nf_detalhe.html",
-      "line": 336,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/nf_detalhe.html",
-      "line": 385,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/nf_detalhe.html",
       "line": 363,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/hora/avaria_detalhe.html",
-      "line": 7,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/pedido_completar_chassis.html",
-      "line": 38,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/pedido_completar_chassis.html",
-      "line": 73,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/pedido_completar_chassis.html",
-      "line": 103,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/pedido_completar_chassis.html",
-      "line": 226,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/recebimento_detalhe.html",
-      "line": 77,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/recebimento_detalhe.html",
-      "line": 184,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/recebimento_detalhe.html",
@@ -1229,55 +911,6 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/hora/pecas_cadastro_lista.html",
-      "line": 76,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/estoque_chassi_detalhe.html",
-      "line": 171,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/estoque_chassi_detalhe.html",
-      "line": 236,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/estoque_chassi_detalhe.html",
-      "line": 261,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/estoque_chassi_detalhe.html",
-      "line": 296,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/estoque_chassi_detalhe.html",
-      "line": 411,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/estoque_chassi_detalhe.html",
-      "line": 441,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/hora/pedido_detalhe.html",
       "line": 253,
       "code": "V1_inline_style_color",
@@ -1286,31 +919,10 @@
     },
     {
       "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 222,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 275,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/pedido_detalhe.html",
       "line": 303,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/hora/avarias_lista.html",
-      "line": 72,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/avarias_lista.html",
@@ -1335,45 +947,10 @@
     },
     {
       "file": "app/templates/hora/recebimento_wizard.html",
-      "line": 44,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/recebimento_wizard.html",
-      "line": 45,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/recebimento_wizard.html",
-      "line": 46,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/recebimento_wizard.html",
-      "line": 579,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark me-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/recebimento_wizard.html",
       "line": 249,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/hora/transferencia_detalhe.html",
-      "line": 81,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/transferencia_detalhe.html",
@@ -1390,32 +967,11 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/hora/venda_upload.html",
-      "line": 80,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/venda_upload.html",
-      "line": 89,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/hora/lojas_lista.html",
       "line": 71,
       "code": "V1_inline_style_color",
       "snippet": "style=\"cursor: pointer; border-bottom: 1px dashed var(--bs-border-color);\"",
       "detail": "cursor: pointer; border-bottom: 1px dashed var(--bs-border-color);"
-    },
-    {
-      "file": "app/templates/hora/nf_upload_lote_resultado.html",
-      "line": 22,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/transferencias_lista.html",
@@ -1439,60 +995,11 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/hora/nf_match_modal.html",
-      "line": 84,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus_peca_map_lista.html",
-      "line": 33,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/modelos_lista.html",
-      "line": 86,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/transferencia_confirmar_wizard.html",
-      "line": 47,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/hora/transferencia_confirmar_wizard.html",
       "line": 36,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/hora/estoque_lista.html",
-      "line": 418,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/estoque_lista.html",
-      "line": 426,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=m.chassi) }}#avarias\"\n               class=\"badge bg-warning text-dark text-decoration-none\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/estoque_lista.html",
-      "line": 433,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=m.chassi) }}#pecas\"\n               class=\"badge bg-info text-dark text-decoration-none\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/estoque_lista.html",
@@ -1509,34 +1016,6 @@
       "detail": "uso de table-info (variant info OK esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/hora/nfs_lista.html",
-      "line": 83,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/nfs_lista.html",
-      "line": 94,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/pecas_cadastro_detalhe.html",
-      "line": 47,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/pecas_cadastro_detalhe.html",
-      "line": 70,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/hora/lojas_mapa.html",
       "line": 30,
       "code": "V1_inline_style_color",
@@ -1549,13 +1028,6 @@
       "code": "V1_inline_style_color",
       "snippet": "style=\"top: 0; z-index: 10; border-bottom: 1px solid var(--bs-border-color);\"",
       "detail": "top: 0; z-index: 10; border-bottom: 1px solid var(--bs-border-color);"
-    },
-    {
-      "file": "app/templates/hora/pedido_importar_preview.html",
-      "line": 73,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/pecas_estoque_detalhe.html",
@@ -1579,41 +1051,6 @@
       "detail": "em style: color:#888; font-size:9px;"
     },
     {
-      "file": "app/templates/integracoes/tagplus_correcao_pedidos.html",
-      "line": 179,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/integracoes/tagplus_correcao_pedidos.html",
-      "line": 181,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/integracoes/tagplus_correcao_pedidos.html",
-      "line": 339,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/producao/dashboard.html",
-      "line": 265,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/producao/listar_palletizacao.html",
-      "line": 180,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/producao/listar_palletizacao.html",
       "line": 211,
       "code": "V6_badge_bg_text_combo",
@@ -1629,24 +1066,10 @@
     },
     {
       "file": "app/templates/producao/listar_palletizacao.html",
-      "line": 223,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/producao/listar_palletizacao.html",
       "line": 225,
       "code": "V6_badge_bg_text_combo",
       "snippet": "<span class=\"badge bg-light text-muted border\"",
       "detail": "badge tem bg-light + text-muted (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/portaria/dashboard.html",
-      "line": 239,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge \n                  {% if registro.status == 'DENTRO' %}bg-success\n                  {% elif registro.status == 'AGUARDANDO' %}bg-warning text",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/portaria/dashboard.html",
@@ -1699,28 +1122,14 @@
     },
     {
       "file": "app/templates/portaria/detalhes_veiculo.html",
-      "line": 114,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge \n                  {% if registro.tipo_carga == 'Coleta' %}bg-primary\n                  {% elif registro.tipo_carga == 'Entrega' %}bg-success",
-      "detail": "badge tem bg-primary + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/portaria/detalhes_veiculo.html",
-      "line": 228,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/portaria/detalhes_veiculo.html",
-      "line": 161,
+      "line": 156,
       "code": "V7_text_bg_combo",
       "snippet": "card-header \n          {% if registro.status == 'SAIU' %}bg-secondary text-white\n          {% elif registro.status == 'DENTRO' %}bg-success text-white\n         ",
       "detail": "combinacao baixo contraste: bg-warning + text-white"
     },
     {
       "file": "app/templates/portaria/detalhes_veiculo.html",
-      "line": 161,
+      "line": 156,
       "code": "V7_text_bg_combo",
       "snippet": "card-header \n          {% if registro.status == 'SAIU' %}bg-secondary text-white\n          {% elif registro.status == 'DENTRO' %}bg-success text-white\n         ",
       "detail": "combinacao baixo contraste: bg-light + text-white"
@@ -1738,27 +1147,6 @@
       "code": "V2_hex_in_template",
       "snippet": "#999",
       "detail": "em style: text-align: center; margin-top: 10px; font-size: 10px; color: #999;"
-    },
-    {
-      "file": "app/templates/embarques/acessar_separacao.html",
-      "line": 34,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/acessar_separacao.html",
-      "line": 155,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/acessar_separacao.html",
-      "line": 164,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/embarques/acessar_separacao.html",
@@ -1916,41 +1304,6 @@
     },
     {
       "file": "app/templates/embarques/visualizar_embarque.html",
-      "line": 199,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/visualizar_embarque.html",
-      "line": 376,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/visualizar_embarque.html",
-      "line": 380,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/visualizar_embarque.html",
-      "line": 412,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark agendamento-badge\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/visualizar_embarque.html",
-      "line": 518,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/visualizar_embarque.html",
       "line": 339,
       "code": "V12_table_row_class",
       "snippet": "table-info",
@@ -2039,27 +1392,6 @@
       "code": "V2_hex_in_template",
       "snippet": "#721c24",
       "detail": "em style: margin: 0 0 2px 0; font-size: 14px; color: #721c24;"
-    },
-    {
-      "file": "app/templates/embarques/listar_embarques.html",
-      "line": 265,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/listar_embarques.html",
-      "line": 270,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/embarques/listar_embarques.html",
-      "line": 283,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/embarques/listar_embarques.html",
@@ -2370,137 +1702,11 @@
       "detail": "em style: margin: 0 0 2px 0; font-size: 14px; color: #856404;"
     },
     {
-      "file": "app/templates/portal/index.html",
-      "line": 100,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/portal/central_portais.html",
-      "line": 63,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/portal/central_portais.html",
-      "line": 97,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/portal/sendas_sessao.html",
       "line": 190,
       "code": "V1_inline_style_color",
       "snippet": "style=\"color: ${color}\"",
       "detail": "color: ${color}"
-    },
-    {
-      "file": "app/templates/fretes/lancar_cte.html",
-      "line": 170,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/lancar_cte.html",
-      "line": 176,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/criar_novo_frete.html",
-      "line": 113,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/selecionar_frete_despesa.html",
-      "line": 77,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if frete.tipo_carga == 'DIRETA' %}bg-info{% else %}bg-warning text-dark{% endif %}\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/selecionar_frete_despesa.html",
-      "line": 91,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                                            {% if frete.status == 'APROVADO' %}bg-success\n                                            {% elif",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/selecionar_frete_despesa.html",
-      "line": 155,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if nf.strip() == numero_nf %}bg-warning text-dark{% else %}bg-secondary{% endif %} mr-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_frete.html",
-      "line": 126,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_frete.html",
-      "line": 156,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('fretes.visualizar_fatura', fatura_id=frete.fatura_frete.id) }}\"\n                                   class=\"badge bg-primary text-white\"",
-      "detail": "badge tem bg-primary + text-white (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_frete.html",
-      "line": 426,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_frete.html",
-      "line": 642,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=despesa.nfd.ocorrencia.id if despesa.nfd and despesa.nfd.ocorrencia else 0) }}\"\n    ",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_frete.html",
-      "line": 691,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                                            {% if despesa.status == 'PENDENTE' %}bg-warning text-dark\n                                       ",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_frete.html",
-      "line": 707,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_frete.html",
-      "line": 952,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/processar_aprovacao_nova.html",
-      "line": 11,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ml-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_email.html",
-      "line": 179,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/fretes/visualizar_email.html",
@@ -2510,74 +1716,11 @@
       "detail": "badge tem bg-light + text-muted (derruba --_badge-color)"
     },
     {
-      "file": "app/templates/fretes/nova_despesa_extra.html",
-      "line": 175,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                            {% if frete.status == 'APROVADO' %}bg-success\n                            {% elif frete.status == 'EM_TRATATIVA' ",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/editar_fatura.html",
-      "line": 97,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/editar_fatura.html",
-      "line": 106,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/fretes/vincular_cte_manual_despesa.html",
-      "line": 41,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                            {% if despesa.status == 'PENDENTE' %}bg-warning text-dark\n                            {% elif despesa.status == '",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/vincular_cte_manual_despesa.html",
-      "line": 174,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/vincular_cte_manual_despesa.html",
-      "line": 240,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/vincular_cte_manual_despesa.html",
-      "line": 188,
+      "line": 183,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/fretes/auditoria_odoo.html",
-      "line": 95,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"https://odoo.nacomgoya.com.br/web#id={{ frete.odoo_purchase_order_id }}&model=purchase.order&view_type=form\"\n                                   target=",
-      "detail": "badge tem bg-primary + text-white (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/conta_corrente.html",
-      "line": 143,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if mov.status == 'ATIVO' %}bg-warning text-dark{% elif mov.status == 'COMPENSADO' %}bg-success{% else %}bg-secondary{% endif %}\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/lancamento_freteiros.html",
-      "line": 143,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/fretes/lancamento_freteiros.html",
@@ -2601,116 +1744,11 @@
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 37,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 49,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 88,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark d-none\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 121,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 178,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2 d-none\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 205,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 213,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 228,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 506,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 510,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/analise_diferencas.html",
-      "line": 525,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/fretes/simulador.html",
       "line": 93,
       "code": "V12_table_row_class",
       "snippet": "table-dark",
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/fretes/processar_aprovacao.html",
-      "line": 169,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/cte_cancelamento_pendencias.html",
-      "line": 170,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                {% if p.status == 'CANCELADO_OK' %}bg-success\n                {% elif p.status == 'ERRO' %}bg-danger\n                {% elif ",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/cte_cancelamento_pendencias.html",
-      "line": 306,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/cte_cancelamento_pendencias.html",
-      "line": 307,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/fretes/cte_cancelamento_pendencias.html",
@@ -2720,186 +1758,11 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/fretes/auditoria_despesa_odoo.html",
-      "line": 58,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"https://odoo.nacomgoya.com.br/web#id={{ despesa.odoo_purchase_order_id }}&model=purchase.order&view_type=form\"\n                           target=\"_blan",
-      "detail": "badge tem bg-primary + text-white (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/auditoria_despesa_odoo.html",
-      "line": 133,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/vincular_cte_despesa.html",
-      "line": 41,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                            {% if despesa.status == 'PENDENTE' %}bg-warning text-dark\n                            {% elif despesa.status == '",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/vincular_cte_despesa.html",
-      "line": 97,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/vincular_cte_despesa.html",
-      "line": 135,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/vincular_cte_despesa.html",
-      "line": 173,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/vincular_cte_despesa.html",
-      "line": 243,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/listar_faturas.html",
-      "line": 145,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/listar_faturas.html",
-      "line": 161,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_fatura.html",
-      "line": 73,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_fatura.html",
-      "line": 206,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_fatura.html",
-      "line": 559,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/visualizar_fatura.html",
-      "line": 615,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/criar_despesa_extra_frete.html",
-      "line": 214,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                            {% if frete.status == 'APROVADO' %}bg-success\n                            {% elif frete.status == 'EM_TRATATIVA' ",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/gerenciar_despesas_extras.html",
-      "line": 182,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/gerenciar_despesas_extras.html",
-      "line": 243,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=despesa.nfd.ocorrencia.id if despesa.nfd and despesa.nfd.ocorrencia else 0) }}\"\n    ",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/gerenciar_despesas_extras.html",
-      "line": 375,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=despesa.nfd.ocorrencia.id if despesa.nfd and despesa.nfd.ocorrencia else 0) }}\"\n    ",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/conferir_fatura.html",
-      "line": 156,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/conferir_fatura.html",
-      "line": 212,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/auditoria_lancamentos.html",
-      "line": 217,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"https://odoo.nacomgoya.com.br/web#id={{ lanc.po_id }}&model=purchase.order&view_type=form\"\n                                   target=\"_blank\" class=\"ba",
-      "detail": "badge tem bg-primary + text-white (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/auditoria_lancamentos.html",
-      "line": 239,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/auditoria_lancamentos.html",
-      "line": 486,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark me-2\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/auditoria_lancamentos.html",
-      "line": 577,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark me-1 mb-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/auditoria_lancamentos.html",
-      "line": 773,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"https://odoo.nacomgoya.com.br/web#id=${lastEtapa.purchase_order_id}&model=purchase.order&view_type=form\" target=\"_blank\" class=\"badge bg-primary text-w",
-      "detail": "badge tem bg-primary + text-white (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/fretes/auditoria_lancamentos.html",
       "line": 133,
       "code": "V12_table_row_class",
       "snippet": "table-dark",
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/comercial/analise_margem.html",
-      "line": 157,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2 me-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/comercial/lista_clientes.html",
@@ -3112,62 +1975,6 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/carteira/agrupados_balanceado.html",
-      "line": 536,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark mt-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/programacao_em_lote.html",
-      "line": 243,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span\n                                    class=\"badge \n                                        {% if cnpj_data.status == 'Reagendar' %}bg-danger{% elif cnpj_da",
-      "detail": "badge tem bg-danger + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/programacao_em_lote.html",
-      "line": 299,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge \n                                                        {% if pedido.status == 'PENDENTE' %}bg-warning text-dark\n                           ",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/programacao_em_lote.html",
-      "line": 315,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/programacao_em_lote.html",
-      "line": 329,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/programacao_em_lote.html",
-      "line": 332,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/programacao_em_lote.html",
-      "line": 369,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/programacao_em_lote.html",
-      "line": 900,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-2\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/carteira/mapa_pedidos.html",
       "line": 145,
       "code": "V1_inline_style_color",
@@ -3246,48 +2053,6 @@
     },
     {
       "file": "app/templates/carteira/mapa_pedidos.html",
-      "line": 239,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/mapa_pedidos.html",
-      "line": 273,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/mapa_pedidos.html",
-      "line": 658,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/mapa_pedidos.html",
-      "line": 681,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-2\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/mapa_pedidos.html",
-      "line": 839,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/mapa_pedidos.html",
-      "line": 1511,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/mapa_pedidos.html",
       "line": 211,
       "code": "V12_table_row_class",
       "snippet": "table-light sticky-top",
@@ -3315,20 +2080,6 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/carteira/alertas_dashboard.html",
-      "line": 127,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/alertas_dashboard.html",
-      "line": 169,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/estoque/listar_movimentacoes.html",
       "line": 703,
       "code": "V1_inline_style_color",
@@ -3350,60 +2101,11 @@
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/estoque/importar_movimentacoes.html",
-      "line": 92,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark me-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/estoque/listar_unificacao_codigos.html",
-      "line": 94,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/estoque/listar_unificacao_codigos.html",
       "line": 66,
       "code": "V12_table_row_class",
       "snippet": "table-dark",
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/estoque/saldo_estoque.html",
-      "line": 112,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if produto.estoque_inicial <= 0 %}bg-danger{% elif produto.estoque_inicial < 10 %}bg-warning text-dark{% else %}bg-success{% endif %}\"",
-      "detail": "badge tem bg-danger + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/estoque/saldo_estoque.html",
-      "line": 117,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if produto.previsao_ruptura <= 0 %}bg-warning text-dark{% elif produto.previsao_ruptura < 10 %}bg-warning text-dark{% else %}bg-success{% ",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/estoque/saldo_estoque.html",
-      "line": 156,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/estoque/saldo_estoque.html",
-      "line": 482,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/estoque/saldo_estoque.html",
-      "line": 485,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge ${produto.status_ruptura === 'CRÍTICO' ? 'bg-danger' : produto.status_ruptura === 'ATENÇÃO' ? 'bg-warning text-dark' : 'bg-success'}\"",
-      "detail": "badge tem bg-danger + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/estoque/saldo_estoque.html",
@@ -3449,20 +2151,6 @@
     },
     {
       "file": "app/templates/cotacao/otimizador.html",
-      "line": 68,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/cotacao/otimizador.html",
-      "line": 174,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/cotacao/otimizador.html",
       "line": 73,
       "code": "V12_table_row_class",
       "snippet": "table-light",
@@ -3481,13 +2169,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/cotacao/redespachar_sao_paulo.html",
-      "line": 37,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-dark text-light\"",
-      "detail": "badge tem bg-dark + text-light (derruba --_badge-color)"
     },
     {
       "file": "app/templates/cotacao/redespachar_sao_paulo.html",
@@ -3516,20 +2197,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/cotacao/cotacao.html",
-      "line": 43,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/cotacao/cotacao.html",
-      "line": 202,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/cotacao/cotacao.html",
@@ -3582,13 +2249,6 @@
     },
     {
       "file": "app/templates/cotacao/redespachar_sao_bernardo.html",
-      "line": 37,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-dark text-light\"",
-      "detail": "badge tem bg-dark + text-light (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/cotacao/redespachar_sao_bernardo.html",
       "line": 42,
       "code": "V12_table_row_class",
       "snippet": "table-light",
@@ -3614,13 +2274,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/cotacao/redespachar.html",
-      "line": 37,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-dark text-light\"",
-      "detail": "badge tem bg-dark + text-light (derruba --_badge-color)"
     },
     {
       "file": "app/templates/cotacao/redespachar.html",
@@ -3693,41 +2346,6 @@
       "detail": "background-color: var(--bs-success-bg-subtle);"
     },
     {
-      "file": "app/templates/custeio/mensal.html",
-      "line": 152,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/custeio/comissao.html",
-      "line": 141,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1 me-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/divergencias_nf_po.html",
-      "line": 282,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/divergencias_nf_po.html",
-      "line": 284,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/divergencias_nf_po.html",
-      "line": 291,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark mt-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/recebimento/divergencias_nf_po.html",
       "line": 139,
       "code": "V12_table_row_class",
@@ -3743,52 +2361,10 @@
     },
     {
       "file": "app/templates/recebimento/divergencias.html",
-      "line": 182,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/divergencias.html",
-      "line": 209,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/divergencias.html",
-      "line": 223,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/divergencias.html",
-      "line": 314,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span id=\"aprovar-nf-header\" class=\"ms-2 badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/divergencias.html",
-      "line": 420,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span id=\"rejeitar-nf-header\" class=\"ms-2 badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/divergencias.html",
       "line": 130,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/recebimento/ncm_ibscbs.html",
-      "line": 143,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/recebimento/ncm_ibscbs.html",
@@ -3810,41 +2386,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light sticky-top",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/recebimento/primeira_compra.html",
-      "line": 200,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/primeira_compra.html",
-      "line": 419,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/primeira_compra.html",
-      "line": 421,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/primeira_compra.html",
-      "line": 422,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/primeira_compra.html",
-      "line": 525,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark fs-4\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/recebimento/primeira_compra.html",
@@ -3876,38 +2417,10 @@
     },
     {
       "file": "app/templates/recebimento/historico_aprovacoes_nf_po.html",
-      "line": 172,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/historico_aprovacoes_nf_po.html",
-      "line": 174,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/historico_aprovacoes_nf_po.html",
       "line": 122,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/recebimento/validacoes_nf_po.html",
-      "line": 235,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/validacoes_nf_po.html",
-      "line": 273,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark mt-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/recebimento/validacoes_nf_po.html",
@@ -3925,59 +2438,10 @@
     },
     {
       "file": "app/templates/recebimento/pendencias_ibscbs.html",
-      "line": 173,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/pendencias_ibscbs.html",
-      "line": 179,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/pendencias_ibscbs.html",
-      "line": 204,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/pendencias_ibscbs.html",
-      "line": 206,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/pendencias_ibscbs.html",
-      "line": 221,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/pendencias_ibscbs.html",
-      "line": 583,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/pendencias_ibscbs.html",
       "line": 134,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/recebimento/status_recebimento_lf.html",
-      "line": 535,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge ${l.tipo === 'auto' ? 'bg-success' : 'bg-warning text-dark'}\"",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/recebimento/recebimento_fisico.html",
@@ -3994,13 +2458,6 @@
       "detail": "flex: 1.4; font-family: monospace; background-color: var(--input-bg); opacity: 0.9;"
     },
     {
-      "file": "app/templates/recebimento/recebimento_fisico.html",
-      "line": 611,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/recebimento/recebimento_lf.html",
       "line": 532,
       "code": "V1_inline_style_color",
@@ -4027,20 +2484,6 @@
       "code": "V2_hex_in_template",
       "snippet": "#f8f9fa",
       "detail": "em style: flex: 1.4; font-family: monospace; background-color: var(--input-bg, #f8f9fa); o"
-    },
-    {
-      "file": "app/templates/recebimento/recebimento_lf.html",
-      "line": 514,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/recebimento/depara_fornecedor.html",
-      "line": 182,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/recebimento/depara_fornecedor.html",
@@ -4055,13 +2498,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/recebimento/preview_consolidacao.html",
-      "line": 516,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/recebimento/preview_consolidacao.html",
@@ -4100,20 +2536,6 @@
     },
     {
       "file": "app/templates/veiculos/admin_veiculos.html",
-      "line": 101,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/veiculos/admin_veiculos.html",
-      "line": 113,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/veiculos/admin_veiculos.html",
       "line": 53,
       "code": "V12_table_row_class",
       "snippet": "table-dark",
@@ -4134,46 +2556,11 @@
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/tabelas/simulacao_frete.html",
-      "line": 121,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/tabelas/simulacao_frete.html",
-      "line": 291,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/tabelas/simulacao_frete.html",
-      "line": 306,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/tabelas/simulacao_frete.html",
-      "line": 495,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/tabelas/historico_tabelas.html",
       "line": 99,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/pessoal/fluxo_caixa.html",
-      "line": 164,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span id=\"countCartoes\" class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pessoal/fluxo_caixa.html",
@@ -4191,20 +2578,6 @@
     },
     {
       "file": "app/templates/pessoal/dashboard.html",
-      "line": 429,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/dashboard.html",
-      "line": 462,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/dashboard.html",
       "line": 143,
       "code": "V12_table_row_class",
       "snippet": "table-light fw-bold",
@@ -4212,59 +2585,17 @@
     },
     {
       "file": "app/templates/pessoal/pluggy_painel.html",
-      "line": 37,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n              {% if item.status == 'UPDATED' %}bg-success\n              {% elif item.status == 'UPDATING' %}bg-info\n              {% elif ite",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/pluggy_painel.html",
-      "line": 117,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/pluggy_painel.html",
-      "line": 136,
+      "line": 132,
       "code": "V6_badge_bg_text_combo",
       "snippet": "<span class=\"badge bg-light text-muted\"",
       "detail": "badge tem bg-light + text-muted (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pessoal/pluggy_painel.html",
-      "line": 100,
+      "line": 96,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/pessoal/compensacoes.html",
-      "line": 28,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border me-1 mb-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/compensacoes.html",
-      "line": 45,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border me-1 mb-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/compensacoes.html",
-      "line": 205,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/compensacoes.html",
-      "line": 257,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pessoal/compensacoes.html",
@@ -4279,13 +2610,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/pessoal/matches_empresa.html",
-      "line": 223,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pessoal/matches_empresa.html",
@@ -4324,55 +2648,6 @@
     },
     {
       "file": "app/templates/pessoal/transacoes.html",
-      "line": 22,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/transacoes.html",
-      "line": 205,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/transacoes.html",
-      "line": 289,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/transacoes.html",
-      "line": 294,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/transacoes.html",
-      "line": 331,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/transacoes.html",
-      "line": 1247,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark border\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/transacoes.html",
-      "line": 1248,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/transacoes.html",
       "line": 242,
       "code": "V12_table_row_class",
       "snippet": "table-light",
@@ -4405,34 +2680,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/pessoal/configuracao.html",
-      "line": 236,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/configuracao.html",
-      "line": 337,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/configuracao.html",
-      "line": 1251,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/configuracao.html",
-      "line": 1355,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pessoal/configuracao.html",
@@ -4477,34 +2724,6 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/pessoal/importar.html",
-      "line": 70,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/importar.html",
-      "line": 86,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/importar.html",
-      "line": 132,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/fluxo_caixa_faturas.html",
-      "line": 200,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/pessoal/fluxo_caixa_faturas.html",
       "line": 69,
       "code": "V12_table_row_class",
@@ -4520,20 +2739,6 @@
     },
     {
       "file": "app/templates/pessoal/pluggy_dry_run.html",
-      "line": 128,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/pluggy_dry_run.html",
-      "line": 185,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<div class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pessoal/pluggy_dry_run.html",
       "line": 99,
       "code": "V12_table_row_class",
       "snippet": "table-dark sticky-top",
@@ -4541,31 +2746,10 @@
     },
     {
       "file": "app/templates/financeiro/extrato_lote_pagamentos_detalhe.html",
-      "line": 1266,
+      "line": 1261,
       "code": "V1_inline_style_color",
       "snippet": "style=\"background: var(--fin-bg-tertiary, var(--bs-tertiary-bg));\"",
       "detail": "background: var(--fin-bg-tertiary, var(--bs-tertiary-bg));"
-    },
-    {
-      "file": "app/templates/financeiro/extrato_lote_pagamentos_detalhe.html",
-      "line": 35,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                            {% if lote.status == 'CONCLUIDO' %}bg-success\n                            {% elif lote.status == 'ERRO' %}bg-dang",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/extrato_lote_pagamentos_detalhe.html",
-      "line": 258,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/extrato_lote_pagamentos_detalhe.html",
-      "line": 443,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/financeiro/baixas_hub.html",
@@ -4940,31 +3124,10 @@
     },
     {
       "file": "app/templates/financeiro/comprovantes_hub.html",
-      "line": 520,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span id=\"multi-nf-juros\" class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/comprovantes_hub.html",
-      "line": 1196,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/comprovantes_hub.html",
       "line": 1258,
       "code": "V6_badge_bg_text_combo",
       "snippet": "<span class=\"badge bg-light text-muted\"",
       "detail": "badge tem bg-light + text-muted (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/comprovantes_hub.html",
-      "line": 1269,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/financeiro/comprovantes_hub.html",
@@ -4979,20 +3142,6 @@
       "code": "V6_badge_bg_text_combo",
       "snippet": "<span class=\"badge bg-light text-muted\"",
       "detail": "badge tem bg-light + text-muted (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/comprovantes_hub.html",
-      "line": 1299,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/comprovantes_hub.html",
-      "line": 2073,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/financeiro/contas_receber.html",
@@ -5035,13 +3184,6 @@
       "code": "V1_inline_style_color",
       "snippet": "style=\"color: var(--fin-accent-danger);\"",
       "detail": "color: var(--fin-accent-danger);"
-    },
-    {
-      "file": "app/templates/financeiro/pagamentos_baixas_lote.html",
-      "line": 192,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                                    {% if item.status_match == 'MATCH_ENCONTRADO' %}bg-success\n                                    {% elif it",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/financeiro/pagamentos_baixas_lote.html",
@@ -5395,31 +3537,10 @@
     },
     {
       "file": "app/templates/financeiro/extrato_lote_detalhe.html",
-      "line": 1170,
+      "line": 1165,
       "code": "V1_inline_style_color",
       "snippet": "style=\"background: var(--fin-bg-tertiary, var(--bs-tertiary-bg));\"",
       "detail": "background: var(--fin-bg-tertiary, var(--bs-tertiary-bg));"
-    },
-    {
-      "file": "app/templates/financeiro/extrato_lote_detalhe.html",
-      "line": 34,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge\n                            {% if lote.status == 'CONCLUIDO' %}bg-success\n                            {% elif lote.status == 'ERRO' %}bg-dang",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/extrato_lote_detalhe.html",
-      "line": 265,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/extrato_lote_detalhe.html",
-      "line": 367,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/financeiro/contas_receber_hub.html",
@@ -5476,34 +3597,6 @@
       "code": "V2_hex_in_template",
       "snippet": "#f8f9fa",
       "detail": "em style: background: #f8f9fa; padding: 0.2rem 0.4rem; border-radius: 4px;"
-    },
-    {
-      "file": "app/templates/financeiro/listar_contas_receber.html",
-      "line": 462,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if em.status_finalizacao == 'Devolvida' %}bg-danger{% elif em.status_finalizacao == 'Cancelada' %}bg-dark{% elif em.status_finalizacao == ",
-      "detail": "badge tem bg-danger + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/listar_contas_receber.html",
-      "line": 475,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-status\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/listar_contas_receber.html",
-      "line": 561,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-clicavel\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/financeiro/listar_contas_receber.html",
-      "line": 1001,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/financeiro/listar_contas_receber.html",
@@ -5576,20 +3669,6 @@
       "detail": "color: var(--fin-accent-danger);"
     },
     {
-      "file": "app/templates/bi/dashboard.html",
-      "line": 384,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/bi/transportadoras.html",
-      "line": 429,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge ${score >= 60 ? 'bg-success' : 'bg-warning text-dark'}\"",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/rastreamento/dashboard.html",
       "line": 208,
       "code": "V1_inline_style_color",
@@ -5632,13 +3711,6 @@
       "detail": "color: ${corTruck}; font-size: 28px;"
     },
     {
-      "file": "app/templates/rastreamento/monitoramento.html",
-      "line": 85,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/rastreamento/questionario_entrega.html",
       "line": 277,
       "code": "V1_inline_style_color",
@@ -5647,24 +3719,10 @@
     },
     {
       "file": "app/templates/rastreamento/detalhes.html",
-      "line": 241,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if ping.bateria_nivel > 50 %}bg-success{% elif ping.bateria_nivel > 20 %}bg-warning text-dark{% else %}bg-danger{% endif %}\"",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/rastreamento/detalhes.html",
       "line": 205,
       "code": "V12_table_row_class",
       "snippet": "table-dark",
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/pedidos/cotacao_manual.html",
-      "line": 17,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-dark text-light\"",
-      "detail": "badge tem bg-dark + text-light (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pedidos/cotacao_manual.html",
@@ -5730,27 +3788,6 @@
       "detail": "em style: margin: 0 0 2px 0; font-size: 14px; color: #856404;"
     },
     {
-      "file": "app/templates/pedidos/detalhes_pedido.html",
-      "line": 49,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/detalhes_pedido.html",
-      "line": 59,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/detalhes_pedido.html",
-      "line": 62,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/localidades/cidades.html",
       "line": 69,
       "code": "V12_table_row_class",
@@ -5763,83 +3800,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-dark",
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/carvia/dashboard.html",
-      "line": 34,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('carvia.fluxo_caixa') }}\" class=\"badge bg-warning text-dark text-decoration-none fs-6 py-2 px-3\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/dashboard.html",
-      "line": 39,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('carvia.listar_cotacoes_v2') }}\" class=\"badge bg-warning text-dark text-decoration-none fs-6 py-2 px-3\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/dashboard.html",
-      "line": 107,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/dashboard.html",
-      "line": 168,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/_quick_nav.html",
-      "line": 60,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/detalhe_operacao.html",
-      "line": 968,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/detalhe_operacao.html",
-      "line": 974,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/_macros.html",
-      "line": 148,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/_macros.html",
-      "line": 157,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/_macros.html",
-      "line": 174,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/_macros.html",
-      "line": 193,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/carvia/importar_resultado.html",
@@ -5856,60 +3816,11 @@
       "detail": "em style: background-color: var(--bs-warning-bg-subtle, #fff3cd);"
     },
     {
-      "file": "app/templates/carvia/importar_resultado.html",
-      "line": 328,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/importar_resultado.html",
-      "line": 534,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/importar_resultado.html",
-      "line": 646,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/gerencial.html",
-      "line": 322,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/faturamento/tela_conciliacao_manual.html",
-      "line": 127,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/faturamento/tela_conciliacao_manual.html",
-      "line": 199,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/faturamento/tela_conciliacao_manual.html",
       "line": 104,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/faturamento/dashboard_reconciliacao.html",
-      "line": 267,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/faturamento/dashboard_reconciliacao.html",
@@ -5934,38 +3845,10 @@
     },
     {
       "file": "app/templates/faturamento/justificativas_parciais.html",
-      "line": 252,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/faturamento/justificativas_parciais.html",
-      "line": 260,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/faturamento/justificativas_parciais.html",
-      "line": 305,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/faturamento/justificativas_parciais.html",
       "line": 212,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/faturamento/atualizar_nf_pendentes.html",
-      "line": 247,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/faturamento/listar_relatorios.html",
@@ -5982,109 +3865,11 @@
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/hora/tagplus/parser_append.html",
-      "line": 206,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/backfill_pedidos.html",
-      "line": 107,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/checklist.html",
-      "line": 29,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/departamento_map.html",
-      "line": 61,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/departamento_map.html",
-      "line": 84,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/backfill.html",
-      "line": 119,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/conta_form.html",
-      "line": 28,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/nfe_status.html",
-      "line": 311,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/hora/tagplus/backfill_detalhe.html",
-      "line": 19,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span id=\"job-status\" class=\"badge fs-6\n          {% if job.status == 'CONCLUIDO' %}bg-success\n          {% elif job.status == 'EM_PROGRESSO' %}bg-primary\n     ",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/backfill_detalhe.html",
-      "line": 98,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark fs-6\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/backfill_detalhe.html",
-      "line": 110,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark fs-6\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/backfill_detalhe.html",
-      "line": 116,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark fs-6\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/backfill_detalhe.html",
-      "line": 165,
+      "line": 160,
       "code": "V12_table_row_class",
       "snippet": "table-light sticky-top",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/hora/tagplus/forma_pag_map.html",
-      "line": 150,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/devolucao/depara/index.html",
-      "line": 530,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/devolucao/depara/index.html",
@@ -6099,27 +3884,6 @@
       "code": "V1_inline_style_color",
       "snippet": "style=\"background: rgba(0,0,0,0.7); z-index: 9999;\"",
       "detail": "background: rgba(0,0,0,0.7); z-index: 9999;"
-    },
-    {
-      "file": "app/templates/devolucao/ocorrencias/index.html",
-      "line": 234,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/devolucao/ocorrencias/index.html",
-      "line": 283,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/devolucao/ocorrencias/index.html",
-      "line": 295,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/devolucao/ocorrencias/index.html",
@@ -6148,41 +3912,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/devolucao/ocorrencias/detalhe.html",
-      "line": 44,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/devolucao/ocorrencias/detalhe.html",
-      "line": 51,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/devolucao/ocorrencias/detalhe.html",
-      "line": 62,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark badge-sm\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/devolucao/ocorrencias/detalhe.html",
-      "line": 838,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/devolucao/ocorrencias/detalhe.html",
-      "line": 975,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/devolucao/ocorrencias/detalhe.html",
@@ -6262,13 +3991,6 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/portal/sendas/verificacao.html",
-      "line": 68,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/portal/tenda/depara/index_ean.html",
       "line": 99,
       "code": "V12_table_row_class",
@@ -6305,38 +4027,10 @@
     },
     {
       "file": "app/templates/portal/atacadao/depara/listar.html",
-      "line": 100,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/portal/atacadao/depara/listar.html",
       "line": 64,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/fretes/ctes/index.html",
-      "line": 211,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/ctes/index.html",
-      "line": 221,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/fretes/ctes/index.html",
-      "line": 268,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark d-block mb-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/fretes/ctes/index.html",
@@ -6367,48 +4061,6 @@
       "detail": "uso de table-secondary (variant secondary NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/fretes/frota/detalhe_veiculo.html",
-      "line": 187,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/comercial/admin/lista_vendedores.html",
-      "line": 86,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carteira/partials/_separacoes_pedido.html",
-      "line": 48,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/dashboard.html",
-      "line": 125,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/dashboard.html",
-      "line": 294,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/dashboard.html",
-      "line": 648,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/pallet/v2/dashboard.html",
       "line": 758,
       "code": "V12_table_row_class",
@@ -6421,83 +4073,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/vales.html",
-      "line": 424,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/vales.html",
-      "line": 426,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/vales.html",
-      "line": 439,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/vales.html",
-      "line": 517,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/solucoes.html",
-      "line": 629,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/solucoes.html",
-      "line": 670,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/solucoes.html",
-      "line": 870,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/solucoes.html",
-      "line": 1083,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/solucoes.html",
-      "line": 1304,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/solucoes.html",
-      "line": 1392,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pallet/v2/controle_pallets/solucoes.html",
-      "line": 1501,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge ${d.recebido ? 'bg-success' : 'bg-warning text-dark'}\"",
-      "detail": "badge tem bg-success + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pallet/v2/tratativa_nfs/vincular_dfe_devolucao.html",
@@ -6570,13 +4145,6 @@
       "detail": "margin-top: 1rem; color: var(--semantic-danger);"
     },
     {
-      "file": "app/templates/pallet/v2/tratativa_nfs/sugestoes.html",
-      "line": 83,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/pallet/v2/tratativa_nfs/solucoes.html",
       "line": 392,
       "code": "V1_inline_style_color",
@@ -6584,102 +4152,11 @@
       "detail": "background: hsla(45 100% 65% / 0.2);"
     },
     {
-      "file": "app/templates/motochefe/titulos_a_pagar/listar.html",
-      "line": 56,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/titulos_a_pagar/listar.html",
-      "line": 105,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark float-end\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/titulos_a_pagar/listar.html",
-      "line": 200,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/titulos_a_pagar/listar.html",
-      "line": 221,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark float-end\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/titulos_a_pagar/listar.html",
-      "line": 276,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark float-end\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/titulos_a_pagar/detalhes.html",
-      "line": 65,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/motochefe/titulos_a_pagar/detalhes.html",
       "line": 204,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/contas_a_pagar.html",
-      "line": 90,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark float-end\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/contas_a_pagar.html",
-      "line": 173,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark float-end\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/contas_a_pagar.html",
-      "line": 259,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark float-end\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/contas_a_pagar.html",
-      "line": 302,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark float-end\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/contas_a_pagar.html",
-      "line": 338,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark float-end\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/detalhes_recebimento.html",
-      "line": 77,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/detalhes_recebimento.html",
-      "line": 110,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/motochefe/financeiro/detalhes_recebimento.html",
@@ -6718,34 +4195,6 @@
     },
     {
       "file": "app/templates/motochefe/financeiro/detalhes_pagamento.html",
-      "line": 175,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/detalhes_pagamento.html",
-      "line": 279,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/detalhes_pagamento.html",
-      "line": 395,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/detalhes_pagamento.html",
-      "line": 428,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/financeiro/detalhes_pagamento.html",
       "line": 154,
       "code": "V12_table_row_class",
       "snippet": "table-dark",
@@ -6780,46 +4229,11 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/motochefe/operacional/despesas/listar.html",
-      "line": 124,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/operacional/despesas/form.html",
-      "line": 91,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/cadastros/equipes/gerenciar_precos.html",
-      "line": 152,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/motochefe/cadastros/equipes/gerenciar_precos.html",
       "line": 62,
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/motochefe/logistica/embarques/listar.html",
-      "line": 66,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/logistica/embarques/listar.html",
-      "line": 77,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/motochefe/logistica/embarques/form.html",
@@ -6837,20 +4251,6 @@
     },
     {
       "file": "app/templates/motochefe/vendas/titulos/detalhes.html",
-      "line": 73,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/titulos/detalhes.html",
-      "line": 191,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/titulos/detalhes.html",
       "line": 173,
       "code": "V12_table_row_class",
       "snippet": "table-light",
@@ -6862,41 +4262,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/comissoes/listar.html",
-      "line": 123,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/comissoes/detalhes.html",
-      "line": 43,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/comissoes/detalhes.html",
-      "line": 245,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/pedidos/historico_confirmacoes.html",
-      "line": 106,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/pedidos/historico_confirmacoes.html",
-      "line": 205,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/motochefe/vendas/pedidos/listar.html",
@@ -6911,20 +4276,6 @@
       "code": "V1_inline_style_color",
       "snippet": "style=\"color:${getCorHex(cor.cor)}\"",
       "detail": "color:${getCorHex(cor.cor)}"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/pedidos/listar.html",
-      "line": 107,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/pedidos/listar.html",
-      "line": 570,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/motochefe/vendas/pedidos/imprimir.html",
@@ -6948,41 +4299,6 @@
       "detail": "color:${getCorHex(cor.cor)}"
     },
     {
-      "file": "app/templates/motochefe/vendas/pedidos/form.html",
-      "line": 779,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/pedidos/detalhes.html",
-      "line": 265,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ml-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/pedidos/detalhes.html",
-      "line": 328,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/pedidos/detalhes.html",
-      "line": 371,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/vendas/pedidos/detalhes.html",
-      "line": 426,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/motochefe/vendas/pedidos/detalhes.html",
       "line": 255,
       "code": "V12_table_row_class",
@@ -7004,67 +4320,11 @@
       "detail": "color:${getCorHex(item.cor)}"
     },
     {
-      "file": "app/templates/motochefe/produtos/motos/listar.html",
-      "line": 179,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/produtos/motos/listar.html",
-      "line": 188,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/produtos/motos/listar.html",
-      "line": 667,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/motochefe/produtos/motos/form.html",
-      "line": 155,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/odoo/sync_integrada/listar_pedidos.html",
       "line": 93,
       "code": "V12_table_row_class",
       "snippet": "table-dark",
       "detail": "uso de table-dark (variant dark NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/financeiro/remessa_vortx/historico.html",
-      "line": 53,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/leitura/historico.html",
-      "line": 66,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/leitura/historico.html",
-      "line": 74,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/leitura/index.html",
-      "line": 662,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark me-2\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pedidos/leitura/index.html",
@@ -7086,20 +4346,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/pedidos/leitura/fila_impostos.html",
-      "line": 87,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/leitura/fila_impostos.html",
-      "line": 485,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pedidos/leitura/fila_impostos.html",
@@ -7130,13 +4376,6 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/pedidos/leitura/regioes_form.html",
-      "line": 122,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/pedidos/leitura/regioes.html",
       "line": 75,
       "code": "V12_table_row_class",
@@ -7149,27 +4388,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/pedidos/_partials/_modais.html",
-      "line": 43,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark fs-6\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/_partials/_modais.html",
-      "line": 211,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/_partials/_modais.html",
-      "line": 248,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/pedidos/_partials/_modais.html",
@@ -7187,52 +4405,10 @@
     },
     {
       "file": "app/templates/pedidos/_partials/_tabela_pedidos.html",
-      "line": 310,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}\"\n                           class=\"badge bg-warning text-dark text-decoration-n",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/_partials/_tabela_pedidos.html",
-      "line": 403,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/pedidos/_partials/_tabela_pedidos.html",
       "line": 269,
       "code": "V12_table_row_class",
       "snippet": "\n                {% if p.status_calculado == 'FATURADO' %}table-success\n                {% elif p.status_calculado in ['COTADO', 'CARVIA_COTADO'] %}table-warnin",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/manufatura/requisicoes_compras/listar.html",
-      "line": 195,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/manufatura/requisicoes_compras/listar.html",
-      "line": 197,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/manufatura/requisicoes_compras/listar.html",
-      "line": 231,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/manufatura/pedidos_compras/index.html",
-      "line": 446,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/manufatura/sugestao_compras/modals/_modal-sugestao-inteligente.html",
@@ -7242,102 +4418,11 @@
       "detail": "background: var(--bg);"
     },
     {
-      "file": "app/templates/carvia/custos_entrega/listar.html",
-      "line": 109,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/custos_entrega/vincular_fatura.html",
-      "line": 112,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/custos_entrega/selecionar_frete.html",
-      "line": 78,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if frete.tipo_carga == 'DIRETA' %}bg-info{% else %}bg-warning text-dark{% endif %}\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/custos_entrega/selecionar_frete.html",
-      "line": 153,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {% if nf.strip() == numero_nf %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/custos_entrega/detalhe.html",
-      "line": 72,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/nfs/listar.html",
-      "line": 241,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('carvia.detalhe_subcontrato', sub_id=s.id) }}\" class=\"badge bg-warning text-dark text-decoration-none d-block mb-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/carvia/nfs/_modal_inserir_nf_transferencia.html",
       "line": 211,
       "code": "V12_table_row_class",
       "snippet": "table-light sticky-top",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/carvia/nfs/detalhe.html",
-      "line": 16,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/nfs/detalhe.html",
-      "line": 29,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/nfs/detalhe.html",
-      "line": 186,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
-      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/nfs/detalhe.html",
-      "line": 225,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/nfs/detalhe.html",
-      "line": 240,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/nfs/detalhe.html",
-      "line": 369,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/nfs/detalhe.html",
-      "line": 1611,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-2\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/carvia/nfs/detalhe.html",
@@ -7359,13 +4444,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/carvia/faturas_cliente/listar.html",
-      "line": 133,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('carvia.detalhe_cte_complementar', cte_comp_id=c.id) }}\"\n                                       class=\"badge bg-warning text-dark text-decor",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/carvia/simulador/simulador_embarque.html",
@@ -7494,137 +4572,11 @@
       "detail": "position:absolute;top:80px;left:12px;z-index:10;color:rgba(255,255,255,0.4)"
     },
     {
-      "file": "app/templates/carvia/ctes_complementares/detalhe.html",
-      "line": 339,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/faturas_transportadora/listar.html",
-      "line": 164,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/faturas_transportadora/visualizar.html",
-      "line": 109,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/faturas_transportadora/conferir.html",
-      "line": 54,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/faturas_transportadora/conferir.html",
-      "line": 166,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/faturas_transportadora/conferir.html",
-      "line": 238,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/carvia/faturas_transportadora/conferir.html",
       "line": 425,
       "code": "V12_table_row_class",
       "snippet": "table-secondary",
       "detail": "uso de table-secondary (variant secondary NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/carvia/fretes/detalhe.html",
-      "line": 148,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/fretes/detalhe.html",
-      "line": 413,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/fretes/detalhe.html",
-      "line": 458,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/fretes/detalhe.html",
-      "line": 600,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/fretes/detalhe.html",
-      "line": 628,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_transportadora.id) }}\"\n                           class=\"badge bg-primary text-whit",
-      "detail": "badge tem bg-primary + text-white (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/fretes/detalhe.html",
-      "line": 662,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<a href=\"{{ url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_cliente.id) }}\"\n                           class=\"badge bg-success text-white text-decorat",
-      "detail": "badge tem bg-success + text-white (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/fretes/detalhe.html",
-      "line": 818,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark despesa-emissao-badge\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/admin/auditoria.html",
-      "line": 73,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge {{ 'bg-danger' if r.acao == 'HARD_DELETE' else 'bg-warning text-dark' if r.acao == 'TYPE_CHANGE' else 'bg-info' }}\"",
-      "detail": "badge tem bg-danger + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/aprovacoes/processar.html",
-      "line": 8,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/aprovacoes/processar.html",
-      "line": 89,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/aprovacoes/processar.html",
-      "line": 128,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/aprovacoes/listar.html",
-      "line": 8,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/carvia/cotacoes/detalhe.html",
@@ -7677,13 +4629,6 @@
     },
     {
       "file": "app/templates/carvia/cotacoes/criar.html",
-      "line": 52,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1 d-none\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/cotacoes/criar.html",
       "line": 78,
       "code": "V12_table_row_class",
       "snippet": "table-light",
@@ -7725,34 +4670,6 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
-      "file": "app/templates/carvia/comissoes/detalhe.html",
-      "line": 87,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-info text-dark\"",
-      "detail": "badge tem bg-info + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/subcontratos/listar.html",
-      "line": 152,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark ms-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/subcontratos/listar.html",
-      "line": 157,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark mt-1\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
-      "file": "app/templates/carvia/subcontratos/criar.html",
-      "line": 298,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
-    },
-    {
       "file": "app/templates/carvia/configuracoes/grupos_cliente.html",
       "line": 64,
       "code": "V12_table_row_class",
@@ -7772,13 +4689,6 @@
       "code": "V12_table_row_class",
       "snippet": "table-light",
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
-    },
-    {
-      "file": "app/templates/carvia/subcontrato/selecionar_transportadora.html",
-      "line": 183,
-      "code": "V6_badge_bg_text_combo",
-      "snippet": "<span class=\"badge bg-warning text-dark\"",
-      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/static/css/main.css",

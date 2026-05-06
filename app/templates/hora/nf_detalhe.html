@@ -14,7 +14,7 @@
     {% if nf.pedido_id %}
       <span class="badge bg-success">Vinculada ao pedido {{ nf.pedido.numero_pedido }}</span>
     {% else %}
-      <span class="badge bg-warning text-dark">Sem pedido</span>
+      <span class="badge bg-warning">Sem pedido</span>
       {% if nf.loja_destino_id %}
         <a href="{{ url_for('hora.nfs_match', nf_id=nf.id) }}" class="btn btn-sm btn-primary">
           <i class="fas fa-link"></i> Vincular via match
@@ -288,7 +288,7 @@
             {% if v and v.vinculado_a_nf %}
               <span class="badge bg-success"><i class="fas fa-check"></i> casa com pedido</span>
             {% elif v %}
-              <span class="badge bg-warning text-dark" title="Chassi existe em outro pedido (nao vinculado a esta NF)">
+              <span class="badge bg-warning" title="Chassi existe em outro pedido (nao vinculado a esta NF)">
                 <i class="fas fa-exclamation-triangle"></i> pedido diferente
               </span>
             {% else %}
@@ -333,7 +333,7 @@
                     </span>
                   {% endif %}
                 {% else %}
-                  <span class="badge bg-light text-dark ms-1">= esperado</span>
+                  <span class="badge bg-light ms-1">= esperado</span>
                 {% endif %}
               {% endif %}
               · status pedido: <span class="badge badge-status-{{ v.pedido.status|lower }}">{{ v.pedido.status }}</span>
@@ -382,7 +382,7 @@
             <td>
               {% if it.conferida %}
                 {% if it.divergencia_qtd == 'OK' %}<span class="badge bg-success">OK ({{ it.qtd_conferida|numero_br(3) }})</span>
-                {% elif it.divergencia_qtd == 'FALTA' %}<span class="badge bg-warning text-dark">FALTA ({{ it.qtd_conferida|numero_br(3) }} de {{ it.qtd_nf|numero_br(3) }})</span>
+                {% elif it.divergencia_qtd == 'FALTA' %}<span class="badge bg-warning">FALTA ({{ it.qtd_conferida|numero_br(3) }} de {{ it.qtd_nf|numero_br(3) }})</span>
                 {% elif it.divergencia_qtd == 'SOBRA' %}<span class="badge bg-info">SOBRA ({{ it.qtd_conferida|numero_br(3) }} de {{ it.qtd_nf|numero_br(3) }})</span>
                 {% elif it.divergencia_qtd == 'AVARIA' %}<span class="badge bg-danger">AVARIA</span>
                 {% endif %}

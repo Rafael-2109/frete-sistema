@@ -31,12 +31,7 @@
                         {{ lote.criado_em|formatar_data_hora_brasil }}
                         {% if lote.criado_por %} | {{ lote.criado_por }}{% endif %}
                         |
-                        <span class="badge
-                            {% if lote.status == 'CONCLUIDO' %}bg-success
-                            {% elif lote.status == 'ERRO' %}bg-danger
-                            {% elif lote.status == 'CONCILIANDO' %}bg-info
-                            {% elif lote.status == 'AGUARDANDO_APROVACAO' %}bg-warning text-dark
-                            {% else %}bg-secondary{% endif %}">
+                        <span class="badge {% if lote.status == 'CONCLUIDO' %}bg-success {% elif lote.status == 'ERRO' %}bg-danger {% elif lote.status == 'CONCILIANDO' %}bg-info {% elif lote.status == 'AGUARDANDO_APROVACAO' %}bg-warning {% else %}bg-secondary{% endif %}">
                             {{ lote.status }}
                         </span>
                     </p>
@@ -262,7 +257,7 @@
                                 {% elif item.status_match == 'MATCH_ENCONTRADO' %}
                                 <span class="badge bg-success">MATCH</span>
                                 {% elif item.status_match == 'MULTIPLOS_MATCHES' %}
-                                <span class="badge bg-warning text-dark">MÚLTIPLOS</span>
+                                <span class="badge bg-warning">MÚLTIPLOS</span>
                                 {% elif item.status_match == 'SEM_MATCH' %}
                                 <span class="badge bg-danger">SEM MATCH</span>
                                 {% else %}
@@ -364,7 +359,7 @@
                             </div>
                             {% elif diff_valor > 0 %}
                             <div class="text-center mt-2">
-                                <span class="badge bg-warning text-dark">
+                                <span class="badge bg-warning">
                                     <i class="fas fa-exclamation-triangle me-1"></i>Sobra no extrato
                                 </span>
                             </div>

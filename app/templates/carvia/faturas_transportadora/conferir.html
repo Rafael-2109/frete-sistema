@@ -51,7 +51,7 @@
                     {% if fatura.status_conferencia == 'CONFERIDO' %}
                     <span class="badge bg-success">CONFERIDO</span>
                     {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
-                    <span class="badge bg-warning text-dark">EM CONFERENCIA</span>
+                    <span class="badge bg-warning">EM CONFERENCIA</span>
                     {% elif fatura.status_conferencia == 'DIVERGENTE' %}
                     <span class="badge bg-danger">DIVERGENTE</span>
                     {% else %}
@@ -163,7 +163,7 @@
                                 {% elif doc.status == 'APROVADO' %}
                                 <span class="badge bg-success">APROVADO</span>
                                 {% elif doc.status == 'EM_TRATATIVA' %}
-                                <span class="badge bg-warning text-dark" title="Divergencia — resolver em Aprovacoes">
+                                <span class="badge bg-warning" title="Divergencia — resolver em Aprovacoes">
                                     EM TRATATIVA
                                 </span>
                                 {% elif doc.status == 'REJEITADO' %}
@@ -235,7 +235,7 @@
                         </a>
                     </span>
                     {% elif tem_sub_em_tratativa %}
-                    <span class="badge bg-warning text-dark">
+                    <span class="badge bg-warning">
                         ⚠️ Ha subcontratos EM TRATATIVA &mdash;
                         <a href="{{ url_for('carvia.listar_aprovacoes_subcontrato') }}" class="text-dark">
                             <u>resolver em Aprovacoes</u>

@@ -308,7 +308,7 @@
                   {% endif %}
                   {% if p.ultimo_embarque %}
                     <br><a href="{{ url_for('embarques.visualizar_embarque', id=p.ultimo_embarque.id) }}"
-                           class="badge bg-warning text-dark text-decoration-none"
+                           class="badge bg-warning text-decoration-none"
                            title="Ver embarque #{{ p.ultimo_embarque.numero }}">
                       <i class="fas fa-truck"></i> {{ p.ultimo_embarque.numero }}
                     </a>
@@ -400,7 +400,7 @@
                     </small>
                   {% endif %}
                   {% if p.obs_separacao %}
-                    <br><span class="badge bg-warning text-dark" title="{{ p.obs_separacao }}" style="font-size: 0.7rem;">
+                    <br><span class="badge bg-warning" title="{{ p.obs_separacao }}" style="font-size: 0.7rem;">
                       <i class="fas fa-sticky-note"></i> {{ p.obs_separacao[:50] }}{% if p.obs_separacao|length > 50 %}...{% endif %}
                     </span>
                   {% endif %}

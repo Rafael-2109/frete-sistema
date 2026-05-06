@@ -74,7 +74,7 @@
     <div>
       <span class="badge bg-success">{{ t.ok }} OK</span>
       {% if pode_ver_resumo_completo %}
-        <span class="badge bg-warning text-dark">{{ t.com_divergencia }} div.</span>
+        <span class="badge bg-warning">{{ t.com_divergencia }} div.</span>
       {% endif %}
     </div>
   </div></div>
@@ -181,7 +181,7 @@
               <span class="badge bg-danger"><i class="fas fa-plus"></i> extra (não NF)</span>
             {% else %}
               {% for d in linha.divergencias %}
-                <span class="badge bg-warning text-dark"
+                <span class="badge bg-warning"
                       title="{{ d.detalhe or '' }}">{{ d.tipo }}</span>
               {% endfor %}
             {% endif %}

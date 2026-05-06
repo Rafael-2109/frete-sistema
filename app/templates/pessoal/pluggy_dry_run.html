@@ -125,7 +125,7 @@
             {% if tx.account_type == 'BANK' %}
               <span class="badge bg-info">CC</span>
             {% else %}
-              <span class="badge bg-warning text-dark">CC CR</span>
+              <span class="badge bg-warning">CC CR</span>
             {% endif %}
           </td>
           <td>
@@ -182,7 +182,7 @@
           </td>
           <td>
             {% for a in tx.alertas %}
-              <div class="badge bg-warning text-dark">{{ a[:35] }}...</div>
+              <div class="badge bg-warning">{{ a[:35] }}...</div>
             {% endfor %}
           </td>
           <td>

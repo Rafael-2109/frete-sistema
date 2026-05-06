@@ -70,7 +70,7 @@
                     <tr>
                         <td>{{ r.id }}</td>
                         <td>
-                            <span class="badge {{ 'bg-danger' if r.acao == 'HARD_DELETE' else 'bg-warning text-dark' if r.acao == 'TYPE_CHANGE' else 'bg-info' }}">
+                            <span class="badge {{ 'bg-danger' if r.acao == 'HARD_DELETE' else 'bg-warning ' if r.acao == 'TYPE_CHANGE' else 'bg-info' }}">
                                 {{ r.acao }}
                             </span>
                         </td>

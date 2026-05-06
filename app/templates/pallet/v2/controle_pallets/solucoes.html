@@ -626,7 +626,7 @@
                                 <div class="info-detail" id="substituicao_info_responsavel">-</div>
                             </div>
                             <div class="text-end">
-                                <span class="badge bg-warning text-dark" id="substituicao_info_saldo_badge">0 pallets</span>
+                                <span class="badge bg-warning" id="substituicao_info_saldo_badge">0 pallets</span>
                                 <div class="info-detail">Saldo disponível</div>
                             </div>
                         </div>
@@ -667,7 +667,7 @@
                                 <div class="info-detail" id="substituicao_dest_responsavel">-</div>
                             </div>
                             <div class="text-end">
-                                <span class="badge bg-info text-dark" id="substituicao_dest_qtd_badge">0 pallets</span>
+                                <span class="badge bg-info" id="substituicao_dest_qtd_badge">0 pallets</span>
                             </div>
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="limparDestinoSubstituicao()">
@@ -867,7 +867,7 @@ function buscarNfVenda(termo) {
                                     <br><small class="text-muted">${venda.nome_comprador || '-'}</small>
                                 </div>
                                 <div class="text-end">
-                                    <span class="badge bg-warning text-dark">${venda.quantidade} plt</span>
+                                    <span class="badge bg-warning">${venda.quantidade} plt</span>
                                     <br><small class="text-muted">R$ ${valorFmt}</small>
                                 </div>
                             </div>
@@ -1080,7 +1080,7 @@ function buscarRemessa(linhaId, termo) {
                                     <strong>NF ${credito.numero_nf || 'N/A'}</strong>
                                     <br><small class="text-muted">${credito.nome_responsavel || credito.cnpj_responsavel || '-'}</small>
                                 </div>
-                                <span class="badge bg-warning text-dark">${credito.qtd_saldo} plt</span>
+                                <span class="badge bg-warning">${credito.qtd_saldo} plt</span>
                             </div>
                         `;
                         div.addEventListener('click', function() {
@@ -1301,7 +1301,7 @@ function buscarNfOrigem(termo) {
                                     <br><small class="text-muted">${credito.nome_responsavel || credito.cnpj_responsavel || '-'} (${credito.tipo_responsavel})</small>
                                 </div>
                                 <div class="text-end">
-                                    <span class="badge bg-warning text-dark">${credito.qtd_saldo} plt</span>
+                                    <span class="badge bg-warning">${credito.qtd_saldo} plt</span>
                                     <br><small class="text-muted">de ${credito.qtd_original}</small>
                                 </div>
                             </div>
@@ -1389,7 +1389,7 @@ function buscarNfDestino(termo) {
                                     <br><small class="text-muted">${nf.nome_destinatario || '-'} (${nf.tipo_destinatario || '-'})</small>
                                 </div>
                                 <div class="text-end">
-                                    <span class="badge bg-info text-dark">${nf.quantidade || 0} plt</span>
+                                    <span class="badge bg-info">${nf.quantidade || 0} plt</span>
                                     <br><small class="text-muted">${nf.data_emissao || '-'}</small>
                                 </div>
                             </div>
@@ -1498,7 +1498,7 @@ function openDetalhesModal(creditoId) {
                                         ${d.numero_documento ? ` - ${d.numero_documento}` : ''}
                                         <br><small class="text-muted">${d.quantidade} pallets</small>
                                     </div>
-                                    <span class="badge ${d.recebido ? 'bg-success' : 'bg-warning text-dark'}">${d.recebido ? 'Recebido' : 'Pendente'}</span>
+                                    <span class="badge ${d.recebido ? 'bg-success' : 'bg-warning '}">${d.recebido ? 'Recebido' : 'Pendente'}</span>
                                 </li>
                             `).join('')}
                         </ul>

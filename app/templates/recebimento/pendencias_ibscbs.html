@@ -170,13 +170,13 @@
                                 <small class="text-muted">
                                     {{ item.cnpj_fornecedor|formatar_cnpj }}
                                     {% if item.uf_fornecedor %}
-                                    <span class="badge bg-light text-dark ms-1">{{ item.uf_fornecedor }}</span>
+                                    <span class="badge bg-light ms-1">{{ item.uf_fornecedor }}</span>
                                     {% endif %}
                                 </small>
                                 <br>
                                 <small class="text-muted">
                                     {% if item.regime_tributario == '3' %}
-                                    <span class="badge bg-warning text-dark">Regime Normal</span>
+                                    <span class="badge bg-warning">Regime Normal</span>
                                     {% else %}
                                     <span class="badge bg-secondary">{{ item.regime_tributario_descricao or 'N/A' }}</span>
                                     {% endif %}
@@ -201,9 +201,9 @@
                                 {% if item.motivo_pendencia == 'nao_destacou' %}
                                 <span class="badge bg-danger">Não Destacou</span>
                                 {% elif item.motivo_pendencia == 'falta_cadastro' %}
-                                <span class="badge bg-warning text-dark">Falta Cadastro</span>
+                                <span class="badge bg-warning">Falta Cadastro</span>
                                 {% elif item.motivo_pendencia == 'cst_incorreto' %}
-                                <span class="badge bg-warning text-dark">CST incorreto</span>
+                                <span class="badge bg-warning">CST incorreto</span>
                                 {% elif item.motivo_pendencia == 'aliquota_divergente' %}
                                 <span class="badge bg-info">Aliq. divergente</span>
                                 {% elif item.motivo_pendencia == 'valor_zerado' %}
@@ -218,7 +218,7 @@
                             </td>
                             <td>
                                 {% if item.status == 'pendente' %}
-                                <span class="badge bg-warning text-dark">Pendente</span>
+                                <span class="badge bg-warning">Pendente</span>
                                 {% elif item.status == 'aprovado' %}
                                 <span class="badge bg-success">Aprovado</span>
                                 {% elif item.status == 'rejeitado' %}
@@ -580,7 +580,7 @@
                         <table class="table table-sm">
                             <tr><td>Razao:</td><td>${p.razao_fornecedor || '-'}</td></tr>
                             <tr><td>CNPJ:</td><td>${formatarCnpj(p.cnpj_fornecedor)}</td></tr>
-                            <tr><td>Regime:</td><td><span class="badge bg-warning text-dark">${p.regime_tributario_descricao || 'N/A'}</span></td></tr>
+                            <tr><td>Regime:</td><td><span class="badge bg-warning">${p.regime_tributario_descricao || 'N/A'}</span></td></tr>
                             ${p.ncm_prefixo ? `<tr><td>NCM:</td><td><code>${p.ncm || p.ncm_prefixo}</code> ${ncmCadastro ? '<span class="badge bg-success">Cadastrado</span>' : '<span class="badge bg-danger">Nao cadastrado</span>'}</td></tr>` : ''}
                         </table>
                     </div>

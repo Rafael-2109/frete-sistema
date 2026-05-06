@@ -179,7 +179,7 @@
                         aria-selected="true">
                         <i class="fas fa-exclamation-triangle text-warning"></i>
                         <strong>SEM Fatura</strong>
-                        <span class="badge bg-warning text-dark ms-2">{{ despesas_sem_fatura.total }}</span>
+                        <span class="badge bg-warning ms-2">{{ despesas_sem_fatura.total }}</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -241,7 +241,7 @@
                                     <td>
                                         {% if despesa.nfd_id %}
                                             <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=despesa.nfd.ocorrencia.id if despesa.nfd and despesa.nfd.ocorrencia else 0) }}"
-                                               class="badge bg-warning text-dark" title="Ver devolução">
+                                               class="badge bg-warning" title="Ver devolução">
                                                 NFD {{ despesa.numero_nfd or despesa.nfd.numero_nfd }}
                                             </a>
                                         {% elif despesa.tipo_despesa == 'DEVOLUÇÃO' %}
@@ -373,7 +373,7 @@
                                     <td>
                                         {% if despesa.nfd_id %}
                                             <a href="{{ url_for('devolucao.devolucao_ocorrencia.detalhe', ocorrencia_id=despesa.nfd.ocorrencia.id if despesa.nfd and despesa.nfd.ocorrencia else 0) }}"
-                                               class="badge bg-warning text-dark" title="Ver devolução">
+                                               class="badge bg-warning" title="Ver devolução">
                                                 NFD {{ despesa.numero_nfd or despesa.nfd.numero_nfd }}
                                             </a>
                                         {% elif despesa.tipo_despesa == 'DEVOLUÇÃO' %}

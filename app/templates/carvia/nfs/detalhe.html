@@ -13,7 +13,7 @@
                 {% if tem_frete %}
                 <span class="badge bg-success" title="Frete CarVia vinculado a esta NF"><i class="fas fa-truck"></i> Frete Vinculado</span>
                 {% elif tem_cte %}
-                <span class="badge bg-warning text-dark" title="NF possui CTe CarVia mas sem Frete"><i class="fas fa-exclamation-triangle"></i> CTe sem Frete</span>
+                <span class="badge bg-warning" title="NF possui CTe CarVia mas sem Frete"><i class="fas fa-exclamation-triangle"></i> CTe sem Frete</span>
                 {% endif %}
                 {% if cotacao_id_nf %}
                 <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cotacao_id_nf) }}"
@@ -26,7 +26,7 @@
                     <i class="fas fa-check-circle"></i> Fatura Paga
                 </span>
                 {% elif faturas_cliente %}
-                <span class="badge bg-warning text-dark" title="Fatura cliente pendente de pagamento">
+                <span class="badge bg-warning" title="Fatura cliente pendente de pagamento">
                     <i class="fas fa-clock"></i> Fatura Pendente
                 </span>
                 {% endif %}
@@ -183,7 +183,7 @@
                     {% for ped in pedidos_da_nf %}
                     <a href="{{ url_for('carvia.detalhe_pedido_carvia', pedido_id=ped.id) }}" class="badge bg-primary text-decoration-none me-1">
                         <i class="fas fa-motorcycle"></i> {{ ped.numero_pedido }}
-                        <span class="badge bg-light text-dark ms-1">{{ ped.status_calculado }}</span>
+                        <span class="badge bg-light ms-1">{{ ped.status_calculado }}</span>
                     </a>
                     {% endfor %}
                 </div>
@@ -222,7 +222,7 @@
                             <small class="text-muted d-block">
                                 Emitente
                                 {% if tomador_label == 'emitente' %}
-                                <span class="badge bg-warning text-dark ms-1">
+                                <span class="badge bg-warning ms-1">
                                     <i class="fas fa-dollar-sign"></i> TOMADOR
                                 </span>
                                 {% endif %}
@@ -237,7 +237,7 @@
                             <small class="text-muted d-block">
                                 Destinatario
                                 {% if tomador_label == 'destinatario' %}
-                                <span class="badge bg-warning text-dark ms-1">
+                                <span class="badge bg-warning ms-1">
                                     <i class="fas fa-dollar-sign"></i> TOMADOR
                                 </span>
                                 {% endif %}
@@ -366,7 +366,7 @@
                         </li>
                         {% if vinculo_transf_obj and vinculo_transf_obj.vinculado_retroativamente %}
                         <li class="mt-2">
-                            <span class="badge bg-warning text-dark">
+                            <span class="badge bg-warning">
                                 <i class="fas fa-exclamation-triangle"></i>
                                 Vinculo retroativo — NF venda ja estava em frete/fatura no momento do vinculo
                             </span>
@@ -1608,7 +1608,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="spinner-border spinner-border-sm mt-1" role="status"></div>
                     <div>
                         <strong>Emissao CTe em andamento</strong>
-                        <span class="badge bg-warning text-dark ms-2">${em.status}</span>
+                        <span class="badge bg-warning ms-2">${em.status}</span>
                         <div class="small mt-1">
                             Etapa: <strong id="bannerEtapa">${etapaTexto}</strong>
                             <span class="text-muted ms-2">Iniciado em ${formatarData(em.criado_em)}</span>

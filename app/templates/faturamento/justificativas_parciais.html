@@ -249,7 +249,7 @@
                                     </td>
                                     <td>
                                         {% if just.tipo_divergencia == 'quantidade' %}
-                                            <span class="badge bg-warning text-dark">Quantidade</span>
+                                            <span class="badge bg-warning">Quantidade</span>
                                         {% elif just.tipo_divergencia == 'valor' %}
                                             <span class="badge bg-info">Valor</span>
                                         {% elif just.tipo_divergencia == 'produto' %}
@@ -257,7 +257,7 @@
                                         {% elif just.tipo_divergencia == 'cancelamento' %}
                                             <span class="badge bg-danger">Cancelamento</span>
                                         {% else %}
-                                            <span class="badge bg-light text-dark">{{ just.tipo_divergencia or 'N/A' }}</span>
+                                            <span class="badge bg-light">{{ just.tipo_divergencia or 'N/A' }}</span>
                                         {% endif %}
                                         
                                         {% if just.automatico %}
@@ -302,7 +302,7 @@
                                     </td>
                                     <td>
                                         {% if just.status == 'pendente' %}
-                                            <span class="badge bg-warning text-dark">Pendente</span>
+                                            <span class="badge bg-warning">Pendente</span>
                                         {% elif just.status == 'justificado' %}
                                             <span class="badge bg-info">Justificado</span>
                                         {% elif just.status == 'aprovado' %}

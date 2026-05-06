@@ -262,7 +262,7 @@
                                         {% if item.montagem_paga %}
                                             <span class="badge bg-success ml-2">PAGA</span>
                                         {% else %}
-                                            <span class="badge bg-warning text-dark ml-2">PENDENTE</span>
+                                            <span class="badge bg-warning ml-2">PENDENTE</span>
                                         {% endif %}
                                     </small>
                                 </td>
@@ -325,7 +325,7 @@
                                     {% if t.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>
                                     {% elif t.status == 'ABERTO' %}
-                                        <span class="badge bg-warning text-dark">ABERTO</span>
+                                        <span class="badge bg-warning">ABERTO</span>
                                     {% else %}
                                         <span class="badge bg-secondary">{{ t.status }}</span>
                                     {% endif %}
@@ -368,7 +368,7 @@
                                     {% if c.status == 'PAGO' %}
                                         <span class="badge bg-success">PAGO</span>
                                     {% else %}
-                                        <span class="badge bg-warning text-dark">PENDENTE</span>
+                                        <span class="badge bg-warning">PENDENTE</span>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -423,7 +423,7 @@
                                     {% if item.montagem_paga %}
                                         <span class="badge bg-success">PAGA</span>
                                     {% else %}
-                                        <span class="badge bg-warning text-dark">PENDENTE</span>
+                                        <span class="badge bg-warning">PENDENTE</span>
                                     {% endif %}
                                 </td>
                             </tr>
