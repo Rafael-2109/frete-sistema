@@ -507,21 +507,30 @@ def _buscar_tagplus_nfe_id_para_venda(
                 if isinstance(tp_id, int):
                     return tp_id, f'chave_44 match em /nfes (since={since} until={until})'
 
-    # Fallback pelo numero. Pode ter ambiguidade se 2 NFs com mesmo
-    # numero existirem em series diferentes — preferimos a que tem chave
-    # batendo com prefixos esperaveis. Em ambiguidade, retorna a primeira.
+    # Fallback pelo numero. Recusa quando ambiguo: empresas que trocaram
+    # de serie podem ter 2 NFs com mesmo numero em series diferentes —
+    # gravar tagplus_pedido_id da NF errada nao seria observavel
+    # (pedido associado seria de cliente diferente). Preferimos retornar
+    # `sem_nfe` para o operador investigar manualmente.
     if numero_nf:
-        for nfe in candidatas:
-            if not isinstance(nfe, dict):
-                continue
-            num_api = str(nfe.get('numero') or '').strip()
-            if num_api == numero_nf:
-                tp_id = nfe.get('id')
-                if isinstance(tp_id, int):
-                    return tp_id, (
-                        f'numero match em /nfes (chave_44 nao bateu — '
-                        f'fallback por numero)'
-                    )
+        matches_numero = [
+            nfe for nfe in candidatas
+            if isinstance(nfe, dict)
+            and str(nfe.get('numero') or '').strip() == numero_nf
+            and isinstance(nfe.get('id'), int)
+        ]
+        if len(matches_numero) > 1:
+            return None, (
+                f'numero {numero_nf!r} ambiguo na janela [{since}, {until}]: '
+                f'{len(matches_numero)} NFes distintas com mesmo numero — '
+                f'prefiram preencher nf_saida_chave_44 e retentar.'
+            )
+        if matches_numero:
+            tp_id = matches_numero[0]['id']
+            return tp_id, (
+                f'numero match em /nfes (chave_44 nao bateu — '
+                f'fallback por numero, candidato unico)'
+            )
 
     return None, (
         f'NFe nao encontrada em /nfes na janela [{since}, {until}] '
@@ -624,11 +633,35 @@ def executar_backfill_pedidos_vendas_legadas(
         )
     api = ApiClient(conta)
 
-    q = _query_vendas_sem_pedido_id()
+    # Coleta IDs primeiro para evitar DetachedInstanceError em jobs longos:
+    # `_aplicar_pedido_em_venda` faz commit por venda, e em backfills com
+    # centenas de vendas a sessao SQLAlchemy pode invalidar objetos previamente
+    # carregados pela query (especialmente apos engine.dispose() no recovery).
+    # Re-buscando via db.session.get(HoraVenda, venda_id) garantimos objeto
+    # attached na sessao corrente. Padrao similar usado no
+    # `_iterador_resiliente` do backfill_service universo NF.
+    from app.hora.models import HoraVenda
+    q = _query_vendas_sem_pedido_id().with_entities(HoraVenda.id)
     if limite:
         q = q.limit(limite)
+    venda_ids = [row[0] for row in q.all()]
 
-    for venda in q:
+    for venda_id in venda_ids:
+        venda = db.session.get(HoraVenda, venda_id)
+        if venda is None:
+            # Venda removida entre a coleta de IDs e a iteracao —
+            # nao incrementa nada, apenas pula.
+            continue
+
+        # Defesa adicional: outro processo pode ter resolvido a venda
+        # em paralelo (idempotencia + concorrencia entre 2 jobs).
+        if venda.tagplus_pedido_id is not None:
+            contadores['processadas'] += 1
+            contadores['inalteradas'] += 1
+            if progress_callback:
+                progress_callback({**contadores, 'erros': erros})
+            continue
+
         try:
             res = _enriquecer_venda_legada(api, venda, operador)
         except ScopeInsuficienteError as exc:
@@ -638,14 +671,14 @@ def executar_backfill_pedidos_vendas_legadas(
             raise
         except Exception as exc:  # noqa: BLE001
             logger.exception(
-                'Falha enriquecendo venda %s', venda.id,
+                'Falha enriquecendo venda %s', venda_id,
             )
             try:
                 db.session.rollback()
             except Exception:
                 pass
             res = {
-                'status': 'erro_pedido', 'venda_id': venda.id,
+                'status': 'erro_pedido', 'venda_id': venda_id,
                 'mensagem': f'{type(exc).__name__}: {exc}'[:300],
             }
 
@@ -674,6 +707,14 @@ def executar_backfill_pedidos_vendas_legadas(
 
         if progress_callback:
             progress_callback({**contadores, 'erros': erros})
+
+        # Higiene de sessao: a cada 25 vendas faz close() para liberar
+        # conexao SSL ao pool. Mesmo padrao do executar_backfill original.
+        if contadores['processadas'] % 25 == 0:
+            try:
+                db.session.close()
+            except Exception:
+                logger.exception('Falha em session.close() periodico')
 
     return {**contadores, 'erros': erros}
 

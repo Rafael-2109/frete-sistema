@@ -1584,6 +1584,7 @@ def _query_vendas(
     data_inicio=None,
     data_fim=None,
     chassi: Optional[str] = None,
+    eager_itens: bool = False,
 ):
     """Constroi query base de vendas com filtros — usado por listar e paginar.
 
@@ -1592,18 +1593,26 @@ def _query_vendas(
     data_inicio/data_fim: faixa em data_venda.
     chassi: substring (case-insensitive) que casa em HoraVendaItem.numero_chassi.
         Usa EXISTS para evitar duplicacao de linhas no resultado.
-
-    Eager loading: itens + moto + modelo carregados via selectinload para
-    permitir exibicao inline na listagem sem N+1 queries.
+    eager_itens: quando True, faz `selectinload` em itens+moto+modelo para
+        permitir exibicao inline na listagem sem N+1. NAO ativar quando o
+        caller nao precisa dos itens (custa 3 SELECT IN extras —
+        listar_vendas/exportacao geralmente nao precisa).
     """
     from sqlalchemy import or_
     from sqlalchemy.orm import selectinload
 
-    query = HoraVenda.query.options(
-        selectinload(HoraVenda.itens)
-        .selectinload(HoraVendaItem.moto)
-        .selectinload(HoraMoto.modelo),
-    ).order_by(
+    opts = []
+    if eager_itens:
+        opts.append(
+            selectinload(HoraVenda.itens)
+            .selectinload(HoraVendaItem.moto)
+            .selectinload(HoraMoto.modelo),
+        )
+
+    query = HoraVenda.query
+    if opts:
+        query = query.options(*opts)
+    query = query.order_by(
         HoraVenda.data_venda.desc(), HoraVenda.id.desc()
     )
     if status:
@@ -1670,6 +1679,7 @@ def paginar_vendas(
         data_inicio=data_inicio,
         data_fim=data_fim,
         chassi=chassi,
+        eager_itens=True,  # listagem mostra itens (chassi+modelo+cor) inline.
     )
     if query is None:
         return None
