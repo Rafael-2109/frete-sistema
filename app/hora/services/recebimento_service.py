@@ -677,9 +677,8 @@ def chassis_conferidos_nao_na_nf(recebimento_id: int) -> List[str]:
 def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: Optional[str]):
     """Cria HoraMoto minima se nao existe (FK para conferencia).
 
-    Migration hora_29: pode levantar ModeloPendenteError se modelo do
-    item_nf nao bate em alias E nao houve seed do modelo DESCONHECIDO
-    fallback. Caller (rota) trata propagacao.
+    Migration hora_29: fallback_sentinela=True garante que recebimento
+    nunca bloqueia por modelo desconhecido. Cria pendencia em paralelo.
     """
     if HoraMoto.query.get(chassi):
         return
@@ -693,6 +692,7 @@ def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: 
             criado_por=operador,
             origem_pendencia=PENDENTE_ORIGEM_RECEBIMENTO,
             origem_id=item_nf.id,
+            fallback_sentinela=True,
         )
     else:
         get_or_create_moto(
@@ -701,6 +701,7 @@ def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: 
             cor='NAO_INFORMADA',
             criado_por=operador,
             origem_pendencia=PENDENTE_ORIGEM_RECEBIMENTO,
+            fallback_sentinela=True,
         )
 
 

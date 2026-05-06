@@ -108,11 +108,16 @@ def modelos_pendencias_vincular(pendencia_id: int):
         flash(f'Erro: {exc}', 'danger')
         return redirect(url_for('hora.modelos_pendencias_lista'))
 
-    motos_criadas = resultado['retroativos'].get('motos_criadas', 0)
+    retro = resultado['retroativos']
+    motos_criadas = retro.get('motos_criadas', 0)
+    motos_atualizadas = retro.get('motos_atualizadas', 0)
+    div_resolvidas = retro.get('divergencias_resolvidas', 0)
     flash(
         f'Pendencia #{resultado["pendencia_id"]} vinculada a '
-        f'{resultado["modelo_nome"]!r}.'
-        f' {motos_criadas} moto(s) criadas retroativamente.',
+        f'{resultado["modelo_nome"]!r}. Retroatividade: '
+        f'{motos_atualizadas} moto(s) migradas de sentinela, '
+        f'{motos_criadas} criadas, '
+        f'{div_resolvidas} divergencia(s) resolvidas.',
         'success',
     )
     return redirect(url_for('hora.modelos_pendencias_lista'))
@@ -144,10 +149,15 @@ def modelos_pendencias_criar_modelo(pendencia_id: int):
         flash(f'Erro: {exc}', 'danger')
         return redirect(url_for('hora.modelos_pendencias_lista'))
 
-    motos_criadas = resultado['retroativos'].get('motos_criadas', 0)
+    retro = resultado['retroativos']
+    motos_criadas = retro.get('motos_criadas', 0)
+    motos_atualizadas = retro.get('motos_atualizadas', 0)
+    div_resolvidas = retro.get('divergencias_resolvidas', 0)
     flash(
         f'Modelo {resultado["modelo_nome"]!r} criado (id={resultado["modelo_id"]}).'
-        f' {motos_criadas} moto(s) criadas retroativamente.',
+        f' Retroatividade: {motos_atualizadas} moto(s) migradas de sentinela, '
+        f'{motos_criadas} criadas, '
+        f'{div_resolvidas} divergencia(s) resolvidas.',
         'success',
     )
     return redirect(url_for('hora.modelos_pendencias_lista'))

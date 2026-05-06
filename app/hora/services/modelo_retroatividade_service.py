@@ -64,8 +64,13 @@ def propagar_resolucao(
     contadores = {
         'pedido_itens_atualizados': 0,
         'motos_criadas': 0,
+        'motos_atualizadas': 0,  # NEW: UPDATE de DESCONHECIDO -> canonico
         'divergencias_resolvidas': 0,
     }
+
+    # Lookup do modelo sentinela DESCONHECIDO (existe via seed hora_30)
+    sentinela = HoraModelo.query.filter_by(nome_modelo='DESCONHECIDO').first()
+    sentinela_id = sentinela.id if sentinela else None
 
     # 1. hora_pedido_item: nao temos `modelo_texto_original` armazenado,
     # entao nao da pra correlacionar item-pendencia por SQL retroativo.
@@ -74,7 +79,13 @@ def propagar_resolucao(
     # automatizar, adicionar coluna `modelo_texto_original` em
     # hora_pedido_item espelhando hora_nf_entrada_item.
 
-    # 2. hora_nf_entrada_item: modelo_texto_original bate, chassi sem moto
+    # 2. hora_nf_entrada_item: modelo_texto_original bate. Para cada chassi:
+    #    - Se HoraMoto NAO existe: cria com modelo canonico.
+    #    - Se HoraMoto existe E modelo_id == sentinela DESCONHECIDO:
+    #      UPDATE para canonico (UNICA EXCECAO ao invariante 3 — permitida
+    #      porque estado anterior era sentinela tecnico, nao modelo real).
+    #    - Se HoraMoto existe E modelo_id != sentinela: pula (nao
+    #      sobrescreve identidade real ja estabelecida).
     itens_nf = (
         HoraNfEntradaItem.query
         .filter(func.upper(HoraNfEntradaItem.modelo_texto_original) == nome_upper)
@@ -87,9 +98,16 @@ def propagar_resolucao(
             continue
         existente = HoraMoto.query.get(chassi)
         if existente:
-            # Moto ja existe — pulamos (nao alteramos identidade imutavel,
-            # mesmo que aponte para outro modelo). O merge_service trata
-            # casos de re-apontamento de modelo.
+            # UPDATE permitido APENAS quando estado anterior eh sentinela
+            if sentinela_id is not None and existente.modelo_id == sentinela_id:
+                existente.modelo_id = modelo_canonico_id
+                contadores['motos_atualizadas'] += 1
+                logger.info(
+                    'Retroatividade: HoraMoto chassi=%s migrada de sentinela '
+                    'DESCONHECIDO -> modelo_id=%s', chassi, modelo_canonico_id,
+                )
+            # else: pula — moto ja tem modelo real, merge_service eh quem
+            # cuida de re-apontamentos.
             continue
         cor_final = (
             (nf_item.cor_texto_original or '').strip().upper()

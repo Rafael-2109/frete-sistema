@@ -135,47 +135,13 @@ def importar_danfe_pdf(
         nome_arquivo_origem=nome_arquivo_origem,
     )
 
-    # Migration hora_29: VALIDA modelos ANTES de criar a NF.
-    # Estrategia: para cada item, resolve modelo via aliases. Se algum nao
-    # bate, cria pendencia (commit isolado para sobreviver ao abort do
-    # import) e ABORTA antes de gravar NF/itens. Operador resolve em
-    # /hora/modelos/pendencias e re-importa o PDF — UNIQUE em chave_44
-    # nao bloqueia porque NF nem foi gravada.
-    from app.hora.services.modelo_resolver_service import (
-        ModeloPendenteError,
-        resolver_ou_pendenciar,
-    )
+    # Migration hora_29 (REVISTA): NF NUNCA mais bloqueia por modelo
+    # desconhecido (decisao 1.b). Itens com modelo nao reconhecido criam
+    # HoraMoto apontando para modelo sentinela DESCONHECIDO + pendencia
+    # em hora_modelo_pendente. Quando operador resolver pendencia, a
+    # retroatividade UPDATE-eara hora_moto.modelo_id para o canonico.
     from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
 
-    modelos_resolvidos: list = []  # paralelo a itens_data
-    pendencias_disparadas: list = []
-    for item in itens_data:
-        modelo, pendente = resolver_ou_pendenciar(
-            item.get('modelo_texto_original'),
-            origem=PENDENTE_ORIGEM_NF_ENTRADA,
-            origem_id=None,  # NF ainda nao tem id
-            commit=True,  # persiste pendencia mesmo se import abortar
-        )
-        if modelo is None:
-            pendencias_disparadas.append({
-                'chassi': item['numero_chassi'],
-                'nome_modelo': item.get('modelo_texto_original'),
-                'pendencia_id': pendente.id if pendente else None,
-            })
-        modelos_resolvidos.append(modelo)
-
-    if pendencias_disparadas:
-        ids = [p['pendencia_id'] for p in pendencias_disparadas if p['pendencia_id']]
-        raise ModeloPendenteError(
-            None,  # type: ignore[arg-type]
-            mensagem=(
-                f'NF nao importada — {len(pendencias_disparadas)} chassi(s) com '
-                f'modelo nao reconhecido. Pendencias criadas: {ids}. '
-                f'Resolva em /hora/modelos/pendencias e re-importe o PDF.'
-            ),
-        )
-
-    # Todos os modelos resolvidos — agora pode criar NF + itens.
     nf = HoraNfEntrada(
         chave_44=nf_data['chave_44'],
         numero_nf=nf_data['numero_nf'],
@@ -195,9 +161,10 @@ def importar_danfe_pdf(
     db.session.add(nf)
     db.session.flush()
 
-    for item, modelo in zip(itens_data, modelos_resolvidos):
-        # get_or_create_moto agora seguro — modelo ja resolvido, nao
-        # levanta ModeloPendenteError.
+    for item in itens_data:
+        # fallback_sentinela=True: se modelo nao resolver, cria HoraMoto
+        # com modelo_id=DESCONHECIDO + pendencia. Operador resolve depois
+        # em /hora/modelos/pendencias e retroatividade corrige modelo_id.
         moto = get_or_create_moto(
             numero_chassi=item['numero_chassi'],
             modelo_nome=item.get('modelo_texto_original'),
@@ -207,6 +174,7 @@ def importar_danfe_pdf(
             criado_por=criado_por,
             origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
             origem_id=nf.id,
+            fallback_sentinela=True,
         )
 
         db.session.add(HoraNfEntradaItem(
@@ -293,7 +261,8 @@ def editar_nf_item_manual(
             )
 
         # Garante hora_moto do chassi novo; preserva o numero_motor textual.
-        # Pode levantar ModeloPendenteError — caller (rota) trata.
+        # fallback_sentinela=True: NF entrada nao bloqueia por modelo
+        # desconhecido. Cria pendencia + moto sentinela.
         from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
         get_or_create_moto(
             numero_chassi=chassi_norm,
@@ -303,6 +272,7 @@ def editar_nf_item_manual(
             criado_por=operador,
             origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
             origem_id=item.id,
+            fallback_sentinela=True,
         )
 
     item.numero_chassi = chassi_norm
