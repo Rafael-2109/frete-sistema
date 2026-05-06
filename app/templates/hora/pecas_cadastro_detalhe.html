@@ -1,0 +1,83 @@
+{% extends "hora/base.html" %}
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <h2>
+    <i class="fas fa-cogs"></i> {{ peca.codigo_interno }}
+    {% if peca.ativo %}<span class="badge bg-success">Ativa</span>
+    {% else %}<span class="badge bg-secondary">Inativa</span>{% endif %}
+  </h2>
+  <div class="d-flex gap-2">
+    {% if current_user.tem_perm_hora('pecas_cadastro', 'editar') %}
+    <a href="{{ url_for('hora.pecas_cadastro_editar', peca_id=peca.id) }}" class="btn btn-sm btn-outline-primary">
+      <i class="fas fa-pen"></i> Editar
+    </a>
+    {% endif %}
+    <a href="{{ url_for('hora.pecas_cadastro_lista') }}" class="btn btn-sm btn-outline-secondary">← Voltar</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-4">
+    <div class="card p-3 mb-3 text-center">
+      {% if foto_url %}
+        <img src="{{ foto_url }}" alt="{{ peca.descricao }}" class="img-fluid rounded mb-2" style="max-height:300px;">
+      {% else %}
+        <div class="text-muted py-5"><i class="fas fa-image fa-3x"></i><br><small>Sem foto</small></div>
+      {% endif %}
+      {% if current_user.tem_perm_hora('pecas_cadastro', 'editar') %}
+      <form method="post" enctype="multipart/form-data"
+            action="{{ url_for('hora.pecas_cadastro_upload_foto', peca_id=peca.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="foto" accept="image/*" class="form-control form-control-sm mb-2" required>
+        <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+          <i class="fas fa-upload"></i> {{ 'Trocar' if foto_url else 'Enviar' }} foto
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card p-3 mb-3">
+      <dl class="row mb-0">
+        <dt class="col-sm-4">Descrição</dt>
+        <dd class="col-sm-8">{{ peca.descricao }}</dd>
+        <dt class="col-sm-4">NCM</dt>
+        <dd class="col-sm-8">{{ peca.ncm or '—' }}</dd>
+        <dt class="col-sm-4">CFOP padrão</dt>
+        <dd class="col-sm-8"><span class="badge bg-light text-dark">{{ peca.cfop_default }}</span></dd>
+        <dt class="col-sm-4">Unidade</dt>
+        <dd class="col-sm-8">{{ peca.unidade }}</dd>
+        <dt class="col-sm-4">Preço de venda padrão</dt>
+        <dd class="col-sm-8"><strong>{{ peca.preco_venda_padrao|valor_br }}</strong></dd>
+        <dt class="col-sm-4">Criada em</dt>
+        <dd class="col-sm-8">{{ peca.criado_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+      </dl>
+    </div>
+
+    <div class="card p-3 mb-3">
+      <h5><i class="fas fa-link"></i> Mapeamento TagPlus</h5>
+      {% if tagplus_map %}
+      <dl class="row mb-0">
+        <dt class="col-sm-4">ID TagPlus</dt>
+        <dd class="col-sm-8"><code>{{ tagplus_map.tagplus_produto_id }}</code></dd>
+        <dt class="col-sm-4">Código DANFE</dt>
+        <dd class="col-sm-8">
+          {% if tagplus_map.tagplus_codigo %}<code>{{ tagplus_map.tagplus_codigo }}</code>
+          {% else %}<span class="text-muted">—</span>{% endif %}
+        </dd>
+        <dt class="col-sm-4">CFOP override</dt>
+        <dd class="col-sm-8">
+          {% if tagplus_map.cfop_default %}<span class="badge bg-light text-dark">{{ tagplus_map.cfop_default }}</span>
+          {% else %}<span class="text-muted">— (usa o cadastro)</span>{% endif %}
+        </dd>
+      </dl>
+      {% else %}
+      <p class="text-warning mb-0">
+        <i class="fas fa-exclamation-triangle"></i>
+        Sem mapeamento TagPlus — peça não pode ser faturada via TagPlus enquanto não for mapeada.
+      </p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

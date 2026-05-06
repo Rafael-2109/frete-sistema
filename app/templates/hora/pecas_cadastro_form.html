@@ -1,0 +1,90 @@
+{% extends "hora/base.html" %}
+{% block hora_content %}
+<h2 class="mb-3">{% if peca %}Editar peça <code>{{ peca.codigo_interno }}</code>{% else %}Nova peça{% endif %}</h2>
+<form method="post" class="card p-3" style="max-width: 800px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Código interno <span class="text-danger">*</span></label>
+      <input type="text" name="codigo_interno" class="form-control text-uppercase" required maxlength="50"
+             value="{{ peca.codigo_interno if peca else '' }}"
+             placeholder="Ex.: CAP-PRETO-M"
+             {% if peca %}readonly title="Código não pode ser alterado"{% endif %}>
+    </div>
+    <div class="col-md-8">
+      <label class="form-label">Descrição <span class="text-danger">*</span></label>
+      <input type="text" name="descricao" class="form-control" required maxlength="255"
+             value="{{ peca.descricao if peca else '' }}"
+             placeholder="Ex.: Capacete preto tamanho M">
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">NCM</label>
+      <input type="text" name="ncm" class="form-control" maxlength="10"
+             value="{{ peca.ncm if peca else '' }}" placeholder="00000000">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">CFOP padrão</label>
+      <input type="text" name="cfop_default" class="form-control" maxlength="5"
+             pattern="[0-9]\.[0-9]{3}"
+             value="{{ peca.cfop_default if peca else '5.102' }}" placeholder="5.102">
+      <small class="text-muted">5.102 (intra) / 6.102 (inter — auto pelo builder)</small>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Unidade</label>
+      <input type="text" name="unidade" class="form-control text-uppercase" maxlength="5"
+             value="{{ peca.unidade if peca else 'UN' }}" placeholder="UN">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Preço de venda padrão</label>
+      <input type="text" name="preco_venda_padrao" class="form-control"
+             value="{{ peca.preco_venda_padrao if peca else '0,00' }}"
+             placeholder="0,00" inputmode="decimal">
+      <small class="text-muted">Snapshot na venda preserva este valor.</small>
+    </div>
+
+    <div class="col-12">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="ativo" value="1" id="chkAtivo"
+               {% if (peca and peca.ativo) or not peca %}checked{% endif %}>
+        <label class="form-check-label" for="chkAtivo">Peça ativa</label>
+      </div>
+    </div>
+  </div>
+
+  {% if pode_editar_tagplus %}
+  <hr class="my-4">
+  <h5><i class="fas fa-link"></i> Mapeamento TagPlus (opcional)</h5>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">ID TagPlus</label>
+      <input type="text" name="tagplus_produto_id" class="form-control" maxlength="50"
+             value="{{ tagplus_map.tagplus_produto_id if tagplus_map else '' }}"
+             placeholder="ex.: 1234">
+      <small class="text-muted">Sem isso, peça não pode ser faturada via TagPlus.</small>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Código DANFE</label>
+      <input type="text" name="tagplus_codigo" class="form-control" maxlength="50"
+             value="{{ tagplus_map.tagplus_codigo if tagplus_map else '' }}"
+             placeholder="ex.: CAP-PRETO-M">
+      <small class="text-muted">Para backfill de NFs já emitidas.</small>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">CFOP override (TagPlus)</label>
+      <input type="text" name="tagplus_cfop_default" class="form-control" maxlength="5"
+             pattern="[0-9]\.[0-9]{3}"
+             value="{{ tagplus_map.cfop_default if tagplus_map else '' }}"
+             placeholder="(usa o cadastro)">
+      <small class="text-muted">Sobrescreve o CFOP do cadastro só na emissão TagPlus.</small>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2 mt-4">
+    <button type="submit" class="btn btn-primary">{% if peca %}Salvar alterações{% else %}Criar peça{% endif %}</button>
+    <a href="{{ url_for('hora.pecas_cadastro_lista') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
