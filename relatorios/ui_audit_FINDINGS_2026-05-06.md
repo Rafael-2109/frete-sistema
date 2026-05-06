@@ -2,7 +2,7 @@
 **Data**: 2026-05-06
 
 **Arquivos escaneados**: 569 templates, 57 CSS
-**Total de violacoes (V1-V10) + catalogo (V12, V14)**: 2784
+**Total de violacoes (V1-V10) + catalogo (V12, V14)**: 2536
 
 > Este documento e um espelho legivel do estado atual. Para violacoes automatizaveis ver `ui_audit_<data>.md` (top hotspots).
 > Para regras de uso correto ver `.claude/references/design/GUIA_COMPONENTES_UI.md`.
@@ -10,13 +10,13 @@
 ## 1. Sumario por categoria
 | Codigo | Descricao | Total |
 |---|---|---:|
-| `V4_rgb_in_css` | rgb/rgba/hsl literal em CSS (preferir token) | 1431 |
+| `V4_rgb_in_css` | rgb/rgba/hsl literal em CSS (preferir token) | 1276 |
 | `V6_badge_bg_text_combo` | Badge com bg-* + text-* (derruba design system) | 440 |
-| `V5_important_in_css` | !important em CSS fora de tokens/_legacy | 308 |
 | `V1_inline_style_color` | Inline style com cor (color/background/border) | 245 |
+| `V5_important_in_css` | !important em CSS fora de tokens/_legacy | 232 |
 | `V12_table_row_class` | Uso de table-secondary/light/dark/info em row | 214 |
-| `V3_hex_in_css_module` | Hex literal em CSS fora de tokens/vendor | 71 |
 | `V2_hex_in_template` | Hex literal dentro de style= em template | 70 |
+| `V3_hex_in_css_module` | Hex literal em CSS fora de tokens/vendor | 54 |
 | `V7_text_bg_combo` | Combinacao bg + text antagonistica (baixo contraste) | 3 |
 | `V14_untokenized_bs_var` | Var Bootstrap-native nao tematizada pelo design system | 2 |
 

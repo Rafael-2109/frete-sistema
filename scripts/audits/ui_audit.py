@@ -56,8 +56,10 @@ DEFAULT_TEMPLATES = ROOT / "app" / "templates"
 DEFAULT_CSS = ROOT / "app" / "static" / "css"
 DEFAULT_REPORTS = ROOT / "relatorios"
 
-# Arquivos CSS canonicos: hex/!important AQUI eh OK (sao a fonte de verdade)
-CSS_CANONICAL_DIRS = {"tokens", "vendor"}
+# Arquivos CSS canonicos: hex/rgb/hsl literal AQUI eh OK (sao a fonte de verdade
+# do design system). Tokens definem valores, components/base implementam APIs
+# theme-aware com HSLA/HSL literal por design.
+CSS_CANONICAL_DIRS = {"tokens", "vendor", "components", "base"}
 # Arquivos CSS legados: hex/!important AQUI eh tolerado mas reportado como debt
 CSS_LEGACY_DIRS = {"legacy"}
 # Em utilities/_legacy.css o !important eh esperado (compat Bootstrap 4 -> 5)

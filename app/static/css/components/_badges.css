@@ -277,6 +277,116 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
+     STATUS BADGES — EXTENSAO CANONICAL (2026-05-06)
+     Status semanticos mais usados em modulos. Esses VIVEM em components/ para
+     evitar duplicacao em _hora.css/_carvia.css/_financeiro.css/_fretes.css/etc.
+
+     Convencao de cor:
+     - faturado/concluido/vendido/ativo/resolvido       → success (alias aprovado)
+     - parcialmente_faturado/em_conferencia/em_andamento → warning (amber-50 + escuro)
+     - em_separacao                                      → warning (alias pendente)
+     - aberto/em_transito                                → primary (amber + escuro)
+     - com_divergencia/avariado                          → danger
+     - recebido/em_recebimento                           → info (cinza-medio)
+     - devolvido/reservado/cancelada                     → cancelado (cinza + branco)
+     - tratativa                                         → cinza escuro 35%
+
+     Modulos podem ainda overridar via @layer modules quando precisarem variante
+     visual (cor diferente por contexto), mas a classe BASE deve ser canonical.
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* SUCCESS family — verde + branco (alias de aprovado/conferido) */
+  .badge-status-faturado,
+  .badge-faturado,
+  .badge-status-concluido,
+  .badge-concluido,
+  .badge-status-concluida,
+  .badge-concluida,
+  .badge-status-vendido,
+  .badge-vendido,
+  .badge-status-vendida,
+  .badge-vendida,
+  .badge-status-ativo,
+  .badge-ativo,
+  .badge-status-ativa,
+  .badge-ativa,
+  .badge-status-resolvido,
+  .badge-resolvido,
+  .badge-status-resolvida,
+  .badge-resolvida {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* WARNING family — amber + escuro (alias de pendente) */
+  .badge-status-parcialmente_faturado,
+  .badge-parcialmente_faturado,
+  .badge-status-em_conferencia,
+  .badge-em_conferencia,
+  .badge-status-em_andamento,
+  .badge-em_andamento,
+  .badge-status-em_separacao,
+  .badge-em_separacao {
+    --_badge-bg: var(--amber-50);
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* PRIMARY family — amber-55 + escuro (acao em curso, destaque) */
+  .badge-status-aberto,
+  .badge-aberto,
+  .badge-status-aberta,
+  .badge-aberta,
+  .badge-status-em_transito,
+  .badge-em_transito {
+    --_badge-bg: var(--amber-55);
+    --_badge-color: hsl(0 0% 10%);
+  }
+
+  /* DANGER family — vermelho + branco (alias de rejeitado) */
+  .badge-status-com_divergencia,
+  .badge-com_divergencia,
+  .badge-status-avariado,
+  .badge-avariado,
+  .badge-status-avariada,
+  .badge-avariada {
+    --_badge-bg: var(--semantic-danger);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* INFO family — cinza-medio + branco (recebido, conferido em contexto neutro) */
+  .badge-status-recebido,
+  .badge-recebido,
+  .badge-status-recebida,
+  .badge-recebida,
+  .badge-status-em_recebimento,
+  .badge-em_recebimento {
+    --_badge-bg: hsl(0 0% 45%);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* SECONDARY family — cinza + branco (alias de cancelado) */
+  .badge-status-devolvido,
+  .badge-devolvido,
+  .badge-status-devolvida,
+  .badge-devolvida,
+  .badge-status-reservado,
+  .badge-reservado,
+  .badge-status-reservada,
+  .badge-reservada,
+  .badge-status-cancelada,
+  .badge-cancelada {
+    --_badge-bg: hsl(0 0% 40%);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* TRATATIVA — cinza escuro (workflow em curso, sem definicao final) */
+  .badge-status-tratativa,
+  .badge-tratativa {
+    --_badge-bg: hsl(0 0% 35%);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
      STATUS BADGES - LIGHT MODE ADJUSTMENTS
      ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -295,6 +405,62 @@
   [data-theme="light"] .badge-status {
     --_badge-bg: hsl(0 0% 92%);
     --_badge-color: hsl(0 0% 20%);
+  }
+
+  /* SUCCESS family extended — light mode darker green for contrast */
+  [data-bs-theme="light"] .badge-status-faturado,
+  [data-bs-theme="light"] .badge-faturado,
+  [data-bs-theme="light"] .badge-status-concluido,
+  [data-bs-theme="light"] .badge-concluido,
+  [data-bs-theme="light"] .badge-status-concluida,
+  [data-bs-theme="light"] .badge-concluida,
+  [data-bs-theme="light"] .badge-status-vendido,
+  [data-bs-theme="light"] .badge-vendido,
+  [data-bs-theme="light"] .badge-status-vendida,
+  [data-bs-theme="light"] .badge-vendida,
+  [data-bs-theme="light"] .badge-status-ativo,
+  [data-bs-theme="light"] .badge-ativo,
+  [data-bs-theme="light"] .badge-status-ativa,
+  [data-bs-theme="light"] .badge-ativa,
+  [data-bs-theme="light"] .badge-status-resolvido,
+  [data-bs-theme="light"] .badge-resolvido,
+  [data-bs-theme="light"] .badge-status-resolvida,
+  [data-bs-theme="light"] .badge-resolvida,
+  [data-theme="light"] .badge-status-faturado,
+  [data-theme="light"] .badge-faturado,
+  [data-theme="light"] .badge-status-concluido,
+  [data-theme="light"] .badge-concluido,
+  [data-theme="light"] .badge-status-concluida,
+  [data-theme="light"] .badge-concluida,
+  [data-theme="light"] .badge-status-vendido,
+  [data-theme="light"] .badge-vendido,
+  [data-theme="light"] .badge-status-vendida,
+  [data-theme="light"] .badge-vendida,
+  [data-theme="light"] .badge-status-ativo,
+  [data-theme="light"] .badge-ativo,
+  [data-theme="light"] .badge-status-ativa,
+  [data-theme="light"] .badge-ativa,
+  [data-theme="light"] .badge-status-resolvido,
+  [data-theme="light"] .badge-resolvido,
+  [data-theme="light"] .badge-status-resolvida,
+  [data-theme="light"] .badge-resolvida {
+    --_badge-bg: hsl(145 65% 35%);
+  }
+
+  /* INFO family extended — light mode darker gray */
+  [data-bs-theme="light"] .badge-status-recebido,
+  [data-bs-theme="light"] .badge-recebido,
+  [data-bs-theme="light"] .badge-status-recebida,
+  [data-bs-theme="light"] .badge-recebida,
+  [data-bs-theme="light"] .badge-status-em_recebimento,
+  [data-bs-theme="light"] .badge-em_recebimento,
+  [data-theme="light"] .badge-status-recebido,
+  [data-theme="light"] .badge-recebido,
+  [data-theme="light"] .badge-status-recebida,
+  [data-theme="light"] .badge-recebida,
+  [data-theme="light"] .badge-status-em_recebimento,
+  [data-theme="light"] .badge-em_recebimento {
+    --_badge-bg: hsl(0 0% 40%);
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════

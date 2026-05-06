@@ -272,6 +272,20 @@
     background-color: var(--_row-hover-bg);
 }
 
+/* Secondary (NEUTRO/INATIVO) — cinza semi-transparente, theme-adaptive
+   Adicionado 2026-05-06 (Fase B): suporte canonical para rows neutras
+   (ex: motos fora de estoque em /hora/estoque) que antes usavam
+   .table-secondary Bootstrap-default e quebravam a hierarquia dark mode. */
+.table-secondary {
+    --_row-bg: hsla(0 0% 50% / 0.10);
+    --_row-hover-bg: hsla(0 0% 50% / 0.20);
+    background-color: var(--_row-bg);
+}
+
+.table-secondary:hover {
+    background-color: var(--_row-hover-bg);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    COLUMN TYPE UTILITIES
    Reusable classes for consistent column widths by data type.

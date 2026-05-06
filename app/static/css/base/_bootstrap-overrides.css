@@ -58,7 +58,7 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /* Hover genérico — usa token amber (pallet/v2) */
-.table > tbody > tr:not(.table-success):not(.table-warning):not(.table-primary):not(.table-light):hover {
+.table > tbody > tr:not(.table-success):not(.table-warning):not(.table-primary):not(.table-light):not(.table-secondary):not(.table-info):not(.table-danger):hover {
     background-color: var(--hover-bg) !important;
 }
 
@@ -90,10 +90,15 @@ h1, h2, h3, h4, h5, h6,
    TABLE STATUS COLORS - Estado normal sutil, hover destaca
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Reset Bootstrap table vars */
+/* Reset Bootstrap table vars
+   Estendido 2026-05-06 (Fase B): incluir secondary/info/danger para que canonical
+   em components/_tables.css assuma controle total via --_row-bg HSLA. */
 .table-success, .table-primary, .table-warning, .table-light,
+.table-secondary, .table-info, .table-danger,
 .table-success > td, .table-primary > td, .table-warning > td, .table-light > td,
-tr.table-success > td, tr.table-primary > td, tr.table-warning > td, tr.table-light > td {
+.table-secondary > td, .table-info > td, .table-danger > td,
+tr.table-success > td, tr.table-primary > td, tr.table-warning > td, tr.table-light > td,
+tr.table-secondary > td, tr.table-info > td, tr.table-danger > td {
     color: var(--text) !important;
     --bs-table-bg: transparent;
     --bs-table-accent-bg: transparent;
