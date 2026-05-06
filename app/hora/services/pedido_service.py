@@ -600,10 +600,14 @@ def mover_item_para_outro_pedido(
             f'Os dois pedidos devem ser da mesma loja.'
         )
 
-    if pedido_destino.status not in ('ABERTO', 'PARCIALMENTE_FATURADO'):
+    # Status FATURADO E aceito como destino: caso tipico e NF com mais chassis
+    # do que o pedido (ex: NF=11 motos, pedido=10/10 = FATURADO; operador
+    # precisa absorver a 11a moto). Apos mover, atualizar_status_pedido_por_
+    # faturamento recalcula o status correto.
+    if pedido_destino.status == 'CANCELADO':
         raise ValueError(
-            f'Pedido destino em status "{pedido_destino.status}" nao aceita '
-            f'novos itens (apenas ABERTO ou PARCIALMENTE_FATURADO).'
+            f'Pedido destino "{pedido_destino.numero_pedido}" esta CANCELADO '
+            f'e nao aceita novos itens.'
         )
 
     item = HoraPedidoItem.query.get(item_id)

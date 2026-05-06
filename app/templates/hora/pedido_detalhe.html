@@ -575,9 +575,11 @@
             {% endfor %}
           </select>
           <small class="text-muted">
-            Apenas pedidos da mesma loja
+            Pedidos da mesma loja
             ({{ pedido.loja_destino.rotulo_display if pedido.loja_destino else '—' }})
-            em status ABERTO ou PARCIALMENTE_FATURADO sao listados.
+            em qualquer status, exceto CANCELADO. Pedido FATURADO aparece
+            quando NF tem chassis extras precisando ser absorvidos
+            (ex: NF=11 motos, pedido=10 fechados).
           </small>
         </div>
 

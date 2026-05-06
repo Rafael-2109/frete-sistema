@@ -120,14 +120,15 @@ def pedidos_detalhe(pedido_id: int):
     # Comparativo de valores (match/sem-match por chassi).
     comparativo_valores = matching_service.comparativo_valores_pedido(pedido)
 
-    # Pedidos candidatos para mover item (mesma loja, ABERTO/PARCIAL,
-    # excluindo o pedido atual).
+    # Pedidos candidatos para mover item (mesma loja, qualquer status exceto
+    # CANCELADO, excluindo o pedido atual). FATURADO entra porque o caso
+    # comum e absorver chassi extra de NF (NF=11 motos, pedido=10 fechados).
     pedidos_candidatos_movimento = []
     if pedido.loja_destino_id:
         pedidos_candidatos_movimento = (
             HoraPedido.query
             .filter(HoraPedido.loja_destino_id == pedido.loja_destino_id)
-            .filter(HoraPedido.status.in_(['ABERTO', 'PARCIALMENTE_FATURADO']))
+            .filter(HoraPedido.status != 'CANCELADO')
             .filter(HoraPedido.id != pedido.id)
             .order_by(HoraPedido.data_pedido.desc(), HoraPedido.id.desc())
             .limit(100)
