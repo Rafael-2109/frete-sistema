@@ -117,6 +117,7 @@ Gotchas rapidos:
 | Auditar codigo existente | `python scripts/audits/ui_audit.py` |
 | Detectar regressao antes de commit em CSS/templates | `python scripts/audits/ui_audit_regression.py` |
 | Detectar regressao VISUAL (pixel diff) antes de commit | `tests/visual/` (capture + compare via Playwright/PIL) |
+| Visual regression — credenciais bot | `scripts/seed/create_visual_test_user.py` (cria/atualiza `claude-visual@bot.nacom.com.br`, salva senha so em `.env` — NUNCA commitar) |
 | Catalogo de inconsistencias (badges duplicados, tabelas, vars BS) | `relatorios/ui_audit_FINDINGS_<data>.md` |
 
 ---

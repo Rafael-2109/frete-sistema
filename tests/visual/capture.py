@@ -46,36 +46,41 @@ PAGES_YML = VISUAL_DIR / "pages.yml"
 
 def login(page, base_url: str, email: str, password: str) -> bool:
     """Faz login via formulario. Retorna True se sucesso."""
-    page.goto(f"{base_url}/auth/login", wait_until="networkidle")
     try:
+        page.goto(f"{base_url}/auth/login", wait_until="domcontentloaded", timeout=10000)
         page.fill('input[name="email"]', email)
         page.fill('input[name="senha"]', password)
-        page.click('button[type="submit"]')
-        page.wait_for_load_state("networkidle", timeout=10000)
-    except PWTimeoutError:
-        print("[capture] ERRO: timeout no login", file=sys.stderr)
+        # WTForms gera <input type="submit">, alguns templates usam <button>
+        page.click('input[type="submit"], button[type="submit"]')
+        # 'load' aguarda redirect+render mas nao espera network idle (que pode
+        # nunca chegar por websockets/long-polling em paginas debug)
+        page.wait_for_load_state("load", timeout=10000)
+    except PWTimeoutError as e:
+        print(f"[capture] ERRO: timeout no login ({e})", file=sys.stderr)
         return False
 
     # Login bem-sucedido = nao ficou em /auth/login
-    if "/auth/login" in page.url or "/auth/" in page.url:
+    if "/auth/login" in page.url:
         print(f"[capture] ERRO: login falhou (ainda em {page.url})", file=sys.stderr)
         return False
     return True
 
 
-def set_theme(page, theme: str) -> None:
-    """Define tema via localStorage e reload."""
-    # Theme handler: base.html lê localStorage 'nacom-theme' antes de render
-    page.evaluate(f"() => localStorage.setItem('nacom-theme', '{theme}')")
+def apply_theme(page, theme: str) -> None:
+    """Aplica tema na pagina atual via localStorage + setAttribute.
+    Tokens CSS reagem automaticamente ao mudar `data-bs-theme` em <html>.
+    Deve ser chamado APOS page.goto (precisa de contexto JS ativo)."""
+    page.evaluate(f"""() => {{
+        try {{ localStorage.setItem('nacom-theme', '{theme}'); }} catch (e) {{}}
+        document.documentElement.setAttribute('data-bs-theme', '{theme}');
+        document.documentElement.setAttribute('data-theme', '{theme}');
+    }}""")
 
 
 def capture_page(page, name: str, url: str, theme: str, target_dir: Path,
                  wait_for: str, timeout_ms: int, full_page: bool) -> bool:
     """Captura uma pagina em um tema especifico. Retorna True se sucesso."""
     out_path = target_dir / f"{name}_{theme}.png"
-
-    # Set theme antes de navegar
-    set_theme(page, theme)
 
     try:
         page.goto(url, wait_until=wait_for, timeout=timeout_ms)
@@ -86,18 +91,15 @@ def capture_page(page, name: str, url: str, theme: str, target_dir: Path,
         print(f"[capture] ERRO em {url} (theme={theme}): {e}", file=sys.stderr)
         return False
 
-    # Validar que tema foi aplicado
-    actual_theme = page.evaluate("() => document.documentElement.getAttribute('data-bs-theme')")
-    if actual_theme != theme:
-        # Force re-apply via JS (caso pagina sobrescreva)
-        page.evaluate(
-            f"() => {{ document.documentElement.setAttribute('data-bs-theme', '{theme}'); "
-            f"document.documentElement.setAttribute('data-theme', '{theme}'); }}"
-        )
-        time.sleep(0.3)
+    # Aplicar tema APOS load (localStorage + setAttribute, instantaneo)
+    try:
+        apply_theme(page, theme)
+    except Exception as e:
+        print(f"[capture] aviso: nao conseguiu aplicar tema={theme} em {url}: {e}",
+              file=sys.stderr)
 
-    # Pequena pausa para fonts/animacoes estabilizarem
-    time.sleep(0.5)
+    # Pequena pausa para fonts/animacoes estabilizarem apos mudanca de tema
+    time.sleep(0.6)
 
     page.screenshot(path=str(out_path), full_page=full_page)
     print(f"[capture] OK  {name}_{theme}.png  ({out_path.stat().st_size // 1024} KB)")
@@ -194,11 +196,12 @@ def main():
                 url_path = url_path.replace("{id}", str(sample_ids[key]))
 
             full_url = args.base_url.rstrip("/") + url_path
+            page_timeout = p_cfg.get("timeout_ms", timeout_ms)
 
             for theme in selected_themes:
                 ok = capture_page(
                     page, name, full_url, theme, target_dir,
-                    wait_for, timeout_ms, full_page,
+                    wait_for, page_timeout, full_page,
                 )
                 if not ok:
                     failures.append((name, theme))

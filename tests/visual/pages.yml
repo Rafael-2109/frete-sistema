@@ -31,22 +31,22 @@ pages:
   # Fretes — badge-status-cancelado/lancado (apos Fase C)
   # ────────────────────────────────────────────────────────────────────
   - name: fretes_listar
-    url: "/fretes/listar_fretes"
+    url: "/fretes/listar"
     description: "Lista de fretes — varias badges status"
 
   - name: fretes_dashboard
-    url: "/fretes/dashboard"
+    url: "/fretes/"
     description: "Dashboard fretes"
 
   # ────────────────────────────────────────────────────────────────────
   # Financeiro — hotspots V1 (245 inline styles)
   # ────────────────────────────────────────────────────────────────────
   - name: financeiro_baixas_hub
-    url: "/financeiro/baixas_hub"
+    url: "/financeiro/contas-receber/baixas"
     description: "Baixas hub — 41 inline styles (V1 hotspot)"
 
   - name: financeiro_extrato_itens
-    url: "/financeiro/extrato_itens"
+    url: "/financeiro/extrato/itens"
     description: "Extrato itens — 33 inline styles"
 
   # ────────────────────────────────────────────────────────────────────
@@ -60,14 +60,15 @@ pages:
   # Comercial — V1 hotspot
   # ────────────────────────────────────────────────────────────────────
   - name: comercial_lista_clientes
-    url: "/comercial/lista_clientes"
+    url: "/comercial/clientes"
     description: "Lista de clientes — 23 inline styles"
+    timeout_ms: 60000  # query pesada — pode demorar ate 60s
 
   # ────────────────────────────────────────────────────────────────────
   # Embarques — V2 hotspot (hex em template)
   # ────────────────────────────────────────────────────────────────────
   - name: embarques_listar
-    url: "/embarques/listar"
+    url: "/embarques/listar_embarques"
     description: "Lista embarques — V2 hotspot em _carvia_separacao_content.html"
 
   # ────────────────────────────────────────────────────────────────────
@@ -90,6 +91,6 @@ config:
     - dark
     - light
   full_page: true
-  wait_for: "networkidle"
+  wait_for: "load"
   timeout_ms: 15000
   diff_threshold_pct: 1.0   # falha se >1% de pixels diferentes (cobre antialiasing/fontes)
