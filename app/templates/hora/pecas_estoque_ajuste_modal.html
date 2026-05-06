@@ -1,0 +1,45 @@
+{# Modal de ajuste manual de estoque de peca. Incluido em pecas_estoque_lista.html. #}
+<div class="modal fade" id="modalAjuste" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('hora.pecas_estoque_ajuste') }}" class="modal-content">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-edit"></i> Ajuste manual de estoque</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Peça <span class="text-danger">*</span></label>
+          <input type="text" id="ajuste-peca-txt" class="form-control"
+                 data-hora-autocomplete="peca" data-hora-target-id="ajuste-peca-id"
+                 placeholder="Buscar por código ou descrição (min. 2 chars)" required>
+          <input type="hidden" name="peca_id" id="ajuste-peca-id" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Loja <span class="text-danger">*</span></label>
+          <select name="loja_id" class="form-select" required>
+            <option value="">(selecione)</option>
+            {% for l in lojas_ativas %}
+              <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Quantidade (signed) <span class="text-danger">*</span></label>
+          <input type="text" name="qtd_signed" class="form-control" inputmode="decimal"
+                 placeholder="Use + para entrar, - para sair (ex.: 5 ou -3)" required>
+          <small class="text-muted">Positivo = entrada / Negativo = saída</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Motivo <span class="text-danger">*</span></label>
+          <textarea name="motivo" rows="2" class="form-control" required minlength="3"
+                    placeholder="Inventário inicial, perda, achado, etc."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Registrar ajuste</button>
+      </div>
+    </form>
+  </div>
+</div>

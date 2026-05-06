@@ -24,6 +24,7 @@ from . import (  # noqa: E402, F401
     devolucoes,
     pecas_faltando,
     pecas_cadastro,
+    pecas_estoque,
     transferencias,
     avarias,
     emprestimos,
