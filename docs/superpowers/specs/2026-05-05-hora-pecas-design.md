@@ -304,6 +304,59 @@ POST /hora/vendas/<id>/itens-peca/<item_id>/editar
 - `nf_detalhe.html` — listar `nf.itens_peca` em seção separada de motos
 - `recebimento_wizard.html` — passo de conferência de peças (qtd_conferida + foto opcional)
 
+### 9.1 Padrão visual obrigatório (referência: módulo HORA)
+
+Todos os templates novos **DEVEM** seguir o padrão consolidado dos templates existentes:
+
+**Listagem** (referência: `modelos_lista.html`, `transferencias_lista.html`):
+- Cabeçalho: `<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">` com `<h2>` + botões à direita
+- Botões respeitam `{% if current_user.tem_perm_hora('modulo', 'acao') %}`
+- Filtros: usar **obrigatoriamente** macros de `hora/_filtros.html`:
+  ```jinja
+  {% from "hora/_filtros.html" import filtros_form, filtro_texto, filtro_loja, filtro_status, filtro_data, filtros_botoes %}
+  {% call filtros_form(url_for('hora.X_lista')) %}
+    {{ filtro_texto('busca', 'Busca', filtro_busca) }}
+    {{ filtro_loja('loja_id', valor=filtro_loja_id, lojas=lojas) }}
+    {{ filtros_botoes(url_for('hora.X_lista')) }}
+  {% endcall %}
+  ```
+- Tabela: `<table class="table table-hover align-middle">`
+- Status: `<span class="badge bg-{success/secondary/info/warning/danger}">`
+- Ações: `<div class="btn-group btn-group-sm">` com `btn-outline-{primary/warning/success/danger}`
+- Forms POST inline: incluem `<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">` + `onsubmit="return confirm(...)"`
+- Empty state: `<tr><td colspan="N" class="text-center text-muted">Nenhum X cadastrado.</td></tr>`
+- Paginação: `{% from "hora/_pagination.html" import render_pagination %}` ao final, **sempre que houver paginação**
+
+**Form criar/editar** (referência: `modelos_novo.html`, `transferencia_nova.html`):
+- Form simples: `<form method="post" class="card p-3" style="max-width: 700px;">`
+- Form multi-coluna: `<form method="post" class="card p-3">` com `<div class="row g-3">`
+- Hint: `<small class="text-muted">` abaixo de inputs com explicação
+- Required: `<span class="text-danger">*</span>` no label
+- Botões: `<div class="d-flex gap-2">` (ou `justify-content-between` com Cancelar à esquerda) — primary + outline-secondary "Cancelar"
+
+**Detalhe** (referência: `transferencia_detalhe.html`, `venda_detalhe.html`):
+- Header: `<div class="d-flex justify-content-between align-items-start mb-3">` com `<h2>` + ícone + badge de status + botões à direita
+- Info: `<div class="row">` + `<div class="col-md-6"><div class="card p-3 mb-3"><dl class="row mb-0">` (dt col-sm-4 / dd col-sm-8)
+- Itens: `<h5>Itens (N)</h5>` + `<div class="card mb-3"><div class="table-responsive"><table class="table table-sm mb-0">`
+- Ações destrutivas: card `border-danger-subtle` com h5 vermelho + botão `btn-danger`
+- Auditoria: tabela ao final, padrão `<th>Quando | Quem | Ação | Detalhe</th>`
+
+**Detalhe técnico**:
+- Datas longas: `.strftime('%d/%m/%Y %H:%M')`
+- Datas em tabelas compactas: `.strftime('%d/%m %H:%M')`
+- Chassi: `<code class="chassi-mono">` (CSS global já existe)
+- Permissões em torno de TODA ação destrutiva ou de modificação
+- Ícones Font Awesome 5 (já carregado): `fa-cogs` para peça, `fa-warehouse` para estoque, `fa-link` para mapeamento, `fa-cloud-download-alt` para backfill
+
+**Modais (ajuste, transferência)**:
+- Bootstrap modal padrão
+- Form com csrf_token + validação client-side
+- Botão fechar + botão primary submit
+
+**JS de autocomplete**:
+- Reutilizar `app/static/js/hora/autocomplete.js` (já carregado em `base.html`)
+- `data-hora-autocomplete="peca"` deve ser registrado em `autocomplete_service.py` + `autocomplete.py` route
+
 ---
 
 ## 10. Permissões + Menu
