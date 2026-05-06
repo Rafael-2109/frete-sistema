@@ -191,7 +191,7 @@
       <th>Cor</th>
       <th>Preço esperado</th>
       <th>Faturamento</th>
-      <th style="width:100px;"></th>
+      <th style="width:140px;"></th>
     </tr></thead>
     <tbody>
       {% for item in pedido.itens %}
@@ -223,16 +223,38 @@
             {% endif %}
           </td>
           <td rowspan="2" class="align-middle">
+            {% set chassi_em_nf = item.numero_chassi and item.numero_chassi in chassis_faturados_set %}
             <div class="d-flex gap-1">
               <button type="button" class="btn btn-sm btn-outline-secondary btn-editar-item"
                       data-bs-toggle="modal" data-bs-target="#modalEditarItem"
                       data-item-id="{{ item.id }}"
                       data-chassi="{{ item.numero_chassi or '' }}"
                       data-modelo="{{ item.modelo.nome_modelo if item.modelo else '' }}"
-                      data-cor="{{ item.cor or '' }}">
-                Editar
+                      data-cor="{{ item.cor or '' }}"
+                      title="Editar item">
+                <i class="fas fa-pen"></i>
               </button>
-              {% set chassi_em_nf = item.numero_chassi and item.numero_chassi in chassis_faturados_set %}
+              {% if chassi_em_nf %}
+                <button type="button" class="btn btn-sm btn-outline-primary" disabled
+                        title="Chassi ja faturado em NF do pedido origem — desvincule a NF antes de mover">
+                  <i class="fas fa-exchange-alt"></i>
+                </button>
+              {% elif pedidos_candidatos_movimento|length == 0 %}
+                <button type="button" class="btn btn-sm btn-outline-primary" disabled
+                        title="Nao ha outros pedidos ABERTO/PARCIAL desta loja para receber o item">
+                  <i class="fas fa-exchange-alt"></i>
+                </button>
+              {% else %}
+                <button type="button" class="btn btn-sm btn-outline-primary btn-mover-item"
+                        data-bs-toggle="modal" data-bs-target="#modalMoverItem"
+                        data-item-id="{{ item.id }}"
+                        data-chassi="{{ item.numero_chassi or '' }}"
+                        data-modelo="{{ item.modelo.nome_modelo if item.modelo else '' }}"
+                        data-cor="{{ item.cor or '' }}"
+                        title="Mover para outro pedido">
+                  <i class="fas fa-exchange-alt"></i>
+                </button>
+              {% endif %}
               {% if chassi_em_nf %}
                 <button type="button" class="btn btn-sm btn-outline-danger" disabled
                         title="Chassi ja faturado em NF — desvincule antes de remover">
@@ -507,6 +529,79 @@
   </div>
 </div>
 
+<!-- Modal mover item para outro pedido -->
+<div class="modal fade" id="modalMoverItem" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-exchange-alt"></i> Mover moto para outro pedido
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info small">
+          <i class="fas fa-info-circle"></i>
+          Use quando esta moto pertencia a outro pedido. Ao mover, o sistema
+          tenta vincular automaticamente NFs orfas que contem este chassi ao
+          pedido destino, facilitando o vinculo Pedido x NF.
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-md-6">
+            <label class="form-label small mb-0">Pedido atual (origem)</label>
+            <input type="text" class="form-control" readonly
+                   value="{{ pedido.numero_pedido }} ({{ pedido.status }})">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-0">Item</label>
+            <input type="text" class="form-control" id="mvr-info-item" readonly>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">
+            Pedido destino <span class="text-danger">*</span>
+          </label>
+          <select id="mvr-pedido-destino" class="form-select" required>
+            <option value="">Selecione um pedido...</option>
+            {% for cand in pedidos_candidatos_movimento %}
+              <option value="{{ cand.id }}">
+                {{ cand.numero_pedido }}
+                — {{ cand.data_pedido.strftime('%d/%m/%Y') }}
+                — {{ cand.status }}
+                ({{ cand.itens|length }} itens)
+              </option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">
+            Apenas pedidos da mesma loja
+            ({{ pedido.loja_destino.rotulo_display if pedido.loja_destino else '—' }})
+            em status ABERTO ou PARCIALMENTE_FATURADO sao listados.
+          </small>
+        </div>
+
+        <div class="form-check mb-3">
+          <input type="checkbox" class="form-check-input" id="mvr-tentar-vincular" checked>
+          <label class="form-check-label" for="mvr-tentar-vincular">
+            Tentar vincular automaticamente NFs orfas com este chassi ao pedido destino
+          </label>
+        </div>
+
+        <div id="mvr-feedback" class="d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" id="mvr-submit">
+          <i class="fas fa-exchange-alt"></i> Mover
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% if pode_excluir_pedido %}
 <!-- Modal confirmar exclusao do pedido -->
 <div class="modal fade" id="modalExcluirPedido" tabindex="-1" aria-hidden="true">
@@ -541,6 +636,7 @@
 
 <script>
 (function() {
+  // Modal de editar item (texto/chassi/modelo/cor)
   const form = document.getElementById('form-editar-item');
   const URL_TEMPLATE = "{{ url_for('hora.pedidos_editar_item', pedido_id=pedido.id, item_id=0) }}";
   document.querySelectorAll('.btn-editar-item').forEach(btn => {
@@ -552,6 +648,119 @@
       document.getElementById('edt-cor').value = btn.dataset.cor || '';
     });
   });
+
+  // Modal de mover item para outro pedido
+  const URL_MOVER_TEMPLATE = "{{ url_for('hora.pedidos_mover_item', pedido_id=pedido.id, item_id=0) }}";
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
+  let itemSelecionado = null;
+  document.querySelectorAll('.btn-mover-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      itemSelecionado = btn.dataset.itemId;
+      const chassi = btn.dataset.chassi || '(sem chassi)';
+      const modelo = btn.dataset.modelo || '';
+      const cor = btn.dataset.cor || '';
+      const partes = [chassi];
+      if (modelo) partes.push(modelo);
+      if (cor) partes.push(cor);
+      document.getElementById('mvr-info-item').value = partes.join(' · ');
+      document.getElementById('mvr-pedido-destino').value = '';
+      document.getElementById('mvr-tentar-vincular').checked = true;
+      const fb = document.getElementById('mvr-feedback');
+      fb.className = 'd-none';
+      fb.innerHTML = '';
+    });
+  });
+
+  const submitBtn = document.getElementById('mvr-submit');
+  if (submitBtn) {
+    submitBtn.addEventListener('click', async () => {
+      const destino = document.getElementById('mvr-pedido-destino').value;
+      const tentar = document.getElementById('mvr-tentar-vincular').checked;
+      const fb = document.getElementById('mvr-feedback');
+
+      if (!destino) {
+        fb.className = 'alert alert-warning small';
+        fb.textContent = 'Selecione o pedido destino.';
+        return;
+      }
+      if (!itemSelecionado) {
+        fb.className = 'alert alert-danger small';
+        fb.textContent = 'Item nao identificado. Recarregue a pagina e tente novamente.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Movendo...';
+      fb.className = 'd-none';
+      fb.innerHTML = '';
+
+      const url = URL_MOVER_TEMPLATE.replace(/\/0\/mover$/, '/' + itemSelecionado + '/mover');
+      const formData = new FormData();
+      formData.append('pedido_destino_id', destino);
+      formData.append('tentar_vincular_nfs', tentar ? '1' : '0');
+
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': getCsrfToken(),
+          },
+          body: formData,
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          fb.className = 'alert alert-danger small';
+          fb.textContent = 'Erro: ' + (data.erro || 'falha ao mover item');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fas fa-exchange-alt"></i> Mover';
+          return;
+        }
+
+        // Sucesso — monta resumo
+        const autoVinc = data.nfs_auto_vinculadas || [];
+        const outras = data.nfs_candidatas_outras || [];
+        let html = '<div class="alert alert-success small mb-2">';
+        html += '<i class="fas fa-check-circle"></i> Item movido com sucesso.';
+        html += '</div>';
+
+        if (autoVinc.length > 0) {
+          html += '<div class="alert alert-info small mb-2">';
+          html += '<strong>' + autoVinc.length + ' NF(s) vinculada(s) automaticamente:</strong><br>';
+          html += autoVinc.map(n => 'NF ' + n.numero_nf).join(', ');
+          html += '</div>';
+        } else if (tentar) {
+          html += '<div class="text-muted small mb-2">';
+          html += 'Nenhuma NF orfa com este chassi encontrada para vinculo automatico.';
+          html += '</div>';
+        }
+
+        if (outras.length > 0) {
+          html += '<div class="alert alert-warning small mb-2">';
+          html += '<strong>' + outras.length + ' NF(s) com este chassi precisam de revisao manual:</strong><br>';
+          html += outras.map(n => 'NF ' + n.numero_nf + ' (' + n.motivo + ')').join('<br>');
+          html += '</div>';
+        }
+
+        html += '<div class="small">Redirecionando para o pedido destino...</div>';
+        fb.className = '';
+        fb.innerHTML = html;
+        setTimeout(() => {
+          window.location.href = data.pedido_destino_url;
+        }, 1800);
+      } catch (err) {
+        fb.className = 'alert alert-danger small';
+        fb.textContent = 'Erro de rede: ' + err.message;
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-exchange-alt"></i> Mover';
+      }
+    });
+  }
 })();
 </script>
 

@@ -120,6 +120,20 @@ def pedidos_detalhe(pedido_id: int):
     # Comparativo de valores (match/sem-match por chassi).
     comparativo_valores = matching_service.comparativo_valores_pedido(pedido)
 
+    # Pedidos candidatos para mover item (mesma loja, ABERTO/PARCIAL,
+    # excluindo o pedido atual).
+    pedidos_candidatos_movimento = []
+    if pedido.loja_destino_id:
+        pedidos_candidatos_movimento = (
+            HoraPedido.query
+            .filter(HoraPedido.loja_destino_id == pedido.loja_destino_id)
+            .filter(HoraPedido.status.in_(['ABERTO', 'PARCIALMENTE_FATURADO']))
+            .filter(HoraPedido.id != pedido.id)
+            .order_by(HoraPedido.data_pedido.desc(), HoraPedido.id.desc())
+            .limit(100)
+            .all()
+        )
+
     return render_template(
         'hora/pedido_detalhe.html',
         pedido=pedido,
@@ -131,6 +145,7 @@ def pedidos_detalhe(pedido_id: int):
         chassis_faturados_set=chassis_faturados_set,
         pode_excluir_pedido=pode_excluir_pedido,
         comparativo_valores=comparativo_valores,
+        pedidos_candidatos_movimento=pedidos_candidatos_movimento,
     )
 
 
@@ -829,6 +844,110 @@ def pedidos_editar_item(pedido_id: int, item_id: int):
         flash(f'Erro: {exc}', 'danger')
 
     return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+
+# ========================================================================
+# Mover item entre pedidos (1 moto = 1 chassi pode mudar de pedido)
+# ========================================================================
+
+@hora_bp.route(
+    '/pedidos/<int:pedido_id>/itens/<int:item_id>/mover',
+    methods=['POST'],
+)
+@require_hora_perm('pedidos', 'editar')
+def pedidos_mover_item(pedido_id: int, item_id: int):
+    """Move 1 item (moto/chassi) de um pedido para outro.
+
+    Apos mover, tenta vincular automaticamente NFs orfas que contem o chassi
+    com o pedido destino (facilita o vinculo Pedido x NF).
+
+    Form/JSON:
+      - pedido_destino_id (obrigatorio)
+      - tentar_vincular_nfs (opcional, default True)
+    """
+    pedido = HoraPedido.query.get_or_404(pedido_id)
+    is_ajax = (
+        request.is_json
+        or request.headers.get('Accept') == 'application/json'
+    )
+
+    # Acesso a loja origem
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': 'acesso negado'}), 403
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
+
+    # Le payload (suporta JSON e form)
+    payload = request.get_json(silent=True) or request.form
+    destino_str = str(payload.get('pedido_destino_id') or '').strip()
+    if not destino_str.isdigit():
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': 'pedido_destino_id invalido'}), 400
+        flash('Pedido destino invalido.', 'danger')
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    pedido_destino_id = int(destino_str)
+    tentar_vincular_nfs = str(
+        payload.get('tentar_vincular_nfs', '1')
+    ).lower() not in ('0', 'false', 'no', '')
+
+    pedido_destino = HoraPedido.query.get(pedido_destino_id)
+    if not pedido_destino:
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': 'pedido destino nao encontrado'}), 404
+        flash(f'Pedido destino {pedido_destino_id} nao encontrado.', 'danger')
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    # Acesso a loja destino (regra de matching: mesma loja, mas validamos
+    # autorizacao de qualquer forma — usuario precisa ter acesso a ambas)
+    if pedido_destino.loja_destino_id and not usuario_tem_acesso_a_loja(
+        pedido_destino.loja_destino_id
+    ):
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': 'acesso negado ao pedido destino'}), 403
+        flash('Acesso negado: pedido destino de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    try:
+        res = pedido_service.mover_item_para_outro_pedido(
+            pedido_origem_id=pedido.id,
+            item_id=item_id,
+            pedido_destino_id=pedido_destino_id,
+            tentar_vincular_nfs=tentar_vincular_nfs,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+    except ValueError as exc:
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': str(exc)}), 400
+        flash(f'Erro ao mover item: {exc}', 'danger')
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    if is_ajax:
+        # Enriquece com URLs uteis pro front-end
+        res['pedido_destino_url'] = url_for(
+            'hora.pedidos_detalhe', pedido_id=pedido_destino_id,
+        )
+        return jsonify(res)
+
+    # Modo nao-AJAX: monta flash com resumo e redireciona ao destino
+    n_auto = len(res.get('nfs_auto_vinculadas') or [])
+    n_outras = len(res.get('nfs_candidatas_outras') or [])
+    msg = (
+        f'Item movido para o pedido {pedido_destino.numero_pedido}.'
+    )
+    if n_auto:
+        nf_nums = ', '.join(
+            n['numero_nf'] for n in res['nfs_auto_vinculadas']
+        )
+        msg += f' {n_auto} NF(s) vinculada(s) automaticamente: {nf_nums}.'
+    if n_outras:
+        msg += (
+            f' {n_outras} NF(s) com este chassi precisam de revisao manual '
+            f'(ja vinculadas a outros pedidos ou outra loja).'
+        )
+    flash(msg, 'success')
+    return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido_destino_id))
 
 
 # ========================================================================
