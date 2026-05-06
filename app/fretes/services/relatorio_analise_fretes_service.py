@@ -349,7 +349,14 @@ def _buscar_despesas_por_frete(frete_ids: List[int]) -> Dict[int, List[Dict]]:
             'tipo_despesa': d.tipo_despesa,
             'valor_despesa': float(d.valor_despesa or 0),
             'setor_responsavel': d.setor_responsavel,
-            'status': d.status
+            'motivo_despesa': d.motivo_despesa,
+            'tipo_documento': d.tipo_documento,
+            'numero_documento': d.numero_documento,
+            'observacoes': d.observacoes or '',
+            'status': d.status,
+            'criado_em': d.criado_em,
+            'criado_por': d.criado_por,
+            'vencimento_despesa': d.vencimento_despesa
         })
 
     return dict(despesas_por_frete)
@@ -1232,4 +1239,473 @@ def gerar_excel_relatorio(dados: Dict, data_inicio: str, data_fim: str, abrir_de
     output.seek(0)
 
     logger.info("Excel gerado com sucesso")
+    return output
+
+
+# =============================================================================
+# RELATÓRIO DEDICADO DE DESPESAS EXTRAS
+# =============================================================================
+# Indexa pelas DESPESAS (não pelas NFs). Preserva todas as 4 dimensões
+# classificatórias (tipo_despesa, setor_responsavel, motivo_despesa, observacoes)
+# que ficam aplainadas no relatório principal por causa da matriz de tipos.
+# =============================================================================
+
+
+def gerar_visao_despesas_detalhada(dados: Dict) -> List[Dict]:
+    """
+    Visão Detalhada: 1 linha por DESPESA (valor íntegro, não rateado).
+
+    - Valor da despesa: total íntegro (não fragmentado por NF)
+    - Valor líquido da despesa: soma dos líquidos calculados por NF
+      (necessário porque ICMS varia por cidade do destinatário)
+    - NFs do frete concatenadas com vírgula
+    - Cliente/UF/Cidade: distintos concatenados
+    - Peso/Valor das NFs e Frete Líquido: SOMA das NFs do frete no período
+    - Datas de fatura: min..max
+
+    Returns:
+        Lista de dicts, 1 por despesa.
+    """
+    linhas = []
+
+    fretes = dados['fretes']
+    faturamento_por_nf = dados['faturamento_por_nf']
+    despesas_por_frete = dados['despesas_por_frete']
+
+    for frete in fretes:
+        optante = frete.get('transportadora_optante', False)
+        freteiro = frete.get('transportadora_freteiro', False)
+
+        despesas_frete = despesas_por_frete.get(frete['id'], [])
+        if not despesas_frete:
+            continue
+
+        nfs_periodo = frete.get('nfs_no_periodo', []) or []
+        if not nfs_periodo:
+            continue
+
+        frete_rateado_por_nf = calcular_rateio_frete_por_nf(frete, faturamento_por_nf)
+
+        # ----- Agregados das NFs do frete (mesmos para todas as despesas do frete) -----
+        nfs_ordenadas = sorted(nfs_periodo)
+        cnpjs_cliente_set = []
+        nomes_cliente_set = []
+        ufs_set = []
+        municipios_set = []
+        incoterms_set = []
+        peso_total_nfs = Decimal('0')
+        valor_total_nfs = Decimal('0')
+        frete_liquido_total_nfs = Decimal('0')
+        datas_fatura = []
+
+        for nf in nfs_ordenadas:
+            fat = faturamento_por_nf.get(nf, {})
+            cnpj = fat.get('cnpj_cliente') or ''
+            nome = fat.get('nome_cliente') or ''
+            uf = fat.get('uf') or ''
+            mun = fat.get('municipio') or ''
+            inco = fat.get('incoterm') or ''
+
+            if cnpj and cnpj not in cnpjs_cliente_set:
+                cnpjs_cliente_set.append(cnpj)
+            if nome and nome not in nomes_cliente_set:
+                nomes_cliente_set.append(nome)
+            if uf and uf not in ufs_set:
+                ufs_set.append(uf)
+            if mun and mun not in municipios_set:
+                municipios_set.append(mun)
+            if inco and inco not in incoterms_set:
+                incoterms_set.append(inco)
+
+            peso_total_nfs += Decimal(str(fat.get('peso_total', 0)))
+            valor_total_nfs += Decimal(str(fat.get('valor_total', 0)))
+
+            frete_bruto_nf = frete_rateado_por_nf.get(nf, Decimal('0'))
+            frete_liq_nf = calcular_valor_liquido(
+                frete_bruto_nf, optante, freteiro, mun, uf
+            )
+            frete_liquido_total_nfs += frete_liq_nf
+
+            data_fat = fat.get('data_fatura')
+            if data_fat:
+                datas_fatura.append(data_fat)
+
+        data_min = min(datas_fatura) if datas_fatura else None
+        data_max = max(datas_fatura) if datas_fatura else None
+
+        # ----- Linha por despesa -----
+        for despesa in despesas_frete:
+            valor_total_despesa = Decimal(str(despesa.get('valor_despesa') or 0))
+
+            # Líquido = soma dos líquidos rateados por NF (ICMS varia por cidade).
+            # Reaproveita rateio por peso já implementado.
+            rateio_despesa = calcular_rateio_despesa_por_nf(despesa, frete, faturamento_por_nf)
+            valor_liquido_total = Decimal('0')
+            for nf in nfs_ordenadas:
+                fat = faturamento_por_nf.get(nf, {})
+                valor_bruto = rateio_despesa.get(nf, Decimal('0'))
+                if valor_bruto == 0:
+                    continue
+                valor_liquido_total += calcular_valor_liquido(
+                    valor_bruto, optante, freteiro, fat.get('municipio', ''), fat.get('uf', '')
+                )
+
+            linhas.append({
+                'despesa_id': despesa['id'],
+                'tipo_despesa': despesa['tipo_despesa'],
+                'setor_responsavel': despesa.get('setor_responsavel') or '',
+                'motivo_despesa': despesa.get('motivo_despesa') or '',
+                'tipo_documento': despesa.get('tipo_documento') or '',
+                'numero_documento': despesa.get('numero_documento') or '',
+                'valor_despesa_total': float(valor_total_despesa),
+                'valor_despesa_liquido': float(valor_liquido_total),
+                'status_despesa': despesa.get('status') or '',
+                'observacoes': despesa.get('observacoes') or '',
+                'criado_em': despesa.get('criado_em'),
+                'criado_por': despesa.get('criado_por') or '',
+                'vencimento': despesa.get('vencimento_despesa'),
+                'frete_id': frete['id'],
+                'numero_cte': frete['numero_cte'] or '',
+                'transportadora': frete['transportadora_razao_social'],
+                'transportadora_cnpj': frete['transportadora_cnpj'] or '',
+                'motorista_proprio': 'Sim' if frete['motorista_proprio'] else 'Não',
+                'qtd_nfs': len(nfs_ordenadas),
+                'numeros_nfs': ', '.join(nfs_ordenadas),
+                'cnpjs_clientes': ', '.join(cnpjs_cliente_set),
+                'nomes_clientes': ', '.join(nomes_cliente_set),
+                'ufs': ', '.join(ufs_set),
+                'municipios': ', '.join(municipios_set),
+                'peso_total_nfs': float(peso_total_nfs),
+                'valor_total_nfs': float(valor_total_nfs),
+                'frete_liquido_total_nfs': float(frete_liquido_total_nfs),
+                'incoterms': ', '.join(incoterms_set),
+                'data_fatura_min': data_min,
+                'data_fatura_max': data_max,
+            })
+
+    # Ordenar por frete_id, depois despesa_id (estável e previsível)
+    linhas.sort(key=lambda r: (r['frete_id'], r['despesa_id']))
+    return linhas
+
+
+def _gerar_visao_despesas_agrupada(dados: Dict, dimensao: str) -> List[Dict]:
+    """
+    Helper compartilhado entre visão por Setor e visão por Motivo.
+
+    Args:
+        dados: dict com fretes/faturamento/despesas/devolucoes
+        dimensao: 'setor_responsavel' ou 'motivo_despesa'
+
+    Returns:
+        Lista de dicts agrupados por (mes_ano, uf, dimensao).
+    """
+    fretes = dados['fretes']
+    faturamento_por_nf = dados['faturamento_por_nf']
+    despesas_por_frete = dados['despesas_por_frete']
+
+    # Dicts separados por chave (mes_ano, uf, dimensao) — evita defaultdict aninhado
+    valor_liquido_por_chave: Dict[Tuple[str, str, str], Decimal] = defaultdict(lambda: Decimal('0'))
+    valor_bruto_por_chave: Dict[Tuple[str, str, str], Decimal] = defaultdict(lambda: Decimal('0'))
+    despesas_unicas_por_chave: Dict[Tuple[str, str, str], set] = defaultdict(set)
+    nfs_unicas_por_chave: Dict[Tuple[str, str, str], set] = defaultdict(set)
+
+    for frete in fretes:
+        optante = frete.get('transportadora_optante', False)
+        freteiro = frete.get('transportadora_freteiro', False)
+        despesas_frete = despesas_por_frete.get(frete['id'], [])
+        if not despesas_frete:
+            continue
+
+        for despesa in despesas_frete:
+            chave_dim = despesa.get(dimensao) or 'NÃO INFORMADO'
+            rateio_despesa = calcular_rateio_despesa_por_nf(despesa, frete, faturamento_por_nf)
+
+            for nf, valor_bruto in rateio_despesa.items():
+                if valor_bruto == 0:
+                    continue
+                fat = faturamento_por_nf.get(nf, {})
+                data_fatura = fat.get('data_fatura')
+                if not data_fatura:
+                    continue
+
+                cidade_cliente = fat.get('municipio', '')
+                uf_cliente = fat.get('uf', '')
+                # Aplicar regra RED como na visão Mês+UF
+                incoterm = fat.get('incoterm', '')
+                uf_grupo = 'SP' if incoterm == 'RED' else (uf_cliente or 'N/D')
+
+                valor_liquido = calcular_valor_liquido(
+                    valor_bruto, optante, freteiro, cidade_cliente, uf_cliente
+                )
+
+                mes_ano = data_fatura.strftime('%Y-%m')
+                chave: Tuple[str, str, str] = (mes_ano, uf_grupo, chave_dim)
+
+                valor_liquido_por_chave[chave] += valor_liquido
+                valor_bruto_por_chave[chave] += valor_bruto
+                despesas_unicas_por_chave[chave].add(despesa['id'])
+                nfs_unicas_por_chave[chave].add(nf)
+
+    # Converter para lista
+    chave_label = 'setor' if dimensao == 'setor_responsavel' else 'motivo'
+    linhas = []
+    for chave in sorted(despesas_unicas_por_chave.keys()):
+        mes_ano, uf, dim_valor = chave
+        nfs = nfs_unicas_por_chave[chave]
+
+        # Valor e peso das NFs únicas atingidas
+        valor_nfs = Decimal('0')
+        peso_nfs = Decimal('0')
+        for nf in nfs:
+            fat = faturamento_por_nf.get(nf, {})
+            valor_nfs += Decimal(str(fat.get('valor_total', 0)))
+            peso_nfs += Decimal(str(fat.get('peso_total', 0)))
+
+        linhas.append({
+            'mes_ano': mes_ano,
+            'uf': uf,
+            chave_label: dim_valor,
+            'valor_despesa_liquido': float(valor_liquido_por_chave[chave]),
+            'valor_despesa_bruto': float(valor_bruto_por_chave[chave]),
+            'qtd_despesas': len(despesas_unicas_por_chave[chave]),
+            'qtd_nfs': len(nfs),
+            'valor_nfs': float(valor_nfs),
+            'peso_nfs': float(peso_nfs),
+        })
+
+    return linhas
+
+
+def gerar_visao_despesas_por_setor_uf_mes(dados: Dict) -> List[Dict]:
+    """Agrupa despesas por (Mês/Ano, UF, Setor Responsável)."""
+    return _gerar_visao_despesas_agrupada(dados, 'setor_responsavel')
+
+
+def gerar_visao_despesas_por_motivo_uf_mes(dados: Dict) -> List[Dict]:
+    """Agrupa despesas por (Mês/Ano, UF, Motivo da Despesa)."""
+    return _gerar_visao_despesas_agrupada(dados, 'motivo_despesa')
+
+
+def gerar_excel_despesas_extras(dados: Dict, data_inicio: str, data_fim: str) -> BytesIO:
+    """
+    Gera Excel dedicado de despesas extras com 3 abas:
+    - 'Detalhada': 1 linha por despesa × NF rateada
+    - 'Por Setor/UF/Mês': agrupado por setor responsável
+    - 'Por Motivo/UF/Mês': agrupado por motivo da despesa
+
+    Reutiliza calcular_valor_liquido (ICMS + freteiro) e
+    calcular_rateio_despesa_por_nf (rateio por peso).
+    """
+    logger.info("Gerando Excel de despesas extras detalhadas")
+
+    visao_detalhada = gerar_visao_despesas_detalhada(dados)
+    visao_setor = gerar_visao_despesas_por_setor_uf_mes(dados)
+    visao_motivo = gerar_visao_despesas_por_motivo_uf_mes(dados)
+
+    logger.info(
+        "Visões geradas: Detalhada=%d, Setor=%d, Motivo=%d",
+        len(visao_detalhada), len(visao_setor), len(visao_motivo)
+    )
+
+    output = BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True, 'constant_memory': False})
+
+    header_format = workbook.add_format({
+        'bold': True,
+        'bg_color': '#4472C4',
+        'font_color': '#FFFFFF',
+        'border': 1,
+        'text_wrap': True,
+        'valign': 'vcenter'
+    })
+    money_format = workbook.add_format({'num_format': '#,##0.00'})
+    date_format = workbook.add_format({'num_format': 'dd/mm/yyyy'})
+    datetime_format = workbook.add_format({'num_format': 'dd/mm/yyyy hh:mm'})
+    number_format = workbook.add_format({'num_format': '#,##0.000'})
+
+    # =========================================================================
+    # ABA 1: Detalhada (1 linha por DESPESA — valor íntegro, NFs concatenadas)
+    # =========================================================================
+    ws1 = workbook.add_worksheet('Detalhada')
+
+    colunas_detalhada = [
+        ('Despesa ID', 11),
+        ('Tipo Despesa', 18),
+        ('Setor Responsável', 16),
+        ('Motivo', 24),
+        ('Tipo Doc.', 10),
+        ('Nº Documento', 16),
+        ('Valor Despesa (Total)', 18),
+        ('Valor Despesa (Líquido)', 18),
+        ('Status', 14),
+        ('Vencimento', 12),
+        ('Criado em', 16),
+        ('Criado por', 18),
+        ('Frete ID', 10),
+        ('Nº CTe', 14),
+        ('Transportadora', 25),
+        ('CNPJ Transp.', 18),
+        ('Mot. Próprio', 12),
+        ('Qtd NFs', 8),
+        ('NFs', 30),
+        ('CNPJs Clientes', 30),
+        ('Nomes Clientes', 40),
+        ('UFs', 12),
+        ('Municípios', 30),
+        ('Peso Total NFs', 14),
+        ('Valor Total NFs', 16),
+        ('Frete Líquido Total NFs', 18),
+        ('Incoterms', 14),
+        ('Data Fatura (Mín)', 14),
+        ('Data Fatura (Máx)', 14),
+        ('Observações', 40),
+    ]
+
+    for col, (nome, largura) in enumerate(colunas_detalhada):
+        ws1.write(0, col, nome, header_format)
+        ws1.set_column(col, col, largura)
+
+    for row, linha in enumerate(visao_detalhada, start=1):
+        col = 0
+        ws1.write_number(row, col, linha.get('despesa_id', 0)); col += 1
+        ws1.write(row, col, linha.get('tipo_despesa', '')); col += 1
+        ws1.write(row, col, linha.get('setor_responsavel', '')); col += 1
+        ws1.write(row, col, linha.get('motivo_despesa', '')); col += 1
+        ws1.write(row, col, linha.get('tipo_documento', '')); col += 1
+        ws1.write(row, col, linha.get('numero_documento', '')); col += 1
+        ws1.write_number(row, col, linha.get('valor_despesa_total', 0), money_format); col += 1
+        ws1.write_number(row, col, linha.get('valor_despesa_liquido', 0), money_format); col += 1
+        ws1.write(row, col, linha.get('status_despesa', '')); col += 1
+
+        venc = linha.get('vencimento')
+        if venc:
+            ws1.write_datetime(row, col, datetime.combine(venc, datetime.min.time()), date_format)
+        else:
+            ws1.write(row, col, '')
+        col += 1
+
+        criado = linha.get('criado_em')
+        if criado:
+            ws1.write_datetime(row, col, criado, datetime_format)
+        else:
+            ws1.write(row, col, '')
+        col += 1
+
+        ws1.write(row, col, linha.get('criado_por', '')); col += 1
+        ws1.write_number(row, col, linha.get('frete_id', 0)); col += 1
+        ws1.write(row, col, linha.get('numero_cte', '')); col += 1
+        ws1.write(row, col, linha.get('transportadora', '')); col += 1
+        ws1.write(row, col, linha.get('transportadora_cnpj', '')); col += 1
+        ws1.write(row, col, linha.get('motorista_proprio', '')); col += 1
+        ws1.write_number(row, col, linha.get('qtd_nfs', 0)); col += 1
+        ws1.write(row, col, linha.get('numeros_nfs', '')); col += 1
+        ws1.write(row, col, linha.get('cnpjs_clientes', '')); col += 1
+        ws1.write(row, col, linha.get('nomes_clientes', '')); col += 1
+        ws1.write(row, col, linha.get('ufs', '')); col += 1
+        ws1.write(row, col, linha.get('municipios', '')); col += 1
+        ws1.write_number(row, col, linha.get('peso_total_nfs', 0), number_format); col += 1
+        ws1.write_number(row, col, linha.get('valor_total_nfs', 0), money_format); col += 1
+        ws1.write_number(row, col, linha.get('frete_liquido_total_nfs', 0), money_format); col += 1
+        ws1.write(row, col, linha.get('incoterms', '')); col += 1
+
+        dmin = linha.get('data_fatura_min')
+        if dmin:
+            ws1.write_datetime(row, col, datetime.combine(dmin, datetime.min.time()), date_format)
+        else:
+            ws1.write(row, col, '')
+        col += 1
+
+        dmax = linha.get('data_fatura_max')
+        if dmax:
+            ws1.write_datetime(row, col, datetime.combine(dmax, datetime.min.time()), date_format)
+        else:
+            ws1.write(row, col, '')
+        col += 1
+
+        ws1.write(row, col, linha.get('observacoes', '')); col += 1
+
+    # Congelar linha de cabeçalho
+    ws1.freeze_panes(1, 0)
+    # Auto-filter
+    if visao_detalhada:
+        ws1.autofilter(0, 0, len(visao_detalhada), len(colunas_detalhada) - 1)
+
+    # =========================================================================
+    # ABA 2: Por Setor + UF + Mês
+    # =========================================================================
+    ws2 = workbook.add_worksheet('Por Setor UF Mês')
+
+    colunas_setor = [
+        ('Mês/Ano', 12),
+        ('UF', 5),
+        ('Setor Responsável', 18),
+        ('Despesa Líquida', 16),
+        ('Despesa Bruta', 16),
+        ('Qtd Despesas', 12),
+        ('Qtd NFs Atingidas', 16),
+        ('Valor NFs Atingidas', 18),
+        ('Peso NFs Atingidas', 16),
+    ]
+
+    for col, (nome, largura) in enumerate(colunas_setor):
+        ws2.write(0, col, nome, header_format)
+        ws2.set_column(col, col, largura)
+
+    for row, linha in enumerate(visao_setor, start=1):
+        col = 0
+        ws2.write(row, col, linha.get('mes_ano', '')); col += 1
+        ws2.write(row, col, linha.get('uf', '')); col += 1
+        ws2.write(row, col, linha.get('setor', '')); col += 1
+        ws2.write_number(row, col, linha.get('valor_despesa_liquido', 0), money_format); col += 1
+        ws2.write_number(row, col, linha.get('valor_despesa_bruto', 0), money_format); col += 1
+        ws2.write_number(row, col, linha.get('qtd_despesas', 0)); col += 1
+        ws2.write_number(row, col, linha.get('qtd_nfs', 0)); col += 1
+        ws2.write_number(row, col, linha.get('valor_nfs', 0), money_format); col += 1
+        ws2.write_number(row, col, linha.get('peso_nfs', 0), number_format); col += 1
+
+    ws2.freeze_panes(1, 0)
+    if visao_setor:
+        ws2.autofilter(0, 0, len(visao_setor), len(colunas_setor) - 1)
+
+    # =========================================================================
+    # ABA 3: Por Motivo + UF + Mês
+    # =========================================================================
+    ws3 = workbook.add_worksheet('Por Motivo UF Mês')
+
+    colunas_motivo = [
+        ('Mês/Ano', 12),
+        ('UF', 5),
+        ('Motivo', 28),
+        ('Despesa Líquida', 16),
+        ('Despesa Bruta', 16),
+        ('Qtd Despesas', 12),
+        ('Qtd NFs Atingidas', 16),
+        ('Valor NFs Atingidas', 18),
+        ('Peso NFs Atingidas', 16),
+    ]
+
+    for col, (nome, largura) in enumerate(colunas_motivo):
+        ws3.write(0, col, nome, header_format)
+        ws3.set_column(col, col, largura)
+
+    for row, linha in enumerate(visao_motivo, start=1):
+        col = 0
+        ws3.write(row, col, linha.get('mes_ano', '')); col += 1
+        ws3.write(row, col, linha.get('uf', '')); col += 1
+        ws3.write(row, col, linha.get('motivo', '')); col += 1
+        ws3.write_number(row, col, linha.get('valor_despesa_liquido', 0), money_format); col += 1
+        ws3.write_number(row, col, linha.get('valor_despesa_bruto', 0), money_format); col += 1
+        ws3.write_number(row, col, linha.get('qtd_despesas', 0)); col += 1
+        ws3.write_number(row, col, linha.get('qtd_nfs', 0)); col += 1
+        ws3.write_number(row, col, linha.get('valor_nfs', 0), money_format); col += 1
+        ws3.write_number(row, col, linha.get('peso_nfs', 0), number_format); col += 1
+
+    ws3.freeze_panes(1, 0)
+    if visao_motivo:
+        ws3.autofilter(0, 0, len(visao_motivo), len(colunas_motivo) - 1)
+
+    workbook.close()
+    output.seek(0)
+
+    logger.info("Excel de despesas extras gerado com sucesso")
     return output

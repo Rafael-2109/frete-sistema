@@ -19,13 +19,16 @@
         </div>
     </div>
 
-    <!-- Card de Filtros -->
-    <div class="row">
-        <div class="col-lg-8 col-xl-6">
-            <div class="card filter-card">
+    <!-- Cards de Filtros (lado a lado em telas grandes) -->
+    <div class="row g-4">
+        <!-- ============================================================ -->
+        <!-- ÁREA 1: Relatório completo de Análise de Fretes               -->
+        <!-- ============================================================ -->
+        <div class="col-lg-6">
+            <div class="card filter-card h-100">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-filter"></i> Filtros do Relatório
+                        <i class="fas fa-filter"></i> Análise de Fretes
                     </h5>
                 </div>
                 <div class="card-body">
@@ -99,6 +102,71 @@
                 </div>
             </div>
         </div>
+
+        <!-- ============================================================ -->
+        <!-- ÁREA 2: Relatório dedicado de Despesas Extras                 -->
+        <!-- ============================================================ -->
+        <div class="col-lg-6">
+            <div class="card filter-card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-receipt"></i> Despesas Extras Detalhadas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="formDespesasExtras">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="dx_data_inicio" class="form-label">
+                                    <i class="fas fa-calendar"></i> Data Início
+                                </label>
+                                <input type="date" class="form-control" id="dx_data_inicio" name="data_inicio" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="dx_data_fim" class="form-label">
+                                    <i class="fas fa-calendar"></i> Data Fim
+                                </label>
+                                <input type="date" class="form-control" id="dx_data_fim" name="data_fim" required>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label for="dx_transportadora_id" class="form-label">
+                                    <i class="fas fa-truck"></i> Transportadora (opcional)
+                                </label>
+                                <input type="text" name="dx_transportadora_nome" class="form-control"
+                                       placeholder="Buscar transportadora..."
+                                       autocomplete="off"
+                                       data-transportadora-autocomplete
+                                       data-transportadora-id="#dx_transportadora_id">
+                                <input type="hidden" id="dx_transportadora_id" name="transportadora_id" value="">
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-warning btn-gerar">
+                                <i class="fas fa-file-excel"></i> Gerar Excel de Despesas Extras
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Informações sobre o relatório -->
+                    <div class="info-box">
+                        <h6><i class="fas fa-info-circle"></i> O Excel inclui:</h6>
+                        <ul>
+                            <li><strong>Aba 1 - Detalhada:</strong> Uma linha por despesa com valor <strong>íntegro</strong> (não rateado). Tipo, <strong>setor responsável</strong>, <strong>motivo</strong>, observações + NFs do frete <strong>concatenadas</strong> e dados agregados (peso, valor, frete líquido somados)</li>
+                            <li><strong>Aba 2 - Por Setor + UF + Mês:</strong> Total de despesa líquida agrupada por setor responsável, UF e mês</li>
+                            <li><strong>Aba 3 - Por Motivo + UF + Mês:</strong> Total de despesa líquida agrupada por motivo, UF e mês</li>
+                        </ul>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="fas fa-calculator"></i>
+                            Aba 1: 1 linha = 1 despesa (valor íntegro). Abas 2 e 3 ratéiam internamente por peso para alocar em UFs distintas (frete consolidado). Líquido = após ICMS e freteiro 9,25%. Regra RED → UF=SP nas abas 2 e 3.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
 </div>
@@ -118,49 +186,39 @@
 <script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('formRelatorio');
     const loadingOverlay = document.getElementById('loadingOverlay');
 
-    // Definir datas padrão (últimos 30 dias do último registro de faturamento: até 22/12/2025)
-    // Período sugerido: julho/2025 que tem maior volume de dados com fretes
-    document.getElementById('data_inicio').value = '2025-07-01';
-    document.getElementById('data_fim').value = '2025-07-31';
+    // Definir datas padrão (julho/2025 com maior volume)
+    const DEFAULT_INICIO = '2025-07-01';
+    const DEFAULT_FIM = '2025-07-31';
+    document.getElementById('data_inicio').value = DEFAULT_INICIO;
+    document.getElementById('data_fim').value = DEFAULT_FIM;
+    document.getElementById('dx_data_inicio').value = DEFAULT_INICIO;
+    document.getElementById('dx_data_fim').value = DEFAULT_FIM;
 
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        const dataInicio = document.getElementById('data_inicio').value;
-        const dataFim = document.getElementById('data_fim').value;
-        const transportadoraId = document.getElementById('transportadora_id').value;
-        const abrirDespesaTipo = document.getElementById('abrir_despesa_tipo').checked;
-
-        // Validação
+    /**
+     * Helper: dispara um POST que retorna um Excel e força download.
+     * Compartilhado pelos dois formulários da tela.
+     */
+    async function gerarExcel({url, payload, filenamePrefix, dataInicio, dataFim}) {
         if (!dataInicio || !dataFim) {
             alert('Por favor, preencha as datas de início e fim.');
             return;
         }
-
         if (new Date(dataInicio) > new Date(dataFim)) {
             alert('A data de início não pode ser maior que a data de fim.');
             return;
         }
 
-        // Mostrar loading
         loadingOverlay.classList.add('show');
-
         try {
-            const response = await fetch('{{ url_for("fretes.api_relatorio_analise_fretes") }}', {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': '{{ csrf_token() }}'
                 },
-                body: JSON.stringify({
-                    data_inicio: dataInicio,
-                    data_fim: dataFim,
-                    transportadora_id: transportadoraId || null,
-                    abrir_despesa_tipo: abrirDespesaTipo
-                })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
@@ -168,24 +226,67 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error(error.error || 'Erro ao gerar relatório');
             }
 
-            // Download do arquivo
             const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
+            const blobUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `analise_fretes_${dataInicio}_${dataFim}.xlsx`;
+            a.href = blobUrl;
+            a.download = `${filenamePrefix}_${dataInicio}_${dataFim}.xlsx`;
             document.body.appendChild(a);
             a.click();
-            window.URL.revokeObjectURL(url);
+            window.URL.revokeObjectURL(blobUrl);
             a.remove();
-
         } catch (error) {
             console.error('Erro:', error);
             alert('Erro ao gerar relatório: ' + error.message);
         } finally {
-            // Esconder loading
             loadingOverlay.classList.remove('show');
         }
+    }
+
+    // ================================================================
+    // Form 1: Relatório completo de Análise de Fretes
+    // ================================================================
+    document.getElementById('formRelatorio').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const dataInicio = document.getElementById('data_inicio').value;
+        const dataFim = document.getElementById('data_fim').value;
+        const transportadoraId = document.getElementById('transportadora_id').value;
+        const abrirDespesaTipo = document.getElementById('abrir_despesa_tipo').checked;
+
+        await gerarExcel({
+            url: '{{ url_for("fretes.api_relatorio_analise_fretes") }}',
+            payload: {
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+                transportadora_id: transportadoraId || null,
+                abrir_despesa_tipo: abrirDespesaTipo
+            },
+            filenamePrefix: 'analise_fretes',
+            dataInicio,
+            dataFim
+        });
+    });
+
+    // ================================================================
+    // Form 2: Relatório dedicado de Despesas Extras
+    // ================================================================
+    document.getElementById('formDespesasExtras').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const dataInicio = document.getElementById('dx_data_inicio').value;
+        const dataFim = document.getElementById('dx_data_fim').value;
+        const transportadoraId = document.getElementById('dx_transportadora_id').value;
+
+        await gerarExcel({
+            url: '{{ url_for("fretes.api_relatorio_despesas_extras") }}',
+            payload: {
+                data_inicio: dataInicio,
+                data_fim: dataFim,
+                transportadora_id: transportadoraId || null
+            },
+            filenamePrefix: 'despesas_extras',
+            dataInicio,
+            dataFim
+        });
     });
 });
 </script>

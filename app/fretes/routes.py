@@ -6539,6 +6539,75 @@ def api_relatorio_analise_fretes():
         return jsonify({"error": f"Erro ao gerar relatório: {str(e)}"}), 500
 
 
+@fretes_bp.route("/api/relatorios/despesas-extras", methods=["POST"])
+@login_required
+@require_financeiro()
+def api_relatorio_despesas_extras():
+    """API para gerar relatório Excel dedicado de despesas extras.
+
+    Retorna planilha com 3 abas:
+    - Detalhada: 1 linha por despesa rateada para cada NF
+    - Por Setor/UF/Mês: agrupado por setor responsável
+    - Por Motivo/UF/Mês: agrupado por motivo da despesa
+
+    Reaproveita a busca de dados do relatório de análise de fretes
+    (mesmas regras de período/transportadora/rateio/líquido).
+    """
+    from app.fretes.services.relatorio_analise_fretes_service import (
+        buscar_dados_relatorio,
+        gerar_excel_despesas_extras
+    )
+
+    try:
+        data = request.json or {}
+        data_inicio = data.get("data_inicio")
+        data_fim = data.get("data_fim")
+        transportadora_id = data.get("transportadora_id")
+
+        if not data_inicio or not data_fim:
+            return jsonify({"error": "Período obrigatório (data_inicio e data_fim)"}), 400
+
+        if transportadora_id:
+            try:
+                transportadora_id = int(transportadora_id)
+            except (ValueError, TypeError):
+                transportadora_id = None
+
+        logger.info(
+            f"Gerando relatório de despesas extras: {data_inicio} a {data_fim}, "
+            f"transportadora={transportadora_id}"
+        )
+
+        dados = buscar_dados_relatorio(data_inicio, data_fim, transportadora_id)
+
+        if not dados['fretes']:
+            return jsonify({
+                "error": f"Nenhum frete encontrado no período {data_inicio} a {data_fim}."
+            }), 404
+
+        # Verifica se há ao menos uma despesa em algum frete do período
+        tem_despesa = any(dados['despesas_por_frete'].get(f['id']) for f in dados['fretes'])
+        if not tem_despesa:
+            return jsonify({
+                "error": f"Nenhuma despesa extra encontrada para os fretes do período {data_inicio} a {data_fim}."
+            }), 404
+
+        output = gerar_excel_despesas_extras(dados, data_inicio, data_fim)
+
+        filename = f"despesas_extras_{agora_utc_naive().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        return send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        logger.exception(f"Erro ao gerar relatório de despesas extras: {e}")
+        return jsonify({"error": f"Erro ao gerar relatório: {str(e)}"}), 500
+
+
 # ==========================================================================
 # CTe Cancelamento Outlook — Pendencias (2026-04-09)
 # ==========================================================================
