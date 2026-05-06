@@ -84,7 +84,7 @@ CLAUDE.md (root, 172 linhas) ─── ROUTER
     │   ├── modelos/   → REGRAS_CARTEIRA_SEPARACAO, REGRAS_MODELOS, CADEIA, QUERIES
     │   ├── negocio/   → REGRAS_NEGOCIO, P1_P7, FRETE_REAL_VS_TEORICO, MARGEM
     │   ├── odoo/      → IDS_FIXOS, GOTCHAS, MODELOS_CAMPOS, PIPELINE
-    │   ├── design/    → MAPEAMENTO_CORES
+    │   ├── design/    → GUIA_COMPONENTES_UI (FONTE UNICA)
     │   └── INDEX.md   → Indice geral
     │
     ├── .claude/skills/ (22 skills, ~5,500 linhas em SKILL.md)

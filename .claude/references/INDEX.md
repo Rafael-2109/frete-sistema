@@ -116,7 +116,7 @@
 | `descobrindo-odoo-estrutura` | odoo/MODELOS_CAMPOS |
 | `gerindo-expedicao` | modelos/REGRAS_CARTEIRA_SEPARACAO, negocio/REGRAS_NEGOCIO |
 | `gerindo-carvia` | app/carvia/CLAUDE.md |
-| `frontend-design` | design/MAPEAMENTO_CORES, design/GUIA_COMPONENTES_UI |
+| `frontend-design` | design/GUIA_COMPONENTES_UI (FONTE UNICA), app/static/css/README.md |
 | `cotando-frete` | negocio/FRETE_REAL_VS_TEORICO, negocio/MARGEM_CUSTEIO |
 | `monitorando-entregas` | modelos/CADEIA_PEDIDO_ENTREGA |
 | `acessando-ssw` | ssw/ROUTING_SSW, ssw/CARVIA_STATUS, ssw/INDEX |

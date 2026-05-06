@@ -1,122 +1,266 @@
-# Guia de Componentes UI — Mapeamento Semantico
+# Guia de Componentes UI — Nacom Goya Design System
 
-**Ultima Atualizacao**: 02/03/2026
+**Ultima Atualizacao**: 2026-05-06
+**Status**: FONTE UNICA — substitui o antigo `MAPEAMENTO_CORES.md`
 
-> Consulte ANTES de escrever botoes, badges ou elementos com cor.
-> Para tokens e arquitetura CSS: ver `MAPEAMENTO_CORES.md` (mesmo diretorio).
-
----
-
-## 1. Botoes: Mapeamento Semantico
-
-### Tabela de Decisao Rapida
-
-| Intencao | Classe | Cor Visual | Texto | Exemplo |
-|----------|--------|------------|-------|---------|
-| Acao principal da tela | `btn-primary` | Ambar | Escuro | "Salvar", "Criar", "Novo" |
-| Acao secundaria/neutra | `btn-secondary` | Cinza | Tema | "Cancelar", "Voltar", "Fechar" |
-| Confirmado/Sucesso/Aprovado | `btn-success` | Verde | Branco | "Confirmado", "Aprovado", "Concluido" |
-| Perigo/Excluir/Rejeitar | `btn-danger` | Vermelho | Branco | "Excluir", "Rejeitar", "Cancelar pedido" |
-| Atencao/Aguardando/Pendente | `btn-warning` | Amarelo | Escuro | "Pendente", "Aguardando", "Revisar" |
-| Informativo/Neutro sem acao | `btn-info` | Cinza medio | Branco | Raramente usado |
-| Variante leve (outline) | `btn-outline-*` | Borda colorida | Colorido | Acoes secundarias em headers |
-
-### Regras de Texto (text-white / text-dark)
-
-| Classe | `--_btn-color` definido | `text-white` necessario? |
-|--------|------------------------|--------------------------|
-| `btn-primary` | `hsl(0 0% 10%)` (escuro) | NAO — texto ja e escuro |
-| `btn-secondary` | `var(--text)` (tema) | NAO |
-| `btn-success` | `hsl(0 0% 100%)` (branco) | NAO — ja e branco |
-| `btn-danger` | `hsl(0 0% 100%)` (branco) | NAO — ja e branco |
-| `btn-warning` | `hsl(0 0% 10%)` (escuro) | NAO — texto ja e escuro |
-| `btn-info` | `hsl(0 0% 100%)` (branco) | NAO — ja e branco |
-| `btn-dark` | `hsl(0 0% 95%)` (claro) | NAO — ja e claro |
-
-**Resumo**: `text-white` e SEMPRE redundante nos botoes filled deste sistema. A cor do texto ja e definida pela variavel `--_btn-color` em `_buttons.css`.
-
-### Erros Comuns
-
-| Erro | Por que esta errado | Correcao |
-|------|-------------------|----------|
-| `btn-primary` para "Confirmado" | Primary = acao principal, NAO status | `btn-success` |
-| `btn-primary` para "Pendente" | Primary = acao principal, NAO alerta | `btn-warning` |
-| `btn-warning` para "Cancelar" | Warning = atencao/pendente, NAO perigo | `btn-secondary` ou `btn-danger` |
-| `btn-success text-white` | `text-white` redundante | `btn-success` (remover `text-white`) |
-| `btn-danger text-white` | `text-white` redundante | `btn-danger` (remover `text-white`) |
-| `btn-info text-white` | `text-white` redundante | `btn-info` (remover `text-white`) |
+> **Consulte ANTES** de criar/alterar badges, botoes, tabelas ou qualquer elemento colorido.
+> Para arquitetura CSS (pastas, @layer, build): ver `app/static/css/README.md`.
+> Para auditar codigo existente: ver `scripts/audits/ui_audit.py` + `relatorios/ui_audit_FINDINGS_<data>.md`.
 
 ---
 
-## 2. Badges de Status
+## 0. TL;DR — Antes de Codar
 
-### Tabela de Decisao
-
-| Status | Classe | Cor |
-|--------|--------|-----|
-| Pendente / Aguardando | `badge bg-warning text-dark` | Amarelo |
-| Confirmado / Aprovado / Concluido | `badge bg-success` | Verde |
-| Cancelado / Rejeitado / Erro | `badge bg-danger` | Vermelho |
-| Em andamento / Processando | `badge bg-info` | Cinza medio |
-| Rascunho / Sem estado / Neutro | `badge bg-secondary` | Cinza neutro |
-
-### Regras
-
-- `text-dark` e necessario APENAS com `bg-warning` (fundo amarelo claro, texto precisa ser escuro)
-- `text-white` NAO e necessario com `bg-success`, `bg-danger`, `bg-info` (ja contrastam)
-- Para badges customizados do sistema de design: usar classes de `_badges.css` (`badge-status-pendente`, `badge-status-concluido`, etc.)
+1. **Nao adicione cores hardcoded** (`#abc`, `rgb(...)`). Use tokens em `tokens/_design-tokens.css`.
+2. **Nao use** `--bs-*-text-emphasis | --bs-*-bg-subtle | --bs-*-border-subtle` — sao Bootstrap-native, **nao** sao tematizadas pelo design system.
+3. **Badges**: priorize classes canonical de `components/_badges.css` (lista na secao 2). Crie nova classe so quando o status nao existir no canonical — e sempre via API `--_badge-bg/color`.
+4. **Tabelas com row colorida**: use `.table-success | .table-warning | .table-primary | .table-danger | .table-info` (`components/_tables.css`). **Nao** use `.table-secondary | .table-light | .table-dark` ate serem canonicalizadas.
+5. **`text-white | text-dark` em badges Bootstrap eh redundante** — `_bootstrap-overrides.css` ja resolve contraste. Audit `V6` reporta isso.
+6. **Inline styles com cor (`style="color: ..."`) sao proibidos** — audit `V1`/`V2` reporta.
+7. **Teste em DARK e LIGHT mode** antes de commitar.
 
 ---
 
-## 3. Layout: Gotchas e Solucoes
+## 1. Arquitetura (resumo executivo)
 
-### Botoes com Conteudo Complexo
+```
+@layer bootstrap, reset, tokens, base, components, modules, utilities;
 
-| Problema | Causa | Solucao |
-|----------|-------|---------|
-| Filhos de `.btn` nao empilham vertical | `.btn` usa `display: inline-flex` + `flex-direction: row` (padrao) | Adicionar classe `flex-column` ao `.btn` |
-| Texto longo nao quebra no botao | `.btn` tem `white-space: nowrap` (linha 41 de `_buttons.css`) | Adicionar `style="white-space: normal"` |
-| `d-block` nao funciona dentro de `.btn` | `inline-flex` governa layout dos filhos, `d-block` e ignorado | Usar `flex-column` no pai |
+app/static/css/
+├── main.css                       # entry point: declara @layer + @import
+├── tokens/_design-tokens.css      # FONTE UNICA de tokens HSL (light/dark)
+├── base/_bootstrap-overrides.css  # ajustes Bootstrap (badges/tables/modals)
+├── base/_navbar.css
+├── components/                    # componentes globais theme-aware
+│   ├── _badges.css                # API --_badge-bg/color/border
+│   ├── _buttons.css               # API --_btn-bg/color
+│   ├── _tables.css                # API --_table-bg/color/border-color
+│   ├── _cards.css, _forms.css, _modals.css, _layout.css, _tags.css
+├── modules/                       # estilos por modulo (_hora.css, _carvia.css, ...)
+└── utilities/                     # _utilities.css, _legacy.css (compat BS4→5)
+```
 
-### Botoes em Headers Ambar (`bg-primary`)
+**Principio**: tokens decidem cor, componentes expoem API CSS custom-property, modulos
+componem variantes via override de `--_X`.
 
-Quando o header usa `bg-primary` (fundo ambar), usar `btn-outline-light` para contraste:
+---
+
+## 2. Badges — Catalogo Canonical (`components/_badges.css`)
+
+### 2.1 Variantes Bootstrap (filled)
+
+Use estas classes diretamente. **Nao** acrescente `text-white|text-dark`.
+
+| Classe | Cor de fundo | Cor de texto | Uso |
+|---|---|---|---|
+| `.badge.bg-primary` | amber-55 | escuro fixo | Acao principal, destaque |
+| `.badge.bg-secondary` | cinza 40% | branco | Neutro |
+| `.badge.bg-success` | semantic-success (light: hsl 145 65 35) | branco | Confirmado, OK |
+| `.badge.bg-danger` | semantic-danger | branco | Erro, perigo |
+| `.badge.bg-warning` | amber-50 | escuro fixo | Atencao, pendente |
+| `.badge.bg-info` | cinza 45% (light: cinza 40%) | branco | Informativo neutro |
+| `.badge.bg-light` | bg-light token | text token | Adapta tema |
+| `.badge.bg-dark` | hsl 0 0 20 (light: 25) | claro fixo | Escuro fixo |
+
+### 2.2 Variantes outline
+
+`.badge-outline-primary | -secondary | -success | -danger | -warning | -info | -light | -dark`
+
+### 2.3 Status canonical (use estes em vez de criar novos)
+
+| Classe | Equivalente curto | Aliases | Cor |
+|---|---|---|---|
+| `.badge-status-pendente` | `.badge-pendente` | — | amber-50 + escuro |
+| `.badge-status-aprovado` | `.badge-aprovado` | `.badge-status-conferido`, `.badge-conferido` | success + branco |
+| `.badge-status-rejeitado` | `.badge-rejeitado` | `.badge-status-reprovado`, `.badge-reprovado` | danger + branco |
+| `.badge-status-pago` | `.badge-pago` | `.badge-status-lancado`, `.badge-lancado` | amber-55 + escuro |
+| `.badge-status-cancelado` | `.badge-cancelado` | — | cinza 40% + branco |
+| `.badge-status-rascunho` | `.badge-rascunho` | — | bg-light + texto + borda |
+| `.badge-status` | base neutro | — | bg-light + texto + borda |
+| `.badge-status-accent` | destaque amarelo | — | amarelo brilhante + escuro |
+
+> **Regra de ouro**: se o status que voce precisa for sinonimo de algum acima
+> (ex: "concluido" ≈ aprovado, "validado" ≈ conferido), reuse o canonical.
+
+### 2.4 Quando criar uma classe nova
+
+Apenas quando o status for genuinamente diferente. Use a API canonical:
+
+```css
+@layer modules {
+  .badge-status-em_transito {
+    --_badge-bg: hsl(220 70% 35%);
+    --_badge-color: hsl(0 0% 100%);
+  }
+
+  /* Ajuste light mode (WCAG 4.5:1) */
+  [data-bs-theme="light"] .badge-status-em_transito,
+  [data-theme="light"] .badge-status-em_transito {
+    --_badge-bg: hsl(220 70% 30%);
+  }
+}
+```
+
+**NAO** faca:
+```css
+/* RUIM — usa var Bootstrap-native nao tematizada (V14) */
+.badge-meu-status { color: var(--bs-warning-text-emphasis); }
+
+/* RUIM — overrida propriedades direto, ignorando API */
+.badge-meu-status { background-color: ...; color: ...; }
+
+/* RUIM — duplica canonical (V11.2) */
+.modulo-badge-pago { ... }  /* use .badge-pago */
+```
+
+### 2.5 Erros comuns
+
+| Erro | Por que | Correcao |
+|---|---|---|
+| `<span class="badge bg-warning text-dark">` | `_bootstrap-overrides.css` ja forca texto escuro em `bg-warning` (em ambos os temas) | `<span class="badge bg-warning">` |
+| `<span class="badge bg-success text-white">` | `--_badge-color` ja eh branco | `<span class="badge bg-success">` |
+| `<span class="badge bg-warning text-white">` | Anti-padrao de baixo contraste (V7) | `<span class="badge bg-warning">` |
+| `<span class="badge" style="background-color: #ffc107;">` | Inline style cor (V1/V2) | `<span class="badge bg-warning">` |
+| Badge customizado em modulo com sufixo igual a canonical | Duplica regra (V11) | Reusar canonical |
+
+---
+
+## 3. Botoes — `components/_buttons.css`
+
+### 3.1 Mapeamento semantico
+
+| Intencao | Classe | Texto | Exemplo |
+|---|---|---|---|
+| Acao principal | `btn-primary` | escuro fixo | "Salvar", "Criar" |
+| Acao secundaria | `btn-secondary` | tema | "Cancelar", "Voltar" |
+| Confirmar/aprovar | `btn-success` | branco | "Aprovar", "Confirmar" |
+| Excluir/perigo | `btn-danger` | branco | "Excluir", "Rejeitar" |
+| Atencao/aguardar | `btn-warning` | escuro fixo | "Pendente", "Revisar" |
+| Informativo | `btn-info` | branco | (raro) |
+| Header amber | `btn-outline-light` | claro | botao sobre `bg-primary` |
+
+### 3.2 Outline em headers `bg-primary`
+
+Quando o card-header usa `bg-primary` (fundo amber), use `btn-outline-light`:
 
 ```html
-<!-- Correto: outline-light em header ambar -->
 <div class="card-header bg-primary">
-    <button class="btn btn-outline-light btn-sm">Filtros</button>
+  <button class="btn btn-outline-light btn-sm">Filtros</button>
 </div>
 ```
 
-O CSS em `_buttons.css:316-326` ja cuida do contraste branco.
+### 3.3 Erros comuns
+
+| Erro | Correcao |
+|---|---|
+| `btn-primary text-white` | `btn-primary` (texto ja escuro fixo) |
+| `btn-success text-white` | `btn-success` (`--_btn-color` ja eh branco) |
+| `btn-warning` para "Excluir" | `btn-danger` (warning = atencao, nao perigo) |
+| `btn-primary` para badge de status | usar `badge-*` em vez de `btn-*` |
 
 ---
 
-## 4. Cores no Design System (Resumo Rapido)
+## 4. Tabelas — `components/_tables.css`
 
-| Bootstrap class | Cor REAL neste sistema | Hex aproximado | Fonte |
-|-----------------|----------------------|----------------|-------|
-| `*-primary` | Ambar (NAO azul!) | `hsl(45, 95%, 55%)` / `var(--amber-55)` | `_buttons.css:75` |
-| `*-secondary` | Cinza neutro | `var(--bg-button)` | `_buttons.css:88` |
-| `*-success` | Verde | `hsl(145, 65%, 40%)` / `var(--semantic-success)` | `_buttons.css:101` |
-| `*-danger` | Vermelho | `hsl(0, 70%, 50%)` / `var(--semantic-danger)` | `_buttons.css:108` |
-| `*-warning` | Amarelo (ambar 50) | `hsl(45, 100%, 50%)` / `var(--amber-50)` | `_buttons.css:115` |
-| `*-info` | Cinza medio (NAO azul!) | `hsl(0, 0%, 45%)` | `_buttons.css:122` |
-| `*-light` | Fundo adaptivo | `var(--bg-light)` | `_buttons.css:129` |
-| `*-dark` | Escuro fixo | `hsl(0, 0%, 20%)` | `_buttons.css:136` |
+### 4.1 Row classes canonicais
 
-**ATENCAO**: `primary` e `info` NAO sao azuis neste sistema. `primary` = ambar, `info` = cinza.
+Definidas com `--_row-bg` + `--_row-hover-bg` (HSLA, semi-transparente sobre tema):
+
+| Classe | Cor | Uso |
+|---|---|---|
+| `.table-success` | verde 15% / 28% hover | Status concluido/aprovado |
+| `.table-warning` | amarelo 15% / 28% hover | Status pendente/atencao |
+| `.table-primary` | amber 15% / 28% hover | Status destacado |
+| `.table-danger` | vermelho 15% / 28% hover | Status erro/cancelado |
+| `.table-info` | ciano 15% / 28% hover | Status informativo |
+
+### 4.2 NAO use ainda
+
+`.table-secondary`, `.table-light`, `.table-dark` — **nao estao no canonical**. Usam Bootstrap-default que quebra hierarquia de elevacao no dark mode.
+
+> Se precisar dessas variantes, abra issue para serem canonicalizadas em `_tables.css`
+> antes de usar. Audit `V12` reporta uso atual (~214 ocorrencias).
+
+### 4.3 Coluna utilities
+
+```html
+<th class="col-pedido">Pedido</th>
+<th class="col-cnpj">CNPJ</th>
+<th class="col-data">Data</th>
+<th class="col-valor">Valor</th>
+<th class="col-acoes">Acoes</th>
+```
+
+Lista completa em `components/_tables.css`: `col-id, col-pedido, col-cnpj, col-data, col-data-input, col-valor, col-qtd, col-peso, col-uf, col-status, col-acoes, col-check, col-nome, col-nome-lg, col-cidade, col-obs, col-nowrap`.
+
+### 4.4 Sticky header
+
+`<table class="table">` ja vem com sticky header em `<thead th>`. Para sticky col tambem:
+
+```html
+<table class="table table-sticky-both">...</table>
+```
 
 ---
 
-## 5. Checklist Pre-Implementacao
+## 5. Cores Reais Neste Sistema (recap)
 
-Antes de escrever qualquer botao, badge ou elemento colorido:
+**Atencao**: nomes Bootstrap NAO correspondem a cores Bootstrap default!
 
-1. Identificar a INTENCAO semantica (acao principal? status? perigo?)
-2. Consultar tabela da Secao 1 (botoes) ou Secao 2 (badges)
-3. Verificar se `text-white` e necessario (geralmente NAO — ver tabela Secao 1)
-4. Se botao com conteudo multi-linha: usar `flex-column` + `white-space: normal`
-5. Se botao em header ambar: usar `btn-outline-light`
-6. Testar em dark mode E light mode
+| Classe Bootstrap | Cor REAL | Token | Hue |
+|---|---|---|---|
+| `*-primary` | amber (NAO azul) | `var(--amber-55)` | 60 |
+| `*-secondary` | cinza neutro | `hsl(0 0% 40%)` | 0 |
+| `*-success` | verde | `var(--semantic-success)` | 145 |
+| `*-danger` | vermelho coral | `var(--semantic-danger)` | 350 |
+| `*-warning` | amarelo-chartreuse | `var(--amber-50)` | 60 |
+| `*-info` | cinza medio (NAO azul) | `hsl(0 0% 45%)` | 0 |
+| `*-light` | adapta tema | `var(--bg-light)` | — |
+| `*-dark` | escuro fixo | `hsl(0 0% 20%)` | 0 |
+
+---
+
+## 6. Antipatterns Catalogados
+
+Codigos do `ui_audit.py` (ver `scripts/audits/ui_audit.py`):
+
+| Codigo | Antipattern | Como evitar |
+|---|---|---|
+| `V1` | Inline style com cor | usar classe canonical |
+| `V2` | Hex literal em template | usar token via classe |
+| `V3` | Hex em CSS modulo | usar token de `_design-tokens.css` |
+| `V4` | rgb/rgba/hsla literal em CSS modulo | usar `var(--token)` ou `hsla()` baseado em token |
+| `V5` | `!important` fora de tokens/legacy | corrigir especificidade ou layer |
+| `V6` | `badge bg-X text-Y` redundante | so `badge bg-X` (canonical resolve) |
+| `V7` | Combinacao baixo contraste | trocar para par valido |
+| `V11` | Duplicacao de classe badge cross-modulo | consolidar em canonical |
+| `V12` | `table-secondary/light/dark` em template | esperar canonicalizacao ou propor variante |
+| `V14` | `--bs-*-text-emphasis/bg-subtle/border-subtle` em modulo | usar token semantico |
+
+Rodar audit: `python scripts/audits/ui_audit.py` (gera 3 reports em `relatorios/`).
+
+---
+
+## 7. Checklist Pre-Implementacao
+
+Antes de escrever badge/botao/tabela colorida:
+
+- [ ] Identifiquei a INTENCAO semantica (acao? status? severidade?)
+- [ ] Verifiquei se ja existe classe canonical (Secao 2 / 3 / 4)
+- [ ] Se classe nova: usei API `--_badge-bg/color`, `--_btn-bg/color`, ou `--_row-bg`
+- [ ] Nao usei `--bs-*-text-emphasis | bg-subtle | border-subtle`
+- [ ] Nao adicionei `text-white | text-dark` redundante
+- [ ] Nao usei inline style com cor
+- [ ] Testei em DARK mode E em LIGHT mode
+- [ ] Rodei `python scripts/audits/ui_audit.py` e nao adicionei novas violacoes
+
+---
+
+## 8. Quando Atualizar Este Documento
+
+- Adicionou status canonical novo em `components/_badges.css` → atualizar Secao 2.3
+- Adicionou row class em `components/_tables.css` → atualizar Secao 4.1
+- Adicionou nova categoria de antipattern → atualizar Secao 6 + estender `ui_audit.py`
+- Mudou semantica de classe Bootstrap → atualizar Secao 5
+
+Mantenedor: dev que estiver alterando design system. Nao adie atualizacao para depois.

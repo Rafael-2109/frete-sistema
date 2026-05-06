@@ -1,298 +1,216 @@
-# Estrutura CSS - Frete Sistema
+# app/static/css/ — Arquitetura CSS
 
-**Atualizado**: 2025-12-17
-**Versao**: 2.1.0
+**Atualizado**: 2026-05-06
+**Versao**: 3.0.0 (substitui v2.x do antigo `_variables.css`)
+
+> Documentacao tecnica da arquitetura. Para uso correto de badges/botoes/tabelas:
+> ler `.claude/references/design/GUIA_COMPONENTES_UI.md`.
 
 ---
 
-## Estrutura de Pastas
+## Estrutura
 
 ```
 app/static/css/
-├── _variables.css              # FONTE UNICA de variaveis de cor
-├── bootstrap-overrides.css     # Sobrescritas do Bootstrap
-├── navbar.css                  # Estilos da navbar (global)
-├── style.css                   # Legacy (manter por compatibilidade)
+├── main.css                       # ENTRY POINT — declara @layer e @import (todos)
 │
-├── modules/
-│   ├── carteira/               # Modulo Carteira de Pedidos
-│   │   ├── agrupados.css       # Carteira agrupada por cliente
-│   │   ├── workspace-montagem.css  # Workspace de montagem de cargas
-│   │   ├── separacao-animations.css # Animacoes de separacao
-│   │   └── carteira-simples.css    # Visao simplificada da carteira
-│   │
-│   ├── analises/               # Modulo Analises
-│   │   └── drilldown.css       # Analises drill-down
-│   │
-│   └── financeiro/             # Modulo Financeiro
-│       ├── extrato.css
-│       └── premium-effects.css
+├── tokens/
+│   └── _design-tokens.css         # FONTE UNICA de tokens (HSL, light/dark, --bs-*)
 │
-└── contas_receber.css          # Modulo Contas a Receber
+├── base/
+│   ├── _bootstrap-overrides.css   # ajustes Bootstrap (badges, tables, modals, btns)
+│   └── _navbar.css                # navbar global
+│
+├── components/                    # componentes globais theme-aware
+│   ├── _badges.css                # API --_badge-bg/color/border (ver Secao 2 do GUIA)
+│   ├── _buttons.css               # API --_btn-bg/color
+│   ├── _tables.css                # API --_table-bg/color/border-color (+ row variants)
+│   ├── _cards.css
+│   ├── _forms.css
+│   ├── _modals.css
+│   ├── _layout.css
+│   └── _tags.css
+│
+├── modules/                       # estilos por modulo (componem variantes)
+│   ├── _hora.css, _carvia.css, _carteira.css, _financeiro.css, ...
+│   └── carteira/, custeio/, manufatura/, margem/, analises/  (subpastas)
+│
+├── utilities/
+│   ├── _utilities.css             # classes utilitarias
+│   └── _legacy.css                # compat Bootstrap 4 -> 5 (!important tolerado aqui)
+│
+├── vendor/
+│   └── bootstrap.min.css          # self-hosted Bootstrap 5.3.3
+│
+├── financeiro/                    # CSS especifico (extrato, premium-effects)
+└── contas_receber.css             # legado (modulo proprio)
 ```
+
+---
+
+## @layer Order (cascade)
+
+```css
+@layer bootstrap, reset, tokens, base, components, modules, utilities;
+```
+
+Layers superiores vencem inferiores **sem precisar `!important`**. Layer `bootstrap`
+fica em primeiro = menor prioridade. `utilities` em ultimo = maior prioridade.
+
+> **Gotcha**: `!important` declarado em `@layer bootstrap` (primeiro) tem MAIOR
+> prioridade `!important` que `!important` em layers superiores (CSS Cascade L5
+> inverte prioridade `!important` por layer). Ou seja: para vencer Bootstrap utility
+> classes, NAO use `!important` em layer superior — sobrescreva a CUSTOM PROPERTY de
+> input que Bootstrap consome (ex: `--bs-light-rgb`). Veja exemplos em
+> `base/_bootstrap-overrides.css` linhas ~245-300.
 
 ---
 
 ## Como Funciona
 
-### 1. Variaveis Centralizadas
+### 1. Tokens (cor, espaco, sombra)
 
-TODAS as variaveis de cor estao em `_variables.css`. Este arquivo e importado por `bootstrap-overrides.css`.
+Toda cor sai de `tokens/_design-tokens.css`. Light e dark mode definem TODOS os
+tokens com mesma chave, valor diferente:
 
 ```css
-/* _variables.css */
-:root, [data-bs-theme="light"], [data-theme="light"] {
-    --bs-primary: #009d80;
-    --bs-success: #0d7d5f;
-    /* ... */
+[data-bs-theme="dark"] {
+    --bg-light: hsl(0 0% 10%);   /* dark mode */
+    --text: hsl(0 0% 95%);
+    --semantic-success: hsl(145 80% 52%);
 }
 
-[data-bs-theme="dark"], [data-theme="dark"] {
-    --bs-primary: #00d4aa;
-    --bs-success: #10b981;
-    /* ... */
+[data-bs-theme="light"] {
+    --bg-light: hsl(0 0% 100%);  /* light mode (branco) */
+    --text: hsl(0 0% 5%);
+    --bs-success: hsl(135 70% 35%);  /* override no mapping --bs-* */
 }
 ```
 
-### 2. Ordem de Carregamento (base.html)
+### 2. Componentes — API Custom Property
 
-```html
-<!-- 1. CDN Bootstrap -->
-<link href="bootstrap.min.css">
+Componentes expoem `--_X` privadas. Variantes overridam essas vars sem mexer em
+`background-color/color` direto:
 
-<!-- 2. Icones e libs -->
-<link href="font-awesome">
-<link href="toastr">
+```css
+/* components/_badges.css */
+.badge {
+    --_badge-bg: var(--bg-light);
+    --_badge-color: var(--text);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
+}
 
-<!-- 3. Overrides e variaveis -->
-<link href="bootstrap-overrides.css">  <!-- Importa _variables.css -->
-<link href="navbar.css">
-<link href="premium-effects.css">
-<link href="style.css">
+.badge.bg-success {
+    --_badge-bg: var(--semantic-success);
+    --_badge-color: hsl(0 0% 100%);
+}
+```
 
-<!-- 4. CSS especifico do modulo -->
-{% block extra_css %}{% endblock %}
+### 3. Modulos — Componem variantes
+
+Modulos NAO duplicam logica de tema. Apenas overridam `--_X` da API:
+
+```css
+/* modules/_meu-modulo.css */
+@layer modules {
+  .meu-badge-customizado {
+    --_badge-bg: hsl(220 70% 35%);
+    --_badge-color: hsl(0 0% 100%);
+  }
+}
 ```
 
 ---
 
-## Como Adicionar Novos Estilos
+## Adicionar Novo CSS
 
-### Para um modulo existente:
+### Em modulo existente
 
-1. Edite o arquivo CSS do modulo em `modules/<modulo>/`
-2. Use variaveis de `_variables.css` para cores
+1. Editar `modules/_<modulo>.css` (ja importado em `main.css`).
+2. Usar tokens: `var(--bg-light)`, `var(--text)`, `var(--semantic-X)`, `var(--amber-XX)`.
+3. NAO usar hex literal, NAO usar `--bs-*-text-emphasis | bg-subtle | border-subtle`.
 
-### Para um novo modulo:
+### Para novo modulo
 
-1. Crie pasta em `modules/<novo_modulo>/`
-2. Crie arquivo CSS (ex: `principal.css`)
-3. No template, adicione no bloco `extra_css`:
+1. Criar `modules/_novo-modulo.css`.
+2. Wrap em `@layer modules { ... }`.
+3. Adicionar `@import` em `main.css` (na secao "Modules").
+4. Componer via API custom-property (nao redefinir cores absolutas).
 
-```jinja2
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/modules/novo_modulo/principal.css') }}">
-{% endblock %}
-```
+### Para novo COMPONENTE global
 
----
-
-## Classes Utilitarias (Substituir Inline Styles)
-
-Disponiveis em `_variables.css` para substituir `style="background-color: #xxx"`:
-
-### Backgrounds de Status
-
-```html
-<!-- DE: style="background-color: #28a745; color: white;" -->
-<!-- PARA: -->
-<span class="bg-status-success">Ativo</span>
-<span class="bg-status-warning">Pendente</span>
-<span class="bg-status-danger">Erro</span>
-<span class="bg-status-info">Processando</span>
-<span class="bg-status-primary">Principal</span>
-<span class="bg-status-secondary">Secundario</span>
-<span class="bg-status-neutral">Neutro</span>
-```
-
-### Bordas Coloridas
-
-```html
-<div class="border-primary-custom">Borda teal</div>
-<div class="border-success-custom">Borda verde</div>
-<div class="border-warning-custom">Borda amber</div>
-<div class="border-danger-custom">Borda vermelha</div>
-<div class="border-info-custom">Borda azul</div>
-```
-
-### Texto Colorido
-
-```html
-<span class="text-status-success">Verde</span>
-<span class="text-status-warning">Amber</span>
-<span class="text-status-danger">Vermelho</span>
-<span class="text-status-info">Azul</span>
-<span class="text-status-primary">Teal</span>
-```
-
-### Badges de Status
-
-```html
-<span class="badge badge-ativo">Ativo</span>
-<span class="badge badge-inativo">Inativo</span>
-<span class="badge badge-pendente">Pendente</span>
-<span class="badge badge-erro">Erro</span>
-<span class="badge badge-processando">Processando</span>
-```
-
-### Stat Cards (Cards de Estatisticas)
-
-Cards unificados para dashboards. Substitui `card bg-primary text-white`, `card bg-info`, etc.
-
-```html
-<!-- Card padrao (borda teal) -->
-<div class="card stat-card">
-    <div class="card-body">
-        <h4 class="mb-0">123</h4>
-        <span class="small">Total de Itens</span>
-    </div>
-</div>
-
-<!-- Card com indicador de sucesso (borda verde) -->
-<div class="card stat-card stat-card-success">...</div>
-
-<!-- Card com indicador de perigo (borda vermelha) -->
-<div class="card stat-card stat-card-danger">...</div>
-
-<!-- Card clicavel (dentro de link) -->
-<a href="...">
-    <div class="card stat-card">...</div>
-</a>
-```
-
-### Action Buttons (Botoes de Acao)
-
-Botoes unificados para acoes rapidas em dashboards. Substitui `btn btn-success btn-lg`, `btn btn-primary btn-lg`, etc.
-
-```html
-<!-- Botao padrao (outline teal) -->
-<a href="..." class="btn btn-action btn-lg btn-block">
-    <i class="fas fa-list"></i><br>
-    Listar Itens
-</a>
-
-<!-- Botao de acao destrutiva (outline vermelho) -->
-<a href="..." class="btn btn-action btn-action-danger btn-lg btn-block">
-    <i class="fas fa-trash"></i><br>
-    Excluir
-</a>
-```
+1. Criar `components/_novo.css`.
+2. Wrap em `@layer components { ... }`.
+3. Expor API `--_X` privada (com prefixo `_` para indicar "interna").
+4. Adicionar `@import` em `main.css`.
 
 ---
 
-## Temas (Light/Dark)
+## Bootstrap 5.3 — Notas
 
-O sistema suporta light e dark mode atraves dos atributos:
-- `data-bs-theme="light|dark"` (Bootstrap 5.3)
-- `data-theme="light|dark"` (fallback)
-
-### Forcar tema em elemento especifico:
-
-```html
-<div data-bs-theme="dark">
-    <!-- Conteudo sempre em dark mode -->
-</div>
-```
-
-### Detectar tema no JavaScript:
-
-```javascript
-const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-```
+- Self-hosted em `vendor/bootstrap.min.css`.
+- Carregado dentro de `@layer bootstrap` (primeira posicao no order).
+- Mapping `--bs-*` definido em `tokens/_design-tokens.css` para AMBOS os temas.
+- Overrides especificos em `base/_bootstrap-overrides.css` (badges/tables/btns/modais).
 
 ---
 
-## Mapeamento de Cores Bootstrap
+## Auditoria
 
-| Bootstrap Antigo | Nosso Sistema |
-|------------------|---------------|
-| `#0d6efd` (blue) | `#009d80` (teal) |
-| `#198754` (green) | `#0d7d5f` (emerald) |
-| `#28a745` (green-old) | `#0d7d5f` (emerald) |
-| `#ffc107` (yellow) | `#b45309` (amber) |
-| `#dc3545` (red) | `#dc2626` (red) |
-| `#17a2b8` (cyan) | `#0284c7` (sky) |
-| `#6c757d` (gray) | `#64748b` (slate) |
+Script: `scripts/audits/ui_audit.py`
+
+```bash
+# Roda audit completo (3 outputs em relatorios/)
+python scripts/audits/ui_audit.py
+
+# Apenas FINDINGS (catalogo + recomendacoes)
+python scripts/audits/ui_audit.py --findings-only
+
+# Escopo restrito
+python scripts/audits/ui_audit.py --templates-dir app/templates/hora
+```
+
+Outputs:
+
+| Arquivo | Conteudo |
+|---|---|
+| `relatorios/ui_audit_<data>.json` | machine-readable (todas violacoes) |
+| `relatorios/ui_audit_<data>.md` | top hotspots (humano) |
+| `relatorios/ui_audit_FINDINGS_<data>.md` | catalogo + dups + recomendacoes |
+
+Codigos detectados (V1-V14): ver Secao 6 do `GUIA_COMPONENTES_UI.md`.
 
 ---
 
 ## Regras de Ouro
 
-1. **NUNCA** adicione cores hardcoded. Use variaveis de `_variables.css`
-2. **SEMPRE** use classes utilitarias em vez de inline styles
-3. **Modularize** - CSS de modulo vai em `modules/<modulo>/`
-4. **Teste** light e dark mode apos alteracoes
-5. **Documente** alteracoes significativas aqui
+1. **Nunca** hex hardcoded em template ou CSS modulo. Use tokens.
+2. **Nunca** `--bs-*-text-emphasis | bg-subtle | border-subtle` em modulo (Bootstrap-native, nao tematizado).
+3. **Sempre** API custom-property em variants (`--_badge-bg`, `--_btn-bg`, `--_row-bg`).
+4. **Sempre** testar em light + dark mode apos alteracao.
+5. **Sempre** rodar `ui_audit.py` antes de commit (e nao adicionar novas violacoes).
+6. **Componentes globais** vao em `components/`, **estilos por modulo** em `modules/`.
 
 ---
 
-## Arquivos Obsoletos (NAO USAR)
+## Cache Busting
 
-- ~~`app/templates/carteira/css/`~~ (movido para `modules/carteira/`)
+`base.html` adiciona `?v=N` em links CSS. Incrementar quando:
 
----
+- Tokens mudam (`tokens/_design-tokens.css`).
+- Layer order muda (`main.css`).
+- Adicao/remocao de imports em `main.css`.
 
-## Versionamento de CSS (Cache Busting)
-
-Para forcar o navegador a recarregar o CSS apos mudancas, use query parameter `?v=N`:
-
-```jinja2
-<!-- Em base.html e templates que carregam CSS -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-overrides.css') }}?v=6">
-```
-
-**Quando incrementar a versao:**
-- Qualquer mudanca em `_variables.css`
-- Mudancas de cor ou layout
-- Adicao de novas classes
-
-**Versao atual**: `?v=6` (2025-12-18)
+Mudancas dentro de `modules/_X.css` em geral nao precisam bump (o navegador respeita
+`Cache-Control` do servidor + ETag).
 
 ---
 
-## Sistema de Badges de Filtro
-
-Badges de filtro (agendamento, atendimento, cliente) seguem padrao minimalista:
-
-### Estado Normal (nao selecionado)
-```css
-.badge-agendamento-* {
-    background-color: transparent;
-    border: 1px solid hsl(0, 0%, 70%);
-    color: hsl(0, 0%, 40%);
-}
-```
-
-### Estado Ativo (selecionado)
-```css
-.badge-agendamento-*.ativo {
-    background-color: hsl(0, 0%, 30%);
-    border-color: hsl(0, 0%, 30%);
-    color: white;
-}
-```
-
-### Excecoes Semanticas
-- `.badge-atendimento-importante` → Usa `var(--bs-warning)` (amarelo)
-- Demais badges → Escala de cinza APENAS
-
----
-
-## Historico de Mudancas
+## Historico
 
 | Data | Versao | Descricao |
-|------|--------|-----------|
-| 2025-12-18 | 2.2.0 | Versionamento CSS (?v=6), badges de filtro cinza, correcoes light mode |
-| 2025-12-17 | 2.1.0 | Adicionados `.stat-card` e `.btn-action` para padronizar dashboards |
-| 2025-12-17 | 2.0.0 | Reorganizacao completa, centralizacao de variaveis, modularizacao |
-| 2025-XX-XX | 1.0.0 | Estrutura inicial |
+|---|---|---|
+| 2026-05-06 | 3.0.0 | README reescrito. Antigo `_variables.css` removido ha tempo (substituido por `tokens/_design-tokens.css`). Documentacao agora reflete arquitetura @layer real. Antigo `MAPEAMENTO_CORES.md` descomissionado (stub redirect). FONTE UNICA: `GUIA_COMPONENTES_UI.md` |
+| 2025-12-18 | 2.2.0 | Cache busting `?v=6`, badges de filtro |
+| 2025-12-17 | 2.0.0 | Reorganizacao com `_variables.css` (depois substituido) |
