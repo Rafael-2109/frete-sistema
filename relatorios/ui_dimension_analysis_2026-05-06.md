@@ -54,13 +54,12 @@ Vars como `--bs-purple`, `--bs-cyan`, `--bs-X-bg-subtle`, `--bs-X-text-emphasis`
 usadas em templates ou modulos. **Nao sao tematizadas** pelo design system —
 herdam Bootstrap default (cores arbitrarias, podem violar contraste em dark).
 
-**7 usos** em 5 arquivos.
+**6 usos** em 4 arquivos.
 
 | Var | Ocorrencias | Tipo | Onde |
 |---|---:|---|---|
 | `var(--bs-warning-bg-subtle)` | 3 | NAO-TEMATIZADA | templates=3, css=0 |
 | `var(--bs-success-bg-subtle)` | 2 | NAO-TEMATIZADA | templates=2, css=0 |
-| `var(--bs-purple)` | 1 | RARA | templates=1, css=0 |
 | `var(--bs-danger-bg-subtle)` | 1 | NAO-TEMATIZADA | templates=1, css=0 |
 
 **Acao**: tematizar essas vars no `_design-tokens.css` em ambos os blocos
@@ -71,13 +70,13 @@ herdam Bootstrap default (cores arbitrarias, podem violar contraste em dark).
 Classes Bootstrap que aplicam cores pastel **nao tematizadas pelo design system**.
 No dark mode podem virar tons claros que conflitam com texto branco/escuro herdado.
 
-**83 ocorrencias** em 24 arquivos.
+**84 ocorrencias** em 25 arquivos.
 
 | Classe | Ocorrencias |
 |---|---:|
 | `bg-opacity-10` | 35 |
 | `bg-success-subtle` | 16 |
-| `bg-info-subtle` | 14 |
+| `bg-info-subtle` | 15 |
 | `bg-warning-subtle` | 10 |
 | `bg-danger-subtle` | 4 |
 | `bg-primary-subtle` | 2 |
@@ -89,11 +88,11 @@ No dark mode podem virar tons claros que conflitam com texto branco/escuro herda
 Quantas variantes visuais coexistem para o mesmo elemento semantico?
 Cada signature distinta = 1 variante. **Quanto mais variantes, mais inconsistencia.**
 
-### `card-header` — 18 variantes em 969 ocorrencias
+### `card-header` — 19 variantes em 969 ocorrencias
 
 | Signature | Ocorrencias | Sample |
 |---|---:|---|
-| `NEUTRO` | 869 | `app/templates/monitoramento/visualizar_entrega.html:705` |
+| `NEUTRO` | 868 | `app/templates/monitoramento/visualizar_entrega.html:705` |
 | `bg-light` | 51 | `app/templates/hora/nf_detalhe.html:95` |
 | `bg-transparent` | 19 | `app/templates/main/dashboard.html:136` |
 | `bg-opacity-10+bg-opacity-10` | 9 | `app/templates/comercial/analise_margem.html:355` |
@@ -102,6 +101,7 @@ Cada signature distinta = 1 variante. **Quanto mais variantes, mais inconsistenc
 | `bg-info-subtle` | 2 | `app/templates/carvia/detalhe_operacao.html:103` |
 | `bg-light+bg-secondary+bg-success+bg-warning+text-dark+text-dark+text-white+text-white` | 1 | `app/templates/portaria/detalhes_veiculo.html:156` |
 | `bg-gradient` | 1 | `app/templates/fretes/visualizar_email.html:29` |
+| `bg-info-subtle+text-info-emphasis` | 1 | `app/templates/estoque/listar_movimentacoes.html:703` |
 | `bg-gradient-danger` | 1 | `app/templates/faturamento/dashboard_faturamento.html:167` |
 | `bg-gradient-warning` | 1 | `app/templates/faturamento/dashboard_faturamento.html:220` |
 | `bg-opacity-25+bg-warning+bg-opacity-25` | 1 | `app/templates/hora/tagplus/parser_append.html:60` |
@@ -198,9 +198,8 @@ Ordem por **valor / esforco** — comecar pelo topo:
 | # | Valor | Esforco | Acao | Alcance |
 |---:|---|---|---|---|
 | 2 | ALTO | BAIXO | Tematizar 6 usos de --bs-X-bg-subtle/text-emphasis no _design-tokens.css | Todos templates que usam essas vars |
-| 3 | MEDIO | MEDIO | Banir/substituir 1 usos de --bs-purple/cyan/etc | N templates |
-| 4 | ALTO | MEDIO | Substituir 83 bg-X-subtle/bg-opacity-N por classe canonical | N templates (criar 1-2 classes canonical, codemod massivo) |
-| 5 | ALTO | ALTO | Unificar 23 variantes de header em 2-3 canonicas | 1320 ocorrencias em ~402 templates |
+| 4 | ALTO | MEDIO | Substituir 84 bg-X-subtle/bg-opacity-N por classe canonical | N templates (criar 1-2 classes canonical, codemod massivo) |
+| 5 | ALTO | ALTO | Unificar 24 variantes de header em 2-3 canonicas | 1320 ocorrencias em ~402 templates |
 | 6 | MEDIO | ALTO | Migrar 22 <style> blocks de templates para CSS modulo | 22 templates |
 | 7 | BAIXO | MEDIO | Substituir 3 `.style.background/color =` por toggle de classe | Pontos de manipulacao dinamica |
 

@@ -304,14 +304,6 @@
   ],
   "dimension_2_bs_vars": [
     {
-      "file": "app/templates/estoque/listar_movimentacoes.html",
-      "line": 703,
-      "kind": "rare_bs_var",
-      "var": "--bs-purple",
-      "snippet": "<div class=\"card-header\" style=\"background-color: var(--bs-purple);\">",
-      "file_kind": "template"
-    },
-    {
       "file": "app/templates/custeio/producao.html",
       "line": 78,
       "kind": "untokenized_bs_var",
@@ -479,6 +471,13 @@
       "kind": "bg_opacity",
       "class": "bg-opacity-10",
       "snippet": "<div class=\"card-header bg-opacity-10 py-2 d-flex align-items-center justify-content-between\">"
+    },
+    {
+      "file": "app/templates/estoque/listar_movimentacoes.html",
+      "line": 703,
+      "kind": "bg_subtle",
+      "class": "bg-info-subtle",
+      "snippet": "<div class=\"card-header bg-info-subtle text-info-emphasis\">"
     },
     {
       "file": "app/templates/estoque/saldo_estoque.html",
@@ -3740,8 +3739,8 @@
       "file": "app/templates/estoque/listar_movimentacoes.html",
       "line": 703,
       "kind": "card-header",
-      "signature": "NEUTRO",
-      "classes": "card-header",
+      "signature": "bg-info-subtle+text-info-emphasis",
+      "classes": "card-header bg-info-subtle text-info-emphasis",
       "style": ""
     },
     {
