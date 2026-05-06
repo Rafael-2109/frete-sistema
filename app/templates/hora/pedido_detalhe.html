@@ -56,6 +56,111 @@
   </div></div>
 </div>
 
+{% if comparativo_valores %}
+{% set cv = comparativo_valores %}
+{% if cv.delta_match == 0 %}
+  {% set delta_color = 'success' %}
+{% elif cv.delta_match > 0 %}
+  {% set delta_color = 'danger' %}
+{% else %}
+  {% set delta_color = 'warning' %}
+{% endif %}
+<div class="card mb-4">
+  <div class="card-header bg-light d-flex justify-content-between align-items-center">
+    <strong><i class="fas fa-balance-scale"></i> Comparativo de valores — Pedido × NFs vinculadas</strong>
+    <small class="text-muted">Delta calculado APENAS sobre chassis em comum (intersecção)</small>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      {# Bloco 1: Match #}
+      <div class="col-md-5">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small mb-1">
+            <i class="fas fa-link text-success"></i> Match
+            <span class="badge bg-secondary">{{ cv.qtd_match }} chassi(s)</span>
+          </div>
+          {% if cv.qtd_match > 0 %}
+            <div class="row">
+              <div class="col-6">
+                <div class="text-muted small">Pedido</div>
+                <div class="fs-5"><strong>{{ cv.valor_pedido_match|valor_br }}</strong></div>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small">NF</div>
+                <div class="fs-5"><strong>{{ cv.valor_nf_match|valor_br }}</strong></div>
+              </div>
+            </div>
+            <div class="mt-2">
+              <span class="badge bg-{{ delta_color }} fs-6">
+                Δ NF − Pedido = {{ cv.delta_match|valor_br }}
+              </span>
+            </div>
+          {% else %}
+            <div class="text-muted">Nenhum chassi em comum entre pedido e NFs vinculadas.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Bloco 2: Sem match #}
+      <div class="col-md-4">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small mb-2">
+            <i class="fas fa-unlink text-warning"></i> Sem match
+          </div>
+          {% if cv.qtd_pedido_sem_match > 0 %}
+            <div class="small">
+              <strong>Pedido s/ NF:</strong>
+              {{ cv.valor_pedido_sem_match|valor_br }}
+              <span class="text-muted">({{ cv.qtd_pedido_sem_match }} chassi)</span>
+            </div>
+          {% endif %}
+          {% if cv.qtd_pedido_sem_chassi > 0 %}
+            <div class="small">
+              <strong>Pedido s/ chassi:</strong>
+              {{ cv.valor_pedido_sem_chassi|valor_br }}
+              <span class="text-muted">({{ cv.qtd_pedido_sem_chassi }} item)</span>
+            </div>
+          {% endif %}
+          {% if cv.qtd_nf_sem_match > 0 %}
+            <div class="small">
+              <strong>NF extra:</strong>
+              {{ cv.valor_nf_sem_match|valor_br }}
+              <span class="text-muted">({{ cv.qtd_nf_sem_match }} chassi fora do pedido)</span>
+            </div>
+          {% endif %}
+          {% if cv.qtd_pedido_sem_match == 0 and cv.qtd_pedido_sem_chassi == 0 and cv.qtd_nf_sem_match == 0 %}
+            <div class="text-muted">— Tudo casado —</div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# Bloco 3: Totais #}
+      <div class="col-md-3">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small mb-2">
+            <i class="fas fa-calculator"></i> Totais
+          </div>
+          <div class="small">
+            <strong>Pedido (itens c/ chassi):</strong> {{ cv.valor_total_pedido|valor_br }}
+            <span class="text-muted">({{ cv.qtd_pedido_com_chassi }})</span>
+          </div>
+          {% if cv.qtd_pedido_sem_chassi > 0 %}
+            <div class="small text-muted">
+              + Pedido (itens s/ chassi): {{ cv.valor_pedido_sem_chassi|valor_br }} ({{ cv.qtd_pedido_sem_chassi }})
+            </div>
+          {% endif %}
+          <hr class="my-2">
+          <div class="small">
+            <strong>NF(s):</strong> {{ cv.valor_total_nfs|valor_br }}
+            <span class="text-muted">({{ cv.qtd_nfs_vinculadas }} NF / {{ cv.qtd_nf_chassis }} chassi)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% if chassis_nao_faturados %}
 <div class="alert alert-warning">
   <strong>{{ chassis_nao_faturados|length }} chassi(s) do pedido ainda não faturado(s):</strong>

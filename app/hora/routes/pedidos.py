@@ -61,6 +61,8 @@ def pedidos_lista():
         p.id: matching_service.resumo_faturamento_pedido(p, fat_batch)
         for p in pedidos
     }
+    # Comparativo de valores (match/sem-match por chassi) — 1 query agregada.
+    comparativos_valores = matching_service.comparativos_valores_pedidos_batch(pedidos)
     # Lojas para o modal de exportacao (filtradas pelo escopo do usuario).
     escopo = lojas_permitidas_ids()
     lojas_q = HoraLoja.query.filter_by(ativa=True)
@@ -77,6 +79,7 @@ def pedidos_lista():
         filtro_data_inicio=data_ini_str,
         filtro_data_fim=data_fim_str,
         resumos=resumos,
+        comparativos_valores=comparativos_valores,
         lojas_ativas=lojas_ativas,
     )
 
@@ -114,6 +117,9 @@ def pedidos_detalhe(pedido_id: int):
 
     pode_excluir_pedido = len(nfs_vinculadas) == 0
 
+    # Comparativo de valores (match/sem-match por chassi).
+    comparativo_valores = matching_service.comparativo_valores_pedido(pedido)
+
     return render_template(
         'hora/pedido_detalhe.html',
         pedido=pedido,
@@ -124,6 +130,7 @@ def pedidos_detalhe(pedido_id: int):
         lojas_ativas=lojas_ativas,
         chassis_faturados_set=chassis_faturados_set,
         pode_excluir_pedido=pode_excluir_pedido,
+        comparativo_valores=comparativo_valores,
     )
 
 

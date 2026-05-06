@@ -49,6 +49,7 @@
       <th>Loja Destino</th>
       <th>Itens</th>
       <th>Faturamento</th>
+      <th>Valores (Pedido × NF)</th>
       <th>Status</th>
       <th></th>
     </tr></thead>
@@ -89,6 +90,61 @@
               <small class="text-muted">({{ r.pct }}%)</small>
             {% endif %}
           </td>
+          <td>
+            {% set cv = comparativos_valores.get(p.id) %}
+            {% if cv %}
+              {% if cv.qtd_match > 0 %}
+                {% set d = cv.delta_match %}
+                {% if d == 0 %}
+                  {% set delta_color = 'success' %}
+                {% elif d > 0 %}
+                  {% set delta_color = 'danger' %}
+                {% else %}
+                  {% set delta_color = 'warning' %}
+                {% endif %}
+                <div class="small">
+                  <span title="Soma do pedido (chassis em comum com NF)">
+                    P: <strong>{{ cv.valor_pedido_match|valor_br }}</strong>
+                  </span>
+                  ·
+                  <span title="Soma da NF (chassis em comum com pedido)">
+                    NF: <strong>{{ cv.valor_nf_match|valor_br }}</strong>
+                  </span>
+                  <br>
+                  <span class="badge bg-{{ delta_color }}"
+                        title="Delta NF − Pedido sobre {{ cv.qtd_match }} chassi(s) em comum">
+                    Δ {{ cv.delta_match|valor_br }} ({{ cv.qtd_match }})
+                  </span>
+                </div>
+              {% else %}
+                <small class="text-muted">— sem match —</small>
+              {% endif %}
+              {% if cv.qtd_pedido_sem_match > 0 or cv.qtd_pedido_sem_chassi > 0 or cv.qtd_nf_sem_match > 0 %}
+                <div class="small text-muted">
+                  s/ match:
+                  {% if cv.qtd_pedido_sem_match > 0 %}
+                    <span title="Chassis do pedido ainda não faturados em NF vinculada">
+                      P {{ cv.valor_pedido_sem_match|valor_br }}
+                    </span>
+                  {% endif %}
+                  {% if cv.qtd_pedido_sem_chassi > 0 %}
+                    {% if cv.qtd_pedido_sem_match > 0 %} · {% endif %}
+                    <span title="{{ cv.qtd_pedido_sem_chassi }} item(ns) sem chassi atribuído">
+                      P/sem-chassi {{ cv.valor_pedido_sem_chassi|valor_br }}
+                    </span>
+                  {% endif %}
+                  {% if cv.qtd_nf_sem_match > 0 %}
+                    {% if cv.qtd_pedido_sem_match > 0 or cv.qtd_pedido_sem_chassi > 0 %} · {% endif %}
+                    <span title="Chassis na NF que não estão neste pedido">
+                      NF {{ cv.valor_nf_sem_match|valor_br }}
+                    </span>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% else %}
+              <small class="text-muted">—</small>
+            {% endif %}
+          </td>
           <td><span class="badge badge-status-{{ p.status|lower }}">{{ p.status }}</span></td>
           <td>
             <div class="d-flex gap-1">
@@ -105,7 +161,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="8" class="text-center text-muted">Nenhum pedido encontrado.</td></tr>
+        <tr><td colspan="9" class="text-center text-muted">Nenhum pedido encontrado.</td></tr>
       {% endfor %}
     </tbody>
   </table>

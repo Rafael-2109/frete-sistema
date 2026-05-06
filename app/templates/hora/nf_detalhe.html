@@ -72,6 +72,105 @@
   </div></div>
 </div>
 
+{% if comparativo_valores %}
+{% set cv = comparativo_valores %}
+{% if cv.sem_pedido %}
+<div class="alert alert-warning mb-4 d-flex align-items-start gap-2">
+  <i class="fas fa-balance-scale mt-1"></i>
+  <div>
+    <strong>NF sem pedido vinculado.</strong>
+    Os {{ cv.qtd_chassis_nf }} chassi(s) somam <strong>{{ cv.valor_chassis_nf|valor_br }}</strong>
+    (header: {{ cv.valor_total_nf|valor_br }}). Vincule a um pedido para habilitar a comparação.
+  </div>
+</div>
+{% else %}
+{% if cv.delta_match == 0 %}
+  {% set delta_color = 'success' %}
+{% elif cv.delta_match > 0 %}
+  {% set delta_color = 'danger' %}
+{% else %}
+  {% set delta_color = 'warning' %}
+{% endif %}
+<div class="card mb-4">
+  <div class="card-header bg-light d-flex justify-content-between align-items-center">
+    <strong><i class="fas fa-balance-scale"></i> Comparativo de valores — NF × Pedido vinculado</strong>
+    <small class="text-muted">Delta calculado APENAS sobre chassis em comum (intersecção)</small>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-5">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small mb-1">
+            <i class="fas fa-link text-success"></i> Match
+            <span class="badge bg-secondary">{{ cv.qtd_match }} chassi(s)</span>
+          </div>
+          {% if cv.qtd_match > 0 %}
+            <div class="row">
+              <div class="col-6">
+                <div class="text-muted small">NF</div>
+                <div class="fs-5"><strong>{{ cv.valor_nf_match|valor_br }}</strong></div>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small">Pedido</div>
+                <div class="fs-5"><strong>{{ cv.valor_pedido_match|valor_br }}</strong></div>
+              </div>
+            </div>
+            <div class="mt-2">
+              <span class="badge bg-{{ delta_color }} fs-6">
+                Δ NF − Pedido = {{ cv.delta_match|valor_br }}
+              </span>
+            </div>
+          {% else %}
+            <div class="text-muted">Nenhum chassi em comum entre NF e pedido vinculado.</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small mb-2">
+            <i class="fas fa-unlink text-warning"></i> Sem match
+          </div>
+          {% if cv.qtd_nf_sem_match > 0 %}
+            <div class="small">
+              <strong>NF s/ pedido:</strong>
+              {{ cv.valor_nf_sem_match|valor_br }}
+              <span class="text-muted">({{ cv.qtd_nf_sem_match }} chassi fora do pedido)</span>
+            </div>
+          {% endif %}
+          {% if cv.qtd_pedido_sem_match > 0 %}
+            <div class="small">
+              <strong>Pedido s/ esta NF:</strong>
+              {{ cv.valor_pedido_sem_match|valor_br }}
+              <span class="text-muted">({{ cv.qtd_pedido_sem_match }} chassi)</span>
+            </div>
+          {% endif %}
+          {% if cv.qtd_nf_sem_match == 0 and cv.qtd_pedido_sem_match == 0 %}
+            <div class="text-muted">— Tudo casado —</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small mb-2">
+            <i class="fas fa-calculator"></i> Totais
+          </div>
+          <div class="small">
+            <strong>NF (header):</strong> {{ cv.valor_total_nf|valor_br }}
+          </div>
+          <div class="small">
+            <strong>NF (Σ itens):</strong> {{ cv.valor_chassis_nf|valor_br }}
+            <span class="text-muted">({{ cv.qtd_chassis_nf }} chassi)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
 {% if not nf.loja_destino_id %}
 <form method="post" action="{{ url_for('hora.nfs_definir_loja', nf_id=nf.id) }}" class="card p-3 mb-3 border-warning">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

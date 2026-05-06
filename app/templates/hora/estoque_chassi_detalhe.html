@@ -54,15 +54,41 @@
       <div class="col-md-2"><small class="text-muted">Data</small><br>
         {{ rastreio.pedido.data_pedido.strftime('%d/%m/%Y') if rastreio.pedido.data_pedido else '—' }}
       </div>
-      <div class="col-md-3"><small class="text-muted">Status</small><br>
+      <div class="col-md-2"><small class="text-muted">Status</small><br>
         <span class="badge bg-info">{{ rastreio.pedido.status }}</span>
       </div>
-      <div class="col-md-4"><small class="text-muted">Loja destino</small><br>
+      <div class="col-md-3"><small class="text-muted">Loja destino</small><br>
         {{ rastreio.pedido.loja_destino.rotulo_display if rastreio.pedido.loja_destino else '—' }}
       </div>
+      {% if rastreio.pedido_item and rastreio.pedido_item.preco_compra_esperado is not none %}
+        <div class="col-md-2"><small class="text-muted">Preço esperado</small><br>
+          {{ rastreio.pedido_item.preco_compra_esperado|valor_br }}
+        </div>
+      {% endif %}
     </div>
   {% else %}
-    <p class="text-muted mb-0">Sem pedido vinculado — moto possivelmente cadastrada manualmente ou entrou em NF sem pedido prévio.</p>
+    <p class="text-muted mb-0">
+      <i class="fas fa-info-circle"></i>
+      Este chassi <strong>não consta nos itens de nenhum pedido</strong> da HORA.
+      {% if rastreio.pedido_da_nf %}
+        Veja abaixo o pedido vinculado à NF (chassi extra na NF).
+      {% else %}
+        Pode ter sido cadastrado manualmente ou entrou em NF sem pedido prévio.
+      {% endif %}
+    </p>
+  {% endif %}
+
+  {% if rastreio.pedido_da_nf %}
+    {# Pedido vinculado a NF mas que NAO contem este chassi nos itens #}
+    <div class="alert alert-warning mt-3 mb-0">
+      <strong><i class="fas fa-exclamation-triangle"></i> Chassi extra na NF</strong>
+      — A NF deste chassi está vinculada ao pedido
+      <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=rastreio.pedido_da_nf.id) }}"
+         class="alert-link">{{ rastreio.pedido_da_nf.numero_pedido }}</a>
+      ({{ rastreio.pedido_da_nf.status }}, {{ rastreio.pedido_da_nf.loja_destino.rotulo_display if rastreio.pedido_da_nf.loja_destino else 'sem loja' }}),
+      mas <strong>este chassi não está entre os itens previstos do pedido</strong>.
+      Foi faturado como extra ou substituiu outro chassi previsto.
+    </div>
   {% endif %}
 </div>
 

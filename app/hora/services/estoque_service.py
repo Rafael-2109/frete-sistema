@@ -421,12 +421,13 @@ def listar_estoque(
         # Autorizacao por usuario escopado.
         if lojas_permitidas_ids is not None:
             if not lojas_permitidas_ids:
-                # Ja retornado [] acima — manter consistencia, nao deve chegar aqui.
-                pass
-            else:
-                subq_perm = chassis_acessiveis_subquery(lojas_permitidas_ids)
-                if subq_perm is not None:
-                    qb = qb.filter(HoraMoto.numero_chassi.in_(subq_perm))
+                # Defesa em profundidade: linha 335-336 ja retornou [] antes,
+                # mas se algum refactor remover esse return, garantimos que
+                # usuario sem acesso a NENHUMA loja recebe lista vazia.
+                return resultado
+            subq_perm = chassis_acessiveis_subquery(lojas_permitidas_ids)
+            if subq_perm is not None:
+                qb = qb.filter(HoraMoto.numero_chassi.in_(subq_perm))
 
         qb = qb.order_by(HoraMoto.numero_chassi)
         for moto, modelo in qb.all():
@@ -979,10 +980,18 @@ def rastreamento_completo(numero_chassi: str) -> dict:
     """Cruza dados de TODAS as entidades que tocam o chassi, gerando o
     "raio-x" usado na tela de detalhe. Sem eventos crus — entidades reais.
 
-    Returns dict com chaves: pedido, nf, nf_item, recebimento, conferencia,
+    Returns dict com chaves: pedido, pedido_item, pedido_da_nf,
+    chassi_no_pedido_da_nf, nf, nf_item, recebimento, conferencia,
     conferencia_divergencias, transferencias, avarias, pecas_faltando, venda,
     devolucoes, ultimo_evento, moto_disponivel.
     Campos ausentes vem como None (ou [] para coleções).
+
+    Regra (corrigida 2026-05-05): `pedido` so e populado se o chassi REALMENTE
+    consta em `HoraPedidoItem` (i.e. faz parte dos itens do pedido). Se a NF do
+    chassi esta vinculada a um pedido que NAO contem este chassi nos itens
+    (chassi extra na NF), o pedido vai em `pedido_da_nf` com flag
+    `chassi_no_pedido_da_nf=False` — para que o template indique a situacao
+    sem enganar o usuario dizendo que e o "pedido de origem" do chassi.
     """
     from app.hora.models import (
         HoraAvaria, HoraDevolucaoFornecedor, HoraDevolucaoFornecedorItem,
@@ -994,6 +1003,9 @@ def rastreamento_completo(numero_chassi: str) -> dict:
     chassi = numero_chassi.strip().upper()
     resultado = {
         'pedido': None,
+        'pedido_item': None,
+        'pedido_da_nf': None,            # Pedido vinculado a NF, mas chassi NAO nos itens
+        'chassi_no_pedido_da_nf': False,  # True se chassi consta nos itens do pedido_da_nf
         'nf': None,
         'nf_item': None,
         'recebimento': None,
@@ -1009,7 +1021,18 @@ def rastreamento_completo(numero_chassi: str) -> dict:
         'moto_disponivel': False,
     }
 
-    # NF item + NF + Pedido
+    # 1) Pedido REAL do chassi: aquele cujo HoraPedidoItem tem este chassi.
+    item_pedido = (
+        HoraPedidoItem.query
+        .filter_by(numero_chassi=chassi)
+        .order_by(HoraPedidoItem.id.desc())
+        .first()
+    )
+    if item_pedido:
+        resultado['pedido'] = item_pedido.pedido
+        resultado['pedido_item'] = item_pedido
+
+    # 2) NF item + NF + pedido_da_nf (informativo, separado).
     nf_item = (
         HoraNfEntradaItem.query
         .filter_by(numero_chassi=chassi)
@@ -1020,27 +1043,33 @@ def rastreamento_completo(numero_chassi: str) -> dict:
         resultado['nf_item'] = nf_item
         resultado['nf'] = nf_item.nf
         if nf_item.nf and nf_item.nf.pedido_id:
-            resultado['pedido'] = HoraPedido.query.get(nf_item.nf.pedido_id)
-        else:
-            # Fallback: pedido diretamente pelo chassi no item de pedido.
-            item_pedido = (
-                HoraPedidoItem.query
-                .filter_by(numero_chassi=chassi)
-                .order_by(HoraPedidoItem.id.desc())
-                .first()
-            )
-            if item_pedido:
-                resultado['pedido'] = item_pedido.pedido
-    else:
-        # Sem NF mas possivelmente com pedido com chassi atribuido.
-        item_pedido = (
-            HoraPedidoItem.query
-            .filter_by(numero_chassi=chassi)
-            .order_by(HoraPedidoItem.id.desc())
-            .first()
-        )
-        if item_pedido:
-            resultado['pedido'] = item_pedido.pedido
+            ped_da_nf = HoraPedido.query.get(nf_item.nf.pedido_id)
+            if ped_da_nf:
+                # Verifica se o chassi consta nos itens deste pedido.
+                chassis_do_pedido = {
+                    pi.numero_chassi for pi in ped_da_nf.itens if pi.numero_chassi
+                }
+                consta = chassi in chassis_do_pedido
+                resultado['chassi_no_pedido_da_nf'] = consta
+                if not resultado['pedido']:
+                    # Nao havia pedido_item para este chassi: o pedido_da_nf
+                    # e a unica referencia. Mostrar so se o chassi consta.
+                    if consta:
+                        resultado['pedido'] = ped_da_nf
+                        # pedido_item pode existir mesmo sem ter sido pego no
+                        # passo 1 (caso `numero_chassi` tenha capitalizacao
+                        # diferente, etc.). Re-busca dentro do pedido.
+                        for pi in ped_da_nf.itens:
+                            if pi.numero_chassi == chassi:
+                                resultado['pedido_item'] = pi
+                                break
+                    else:
+                        resultado['pedido_da_nf'] = ped_da_nf
+                else:
+                    # Ja temos pedido real (passo 1). Se for outro pedido,
+                    # registra pedido_da_nf como informacao adicional.
+                    if ped_da_nf.id != resultado['pedido'].id:
+                        resultado['pedido_da_nf'] = ped_da_nf
 
     # Recebimento + Conferencia (ativa mais recente)
     conf = (

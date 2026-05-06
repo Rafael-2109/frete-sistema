@@ -123,12 +123,18 @@ def chassis_acessiveis_subquery(lojas_permitidas: Optional[List[int]]):
     chassis_nf = (
         db.session.query(HoraNfEntradaItem.numero_chassi)
         .join(HoraNfEntrada, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
-        .filter(HoraNfEntrada.loja_destino_id.in_(lojas_permitidas))
+        .filter(
+            HoraNfEntrada.loja_destino_id.in_(lojas_permitidas),
+            HoraNfEntradaItem.numero_chassi.isnot(None),
+        )
     )
     chassis_venda = (
         db.session.query(HoraVendaItem.numero_chassi)
         .join(HoraVenda, HoraVendaItem.venda_id == HoraVenda.id)
-        .filter(HoraVenda.loja_id.in_(lojas_permitidas))
+        .filter(
+            HoraVenda.loja_id.in_(lojas_permitidas),
+            HoraVendaItem.numero_chassi.isnot(None),
+        )
     )
     return chassis_evento.union(
         chassis_pedido, chassis_nf, chassis_venda,

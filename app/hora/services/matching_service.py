@@ -752,3 +752,320 @@ def chassis_pedido_batch(pedido_ids: list) -> dict:
     for pid, chassi in rows:
         out.setdefault(pid, set()).add(chassi)
     return out
+
+
+# ------------------------------------------------------------------------
+# Comparativo de valores: pedido <-> NFs vinculadas pelos chassis em comum.
+#
+# Regras (confirmadas pelo dono do produto, 2026-05-05):
+#  - Delta compara APENAS chassis em comum (intersecao). Itens fora da
+#    intersecao (pedido sem NF, NF sem pedido vinculado) viram "s/ match".
+#  - Pedido pode ter N NFs vinculadas. Soma todas no lado da NF.
+#  - Itens do pedido sem chassi (numero_chassi=NULL) vao para um bucket
+#    separado — nao entram em match nem em sem-match (nao ha como casar).
+# ------------------------------------------------------------------------
+
+def _zero():
+    """Decimal(0) consistente para acumuladores."""
+    from decimal import Decimal
+    return Decimal('0')
+
+
+def comparativo_valores_pedido(
+    pedido: HoraPedido,
+    *,
+    itens_nf_por_pedido: Optional[dict] = None,
+    valor_total_nfs_por_pedido: Optional[dict] = None,
+) -> dict:
+    """Compara valores do pedido x NFs vinculadas, somando pelos chassis em comum.
+
+    `itens_nf_por_pedido` (opcional): dict {pedido_id: list[HoraNfEntradaItem]}
+    pre-carregado em batch (para evitar N+1 em listagens). Se None, busca aqui.
+
+    `valor_total_nfs_por_pedido` (opcional): dict {pedido_id: Decimal} com a
+    soma de `HoraNfEntrada.valor_total` das NFs vinculadas. Pre-carregado em
+    batch para eliminar query extra por pedido (era N+1 silencioso).
+
+    Returns dict:
+        # Lado pedido — sempre, mesmo sem NF
+        valor_total_pedido (Decimal): soma preco_compra_esperado de itens com chassi
+        valor_pedido_sem_chassi (Decimal): soma de itens NULL (sem chassi)
+        qtd_pedido_total (int): contagem total de itens do pedido
+        qtd_pedido_com_chassi (int)
+        qtd_pedido_sem_chassi (int)
+
+        # Lado NFs vinculadas
+        qtd_nfs_vinculadas (int)
+        valor_total_nfs (Decimal): soma valor_total das NFs vinculadas (header)
+        qtd_nf_chassis (int): total de itens-chassi nas NFs vinculadas
+
+        # Match (chassi em pedido E em NF vinculada)
+        qtd_match (int)
+        valor_pedido_match (Decimal): soma preco_compra_esperado dos chassis em comum
+        valor_nf_match (Decimal): soma preco_real dos chassis em comum
+        delta_match (Decimal): valor_nf_match - valor_pedido_match
+
+        # Sem match (lado pedido)
+        qtd_pedido_sem_match (int): chassis preenchidos no pedido mas sem NF
+        valor_pedido_sem_match (Decimal)
+
+        # Sem match (lado NF)
+        qtd_nf_sem_match (int): chassis na NF que nao estao no pedido
+        valor_nf_sem_match (Decimal)
+    """
+    out = {
+        'valor_total_pedido': _zero(),
+        'valor_pedido_sem_chassi': _zero(),
+        'qtd_pedido_total': len(pedido.itens),
+        'qtd_pedido_com_chassi': 0,
+        'qtd_pedido_sem_chassi': 0,
+        'qtd_nfs_vinculadas': 0,
+        'valor_total_nfs': _zero(),
+        'qtd_nf_chassis': 0,
+        'qtd_match': 0,
+        'valor_pedido_match': _zero(),
+        'valor_nf_match': _zero(),
+        'delta_match': _zero(),
+        'qtd_pedido_sem_match': 0,
+        'valor_pedido_sem_match': _zero(),
+        'qtd_nf_sem_match': 0,
+        'valor_nf_sem_match': _zero(),
+    }
+
+    # Mapas chassi -> preco do lado pedido
+    pedido_por_chassi: dict = {}
+    for it in pedido.itens:
+        if it.numero_chassi:
+            out['qtd_pedido_com_chassi'] += 1
+            preco = it.preco_compra_esperado or _zero()
+            pedido_por_chassi[it.numero_chassi] = preco
+            out['valor_total_pedido'] += preco
+        else:
+            out['qtd_pedido_sem_chassi'] += 1
+            out['valor_pedido_sem_chassi'] += (it.preco_compra_esperado or _zero())
+
+    # Itens das NFs vinculadas
+    if itens_nf_por_pedido is not None:
+        nf_items = itens_nf_por_pedido.get(pedido.id, [])
+    else:
+        nf_items = (
+            db.session.query(HoraNfEntradaItem)
+            .join(HoraNfEntrada, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+            .filter(HoraNfEntrada.pedido_id == pedido.id)
+            .all()
+        )
+    nfs_vinculadas_ids: set = set()
+    nf_por_chassi: dict = {}  # chassi -> preco_real (NF vinculada)
+    for nfi in nf_items:
+        nfs_vinculadas_ids.add(nfi.nf_id)
+        if nfi.numero_chassi:
+            out['qtd_nf_chassis'] += 1
+            nf_por_chassi[nfi.numero_chassi] = nfi.preco_real or _zero()
+
+    out['qtd_nfs_vinculadas'] = len(nfs_vinculadas_ids)
+
+    # valor_total_nfs (header das NFs)
+    if valor_total_nfs_por_pedido is not None:
+        out['valor_total_nfs'] = valor_total_nfs_por_pedido.get(pedido.id, _zero())
+    elif nfs_vinculadas_ids:
+        valores_header = (
+            db.session.query(HoraNfEntrada.valor_total)
+            .filter(HoraNfEntrada.id.in_(nfs_vinculadas_ids))
+            .all()
+        )
+        for (v,) in valores_header:
+            out['valor_total_nfs'] += (v or _zero())
+
+    # Calcula match / sem-match
+    chassis_match = set(pedido_por_chassi.keys()) & set(nf_por_chassi.keys())
+    out['qtd_match'] = len(chassis_match)
+    for c in chassis_match:
+        out['valor_pedido_match'] += pedido_por_chassi[c]
+        out['valor_nf_match'] += nf_por_chassi[c]
+    out['delta_match'] = out['valor_nf_match'] - out['valor_pedido_match']
+
+    pedido_sem_match = set(pedido_por_chassi.keys()) - set(nf_por_chassi.keys())
+    out['qtd_pedido_sem_match'] = len(pedido_sem_match)
+    for c in pedido_sem_match:
+        out['valor_pedido_sem_match'] += pedido_por_chassi[c]
+
+    nf_sem_match = set(nf_por_chassi.keys()) - set(pedido_por_chassi.keys())
+    out['qtd_nf_sem_match'] = len(nf_sem_match)
+    for c in nf_sem_match:
+        out['valor_nf_sem_match'] += nf_por_chassi[c]
+
+    return out
+
+
+def comparativos_valores_pedidos_batch(
+    pedidos: list,
+) -> dict:
+    """Bulk: {pedido_id: dict} para listagem.
+
+    Faz 2 queries pre-carregadas (eliminam N+1):
+      1. Itens-chassi de TODAS as NFs vinculadas (HoraNfEntradaItem JOIN HoraNfEntrada).
+      2. Soma de `valor_total` por pedido (read_group em HoraNfEntrada).
+    """
+    if not pedidos:
+        return {}
+    pedido_ids = [p.id for p in pedidos]
+
+    # Query 1: itens-chassi de NFs vinculadas
+    rows_itens = (
+        db.session.query(HoraNfEntradaItem, HoraNfEntrada.pedido_id)
+        .join(HoraNfEntrada, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+        .filter(HoraNfEntrada.pedido_id.in_(pedido_ids))
+        .all()
+    )
+    itens_nf_por_pedido: dict = {}
+    for nfi, pid in rows_itens:
+        itens_nf_por_pedido.setdefault(pid, []).append(nfi)
+
+    # Query 2: soma valor_total por pedido (header das NFs vinculadas).
+    from sqlalchemy import func as _sa_func
+    rows_total = (
+        db.session.query(
+            HoraNfEntrada.pedido_id,
+            _sa_func.coalesce(_sa_func.sum(HoraNfEntrada.valor_total), 0),
+        )
+        .filter(HoraNfEntrada.pedido_id.in_(pedido_ids))
+        .group_by(HoraNfEntrada.pedido_id)
+        .all()
+    )
+    valor_total_nfs_por_pedido: dict = {pid: total for pid, total in rows_total}
+
+    return {
+        p.id: comparativo_valores_pedido(
+            p,
+            itens_nf_por_pedido=itens_nf_por_pedido,
+            valor_total_nfs_por_pedido=valor_total_nfs_por_pedido,
+        )
+        for p in pedidos
+    }
+
+
+def comparativo_valores_nf(
+    nf: HoraNfEntrada,
+    *,
+    pedido_por_chassi_pre: Optional[dict] = None,
+) -> dict:
+    """Compara valores da NF x pedido vinculado, somando pelos chassis em comum.
+
+    `pedido_por_chassi_pre` (opcional): dict {chassi: preco_compra_esperado}
+    pre-carregado para o pedido vinculado (uso em batch). Se None e nf.pedido_id,
+    busca aqui.
+
+    Returns dict:
+        valor_total_nf (Decimal): nf.valor_total (header)
+        qtd_chassis_nf (int): itens da NF
+        valor_chassis_nf (Decimal): soma preco_real dos itens da NF
+
+        sem_pedido (bool): True se nf.pedido_id is None
+
+        # Match (chassi presente em ambos)
+        qtd_match (int)
+        valor_nf_match (Decimal)
+        valor_pedido_match (Decimal)
+        delta_match (Decimal): valor_nf_match - valor_pedido_match
+
+        # Sem match (chassis na NF mas nao no pedido vinculado)
+        qtd_nf_sem_match (int)
+        valor_nf_sem_match (Decimal)
+
+        # Sem match (chassis no pedido mas nao nesta NF — para visibilidade)
+        qtd_pedido_sem_match (int)
+        valor_pedido_sem_match (Decimal)
+    """
+    out = {
+        'valor_total_nf': nf.valor_total or _zero(),
+        'qtd_chassis_nf': 0,
+        'valor_chassis_nf': _zero(),
+        'sem_pedido': nf.pedido_id is None,
+        'qtd_match': 0,
+        'valor_nf_match': _zero(),
+        'valor_pedido_match': _zero(),
+        'delta_match': _zero(),
+        'qtd_nf_sem_match': 0,
+        'valor_nf_sem_match': _zero(),
+        'qtd_pedido_sem_match': 0,
+        'valor_pedido_sem_match': _zero(),
+    }
+
+    nf_por_chassi: dict = {}
+    for it in nf.itens:
+        out['qtd_chassis_nf'] += 1
+        preco = it.preco_real or _zero()
+        out['valor_chassis_nf'] += preco
+        if it.numero_chassi:
+            nf_por_chassi[it.numero_chassi] = preco
+
+    if not nf.pedido_id:
+        # Sem pedido vinculado: tudo da NF e "sem match" do lado NF.
+        out['qtd_nf_sem_match'] = len(nf_por_chassi)
+        out['valor_nf_sem_match'] = sum(nf_por_chassi.values(), _zero())
+        return out
+
+    if pedido_por_chassi_pre is not None:
+        pedido_por_chassi = pedido_por_chassi_pre
+    else:
+        pedido_por_chassi = {}
+        rows = (
+            db.session.query(HoraPedidoItem.numero_chassi, HoraPedidoItem.preco_compra_esperado)
+            .filter(HoraPedidoItem.pedido_id == nf.pedido_id)
+            .filter(HoraPedidoItem.numero_chassi.isnot(None))
+            .all()
+        )
+        for chassi, preco in rows:
+            pedido_por_chassi[chassi] = preco or _zero()
+
+    chassis_match = set(nf_por_chassi.keys()) & set(pedido_por_chassi.keys())
+    out['qtd_match'] = len(chassis_match)
+    for c in chassis_match:
+        out['valor_nf_match'] += nf_por_chassi[c]
+        out['valor_pedido_match'] += pedido_por_chassi[c]
+    out['delta_match'] = out['valor_nf_match'] - out['valor_pedido_match']
+
+    nf_sem = set(nf_por_chassi.keys()) - set(pedido_por_chassi.keys())
+    out['qtd_nf_sem_match'] = len(nf_sem)
+    for c in nf_sem:
+        out['valor_nf_sem_match'] += nf_por_chassi[c]
+
+    pedido_sem = set(pedido_por_chassi.keys()) - set(nf_por_chassi.keys())
+    out['qtd_pedido_sem_match'] = len(pedido_sem)
+    for c in pedido_sem:
+        out['valor_pedido_sem_match'] += pedido_por_chassi[c]
+
+    return out
+
+
+def comparativos_valores_nfs_batch(nfs: list) -> dict:
+    """Bulk: {nf_id: dict} para listagem. 1 query agregada para itens de pedido."""
+    if not nfs:
+        return {}
+
+    pedido_ids = list({nf.pedido_id for nf in nfs if nf.pedido_id})
+    pedido_por_chassi_por_pedido: dict = {pid: {} for pid in pedido_ids}
+    if pedido_ids:
+        rows = (
+            db.session.query(
+                HoraPedidoItem.pedido_id,
+                HoraPedidoItem.numero_chassi,
+                HoraPedidoItem.preco_compra_esperado,
+            )
+            .filter(HoraPedidoItem.pedido_id.in_(pedido_ids))
+            .filter(HoraPedidoItem.numero_chassi.isnot(None))
+            .all()
+        )
+        for pid, chassi, preco in rows:
+            pedido_por_chassi_por_pedido[pid][chassi] = preco or _zero()
+
+    return {
+        nf.id: comparativo_valores_nf(
+            nf,
+            pedido_por_chassi_pre=(
+                pedido_por_chassi_por_pedido.get(nf.pedido_id, {})
+                if nf.pedido_id else None
+            ),
+        )
+        for nf in nfs
+    }

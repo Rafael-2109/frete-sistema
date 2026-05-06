@@ -136,11 +136,14 @@ def nfs_lista():
         nf.id: matching_service.resumo_vinculo_nf(nf, chassis_por_pedido)
         for nf in nfs
     }
+    # Comparativo de valores (NF vs pedido vinculado, match/sem-match por chassi).
+    comparativos_valores = matching_service.comparativos_valores_nfs_batch(nfs)
     lojas_ativas = _lojas_ativas_permitidas()
     return render_template(
         'hora/nfs_lista.html',
         nfs=nfs,
         resumos=resumos,
+        comparativos_valores=comparativos_valores,
         lojas_ativas=lojas_ativas,
         filtro_numero_nf=numero_nf,
         filtro_emitente=emitente,
@@ -175,12 +178,16 @@ def nfs_detalhe(nf_id: int):
     # Vinculo por chassi: {chassi: {'pedido': ..., 'pedido_item': ..., 'vinculado_a_nf': bool}}
     vinculos = matching_service.vinculo_por_chassi_nf(nf.id)
 
+    # Comparativo de valores (NF vs pedido vinculado, match/sem-match por chassi).
+    comparativo_valores = matching_service.comparativo_valores_nf(nf)
+
     return render_template(
         'hora/nf_detalhe.html',
         nf=nf,
         pedidos_disponiveis=pedidos_disponiveis,
         lojas_ativas=lojas_ativas,
         vinculos_por_chassi=vinculos,
+        comparativo_valores=comparativo_valores,
     )
 
 
