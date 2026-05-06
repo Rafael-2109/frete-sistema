@@ -58,8 +58,8 @@ class PayloadBuilder:
     # Public
     # --------------------------------------------------------------
     def build(self, venda: 'HoraVenda') -> dict:
-        if not venda.itens:
-            raise PayloadBuilderError('venda_sem_itens', 'Venda sem itens.')
+        if not venda.itens and not getattr(venda, 'itens_peca', []):
+            raise PayloadBuilderError('venda_sem_itens', 'Venda sem itens (motos nem pecas).')
 
         if venda.forma_pagamento in (None, '', 'NAO_INFORMADO'):
             raise PayloadBuilderError(
@@ -82,12 +82,23 @@ class PayloadBuilder:
         faturas = self._montar_faturas(venda)
 
         loja_label = self._loja_label(venda)
+        # Soma motos + pecas em valor_desconto e valor_nota.
+        # Pecas: desconto_aplicado e POR UNIDADE; preco_final e o TOTAL da linha.
         valor_desconto = sum(
             (i.desconto_aplicado or Decimal('0') for i in venda.itens),
+            Decimal('0'),
+        ) + sum(
+            (
+                (Decimal(str(p.desconto_aplicado or 0)) * Decimal(str(p.qtd)))
+                for p in (getattr(venda, 'itens_peca', []) or [])
+            ),
             Decimal('0'),
         )
         valor_nota = sum(
             (i.preco_final for i in venda.itens),
+            Decimal('0'),
+        ) + sum(
+            (Decimal(str(p.preco_final or 0)) for p in (getattr(venda, 'itens_peca', []) or [])),
             Decimal('0'),
         )
 
@@ -531,6 +542,7 @@ class PayloadBuilder:
     # --------------------------------------------------------------
     def _montar_itens(self, venda: 'HoraVenda') -> list[dict]:
         itens = []
+        # 1. Itens MOTO (1 chassi por linha, qtd=1, detalhes = chassi/motor)
         for vi in venda.itens:
             modelo_id = vi.moto.modelo_id if vi.moto else None
             if modelo_id is None:
@@ -553,16 +565,39 @@ class PayloadBuilder:
             motor = (vi.moto.numero_motor if vi.moto else None) or '-'
             itens.append({
                 # API exige `produto_servico` (422 confirma em 2026-04-28 venda #2).
-                # doc_tagplus.md:638 mostra `produto` no sample mas a doc esta
-                # desatualizada — a API real rejeita `produto` como
-                # additionalProperty e exige `produto_servico` como required.
                 'produto_servico': str(map_.tagplus_produto_id),
                 'qtd': 1,
                 'valor_unitario': self._round2_float(vi.preco_tabela_referencia),
                 'valor_acrescimo': 0,
                 'valor_desconto': self._round2_float(vi.desconto_aplicado or Decimal('0')),
                 'detalhes': f'Chassi: {chassi} / Motor: {motor}',
+                'cfop': map_.cfop_default or '5.403',
             })
+
+        # 2. Itens PECA (qtd > 1 OK, sem chassi, CFOP de peca)
+        from app.hora.models import HoraTagPlusPecaMap
+        for vp in getattr(venda, 'itens_peca', []) or []:
+            peca_map = (
+                HoraTagPlusPecaMap.query
+                .filter_by(peca_id=vp.peca_id)
+                .first()
+            )
+            if not peca_map:
+                raise PayloadBuilderError(
+                    'peca_nao_mapeada',
+                    f'Peca {vp.peca.codigo_interno} (id={vp.peca_id}) sem mapeamento '
+                    f'TagPlus. Configurar em /hora/pecas/cadastro/{vp.peca_id}/editar.',
+                )
+            cfop_peca = peca_map.cfop_default or vp.peca.cfop_default or '5.102'
+            itens.append({
+                'produto_servico': str(peca_map.tagplus_produto_id),
+                'qtd': float(vp.qtd),
+                'valor_unitario': self._round2_float(vp.preco_unitario_referencia),
+                'valor_acrescimo': 0,
+                'valor_desconto': self._round2_float(vp.desconto_aplicado or Decimal('0')),
+                'cfop': cfop_peca,
+            })
+
         return itens
 
     # --------------------------------------------------------------
