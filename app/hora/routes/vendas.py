@@ -864,3 +864,60 @@ def vendas_exportar_xlsx():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+# ========================================================================
+# Itens PECA em pedido de venda (XOR moto)
+# ========================================================================
+
+@hora_bp.route('/vendas/<int:venda_id>/itens-peca/novo', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def venda_adicionar_item_peca(venda_id: int):
+    """Adiciona peca em pedido de venda (apenas em COTACAO)."""
+    venda = HoraVenda.query.get_or_404(venda_id)
+    from app.hora.services.auth_helper import usuario_tem_acesso_a_loja
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+
+    try:
+        peca_id_str = (request.form.get('peca_id') or '').strip()
+        if not peca_id_str.isdigit():
+            raise ValueError('Selecione uma peca')
+        qtd_str = (request.form.get('qtd') or '').strip().replace(',', '.')
+        valor_str = (request.form.get('valor_unitario_final') or '').strip().replace(',', '.')
+        if not qtd_str or not valor_str:
+            raise ValueError('Quantidade e valor unitario obrigatorios')
+        from app.hora.services import venda_service
+        venda_service.adicionar_item_peca(
+            venda_id=venda_id,
+            peca_id=int(peca_id_str),
+            qtd=Decimal(qtd_str),
+            valor_unitario_final=Decimal(valor_str),
+            usuario=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        flash('Peca adicionada ao pedido.', 'success')
+    except (ValueError, InvalidOperation) as exc:
+        flash(f'Erro ao adicionar peca: {exc}', 'danger')
+
+    return redirect(url_for('hora.venda_detalhe', venda_id=venda_id))
+
+
+@hora_bp.route('/vendas/<int:venda_id>/itens-peca/<int:item_id>/remover', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def venda_remover_item_peca(venda_id: int, item_id: int):
+    venda = HoraVenda.query.get_or_404(venda_id)
+    from app.hora.services.auth_helper import usuario_tem_acesso_a_loja
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    try:
+        from app.hora.services import venda_service
+        venda_service.remover_item_peca(
+            venda_id=venda_id, item_id=item_id,
+            usuario=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        flash('Peca removida do pedido.', 'success')
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.venda_detalhe', venda_id=venda_id))

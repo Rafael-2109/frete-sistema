@@ -595,6 +595,84 @@
 {% endif %}
 
 {# ---------------------------------------------------------------
+   Pecas (XOR moto) — itens_peca tem qtd, sem chassi
+   --------------------------------------------------------------- #}
+<h4 class="mt-4 mb-2"><i class="fas fa-cogs"></i> Peças do pedido ({{ venda.itens_peca|length }})</h4>
+<div class="card mb-3">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Código</th>
+          <th>Descrição</th>
+          <th class="text-end">Qtd</th>
+          <th class="text-end">Preço un. ref.</th>
+          <th class="text-end">Desconto un.</th>
+          <th class="text-end">Preço final</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ip in venda.itens_peca %}
+          <tr>
+            <td><code>{{ ip.peca.codigo_interno }}</code></td>
+            <td>{{ ip.peca.descricao }}</td>
+            <td class="text-end">{{ ip.qtd|numero_br(3) }} {{ ip.peca.unidade }}</td>
+            <td class="text-end">{{ ip.preco_unitario_referencia|valor_br }}</td>
+            <td class="text-end">{{ ip.desconto_aplicado|valor_br }}</td>
+            <td class="text-end"><strong>{{ ip.preco_final|valor_br }}</strong></td>
+            <td class="text-end">
+              {% if is_cotacao and pode_editar %}
+              <form method="post" action="{{ url_for('hora.venda_remover_item_peca', venda_id=venda.id, item_id=ip.id) }}"
+                    class="d-inline" onsubmit="return confirm('Remover {{ ip.peca.codigo_interno }} do pedido?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" title="Remover"><i class="fas fa-trash"></i></button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="text-center text-muted">Nenhuma peça neste pedido.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_cotacao and pode_editar %}
+  <div class="card-body border-top">
+    <h6 class="mb-2"><i class="fas fa-plus-circle"></i> Adicionar peça ao pedido</h6>
+    <form method="post" action="{{ url_for('hora.venda_adicionar_item_peca', venda_id=venda.id) }}"
+          class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4">
+        <label class="form-label small mb-0">Peça</label>
+        <input type="text" id="venda-add-peca-txt" class="form-control form-control-sm"
+               data-hora-autocomplete="peca" data-hora-target-id="venda-add-peca-id"
+               placeholder="Buscar peça (min. 2 chars)" required>
+        <input type="hidden" name="peca_id" id="venda-add-peca-id" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-0">Qtd</label>
+        <input type="text" name="qtd" class="form-control form-control-sm" inputmode="decimal" required placeholder="0,000">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-0">Valor unitário final</label>
+        <input type="text" name="valor_unitario_final" class="form-control form-control-sm"
+               inputmode="decimal" required placeholder="0,00">
+      </div>
+      <div class="col-md-auto">
+        <button class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Adicionar peça</button>
+      </div>
+    </form>
+    <small class="text-muted d-block mt-1">
+      <i class="fas fa-info-circle"></i> Saldo verificado na loja {{ venda.loja.rotulo_display if venda.loja else '—' }}.
+      Estoque é debitado ao adicionar; cancelar pedido devolve as peças.
+    </small>
+  </div>
+  {% endif %}
+</div>
+
+{# ---------------------------------------------------------------
    Auditoria (timeline append-only)
    --------------------------------------------------------------- #}
 {% if venda.auditoria %}

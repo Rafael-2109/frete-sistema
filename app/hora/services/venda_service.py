@@ -968,6 +968,18 @@ def cancelar_venda(
             detalhe=f'Pedido #{venda.id} cancelado: {motivo_limpo[:180]}',
         )
 
+    # Devolve pecas ao estoque (DEVOLUCAO_VENDA).
+    if venda.itens_peca:
+        from app.hora.services import peca_estoque_service
+        for ip in venda.itens_peca:
+            peca_estoque_service.registrar_movimento(
+                peca_id=ip.peca_id, loja_id=venda.loja_id,
+                tipo='DEVOLUCAO_VENDA', qtd=Decimal(str(ip.qtd)),
+                ref_tabela='hora_venda_item_peca', ref_id=ip.id,
+                motivo=f'Pedido #{venda.id} cancelado',
+                operador=usuario,
+            )
+
     venda_audit.registrar_auditoria(
         venda_id=venda.id, usuario=usuario or '',
         acao='CANCELOU',
@@ -976,6 +988,115 @@ def cancelar_venda(
 
     db.session.commit()
     return venda
+
+
+# --------------------------------------------------------------------------
+# Itens PECA em pedido de venda
+# --------------------------------------------------------------------------
+
+def adicionar_item_peca(
+    venda_id: int,
+    peca_id: int,
+    qtd,
+    valor_unitario_final,
+    usuario: Optional[str] = None,
+) -> 'HoraVendaItemPeca':
+    """Adiciona peca em pedido COTACAO. Emite SAIDA_VENDA na loja do pedido.
+
+    Validacoes:
+    - status precisa ser COTACAO
+    - peca_id existe
+    - qtd > 0 e valor_unitario_final > 0
+    - venda.loja_id definido
+    - saldo na loja suficiente
+    """
+    from app.hora.models import HoraVenda, HoraVendaItemPeca, HoraPeca
+    from app.hora.services import peca_estoque_service
+
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    _exigir_cotacao(venda, 'Adicionar peca')
+
+    peca = HoraPeca.query.get(peca_id)
+    if not peca:
+        raise ValueError(f'Peca {peca_id} nao existe')
+    qtd_dec = Decimal(str(qtd or 0))
+    if qtd_dec <= 0:
+        raise ValueError('qtd deve ser positiva')
+    valor_uni = Decimal(str(valor_unitario_final or 0))
+    if valor_uni <= 0:
+        raise ValueError('valor_unitario_final deve ser positivo')
+
+    if not venda.loja_id:
+        raise ValueError('Venda sem loja_id - defina loja antes de adicionar pecas')
+    saldo_atual = peca_estoque_service.saldo(peca.id, venda.loja_id)
+    if saldo_atual < qtd_dec:
+        raise ValueError(
+            f'Saldo insuficiente: loja {venda.loja_id} tem {saldo_atual} {peca.unidade}, '
+            f'pedido exige {qtd_dec}'
+        )
+
+    preco_ref = Decimal(str(peca.preco_venda_padrao))
+    desconto_uni = max(Decimal('0'), preco_ref - valor_uni)
+    preco_final_total = qtd_dec * valor_uni
+
+    item = HoraVendaItemPeca(
+        venda_id=venda.id, peca_id=peca.id, qtd=qtd_dec,
+        preco_unitario_referencia=preco_ref,
+        desconto_aplicado=desconto_uni,
+        preco_final=preco_final_total,
+    )
+    db.session.add(item)
+    db.session.flush()
+
+    peca_estoque_service.registrar_movimento(
+        peca_id=peca.id, loja_id=venda.loja_id,
+        tipo='SAIDA_VENDA', qtd=-qtd_dec,
+        ref_tabela='hora_venda_item_peca', ref_id=item.id,
+        motivo=f'Pedido #{venda.id}', operador=usuario,
+    )
+
+    venda.valor_total = Decimal(str(venda.valor_total)) + preco_final_total
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='ADICIONOU_ITEM_PECA',
+        detalhe=f'peca={peca.codigo_interno} qtd={qtd_dec} total={preco_final_total}',
+    )
+    db.session.commit()
+    return item
+
+
+def remover_item_peca(venda_id: int, item_id: int, usuario: Optional[str] = None) -> None:
+    """Remove peca de pedido COTACAO. Emite DEVOLUCAO_VENDA (devolve estoque)."""
+    from app.hora.models import HoraVenda, HoraVendaItemPeca
+    from app.hora.services import peca_estoque_service
+
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    _exigir_cotacao(venda, 'Remover peca')
+
+    item = HoraVendaItemPeca.query.get(item_id)
+    if not item or item.venda_id != venda.id:
+        raise ValueError(f'Item peca {item_id} nao pertence ao pedido {venda_id}')
+
+    peca_estoque_service.registrar_movimento(
+        peca_id=item.peca_id, loja_id=venda.loja_id,
+        tipo='DEVOLUCAO_VENDA', qtd=Decimal(str(item.qtd)),
+        ref_tabela='hora_venda_item_peca', ref_id=item.id,
+        motivo=f'Item peca removido do pedido #{venda.id}',
+        operador=usuario,
+    )
+
+    venda.valor_total = Decimal(str(venda.valor_total)) - Decimal(str(item.preco_final))
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='REMOVEU_ITEM_PECA',
+        detalhe=f'peca={item.peca.codigo_interno} qtd={item.qtd}',
+    )
+    db.session.delete(item)
+    db.session.commit()
 
 
 # --------------------------------------------------------------------------
