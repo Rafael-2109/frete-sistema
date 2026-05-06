@@ -198,7 +198,7 @@ def main():
             for theme in selected_themes:
                 ok = capture_page(
                     page, name, full_url, theme, target_dir,
-                    viewport_w, viewport_h, wait_for, timeout_ms, full_page,
+                    wait_for, timeout_ms, full_page,
                 )
                 if not ok:
                     failures.append((name, theme))

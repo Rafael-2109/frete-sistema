@@ -116,6 +116,7 @@ Gotchas rapidos:
 | Arquitetura CSS (@layer, tokens, components/modules) | `app/static/css/README.md` |
 | Auditar codigo existente | `python scripts/audits/ui_audit.py` |
 | Detectar regressao antes de commit em CSS/templates | `python scripts/audits/ui_audit_regression.py` |
+| Detectar regressao VISUAL (pixel diff) antes de commit | `tests/visual/` (capture + compare via Playwright/PIL) |
 | Catalogo de inconsistencias (badges duplicados, tabelas, vars BS) | `relatorios/ui_audit_FINDINGS_<data>.md` |
 
 ---
