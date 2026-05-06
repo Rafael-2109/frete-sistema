@@ -36,6 +36,8 @@ MODULOS_HORA: list[tuple[str, str]] = [
     ('vendas', 'Vendas (NF saida)'),
     ('vendas_descarte', 'Vendas: Descartar (NF teste)'),
     ('tagplus', 'Integracao TagPlus (NFe)'),
+    ('pecas_cadastro', 'Cadastro de Pecas'),
+    ('pecas_estoque', 'Estoque de Pecas'),
 ]
 
 # Modulos virtuais onde apenas a acao 'ver' tem semantica. As demais colunas
