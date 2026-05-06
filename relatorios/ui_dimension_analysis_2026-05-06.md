@@ -70,57 +70,48 @@ herdam Bootstrap default (cores arbitrarias, podem violar contraste em dark).
 Classes Bootstrap que aplicam cores pastel **nao tematizadas pelo design system**.
 No dark mode podem virar tons claros que conflitam com texto branco/escuro herdado.
 
-**84 ocorrencias** em 25 arquivos.
+**94 ocorrencias** em 31 arquivos.
 
 | Classe | Ocorrencias |
 |---|---:|
-| `bg-opacity-10` | 35 |
-| `bg-success-subtle` | 16 |
-| `bg-info-subtle` | 15 |
-| `bg-warning-subtle` | 10 |
-| `bg-danger-subtle` | 4 |
-| `bg-primary-subtle` | 2 |
+| `bg-opacity-10` | 21 |
+| `bg-warning-subtle` | 20 |
+| `bg-success-subtle` | 20 |
+| `bg-info-subtle` | 18 |
+| `bg-danger-subtle` | 7 |
+| `bg-primary-subtle` | 6 |
+| `bg-secondary-subtle` | 1 |
 | `bg-opacity-75` | 1 |
-| `bg-opacity-25` | 1 |
 
 ## 4. Headers (modal-header / card-header) — catalogo de variantes
 
 Quantas variantes visuais coexistem para o mesmo elemento semantico?
 Cada signature distinta = 1 variante. **Quanto mais variantes, mais inconsistencia.**
 
-### `card-header` — 19 variantes em 969 ocorrencias
+### `card-header` — 10 variantes em 970 ocorrencias
 
 | Signature | Ocorrencias | Sample |
 |---|---:|---|
-| `NEUTRO` | 868 | `app/templates/monitoramento/visualizar_entrega.html:705` |
-| `bg-light` | 51 | `app/templates/hora/nf_detalhe.html:95` |
+| `NEUTRO` | 869 | `app/templates/monitoramento/visualizar_entrega.html:705` |
+| `bg-light` | 52 | `app/templates/hora/nf_detalhe.html:95` |
 | `bg-transparent` | 19 | `app/templates/main/dashboard.html:136` |
-| `bg-opacity-10+bg-opacity-10` | 9 | `app/templates/comercial/analise_margem.html:355` |
+| `bg-warning-subtle+text-warning-emphasis` | 8 | `app/templates/monitoramento/visualizar_entrega.html:385` |
+| `bg-info-subtle+text-info-emphasis` | 6 | `app/templates/comercial/analise_margem.html:429` |
 | `bg-white` | 6 | `app/templates/bi/despesas.html:84` |
-| `bg-warning+text-dark` | 2 | `app/templates/monitoramento/visualizar_entrega.html:385` |
-| `bg-info-subtle` | 2 | `app/templates/carvia/detalhe_operacao.html:103` |
-| `bg-light+bg-secondary+bg-success+bg-warning+text-dark+text-dark+text-white+text-white` | 1 | `app/templates/portaria/detalhes_veiculo.html:156` |
-| `bg-gradient` | 1 | `app/templates/fretes/visualizar_email.html:29` |
-| `bg-info-subtle+text-info-emphasis` | 1 | `app/templates/estoque/listar_movimentacoes.html:703` |
-| `bg-gradient-danger` | 1 | `app/templates/faturamento/dashboard_faturamento.html:167` |
-| `bg-gradient-warning` | 1 | `app/templates/faturamento/dashboard_faturamento.html:220` |
-| `bg-opacity-25+bg-warning+bg-opacity-25` | 1 | `app/templates/hora/tagplus/parser_append.html:60` |
-| `bg-opacity-10+bg-success+bg-opacity-10` | 1 | `app/templates/pedidos/_partials/_modais.html:170` |
-| `bg-opacity-10+bg-warning+bg-opacity-10` | 1 | `app/templates/pedidos/_partials/_modais.html:206` |
-| `bg-info+bg-opacity-10+bg-opacity-10` | 1 | `app/templates/pedidos/_partials/_modais.html:243` |
-| `bg-primary-subtle` | 1 | `app/templates/carvia/nfs/detalhe.html:327` |
-| `bg-primary+text-white` | 1 | `app/templates/carvia/aprovacoes/processar.html:164` |
-| `bg-opacity-10+bg-primary+bg-opacity-10` | 1 | `app/templates/carvia/subcontratos/detalhe.html:619` |
+| `bg-primary-subtle+text-primary-emphasis` | 4 | `app/templates/custeio/parametros.html:42` |
+| `bg-success-subtle+text-success-emphasis` | 3 | `app/templates/comercial/analise_margem.html:355` |
+| `bg-danger-subtle+text-danger-emphasis` | 2 | `app/templates/comercial/analise_margem.html:378` |
+| `bg-light+bg-secondary-subtle+bg-success-subtle+bg-warning-subtle+text-secondary-emphasis+text-success-emphasis+text-warning-emphasis` | 1 | `app/templates/portaria/detalhes_veiculo.html:156` |
 
-### `modal-header` — 5 variantes em 351 ocorrencias
+### `modal-header` — 5 variantes em 355 ocorrencias
 
 | Signature | Ocorrencias | Sample |
 |---|---:|---|
-| `NEUTRO` | 347 | `app/templates/monitoramento/visualizar_entrega.html:197` |
-| `bg-danger+text-white` | 1 | `app/templates/hora/nf_detalhe.html:571` |
+| `NEUTRO` | 351 | `app/templates/monitoramento/visualizar_entrega.html:197` |
+| `bg-danger-subtle+text-danger-emphasis` | 1 | `app/templates/hora/nf_detalhe.html:571` |
 | `bg-light` | 1 | `app/templates/recebimento/primeira_compra.html:291` |
-| `bg-opacity-10+bg-opacity-10` | 1 | `app/templates/carvia/detalhe_operacao.html:639` |
-| `bg-primary+text-white` | 1 | `app/templates/carvia/faturas_transportadora/conferir.html:379` |
+| `bg-warning-subtle+text-warning-emphasis` | 1 | `app/templates/carvia/detalhe_operacao.html:639` |
+| `bg-primary-subtle+text-primary-emphasis` | 1 | `app/templates/carvia/faturas_transportadora/conferir.html:379` |
 
 ## 5. `<style>` blocks em templates
 
@@ -198,8 +189,8 @@ Ordem por **valor / esforco** — comecar pelo topo:
 | # | Valor | Esforco | Acao | Alcance |
 |---:|---|---|---|---|
 | 2 | ALTO | BAIXO | Tematizar 6 usos de --bs-X-bg-subtle/text-emphasis no _design-tokens.css | Todos templates que usam essas vars |
-| 4 | ALTO | MEDIO | Substituir 84 bg-X-subtle/bg-opacity-N por classe canonical | N templates (criar 1-2 classes canonical, codemod massivo) |
-| 5 | ALTO | ALTO | Unificar 24 variantes de header em 2-3 canonicas | 1320 ocorrencias em ~402 templates |
+| 4 | ALTO | MEDIO | Substituir 94 bg-X-subtle/bg-opacity-N por classe canonical | N templates (criar 1-2 classes canonical, codemod massivo) |
+| 5 | ALTO | ALTO | Unificar 15 variantes de header em 2-3 canonicas | 1325 ocorrencias em ~405 templates |
 | 6 | MEDIO | ALTO | Migrar 22 <style> blocks de templates para CSS modulo | 22 templates |
 | 7 | BAIXO | MEDIO | Substituir 3 `.style.background/color =` por toggle de classe | Pontos de manipulacao dinamica |
 

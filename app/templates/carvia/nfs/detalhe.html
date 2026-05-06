@@ -140,7 +140,7 @@
     {# Cotacao Comercial vinculada (via CarviaPedidoItem.numero_nf) #}
     {% if cotacao_obj %}
     <div class="card mb-4 border-info">
-        <div class="card-header bg-info-subtle d-flex justify-content-between align-items-center">
+        <div class="card-header bg-info-subtle text-info-emphasis d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-file-invoice-dollar"></i> Cotacao Comercial</h5>
             <a href="{{ url_for('carvia.detalhe_cotacao_v2', cotacao_id=cotacao_obj.id) }}" class="btn btn-info btn-sm">
                 <i class="fas fa-external-link-alt"></i> Abrir Cotacao
@@ -324,9 +324,9 @@
     {# ===== NF Triangular: vinculo de transferencia ===== #}
     {% if transf_vinculada or eh_transf_efetiva %}
     <div class="card mt-4 border-primary">
-        <div class="card-header bg-primary-subtle">
+        <div class="card-header bg-primary-subtle text-primary-emphasis">
             <h5 class="mb-0">
-                <i class="fas fa-exchange-alt text-primary"></i>
+                <i class="fas fa-exchange-alt"></i>
                 {% if eh_transf_efetiva %}
                     NFs de Venda vinculadas a esta NF Transferencia ({{ vendas_da_transf|length }})
                 {% else %}

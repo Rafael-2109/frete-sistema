@@ -616,7 +616,7 @@ function renderOpcoes(opcoes, valorCte) {
         var card = document.createElement('div');
         card.className = 'card mb-2' + (isMelhor ? ' border-primary' : '');
         card.innerHTML =
-            '<div class="card-header py-2 d-flex justify-content-between align-items-center' + (isMelhor ? ' bg-primary bg-opacity-10' : '') + '">' +
+            '<div class="card-header py-2 d-flex justify-content-between align-items-center' + (isMelhor ? ' bg-primary-subtle text-primary-emphasis' : '') + '">' +
                 '<div>' +
                     '<strong>' + (op.transportadora_nome || '') + '</strong>' +
                     ' <span class="badge bg-secondary">' + (op.tabela_nome || '') + '</span>' +

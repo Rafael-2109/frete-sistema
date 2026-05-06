@@ -355,6 +355,13 @@
   "dimension_3_pastel": [
     {
       "file": "app/templates/monitoramento/visualizar_entrega.html",
+      "line": 385,
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"card-header bg-warning-subtle text-warning-emphasis d-flex justify-content-between align-items-center\">"
+    },
+    {
+      "file": "app/templates/monitoramento/visualizar_entrega.html",
       "line": 652,
       "kind": "bg_opacity",
       "class": "bg-opacity-10",
@@ -366,6 +373,13 @@
       "kind": "bg_opacity",
       "class": "bg-opacity-10",
       "snippet": "<div class=\"mt-2 p-2 bg-success bg-opacity-10 rounded\">"
+    },
+    {
+      "file": "app/templates/hora/nf_detalhe.html",
+      "line": 571,
+      "kind": "bg_subtle",
+      "class": "bg-danger-subtle",
+      "snippet": "<div class=\"modal-header bg-danger-subtle text-danger-emphasis\">"
     },
     {
       "file": "app/templates/hora/recebimento_detalhe.html",
@@ -382,11 +396,39 @@
       "snippet": "<th colspan=\"3\" class=\"border-start bg-info-subtle\">NF (esperado)</th>"
     },
     {
+      "file": "app/templates/hora/permissoes_lista.html",
+      "line": 15,
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"card-header bg-warning-subtle text-warning-emphasis\">"
+    },
+    {
       "file": "app/templates/hora/venda_detalhe.html",
       "line": 184,
       "kind": "bg_subtle",
       "class": "bg-warning-subtle",
       "snippet": "<div class=\"card-body border-top bg-warning-subtle\">"
+    },
+    {
+      "file": "app/templates/portaria/detalhes_veiculo.html",
+      "line": 157,
+      "kind": "bg_subtle",
+      "class": "bg-secondary-subtle",
+      "snippet": "{% if registro.status == 'SAIU' %}bg-secondary-subtle text-secondary-emphasis"
+    },
+    {
+      "file": "app/templates/portaria/detalhes_veiculo.html",
+      "line": 158,
+      "kind": "bg_subtle",
+      "class": "bg-success-subtle",
+      "snippet": "{% elif registro.status == 'DENTRO' %}bg-success-subtle text-success-emphasis"
+    },
+    {
+      "file": "app/templates/portaria/detalhes_veiculo.html",
+      "line": 159,
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "{% elif registro.status == 'AGUARDANDO' %}bg-warning-subtle text-warning-emphasis"
     },
     {
       "file": "app/templates/metricas/dashboard.html",
@@ -426,51 +468,51 @@
     {
       "file": "app/templates/comercial/analise_margem.html",
       "line": 355,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header py-2 bg-opacity-10\">"
+      "kind": "bg_subtle",
+      "class": "bg-success-subtle",
+      "snippet": "<div class=\"card-header py-2 bg-success-subtle text-success-emphasis\">"
     },
     {
       "file": "app/templates/comercial/analise_margem.html",
       "line": 378,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header py-2 bg-opacity-10\">"
+      "kind": "bg_subtle",
+      "class": "bg-danger-subtle",
+      "snippet": "<div class=\"card-header py-2 bg-danger-subtle text-danger-emphasis\">"
     },
     {
       "file": "app/templates/comercial/analise_margem.html",
       "line": 429,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header py-2 bg-opacity-10\">"
+      "kind": "bg_subtle",
+      "class": "bg-info-subtle",
+      "snippet": "<div class=\"card-header py-2 bg-info-subtle text-info-emphasis\">"
     },
     {
       "file": "app/templates/comercial/analise_margem.html",
       "line": 448,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header py-2 bg-opacity-10\">"
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"card-header py-2 bg-warning-subtle text-warning-emphasis\">"
     },
     {
       "file": "app/templates/carteira/mapa_pedidos.html",
       "line": 201,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header bg-opacity-10 py-2 d-flex align-items-center justify-content-between\">"
+      "kind": "bg_subtle",
+      "class": "bg-success-subtle",
+      "snippet": "<div class=\"card-header bg-success-subtle text-success-emphasis py-2 d-flex align-items-center justify-content-between\">"
     },
     {
       "file": "app/templates/carteira/mapa_pedidos.html",
       "line": 234,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header bg-opacity-10 py-2 d-flex align-items-center justify-content-between\">"
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"card-header bg-warning-subtle text-warning-emphasis py-2 d-flex align-items-center justify-content-between\">"
     },
     {
       "file": "app/templates/carteira/mapa_pedidos.html",
       "line": 268,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header bg-opacity-10 py-2 d-flex align-items-center justify-content-between\">"
+      "kind": "bg_subtle",
+      "class": "bg-info-subtle",
+      "snippet": "<div class=\"card-header bg-info-subtle text-info-emphasis py-2 d-flex align-items-center justify-content-between\">"
     },
     {
       "file": "app/templates/estoque/listar_movimentacoes.html",
@@ -510,16 +552,16 @@
     {
       "file": "app/templates/custeio/parametros.html",
       "line": 42,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header bg-opacity-10 py-2\">"
+      "kind": "bg_subtle",
+      "class": "bg-primary-subtle",
+      "snippet": "<div class=\"card-header bg-primary-subtle text-primary-emphasis py-2\">"
     },
     {
       "file": "app/templates/custeio/parametros.html",
       "line": 70,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header bg-opacity-10 py-2\">"
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"card-header bg-warning-subtle text-warning-emphasis py-2\">"
     },
     {
       "file": "app/templates/recebimento/pendencias_ibscbs.html",
@@ -813,14 +855,14 @@
       "line": 103,
       "kind": "bg_subtle",
       "class": "bg-info-subtle",
-      "snippet": "<div class=\"card-header bg-info-subtle\">"
+      "snippet": "<div class=\"card-header bg-info-subtle text-info-emphasis\">"
     },
     {
       "file": "app/templates/carvia/detalhe_operacao.html",
       "line": 639,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"modal-header bg-opacity-10\">"
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"modal-header bg-warning-subtle text-warning-emphasis\">"
     },
     {
       "file": "app/templates/carvia/gerencial.html",
@@ -830,11 +872,25 @@
       "snippet": "<span class=\"badge bg-primary bg-opacity-75\">{{ it.modelo_moto_nome }}</span>"
     },
     {
+      "file": "app/templates/faturamento/dashboard_faturamento.html",
+      "line": 167,
+      "kind": "bg_subtle",
+      "class": "bg-danger-subtle",
+      "snippet": "<div class=\"card-header py-3 bg-danger-subtle text-danger-emphasis\">"
+    },
+    {
+      "file": "app/templates/faturamento/dashboard_faturamento.html",
+      "line": 220,
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"card-header py-3 bg-warning-subtle text-warning-emphasis\">"
+    },
+    {
       "file": "app/templates/hora/tagplus/parser_append.html",
       "line": 60,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-25",
-      "snippet": "<div class=\"card-header bg-warning bg-opacity-25\">"
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"card-header bg-warning-subtle text-warning-emphasis\">"
     },
     {
       "file": "app/templates/pedidos/leitura/index.html",
@@ -888,23 +944,23 @@
     {
       "file": "app/templates/pedidos/_partials/_modais.html",
       "line": 170,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header bg-success bg-opacity-10 py-2 d-flex align-items-center justify-content-between\">"
+      "kind": "bg_subtle",
+      "class": "bg-success-subtle",
+      "snippet": "<div class=\"card-header bg-success-subtle text-success-emphasis py-2 d-flex align-items-center justify-content-between\">"
     },
     {
       "file": "app/templates/pedidos/_partials/_modais.html",
       "line": 206,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header bg-warning bg-opacity-10 py-2 d-flex align-items-center justify-content-between\">"
+      "kind": "bg_subtle",
+      "class": "bg-warning-subtle",
+      "snippet": "<div class=\"card-header bg-warning-subtle text-warning-emphasis py-2 d-flex align-items-center justify-content-between\">"
     },
     {
       "file": "app/templates/pedidos/_partials/_modais.html",
       "line": 243,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "<div class=\"card-header bg-info bg-opacity-10 py-2 d-flex align-items-center justify-content-between\">"
+      "kind": "bg_subtle",
+      "class": "bg-info-subtle",
+      "snippet": "<div class=\"card-header bg-info-subtle text-info-emphasis py-2 d-flex align-items-center justify-content-between\">"
     },
     {
       "file": "app/templates/carvia/nfs/_modal_inserir_nf_transferencia.html",
@@ -925,21 +981,35 @@
       "line": 143,
       "kind": "bg_subtle",
       "class": "bg-info-subtle",
-      "snippet": "<div class=\"card-header bg-info-subtle d-flex justify-content-between align-items-center\">"
+      "snippet": "<div class=\"card-header bg-info-subtle text-info-emphasis d-flex justify-content-between align-items-center\">"
     },
     {
       "file": "app/templates/carvia/nfs/detalhe.html",
       "line": 327,
       "kind": "bg_subtle",
       "class": "bg-primary-subtle",
-      "snippet": "<div class=\"card-header bg-primary-subtle\">"
+      "snippet": "<div class=\"card-header bg-primary-subtle text-primary-emphasis\">"
+    },
+    {
+      "file": "app/templates/carvia/faturas_transportadora/conferir.html",
+      "line": 379,
+      "kind": "bg_subtle",
+      "class": "bg-primary-subtle",
+      "snippet": "<div class=\"modal-header bg-primary-subtle text-primary-emphasis\">"
+    },
+    {
+      "file": "app/templates/carvia/aprovacoes/processar.html",
+      "line": 164,
+      "kind": "bg_subtle",
+      "class": "bg-primary-subtle",
+      "snippet": "<div class=\"card-header bg-primary-subtle text-primary-emphasis\">"
     },
     {
       "file": "app/templates/carvia/subcontratos/detalhe.html",
       "line": 619,
-      "kind": "bg_opacity",
-      "class": "bg-opacity-10",
-      "snippet": "'<div class=\"card-header py-2 d-flex justify-content-between align-items-center' + (isMelhor ? ' bg-primary bg-opacity-10' : '') + '\">' +"
+      "kind": "bg_subtle",
+      "class": "bg-primary-subtle",
+      "snippet": "'<div class=\"card-header py-2 d-flex justify-content-between align-items-center' + (isMelhor ? ' bg-primary-subtle text-primary-emphasis' : '') + '\">' +"
     }
   ],
   "dimension_4_headers": [
@@ -955,8 +1025,8 @@
       "file": "app/templates/monitoramento/visualizar_entrega.html",
       "line": 385,
       "kind": "card-header",
-      "signature": "bg-warning+text-dark",
-      "classes": "card-header bg-warning text-dark d-flex justify-content-between align-items-center",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "card-header bg-warning-subtle text-warning-emphasis d-flex justify-content-between align-items-center",
       "style": ""
     },
     {
@@ -1131,8 +1201,8 @@
       "file": "app/templates/hora/nf_detalhe.html",
       "line": 571,
       "kind": "modal-header",
-      "signature": "bg-danger+text-white",
-      "classes": "modal-header bg-danger text-white",
+      "signature": "bg-danger-subtle+text-danger-emphasis",
+      "classes": "modal-header bg-danger-subtle text-danger-emphasis",
       "style": ""
     },
     {
@@ -1177,7 +1247,7 @@
     },
     {
       "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 397,
+      "line": 419,
       "kind": "modal-header",
       "signature": "NEUTRO",
       "classes": "modal-header",
@@ -1185,7 +1255,7 @@
     },
     {
       "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 434,
+      "line": 456,
       "kind": "modal-header",
       "signature": "NEUTRO",
       "classes": "modal-header",
@@ -1193,7 +1263,7 @@
     },
     {
       "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 478,
+      "line": 500,
       "kind": "modal-header",
       "signature": "NEUTRO",
       "classes": "modal-header",
@@ -1201,7 +1271,15 @@
     },
     {
       "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 517,
+      "line": 536,
+      "kind": "modal-header",
+      "signature": "NEUTRO",
+      "classes": "modal-header",
+      "style": ""
+    },
+    {
+      "file": "app/templates/hora/pedido_detalhe.html",
+      "line": 612,
       "kind": "modal-header",
       "signature": "NEUTRO",
       "classes": "modal-header",
@@ -1219,8 +1297,8 @@
       "file": "app/templates/hora/permissoes_lista.html",
       "line": 15,
       "kind": "card-header",
-      "signature": "bg-warning+text-dark",
-      "classes": "card-header bg-warning text-dark",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "card-header bg-warning-subtle text-warning-emphasis",
       "style": ""
     },
     {
@@ -1819,8 +1897,8 @@
       "file": "app/templates/portaria/detalhes_veiculo.html",
       "line": 156,
       "kind": "card-header",
-      "signature": "bg-light+bg-secondary+bg-success+bg-warning+text-dark+text-dark+text-white+text-white",
-      "classes": "card-header \n          {% if registro.status == 'SAIU' %}bg-secondary text-white\n          {% elif registro.status == 'D",
+      "signature": "bg-light+bg-secondary-subtle+bg-success-subtle+bg-warning-subtle+text-secondary-emphasis+text-success-emphasis+text-warning-emphasis",
+      "classes": "card-header\n          {% if registro.status == 'SAIU' %}bg-secondary-subtle text-secondary-emphasis\n          {% elif re",
       "style": ""
     },
     {
@@ -2459,8 +2537,8 @@
       "file": "app/templates/fretes/visualizar_email.html",
       "line": 29,
       "kind": "card-header",
-      "signature": "bg-gradient",
-      "classes": "card-header bg-gradient",
+      "signature": "NEUTRO",
+      "classes": "card-header",
       "style": ""
     },
     {
@@ -3283,32 +3361,32 @@
       "file": "app/templates/comercial/analise_margem.html",
       "line": 355,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header py-2 bg-opacity-10",
+      "signature": "bg-success-subtle+text-success-emphasis",
+      "classes": "card-header py-2 bg-success-subtle text-success-emphasis",
       "style": ""
     },
     {
       "file": "app/templates/comercial/analise_margem.html",
       "line": 378,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header py-2 bg-opacity-10",
+      "signature": "bg-danger-subtle+text-danger-emphasis",
+      "classes": "card-header py-2 bg-danger-subtle text-danger-emphasis",
       "style": ""
     },
     {
       "file": "app/templates/comercial/analise_margem.html",
       "line": 429,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header py-2 bg-opacity-10",
+      "signature": "bg-info-subtle+text-info-emphasis",
+      "classes": "card-header py-2 bg-info-subtle text-info-emphasis",
       "style": ""
     },
     {
       "file": "app/templates/comercial/analise_margem.html",
       "line": 448,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header py-2 bg-opacity-10",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "card-header py-2 bg-warning-subtle text-warning-emphasis",
       "style": ""
     },
     {
@@ -3523,24 +3601,24 @@
       "file": "app/templates/carteira/mapa_pedidos.html",
       "line": 201,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header bg-opacity-10 py-2 d-flex align-items-center justify-content-between",
+      "signature": "bg-success-subtle+text-success-emphasis",
+      "classes": "card-header bg-success-subtle text-success-emphasis py-2 d-flex align-items-center justify-content-between",
       "style": ""
     },
     {
       "file": "app/templates/carteira/mapa_pedidos.html",
       "line": 234,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header bg-opacity-10 py-2 d-flex align-items-center justify-content-between",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "card-header bg-warning-subtle text-warning-emphasis py-2 d-flex align-items-center justify-content-between",
       "style": ""
     },
     {
       "file": "app/templates/carteira/mapa_pedidos.html",
       "line": 268,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header bg-opacity-10 py-2 d-flex align-items-center justify-content-between",
+      "signature": "bg-info-subtle+text-info-emphasis",
+      "classes": "card-header bg-info-subtle text-info-emphasis py-2 d-flex align-items-center justify-content-between",
       "style": ""
     },
     {
@@ -4235,16 +4313,16 @@
       "file": "app/templates/custeio/parametros.html",
       "line": 42,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header bg-opacity-10 py-2",
+      "signature": "bg-primary-subtle+text-primary-emphasis",
+      "classes": "card-header bg-primary-subtle text-primary-emphasis py-2",
       "style": ""
     },
     {
       "file": "app/templates/custeio/parametros.html",
       "line": 70,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "card-header bg-opacity-10 py-2",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "card-header bg-warning-subtle text-warning-emphasis py-2",
       "style": ""
     },
     {
@@ -6419,8 +6497,8 @@
       "file": "app/templates/carvia/detalhe_operacao.html",
       "line": 103,
       "kind": "card-header",
-      "signature": "bg-info-subtle",
-      "classes": "card-header bg-info-subtle",
+      "signature": "bg-info-subtle+text-info-emphasis",
+      "classes": "card-header bg-info-subtle text-info-emphasis",
       "style": ""
     },
     {
@@ -6491,8 +6569,8 @@
       "file": "app/templates/carvia/detalhe_operacao.html",
       "line": 639,
       "kind": "modal-header",
-      "signature": "bg-opacity-10+bg-opacity-10",
-      "classes": "modal-header bg-opacity-10",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "modal-header bg-warning-subtle text-warning-emphasis",
       "style": ""
     },
     {
@@ -6851,8 +6929,8 @@
       "file": "app/templates/faturamento/dashboard_faturamento.html",
       "line": 167,
       "kind": "card-header",
-      "signature": "bg-gradient-danger",
-      "classes": "card-header py-3 bg-gradient-danger",
+      "signature": "bg-danger-subtle+text-danger-emphasis",
+      "classes": "card-header py-3 bg-danger-subtle text-danger-emphasis",
       "style": ""
     },
     {
@@ -6867,8 +6945,8 @@
       "file": "app/templates/faturamento/dashboard_faturamento.html",
       "line": 220,
       "kind": "card-header",
-      "signature": "bg-gradient-warning",
-      "classes": "card-header py-3 bg-gradient-warning ",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "card-header py-3 bg-warning-subtle text-warning-emphasis",
       "style": ""
     },
     {
@@ -7019,8 +7097,8 @@
       "file": "app/templates/hora/tagplus/parser_append.html",
       "line": 60,
       "kind": "card-header",
-      "signature": "bg-opacity-25+bg-warning+bg-opacity-25",
-      "classes": "card-header bg-warning bg-opacity-25",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "card-header bg-warning-subtle text-warning-emphasis",
       "style": ""
     },
     {
@@ -7085,6 +7163,38 @@
       "kind": "card-header",
       "signature": "NEUTRO",
       "classes": "card-header d-flex align-items-center justify-content-between",
+      "style": ""
+    },
+    {
+      "file": "app/templates/hora/modelos/unificar.html",
+      "line": 39,
+      "kind": "card-header",
+      "signature": "bg-light",
+      "classes": "card-header bg-light",
+      "style": ""
+    },
+    {
+      "file": "app/templates/hora/modelos/pendencias.html",
+      "line": 141,
+      "kind": "modal-header",
+      "signature": "NEUTRO",
+      "classes": "modal-header",
+      "style": ""
+    },
+    {
+      "file": "app/templates/hora/modelos/pendencias.html",
+      "line": 179,
+      "kind": "modal-header",
+      "signature": "NEUTRO",
+      "classes": "modal-header",
+      "style": ""
+    },
+    {
+      "file": "app/templates/hora/modelos/aliases.html",
+      "line": 121,
+      "kind": "modal-header",
+      "signature": "NEUTRO",
+      "classes": "modal-header",
       "style": ""
     },
     {
@@ -9451,24 +9561,24 @@
       "file": "app/templates/pedidos/_partials/_modais.html",
       "line": 170,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-success+bg-opacity-10",
-      "classes": "card-header bg-success bg-opacity-10 py-2 d-flex align-items-center justify-content-between",
+      "signature": "bg-success-subtle+text-success-emphasis",
+      "classes": "card-header bg-success-subtle text-success-emphasis py-2 d-flex align-items-center justify-content-between",
       "style": ""
     },
     {
       "file": "app/templates/pedidos/_partials/_modais.html",
       "line": 206,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-warning+bg-opacity-10",
-      "classes": "card-header bg-warning bg-opacity-10 py-2 d-flex align-items-center justify-content-between",
+      "signature": "bg-warning-subtle+text-warning-emphasis",
+      "classes": "card-header bg-warning-subtle text-warning-emphasis py-2 d-flex align-items-center justify-content-between",
       "style": ""
     },
     {
       "file": "app/templates/pedidos/_partials/_modais.html",
       "line": 243,
       "kind": "card-header",
-      "signature": "bg-info+bg-opacity-10+bg-opacity-10",
-      "classes": "card-header bg-info bg-opacity-10 py-2 d-flex align-items-center justify-content-between",
+      "signature": "bg-info-subtle+text-info-emphasis",
+      "classes": "card-header bg-info-subtle text-info-emphasis py-2 d-flex align-items-center justify-content-between",
       "style": ""
     },
     {
@@ -10099,8 +10209,8 @@
       "file": "app/templates/carvia/nfs/detalhe.html",
       "line": 143,
       "kind": "card-header",
-      "signature": "bg-info-subtle",
-      "classes": "card-header bg-info-subtle d-flex justify-content-between align-items-center",
+      "signature": "bg-info-subtle+text-info-emphasis",
+      "classes": "card-header bg-info-subtle text-info-emphasis d-flex justify-content-between align-items-center",
       "style": ""
     },
     {
@@ -10123,8 +10233,8 @@
       "file": "app/templates/carvia/nfs/detalhe.html",
       "line": 327,
       "kind": "card-header",
-      "signature": "bg-primary-subtle",
-      "classes": "card-header bg-primary-subtle",
+      "signature": "bg-primary-subtle+text-primary-emphasis",
+      "classes": "card-header bg-primary-subtle text-primary-emphasis",
       "style": ""
     },
     {
@@ -10699,8 +10809,8 @@
       "file": "app/templates/carvia/faturas_transportadora/conferir.html",
       "line": 379,
       "kind": "modal-header",
-      "signature": "bg-primary+text-white",
-      "classes": "modal-header bg-primary text-white",
+      "signature": "bg-primary-subtle+text-primary-emphasis",
+      "classes": "modal-header bg-primary-subtle text-primary-emphasis",
       "style": ""
     },
     {
@@ -10963,8 +11073,8 @@
       "file": "app/templates/carvia/aprovacoes/processar.html",
       "line": 164,
       "kind": "card-header",
-      "signature": "bg-primary+text-white",
-      "classes": "card-header bg-primary text-white",
+      "signature": "bg-primary-subtle+text-primary-emphasis",
+      "classes": "card-header bg-primary-subtle text-primary-emphasis",
       "style": ""
     },
     {
@@ -11283,8 +11393,8 @@
       "file": "app/templates/carvia/subcontratos/detalhe.html",
       "line": 619,
       "kind": "card-header",
-      "signature": "bg-opacity-10+bg-primary+bg-opacity-10",
-      "classes": "card-header py-2 d-flex justify-content-between align-items-center' + (isMelhor ? ' bg-primary bg-opacity-10' : '') + '",
+      "signature": "bg-primary-subtle+text-primary-emphasis",
+      "classes": "card-header py-2 d-flex justify-content-between align-items-center' + (isMelhor ? ' bg-primary-subtle text-primary-empha",
       "style": ""
     },
     {

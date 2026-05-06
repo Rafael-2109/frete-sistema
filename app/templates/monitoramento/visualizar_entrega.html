@@ -382,7 +382,7 @@
         {% if current_user.sistema_carvia %}
         <!-- === Bloco CarVia: Custos de Entrega (Frete Subcontratado) === -->
         <div class="card border-warning mb-4">
-          <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+          <div class="card-header bg-warning-subtle text-warning-emphasis d-flex justify-content-between align-items-center">
             <strong><i class="fas fa-truck"></i> Custos CarVia (Frete Subcontratado)</strong>
             {% if tem_frete_carvia %}
               <a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia', numero_nf=entrega.numero_nf) }}"

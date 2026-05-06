@@ -568,11 +568,11 @@
   <div class="modal-dialog">
     <form method="post" action="{{ url_for('hora.nfs_remover', nf_id=nf.id) }}" class="modal-content">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="modal-header bg-danger text-white">
+      <div class="modal-header bg-danger-subtle text-danger-emphasis">
         <h5 class="modal-title">
           <i class="fas fa-exclamation-triangle"></i> Remover NF {{ nf.numero_nf }}
         </h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
       <div class="modal-body">
         <p class="mb-2">

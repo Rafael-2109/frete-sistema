@@ -12,7 +12,7 @@
 {# ===== Pendentes de aprovacao ===== #}
 {% if pendentes and current_user.tem_perm_hora('usuarios', 'aprovar') %}
   <div class="card border-warning mb-4">
-    <div class="card-header bg-warning text-dark">
+    <div class="card-header bg-warning-subtle text-warning-emphasis">
       <i class="fas fa-user-clock"></i>
       <strong>Solicitações pendentes</strong>
       <span class="badge bg-dark">{{ pendentes|length }}</span>
