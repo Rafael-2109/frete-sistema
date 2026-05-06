@@ -274,13 +274,19 @@ BACKFILL_JOB_TIPO_NF = 'NF'
 # Backfill original: lista NFs no TagPlus e cria/atualiza HoraVenda
 # (importar_nfe_da_api).
 BACKFILL_JOB_TIPO_PEDIDO_ENRIQ = 'PEDIDO_ENRIQUECIMENTO'
-# Backfill novo: itera HoraTagPlusNfeEmissao APROVADA, puxa
+# Backfill: itera HoraTagPlusNfeEmissao APROVADA, puxa
 # pedido_os_vinculada via GET /nfes/{id} e enriquece HoraVenda com dados
 # do GET /pedidos/{id} (vendedor, departamento, forma_pagamento detalhada).
+BACKFILL_JOB_TIPO_PEDIDO_VENDAS_LEGADAS = 'PEDIDO_VENDAS_LEGADAS'
+# Backfill: itera HoraVenda FATURADO sem `tagplus_pedido_id`, incluindo
+# vendas legadas DANFE PDF (origem='DANFE') ou MANUAL sem entrada em
+# HoraTagPlusNfeEmissao. Usa GET /nfes em janela de datas para descobrir
+# o tagplus_nfe_id e dai segue mesmo fluxo de enriquecimento.
 
 BACKFILL_JOB_TIPOS_VALIDOS = (
     BACKFILL_JOB_TIPO_NF,
     BACKFILL_JOB_TIPO_PEDIDO_ENRIQ,
+    BACKFILL_JOB_TIPO_PEDIDO_VENDAS_LEGADAS,
 )
 
 

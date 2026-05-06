@@ -1592,6 +1592,77 @@ def tagplus_backfill_pedidos():
 
 
 # ============================================================================
+# Backfill tagplus_pedido_id para vendas legadas (DANFE / sem emissao)
+# ============================================================================
+
+@hora_bp.route('/tagplus/backfill-pedidos-legados', methods=['GET', 'POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_backfill_pedidos_legados():
+    """Enfileira backfill de tagplus_pedido_id para HoraVenda FATURADO sem
+    pedido vinculado.
+
+    Coberturas (em ordem de tentativa):
+      - Vendas com HoraTagPlusNfeEmissao (path rapido, igual ao backfill de
+        enriquecimento de pedidos).
+      - Vendas DANFE legadas / origem MANUAL — descobre tagplus_nfe_id via
+        GET /nfes em janela de datas (since=data_venda-7d, until=data_venda+7d),
+        bate por chave_acesso (fallback numero).
+    """
+    from app.hora.models import (
+        BACKFILL_JOB_TIPO_PEDIDO_VENDAS_LEGADAS,
+        HoraTagPlusBackfillJob,
+    )
+    from app.hora.services.tagplus.pedido_backfill_service import (
+        contar_universo_vendas_legadas,
+        enfileirar_backfill_pedidos_vendas_legadas_job,
+    )
+
+    if request.method == 'POST':
+        limite_raw = (request.form.get('limite') or '').strip()
+        try:
+            limite = int(limite_raw) if limite_raw else None
+        except ValueError:
+            limite = None
+            flash(f'Limite invalido: {limite_raw!r} — ignorado.', 'warning')
+
+        operador = (
+            current_user.nome
+            if current_user.is_authenticated and getattr(current_user, 'nome', None)
+            else (current_user.email if current_user.is_authenticated else None)
+        )
+
+        try:
+            job_id = enfileirar_backfill_pedidos_vendas_legadas_job(
+                operador=operador, limite=limite,
+            )
+            flash(
+                f'Backfill de vendas legadas enfileirado (job #{job_id}). '
+                f'Acompanhe o progresso abaixo — pode fechar a aba e voltar depois.',
+                'success',
+            )
+            return redirect(url_for('hora.tagplus_backfill_detalhe', job_id=job_id))
+        except RuntimeError as exc:
+            flash(f'Backfill nao pode ser enfileirado: {exc}', 'danger')
+        except Exception as exc:  # pragma: no cover
+            flash(f'Erro inesperado: {exc}', 'danger')
+            logger.exception('Enfileiramento backfill PEDIDOS-VENDAS-LEGADAS falhou')
+
+    total_universo = contar_universo_vendas_legadas()
+
+    jobs = (
+        HoraTagPlusBackfillJob.query
+        .filter(HoraTagPlusBackfillJob.tipo == BACKFILL_JOB_TIPO_PEDIDO_VENDAS_LEGADAS)
+        .order_by(HoraTagPlusBackfillJob.id.desc())
+        .limit(20).all()
+    )
+
+    return render_template(
+        'hora/tagplus/backfill_pedidos_legados.html',
+        jobs=jobs, total_universo=total_universo,
+    )
+
+
+# ============================================================================
 # De-para departamento TagPlus -> HoraLoja (revisao pos-backfill)
 # ============================================================================
 

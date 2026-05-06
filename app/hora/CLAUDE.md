@@ -332,6 +332,79 @@ Não-objetivos v1: versionamento de preço de peça (preço fixo em `hora_peca.p
 
 ---
 
+## 13. Listagem de Pedidos de Venda com itens inline + filtro chassi — 2026-05-06
+
+A listagem `/hora/vendas` agora exibe os chassis e modelos dos itens
+diretamente em cada linha (sem precisar abrir o detalhe), com filtro por
+chassi.
+
+**Service** (`app/hora/services/venda_service.py`):
+- `_query_vendas` aceita parametro `chassi` (substring case-insensitive).
+  Aplicado via `EXISTS(SELECT 1 FROM hora_venda_item ...)` para nao duplicar
+  linhas quando o chassi casa multiplos itens.
+- Eager loading: `selectinload(HoraVenda.itens).selectinload(HoraVendaItem.moto).selectinload(HoraMoto.modelo)`
+  evita N+1 na renderizacao.
+- `paginar_vendas(... chassi=...)` repassa para `_query_vendas`.
+
+**Rota** (`app/hora/routes/vendas.py:vendas_lista`):
+- Le `request.args.get('chassi')` (uppercased + trimmed).
+- Repassa para o service e ao template como `filtro_chassi`.
+
+**Template** (`app/templates/hora/vendas_lista.html`):
+- Coluna nova "Itens (chassi · modelo · cor)" com `<ul>` de cada item.
+- Chassi que casa o filtro recebe highlight `bg-warning-subtle`.
+- Coluna nova "Pedido TP" mostra `tagplus_pedido_id` quando preenchido.
+- Filtro novo `<input name="chassi">` no formulario de busca.
+
+---
+
+## 14. Backfill `tagplus_pedido_id` para vendas legadas — 2026-05-06
+
+Cobre vendas FATURADO sem pedido TagPlus vinculado — incluindo legacy
+DANFE PDF (origem='DANFE') e vendas MANUAL sem entrada em
+`HoraTagPlusNfeEmissao`.
+
+**Service** (`app/hora/services/tagplus/pedido_backfill_service.py`):
+- `_aplicar_pedido_em_venda(api, venda, pedido_id_tp, operador, emissao=None)` —
+  extracao reusavel da logica de aplicar GET /pedidos/{id} em uma venda
+  (compartilhada entre os 2 universos).
+- `_buscar_tagplus_nfe_id_para_venda(api, venda)` — descobre o id da NFe
+  no TagPlus paginando `GET /nfes` em janela `[data_venda - 7d, data_venda + 7d]`
+  com header `X-Data-Filter: data_emissao`. Match por `chave_acesso`
+  (preferencial), fallback `numero`. Constante `JANELA_BUSCA_NFE_DIAS = 7`.
+- `_enriquecer_venda_legada(api, venda, operador)` — orquestra
+  busca NFe → GET /nfes/{id} → extrai `pedido_os_vinculada.id` → aplica.
+- `executar_backfill_pedidos_vendas_legadas(operador, limite, progress_callback)`
+  itera `HoraVenda FATURADO + tagplus_pedido_id IS NULL + nf_saida_chave_44 NOT NULL`.
+- `enfileirar_backfill_pedidos_vendas_legadas_job` — RQ enqueue, queue `hora_backfill`.
+
+**Worker** (`app/hora/workers/pedido_backfill_worker.py`):
+- `processar_backfill_pedidos_vendas_legadas_job(job_id)` — espelho do
+  `processar_backfill_pedidos_job` mas chama `executar_backfill_pedidos_vendas_legadas`
+  e usa `_gravar_progresso_legado` (que mapeia `sem_nfe` para
+  `n_pulada_invalida`).
+
+**Modelo** (`app/hora/models/tagplus.py`):
+- Constante nova: `BACKFILL_JOB_TIPO_PEDIDO_VENDAS_LEGADAS = 'PEDIDO_VENDAS_LEGADAS'`.
+- Adicionada em `BACKFILL_JOB_TIPOS_VALIDOS`. **Sem migration necessaria** —
+  campo `tipo` em `hora_tagplus_backfill_job` e VARCHAR(30) sem CHECK constraint.
+
+**Rota** (`app/hora/routes/tagplus_routes.py`):
+- `POST/GET /hora/tagplus/backfill-pedidos-legados` — perm `tagplus/editar`.
+  Mostra universo + jobs anteriores; POST enfileira o job RQ.
+
+**Template** (`app/templates/hora/tagplus/backfill_pedidos_legados.html`)
+e link no menu Faturamento (`base.html`).
+
+**Idempotencia**: 2x executa sem problemas. Vendas com `tagplus_pedido_id`
+ja preenchido caem fora do universo (`WHERE tagplus_pedido_id IS NULL`).
+
+**Pre-requisito**: scope OAuth deve incluir `read:pedidos`. Sem scope, o
+service levanta `ScopeInsuficienteError` na primeira venda e aborta o
+job inteiro.
+
+---
+
 ## 12. Unificação de modelos (N nomes → 1 canônico) — 2026-05-06
 
 Resolve duplicação histórica: TagPlus, NFs e pedidos podem se referir ao mesmo modelo físico com descrições divergentes (ex: `BOB`, `BOB AM`, `SCOOTER ELETRICA BOB` todas são `MT-BOB / tagplus_id=10`). Antes da migration `hora_29`, o sistema criava `HoraModelo` distintos via `buscar_ou_criar_modelo`. Resultado em produção: 8 grupos de duplicação, 20 modelos absorvíveis em 8 canônicos.

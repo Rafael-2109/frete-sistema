@@ -36,7 +36,7 @@
 
 {% call filtros_form(url_for('hora.vendas_lista')) %}
   <input type="hidden" name="status" value="{{ status_filtro or '' }}">
-  <div class="col-md-4">
+  <div class="col-md-3">
     <label class="form-label small mb-1">Busca (NF, cliente ou CPF)</label>
     <input type="text" name="busca"
            value="{{ filtro_busca or '' }}"
@@ -44,7 +44,15 @@
            class="form-control form-control-sm"
            data-hora-autocomplete="venda">
   </div>
-  {{ filtro_loja('loja_id', 'Loja', filtro_loja_id, lojas_ativas, 'col-md-3') }}
+  <div class="col-md-2">
+    <label class="form-label small mb-1">Chassi</label>
+    <input type="text" name="chassi"
+           value="{{ filtro_chassi or '' }}"
+           placeholder="Parcial ou completo"
+           class="form-control form-control-sm text-uppercase"
+           style="text-transform:uppercase;">
+  </div>
+  {{ filtro_loja('loja_id', 'Loja', filtro_loja_id, lojas_ativas, 'col-md-2') }}
   {{ filtro_data('data_inicio', 'Data a partir', filtro_data_inicio, 'col-md-2') }}
   {{ filtro_data('data_fim', 'Data até', filtro_data_fim, 'col-md-2') }}
   <div class="col-md-auto d-flex gap-2 align-items-end">
@@ -71,12 +79,13 @@
       <th>#</th>
       <th>Status</th>
       <th>NF</th>
+      <th>Pedido TP</th>
       <th>Loja</th>
       <th>Cliente</th>
       <th>CPF</th>
       <th>Data</th>
       <th>Valor</th>
-      <th>Itens</th>
+      <th style="min-width:280px;">Itens (chassi · modelo · cor)</th>
       <th></th>
     </tr></thead>
     <tbody>
@@ -100,6 +109,15 @@
             {% endif %}
           </td>
           <td>
+            {% if v.tagplus_pedido_id %}
+              <small class="text-muted" title="ID do pedido auto-criado pelo TagPlus">
+                #{{ v.tagplus_pedido_id }}
+              </small>
+            {% else %}
+              <small class="text-muted">—</small>
+            {% endif %}
+          </td>
+          <td>
             {% if v.loja %}<strong>{{ v.loja.rotulo_display }}</strong>
             {% else %}<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> sem loja</span>{% endif %}
           </td>
@@ -107,7 +125,27 @@
           <td><small>{{ v.cpf_cliente }}</small></td>
           <td>{{ v.data_venda.strftime('%d/%m/%Y') }}</td>
           <td>{{ v.valor_total|valor_br }}</td>
-          <td>{{ v.itens|length }}</td>
+          <td>
+            {% if v.itens %}
+              <ul class="list-unstyled mb-0 small">
+                {% for it in v.itens %}
+                  {% set modelo_nome = (it.moto.modelo.nome_modelo if it.moto and it.moto.modelo else '—') %}
+                  {% set cor_lbl = (it.moto.cor if it.moto else '') %}
+                  {% set chassi_lbl = it.numero_chassi or '' %}
+                  {% set match_chassi = filtro_chassi and chassi_lbl and (filtro_chassi in chassi_lbl.upper()) %}
+                  <li>
+                    <code class="{% if match_chassi %}bg-warning-subtle text-dark px-1 rounded{% endif %}"
+                          title="Chassi">{{ chassi_lbl or '—' }}</code>
+                    <span class="text-muted"> · </span>{{ modelo_nome }}{% if cor_lbl %}
+                    <span class="text-muted"> · </span><span>{{ cor_lbl }}</span>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <small class="text-muted">— sem itens —</small>
+            {% endif %}
+          </td>
           <td>
             <div class="d-flex gap-1">
               <a href="{{ url_for('hora.vendas_detalhe', venda_id=v.id) }}"
@@ -123,7 +161,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="10" class="text-center text-muted">Nenhum pedido cadastrado.</td></tr>
+        <tr><td colspan="11" class="text-center text-muted">Nenhum pedido cadastrado.</td></tr>
       {% endfor %}
     </tbody>
   </table>

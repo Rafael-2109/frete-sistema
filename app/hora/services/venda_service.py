@@ -1583,16 +1583,27 @@ def _query_vendas(
     loja_id: Optional[int] = None,
     data_inicio=None,
     data_fim=None,
+    chassi: Optional[str] = None,
 ):
     """Constroi query base de vendas com filtros — usado por listar e paginar.
 
     busca: substring que casa em nf_saida_numero, nome_cliente ou cpf_cliente.
     loja_id: id especifico de loja_id (precisa estar dentro de lojas_permitidas).
     data_inicio/data_fim: faixa em data_venda.
+    chassi: substring (case-insensitive) que casa em HoraVendaItem.numero_chassi.
+        Usa EXISTS para evitar duplicacao de linhas no resultado.
+
+    Eager loading: itens + moto + modelo carregados via selectinload para
+    permitir exibicao inline na listagem sem N+1 queries.
     """
     from sqlalchemy import or_
+    from sqlalchemy.orm import selectinload
 
-    query = HoraVenda.query.order_by(
+    query = HoraVenda.query.options(
+        selectinload(HoraVenda.itens)
+        .selectinload(HoraVendaItem.moto)
+        .selectinload(HoraMoto.modelo),
+    ).order_by(
         HoraVenda.data_venda.desc(), HoraVenda.id.desc()
     )
     if status:
@@ -1619,6 +1630,18 @@ def _query_vendas(
         query = query.filter(HoraVenda.data_venda >= data_inicio)
     if data_fim:
         query = query.filter(HoraVenda.data_venda <= data_fim)
+    if chassi:
+        ch = chassi.strip().upper()
+        if ch:
+            # EXISTS evita duplicar HoraVenda quando chassi casa multiplos
+            # itens (raro mas possivel em pedido com itens trocados via
+            # editar_item_pedido). Mantem ordering estavel.
+            sub = (
+                db.session.query(HoraVendaItem.id)
+                .filter(HoraVendaItem.venda_id == HoraVenda.id)
+                .filter(HoraVendaItem.numero_chassi.ilike(f'%{ch}%'))
+            )
+            query = query.filter(sub.exists())
     return query
 
 
@@ -1632,6 +1655,7 @@ def paginar_vendas(
     loja_id: Optional[int] = None,
     data_inicio=None,
     data_fim=None,
+    chassi: Optional[str] = None,
 ):
     """Pagina vendas com filtros. Retorna `Pagination` (Flask-SQLAlchemy)
     ou None quando o usuario nao tem nenhuma loja permitida (lista vazia).
@@ -1645,6 +1669,7 @@ def paginar_vendas(
         loja_id=loja_id,
         data_inicio=data_inicio,
         data_fim=data_fim,
+        chassi=chassi,
     )
     if query is None:
         return None

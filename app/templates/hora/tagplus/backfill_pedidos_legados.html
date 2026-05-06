@@ -1,0 +1,154 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-history"></i> Backfill <code>tagplus_pedido_id</code> em vendas legadas</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('hora.tagplus_backfill_pedidos') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-magic"></i> Enriquecimento (emissoes)
+    </a>
+    <a href="{{ url_for('hora.tagplus_backfill') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-cloud-download-alt"></i> Backfill NF (basico)
+    </a>
+    <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-clipboard-check"></i> Checklist
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>Encontra o numero do pedido TagPlus para vendas que ainda nao tem
+  <code>tagplus_pedido_id</code>.</strong>
+  <ul class="mb-0 mt-1">
+    <li>Universo: <code>HoraVenda</code> em status <code>FATURADO</code> sem
+      <code>tagplus_pedido_id</code> e com <code>nf_saida_chave_44</code> preenchida.
+      Inclui vendas legadas <em>DANFE PDF</em> (importadas antes da integracao TagPlus)
+      e vendas <em>MANUAL</em> que nao passaram pelo emissor automatico.</li>
+    <li>Para cada venda: <code>GET /nfes?since=data_venda-7d&amp;until=data_venda+7d</code>
+      &rarr; bate por <code>chave_acesso</code> (fallback <code>numero</code>) &rarr;
+      <code>GET /nfes/&#123;id&#125;</code> &rarr; <code>pedido_os_vinculada.id</code>
+      &rarr; <code>GET /pedidos/&#123;id&#125;</code>.</li>
+    <li>Preenche em <code>HoraVenda</code> (somente campos vazios — preserva edicoes manuais):
+      <ul class="mb-0">
+        <li><code>tagplus_pedido_id</code> + <code>tagplus_pedido_payload</code> (auditoria)</li>
+        <li><code>vendedor</code> &larr; <code>pedido.vendedor.nome</code> (so se NULL)</li>
+        <li><code>forma_pagamento</code> &larr; mapa <code>HoraTagPlusFormaPagamentoMap</code></li>
+        <li><code>tagplus_departamento</code> &larr; raw <code>pedido.departamento.descricao</code></li>
+      </ul>
+    </li>
+    <li><strong>NAO mexe em <code>loja_id</code></strong> — depois rodar
+      <a href="{{ url_for('hora.tagplus_departamento_map') }}">De-para Loja</a>.</li>
+    <li>Pre-requisito: scope OAuth deve incluir <code>read:pedidos</code>.</li>
+    <li><strong>Background</strong>: roda no worker RQ (queue <code>hora_backfill</code>). Pode fechar a aba.</li>
+  </ul>
+</div>
+
+<form method="post" class="card p-3 mb-3" style="max-width: 700px;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="row g-3">
+    <div class="col-md-12">
+      <label class="form-label">
+        Universo previsto: <strong>{{ total_universo }}</strong> venda(s) FATURADO sem <code>tagplus_pedido_id</code>.
+      </label>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">
+        Limite <span class="text-muted small">(opcional)</span>
+      </label>
+      <input type="number" name="limite" min="1" class="form-control"
+             placeholder="Vazio = todas">
+      <small class="text-muted">
+        Util para teste com 5-10 antes de rodar tudo.
+      </small>
+    </div>
+  </div>
+
+  <div class="alert alert-warning small mt-3 mb-3">
+    <i class="fas fa-exclamation-triangle"></i>
+    Cada venda gera ate <strong>1 paginacao</strong> em <code>/nfes</code>
+    (1-3 chamadas) + <code>GET /nfes/&#123;id&#125;</code> + <code>GET /pedidos/&#123;id&#125;</code>.
+    Em janela de 14 dias com volume de NFs alto, pode chegar a 5-6 chamadas por venda.
+    Idempotente — rodar 2x e seguro (vendas ja com pedido vinculado caem fora do universo).
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-play"></i> Enfileirar backfill de vendas legadas
+    </button>
+    <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-outline-secondary">
+      Voltar
+    </a>
+  </div>
+</form>
+
+<h4 class="mt-4">Jobs anteriores (PEDIDO_VENDAS_LEGADAS)</h4>
+{% if jobs %}
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Status</th>
+        <th>Limite</th>
+        <th>Operador</th>
+        <th>Iniciado</th>
+        <th>Finalizado</th>
+        <th class="text-end">Progresso</th>
+        <th class="text-end">Enriquecidas</th>
+        <th class="text-end">Inalt.</th>
+        <th class="text-end">Erros</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+        <tr>
+          <td><code>{{ j.id }}</code></td>
+          <td>
+            {% if j.status == 'CONCLUIDO' %}
+              <span class="badge bg-success">{{ j.status }}</span>
+            {% elif j.status == 'EM_PROGRESSO' %}
+              <span class="badge bg-primary"><i class="fas fa-spinner fa-spin"></i> {{ j.status }}</span>
+            {% elif j.status == 'PENDENTE' %}
+              <span class="badge bg-secondary">{{ j.status }}</span>
+            {% elif j.status == 'ERRO' %}
+              <span class="badge bg-danger">{{ j.status }}</span>
+            {% else %}
+              <span class="badge bg-light">{{ j.status }}</span>
+            {% endif %}
+          </td>
+          <td><small>{{ j.limite or 'todas' }}</small></td>
+          <td><small>{{ j.operador or '—' }}</small></td>
+          <td><small>{{ j.iniciado_em.strftime('%d/%m %H:%M:%S') if j.iniciado_em else '—' }}</small></td>
+          <td><small>{{ j.finalizado_em.strftime('%d/%m %H:%M:%S') if j.finalizado_em else '—' }}</small></td>
+          <td class="text-end"><small>
+            {{ j.processadas }}/{{ j.total_listadas or '?' }}
+            {% if j.total_listadas %}
+              ({{ j.percentual }}%)
+            {% endif %}
+          </small></td>
+          <td class="text-end">{{ j.n_atualizado or 0 }}</td>
+          <td class="text-end"><small class="text-muted">{{ j.n_inalterado or 0 }}</small></td>
+          <td class="text-end">
+            {% if (j.n_erro or 0) > 0 %}
+              <span class="badge bg-danger">{{ j.n_erro }}</span>
+            {% else %}
+              <small class="text-muted">0</small>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('hora.tagplus_backfill_detalhe', job_id=j.id) }}"
+               class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-search"></i>
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted"><em>Nenhum job de backfill de vendas legadas rodado ainda.</em></p>
+{% endif %}
+{% endblock %}

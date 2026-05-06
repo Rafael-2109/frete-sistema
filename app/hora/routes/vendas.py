@@ -71,6 +71,7 @@ def vendas_lista():
     loja_id = int(loja_id_str) if loja_id_str.isdigit() else None
     data_ini_str = (request.args.get('data_inicio') or '').strip()
     data_fim_str = (request.args.get('data_fim') or '').strip()
+    filtro_chassi = (request.args.get('chassi') or '').strip().upper() or None
 
     from datetime import datetime as _dt
     try:
@@ -94,6 +95,7 @@ def vendas_lista():
         loja_id=loja_id,
         data_inicio=data_inicio,
         data_fim=data_fim,
+        chassi=filtro_chassi,
     )
 
     # Lojas para filtro
@@ -117,6 +119,7 @@ def vendas_lista():
         filtro_loja_id=loja_id,
         filtro_data_inicio=data_ini_str,
         filtro_data_fim=data_fim_str,
+        filtro_chassi=filtro_chassi,
         lojas_ativas=lojas_lista,
     )
 

@@ -117,6 +117,58 @@ def _contar_total_listadas() -> int:
     ).count()
 
 
+def _contar_total_vendas_legadas() -> int:
+    """Universo do backfill de vendas legadas: HoraVenda FATURADO sem tagplus_pedido_id."""
+    from app.hora.services.tagplus.pedido_backfill_service import (
+        contar_universo_vendas_legadas,
+    )
+    return contar_universo_vendas_legadas()
+
+
+def _gravar_progresso_legado(job_id: int, snap: dict) -> None:
+    """Atualiza job com snapshot incremental do executar_backfill_pedidos_vendas_legadas.
+
+    Mapeia contadores do snap (incluindo `sem_nfe`) para os campos existentes
+    do HoraTagPlusBackfillJob:
+      - n_atualizado     <- snap['enriquecidas']
+      - n_inalterado     <- snap['inalteradas']
+      - n_pulada_invalida <- snap['sem_pedido'] + snap['sem_nfe']
+      - n_erro           <- snap['erro_pedido']
+      - relatorio.erros  <- snap['erros']
+    """
+    from app import db
+    from app.hora.models import HoraTagPlusBackfillJob
+    from app.utils.json_helpers import sanitize_for_json
+    from app.utils.timezone import agora_utc_naive
+
+    try:
+        job = db.session.get(HoraTagPlusBackfillJob, job_id)
+        if job is None:
+            return
+        job.processadas = snap.get('processadas', 0)
+        job.n_atualizado = snap.get('enriquecidas', 0)
+        job.n_inalterado = snap.get('inalteradas', 0)
+        job.n_pulada_invalida = (
+            snap.get('sem_pedido', 0) + snap.get('sem_nfe', 0)
+        )
+        job.n_erro = snap.get('erro_pedido', 0)
+        job.atualizado_em = agora_utc_naive()
+        erros_snap = snap.get('erros') or []
+        if erros_snap:
+            relatorio_atual = dict(job.relatorio or {})
+            relatorio_atual['erros'] = sanitize_for_json(erros_snap)
+            job.relatorio = relatorio_atual
+        db.session.commit()
+    except Exception:
+        logger.exception(
+            'Falha ao gravar progresso pedido-vendas-legadas job %s', job_id,
+        )
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
 def processar_backfill_pedidos_job(job_id: int) -> None:
     """Job RQ: enriquece HoraVenda via GET /pedidos/{id} TagPlus.
 
@@ -178,6 +230,92 @@ def processar_backfill_pedidos_job(job_id: int) -> None:
             )
         except Exception as exc:
             logger.exception('Backfill PEDIDOS job_id=%s ERRO terminal', job_id)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            _marcar_fim(
+                job_id, BACKFILL_JOB_STATUS_ERRO,
+                relatorio=None, erro=f'{type(exc).__name__}: {exc}',
+            )
+            raise
+    finally:
+        if ctx is not None:
+            ctx.pop()
+
+
+def processar_backfill_pedidos_vendas_legadas_job(job_id: int) -> None:
+    """Job RQ: backfill de tagplus_pedido_id para HoraVenda FATURADO sem pedido vinculado.
+
+    Universo: HoraVenda FATURADO sem `tagplus_pedido_id` e com
+    `nf_saida_chave_44` preenchida — inclui vendas DANFE legadas e
+    vendas MANUAL sem entrada em HoraTagPlusNfeEmissao.
+
+    Funcao `enqueue`-ada por `enfileirar_backfill_pedidos_vendas_legadas_job`.
+    Resultado fica em HoraTagPlusBackfillJob.relatorio.
+    """
+    ctx = _ensure_app_context()
+    try:
+        from app import db
+        from app.hora.models import (
+            BACKFILL_JOB_STATUS_CONCLUIDO,
+            BACKFILL_JOB_STATUS_ERRO,
+            HoraTagPlusBackfillJob,
+        )
+        from app.hora.services.tagplus.pedido_backfill_service import (
+            executar_backfill_pedidos_vendas_legadas,
+        )
+
+        job = db.session.get(HoraTagPlusBackfillJob, job_id)
+        if job is None:
+            logger.error(
+                'processar_backfill_pedidos_vendas_legadas_job: job %s nao existe',
+                job_id,
+            )
+            return
+
+        limite = job.limite
+        operador = job.operador
+
+        logger.info(
+            'Iniciando backfill PEDIDOS-VENDAS-LEGADAS job_id=%s limite=%s '
+            'operador=%s', job_id, limite, operador,
+        )
+
+        _marcar_inicio(job_id)
+
+        # Pre-contagem (best-effort).
+        try:
+            total = _contar_total_vendas_legadas()
+            if total:
+                job = db.session.get(HoraTagPlusBackfillJob, job_id)
+                if job is not None:
+                    job.total_listadas = (
+                        min(limite, total) if limite else total
+                    )
+                    db.session.commit()
+        except Exception:
+            logger.exception('Pre-contagem total_listadas falhou — UI sem %')
+
+        def _cb(snap: dict) -> None:
+            _gravar_progresso_legado(job_id, snap)
+
+        try:
+            relatorio = executar_backfill_pedidos_vendas_legadas(
+                operador=operador, limite=limite,
+                progress_callback=_cb,
+            )
+            _marcar_fim(job_id, BACKFILL_JOB_STATUS_CONCLUIDO, relatorio)
+            logger.info(
+                'Backfill PEDIDOS-VENDAS-LEGADAS job_id=%s CONCLUIDO: %s',
+                job_id,
+                {k: v for k, v in relatorio.items() if k != 'erros'},
+            )
+        except Exception as exc:
+            logger.exception(
+                'Backfill PEDIDOS-VENDAS-LEGADAS job_id=%s ERRO terminal',
+                job_id,
+            )
             try:
                 db.session.rollback()
             except Exception:
