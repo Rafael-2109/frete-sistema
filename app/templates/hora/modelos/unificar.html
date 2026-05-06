@@ -1,0 +1,262 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>
+    <i class="fas fa-compress-arrows-alt"></i> Unificar modelos duplicados
+  </h2>
+  <div>
+    <a href="{{ url_for('hora.modelos_lista') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-list"></i> Lista de modelos
+    </a>
+    <a href="{{ url_for('hora.modelos_pendencias_lista') }}" class="btn btn-outline-warning btn-sm">
+      <i class="fas fa-question-circle"></i> Pendencias
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-warning">
+  <strong><i class="fas fa-exclamation-triangle"></i> Operacao destrutiva e irreversivel.</strong>
+  <p class="mb-0 small">
+    Ao unificar, os modelos <strong>aliases</strong> sao absorvidos no
+    <strong>canonico</strong>: todas as motos, pedidos, recebimentos e
+    emprestimos sao re-apontados. As tabelas de preco do alias sao descartadas
+    (mantida apenas a do canonico). O alias fica <code>ativo=False</code> com
+    referencia ao canonico — registro preservado para auditoria.
+  </p>
+</div>
+
+{% if sugestoes %}
+<h5 class="mt-4">Sugestoes automaticas (mesmo TagPlus produto)</h5>
+<p class="text-muted small">
+  Modelos abaixo compartilham o mesmo <code>tagplus_produto_id</code> ou
+  <code>tagplus_codigo</code>. O sistema sugere o canonico com mais motos.
+  Voce pode ajustar antes de executar.
+</p>
+
+{% for s in sugestoes %}
+<div class="card mb-3">
+  <div class="card-header bg-light">
+    <strong>TagPlus #{{ s.tagplus_produto_id }}</strong>
+    {% if s.tagplus_codigo %}<code class="ms-2">{{ s.tagplus_codigo }}</code>{% endif %}
+    <span class="badge bg-warning text-dark ms-2">{{ s.modelos|length }} duplicatas</span>
+  </div>
+  <div class="card-body">
+    <form class="form-unificar" data-grupo="{{ loop.index }}">
+      <div class="table-responsive">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th width="60">Canonico</th>
+            <th width="60">Aliases</th>
+            <th>Modelo</th>
+            <th class="text-end">Motos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in s.modelos %}
+          <tr>
+            <td class="text-center">
+              <input type="radio" name="canonico_grp{{ loop.index0 }}" value="{{ m.id }}"
+                     {% if m.id == s.canonico_sugerido_id %}checked{% endif %}
+                     class="form-check-input radio-canonico">
+            </td>
+            <td class="text-center">
+              <input type="checkbox" name="alias_grp{{ loop.index0 }}" value="{{ m.id }}"
+                     {% if m.id != s.canonico_sugerido_id %}checked{% endif %}
+                     class="form-check-input check-alias">
+            </td>
+            <td>
+              <a href="{{ url_for('hora.modelos_aliases_lista', modelo_id=m.id) }}">
+                {{ m.nome_modelo }}
+              </a>
+              <small class="text-muted">(id={{ m.id }})</small>
+            </td>
+            <td class="text-end">
+              <span class="badge {% if m.qtd_motos > 0 %}bg-success{% else %}bg-secondary{% endif %}">
+                {{ m.qtd_motos }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      <div class="d-flex gap-2 justify-content-end">
+        <button type="button" class="btn btn-sm btn-outline-info btn-preview"
+                data-grupo="{{ loop.index }}">
+          <i class="fas fa-eye"></i> Preview impacto
+        </button>
+        <button type="submit" class="btn btn-sm btn-warning btn-executar"
+                data-grupo="{{ loop.index }}">
+          <i class="fas fa-compress-arrows-alt"></i> Executar merge
+        </button>
+      </div>
+      <div class="preview-result mt-2"></div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="alert alert-success">
+  <i class="fas fa-check-circle"></i>
+  Nenhuma duplicacao automatica detectada. Voce pode unificar manualmente
+  abaixo selecionando canonico e aliases.
+</div>
+{% endif %}
+
+{# ---------- Merge manual ---------- #}
+<h5 class="mt-4">Unificacao manual (escolher canonico + aliases livremente)</h5>
+
+<form id="formMergeManual" class="card card-body">
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <label class="form-label">Modelo canonico (sobrevive)</label>
+      <select name="canonico_id" class="form-select" required>
+        <option value="">-- escolha --</option>
+        {% for m in modelos %}
+        <option value="{{ m.id }}">{{ m.nome_modelo }} (id={{ m.id }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Aliases (serao absorvidos)</label>
+      <select name="alias_ids" class="form-select" multiple size="6" required>
+        {% for m in modelos %}
+        <option value="{{ m.id }}">{{ m.nome_modelo }} (id={{ m.id }})</option>
+        {% endfor %}
+      </select>
+      <small class="text-muted">
+        Segure Ctrl/Cmd para selecionar varios. NAO inclua o canonico aqui.
+      </small>
+    </div>
+  </div>
+  <div class="d-flex gap-2 justify-content-end">
+    <button type="button" class="btn btn-outline-info" id="btnPreviewManual">
+      <i class="fas fa-eye"></i> Preview impacto
+    </button>
+    <button type="submit" class="btn btn-warning" id="btnExecutarManual">
+      <i class="fas fa-compress-arrows-alt"></i> Executar merge
+    </button>
+  </div>
+  <div id="previewManualResult" class="mt-2"></div>
+</form>
+
+<script>
+(function () {
+  const csrf = document.querySelector('meta[name="csrf-token"]');
+  const csrfToken = csrf ? csrf.content : '';
+
+  function montarFormGrupo(formEl) {
+    const canonico = formEl.querySelector('.radio-canonico:checked');
+    const aliases = Array.from(formEl.querySelectorAll('.check-alias:checked'));
+    if (!canonico) return null;
+    const fd = new FormData();
+    fd.append('canonico_id', canonico.value);
+    aliases.forEach(a => {
+      if (a.value !== canonico.value) fd.append('alias_ids[]', a.value);
+    });
+    return fd;
+  }
+
+  // Botoes preview por grupo
+  document.querySelectorAll('.btn-preview').forEach(btn => {
+    btn.addEventListener('click', async function () {
+      const form = this.closest('form');
+      const fd = montarFormGrupo(form);
+      if (!fd) {
+        form.querySelector('.preview-result').innerHTML =
+          '<div class="alert alert-warning small">Selecione um canonico.</div>';
+        return;
+      }
+      const r = await fetch('{{ url_for("hora.modelos_unificar_preview") }}', {
+        method: 'POST', body: fd,
+      });
+      const j = await r.json();
+      const div = form.querySelector('.preview-result');
+      if (!j.ok) {
+        div.innerHTML = `<div class="alert alert-danger small">${j.erro}</div>`;
+        return;
+      }
+      const t = j.preview.totais;
+      div.innerHTML = `
+        <div class="alert alert-info small">
+          <strong>Preview:</strong>
+          ${t.motos} motos, ${t.pedido_itens} pedido_itens,
+          ${t.recebimento_conferencias} conferencias,
+          ${t.emprestimos} emprestimos serao re-apontados.
+          ${t.tabela_preco_descartadas} tabela(s) de preco do(s) alias(es) serao descartadas.
+          ${t.tagplus_maps_conflito} conflito(s) TagPlus map (preservado como alias).
+        </div>
+      `;
+    });
+  });
+
+  // Submit por grupo
+  document.querySelectorAll('.form-unificar').forEach(form => {
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const fd = montarFormGrupo(form);
+      if (!fd) return;
+      if (!confirm('Confirmar merge? Esta operacao e irreversivel (ate o canonico ser mergeado em outro).')) {
+        return;
+      }
+      const r = await fetch('{{ url_for("hora.modelos_unificar_executar") }}', {
+        method: 'POST', body: fd,
+      });
+      window.location = '{{ url_for("hora.modelos_lista") }}';
+    });
+  });
+
+  // Manual
+  function montarFormManual() {
+    const f = document.getElementById('formMergeManual');
+    const canonico = f.querySelector('[name="canonico_id"]').value;
+    if (!canonico) return null;
+    const fd = new FormData();
+    fd.append('canonico_id', canonico);
+    const select = f.querySelector('[name="alias_ids"]');
+    Array.from(select.selectedOptions).forEach(o => {
+      if (o.value !== canonico) fd.append('alias_ids[]', o.value);
+    });
+    return fd;
+  }
+  document.getElementById('btnPreviewManual').addEventListener('click', async () => {
+    const fd = montarFormManual();
+    const div = document.getElementById('previewManualResult');
+    if (!fd) {
+      div.innerHTML = '<div class="alert alert-warning small">Selecione canonico.</div>';
+      return;
+    }
+    const r = await fetch('{{ url_for("hora.modelos_unificar_preview") }}', {
+      method: 'POST', body: fd,
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      div.innerHTML = `<div class="alert alert-danger small">${j.erro}</div>`;
+      return;
+    }
+    const t = j.preview.totais;
+    div.innerHTML = `
+      <div class="alert alert-info small">
+        <strong>Preview:</strong>
+        ${t.motos} motos, ${t.pedido_itens} pedido_itens,
+        ${t.recebimento_conferencias} conferencias,
+        ${t.emprestimos} emprestimos serao re-apontados.
+      </div>
+    `;
+  });
+  document.getElementById('formMergeManual').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const fd = montarFormManual();
+    if (!fd) return;
+    if (!confirm('Confirmar merge?')) return;
+    const r = await fetch('{{ url_for("hora.modelos_unificar_executar") }}', {
+      method: 'POST', body: fd,
+    });
+    window.location = '{{ url_for("hora.modelos_lista") }}';
+  });
+})();
+</script>
+
+{% endblock %}

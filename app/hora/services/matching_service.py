@@ -279,13 +279,17 @@ def aplicar_correcao_pedido_item(
             f'Chassi {novo_chassi} ja esta em outro item (#{duplicado.id}) do pedido.'
         )
 
-    # Garante HoraMoto (insert-once)
+    # Garante HoraMoto (insert-once). Pode levantar ModeloPendenteError —
+    # caller (rota) trata. Origem NF_ENTRADA porque modelo veio da NF.
+    from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
     moto = get_or_create_moto(
         numero_chassi=novo_chassi,
         modelo_nome=nf_item.modelo_texto_original,
         cor=nf_item.cor_texto_original or 'NAO_INFORMADA',
         numero_motor=nf_item.numero_motor_texto_original,
         criado_por=operador,
+        origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
+        origem_id=nf_item.id,
     )
 
     pedido_item.numero_chassi = moto.numero_chassi
@@ -356,12 +360,16 @@ def aplicar_correcao_nf_item(
             f'Chassi {novo_chassi} ja esta em outro item (#{duplicado.id}) da NF.'
         )
 
-    # Garante HoraMoto do chassi novo
+    # Garante HoraMoto do chassi novo. Pode levantar ModeloPendenteError —
+    # caller (rota) trata. Origem PEDIDO_MANUAL porque modelo vem do pedido.
+    from app.hora.models import PENDENTE_ORIGEM_PEDIDO_MANUAL
     get_or_create_moto(
         numero_chassi=novo_chassi,
         modelo_nome=(pedido_item.modelo.nome_modelo if pedido_item.modelo else None),
         cor=pedido_item.cor or 'NAO_INFORMADA',
         criado_por=operador,
+        origem_pendencia=PENDENTE_ORIGEM_PEDIDO_MANUAL,
+        origem_id=pedido_item.id,
     )
 
     nf_item.numero_chassi = novo_chassi
@@ -447,12 +455,16 @@ def aplicar_pares_completar_chassis(
             )
         chassis_aplicados_no_lote.add(chassi)
 
+        # Pode levantar ModeloPendenteError — caller (rota) trata.
+        from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
         moto = get_or_create_moto(
             numero_chassi=chassi,
             modelo_nome=ni.modelo_texto_original,
             cor=ni.cor_texto_original or 'NAO_INFORMADA',
             numero_motor=ni.numero_motor_texto_original,
             criado_por=operador,
+            origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
+            origem_id=ni.id,
         )
         pi.numero_chassi = moto.numero_chassi
         pi.modelo_id = moto.modelo_id
@@ -566,14 +578,22 @@ def editar_pedido_item_manual(
             modelo_nome=modelo_nome,
             cor=(cor or 'NAO_INFORMADA'),
             criado_por=operador,
+            origem_pendencia='PEDIDO_MANUAL',
+            origem_id=pedido.id,
         )
         pi.numero_chassi = moto.numero_chassi
         pi.modelo_id = moto.modelo_id
     else:
         pi.numero_chassi = None
         if modelo_nome:
-            from app.hora.services.cadastro_service import buscar_ou_criar_modelo
-            pi.modelo_id = buscar_ou_criar_modelo(modelo_nome).id
+            from app.hora.services.modelo_resolver_service import resolver_ou_pendenciar
+            from app.hora.models import PENDENTE_ORIGEM_PEDIDO_MANUAL
+            modelo, _pendente = resolver_ou_pendenciar(
+                modelo_nome,
+                origem=PENDENTE_ORIGEM_PEDIDO_MANUAL,
+                origem_id=pedido.id,
+            )
+            pi.modelo_id = modelo.id if modelo else None
 
     if cor is not None:
         pi.cor = cor.strip().upper() or None

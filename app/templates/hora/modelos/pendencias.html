@@ -1,0 +1,223 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2>
+    <i class="fas fa-question-circle text-warning"></i> Modelos pendentes
+    {% if contadores[status_atual] %}
+      <span class="badge bg-warning text-dark">{{ contadores[status_atual] }}</span>
+    {% endif %}
+  </h2>
+  <div>
+    <a href="{{ url_for('hora.modelos_lista') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-list"></i> Lista de modelos
+    </a>
+    {% if current_user.tem_perm_hora('modelos', 'aprovar') %}
+    <a href="{{ url_for('hora.modelos_unificar_form') }}" class="btn btn-outline-warning btn-sm">
+      <i class="fas fa-compress-arrows-alt"></i> Unificar duplicados
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>O que sao pendencias?</strong>
+  <p class="mb-0 small">
+    Quando uma NF, pedido ou backfill TagPlus referencia um nome de produto que
+    nao bate em nenhum modelo cadastrado nem em alias conhecido, o sistema
+    registra a pendencia aqui em vez de criar um modelo novo silenciosamente.
+    Voce pode <strong>vincular</strong> a pendencia a um modelo existente
+    (criando um alias para o nome observado) ou <strong>criar um modelo novo</strong>.
+  </p>
+</div>
+
+{# Tabs de status #}
+<ul class="nav nav-tabs mb-3">
+  {% for st in statuses %}
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if st == status_atual else '' }}"
+       href="{{ url_for('hora.modelos_pendencias_lista', status=st) }}">
+      {{ st }} <span class="badge bg-secondary">{{ contadores[st] }}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% if not pendencias %}
+  <div class="text-center text-muted py-5">
+    <i class="fas fa-check-circle fa-3x mb-3"></i>
+    <p>Nenhuma pendencia em status <strong>{{ status_atual }}</strong>.</p>
+  </div>
+{% else %}
+<div class="table-responsive">
+<table class="table table-sm table-hover">
+  <thead class="table-light">
+    <tr>
+      <th>#</th>
+      <th>Nome observado</th>
+      <th>Origem</th>
+      <th>Ocorrencias</th>
+      <th>Ultimo visto</th>
+      <th>TagPlus</th>
+      <th class="text-center">Acoes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in pendencias %}
+    <tr>
+      <td><small>{{ p.id }}</small></td>
+      <td>
+        <strong>{{ p.nome_observado }}</strong>
+        {% if p.observacao %}
+          <br><small class="text-muted">{{ p.observacao }}</small>
+        {% endif %}
+      </td>
+      <td><span class="badge bg-secondary">{{ p.origem }}</span></td>
+      <td class="text-end">
+        <span class="badge {{ 'bg-danger' if p.qtd_ocorrencias > 5 else 'bg-warning text-dark' }}">
+          {{ p.qtd_ocorrencias }}
+        </span>
+      </td>
+      <td><small>{{ p.ultimo_visto.strftime('%d/%m/%Y %H:%M') if p.ultimo_visto else '-' }}</small></td>
+      <td>
+        {% if p.tagplus_codigo %}<code>{{ p.tagplus_codigo }}</code>{% endif %}
+        {% if p.tagplus_produto_id %}<small class="text-muted"><br>id={{ p.tagplus_produto_id }}</small>{% endif %}
+      </td>
+      <td class="text-end">
+        {% if status_atual == 'PENDENTE' %}
+          <button type="button" class="btn btn-sm btn-outline-primary"
+                  data-bs-toggle="modal"
+                  data-bs-target="#modalVincular{{ p.id }}">
+            <i class="fas fa-link"></i> Vincular
+          </button>
+          {% if current_user.tem_perm_hora('modelos', 'criar') %}
+          <button type="button" class="btn btn-sm btn-outline-success"
+                  data-bs-toggle="modal"
+                  data-bs-target="#modalCriar{{ p.id }}">
+            <i class="fas fa-plus"></i> Criar novo
+          </button>
+          {% endif %}
+          <form method="POST"
+                action="{{ url_for('hora.modelos_pendencias_ignorar', pendencia_id=p.id) }}"
+                style="display:inline;"
+                onsubmit="return confirm('Ignorar esta pendencia?');">
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    title="Marcar como ignorada (nao gera modelo nem alias)">
+              <i class="fas fa-times"></i>
+            </button>
+          </form>
+        {% else %}
+          {% if p.modelo %}
+            <small>
+              <a href="{{ url_for('hora.modelos_aliases_lista', modelo_id=p.modelo.id) }}">
+                {{ p.modelo.nome_modelo }}
+              </a>
+            </small>
+            <br><small class="text-muted">
+              {{ p.resolvido_por or '-' }}
+              {{ p.resolvido_em.strftime('%d/%m %H:%M') if p.resolvido_em else '' }}
+            </small>
+          {% else %}
+            <small class="text-muted">-</small>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{# Modais por pendencia (apenas em status PENDENTE) #}
+{% if status_atual == 'PENDENTE' %}
+{% for p in pendencias %}
+
+<!-- Modal: Vincular -->
+<div class="modal fade" id="modalVincular{{ p.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST"
+          action="{{ url_for('hora.modelos_pendencias_vincular', pendencia_id=p.id) }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Vincular {{ p.nome_observado }} a modelo existente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>O sistema criara um <strong>alias</strong> que mapeia
+            <code>{{ p.nome_observado }}</code> para o modelo escolhido.
+            Itens com esse nome serao vinculados retroativamente.</p>
+          <div class="mb-3">
+            <label class="form-label">Modelo destino</label>
+            <select name="modelo_id" class="form-select" required>
+              <option value="">-- escolha --</option>
+              {% for m in modelos %}
+              <option value="{{ m.id }}">{{ m.nome_modelo }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-link"></i> Vincular
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Criar novo modelo -->
+{% if current_user.tem_perm_hora('modelos', 'criar') %}
+<div class="modal fade" id="modalCriar{{ p.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST"
+          action="{{ url_for('hora.modelos_pendencias_criar_modelo', pendencia_id=p.id) }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Criar novo modelo a partir de {{ p.nome_observado }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nome do modelo (canonico) <span class="text-danger">*</span></label>
+            <input type="text" name="nome_modelo" class="form-control" required
+                   value="{{ p.nome_observado }}"
+                   placeholder="Ex.: BOB, X12-10">
+            <small class="text-muted">
+              Se diferente do nome observado, o sistema cria um <strong>alias</strong>
+              para que <code>{{ p.nome_observado }}</code> tambem aponte para o novo modelo.
+            </small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Potencia do motor</label>
+            <input type="text" name="potencia_motor" class="form-control"
+                   placeholder="Ex.: 1000W, 2000W (opcional)">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Descricao</label>
+            <textarea name="descricao" class="form-control" rows="2"
+                      placeholder="Descricao livre (opcional)"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-plus"></i> Criar modelo
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endfor %}
+{% endif %}
+
+{% endif %}
+{% endblock %}

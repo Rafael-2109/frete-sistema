@@ -332,6 +332,63 @@ Não-objetivos v1: versionamento de preço de peça (preço fixo em `hora_peca.p
 
 ---
 
+## 12. Unificação de modelos (N nomes → 1 canônico) — 2026-05-06
+
+Resolve duplicação histórica: TagPlus, NFs e pedidos podem se referir ao mesmo modelo físico com descrições divergentes (ex: `BOB`, `BOB AM`, `SCOOTER ELETRICA BOB` todas são `MT-BOB / tagplus_id=10`). Antes da migration `hora_29`, o sistema criava `HoraModelo` distintos via `buscar_ou_criar_modelo`. Resultado em produção: 8 grupos de duplicação, 20 modelos absorvíveis em 8 canônicos.
+
+**3 tabelas envolvidas (migration `hora_29`)**:
+- `hora_modelo_alias` — N nomes → 1 modelo canônico. Tipos: `TAGPLUS_PRODUTO_ID`, `TAGPLUS_CODIGO`, `NOME_NF`, `NOME_PEDIDO`, `NOME_LIVRE`. UNIQUE `(tipo, nome_alias)`.
+- `hora_modelo_pendente` — fila de nomes desconhecidos aguardando decisão. UNIQUE `(nome_observado, origem)`.
+- `hora_modelo` ALTER — `merged_em_id` (self FK), `merged_em`, `merged_por` para auditoria de merge físico.
+
+**Fluxo de ingestão** (TagPlus, NF DANFE, pedido manual, recebimento):
+1. Chama `modelo_resolver_service.resolver_ou_pendenciar(nome, origem=...)`.
+2. Resolver consulta `hora_modelo_alias` (case-insensitive) e fallback `hora_modelo.nome_modelo`.
+3. Se acha → retorna `(modelo, None)`. Se não → cria/incrementa pendência e retorna `(None, pendente)`.
+4. `get_or_create_moto` levanta `ModeloPendenteError` (com `pendencia` no atributo) quando modelo não resolve. Caller decide:
+   - **TagPlus backfill / DANFE saída**: captura, registra divergência `MODELO_PENDENTE`, **skipa o item**, segue.
+   - **NF entrada DANFE**: aborta o import inteiro **antes** de gravar a NF. Pendências persistem (commit isolado em `resolver_ou_pendenciar(commit=True)`).
+   - **Pedido manual**: propaga, rota retorna 4xx com link para resolver.
+
+**Resolução em UI**: `/hora/modelos/pendencias`.
+- **Vincular**: cria `HoraModeloAlias` apontando o nome para um modelo existente.
+- **Criar novo**: cria `HoraModelo` + alias do nome observado.
+- **Ignorar**: marca como ignorada (não gera modelo nem alias).
+
+**Retroatividade automática** (`modelo_retroatividade_service.propagar_resolucao`): ao resolver pendência:
+- Cria `HoraMoto` para chassis em `hora_nf_entrada_item` cujo `modelo_texto_original` bate no nome observado.
+- Marca divergências `MODELO_PENDENTE` como resolvidas para esses chassis.
+- (Não corrige `hora_pedido_item.modelo_id IS NULL` — operador edita manualmente.)
+
+**Merge físico** (`/hora/modelos/unificar`, perm `modelos/aprovar`):
+- Operador escolhe canônico + N aliases.
+- Service `modelo_merge_service.merge_modelos` em UMA transação:
+  - `UPDATE` em todas as 6 FKs apontando para alias → canônico (`hora_moto`, `hora_pedido_item`, `hora_recebimento_conferencia`, `hora_emprestimo_moto`, `hora_modelo_alias`, `hora_modelo_pendente.resolvido_modelo_id`).
+  - `hora_tabela_preco`: descarta do alias (preserva só do canônico).
+  - `hora_tagplus_produto_map` (UNIQUE em `modelo_id`): se canônico já tem map, transfere `tagplus_codigo`+`tagplus_produto_id` como `HoraModeloAlias` e deleta map duplicado; se não tem, faz `UPDATE`.
+  - Cria alias `NOME_LIVRE` para o nome do alias (preserva nome histórico).
+  - Marca alias `ativo=False, merged_em_id=canonico, merged_em=now, merged_por=operador`.
+- Tela `unificar.html` tem **preview AJAX** (dry-run via `preview_merge`) antes de executar.
+
+**Pontos importantes**:
+- `HoraMoto.modelo_id` permanece `NOT NULL` (invariante 3) — moto só é criada após pendência resolvida.
+- Listagens (`cadastro_service.listar_modelos`, `autocomplete_service.modelos`) filtram `merged_em_id IS NULL` por padrão.
+- Autocomplete agora busca também em aliases (operador digita "BOB AM" e acha modelo BOB).
+- Modelo sentinela `DESCONHECIDO` (id criado em `hora_30`) absorve nomes técnicos `CHASSI_EXTRA_DESCONHECIDO`, `MODELO_DESCONHECIDO`, `NAO_INFORMADO` para evitar pendências em loop no recebimento.
+
+**Migrations relacionadas**:
+- `hora_29_modelo_alias.{py,sql}` — DDL das 2 tabelas + ALTER `hora_modelo`.
+- `hora_30_seed_aliases_atuais.py` — popula aliases iniciais (`NOME_LIVRE` para cada modelo, sentinela DESCONHECIDO).
+- `hora_32_sugestoes_merge.py` — relatório read-only dos grupos duplicados (guia para `/hora/modelos/unificar`).
+
+**Permissões**: módulo `modelos` × ações `ver` (listar), `editar` (vincular pendência, gerir aliases), `criar` (criar modelo de pendência), `aprovar` (executar merge — operação de alta consequência).
+
+**Constantes em `app/hora/models/modelo_alias.py`**: `ALIAS_TIPO_*`, `PENDENTE_ORIGEM_*`, `PENDENTE_STATUS_*`.
+
+**Spec/Plano**: implementado em sessão única 2026-05-06. Sem spec separado (escopo coeso).
+
+---
+
 ## Referências
 
 - **Contrato de design**: `docs/hora/INVARIANTES.md`

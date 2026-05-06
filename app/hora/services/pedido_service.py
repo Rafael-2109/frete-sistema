@@ -60,7 +60,8 @@ def criar_pedido(
     db.session.add(pedido)
     db.session.flush()
 
-    from app.hora.services.cadastro_service import buscar_ou_criar_modelo
+    from app.hora.services.modelo_resolver_service import resolver_ou_pendenciar
+    from app.hora.models import PENDENTE_ORIGEM_PEDIDO_MANUAL
 
     vistos_chassi = set()
     for item in itens_lista:
@@ -77,22 +78,34 @@ def criar_pedido(
             raise ValueError(f"Item sem preco_compra_esperado: {item}")
 
         if chassi:
-            # Caso com chassi: get_or_create HoraMoto + referenciar
+            # Caso com chassi: get_or_create HoraMoto + referenciar.
+            # Pode levantar ModeloPendenteError — propaga para chamador
+            # (rota retorna 4xx com link para /hora/modelos/pendencias).
             moto = get_or_create_moto(
                 numero_chassi=chassi,
                 modelo_nome=item.get('modelo'),
                 cor=item.get('cor') or 'NAO_INFORMADA',
                 criado_por=criado_por,
+                origem_pendencia=PENDENTE_ORIGEM_PEDIDO_MANUAL,
+                origem_id=pedido.id,
             )
             modelo_id = moto.modelo_id
             chassi_final = moto.numero_chassi
         else:
-            # Pedido pré-NF: só modelo+cor, chassi pendente.
-            # Não cria HoraMoto (não existe ainda). Resolve modelo_id pelo nome.
+            # Pedido pre-NF: chassi pendente. Resolve modelo_id pelo nome.
+            # Se nao bate em alias, cria pendencia em hora_modelo_pendente
+            # e item fica com modelo_id=NULL. Operador resolve via tela
+            # /hora/modelos/pendencias; retroatividade corrige.
             modelo_id = None
-            if item.get('modelo'):
-                modelo = buscar_ou_criar_modelo(item['modelo'])
-                modelo_id = modelo.id
+            nome_modelo = item.get('modelo')
+            if nome_modelo:
+                modelo, _pendente = resolver_ou_pendenciar(
+                    nome_modelo,
+                    origem=PENDENTE_ORIGEM_PEDIDO_MANUAL,
+                    origem_id=pedido.id,
+                )
+                if modelo is not None:
+                    modelo_id = modelo.id
             chassi_final = None
 
         db.session.add(HoraPedidoItem(
@@ -281,21 +294,30 @@ def adicionar_item_pedido(
     if preco_compra_esperado is None:
         raise ValueError('preco_compra_esperado obrigatorio')
 
+    from app.hora.services.modelo_resolver_service import resolver_ou_pendenciar
+    from app.hora.models import PENDENTE_ORIGEM_PEDIDO_MANUAL
+
     if chassi:
         moto = get_or_create_moto(
             numero_chassi=chassi,
             modelo_nome=modelo_nome,
             cor=cor or 'NAO_INFORMADA',
             criado_por=operador,
+            origem_pendencia=PENDENTE_ORIGEM_PEDIDO_MANUAL,
+            origem_id=pedido.id,
         )
         modelo_id = moto.modelo_id
         chassi_final = moto.numero_chassi
     else:
         modelo_id = None
         if modelo_nome:
-            from app.hora.services.cadastro_service import buscar_ou_criar_modelo
-            modelo = buscar_ou_criar_modelo(modelo_nome)
-            modelo_id = modelo.id
+            modelo, _pendente = resolver_ou_pendenciar(
+                modelo_nome,
+                origem=PENDENTE_ORIGEM_PEDIDO_MANUAL,
+                origem_id=pedido.id,
+            )
+            if modelo is not None:
+                modelo_id = modelo.id
         chassi_final = None
 
     item = HoraPedidoItem(
@@ -508,6 +530,193 @@ def exportar_pedidos_excel(
 
     output.seek(0)
     return output.read()
+
+
+def mover_item_para_outro_pedido(
+    pedido_origem_id: int,
+    item_id: int,
+    pedido_destino_id: int,
+    tentar_vincular_nfs: bool = True,
+    operador: Optional[str] = None,
+) -> dict:
+    """Move 1 HoraPedidoItem de um pedido para outro e tenta auto-vincular NFs.
+
+    Caso de uso: operador detecta que uma moto (chassi) foi cadastrada no pedido
+    errado. Essa funcao permite mover sem deletar/recriar, e ainda aproveita o
+    momento para vincular NFs orfas que contem aquele chassi ao pedido destino,
+    facilitando o vinculo Pedido x NF.
+
+    Regras:
+      - Pedido origem != pedido destino.
+      - Mesma loja_destino_id (matching por loja, nunca por CNPJ — todas as NFs
+        e pedidos HORA usam o CNPJ da matriz).
+      - Pedido destino em status ABERTO ou PARCIALMENTE_FATURADO (FATURADO/CANCELADO
+        nao aceita itens novos).
+      - Pedido origem precisa ter ao menos 2 itens (1 deve sobrar — mesma regra
+        de excluir_item_pedido).
+      - Se item tem chassi: nao pode estar duplicado no pedido destino.
+      - Se item tem chassi e ja foi faturado em NF vinculada ao pedido ORIGEM:
+        bloqueado. Operador precisa desvincular a NF antes (mesma logica de
+        excluir_item_pedido).
+      - Item peca (peca_id) tambem pode ser movido — sem auto-vinculo de NF.
+
+    Auto-vinculo de NFs (apenas se item tem chassi):
+      - Busca NFs cujos itens contem o chassi do item movido.
+      - Vincula automaticamente NFs que estao orfas (pedido_id IS NULL) e da
+        mesma loja do pedido destino.
+      - NFs que estao em outros pedidos OU em outra loja sao retornadas como
+        "candidatas_outras" para o operador decidir manualmente.
+
+    Retorna:
+        {
+          'ok': True,
+          'item_id': int,
+          'numero_chassi': str | None,
+          'pedido_origem_id': int,
+          'pedido_destino_id': int,
+          'pedido_origem_status': str,   # status apos recalculo
+          'pedido_destino_status': str,
+          'nfs_auto_vinculadas': [{'nf_id', 'numero_nf', 'data_emissao_iso'}],
+          'nfs_candidatas_outras': [{'nf_id', 'numero_nf', 'pedido_id_atual',
+                                     'loja_destino_id', 'motivo'}],
+        }
+    """
+    from app.hora.models import HoraNfEntrada, HoraNfEntradaItem
+
+    if pedido_origem_id == pedido_destino_id:
+        raise ValueError('Pedido destino deve ser diferente do origem.')
+
+    pedido_origem = HoraPedido.query.get(pedido_origem_id)
+    if not pedido_origem:
+        raise ValueError(f'Pedido origem {pedido_origem_id} nao encontrado')
+    pedido_destino = HoraPedido.query.get(pedido_destino_id)
+    if not pedido_destino:
+        raise ValueError(f'Pedido destino {pedido_destino_id} nao encontrado')
+
+    if pedido_origem.loja_destino_id != pedido_destino.loja_destino_id:
+        raise ValueError(
+            f'Lojas divergentes: origem={pedido_origem.loja_destino_id}, '
+            f'destino={pedido_destino.loja_destino_id}. '
+            f'Os dois pedidos devem ser da mesma loja.'
+        )
+
+    if pedido_destino.status not in ('ABERTO', 'PARCIALMENTE_FATURADO'):
+        raise ValueError(
+            f'Pedido destino em status "{pedido_destino.status}" nao aceita '
+            f'novos itens (apenas ABERTO ou PARCIALMENTE_FATURADO).'
+        )
+
+    item = HoraPedidoItem.query.get(item_id)
+    if not item or item.pedido_id != pedido_origem.id:
+        raise ValueError(
+            f'Item {item_id} nao pertence ao pedido origem {pedido_origem_id}.'
+        )
+
+    if len(pedido_origem.itens) <= 1:
+        raise ValueError(
+            'Pedido origem ficaria sem itens. Pedido precisa ter pelo menos 1 item; '
+            'exclua o pedido se necessario.'
+        )
+
+    chassi = item.numero_chassi  # pode ser None (item pre-NF) ou peca
+
+    # Bloqueio: chassi ja faturado em NF do pedido origem
+    if chassi:
+        existe_em_nf_origem = db.session.query(
+            db.session.query(HoraNfEntradaItem)
+            .join(HoraNfEntrada, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+            .filter(HoraNfEntrada.pedido_id == pedido_origem.id)
+            .filter(HoraNfEntradaItem.numero_chassi == chassi)
+            .exists()
+        ).scalar()
+        if existe_em_nf_origem:
+            raise ValueError(
+                f'Chassi {chassi} ja foi faturado em NF do pedido origem '
+                f'{pedido_origem.numero_pedido}. Desvincule a NF antes de mover '
+                f'o item.'
+            )
+
+        # Bloqueio: chassi duplicado no pedido destino
+        dup_destino = (
+            HoraPedidoItem.query
+            .filter(
+                HoraPedidoItem.pedido_id == pedido_destino.id,
+                HoraPedidoItem.numero_chassi == chassi,
+                HoraPedidoItem.id != item.id,
+            )
+            .first()
+        )
+        if dup_destino:
+            raise ValueError(
+                f'Chassi {chassi} ja existe no pedido destino '
+                f'{pedido_destino.numero_pedido} (item #{dup_destino.id}).'
+            )
+
+    # Move o item
+    item.pedido_id = pedido_destino.id
+    db.session.flush()
+
+    # Auto-vinculo de NFs orfas com o chassi do item movido
+    nfs_auto_vinculadas: List[dict] = []
+    nfs_candidatas_outras: List[dict] = []
+    if tentar_vincular_nfs and chassi:
+        nfs_com_chassi = (
+            db.session.query(HoraNfEntrada)
+            .join(HoraNfEntradaItem, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+            .filter(HoraNfEntradaItem.numero_chassi == chassi)
+            .distinct()
+            .all()
+        )
+        for nf in nfs_com_chassi:
+            if nf.pedido_id == pedido_destino.id:
+                # Ja vinculada ao destino — nada a fazer.
+                continue
+            if nf.pedido_id is None and nf.loja_destino_id == pedido_destino.loja_destino_id:
+                # Vincula automaticamente: NF orfa, mesma loja.
+                nf.pedido_id = pedido_destino.id
+                nfs_auto_vinculadas.append({
+                    'nf_id': nf.id,
+                    'numero_nf': nf.numero_nf,
+                    'data_emissao_iso': nf.data_emissao.isoformat() if nf.data_emissao else None,
+                })
+            else:
+                # NF ja vinculada a outro pedido OU loja diferente.
+                # Lista para o operador decidir manualmente.
+                if nf.pedido_id is not None and nf.pedido_id != pedido_destino.id:
+                    motivo = f'ja vinculada ao pedido {nf.pedido_id}'
+                elif nf.loja_destino_id and nf.loja_destino_id != pedido_destino.loja_destino_id:
+                    motivo = f'loja diferente ({nf.loja_destino_id})'
+                else:
+                    motivo = 'NF sem loja'
+                nfs_candidatas_outras.append({
+                    'nf_id': nf.id,
+                    'numero_nf': nf.numero_nf,
+                    'pedido_id_atual': nf.pedido_id,
+                    'loja_destino_id': nf.loja_destino_id,
+                    'motivo': motivo,
+                })
+
+    db.session.commit()
+
+    # Recalcula status dos dois pedidos
+    atualizar_status_pedido_por_faturamento(pedido_origem.id)
+    atualizar_status_pedido_por_faturamento(pedido_destino.id)
+
+    # Releitura para devolver status atualizados
+    db.session.refresh(pedido_origem)
+    db.session.refresh(pedido_destino)
+
+    return {
+        'ok': True,
+        'item_id': item.id,
+        'numero_chassi': chassi,
+        'pedido_origem_id': pedido_origem.id,
+        'pedido_destino_id': pedido_destino.id,
+        'pedido_origem_status': pedido_origem.status,
+        'pedido_destino_status': pedido_destino.status,
+        'nfs_auto_vinculadas': nfs_auto_vinculadas,
+        'nfs_candidatas_outras': nfs_candidatas_outras,
+    }
 
 
 def atualizar_status_pedido_por_faturamento(pedido_id: int) -> None:

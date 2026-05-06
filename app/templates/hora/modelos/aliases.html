@@ -1,0 +1,166 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>
+    <i class="fas fa-tags"></i> Aliases de
+    <strong>{{ modelo.nome_modelo }}</strong>
+    {% if not modelo.ativo %}<span class="badge bg-secondary">inativo</span>{% endif %}
+    {% if modelo.merged_em_id %}
+      <span class="badge bg-warning text-dark">
+        unificado em #{{ modelo.merged_em_id }} em
+        {{ modelo.merged_em.strftime('%d/%m/%Y') if modelo.merged_em else '-' }}
+      </span>
+    {% endif %}
+  </h2>
+  <div>
+    <a href="{{ url_for('hora.modelos_lista') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <a href="{{ url_for('hora.modelos_editar', modelo_id=modelo.id) }}" class="btn btn-outline-primary btn-sm">
+      <i class="fas fa-edit"></i> Editar modelo
+    </a>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>O que sao aliases?</strong>
+  <p class="mb-0 small">
+    Aliases sao N nomes que apontam para este modelo. Quando uma NF, pedido ou
+    backfill encontra qualquer um desses nomes, o sistema resolve automaticamente
+    para <strong>{{ modelo.nome_modelo }}</strong>. Permite que o mesmo modelo
+    fisico tenha varias descricoes na origem (TagPlus, ERP, NF, etc).
+  </p>
+</div>
+
+{% if tagplus_map %}
+<div class="card mb-3 border-info">
+  <div class="card-body">
+    <h6 class="card-title"><i class="fas fa-link"></i> Mapeamento TagPlus (legado)</h6>
+    <small>
+      <strong>tagplus_codigo:</strong> <code>{{ tagplus_map.tagplus_codigo or '-' }}</code> &nbsp;
+      <strong>tagplus_produto_id:</strong> <code>{{ tagplus_map.tagplus_produto_id }}</code> &nbsp;
+      <strong>cfop_default:</strong> <code>{{ tagplus_map.cfop_default }}</code>
+    </small>
+    <br><small class="text-muted">
+      Este mapeamento ainda funciona para emissao de NFe TagPlus.
+      Voce tambem pode criar aliases TAGPLUS_CODIGO/TAGPLUS_PRODUTO_ID na tabela
+      abaixo para uniformizar a resolucao.
+    </small>
+  </div>
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5>Aliases ativos ({{ aliases|length }})</h5>
+  {% if current_user.tem_perm_hora('modelos', 'editar') and not modelo.merged_em_id %}
+  <button type="button" class="btn btn-sm btn-primary"
+          data-bs-toggle="modal" data-bs-target="#modalAddAlias">
+    <i class="fas fa-plus"></i> Adicionar alias
+  </button>
+  {% endif %}
+</div>
+
+{% if not aliases %}
+  <div class="text-center text-muted py-3">
+    Nenhum alias ainda. Aliases sao criados automaticamente quando:
+    <ul class="text-start small d-inline-block mt-2">
+      <li>Modelo eh seedado pela migration <code>hora_30</code> (NOME_LIVRE)</li>
+      <li>Operador resolve uma pendencia em <code>/hora/modelos/pendencias</code></li>
+      <li>Operador faz merge de modelos em <code>/hora/modelos/unificar</code></li>
+      <li>Operador adiciona manualmente nesta tela</li>
+    </ul>
+  </div>
+{% else %}
+<div class="table-responsive">
+<table class="table table-sm table-hover">
+  <thead class="table-light">
+    <tr>
+      <th>Tipo</th>
+      <th>Nome (alias)</th>
+      <th>Criado em</th>
+      <th>Por</th>
+      <th>Observacao</th>
+      <th class="text-center">Acoes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for a in aliases %}
+    <tr>
+      <td><span class="badge bg-secondary">{{ a.tipo }}</span></td>
+      <td><code>{{ a.nome_alias }}</code></td>
+      <td><small>{{ a.criado_em.strftime('%d/%m/%Y %H:%M') if a.criado_em else '-' }}</small></td>
+      <td><small>{{ a.criado_por or '-' }}</small></td>
+      <td><small class="text-muted">{{ a.observacao or '' }}</small></td>
+      <td class="text-end">
+        {% if current_user.tem_perm_hora('modelos', 'editar') %}
+        <form method="POST"
+              action="{{ url_for('hora.modelos_aliases_remover', modelo_id=modelo.id, alias_id=a.id) }}"
+              style="display:inline;"
+              onsubmit="return confirm('Remover este alias? Items futuros com este nome viraram pendencia.');">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Remover alias">
+            <i class="fas fa-trash"></i>
+          </button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{# Modal: Adicionar alias #}
+{% if current_user.tem_perm_hora('modelos', 'editar') and not modelo.merged_em_id %}
+<div class="modal fade" id="modalAddAlias" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST"
+          action="{{ url_for('hora.modelos_aliases_criar', modelo_id=modelo.id) }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Adicionar alias para {{ modelo.nome_modelo }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Tipo <span class="text-danger">*</span></label>
+            <select name="tipo" class="form-select" required>
+              <option value="">-- escolha --</option>
+              {% for t in tipos_validos %}
+              <option value="{{ t }}">{{ t }}</option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">
+              <strong>NOME_LIVRE</strong>: nome textual generico (ex: "BOB", "BOB AM").<br>
+              <strong>NOME_NF</strong>: como apareceu numa NF de entrada.<br>
+              <strong>NOME_PEDIDO</strong>: como digitado em pedido manual.<br>
+              <strong>TAGPLUS_CODIGO</strong>: codigo curto TagPlus (ex: "MT-BOB").<br>
+              <strong>TAGPLUS_PRODUTO_ID</strong>: ID inteiro TagPlus (ex: "10").
+            </small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nome do alias <span class="text-danger">*</span></label>
+            <input type="text" name="nome_alias" class="form-control" required
+                   placeholder="Ex.: BOB AM, MT-BOB, SCOOTER ELETRICA BOB">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Observacao (opcional)</label>
+            <textarea name="observacao" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Adicionar
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

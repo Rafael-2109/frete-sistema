@@ -138,15 +138,36 @@ def criar_modelo(
 
 
 def buscar_ou_criar_modelo(nome_modelo: str) -> HoraModelo:
-    """Usado na ingestão: modelo extraído da NF pode ser novo."""
+    """DEPRECATED — preferir `modelo_resolver_service.resolver_ou_pendenciar`.
+
+    Mantido como shim de compat: tenta resolver via aliases primeiro;
+    se nao achar, cai no comportamento antigo (cria HoraModelo
+    silenciosamente). NOVOS CALLSITES NAO devem usar essa funcao —
+    usar resolver_ou_pendenciar para criar pendencia adequada.
+
+    Existe apenas para callsites legados que ainda nao foram adaptados;
+    sera removida apos migracao completa.
+    """
+    from app.hora.services.modelo_resolver_service import resolver_modelo
+
     nome_norm = (nome_modelo or '').strip()
     if not nome_norm:
         nome_norm = 'MODELO_DESCONHECIDO'
 
-    existente = HoraModelo.query.filter_by(nome_modelo=nome_norm).first()
-    if existente:
-        return existente
+    # 1. Tenta resolver via aliases (caminho preferencial novo)
+    modelo = resolver_modelo(nome_norm)
+    if modelo:
+        return modelo
 
+    # 2. Fallback: comportamento antigo — cria HoraModelo silenciosamente.
+    #    Mantido apenas para compat ate todos os callsites migrarem para
+    #    resolver_ou_pendenciar. Loga para auditoria.
+    import logging
+    logging.getLogger(__name__).warning(
+        'buscar_ou_criar_modelo criou modelo silenciosamente: %r. '
+        'Migrar callsite para resolver_ou_pendenciar.',
+        nome_norm,
+    )
     modelo = HoraModelo(nome_modelo=nome_norm, ativo=True)
     db.session.add(modelo)
     db.session.flush()
@@ -157,15 +178,22 @@ def listar_modelos(
     apenas_ativos: bool = True,
     *,
     busca: Optional[str] = None,
+    incluir_merged: bool = False,
 ) -> Iterable[HoraModelo]:
-    """Lista modelos. Filtros opcionais:
+    """Lista modelos canonicos. Filtros opcionais:
+
     - busca: substring em nome_modelo, potencia_motor ou descricao
+    - incluir_merged: se True, inclui modelos absorvidos (merged_em_id IS
+      NOT NULL). Default False — listagens publicas mostram 1 modelo por
+      produto fisico.
     """
     from sqlalchemy import or_
 
     query = HoraModelo.query.order_by(HoraModelo.nome_modelo)
     if apenas_ativos:
         query = query.filter_by(ativo=True)
+    if not incluir_merged:
+        query = query.filter(HoraModelo.merged_em_id.is_(None))
     if busca:
         b = busca.strip()
         query = query.filter(or_(

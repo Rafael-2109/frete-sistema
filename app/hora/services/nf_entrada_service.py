@@ -135,6 +135,47 @@ def importar_danfe_pdf(
         nome_arquivo_origem=nome_arquivo_origem,
     )
 
+    # Migration hora_29: VALIDA modelos ANTES de criar a NF.
+    # Estrategia: para cada item, resolve modelo via aliases. Se algum nao
+    # bate, cria pendencia (commit isolado para sobreviver ao abort do
+    # import) e ABORTA antes de gravar NF/itens. Operador resolve em
+    # /hora/modelos/pendencias e re-importa o PDF — UNIQUE em chave_44
+    # nao bloqueia porque NF nem foi gravada.
+    from app.hora.services.modelo_resolver_service import (
+        ModeloPendenteError,
+        resolver_ou_pendenciar,
+    )
+    from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
+
+    modelos_resolvidos: list = []  # paralelo a itens_data
+    pendencias_disparadas: list = []
+    for item in itens_data:
+        modelo, pendente = resolver_ou_pendenciar(
+            item.get('modelo_texto_original'),
+            origem=PENDENTE_ORIGEM_NF_ENTRADA,
+            origem_id=None,  # NF ainda nao tem id
+            commit=True,  # persiste pendencia mesmo se import abortar
+        )
+        if modelo is None:
+            pendencias_disparadas.append({
+                'chassi': item['numero_chassi'],
+                'nome_modelo': item.get('modelo_texto_original'),
+                'pendencia_id': pendente.id if pendente else None,
+            })
+        modelos_resolvidos.append(modelo)
+
+    if pendencias_disparadas:
+        ids = [p['pendencia_id'] for p in pendencias_disparadas if p['pendencia_id']]
+        raise ModeloPendenteError(
+            None,  # type: ignore[arg-type]
+            mensagem=(
+                f'NF nao importada — {len(pendencias_disparadas)} chassi(s) com '
+                f'modelo nao reconhecido. Pendencias criadas: {ids}. '
+                f'Resolva em /hora/modelos/pendencias e re-importe o PDF.'
+            ),
+        )
+
+    # Todos os modelos resolvidos — agora pode criar NF + itens.
     nf = HoraNfEntrada(
         chave_44=nf_data['chave_44'],
         numero_nf=nf_data['numero_nf'],
@@ -154,7 +195,9 @@ def importar_danfe_pdf(
     db.session.add(nf)
     db.session.flush()
 
-    for item in itens_data:
+    for item, modelo in zip(itens_data, modelos_resolvidos):
+        # get_or_create_moto agora seguro — modelo ja resolvido, nao
+        # levanta ModeloPendenteError.
         moto = get_or_create_moto(
             numero_chassi=item['numero_chassi'],
             modelo_nome=item.get('modelo_texto_original'),
@@ -162,6 +205,8 @@ def importar_danfe_pdf(
             numero_motor=item.get('numero_motor'),
             ano_modelo=item.get('ano_modelo'),
             criado_por=criado_por,
+            origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
+            origem_id=nf.id,
         )
 
         db.session.add(HoraNfEntradaItem(
@@ -248,12 +293,16 @@ def editar_nf_item_manual(
             )
 
         # Garante hora_moto do chassi novo; preserva o numero_motor textual.
+        # Pode levantar ModeloPendenteError — caller (rota) trata.
+        from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
         get_or_create_moto(
             numero_chassi=chassi_norm,
             modelo_nome=item.modelo_texto_original,
             cor=item.cor_texto_original or 'NAO_INFORMADA',
             numero_motor=numero_motor_texto_original if numero_motor_texto_original else None,
             criado_por=operador,
+            origem_pendencia=PENDENTE_ORIGEM_NF_ENTRADA,
+            origem_id=item.id,
         )
 
     item.numero_chassi = chassi_norm

@@ -404,13 +404,20 @@ def _upsert_emissao_nfe(
 
 
 def _resolver_modelo_id(codigo_produto: Optional[str]) -> Optional[int]:
+    """Resolve codigo TagPlus -> modelo canonico.
+
+    Migration hora_29: agora consulta resolver_via_tagplus (que cobre
+    HoraModeloAlias com tipo TAGPLUS_CODIGO + fallback legado em
+    hora_tagplus_produto_map). Mantem compat com codigo antigo.
+    """
     if not codigo_produto:
         return None
     cod = str(codigo_produto).strip()
     if not cod:
         return None
-    mapa = HoraTagPlusProdutoMap.query.filter_by(tagplus_codigo=cod).first()
-    return mapa.modelo_id if mapa else None
+    from app.hora.services.modelo_resolver_service import resolver_via_tagplus
+    modelo = resolver_via_tagplus(tagplus_codigo=cod)
+    return modelo.id if modelo else None
 
 
 def _extrair_endereco(dest: dict, nfe: dict) -> dict:
@@ -1368,14 +1375,41 @@ def _criar_itens_da_api(
                 db.session.add(moto)
                 db.session.flush()
             else:
-                moto = get_or_create_moto(
-                    numero_chassi=chassi_norm,
-                    modelo_nome=descricao or codigo_produto or 'MODELO_DESCONHECIDO',
-                    cor=cor_para_moto,
-                    numero_motor=motor,
-                    ano_modelo=ano_final,
-                    criado_por=operador,
-                )
+                # Migration hora_29: get_or_create_moto pode levantar
+                # ModeloPendenteError quando nome nao bate em alias.
+                # Capturamos, registramos divergencia MODELO_PENDENTE e
+                # SKIPAMOS o item — operador resolve via tela /hora/modelos/pendencias.
+                from app.hora.services.modelo_resolver_service import ModeloPendenteError
+                from app.hora.models import PENDENTE_ORIGEM_TAGPLUS_BACKFILL
+                try:
+                    moto = get_or_create_moto(
+                        numero_chassi=chassi_norm,
+                        modelo_nome=descricao or codigo_produto or 'MODELO_DESCONHECIDO',
+                        cor=cor_para_moto,
+                        numero_motor=motor,
+                        ano_modelo=ano_final,
+                        criado_por=operador,
+                        origem_pendencia=PENDENTE_ORIGEM_TAGPLUS_BACKFILL,
+                        origem_id=venda.id,
+                        tagplus_codigo=codigo_produto,
+                    )
+                except ModeloPendenteError as exc:
+                    _registrar_divergencia(
+                        venda_id=venda.id, tipo='MODELO_PENDENTE',
+                        numero_chassi=chassi_norm,
+                        detalhe=(
+                            f'Modelo {(descricao or codigo_produto)!r} nao reconhecido. '
+                            f'Pendencia #{exc.pendencia.id} aguardando decisao em '
+                            f'/hora/modelos/pendencias. Quando resolvida, HoraMoto '
+                            f'sera criada retroativamente.'
+                        ),
+                        valor_conferido=(descricao or codigo_produto or '')[:255],
+                    )
+                    logger.info(
+                        'TagPlus item skip (modelo pendente): chassi=%s pendencia=%s',
+                        chassi_norm, exc.pendencia.id,
+                    )
+                    continue
                 # UPSERT: moto ja existia — atualiza campos que estao em
                 # estado sentinela ('NAO_INFORMADA' / NULL / motor==chassi).
                 if moto_existia:
@@ -2456,13 +2490,25 @@ def executar_backfill_produtos_pecas(
         for prod in data:
             try:
                 ncm = (prod.get('ncm') or '').strip()
-                if ncm.startswith('8711'):
-                    relatorio['puladas_moto'] += 1
-                    continue
                 codigo = (prod.get('codigo') or '').strip()
                 descricao = (prod.get('descricao') or prod.get('nome') or '').strip()
                 tagplus_id = str(prod.get('id') or '').strip()
                 if not codigo or not tagplus_id:
+                    continue
+                # Heuristica de "e moto": NCM 8711* OU ja mapeado como moto.
+                # Necessario porque TagPlus pode retornar NCM vazio (caso real
+                # observado em 2026-05-05): so a checagem NCM falhava em
+                # detectar motos como MT-MC20, MT-X12 10 - 18X etc.
+                e_moto = ncm.startswith('8711')
+                if not e_moto:
+                    e_moto = db.session.query(
+                        HoraTagPlusProdutoMap.id
+                    ).filter(
+                        (HoraTagPlusProdutoMap.tagplus_codigo == codigo)
+                        | (HoraTagPlusProdutoMap.tagplus_produto_id == tagplus_id)
+                    ).first() is not None
+                if e_moto:
+                    relatorio['puladas_moto'] += 1
                     continue
 
                 existing = HoraPeca.query.filter_by(codigo_interno=codigo).first()

@@ -286,14 +286,36 @@ def lojas_externas(q: str, limit: int = _DEFAULT_LIMIT) -> List[dict]:
 
 def modelos(q: str, apenas_ativos: bool = True,
             limit: int = _DEFAULT_LIMIT) -> List[dict]:
-    """Busca modelos por nome (substring). Inclui modelos sem chassi (cadastro novo)."""
+    """Busca modelos por nome (substring) + por aliases. Inclui modelos sem chassi (cadastro novo).
+
+    Migration hora_29: tambem busca em hora_modelo_alias (qualquer tipo)
+    para que o usuario digite "BOB AM" e ache modelo BOB. Modelos absorvidos
+    (merged_em_id NOT NULL) sao automaticamente excluidos.
+    """
+    from app.hora.models import HoraModeloAlias
+
     q_norm = (q or '').strip()
     if len(q_norm) < _MIN_CHARS:
         return []
 
-    base = HoraModelo.query.filter(HoraModelo.nome_modelo.ilike(f'%{q_norm}%'))
+    # Busca por nome direto OU por alias
+    matched_via_alias = (
+        db.session.query(HoraModeloAlias.modelo_id)
+        .filter(HoraModeloAlias.nome_alias.ilike(f'%{q_norm}%'))
+        .subquery()
+    )
+
+    from sqlalchemy import or_
+    base = HoraModelo.query.filter(
+        or_(
+            HoraModelo.nome_modelo.ilike(f'%{q_norm}%'),
+            HoraModelo.id.in_(db.session.query(matched_via_alias.c.modelo_id)),
+        )
+    )
     if apenas_ativos:
         base = base.filter(HoraModelo.ativo.is_(True))
+    # Sempre exclui modelos absorvidos — eles nao sao escolhiveis em UI.
+    base = base.filter(HoraModelo.merged_em_id.is_(None))
     base = base.order_by(HoraModelo.nome_modelo).limit(limit)
     return [
         {

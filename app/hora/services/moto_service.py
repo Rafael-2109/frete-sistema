@@ -9,7 +9,6 @@ from typing import Optional
 
 from app import db
 from app.hora.models import HoraMoto, HoraMotoEvento
-from app.hora.services.cadastro_service import buscar_ou_criar_modelo
 
 
 def get_or_create_moto(
@@ -19,6 +18,12 @@ def get_or_create_moto(
     numero_motor: Optional[str] = None,
     ano_modelo: Optional[int] = None,
     criado_por: Optional[str] = None,
+    *,
+    origem_pendencia: Optional[str] = None,
+    origem_id: Optional[int] = None,
+    tagplus_codigo: Optional[str] = None,
+    tagplus_produto_id: Optional[str] = None,
+    pendenciar: bool = True,
 ) -> HoraMoto:
     """Get-or-create respeitando o invariante insert-once.
 
@@ -26,7 +31,35 @@ def get_or_create_moto(
     imutáveis. Diferenças entre o que já está na base e o que veio na nova
     fonte (ex.: cor diferente na NF vs pedido) NÃO atualizam a linha — elas
     devem virar conferência de divergência no momento do recebimento.
+
+    Resolucao de modelo (migration hora_29):
+        Usa `modelo_resolver_service.resolver_ou_pendenciar` para mapear
+        `modelo_nome` -> HoraModelo canonico via aliases.
+
+        Se modelo NAO resolver:
+          - Se pendenciar=True (default): registra pendencia e levanta
+            `ModeloPendenteError`. Chamador trata (NAO cria HoraMoto sem
+            modelo — invariante 3 exige modelo_id NOT NULL).
+          - Se pendenciar=False: levanta ValueError direto sem pendencia
+            (callsites que ja gerenciam divergencia fora deste service).
+
+    Args:
+        origem_pendencia: PENDENTE_ORIGEM_* (qual fluxo disparou). Default
+            None faz cair em NF_ENTRADA (fluxo mais comum).
+        origem_id: id da entidade que disparou (venda, NF, pedido).
+        tagplus_codigo / tagplus_produto_id: pistas TagPlus para resolver.
+        pendenciar: True cria pendencia + raise; False raise sem pendencia.
+
+    Raises:
+        ModeloPendenteError: modelo nao resolvido + pendencia criada.
+        ValueError: chassi invalido OU pendenciar=False com modelo nao resolvido.
     """
+    from app.hora.models import PENDENTE_ORIGEM_NF_ENTRADA
+    from app.hora.services.modelo_resolver_service import (
+        ModeloPendenteError,
+        resolver_ou_pendenciar,
+    )
+
     numero_chassi_norm = numero_chassi.strip().upper()
     if not numero_chassi_norm:
         raise ValueError("numero_chassi obrigatório")
@@ -37,7 +70,21 @@ def get_or_create_moto(
     if existente:
         return existente
 
-    modelo = buscar_ou_criar_modelo(modelo_nome or 'MODELO_DESCONHECIDO')
+    # Resolve modelo via aliases. Se nao encontrar, cria pendencia (ou
+    # raise ValueError quando pendenciar=False).
+    modelo, pendente = resolver_ou_pendenciar(
+        modelo_nome,
+        origem=(origem_pendencia or PENDENTE_ORIGEM_NF_ENTRADA),
+        origem_id=origem_id,
+        tagplus_codigo=tagplus_codigo,
+        tagplus_produto_id=tagplus_produto_id,
+    )
+    if modelo is None:
+        if pendenciar and pendente is not None:
+            raise ModeloPendenteError(pendente)
+        raise ValueError(
+            f'Modelo {modelo_nome!r} nao reconhecido e pendencia desativada.'
+        )
 
     moto = HoraMoto(
         numero_chassi=numero_chassi_norm,

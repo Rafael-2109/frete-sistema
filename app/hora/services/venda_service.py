@@ -66,6 +66,11 @@ TIPOS_DIVERGENCIA_VENDA = (
     'CNPJ_DESCONHECIDO',
     'TABELA_PRECO_AUSENTE',
     'PRECO_ACIMA_TABELA',
+    # Adicionado migration hora_29: nome do produto na origem (TagPlus,
+    # NF, pedido) nao bate em nenhum HoraModeloAlias — pendencia foi
+    # criada em hora_modelo_pendente. Item da venda fica sem HoraMoto
+    # ate operador resolver em /hora/modelos/pendencias.
+    'MODELO_PENDENTE',
 )
 
 # Estados de NFe que bloqueiam edicao/cancelamento livre da venda.
@@ -1379,22 +1384,17 @@ def importar_nf_saida_pdf(
 def _resolver_modelo_id_por_codigo(codigo_produto: Optional[str]) -> Optional[int]:
     """Resolve modelo_id deterministicamente via tagplus_codigo.
 
-    Caminho principal do BACKFILL TagPlus: o parser DANFE extrai o codigo
-    de produto da seção "Dados do Produto" (ex: 'MT-JETMAX', 'MT-X12'),
-    e este helper busca o `modelo_id` em `hora_tagplus_produto_map`.
-
-    Returns:
-        modelo_id quando ha mapeamento exato; None quando nao ha codigo OU
-        codigo nao mapeado (caller cai no fallback `buscar_ou_criar_modelo`
-        pelo nome textual e registra divergencia).
+    Migration hora_29: usa resolver_via_tagplus (que cobre HoraModeloAlias
+    com tipo TAGPLUS_CODIGO + fallback legado em hora_tagplus_produto_map).
     """
     if not codigo_produto:
         return None
     cod = codigo_produto.strip()
     if not cod:
         return None
-    mapa = HoraTagPlusProdutoMap.query.filter_by(tagplus_codigo=cod).first()
-    return mapa.modelo_id if mapa else None
+    from app.hora.services.modelo_resolver_service import resolver_via_tagplus
+    modelo = resolver_via_tagplus(tagplus_codigo=cod)
+    return modelo.id if modelo else None
 
 
 def _criar_itens_e_eventos(
@@ -1429,14 +1429,39 @@ def _criar_itens_e_eventos(
             db.session.add(moto)
             db.session.flush()
         else:
-            moto = get_or_create_moto(
-                numero_chassi=chassi,
-                modelo_nome=item.get('modelo_texto_original'),
-                cor=item.get('cor_texto_original') or 'NAO_INFORMADA',
-                numero_motor=item.get('numero_motor'),
-                ano_modelo=item.get('ano_modelo'),
-                criado_por=operador,
-            )
+            # Migration hora_29: get_or_create_moto pode levantar
+            # ModeloPendenteError. Capturamos e SKIPAMOS o item — operador
+            # resolve via /hora/modelos/pendencias e re-importa NF (UNIQUE
+            # em chave_44 detecta + atualiza).
+            from app.hora.services.modelo_resolver_service import ModeloPendenteError
+            from app.hora.models import PENDENTE_ORIGEM_DANFE_PDF
+            try:
+                moto = get_or_create_moto(
+                    numero_chassi=chassi,
+                    modelo_nome=item.get('modelo_texto_original'),
+                    cor=item.get('cor_texto_original') or 'NAO_INFORMADA',
+                    numero_motor=item.get('numero_motor'),
+                    ano_modelo=item.get('ano_modelo'),
+                    criado_por=operador,
+                    origem_pendencia=PENDENTE_ORIGEM_DANFE_PDF,
+                    origem_id=venda.id,
+                    tagplus_codigo=codigo_produto,
+                )
+            except ModeloPendenteError as exc:
+                _registrar_divergencia(
+                    venda_id=venda.id, tipo='MODELO_PENDENTE',
+                    numero_chassi=chassi,
+                    detalhe=(
+                        f'Modelo {(item.get("modelo_texto_original") or codigo_produto)!r} '
+                        f'nao reconhecido. Pendencia #{exc.pendencia.id} aguardando '
+                        f'decisao em /hora/modelos/pendencias. Re-importe a NF apos '
+                        f'resolver.'
+                    ),
+                    valor_conferido=(
+                        item.get('modelo_texto_original') or codigo_produto or ''
+                    )[:255],
+                )
+                continue
             # Se chegou ate aqui sem modelo_id resolvido E havia codigo no PDF,
             # operador esqueceu de mapear -> registra divergencia.
             if codigo_produto and not modelo_id_resolvido and not moto_existia:

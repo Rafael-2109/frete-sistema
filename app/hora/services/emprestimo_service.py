@@ -171,11 +171,15 @@ def criar_emprestimo(
                 f'"{modelo.nome_modelo}".'
             )
         if not moto:
+            # Modelo ja existe (validado em _validar_modelo). Resolver
+            # bate via fallback HoraModelo.nome_modelo OU alias NOME_LIVRE.
+            from app.hora.models import PENDENTE_ORIGEM_PEDIDO_MANUAL
             moto = get_or_create_moto(
                 numero_chassi=chassi_norm,
                 modelo_nome=modelo.nome_modelo,
                 cor='NAO_INFORMADA',
                 criado_por=operador,
+                origem_pendencia=PENDENTE_ORIGEM_PEDIDO_MANUAL,
             )
         chassi_saida = None
         chassi_entrada = chassi_norm
@@ -259,11 +263,14 @@ def ressarcir_emprestimo(
                 f'mas o emprestimo e do modelo "{emp.modelo.nome_modelo}".'
             )
         if not moto:
+            # Modelo do emprestimo ja existe — resolver bate via fallback.
+            from app.hora.models import PENDENTE_ORIGEM_PEDIDO_MANUAL
             moto = get_or_create_moto(
                 numero_chassi=chassi_norm,
                 modelo_nome=emp.modelo.nome_modelo,
                 cor='NAO_INFORMADA',
                 criado_por=operador,
+                origem_pendencia=PENDENTE_ORIGEM_PEDIDO_MANUAL,
             )
         emp.chassi_entrada = chassi_norm
         evento_tipo = 'RESSARCIMENTO_SAIDA'

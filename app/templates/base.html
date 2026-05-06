@@ -208,6 +208,17 @@
                     <li><a class="dropdown-item" href="{{ url_for('hora.modelos_lista') }}">
                         <i class="fas fa-motorcycle fa-fw"></i> Modelos
                     </a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('hora.modelos_pendencias_lista') }}">
+                        <i class="fas fa-question-circle fa-fw"></i> Modelos pendentes
+                        {% if hora_pendencias_qtd and hora_pendencias_qtd > 0 %}
+                          <span class="badge bg-warning text-dark ms-1">{{ hora_pendencias_qtd }}</span>
+                        {% endif %}
+                    </a></li>
+                    {% if current_user.tem_perm_hora('modelos', 'aprovar') %}
+                    <li><a class="dropdown-item" href="{{ url_for('hora.modelos_unificar_form') }}">
+                        <i class="fas fa-compress-arrows-alt fa-fw"></i> Unificar modelos
+                    </a></li>
+                    {% endif %}
                     {% endif %}
                     {% if current_user.tem_perm_hora('lojas', 'ver') %}
                     <li><a class="dropdown-item" href="{{ url_for('hora.lojas_lista') }}">

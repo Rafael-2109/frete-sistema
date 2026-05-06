@@ -31,7 +31,6 @@ from app.hora.services import (
     recebimento_audit,
     resolucao_service,
 )
-from app.hora.services.cadastro_service import buscar_ou_criar_modelo
 from app.hora.services.auth_helper import lojas_permitidas_ids, usuario_tem_acesso_a_loja
 
 
@@ -524,18 +523,53 @@ def recebimentos_resolver_aplicar(recebimento_id: int, conferencia_id: int):
 @hora_bp.route('/modelos/criar-rapido', methods=['POST'])
 @require_hora_perm('modelos', 'criar')
 def modelos_criar_rapido():
+    """Cria um modelo intencionalmente (operador clica "Criar modelo X").
+
+    Migration hora_29: usa cadastro_service.criar_modelo direto + adiciona
+    o nome_modelo como HoraModeloAlias NOME_LIVRE (preserva auto-resolucao
+    em ingestoes futuras).
+    """
+    from app.hora.services import cadastro_service
+    from app.hora.models import HoraModeloAlias, ALIAS_TIPO_NOME_LIVRE
+
     nome = (request.form.get('nome_modelo') or '').strip()
     if not nome:
         return jsonify({'ok': False, 'erro': 'nome_modelo obrigatorio'}), 400
     try:
-        modelo = buscar_ou_criar_modelo(nome)
+        # criar_modelo valida unicidade de nome_modelo e levanta ValueError
+        # se ja existe.
+        modelo = cadastro_service.criar_modelo(nome_modelo=nome)
+        # Auto-alias: o proprio nome canonico vira alias para o resolver
+        # bater diretamente em HoraModeloAlias (consistencia com seed).
+        existente = (
+            HoraModeloAlias.query
+            .filter_by(tipo=ALIAS_TIPO_NOME_LIVRE, nome_alias=nome)
+            .first()
+        )
+        if not existente:
+            db.session.add(HoraModeloAlias(
+                modelo_id=modelo.id,
+                nome_alias=nome,
+                tipo=ALIAS_TIPO_NOME_LIVRE,
+                criado_por=getattr(current_user, 'username', None),
+                observacao='Auto-alias do nome_modelo canonico (criar-rapido)',
+            ))
         db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        # Pode ser "ja existe" — tenta recuperar e devolver o existente.
+        modelo = HoraModelo.query.filter_by(nome_modelo=nome).first()
+        if modelo:
+            return jsonify({
+                'ok': True,
+                'modelo_id': modelo.id,
+                'nome_modelo': modelo.nome_modelo,
+                'aviso': 'Modelo ja existia.',
+            })
+        return jsonify({'ok': False, 'erro': str(exc)}), 400
     except IntegrityError:
         db.session.rollback()
         modelo = HoraModelo.query.filter_by(nome_modelo=nome).first()
         if not modelo:
             return jsonify({'ok': False, 'erro': 'falha ao criar/recuperar modelo'}), 500
-    except ValueError as exc:
-        db.session.rollback()
-        return jsonify({'ok': False, 'erro': str(exc)}), 400
     return jsonify({'ok': True, 'modelo_id': modelo.id, 'nome_modelo': modelo.nome_modelo})

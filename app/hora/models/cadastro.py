@@ -76,7 +76,18 @@ class HoraLoja(db.Model):
 
 
 class HoraModelo(db.Model):
-    """Catálogo de modelos de moto elétrica comercializados pela HORA."""
+    """Catálogo de modelos de moto elétrica comercializados pela HORA.
+
+    Unificacao N->1 (migration hora_29):
+      Quando um modelo e absorvido em outro (merge), o registro permanece
+      na tabela mas ativo=False + merged_em_id aponta para o canonico.
+      Permite auditoria — ninguem perde rastreio de "este chassi foi
+      cadastrado originalmente como BOB AM, depois unificado em BOB".
+
+      `aliases` (backref de HoraModeloAlias) lista os N nomes que
+      apontam para este modelo. Resolver de ingestao consulta primeiro
+      essa tabela antes de criar pendencia.
+    """
     __tablename__ = 'hora_modelo'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -85,8 +96,31 @@ class HoraModelo(db.Model):
     descricao = db.Column(db.Text, nullable=True)
     ativo = db.Column(db.Boolean, nullable=False, default=True)
 
+    # Auditoria de merge (migration hora_29). Quando este modelo e
+    # absorvido em outro, ativo=False + merged_em_id=canonico.id.
+    merged_em_id = db.Column(
+        db.Integer,
+        db.ForeignKey('hora_modelo.id'),
+        nullable=True,
+        index=True,
+    )
+    merged_em = db.Column(db.DateTime, nullable=True)
+    merged_por = db.Column(db.String(100), nullable=True)
+
+    canonico = db.relationship(
+        'HoraModelo',
+        remote_side=[id],
+        foreign_keys=[merged_em_id],
+        backref='absorvidos',
+    )
+
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
+
+    @property
+    def foi_unificado(self) -> bool:
+        """True se este modelo foi absorvido em outro (canonico)."""
+        return self.merged_em_id is not None
 
     def __repr__(self):
         return f'<HoraModelo {self.nome_modelo}>'

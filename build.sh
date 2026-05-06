@@ -77,6 +77,23 @@ echo "HORA 23: emprestimo entre lojas..."
 python scripts/migrations/hora_23_emprestimo_moto.py \
     || echo "⚠️ Migration hora_23 falhou, continuando deploy..."
 
+# 9. HORA 29: unificacao de modelos (N nomes -> 1 canonico).
+# Cria hora_modelo_alias + hora_modelo_pendente + ALTER hora_modelo
+# (3 cols: merged_em_id, merged_em, merged_por). Idempotente.
+echo "HORA 29: unificacao de modelos (alias + pendencias)..."
+python scripts/migrations/hora_29_modelo_alias.py \
+    || echo "⚠️ Migration hora_29 falhou, continuando deploy..."
+
+# 10. HORA 30: seed inicial de hora_modelo_alias.
+# Para cada modelo existente, cria alias NOME_LIVRE com nome_modelo
+# + aliases TAGPLUS_CODIGO/TAGPLUS_PRODUTO_ID a partir do legado
+# hora_tagplus_produto_map. Tambem cria modelo sentinela DESCONHECIDO
+# com aliases para CHASSI_EXTRA_DESCONHECIDO/MODELO_DESCONHECIDO/NAO_INFORMADO
+# (evita pendencias em loop em recebimento). Idempotente.
+echo "HORA 30: seed de aliases iniciais..."
+python scripts/migrations/hora_30_seed_aliases_atuais.py \
+    || echo "⚠️ Seed hora_30 falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

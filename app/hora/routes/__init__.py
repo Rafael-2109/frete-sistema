@@ -16,6 +16,7 @@ hora_bp = Blueprint(
 from . import (  # noqa: E402, F401
     dashboard,
     cadastros,
+    modelos_unificacao,
     pedidos,
     nfs,
     recebimentos,
