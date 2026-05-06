@@ -355,6 +355,143 @@
   </table>
 </div>
 
+{# ===================== Pecas em NF de entrada ===================== #}
+<h4 class="mt-4 mb-2"><i class="fas fa-cogs"></i> Peças da NF ({{ nf.itens_peca|length }})</h4>
+<div class="card mb-3">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Código</th>
+          <th>Descrição</th>
+          <th class="text-end">Qtd NF</th>
+          <th class="text-end">Preço unit.</th>
+          <th class="text-end">Total</th>
+          <th>Conferência</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in nf.itens_peca %}
+          <tr>
+            <td><code>{{ it.peca.codigo_interno }}</code></td>
+            <td>{{ it.peca.descricao }}</td>
+            <td class="text-end">{{ it.qtd_nf|numero_br(3) }} {{ it.peca.unidade }}</td>
+            <td class="text-end">{{ it.preco_real|valor_br }}</td>
+            <td class="text-end"><strong>{{ (it.qtd_nf * it.preco_real)|valor_br }}</strong></td>
+            <td>
+              {% if it.conferida %}
+                {% if it.divergencia_qtd == 'OK' %}<span class="badge bg-success">OK ({{ it.qtd_conferida|numero_br(3) }})</span>
+                {% elif it.divergencia_qtd == 'FALTA' %}<span class="badge bg-warning text-dark">FALTA ({{ it.qtd_conferida|numero_br(3) }} de {{ it.qtd_nf|numero_br(3) }})</span>
+                {% elif it.divergencia_qtd == 'SOBRA' %}<span class="badge bg-info">SOBRA ({{ it.qtd_conferida|numero_br(3) }} de {{ it.qtd_nf|numero_br(3) }})</span>
+                {% elif it.divergencia_qtd == 'AVARIA' %}<span class="badge bg-danger">AVARIA</span>
+                {% endif %}
+                <br><small class="text-muted">por {{ it.conferida_por or '-' }} em {{ it.conferida_em.strftime('%d/%m %H:%M') }}</small>
+              {% else %}
+                <span class="badge bg-secondary">Pendente</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              {% if current_user.tem_perm_hora('recebimentos', 'editar') %}
+              <button type="button" class="btn btn-sm btn-outline-primary"
+                      data-bs-toggle="modal" data-bs-target="#modalConferirPeca{{ it.id }}"
+                      title="Conferir">
+                <i class="fas fa-check"></i>
+              </button>
+              {% endif %}
+              {% if not it.conferida and current_user.tem_perm_hora('nfs', 'editar') %}
+              <form method="post" action="{{ url_for('hora.nfs_remover_item_peca', nf_id=nf.id, item_id=it.id) }}"
+                    class="d-inline" onsubmit="return confirm('Remover {{ it.peca.codigo_interno }} desta NF?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" title="Remover"><i class="fas fa-trash"></i></button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+
+          {% if current_user.tem_perm_hora('recebimentos', 'editar') %}
+          {# Modal de conferencia da peca {{ it.id }} #}
+          <div class="modal fade" id="modalConferirPeca{{ it.id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+              <form method="post" action="{{ url_for('hora.nfs_conferir_item_peca', nf_id=nf.id, item_id=it.id) }}"
+                    enctype="multipart/form-data" class="modal-content">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                  <h5 class="modal-title"><i class="fas fa-check"></i> Conferir {{ it.peca.codigo_interno }}</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  <p class="text-muted small mb-3">
+                    NF declarou <strong>{{ it.qtd_nf|numero_br(3) }} {{ it.peca.unidade }}</strong>.
+                    Informe a quantidade efetivamente recebida.
+                  </p>
+                  <div class="mb-3">
+                    <label class="form-label">Qtd conferida <span class="text-danger">*</span></label>
+                    <input type="text" name="qtd_conferida" class="form-control" inputmode="decimal"
+                           value="{{ it.qtd_conferida if it.qtd_conferida is not none else it.qtd_nf }}" required>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Status</label>
+                    <select name="divergencia_qtd" class="form-select">
+                      <option value="OK" {% if it.divergencia_qtd == 'OK' or not it.conferida %}selected{% endif %}>OK</option>
+                      <option value="FALTA" {% if it.divergencia_qtd == 'FALTA' %}selected{% endif %}>FALTA</option>
+                      <option value="SOBRA" {% if it.divergencia_qtd == 'SOBRA' %}selected{% endif %}>SOBRA</option>
+                      <option value="AVARIA" {% if it.divergencia_qtd == 'AVARIA' %}selected{% endif %}>AVARIA</option>
+                    </select>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Foto (opcional)</label>
+                    <input type="file" name="foto" accept="image/*" class="form-control">
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                  <button type="submit" class="btn btn-primary">Confirmar conferência</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          {% endif %}
+        {% else %}
+          <tr><td colspan="7" class="text-center text-muted">Nenhuma peça nesta NF.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if current_user.tem_perm_hora('nfs', 'editar') %}
+  <div class="card-body border-top">
+    <h6>Adicionar peça à NF</h6>
+    <form method="post" action="{{ url_for('hora.nfs_adicionar_item_peca', nf_id=nf.id) }}"
+          class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4">
+        <label class="form-label small mb-0">Peça</label>
+        <input type="text" id="nf-add-peca-txt" class="form-control form-control-sm"
+               data-hora-autocomplete="peca" data-hora-target-id="nf-add-peca-id"
+               placeholder="Buscar peça (min. 2 chars)" required>
+        <input type="hidden" name="peca_id" id="nf-add-peca-id" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-0">Qtd NF</label>
+        <input type="text" name="qtd_nf" class="form-control form-control-sm" inputmode="decimal" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-0">Preço unitário</label>
+        <input type="text" name="preco_real" class="form-control form-control-sm" inputmode="decimal" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-0">Texto original (opcional)</label>
+        <input type="text" name="modelo_texto_original" class="form-control form-control-sm" maxlength="255">
+      </div>
+      <div class="col-md-auto">
+        <button class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Adicionar</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
 <a href="{{ url_for('hora.nfs_lista') }}" class="btn btn-secondary">Voltar</a>
 
 {% if pode_editar_nf %}

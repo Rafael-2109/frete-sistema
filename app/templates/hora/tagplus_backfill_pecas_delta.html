@@ -1,0 +1,75 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2><i class="fas fa-magic"></i> Backfill Peças Faltantes (delta de valor)</h2>
+</div>
+
+<div class="card p-3 mb-3" style="max-width:780px;">
+  <p class="mb-2">
+    Detecta vendas <strong>FATURADO</strong> em que <code>valor_total &gt; soma(itens motos + itens peças)</code>.
+    O delta indica que <strong>peças foram ignoradas</strong> na importação original (porque não estavam
+    mapeadas no TagPlus na época).
+  </p>
+  <p class="small text-muted mb-3">
+    O job repuxa cada NFe via <code>GET /nfes/{id}</code> e classifica itens cujo código bate em
+    <code>hora_tagplus_peca_map</code> como peças, criando <code>hora_venda_item_peca</code>.
+    <strong>Idempotente</strong> — não duplica peças já registradas.
+  </p>
+
+  {% if current_user.tem_perm_hora('tagplus', 'editar') %}
+  <form method="post" action="{{ url_for('hora.tagplus_backfill_pecas_delta_executar') }}"
+        class="row g-2 align-items-end"
+        onsubmit="return confirm('Executar agora?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-3">
+      <label class="form-label small mb-0">Limite de vendas a reprocessar</label>
+      <input type="number" name="limite" value="50" min="1" max="500" class="form-control form-control-sm">
+    </div>
+    <div class="col-md-auto">
+      <button class="btn btn-primary"><i class="fas fa-play"></i> Executar</button>
+    </div>
+  </form>
+  {% endif %}
+
+  <p class="small text-muted mt-3 mb-0">
+    <i class="fas fa-info-circle"></i> Antes de executar este backfill, rode primeiro o
+    <a href="{{ url_for('hora.tagplus_backfill_produtos') }}">backfill de produtos</a>
+    para garantir que as peças estejam cadastradas e mapeadas.
+  </p>
+</div>
+
+{% if relatorio %}
+<div class="card p-3" style="max-width:780px;">
+  <h5>Relatório da última execução</h5>
+  <dl class="row mb-0">
+    <dt class="col-sm-5">Vendas analisadas</dt><dd class="col-sm-7">{{ relatorio.analisadas }}</dd>
+    <dt class="col-sm-5">Vendas reprocessadas (com delta)</dt>
+    <dd class="col-sm-7"><strong>{{ relatorio.reprocessadas }}</strong></dd>
+    <dt class="col-sm-5">Peças criadas</dt>
+    <dd class="col-sm-7"><strong class="text-success">{{ relatorio.pecas_criadas }}</strong></dd>
+    <dt class="col-sm-5">Sem emissão TagPlus (pulado)</dt>
+    <dd class="col-sm-7"><span class="text-muted">{{ relatorio.sem_emissao }}</span></dd>
+    <dt class="col-sm-5">Item sem mapping de peça (pulado)</dt>
+    <dd class="col-sm-7">
+      {% if relatorio.sem_mapping > 0 %}
+        <span class="text-warning">{{ relatorio.sem_mapping }} — rode backfill de produtos primeiro</span>
+      {% else %}<span class="text-muted">0</span>{% endif %}
+    </dd>
+    <dt class="col-sm-5">Erros</dt>
+    <dd class="col-sm-7">
+      {% if relatorio.erros == 0 %}<span class="text-success">0</span>
+      {% else %}<span class="text-danger">{{ relatorio.erros }}</span>{% endif %}
+    </dd>
+  </dl>
+
+  {% if relatorio.detalhes %}
+  <hr>
+  <h6>Detalhes:</h6>
+  <ul class="small">
+    {% for d in relatorio.detalhes %}<li><code>{{ d }}</code></li>{% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

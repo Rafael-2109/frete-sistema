@@ -21,7 +21,8 @@
         current_user.tem_perm_hora('modelos', 'ver') or
         current_user.tem_perm_hora('lojas', 'ver') or
         current_user.tem_perm_hora('usuarios', 'ver') or
-        current_user.tem_perm_hora('tagplus', 'ver') %}
+        current_user.tem_perm_hora('tagplus', 'ver') or
+        current_user.tem_perm_hora('pecas_cadastro', 'ver') %}
     {% if show_cadastros %}
     <div class="nav-item dropdown">
       <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.modelos') or request.endpoint.startswith('hora.lojas') or request.endpoint.startswith('hora.permissoes') or 'forma_map' in (request.endpoint or '')) %}active{% endif %}"
@@ -32,6 +33,11 @@
         {% if current_user.tem_perm_hora('modelos', 'ver') %}
           <li><a class="dropdown-item" href="{{ url_for('hora.modelos_lista') }}">
             <i class="fas fa-motorcycle fa-fw"></i> Modelos
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('pecas_cadastro', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.pecas_cadastro_lista') }}">
+            <i class="fas fa-cogs fa-fw"></i> Peças
           </a></li>
         {% endif %}
         {% if current_user.tem_perm_hora('lojas', 'ver') %}
@@ -62,7 +68,8 @@
         current_user.tem_perm_hora('tagplus', 'ver') or
         current_user.tem_perm_hora('transferencias', 'ver') or
         current_user.tem_perm_hora('emprestimos', 'ver') or
-        current_user.tem_perm_hora('estoque', 'ver') %}
+        current_user.tem_perm_hora('estoque', 'ver') or
+        current_user.tem_perm_hora('pecas_estoque', 'ver') %}
     {% if show_mov %}
     <div class="nav-item dropdown">
       <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pedidos') or request.endpoint.startswith('hora.nfs') or request.endpoint.startswith('hora.recebimentos') or request.endpoint.startswith('hora.vendas') or request.endpoint.startswith('hora.transferencia') or request.endpoint.startswith('hora.emprestimos') or request.endpoint.startswith('hora.estoque') or request.endpoint == 'hora.tagplus_emissoes_lista' or request.endpoint == 'hora.venda_nfe_status') %}active{% endif %}"
@@ -112,6 +119,11 @@
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{{ url_for('hora.estoque_lista') }}">
             <i class="fas fa-warehouse fa-fw"></i> Estoque
+          </a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('pecas_estoque', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.pecas_estoque_lista') }}">
+            <i class="fas fa-cogs fa-fw"></i> Estoque de Peças
           </a></li>
         {% endif %}
       </ul>
@@ -180,11 +192,20 @@
           <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_produto_map_lista') }}">
             <i class="fas fa-link fa-fw"></i> Mapeamento de produtos
           </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_peca_map_lista') }}">
+            <i class="fas fa-link fa-fw"></i> Mapeamento de peças
+          </a></li>
           <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_backfill') }}">
             <i class="fas fa-cloud-download-alt fa-fw"></i> Backfill via API (puxar NFs)
           </a></li>
           <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_backfill_pedidos') }}">
             <i class="fas fa-magic fa-fw"></i> Backfill enriquecedor (pedidos)
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_backfill_produtos') }}">
+            <i class="fas fa-cloud-download-alt fa-fw"></i> Backfill catálogo de peças
+          </a></li>
+          <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_backfill_pecas_delta') }}">
+            <i class="fas fa-magic fa-fw"></i> Backfill peças faltantes (delta)
           </a></li>
           <li><a class="dropdown-item" href="{{ url_for('hora.tagplus_departamento_map') }}">
             <i class="fas fa-store fa-fw"></i> De-para Loja (departamento TagPlus)

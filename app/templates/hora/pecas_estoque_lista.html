@@ -1,0 +1,71 @@
+{% extends "hora/base.html" %}
+{% from "hora/_filtros.html" import filtros_form, filtro_loja %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-warehouse"></i> Estoque de Peças</h2>
+  <div class="d-flex gap-2">
+    {% if current_user.tem_perm_hora('pecas_estoque', 'editar') %}
+    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAjuste">
+      <i class="fas fa-edit"></i> Ajuste manual
+    </button>
+    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalTransf">
+      <i class="fas fa-exchange-alt"></i> Transferência
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+{% call filtros_form(url_for('hora.pecas_estoque_lista')) %}
+  {{ filtro_loja(name='loja_id', valor=filtro_loja_id, lojas=lojas_ativas) }}
+  <div class="col-md-4">
+    <label class="form-label small mb-1">Busca peça</label>
+    <input type="text" name="busca" value="{{ filtro_busca or '' }}"
+           class="form-control form-control-sm" placeholder="Código ou descrição">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label small mb-1">Estoque</label>
+    <div class="form-check form-check-inline mt-1">
+      <input class="form-check-input" type="checkbox" name="somente_positivo" value="1"
+             id="chkPos" {% if filtro_somente_positivo %}checked{% endif %}>
+      <label class="form-check-label" for="chkPos">Apenas com saldo &gt; 0</label>
+    </div>
+  </div>
+  <div class="col-md-auto d-flex gap-2 align-items-end">
+    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-filter"></i> Filtrar</button>
+    <a href="{{ url_for('hora.pecas_estoque_lista') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-eraser"></i> Limpar
+    </a>
+  </div>
+{% endcall %}
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead><tr>
+      <th>Código</th><th>Peça</th><th>Loja</th>
+      <th class="text-end">Saldo</th><th>Un.</th>
+      <th class="text-end">Ações</th>
+    </tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><code>{{ r.codigo_interno }}</code></td>
+        <td>{{ r.descricao }}</td>
+        <td>{{ r.loja_nome }}</td>
+        <td class="text-end"><strong>{{ r.saldo|numero_br(3) }}</strong></td>
+        <td>{{ r.unidade }}</td>
+        <td class="text-end">
+          <a href="{{ url_for('hora.pecas_estoque_detalhe', peca_id=r.peca_id, loja_id=r.loja_id) }}"
+             class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i> Detalhe</a>
+        </td>
+      </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-center text-muted">Nenhum saldo encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include 'hora/pecas_estoque_ajuste_modal.html' %}
+{% include 'hora/pecas_estoque_transferencia_modal.html' %}
+{% endblock %}

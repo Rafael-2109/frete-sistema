@@ -31,6 +31,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Callable, Iterator, Optional
 
+from flask import current_app
+
 from app import db
 from app.hora.models import HoraMoto, HoraMotoEvento, HoraVenda, HoraVendaItem
 from app.hora.models.tagplus import (
@@ -1071,10 +1073,14 @@ def _atualizar_moto_complementar(
     """UPSERT de campos complementares de `HoraMoto` durante backfill TagPlus.
 
     Excecao controlada ao invariante 3 (insert-once): so atualiza campos que
-    estao em estado sentinela (NULL, 'NAO_INFORMADA' ou motor==chassi —
+    estao em estado sentinela (NULL, 'NAO_INFORMADA' ou motor==chassi -
     sinal do bug regex que gravava motor como chassi). NUNCA sobrescreve
     valores ja preenchidos com dados reais (preserva edicoes de operador
     e mantem rastreabilidade da identidade da moto).
+
+    PROTECAO DE CHASSI (2026-05-05): se chassi esta vinculado a HoraPedidoItem
+    ou HoraNfEntradaItem, considera-se fonte de verdade. NAO atualiza nada -
+    apenas registra warning. Vide chassi_protecao_service.chassi_protegido().
 
     Para motor: alem da checagem de campo vazio/sentinela, valida UNIQUE
     via `_resolver_conflito_motor_unique` (consolida moto-bug ou pula).
@@ -1082,6 +1088,25 @@ def _atualizar_moto_complementar(
     Returns:
         True se algum campo foi alterado, False caso contrario.
     """
+    # Defesa contra parser quebrar ciclo de chassi vinculado a compra.
+    from app.hora.services.chassi_protecao_service import chassi_protegido
+    if chassi_protegido(moto.numero_chassi):
+        cor_norm = (cor_nova or '').strip().upper() or None
+        motor_norm = (motor_novo or '').strip().upper() or None
+        if (
+            (cor_norm and cor_norm != moto.cor and moto.cor not in (None, '', 'NAO_INFORMADA'))
+            or (motor_norm and motor_norm != moto.numero_motor
+                and moto.numero_motor not in (None, '', moto.numero_chassi))
+        ):
+            current_app.logger.warning(
+                'TagPlus backfill: chassi PROTEGIDO %s - parser sugeriu '
+                'cor=%r/motor=%r mas dados atuais cor=%r/motor=%r preservados '
+                '(fonte de verdade: pedido/NF entrada).',
+                moto.numero_chassi, cor_norm, motor_norm,
+                moto.cor, moto.numero_motor,
+            )
+        return False
+
     alterou = False
 
     cor_norm = (cor_nova or '').strip().upper() or None
@@ -2366,3 +2391,247 @@ def enfileirar_backfill_job(
     job.rq_job_id = rq_job.id
     db.session.commit()
     return job.id
+
+
+# ============================================================
+# Backfill catalogo de produtos TagPlus -> hora_peca
+# ============================================================
+
+def _resolver_peca_id_por_codigo(codigo_produto: Optional[str]) -> Optional[int]:
+    """Lookup de codigo TagPlus em hora_tagplus_peca_map."""
+    if not codigo_produto:
+        return None
+    from app.hora.models import HoraTagPlusPecaMap
+    cod = str(codigo_produto).strip()
+    if not cod:
+        return None
+    m = HoraTagPlusPecaMap.query.filter_by(tagplus_codigo=cod).first()
+    return m.peca_id if m else None
+
+
+def executar_backfill_produtos_pecas(
+    operador: Optional[str] = None,
+) -> dict:
+    """Itera GET /produtos do TagPlus e popula hora_peca + hora_tagplus_peca_map.
+
+    Heuristica: produtos com NCM iniciando em '8711' (motos eletricas)
+    sao PULADOS — nao entram como peca.
+
+    Idempotente: re-execucao atualiza, nao duplica.
+
+    Returns:
+        dict com contadores: criadas, atualizadas, puladas_moto, erros.
+    """
+    from app.hora.models import HoraPeca, HoraTagPlusPecaMap, HoraTagPlusConta
+    from app.hora.services.tagplus.api_client import ApiClient
+
+    conta = HoraTagPlusConta.ativa()
+    api = ApiClient(conta)
+    page = 1
+    relatorio = {'criadas': 0, 'atualizadas': 0, 'puladas_moto': 0, 'erros': 0}
+    erros_detalhe: list[str] = []
+
+    while True:
+        try:
+            r = api.get('/produtos', params={'per_page': 100, 'page': page})
+        except Exception as exc:
+            relatorio['erros'] += 1
+            erros_detalhe.append(f'page={page}: {exc}')
+            break
+
+        if r.status_code != 200:
+            relatorio['erros'] += 1
+            erros_detalhe.append(f'page={page}: status={r.status_code}')
+            break
+
+        try:
+            data = r.json() or []
+        except ValueError:
+            data = []
+        if isinstance(data, dict):
+            data = data.get('data') or data.get('produtos') or []
+        if not data:
+            break
+
+        for prod in data:
+            try:
+                ncm = (prod.get('ncm') or '').strip()
+                if ncm.startswith('8711'):
+                    relatorio['puladas_moto'] += 1
+                    continue
+                codigo = (prod.get('codigo') or '').strip()
+                descricao = (prod.get('descricao') or prod.get('nome') or '').strip()
+                tagplus_id = str(prod.get('id') or '').strip()
+                if not codigo or not tagplus_id:
+                    continue
+
+                existing = HoraPeca.query.filter_by(codigo_interno=codigo).first()
+                if existing:
+                    p = existing
+                    if descricao and not p.descricao:
+                        p.descricao = descricao
+                    if ncm and not p.ncm:
+                        p.ncm = ncm
+                    relatorio['atualizadas'] += 1
+                else:
+                    unidade = (prod.get('unidade') or 'UN').strip().upper()[:5]
+                    p = HoraPeca(
+                        codigo_interno=codigo,
+                        descricao=descricao or codigo,
+                        ncm=ncm or None,
+                        cfop_default='5.102',
+                        unidade=unidade or 'UN',
+                    )
+                    db.session.add(p)
+                    db.session.flush()
+                    relatorio['criadas'] += 1
+
+                m = HoraTagPlusPecaMap.query.filter_by(peca_id=p.id).first()
+                if not m:
+                    m = HoraTagPlusPecaMap(peca_id=p.id, tagplus_produto_id=tagplus_id)
+                    db.session.add(m)
+                m.tagplus_codigo = codigo
+                if not m.tagplus_produto_id:
+                    m.tagplus_produto_id = tagplus_id
+            except Exception as exc:
+                relatorio['erros'] += 1
+                erros_detalhe.append(f'page={page} prod={prod.get("codigo")}: {exc}')
+                continue
+
+        db.session.commit()
+        page += 1
+        if len(data) < 100:
+            break
+
+    relatorio['erros_detalhe'] = erros_detalhe[:20]
+    return relatorio
+
+
+# ============================================================
+# Backfill delta: NFes com valor_total > soma(itens) -> tem peca
+# ============================================================
+
+def executar_backfill_pecas_faltantes(
+    operador: Optional[str] = None,
+    limite: int = 100,
+) -> dict:
+    """Reprocessa vendas FATURADO com delta valor_total > soma(itens) > 0.
+
+    Esse delta indica que peca foi ignorada na importacao original.
+    Repuxa NFe via GET /nfes/{id} e tenta classificar itens novos como pecas.
+    """
+    from sqlalchemy import func
+    from app.hora.models import (
+        HoraVendaItemPeca, HoraTagPlusConta,
+    )
+    from app.hora.services.tagplus.api_client import ApiClient
+
+    sub_motos = (
+        db.session.query(
+            HoraVendaItem.venda_id.label('vid'),
+            func.coalesce(func.sum(HoraVendaItem.preco_final), 0).label('soma_motos'),
+        ).group_by(HoraVendaItem.venda_id).subquery()
+    )
+    sub_pecas = (
+        db.session.query(
+            HoraVendaItemPeca.venda_id.label('vid'),
+            func.coalesce(func.sum(HoraVendaItemPeca.preco_final), 0).label('soma_pecas'),
+        ).group_by(HoraVendaItemPeca.venda_id).subquery()
+    )
+
+    rows = (
+        db.session.query(
+            HoraVenda, sub_motos.c.soma_motos, sub_pecas.c.soma_pecas,
+        )
+        .outerjoin(sub_motos, sub_motos.c.vid == HoraVenda.id)
+        .outerjoin(sub_pecas, sub_pecas.c.vid == HoraVenda.id)
+        .filter(HoraVenda.status == VENDA_STATUS_FATURADO)
+        .limit(limite * 5)
+        .all()
+    )
+
+    relatorio = {
+        'analisadas': 0, 'reprocessadas': 0, 'pecas_criadas': 0,
+        'sem_emissao': 0, 'sem_mapping': 0, 'erros': 0,
+        'detalhes': [],
+    }
+
+    conta = HoraTagPlusConta.ativa()
+    api = ApiClient(conta)
+
+    for venda, sm, sp in rows:
+        if relatorio['reprocessadas'] >= limite:
+            break
+        relatorio['analisadas'] += 1
+        soma = Decimal(str(sm or 0)) + Decimal(str(sp or 0))
+        delta = Decimal(str(venda.valor_total or 0)) - soma
+        if delta <= Decimal('0.01'):
+            continue
+
+        emissao = HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda.id).first()
+        if not emissao or not emissao.tagplus_nfe_id:
+            relatorio['sem_emissao'] += 1
+            continue
+
+        try:
+            r = api.get(f'/nfes/{emissao.tagplus_nfe_id}')
+            if r.status_code != 200:
+                relatorio['erros'] += 1
+                continue
+            nfe_data = r.json() or {}
+            itens_api = nfe_data.get('itens', []) if isinstance(nfe_data, dict) else []
+
+            ids_motos_existentes = {vi.numero_chassi for vi in venda.itens}
+            criou_alguma = False
+            for it in itens_api:
+                prod = it.get('produto') if isinstance(it, dict) else None
+                codigo = None
+                if isinstance(prod, dict):
+                    codigo = (prod.get('codigo') or '').strip() or None
+                elif isinstance(prod, (str, int)):
+                    codigo = str(prod).strip() or None
+                if not codigo:
+                    continue
+
+                # Se codigo bate com mapping de peca, cria HoraVendaItemPeca.
+                peca_id = _resolver_peca_id_por_codigo(codigo)
+                if not peca_id:
+                    relatorio['sem_mapping'] += 1
+                    continue
+
+                # Idempotencia: nao duplicar peca ja registrada
+                ja_existe = HoraVendaItemPeca.query.filter_by(
+                    venda_id=venda.id, peca_id=peca_id,
+                ).first()
+                if ja_existe:
+                    continue
+
+                qtd = Decimal(str(it.get('qtd') or 0))
+                valor_unit = Decimal(str(it.get('valor_unitario') or 0))
+                desconto_unit = Decimal(str(it.get('valor_desconto') or 0))
+                if qtd <= 0 or valor_unit <= 0:
+                    continue
+
+                preco_final = qtd * (valor_unit - desconto_unit)
+                vp = HoraVendaItemPeca(
+                    venda_id=venda.id, peca_id=peca_id,
+                    qtd=qtd,
+                    preco_unitario_referencia=valor_unit,
+                    desconto_aplicado=desconto_unit,
+                    preco_final=preco_final,
+                )
+                db.session.add(vp)
+                db.session.flush()
+                relatorio['pecas_criadas'] += 1
+                criou_alguma = True
+
+            if criou_alguma:
+                relatorio['reprocessadas'] += 1
+                db.session.commit()
+        except Exception as exc:
+            relatorio['erros'] += 1
+            relatorio['detalhes'].append(f'venda={venda.id}: {exc}')
+            db.session.rollback()
+            continue
+
+    return relatorio

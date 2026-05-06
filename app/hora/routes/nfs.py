@@ -846,3 +846,79 @@ def nfs_match_confirmar(nf_id: int):
     except ValueError as exc:
         flash(f'Erro: {exc}', 'danger')
         return redirect(url_for('hora.nfs_match', nf_id=nf.id))
+
+
+# ========================================================================
+# Itens PECA em NF de entrada (XOR moto/peca aplicado em camada de UI)
+# ========================================================================
+
+@hora_bp.route('/nfs/<int:nf_id>/itens-peca/novo', methods=['POST'])
+@require_hora_perm('nfs', 'editar')
+def nfs_adicionar_item_peca(nf_id: int):
+    """Adiciona linha de peca em NF entrada (manual)."""
+    from decimal import Decimal, InvalidOperation
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+
+    try:
+        peca_id_str = (request.form.get('peca_id') or '').strip()
+        if not peca_id_str.isdigit():
+            raise ValueError('Selecione uma peca')
+        qtd_str = (request.form.get('qtd_nf') or '').strip().replace(',', '.')
+        preco_str = (request.form.get('preco_real') or '').strip().replace(',', '.')
+        if not qtd_str or not preco_str:
+            raise ValueError('Quantidade e preco obrigatorios')
+        nf_entrada_service.adicionar_item_peca_nf(
+            nf_id=nf_id,
+            peca_id=int(peca_id_str),
+            qtd_nf=Decimal(qtd_str),
+            preco_real=Decimal(preco_str),
+            modelo_texto_original=(request.form.get('modelo_texto_original') or '') or None,
+        )
+        flash('Peca adicionada a NF.', 'success')
+    except (ValueError, InvalidOperation) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf_id))
+
+
+@hora_bp.route('/nfs/<int:nf_id>/itens-peca/<int:item_id>/remover', methods=['POST'])
+@require_hora_perm('nfs', 'editar')
+def nfs_remover_item_peca(nf_id: int, item_id: int):
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+    try:
+        nf_entrada_service.remover_item_peca_nf(item_id)
+        flash('Peca removida da NF.', 'success')
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf_id))
+
+
+@hora_bp.route('/nfs/<int:nf_id>/itens-peca/<int:item_id>/conferir', methods=['POST'])
+@require_hora_perm('recebimentos', 'editar')
+def nfs_conferir_item_peca(nf_id: int, item_id: int):
+    """Confere item peca + emite ENTRADA_NF no estoque."""
+    from decimal import Decimal, InvalidOperation
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+    try:
+        qtd_conf = Decimal((request.form.get('qtd_conferida') or '0').replace(',', '.'))
+        diverg = (request.form.get('divergencia_qtd') or 'OK').strip().upper()
+        foto = request.files.get('foto')
+        nf_entrada_service.conferir_item_peca_nf(
+            nf_item_id=item_id,
+            qtd_conferida=qtd_conf,
+            divergencia_qtd=diverg,
+            foto_file=foto,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        flash(f'Peca conferida (status: {diverg}). Saldo atualizado.', 'success')
+    except (ValueError, InvalidOperation) as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf_id))

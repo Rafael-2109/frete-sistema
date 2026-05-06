@@ -19,7 +19,7 @@ from app.hora.models import (
     HoraRecebimento,
     HoraRecebimentoConferencia,
 )
-from app.hora.services import devolucao_service, peca_service
+from app.hora.services import devolucao_service, peca_faltando_service as peca_service
 from app.hora.services.moto_service import registrar_evento
 
 

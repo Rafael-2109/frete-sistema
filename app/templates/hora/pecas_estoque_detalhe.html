@@ -1,0 +1,50 @@
+{% extends "hora/base.html" %}
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <h2>
+    <i class="fas fa-warehouse"></i> {{ peca.codigo_interno }}
+    <small class="text-muted">@ {{ loja.rotulo_display }}</small>
+  </h2>
+  <a href="{{ url_for('hora.pecas_estoque_lista') }}" class="btn btn-sm btn-outline-secondary">← Voltar</a>
+</div>
+
+<div class="row">
+  <div class="col-md-4">
+    <div class="card p-3 mb-3 text-center">
+      {% if foto_url %}<img src="{{ foto_url }}" class="img-fluid rounded mb-2" style="max-height:200px;">{% endif %}
+      <h5 class="mb-0">{{ peca.descricao }}</h5>
+      <p class="display-6 my-3">{{ saldo|numero_br(3) }} <small class="text-muted">{{ peca.unidade }}</small></p>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <h5>Histórico de movimentos ({{ movimentos|length }})</h5>
+    <div class="card mb-3">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>Quando</th><th>Tipo</th><th class="text-end">Qtd</th><th>Motivo / Ref</th><th>Operador</th></tr>
+          </thead>
+          <tbody>
+            {% for m in movimentos %}
+            <tr>
+              <td><small>{{ m.criado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+              <td><span class="badge bg-{% if m.qtd > 0 %}success{% else %}warning text-dark{% endif %}">{{ m.tipo }}</span></td>
+              <td class="text-end {% if m.qtd > 0 %}text-success{% else %}text-danger{% endif %}">
+                <strong>{% if m.qtd > 0 %}+{% endif %}{{ m.qtd|numero_br(3) }}</strong>
+              </td>
+              <td>
+                {% if m.ref_tabela %}<code class="small">{{ m.ref_tabela }}#{{ m.ref_id }}</code><br>{% endif %}
+                <small>{{ m.motivo or '' }}</small>
+              </td>
+              <td><small>{{ m.operador or '—' }}</small></td>
+            </tr>
+            {% else %}
+              <tr><td colspan="5" class="text-center text-muted">Sem movimentos.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

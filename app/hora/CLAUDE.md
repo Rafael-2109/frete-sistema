@@ -286,6 +286,52 @@ Segue o plano aprovado em 2026-04-18:
 
 ---
 
+## 11. Peças (cadastro, estoque, faturamento) — 2026-05-05
+
+Peças (capacete, retrovisor, bateria, acessórios) são produtos **fungíveis sem chassi**, paralelos a motos no ciclo HORA.
+
+**Tabelas novas (5)** — migrations `hora_26..28`:
+- `hora_peca` — cadastro (codigo_interno, descricao, ncm, cfop_default, unidade, preco_venda_padrao, foto, ativo)
+- `hora_tagplus_peca_map` — mapeamento opcional p/ emissão TagPlus (peça pode existir sem TagPlus)
+- `hora_peca_movimento` — log de entradas/saídas signed; saldo derivado por SUM (mesmo padrão moto-evento)
+- `hora_nf_entrada_item_peca` — peça em NF entrada com **conferência embutida 1:1** (qtd_conferida, divergencia, foto)
+- `hora_venda_item_peca` — peça em pedido de venda
+
+**ALTER `hora_pedido_item`**: adicionado `peca_id`, `qtd_pedida` com **CHECK XOR** (item é OU moto OU peça).
+
+**Permissões**: `pecas_cadastro` e `pecas_estoque` em `MODULOS_HORA` (separados de `pecas` que continua significando "peças faltando em motos").
+
+**Ciclo de vida**:
+1. **Pedido compra** (`HoraPedido`) — itens podem ser moto OU peça (`peca_id` + `qtd_pedida`). UI: seção "Peças do pedido" em `pedido_detalhe.html`.
+2. **NF entrada** — operador adiciona peças manualmente em `nf_detalhe.html`. Confronto 1:1 (`qtd_nf` vs `qtd_conferida`) com modal por linha. Conferir emite movimento `ENTRADA_NF` no estoque da loja destino.
+3. **Estoque de peças** — saldo materializado **NÃO existe**. Saldo = `SELECT SUM(qtd) FROM hora_peca_movimento WHERE peca_id, loja_id`. Tipos de movimento: `ENTRADA_NF`, `SAIDA_VENDA`, `TRANSFERENCIA_OUT/IN`, `AJUSTE_POS/NEG`, `DEVOLUCAO_VENDA`, `DEVOLUCAO_FORNECEDOR`. Saldo só é positivo (transferência valida).
+4. **Pedido venda** (`HoraVenda`) — `criar_venda_manual` continua aceitando moto. `adicionar_item_peca(venda_id, peca_id, qtd, valor_unitario_final)` em COTACAO emite `SAIDA_VENDA`. Cancelar venda emite `DEVOLUCAO_VENDA` para todas as peças.
+5. **NFe TagPlus** — payload misto: `_montar_itens()` concatena `venda.itens` (motos: qtd=1, detalhes=Chassi/Motor) + `venda.itens_peca` (peças: qtd N, sem detalhes chassi). CFOP por item (peca_map.cfop_default override peca.cfop_default).
+6. **Backfill TagPlus** (em `tagplus/backfill_service.py`):
+   - `executar_backfill_produtos_pecas()` — itera `GET /produtos`, popula `hora_peca` + `hora_tagplus_peca_map`. Heurística NCM 8711* = moto (pula).
+   - `executar_backfill_pecas_faltantes(limite)` — busca `HoraVenda` FATURADO com `valor_total - sum(itens) > 0`, repuxa NFe e classifica peças cujo código bate em `hora_tagplus_peca_map`.
+
+**Proteção de chassi (CRÍTICA — fonte: usuário 2026-05-05)**:
+
+Helper `chassi_protecao_service.chassi_protegido(numero_chassi)` retorna True se chassi tem registro em `HoraPedidoItem` OU `HoraNfEntradaItem`. Esses registros são fonte de verdade.
+
+Aplicação em `tagplus/backfill_service._atualizar_moto_complementar()`:
+- Se chassi protegido + parser sugeriu cor/motor diferente: **NÃO atualiza**, apenas registra warning.
+- Preserva identidade da moto vinda de pedido/NF de compra.
+
+Não-objetivos v1: versionamento de preço de peça (preço fixo em `hora_peca.preco_venda_padrao`), custo médio, devolução parcial, inventário cíclico, multi-emitente.
+
+**UI / Menu**:
+- Cadastros → Peças (`/hora/pecas/cadastro`)
+- Movimentação → Estoque de Peças (`/hora/pecas/estoque`) com modais ajuste manual e transferência
+- Faturamento → Mapeamento de peças, Backfill catálogo de peças, Backfill peças faltantes (delta)
+
+**Spec/Plano**:
+- `docs/superpowers/specs/2026-05-05-hora-pecas-design.md`
+- `docs/superpowers/plans/2026-05-05-hora-pecas.md`
+
+---
+
 ## Referências
 
 - **Contrato de design**: `docs/hora/INVARIANTES.md`

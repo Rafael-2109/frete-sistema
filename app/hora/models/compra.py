@@ -77,10 +77,25 @@ class HoraPedidoItem(db.Model):
     cor = db.Column(db.String(50), nullable=True)
     preco_compra_esperado = db.Column(db.Numeric(15, 2), nullable=False)
 
+    # XOR moto/peca: item e OU moto (numero_chassi/modelo_id) OU peca (peca_id/qtd_pedida).
+    # CHECK no banco em hora_22_pecas_movimento_e_itens.sql.
+    peca_id = db.Column(
+        db.Integer, db.ForeignKey('hora_peca.id'),
+        nullable=True, index=True,
+    )
+    qtd_pedida = db.Column(db.Numeric(15, 3), nullable=True)
+
     moto = db.relationship('HoraMoto', backref='pedidos_itens')
     modelo = db.relationship('HoraModelo')
+    peca = db.relationship('HoraPeca')
+
+    @property
+    def is_peca(self) -> bool:
+        return self.peca_id is not None
 
     def __repr__(self):
+        if self.is_peca:
+            return f'<HoraPedidoItem pedido={self.pedido_id} peca={self.peca_id} qtd={self.qtd_pedida}>'
         chassi = self.numero_chassi or 'PENDENTE'
         return f'<HoraPedidoItem pedido={self.pedido_id} chassi={chassi}>'
 

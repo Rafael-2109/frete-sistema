@@ -7,7 +7,7 @@ from flask_login import current_user
 from app.hora.decorators import require_hora_perm
 from app.hora.models import HoraMoto, HoraPecaFaltando
 from app.hora.routes import hora_bp
-from app.hora.services import estoque_service, peca_service
+from app.hora.services import estoque_service, peca_faltando_service as peca_service
 from app.hora.services.auth_helper import (
     lojas_permitidas_ids,
     usuario_tem_acesso_a_loja,

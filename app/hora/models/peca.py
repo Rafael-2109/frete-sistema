@@ -1,94 +1,225 @@
-"""Peca faltando em moto + canibalizacao entre motos.
+"""Cadastro de pecas (produtos fungiveis sem chassi) + estoque + itens.
 
-hora_peca_faltando  : N pendencias por moto (uma por peca ausente).
-hora_peca_faltando_foto : N fotos por pendencia.
+Este modulo cobre o ciclo COMPLETO de pecas:
+- HoraPeca               cadastro principal
+- HoraTagPlusPecaMap     mapeamento opcional para emissao NFe TagPlus
+- HoraPecaMovimento      log de entradas/saidas (saldo derivado por SUM)
+- HoraNfEntradaItemPeca  linha de peca em NF de entrada (com conferencia 1:1)
+- HoraVendaItemPeca      linha de peca em pedido de venda
 
-Canibalizacao: quando uma peca e retirada de uma moto "doadora" para
-completar outra, preencher `chassi_doador` — o service emite evento
-FALTANDO_PECA na moto doadora automaticamente.
+NAO confundir com HoraPecaFaltando (peca FALTANDO em moto - vide peca_faltando.py).
 """
 from app import db
 from app.utils.timezone import agora_utc_naive
 
 
-class HoraPecaFaltando(db.Model):
-    """Uma peca ausente em uma moto (N por moto)."""
-    __tablename__ = 'hora_peca_faltando'
+# ============================================================
+# Constantes
+# ============================================================
+
+PECA_MOV_TIPO_ENTRADA_NF = 'ENTRADA_NF'
+PECA_MOV_TIPO_SAIDA_VENDA = 'SAIDA_VENDA'
+PECA_MOV_TIPO_TRANSF_OUT = 'TRANSFERENCIA_OUT'
+PECA_MOV_TIPO_TRANSF_IN = 'TRANSFERENCIA_IN'
+PECA_MOV_TIPO_AJUSTE_POS = 'AJUSTE_POS'
+PECA_MOV_TIPO_AJUSTE_NEG = 'AJUSTE_NEG'
+PECA_MOV_TIPO_DEVOLUCAO_VENDA = 'DEVOLUCAO_VENDA'
+PECA_MOV_TIPO_DEVOLUCAO_FORN = 'DEVOLUCAO_FORNECEDOR'
+
+PECA_MOV_TIPOS_VALIDOS = (
+    PECA_MOV_TIPO_ENTRADA_NF, PECA_MOV_TIPO_SAIDA_VENDA,
+    PECA_MOV_TIPO_TRANSF_OUT, PECA_MOV_TIPO_TRANSF_IN,
+    PECA_MOV_TIPO_AJUSTE_POS, PECA_MOV_TIPO_AJUSTE_NEG,
+    PECA_MOV_TIPO_DEVOLUCAO_VENDA, PECA_MOV_TIPO_DEVOLUCAO_FORN,
+)
+
+PECA_DIVERGENCIA_OK = 'OK'
+PECA_DIVERGENCIA_FALTA = 'FALTA'
+PECA_DIVERGENCIA_SOBRA = 'SOBRA'
+PECA_DIVERGENCIA_AVARIA = 'AVARIA'
+
+PECA_DIVERGENCIA_VALIDAS = (
+    PECA_DIVERGENCIA_OK, PECA_DIVERGENCIA_FALTA,
+    PECA_DIVERGENCIA_SOBRA, PECA_DIVERGENCIA_AVARIA,
+)
+
+
+# ============================================================
+# HoraPeca
+# ============================================================
+
+class HoraPeca(db.Model):
+    """Catalogo de pecas (capacete, retrovisor, bateria, ...)."""
+    __tablename__ = 'hora_peca'
 
     id = db.Column(db.Integer, primary_key=True)
-    # Moto que esta SEM a peca.
-    numero_chassi = db.Column(
-        db.String(30),
-        db.ForeignKey('hora_moto.numero_chassi'),
-        nullable=False,
-        index=True,
-    )
+    codigo_interno = db.Column(db.String(50), nullable=False, unique=True, index=True)
     descricao = db.Column(db.String(255), nullable=False)
-    # Ex.: "bateria 72V", "chave de ignicao", "retrovisor esquerdo"
-
-    # Moto que cedeu a peca (canibalizacao). Preenchido quando a peca foi
-    # retirada de outra moto para completar esta. Emite evento FALTANDO_PECA
-    # no chassi_doador automaticamente no servico.
-    chassi_doador = db.Column(
-        db.String(30),
-        db.ForeignKey('hora_moto.numero_chassi'),
-        nullable=True,
-        index=True,
-    )
-
-    status = db.Column(db.String(20), nullable=False, default='ABERTA', index=True)
-    # Valores: ABERTA, RESOLVIDA, CANCELADA
-
-    # Ref opcional a conferencia de recebimento que detectou a falta.
-    recebimento_conferencia_id = db.Column(
-        db.Integer,
-        db.ForeignKey('hora_recebimento_conferencia.id'),
-        nullable=True,
-    )
-
-    observacoes = db.Column(db.Text, nullable=True)
-    criado_por = db.Column(db.String(100), nullable=True)
-    resolvido_por = db.Column(db.String(100), nullable=True)
+    ncm = db.Column(db.String(10), nullable=True)
+    cfop_default = db.Column(db.String(5), nullable=False, default='5.102')
+    unidade = db.Column(db.String(5), nullable=False, default='UN')
+    preco_venda_padrao = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    foto_s3_key = db.Column(db.String(500), nullable=True)
+    ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
 
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
-    resolvido_em = db.Column(db.DateTime, nullable=True)
+    atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
 
-    moto = db.relationship(
-        'HoraMoto',
-        foreign_keys=[numero_chassi],
-        backref='pecas_faltando',
+    def __repr__(self):
+        return f'<HoraPeca {self.codigo_interno} {self.descricao!r}>'
+
+
+# ============================================================
+# HoraTagPlusPecaMap
+# ============================================================
+
+class HoraTagPlusPecaMap(db.Model):
+    """Mapeamento opcional de peca para integracao TagPlus.
+
+    Peca pode existir sem mapeamento (somente uso interno). Para emitir
+    NFe via TagPlus, exige tagplus_produto_id preenchido.
+    """
+    __tablename__ = 'hora_tagplus_peca_map'
+
+    id = db.Column(db.Integer, primary_key=True)
+    peca_id = db.Column(
+        db.Integer, db.ForeignKey('hora_peca.id'),
+        nullable=False, unique=True, index=True,
     )
-    moto_doadora = db.relationship('HoraMoto', foreign_keys=[chassi_doador])
-    conferencia = db.relationship('HoraRecebimentoConferencia')
-    fotos = db.relationship(
-        'HoraPecaFaltandoFoto',
-        backref='peca_faltando',
-        cascade='all, delete-orphan',
+    tagplus_produto_id = db.Column(db.String(50), nullable=False)
+    tagplus_codigo = db.Column(db.String(50), nullable=True, index=True)
+    cfop_default = db.Column(db.String(5), nullable=True)
+    # Se preenchido, sobrescreve hora_peca.cfop_default na emissao NFe.
+
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+    atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
+
+    peca = db.relationship('HoraPeca', backref=db.backref('tagplus_map', uselist=False))
+
+    def __repr__(self):
+        return f'<HoraTagPlusPecaMap peca={self.peca_id} tagplus={self.tagplus_produto_id}>'
+
+
+# ============================================================
+# HoraPecaMovimento - saldo derivado por SUM
+# ============================================================
+
+class HoraPecaMovimento(db.Model):
+    """Movimento de peca (signed: + entrada, - saida).
+
+    Saldo de uma combinacao (peca_id, loja_id) = SUM(qtd) deste log.
+    Sem tabela de saldo materializado (mesmo padrao moto: estoque deriva
+    de eventos).
+    """
+    __tablename__ = 'hora_peca_movimento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    peca_id = db.Column(
+        db.Integer, db.ForeignKey('hora_peca.id'),
+        nullable=False, index=True,
+    )
+    loja_id = db.Column(
+        db.Integer, db.ForeignKey('hora_loja.id'),
+        nullable=False, index=True,
+    )
+    tipo = db.Column(db.String(25), nullable=False)
+    qtd = db.Column(db.Numeric(15, 3), nullable=False)
+    ref_tabela = db.Column(db.String(50), nullable=True)
+    ref_id = db.Column(db.Integer, nullable=True)
+    motivo = db.Column(db.String(500), nullable=True)
+    operador = db.Column(db.String(100), nullable=True)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    peca = db.relationship('HoraPeca', backref='movimentos')
+    loja = db.relationship('HoraLoja')
+
+    __table_args__ = (
+        db.Index('ix_hora_peca_mov_saldo_idx', 'peca_id', 'loja_id', 'criado_em'),
+        db.Index('ix_hora_peca_mov_ref_idx', 'ref_tabela', 'ref_id'),
     )
 
     def __repr__(self):
         return (
-            f'<HoraPecaFaltando chassi={self.numero_chassi} '
-            f'peca="{self.descricao}" {self.status}>'
+            f'<HoraPecaMovimento peca={self.peca_id} loja={self.loja_id} '
+            f'{self.tipo} {self.qtd}>'
         )
 
 
-class HoraPecaFaltandoFoto(db.Model):
-    """N fotos por pendencia de peca faltando."""
-    __tablename__ = 'hora_peca_faltando_foto'
+# ============================================================
+# HoraNfEntradaItemPeca - peca em NF de entrada (com conferencia 1:1)
+# ============================================================
+
+class HoraNfEntradaItemPeca(db.Model):
+    """Linha de peca em NF de entrada com conferencia embutida.
+
+    Conferencia e 1:1 (uma linha de NF = uma conferencia, qtd_nf vs
+    qtd_conferida). Por isso campos de conferencia moram aqui em vez
+    de tabela paralela.
+    """
+    __tablename__ = 'hora_nf_entrada_item_peca'
 
     id = db.Column(db.Integer, primary_key=True)
-    peca_faltando_id = db.Column(
-        db.Integer,
-        db.ForeignKey('hora_peca_faltando.id'),
-        nullable=False,
-        index=True,
+    nf_id = db.Column(
+        db.Integer, db.ForeignKey('hora_nf_entrada.id'),
+        nullable=False, index=True,
     )
-    foto_s3_key = db.Column(db.String(500), nullable=False)
-    legenda = db.Column(db.String(255), nullable=True)
+    peca_id = db.Column(
+        db.Integer, db.ForeignKey('hora_peca.id'),
+        nullable=False, index=True,
+    )
+    qtd_nf = db.Column(db.Numeric(15, 3), nullable=False)
+    preco_real = db.Column(db.Numeric(15, 2), nullable=False)
+    modelo_texto_original = db.Column(db.String(255), nullable=True)
 
-    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
-    criado_por = db.Column(db.String(100), nullable=True)
+    # Conferencia embutida (1:1).
+    qtd_conferida = db.Column(db.Numeric(15, 3), nullable=True)
+    divergencia_qtd = db.Column(db.String(20), nullable=True)
+    foto_conferencia_s3_key = db.Column(db.String(500), nullable=True)
+    conferida_em = db.Column(db.DateTime, nullable=True)
+    conferida_por = db.Column(db.String(100), nullable=True)
+
+    nf = db.relationship('HoraNfEntrada', backref='itens_peca')
+    peca = db.relationship('HoraPeca')
+
+    @property
+    def conferida(self) -> bool:
+        return self.qtd_conferida is not None
 
     def __repr__(self):
-        return f'<HoraPecaFaltandoFoto peca={self.peca_faltando_id} key={self.foto_s3_key}>'
+        return f'<HoraNfEntradaItemPeca nf={self.nf_id} peca={self.peca_id} qtd={self.qtd_nf}>'
+
+
+# ============================================================
+# HoraVendaItemPeca - peca em pedido de venda
+# ============================================================
+
+class HoraVendaItemPeca(db.Model):
+    """Linha de peca em pedido de venda.
+
+    `preco_unitario_referencia` e snapshot de hora_peca.preco_venda_padrao
+    no momento da venda (auditoria). `preco_final` = qtd * (referencia - desconto).
+    """
+    __tablename__ = 'hora_venda_item_peca'
+
+    id = db.Column(db.Integer, primary_key=True)
+    venda_id = db.Column(
+        db.Integer, db.ForeignKey('hora_venda.id'),
+        nullable=False, index=True,
+    )
+    peca_id = db.Column(
+        db.Integer, db.ForeignKey('hora_peca.id'),
+        nullable=False, index=True,
+    )
+    qtd = db.Column(db.Numeric(15, 3), nullable=False)
+    preco_unitario_referencia = db.Column(db.Numeric(15, 2), nullable=False)
+    desconto_aplicado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    preco_final = db.Column(db.Numeric(15, 2), nullable=False)
+
+    venda = db.relationship('HoraVenda', backref='itens_peca')
+    peca = db.relationship('HoraPeca')
+
+    def __repr__(self):
+        return (
+            f'<HoraVendaItemPeca venda={self.venda_id} peca={self.peca_id} '
+            f'qtd={self.qtd} R${self.preco_final}>'
+        )

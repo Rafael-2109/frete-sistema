@@ -1,0 +1,55 @@
+{# Modal de transferencia de pecas entre lojas. Incluido em pecas_estoque_lista.html. #}
+<div class="modal fade" id="modalTransf" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('hora.pecas_estoque_transferencia') }}" class="modal-content">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> Transferência entre lojas</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Peça <span class="text-danger">*</span></label>
+          <input type="text" id="transf-peca-txt" class="form-control"
+                 data-hora-autocomplete="peca" data-hora-target-id="transf-peca-id"
+                 placeholder="Buscar por código ou descrição" required>
+          <input type="hidden" name="peca_id" id="transf-peca-id" required>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Loja origem <span class="text-danger">*</span></label>
+            <select name="loja_origem_id" class="form-select" required>
+              <option value="">(selecione)</option>
+              {% for l in lojas_ativas %}
+                <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Loja destino <span class="text-danger">*</span></label>
+            <select name="loja_destino_id" class="form-select" required>
+              <option value="">(selecione)</option>
+              {% for l in lojas_ativas %}
+                <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="mb-3 mt-3">
+          <label class="form-label">Quantidade <span class="text-danger">*</span></label>
+          <input type="text" name="qtd" class="form-control" inputmode="decimal"
+                 placeholder="Quantidade a transferir (positiva)" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Motivo <span class="text-danger">*</span></label>
+          <textarea name="motivo" rows="2" class="form-control" required minlength="3"
+                    placeholder="Reposição, demanda da filial X, etc."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Transferir</button>
+      </div>
+    </form>
+  </div>
+</div>

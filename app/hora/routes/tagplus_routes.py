@@ -1941,3 +1941,110 @@ def tagplus_parser_append_reativar(append_id: int):
     except Exception as exc:  # pragma: no cover
         flash(f'Erro: {exc}', 'danger')
     return redirect(url_for('hora.tagplus_parser_append'))
+
+
+# ========================================================================
+# Mapeamento TagPlus de PECAS (paralelo a tagplus_produto_map de motos)
+# ========================================================================
+
+@hora_bp.route('/tagplus/peca-map')
+@require_hora_perm('tagplus', 'ver')
+def tagplus_peca_map_lista():
+    """Lista de mapeamentos TagPlus -> peca."""
+    from app.hora.models import HoraPeca, HoraTagPlusPecaMap
+    pecas = HoraPeca.query.filter_by(ativo=True).order_by(HoraPeca.codigo_interno).all()
+    rows = []
+    for p in pecas:
+        m = HoraTagPlusPecaMap.query.filter_by(peca_id=p.id).first()
+        rows.append({'peca': p, 'map': m})
+    return render_template('hora/tagplus_peca_map_lista.html', rows=rows)
+
+
+@hora_bp.route('/tagplus/peca-map/<int:peca_id>/salvar', methods=['POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_peca_map_salvar(peca_id: int):
+    from app.hora.services import peca_service
+    try:
+        tagplus_id = (request.form.get('tagplus_produto_id') or '').strip()
+        if not tagplus_id:
+            from app.hora.models import HoraTagPlusPecaMap
+            existing = HoraTagPlusPecaMap.query.filter_by(peca_id=peca_id).first()
+            if existing:
+                peca_service.remover_tagplus_map(peca_id)
+                flash('Mapeamento removido.', 'info')
+        else:
+            peca_service.set_tagplus_map(
+                peca_id=peca_id,
+                tagplus_produto_id=tagplus_id,
+                tagplus_codigo=(request.form.get('tagplus_codigo') or '') or None,
+                cfop_default=(request.form.get('cfop_default') or '') or None,
+            )
+            flash('Mapeamento salvo.', 'success')
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    return redirect(url_for('hora.tagplus_peca_map_lista'))
+
+
+# ========================================================================
+# Backfill catalogo de produtos -> hora_peca + hora_tagplus_peca_map
+# ========================================================================
+
+@hora_bp.route('/tagplus/backfill-produtos-pecas', methods=['GET'])
+@require_hora_perm('tagplus', 'ver')
+def tagplus_backfill_produtos():
+    """Tela de form para executar backfill de catalogo de pecas."""
+    return render_template('hora/tagplus_backfill_produtos.html', relatorio=None)
+
+
+@hora_bp.route('/tagplus/backfill-produtos-pecas/executar', methods=['POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_backfill_produtos_executar():
+    from app.hora.services.tagplus import backfill_service
+    try:
+        relatorio = backfill_service.executar_backfill_produtos_pecas(operador=_operador())
+        flash(
+            f'Backfill produtos: {relatorio["criadas"]} criadas, '
+            f'{relatorio["atualizadas"]} atualizadas, '
+            f'{relatorio["puladas_moto"]} motos puladas, '
+            f'{relatorio["erros"]} erros.',
+            'success' if relatorio['erros'] == 0 else 'warning',
+        )
+    except Exception as exc:  # pragma: no cover
+        flash(f'Erro no backfill: {exc}', 'danger')
+        relatorio = {'erros': 1, 'erros_detalhe': [str(exc)]}
+    return render_template('hora/tagplus_backfill_produtos.html', relatorio=relatorio)
+
+
+# ========================================================================
+# Backfill delta (NFes legadas com peca ignorada)
+# ========================================================================
+
+@hora_bp.route('/tagplus/backfill-pecas-delta', methods=['GET'])
+@require_hora_perm('tagplus', 'ver')
+def tagplus_backfill_pecas_delta():
+    return render_template('hora/tagplus_backfill_pecas_delta.html', relatorio=None)
+
+
+@hora_bp.route('/tagplus/backfill-pecas-delta/executar', methods=['POST'])
+@require_hora_perm('tagplus', 'editar')
+def tagplus_backfill_pecas_delta_executar():
+    from app.hora.services.tagplus import backfill_service
+    try:
+        limite_str = (request.form.get('limite') or '50').strip()
+        limite = int(limite_str) if limite_str.isdigit() else 50
+        relatorio = backfill_service.executar_backfill_pecas_faltantes(
+            operador=_operador(), limite=limite,
+        )
+        flash(
+            f'Backfill delta: {relatorio["analisadas"]} analisadas, '
+            f'{relatorio["reprocessadas"]} reprocessadas, '
+            f'{relatorio["pecas_criadas"]} pecas criadas, '
+            f'{relatorio["sem_emissao"]} sem emissao, '
+            f'{relatorio["sem_mapping"]} sem mapping, '
+            f'{relatorio["erros"]} erros.',
+            'success' if relatorio['erros'] == 0 else 'warning',
+        )
+    except Exception as exc:  # pragma: no cover
+        flash(f'Erro no backfill: {exc}', 'danger')
+        relatorio = {'erros': 1, 'detalhes': [str(exc)]}
+    return render_template('hora/tagplus_backfill_pecas_delta.html', relatorio=relatorio)

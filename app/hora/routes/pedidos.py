@@ -829,3 +829,61 @@ def pedidos_editar_item(pedido_id: int, item_id: int):
         flash(f'Erro: {exc}', 'danger')
 
     return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+
+# ========================================================================
+# Itens de PECA (compra de pecas - XOR moto/peca em hora_pedido_item)
+# ========================================================================
+
+@hora_bp.route('/pedidos/<int:pedido_id>/itens-peca/novo', methods=['POST'])
+@require_hora_perm('pedidos', 'editar')
+def pedido_adicionar_item_peca(pedido_id: int):
+    """Adiciona item peca em pedido de compra (HoraPedido)."""
+    pedido = HoraPedido.query.get_or_404(pedido_id)
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
+
+    try:
+        peca_id_str = (request.form.get('peca_id') or '').strip()
+        if not peca_id_str.isdigit():
+            raise ValueError('Selecione uma peca')
+        peca_id = int(peca_id_str)
+        qtd_str = (request.form.get('qtd_pedida') or '').strip().replace(',', '.')
+        preco_str = (request.form.get('preco_compra_esperado') or '').strip().replace(',', '.')
+        if not qtd_str or not preco_str:
+            raise ValueError('Quantidade e preco obrigatorios')
+        pedido_service.adicionar_item_peca_pedido(
+            pedido_id=pedido_id,
+            peca_id=peca_id,
+            qtd_pedida=Decimal(qtd_str),
+            preco_compra_esperado=Decimal(preco_str),
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        flash('Peca adicionada ao pedido.', 'success')
+    except (ValueError, InvalidOperation) as exc:
+        flash(f'Erro ao adicionar peca: {exc}', 'danger')
+
+    return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido_id))
+
+
+@hora_bp.route('/pedidos/<int:pedido_id>/itens-peca/<int:item_id>/remover', methods=['POST'])
+@require_hora_perm('pedidos', 'editar')
+def pedido_remover_item_peca(pedido_id: int, item_id: int):
+    """Remove item peca de pedido em status ABERTO."""
+    pedido = HoraPedido.query.get_or_404(pedido_id)
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
+
+    try:
+        pedido_service.remover_item_peca_pedido(
+            pedido_id=pedido_id,
+            item_id=item_id,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        flash('Peca removida do pedido.', 'success')
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+
+    return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido_id))

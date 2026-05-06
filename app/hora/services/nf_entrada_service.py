@@ -2,17 +2,29 @@
 from __future__ import annotations
 
 import io
+from decimal import Decimal
 from typing import Optional
 
 from flask import current_app
 
 from app import db
-from app.hora.models import HoraNfEntrada, HoraNfEntradaItem, HoraPedido
+from app.hora.models import (
+    HoraNfEntrada,
+    HoraNfEntradaItem,
+    HoraNfEntradaItemPeca,
+    HoraPeca,
+    HoraPedido,
+    PECA_DIVERGENCIA_VALIDAS,
+    PECA_MOV_TIPO_ENTRADA_NF,
+)
 from app.hora.services.moto_service import get_or_create_moto
 from app.hora.services.parsers import parse_danfe_to_hora_payload
 from app.hora.services.pedido_service import atualizar_status_pedido_por_faturamento
 from app.utils.file_storage import FileStorage
 from app.utils.timezone import agora_utc_naive
+
+
+_PECA_FOTO_EXT = {'jpg', 'jpeg', 'png', 'webp', 'heic'}
 
 
 def _salvar_pdf_danfe_storage(
@@ -816,3 +828,120 @@ def listar_nfs_entrada(
         query = query.filter(HoraNfEntrada.pedido_id.is_(None))
 
     return query.limit(limit).all()
+
+
+# ============================================================
+# Itens de PECA em NF de entrada (XOR moto/peca aplicado em camada de UI)
+# ============================================================
+
+def adicionar_item_peca_nf(
+    nf_id: int,
+    peca_id: int,
+    qtd_nf,
+    preco_real,
+    modelo_texto_original: Optional[str] = None,
+) -> HoraNfEntradaItemPeca:
+    """Adiciona linha de peca em NF de entrada (manual ou via parser).
+
+    Nao emite movimento de estoque — isso so acontece em conferir_item_peca_nf.
+    """
+    nf = HoraNfEntrada.query.get(nf_id)
+    if not nf:
+        raise ValueError(f'NF {nf_id} nao encontrada')
+    if not HoraPeca.query.get(peca_id):
+        raise ValueError(f'Peca {peca_id} nao existe')
+    qtd = Decimal(str(qtd_nf or 0))
+    if qtd <= 0:
+        raise ValueError('qtd_nf deve ser positiva')
+    preco = Decimal(str(preco_real or 0))
+    if preco < 0:
+        raise ValueError('preco_real nao pode ser negativo')
+
+    item = HoraNfEntradaItemPeca(
+        nf_id=nf.id,
+        peca_id=peca_id,
+        qtd_nf=qtd,
+        preco_real=preco,
+        modelo_texto_original=(modelo_texto_original or '').strip() or None,
+    )
+    db.session.add(item)
+    db.session.commit()
+    return item
+
+
+def remover_item_peca_nf(nf_item_id: int) -> None:
+    """Remove item peca de NF. Bloqueia se ja conferida."""
+    item = HoraNfEntradaItemPeca.query.get(nf_item_id)
+    if not item:
+        raise ValueError(f'Item peca {nf_item_id} nao encontrado')
+    if item.qtd_conferida is not None:
+        raise ValueError(
+            f'Item ja foi conferido em {item.conferida_em} '
+            f'(qtd_conferida={item.qtd_conferida}). Estorne primeiro.'
+        )
+    db.session.delete(item)
+    db.session.commit()
+
+
+def conferir_item_peca_nf(
+    nf_item_id: int,
+    qtd_conferida,
+    divergencia_qtd: str = 'OK',
+    foto_file=None,
+    operador: Optional[str] = None,
+) -> HoraNfEntradaItemPeca:
+    """Confere item peca + emite ENTRADA_NF no estoque na loja destino.
+
+    Idempotencia: se ja conferido, atualiza valores e ajusta movimento (delta).
+    Para conferencia inicial, emite movimento ENTRADA_NF com qtd_conferida.
+    """
+    from app.hora.services import peca_estoque_service
+
+    item = HoraNfEntradaItemPeca.query.get(nf_item_id)
+    if not item:
+        raise ValueError(f'Item peca {nf_item_id} nao encontrado')
+    qtd_conf = Decimal(str(qtd_conferida or 0))
+    if qtd_conf < 0:
+        raise ValueError('qtd_conferida nao pode ser negativa')
+    if divergencia_qtd not in PECA_DIVERGENCIA_VALIDAS:
+        raise ValueError(
+            f'divergencia_qtd invalida: {divergencia_qtd!r}. '
+            f'Valores: {", ".join(PECA_DIVERGENCIA_VALIDAS)}'
+        )
+
+    nf = item.nf
+    if not nf.loja_destino_id:
+        raise ValueError('NF sem loja_destino_id — defina antes de conferir.')
+
+    # Foto opcional.
+    if foto_file and getattr(foto_file, 'filename', ''):
+        storage = FileStorage()
+        folder = f'hora/nf_entrada/{nf.id}/peca/{item.id}'
+        s3_key = storage.save_file(
+            file=foto_file, folder=folder, allowed_extensions=_PECA_FOTO_EXT,
+        )
+        if s3_key:
+            item.foto_conferencia_s3_key = s3_key
+
+    qtd_anterior = item.qtd_conferida
+    item.qtd_conferida = qtd_conf
+    item.divergencia_qtd = divergencia_qtd
+    item.conferida_em = agora_utc_naive()
+    item.conferida_por = operador
+
+    # Movimento de estoque: delta entre qtd_anterior e qtd_atual.
+    delta = qtd_conf - Decimal(str(qtd_anterior or 0))
+    if delta != 0:
+        peca_estoque_service.registrar_movimento(
+            peca_id=item.peca_id,
+            loja_id=nf.loja_destino_id,
+            tipo=PECA_MOV_TIPO_ENTRADA_NF,
+            qtd=delta,
+            ref_tabela='hora_nf_entrada_item_peca',
+            ref_id=item.id,
+            motivo=f'Conferencia NF #{nf.id} ({divergencia_qtd})',
+            operador=operador,
+        )
+
+    db.session.commit()
+    return item
