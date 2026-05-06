@@ -195,6 +195,7 @@
     </tr></thead>
     <tbody>
       {% for item in pedido.itens %}
+        {% if item.peca_id %}{# pulado — pecas tem secao propria abaixo #}{% else %}
         {% set v = vinculos_por_chassi.get(item.numero_chassi) if item.numero_chassi else None %}
         <tr class="border-top border-2 {% if not item.numero_chassi %}table-warning{% endif %}">
           <td rowspan="2" class="align-middle text-muted"><small>{{ item.id }}</small></td>
@@ -287,9 +288,81 @@
           </td>
           <td></td>
         </tr>
+        {% endif %}
       {% endfor %}
     </tbody>
   </table>
+</div>
+
+{# ===================== Pecas (XOR moto) ===================== #}
+{% set itens_peca = pedido.itens|selectattr('peca_id')|list %}
+<h4 class="mt-4 mb-2"><i class="fas fa-cogs"></i> Peças do pedido ({{ itens_peca|length }})</h4>
+<div class="card mb-3">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Código</th>
+          <th>Descrição</th>
+          <th class="text-end">Qtd pedida</th>
+          <th class="text-end">Preço unit. esperado</th>
+          <th class="text-end">Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in itens_peca %}
+          <tr>
+            <td><code>{{ it.peca.codigo_interno }}</code></td>
+            <td>{{ it.peca.descricao }}</td>
+            <td class="text-end">{{ it.qtd_pedida|numero_br(3) }} {{ it.peca.unidade }}</td>
+            <td class="text-end">{{ it.preco_compra_esperado|valor_br }}</td>
+            <td class="text-end"><strong>{{ (it.qtd_pedida * it.preco_compra_esperado)|valor_br }}</strong></td>
+            <td class="text-end">
+              {% if pedido.status == 'ABERTO' and current_user.tem_perm_hora('pedidos', 'editar') %}
+              <form method="post" action="{{ url_for('hora.pedido_remover_item_peca', pedido_id=pedido.id, item_id=it.id) }}"
+                    class="d-inline" onsubmit="return confirm('Remover {{ it.peca.codigo_interno }} do pedido?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" title="Remover"><i class="fas fa-trash"></i></button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="text-center text-muted">Nenhuma peça neste pedido.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pedido.status == 'ABERTO' and current_user.tem_perm_hora('pedidos', 'editar') %}
+  <div class="card-body border-top">
+    <form method="post" action="{{ url_for('hora.pedido_adicionar_item_peca', pedido_id=pedido.id) }}"
+          class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-4">
+        <label class="form-label small mb-0">Peça</label>
+        <input type="text" id="add-peca-txt" class="form-control form-control-sm"
+               data-hora-autocomplete="peca" data-hora-target-id="add-peca-id"
+               placeholder="Buscar peça (min. 2 chars)" required>
+        <input type="hidden" name="peca_id" id="add-peca-id" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small mb-0">Qtd</label>
+        <input type="text" name="qtd_pedida" class="form-control form-control-sm" inputmode="decimal"
+               placeholder="0,000" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-0">Preço unitário esperado</label>
+        <input type="text" name="preco_compra_esperado" class="form-control form-control-sm"
+               inputmode="decimal" placeholder="0,00" required>
+      </div>
+      <div class="col-md-auto">
+        <button class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Adicionar peça</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
 </div>
 
 {% if nfs_vinculadas %}

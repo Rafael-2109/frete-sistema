@@ -310,6 +310,69 @@ def adicionar_item_pedido(
     return item
 
 
+def adicionar_item_peca_pedido(
+    pedido_id: int,
+    peca_id: int,
+    qtd_pedida,
+    preco_compra_esperado,
+    operador: Optional[str] = None,
+) -> HoraPedidoItem:
+    """Adiciona item peca em pedido (XOR moto/peca).
+
+    CHECK no banco garante que peca_id e qtd_pedida juntos sao incompativeis com
+    numero_chassi/modelo_id.
+    """
+    from app.hora.models import HoraPeca
+
+    pedido = HoraPedido.query.get(pedido_id)
+    if not pedido:
+        raise ValueError(f'Pedido {pedido_id} nao encontrado')
+    if pedido.status not in ('ABERTO',):
+        raise ValueError(
+            f'Pedido em status {pedido.status} nao aceita novos itens (apenas ABERTO).'
+        )
+    if not HoraPeca.query.get(peca_id):
+        raise ValueError(f'Peca {peca_id} nao existe')
+    qtd = Decimal(str(qtd_pedida or 0))
+    if qtd <= 0:
+        raise ValueError('qtd_pedida deve ser positiva')
+    preco = Decimal(str(preco_compra_esperado or 0))
+    if preco <= 0:
+        raise ValueError('preco_compra_esperado deve ser positivo')
+
+    item = HoraPedidoItem(
+        pedido_id=pedido.id,
+        peca_id=peca_id,
+        qtd_pedida=qtd,
+        preco_compra_esperado=preco,
+        # numero_chassi, modelo_id e cor ficam NULL (CHECK XOR satisfeito)
+    )
+    db.session.add(item)
+    db.session.commit()
+    return item
+
+
+def remover_item_peca_pedido(
+    pedido_id: int,
+    item_id: int,
+    operador: Optional[str] = None,
+) -> None:
+    """Remove item peca de pedido. Bloqueia se pedido nao esta ABERTO."""
+    item = HoraPedidoItem.query.get(item_id)
+    if not item or item.pedido_id != pedido_id:
+        raise ValueError(f'Item {item_id} nao encontrado neste pedido')
+    if item.peca_id is None:
+        raise ValueError(f'Item {item_id} nao e de peca')
+    if item.pedido.status != 'ABERTO':
+        raise ValueError(
+            f'Pedido em status {item.pedido.status} nao permite remocao (apenas ABERTO).'
+        )
+    if len(item.pedido.itens) <= 1:
+        raise ValueError('Pedido precisa ter pelo menos 1 item')
+    db.session.delete(item)
+    db.session.commit()
+
+
 def excluir_item_pedido(
     pedido_id: int,
     item_id: int,
