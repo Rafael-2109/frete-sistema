@@ -108,6 +108,16 @@ Gotchas rapidos:
 | S3 storage (arquivos persistidos — todos modulos) | `.claude/references/S3_STORAGE.md` |
 | Indice completo | `.claude/references/INDEX.md` |
 
+### Design System (UI/CSS)
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| Badges, botoes, tabelas (qual classe usar, como criar nova) | `.claude/references/design/GUIA_COMPONENTES_UI.md` |
+| Arquitetura CSS (@layer, tokens, components/modules) | `app/static/css/README.md` |
+| Auditar codigo existente | `python scripts/audits/ui_audit.py` |
+| Detectar regressao antes de commit em CSS/templates | `python scripts/audits/ui_audit_regression.py` |
+| Catalogo de inconsistencias (badges duplicados, tabelas, vars BS) | `relatorios/ui_audit_FINDINGS_<data>.md` |
+
 ---
 
 ## CAMINHOS DO SISTEMA

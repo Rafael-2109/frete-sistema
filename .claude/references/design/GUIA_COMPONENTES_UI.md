@@ -239,6 +239,21 @@ Codigos do `ui_audit.py` (ver `scripts/audits/ui_audit.py`):
 
 Rodar audit: `python scripts/audits/ui_audit.py` (gera 3 reports em `relatorios/`).
 
+### Regression check (pre-commit / CI)
+
+`scripts/audits/ui_audit_regression.py` compara audit atual vs baseline commitado
+(`relatorios/ui_audit_baseline.json`):
+
+```bash
+# antes de commit — falha se alguma categoria aumentou
+python scripts/audits/ui_audit_regression.py
+
+# apos cleanup intencional (atingiu novo piso) — atualiza baseline
+python scripts/audits/ui_audit_regression.py --update-baseline
+```
+
+Exit code 0 = OK, 1 = regressao detectada (uma ou mais categorias subiram), 2 = erro de execucao.
+
 ---
 
 ## 7. Checklist Pre-Implementacao
@@ -252,7 +267,7 @@ Antes de escrever badge/botao/tabela colorida:
 - [ ] Nao adicionei `text-white | text-dark` redundante
 - [ ] Nao usei inline style com cor
 - [ ] Testei em DARK mode E em LIGHT mode
-- [ ] Rodei `python scripts/audits/ui_audit.py` e nao adicionei novas violacoes
+- [ ] Rodei `python scripts/audits/ui_audit_regression.py` (deve retornar 0)
 
 ---
 
