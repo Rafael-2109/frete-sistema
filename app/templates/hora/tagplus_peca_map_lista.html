@@ -1,0 +1,66 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2><i class="fas fa-link"></i> Mapeamento TagPlus de Peças</h2>
+  <a href="{{ url_for('hora.pecas_cadastro_lista') }}" class="btn btn-outline-secondary">
+    ← Cadastro de Peças
+  </a>
+</div>
+
+<p class="text-muted">
+  Configure o <code>ID TagPlus</code> e o <code>Código DANFE</code> de cada peça
+  ativa para permitir emissão de NFe e backfill de NFs já emitidas.
+</p>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead><tr>
+      <th>Código interno</th>
+      <th>Peça</th>
+      <th>NCM</th>
+      <th>CFOP cadastro</th>
+      <th>Mapeamento atual</th>
+      <th>Salvar</th>
+    </tr></thead>
+    <tbody>
+      {% for r in rows %}
+        {% set p = r.peca %}{% set m = r.map %}
+        <tr>
+          <td><code>{{ p.codigo_interno }}</code></td>
+          <td>{{ p.descricao }}</td>
+          <td><small>{{ p.ncm or '—' }}</small></td>
+          <td><span class="badge bg-light text-dark">{{ p.cfop_default }}</span></td>
+          <td>
+            {% if m %}
+              <code>{{ m.tagplus_produto_id }}</code>
+              {% if m.tagplus_codigo %}<br><small>cod: {{ m.tagplus_codigo }}</small>{% endif %}
+              {% if m.cfop_default %}<br><small>CFOP override: {{ m.cfop_default }}</small>{% endif %}
+            {% else %}
+              <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> sem mapeamento</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('hora.tagplus_peca_map_salvar', peca_id=p.id) }}"
+                  class="d-flex gap-1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="text" name="tagplus_produto_id" class="form-control form-control-sm"
+                     style="width: 110px;" placeholder="ID TagPlus"
+                     value="{{ m.tagplus_produto_id if m else '' }}">
+              <input type="text" name="tagplus_codigo" class="form-control form-control-sm"
+                     style="width: 130px;" placeholder="Código DANFE"
+                     value="{{ m.tagplus_codigo if m else '' }}">
+              <input type="text" name="cfop_default" class="form-control form-control-sm"
+                     style="width: 80px;" placeholder="CFOP"
+                     value="{{ m.cfop_default if m else '' }}">
+              <button class="btn btn-sm btn-primary"><i class="fas fa-save"></i></button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="text-center text-muted">Nenhuma peça ativa cadastrada.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

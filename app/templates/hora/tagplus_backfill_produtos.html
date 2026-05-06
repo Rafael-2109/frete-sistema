@@ -1,0 +1,53 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2><i class="fas fa-cloud-download-alt"></i> Backfill de Catálogo de Peças (TagPlus)</h2>
+</div>
+
+<div class="card p-3 mb-3" style="max-width:780px;">
+  <p class="mb-3">
+    Importa o catálogo de produtos do TagPlus para criar/atualizar
+    <code>hora_peca</code> e <code>hora_tagplus_peca_map</code>.
+  </p>
+  <ul class="small text-muted">
+    <li>Heurística: produtos com <strong>NCM iniciando em 8711</strong> (motos elétricas) são <strong>pulados</strong>.</li>
+    <li><strong>Idempotente</strong> — re-execução atualiza, não duplica.</li>
+    <li>Após o backfill, revise mapeamentos em <a href="{{ url_for('hora.tagplus_peca_map_lista') }}">Mapeamento de Peças</a>.</li>
+  </ul>
+
+  {% if current_user.tem_perm_hora('tagplus', 'editar') %}
+  <form method="post" action="{{ url_for('hora.tagplus_backfill_produtos_executar') }}"
+        onsubmit="return confirm('Executar backfill agora? Pode demorar alguns minutos.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-primary"><i class="fas fa-play"></i> Executar backfill</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if relatorio %}
+<div class="card p-3" style="max-width:780px;">
+  <h5>Relatório da última execução</h5>
+  <dl class="row mb-0">
+    <dt class="col-sm-5">Peças criadas</dt><dd class="col-sm-7"><strong class="text-success">{{ relatorio.criadas }}</strong></dd>
+    <dt class="col-sm-5">Peças atualizadas</dt><dd class="col-sm-7">{{ relatorio.atualizadas }}</dd>
+    <dt class="col-sm-5">Produtos pulados (motos NCM 8711*)</dt><dd class="col-sm-7"><span class="text-muted">{{ relatorio.puladas_moto }}</span></dd>
+    <dt class="col-sm-5">Erros</dt><dd class="col-sm-7">
+      {% if relatorio.erros == 0 %}
+        <span class="text-success">0</span>
+      {% else %}
+        <span class="text-danger"><strong>{{ relatorio.erros }}</strong></span>
+      {% endif %}
+    </dd>
+  </dl>
+
+  {% if relatorio.erros_detalhe %}
+  <hr>
+  <h6>Detalhe dos erros (primeiros 20):</h6>
+  <ul class="small">
+    {% for d in relatorio.erros_detalhe %}<li><code>{{ d }}</code></li>{% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
