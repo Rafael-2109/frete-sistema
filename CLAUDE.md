@@ -116,6 +116,9 @@ Gotchas rapidos:
 | Arquitetura CSS (@layer, tokens, components/modules) | `app/static/css/README.md` |
 | Auditar codigo existente | `python scripts/audits/ui_audit.py` |
 | Detectar regressao antes de commit em CSS/templates | `python scripts/audits/ui_audit_regression.py` |
+| **Lint policy bloqueador** (regras P1-P9) | `python scripts/audits/ui_policy_lint.py --enforce-new` (pre-commit) ou `--report-only` (auditoria) |
+| Pre-commit hook UI lint (instalar) | `ln -sf ../../scripts/hooks/pre-commit-ui-lint.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit` |
+| Analise dimensional (WCAG, headers, etc) | `python scripts/audits/ui_dimension_analysis.py` → `relatorios/ui_dimension_analysis_<data>.md` |
 | Detectar regressao VISUAL (pixel diff) antes de commit | `tests/visual/` (capture + compare via Playwright/PIL) |
 | Visual regression — credenciais bot | `scripts/seed/create_visual_test_user.py` (cria/atualiza `claude-visual@bot.nacom.com.br`, salva senha so em `.env` — NUNCA commitar) |
 | Catalogo de inconsistencias (badges duplicados, tabelas, vars BS) | `relatorios/ui_audit_FINDINGS_<data>.md` |

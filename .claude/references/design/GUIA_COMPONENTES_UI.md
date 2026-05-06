@@ -11,13 +11,28 @@
 
 ## 0. TL;DR — Antes de Codar
 
-1. **Nao adicione cores hardcoded** (`#abc`, `rgb(...)`). Use tokens em `tokens/_design-tokens.css`.
-2. **Nao use** `--bs-*-text-emphasis | --bs-*-bg-subtle | --bs-*-border-subtle` — sao Bootstrap-native, **nao** sao tematizadas pelo design system.
-3. **Badges**: priorize classes canonical de `components/_badges.css` (lista na secao 2). Crie nova classe so quando o status nao existir no canonical — e sempre via API `--_badge-bg/color`.
-4. **Tabelas com row colorida**: use `.table-success | .table-warning | .table-primary | .table-danger | .table-info` (`components/_tables.css`). **Nao** use `.table-secondary | .table-light | .table-dark` ate serem canonicalizadas.
-5. **`text-white | text-dark` em badges Bootstrap eh redundante** — `_bootstrap-overrides.css` ja resolve contraste. Audit `V6` reporta isso.
-6. **Inline styles com cor (`style="color: ..."`) sao proibidos** — audit `V1`/`V2` reporta.
-7. **Teste em DARK e LIGHT mode** antes de commitar.
+**Resumo**: o design system tem **vocabulario fechado** validado em WCAG.
+PRs que violem sao **bloqueados pelo pre-commit hook** (`scripts/hooks/pre-commit-ui-lint.sh`).
+
+### Regras blockantes (ver Secao 6 — codigos P1-P9)
+
+1. **NUNCA** hex literal (`#abc`, `#aabbcc`) em template ou CSS modulo (use tokens)
+2. **NUNCA** `rgb()/rgba()/hsl()/hsla()` literal em CSS modulo fora de `var(...)` (use tokens)
+3. **NUNCA** inline `style="color/background: ..."` em template (use classe canonical)
+4. **NUNCA** `<style>` block em template (mover para `css/modules/_X.css`)
+5. **NUNCA** `var(--bs-purple|pink|cyan|orange|teal|indigo|red|green|blue|yellow|gray|black|white)` — Bootstrap-default, nao tematizado
+6. **NUNCA** `var(--bs-X-text-emphasis|bg-subtle|border-subtle)` em CSS modulo (use `--semantic-X-*` ou tokens proprios)
+7. **NUNCA** `bg-warning text-white`, `bg-light text-white`, `bg-info text-dark` (combinacoes ilegiveis)
+8. **NUNCA** `!important` em CSS modulo (so em `tokens/`, `legacy/`, `utilities/_legacy.css`)
+
+### Boas praticas
+
+9. Use API canonical: `--_badge-bg/color`, `--_btn-bg/color`, `--_row-bg`
+10. Para badges: prefira classes de `_badges.css` (Secao 2.3)
+11. Para tabelas com row colorida: `.table-success/warning/primary/danger/info/secondary` (Secao 4.1)
+12. `text-white | text-dark | text-light` em badges Bootstrap eh REDUNDANTE — `_bootstrap-overrides.css:675-687` ja forca contraste. Codemod V6 ja removeu existentes.
+13. **Sempre** teste em DARK e LIGHT mode antes de commitar
+14. Rode `python scripts/audits/ui_policy_lint.py --enforce-new` antes de PR (ou instale o pre-commit hook)
 
 ---
 
@@ -224,6 +239,8 @@ Lista completa em `components/_tables.css`: `col-id, col-pedido, col-cnpj, col-d
 
 Codigos do `ui_audit.py` (ver `scripts/audits/ui_audit.py`):
 
+### Audit numerico (`ui_audit.py`) — codigos catalogo
+
 | Codigo | Antipattern | Como evitar |
 |---|---|---|
 | `V1` | Inline style com cor | usar classe canonical |
@@ -234,10 +251,26 @@ Codigos do `ui_audit.py` (ver `scripts/audits/ui_audit.py`):
 | `V6` | `badge bg-X text-Y` redundante | so `badge bg-X` (canonical resolve) |
 | `V7` | Combinacao baixo contraste | trocar para par valido |
 | `V11` | Duplicacao de classe badge cross-modulo | consolidar em canonical |
-| `V12` | `table-secondary/light/dark` em template | esperar canonicalizacao ou propor variante |
+| `V12` | `table-secondary/light/dark` em template | usar canonical (agora todos disponiveis) |
 | `V14` | `--bs-*-text-emphasis/bg-subtle/border-subtle` em modulo | usar token semantico |
 
+### Policy lint (`ui_policy_lint.py`) — codigos blockantes
+
+| Codigo | Regra | Em |
+|---|---|---|
+| `P1` | hex literal em template | template |
+| `P2` | hex literal em CSS modulo | css/modules/, css/utilities/ |
+| `P3` | inline `style="color/background: ..."` em template | template |
+| `P4` | `<style>` block em template | template |
+| `P5` | `var(--bs-purple/pink/cyan/orange/teal/indigo/etc)` — Bootstrap nao tematizado | template + css modulo |
+| `P6` | `var(--bs-X-text-emphasis/bg-subtle/border-subtle)` em CSS modulo | css/modules/, css/utilities/ |
+| `P7` | combinacao bg+text antagonista (bg-warning text-white, etc.) | template |
+| `P8` | `!important` em CSS modulo | css/modules/, css/components/ |
+| `P9` | `rgb()/rgba()/hsl()/hsla()` literal em CSS modulo (sem var) | css/modules/, css/utilities/ |
+
 Rodar audit: `python scripts/audits/ui_audit.py` (gera 3 reports em `relatorios/`).
+Rodar policy lint: `python scripts/audits/ui_policy_lint.py --report-only` (lista todas violacoes blockantes do codebase).
+Rodar dimension analysis: `python scripts/audits/ui_dimension_analysis.py` (WCAG ratio dos tokens + catalogo headers/dimensoes).
 
 ### Regression check (pre-commit / CI)
 
