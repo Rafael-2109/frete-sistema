@@ -1,12 +1,12 @@
 {
   "generated_at": "2026-05-06",
   "files_scanned": {
-    "templates": 569,
+    "templates": 579,
     "css": 57
   },
   "totals_by_violation": {
-    "V6_badge_bg_text_combo": 440,
-    "V12_table_row_class": 214,
+    "V6_badge_bg_text_combo": 445,
+    "V12_table_row_class": 218,
     "V1_inline_style_color": 245,
     "V2_hex_in_template": 70,
     "V7_text_bg_combo": 3,
@@ -29,9 +29,9 @@
       "V12_table_row_class": 1
     },
     "templates/hora": {
-      "V6_badge_bg_text_combo": 50,
+      "V6_badge_bg_text_combo": 55,
       "V1_inline_style_color": 6,
-      "V12_table_row_class": 13
+      "V12_table_row_class": 17
     },
     "templates/devolucao": {
       "V1_inline_style_color": 2,
@@ -1152,6 +1152,20 @@
       "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
     },
     {
+      "file": "app/templates/hora/nf_detalhe.html",
+      "line": 385,
+      "code": "V6_badge_bg_text_combo",
+      "snippet": "<span class=\"badge bg-warning text-dark\"",
+      "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
+    },
+    {
+      "file": "app/templates/hora/nf_detalhe.html",
+      "line": 363,
+      "code": "V12_table_row_class",
+      "snippet": "table-light",
+      "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
+    },
+    {
       "file": "app/templates/hora/avaria_detalhe.html",
       "line": 7,
       "code": "V6_badge_bg_text_combo",
@@ -1215,6 +1229,13 @@
       "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
+      "file": "app/templates/hora/pecas_cadastro_lista.html",
+      "line": 76,
+      "code": "V6_badge_bg_text_combo",
+      "snippet": "<span class=\"badge bg-light text-dark\"",
+      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
+    },
+    {
       "file": "app/templates/hora/estoque_chassi_detalhe.html",
       "line": 171,
       "code": "V6_badge_bg_text_combo",
@@ -1258,24 +1279,31 @@
     },
     {
       "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 252,
+      "line": 253,
       "code": "V1_inline_style_color",
       "snippet": "style=\"background-color: rgba(0,0,0,.02);\"",
       "detail": "background-color: rgba(0,0,0,.02);"
     },
     {
       "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 221,
+      "line": 222,
       "code": "V6_badge_bg_text_combo",
       "snippet": "<span class=\"badge bg-warning text-dark\"",
       "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/pedido_detalhe.html",
-      "line": 274,
+      "line": 275,
       "code": "V6_badge_bg_text_combo",
       "snippet": "<span class=\"badge bg-light text-dark ms-1\"",
       "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
+    },
+    {
+      "file": "app/templates/hora/pedido_detalhe.html",
+      "line": 303,
+      "code": "V12_table_row_class",
+      "snippet": "table-light",
+      "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
       "file": "app/templates/hora/avarias_lista.html",
@@ -1404,11 +1432,25 @@
       "detail": "height: 300px; border-radius: 0.25rem; border: 1px solid var(--bs-border-color);"
     },
     {
+      "file": "app/templates/hora/venda_detalhe.html",
+      "line": 604,
+      "code": "V12_table_row_class",
+      "snippet": "table-light",
+      "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
+    },
+    {
       "file": "app/templates/hora/nf_match_modal.html",
       "line": 84,
       "code": "V6_badge_bg_text_combo",
       "snippet": "<span class=\"badge bg-warning text-dark\"",
       "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
+    },
+    {
+      "file": "app/templates/hora/tagplus_peca_map_lista.html",
+      "line": 33,
+      "code": "V6_badge_bg_text_combo",
+      "snippet": "<span class=\"badge bg-light text-dark\"",
+      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
     },
     {
       "file": "app/templates/hora/modelos_lista.html",
@@ -1481,6 +1523,20 @@
       "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
     },
     {
+      "file": "app/templates/hora/pecas_cadastro_detalhe.html",
+      "line": 47,
+      "code": "V6_badge_bg_text_combo",
+      "snippet": "<span class=\"badge bg-light text-dark\"",
+      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
+    },
+    {
+      "file": "app/templates/hora/pecas_cadastro_detalhe.html",
+      "line": 70,
+      "code": "V6_badge_bg_text_combo",
+      "snippet": "<span class=\"badge bg-light text-dark\"",
+      "detail": "badge tem bg-light + text-dark (derruba --_badge-color)"
+    },
+    {
       "file": "app/templates/hora/lojas_mapa.html",
       "line": 30,
       "code": "V1_inline_style_color",
@@ -1500,6 +1556,13 @@
       "code": "V6_badge_bg_text_combo",
       "snippet": "<span class=\"badge bg-warning text-dark\"",
       "detail": "badge tem bg-warning + text-dark (derruba --_badge-color)"
+    },
+    {
+      "file": "app/templates/hora/pecas_estoque_detalhe.html",
+      "line": 24,
+      "code": "V12_table_row_class",
+      "snippet": "table-light",
+      "detail": "uso de table-light (variant light NAO esta em _tables.css canonical)"
     },
     {
       "file": "app/templates/devolucao/termo_descarte.html",
