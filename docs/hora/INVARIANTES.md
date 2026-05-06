@@ -40,6 +40,16 @@ Status, localização, preço e histórico vivem em tabelas satélite (`hora_mot
 
 Consequência: `hora_moto` é uma tabela insert-once, update-never. Toda mudança de estado é um novo registro em `hora_moto_evento`. Elimina race conditions em UPDATE e cria trilha de auditoria natural.
 
+#### Exceções controladas (UPDATE permitido)
+
+A regra é insert-once, mas **dois fluxos** têm autorização explícita para fazer UPDATE em `hora_moto.cor` e `hora_moto.modelo_id`. São os únicos casos — qualquer novo UPDATE precisa de aprovação do dono do módulo:
+
+1. **Retroatividade de modelo sentinela** (migration `hora_29`, 2026-05-06): quando `HoraModelo` sentinela `DESCONHECIDO` é resolvido para um canônico via `/hora/modelos/pendencias`, `modelo_retroatividade_service.propagar_resolucao` UPDATE-eia `hora_moto.modelo_id` para os chassis afetados. Cor não muda nesse fluxo.
+
+2. **Recebimento como Source of Truth** (2026-05-06): quando `recebimento_service.registrar_conferencia_cega` confirma uma conferência com cor ou modelo divergente da NF, o helper `_aplicar_correcao_moto_se_divergir` UPDATE-eia `hora_moto.cor` e `hora_moto.modelo_id` para os valores conferidos. Justificativa: regra de negócio explícita ("se divergir da NF, corrigir a NF; se o recebimento foi errado, ajustar o recebimento") — recebimento é fonte de verdade física, NF é fonte fiscal e pode estar errada.
+
+Ambas as exceções são auditáveis: a divergência fica registrada em `hora_conferencia_divergencia` (ou em `hora_modelo_pendente` para o caso 1), preservando o valor original que veio da NF.
+
 ### 4. Estado atual da moto é uma VIEW sobre `hora_moto_evento`, não um UPDATE na linha da moto.
 
 Para saber "onde está a moto X agora?", a consulta é:

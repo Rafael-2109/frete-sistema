@@ -950,6 +950,7 @@ def kpis_loja_modelo_cor(
             HoraMoto.cor,
             func.count().label('qtd'),
         )
+        .select_from(HoraMotoEvento)
         .join(
             sub,
             and_(

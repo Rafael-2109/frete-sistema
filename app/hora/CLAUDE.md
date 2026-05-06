@@ -55,6 +55,11 @@ Em 1 linha por invariante:
 - Ao criar uma nova tabela transacional, pergunte: "tem `chassi`?" Se não, revise o desenho.
 - Ao adicionar coluna em `hora_moto`, pergunte: "esse dado pode mudar durante a vida da moto?" Se sim, o lugar certo é satélite.
 
+**Exceções autorizadas (UPDATE em `hora_moto.cor` e `modelo_id` apenas)**:
+1. Retroatividade de modelo sentinela (`modelo_retroatividade_service.propagar_resolucao`).
+2. Recebimento como SOT: `recebimento_service._aplicar_correcao_moto_se_divergir` UPDATE-eia cor/modelo quando conferência diverge da NF (regra confirmada pelo dono do módulo em 2026-05-06). Categoria nova de evento `MOTO_FALTANDO` (em `EVENTOS_FALTANDO_FISICAMENTE`) emitida por `finalizar_recebimento` para chassis declarados na NF mas que não chegaram fisicamente — não conta como disponível em estoque.
+   Detalhes em `docs/hora/INVARIANTES.md` seção "Exceções controladas".
+
 ---
 
 ## Modelo de dados planejado (13 tabelas)
